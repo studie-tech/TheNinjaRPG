@@ -81,7 +81,7 @@ import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
-import { userBattleAtom, useUserData } from "@/utils/UserContext";
+import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
 /**
@@ -127,7 +127,9 @@ export const socials = [
 
 const MenuBoxProfile: React.FC = () => {
   // State
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector(
+    ({ longitude, latitude, updatedAt, location, ...profile }) => profile,
+  );
   const [now, setNow] = useState(Date.now);
   const refreshTime = () => setNow(Date.now());
   const battle = useAtomValue(userBattleAtom);
@@ -155,7 +157,7 @@ const MenuBoxProfile: React.FC = () => {
   const activeImbuementTimer = sidebarTimers?.imbuement;
 
   // Get location of user
-  const { location } = useGameMenu(userData);
+  const { location } = useGameMenu();
 
   const immunityData = useExpiryAnchor(userData?.immunityUntil, now);
   const immunitySecsLeft = immunityData.secsLeft;

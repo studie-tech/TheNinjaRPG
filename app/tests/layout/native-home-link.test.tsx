@@ -22,6 +22,13 @@ let session: ReturnType<typeof UserContext.useUserData>;
 const character = { userId: "player", status: "AWAKE", userQuests: [] } as unknown as NonNullable<typeof session.data>;
 
 beforeEach(() => {
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+    const info = UserContext.useUserData();
+    return { ...info, data: info.data ? select(info.data) : undefined } as never;
+  });
+});
+
+beforeEach(() => {
   ensureDom();
   navigate.mockClear();
   pathname = "/";

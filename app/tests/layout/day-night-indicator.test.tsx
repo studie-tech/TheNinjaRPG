@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Profiler, useContext, useState } from "react";
+import { createContext, Profiler, useContext, useState } from "react";
 import { WORLD_CYCLE_SECONDS, WORLD_DAY_SECONDS, WORLD_NIGHT_SECONDS, type UserRole } from "@/drizzle/constants";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { getWorldCyclePosition } from "@/libs/dayNight";
@@ -15,7 +15,7 @@ let now = 0;
 const onChange = vi.fn();
 const onWeatherChange = vi.fn();
 const originalCustomEvent = globalThis.CustomEvent;
-const { UserContext } = userContext;
+const UserContext = createContext<{ timeDiff: number; data: UserWithRelations }>({ timeDiff: 0, data: undefined });
 
 /** Provider-controlled map preview with the real world clock. */
 const PreviewMap = ({ role = "OWNER", editable = true, initialDate = null, initialWeather = null }: {
@@ -36,7 +36,7 @@ beforeEach(() => {
   ensureDom();
   globalThis.CustomEvent = window.CustomEvent;
   // Staff access and the server-clock offset belong to this fixture's provider.
-  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => useContext(UserContext));
+  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => useContext(UserContext) as never);
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
     const context = useContext(UserContext);
     return { ...context, data: context.data ? select(context.data) : undefined } as never;

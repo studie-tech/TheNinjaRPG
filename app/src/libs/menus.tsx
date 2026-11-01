@@ -26,10 +26,9 @@ import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
 import { calcIsInVillage } from "@/libs/travel";
-import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserInfo } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 
 export interface NavBarDropdownLink {
   id?: string;
@@ -98,7 +97,14 @@ export const BUGS_NAV_LINK: NavBarDropdownLink = {
   icon: <Bug className="h-6 w-6" />,
 };
 
-export const useGameMenu = (userData?: UserWithRelations | null) => {
+export const useGameMenu = () => {
+  const { data: userData } = useUserDataSelector((user) => ({
+    sector: user.sector,
+    villageId: user.villageId,
+    village: user.village,
+    isOutlaw: user.isOutlaw,
+    status: user.status,
+  }));
   const pathname = usePublicPathname();
   const { notifications } = useUserInfo();
 
@@ -218,26 +224,30 @@ export const useGameMenu = (userData?: UserWithRelations | null) => {
   const { sectorVillage: sector } = useSectorVillage(userData);
 
   const ownSector = userData?.sector === userData?.village?.sector;
-  const inVillage =
-    !!userData && calcIsInVillage({ x: userData.longitude, y: userData.latitude });
   const isAllied =
     !!sector &&
     findVillageUserRelationship(sector, userData?.villageId ?? "syndicate")?.status ===
       "ALLY";
-  const canVisit =
-    !!userData &&
-    !!sector &&
-    ((inVillage && (ownSector || isAllied)) ||
-      userData.isOutlaw ||
-      sector.type === "SAFEZONE");
-  const structure =
-    pathname === "/travel" && (ownSector || isAllied)
-      ? sector?.structures?.find(
-          (entry) =>
-            entry.longitude === userData?.longitude &&
-            entry.latitude === userData?.latitude,
-        )
-      : undefined;
+  // Position matters only when it changes village access or the structure offered by the menu.
+  const { data: arrival } = useUserDataSelector((user) => ({
+    canVisit:
+      !!sector &&
+      ((calcIsInVillage({ x: user.longitude, y: user.latitude }) &&
+        (ownSector || isAllied)) ||
+        user.isOutlaw ||
+        sector.type === "SAFEZONE"),
+    structureId:
+      pathname === "/travel" && (ownSector || isAllied)
+        ? sector?.structures?.find(
+            (entry) =>
+              entry.longitude === user.longitude && entry.latitude === user.latitude,
+          )?.id
+        : undefined,
+  }));
+  const canVisit = arrival?.canVisit;
+  const structure = sector?.structures?.find(
+    (entry) => entry.id === arrival?.structureId,
+  );
   // Coordinates choose the model; unchanged village/structure content retains the menu subtree.
   const location = useMemo<NavBarDropdownLink | undefined>(() => {
     if (!canVisit || !sector) return undefined;

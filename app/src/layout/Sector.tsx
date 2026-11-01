@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { getMutationKey } from "@trpc/react-query";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
@@ -9,7 +10,7 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
-import type { RouterOutputs } from "@/app/_trpc/client";
+import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,6 +37,7 @@ import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useSceneMutation } from "@/hooks/useSceneMutation";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -102,7 +104,12 @@ import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
-import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
+import {
+  blockingPopupOpenAtom,
+  selectUserWithoutPosition,
+  useRequiredUserDataSelector,
+  useUserDataRef,
+} from "@/utils/UserContext";
 import { shareUserCache } from "@/utils/userCacheSharing";
 import { MAP_LOCATION_REFRESH_MS, type MapLocation } from "@/validators/mapLocation";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
@@ -138,7 +145,7 @@ interface SectorProps {
   cameraFocusRevision: number;
   setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
-  setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
+  setPosition: (position: SectorPoint | null) => void;
 }
 
 /** Nearest walkable tile along the given border edge, closest to `preferred` */
@@ -221,6 +228,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
   const [healTargetUser, setHealTargetUser] = useState<SectorUser | null>(null);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
+  const publishSurroundingsRef = useRef(false);
+  publishSurroundingsRef.current =
+    props.showSorrounding || autoAttackMode || !!healTargetUser;
   const [allyAttack, setAllyAttack] = useLocalStorage<boolean>("friendlyAttack", false);
   const [storedBracket, setStoredBracket] = useLocalStorage<number>(
     "minBracketOnScout",
@@ -238,6 +248,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const [currentStructure, setCurrentStructure] = useState<VillageStructure | null>(
     null,
   );
+  const currentStructureRef = useRef<VillageStructure | null>(null);
   // Structure under the pointer (sticky while interacting with the panel so
   // the pointer can leave the canvas to click "Go to" without clearing).
   const [hoveredStructure, setHoveredStructure] = useState<VillageStructure | null>(
@@ -271,7 +282,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const ignoreMapClicksUntilRef = useRef<number>(0);
   const hoveredStructureIdRef = useRef<string | null>(null);
   const structuresRef = useRef<VillageStructure[]>([]);
-  const userRef = useRef<UserWithRelations>(undefined);
+  const userRef = useUserDataRef(() => positionChangedRef.current());
+  const positionChangedRef = useRef(() => {});
   const lastAutoAttackTimeRef = useRef<number | null>(null);
   // Mirror the attack-pending flag into a ref so the render loop's click guard
   // can read it without the flag being a scene-build effect dependency (which
@@ -354,12 +366,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // Data from db
   const {
-    data: userData,
+    data: profile,
     pusher,
     timeDiff,
     updateUser,
     prepareUserUpdate,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector(selectUserWithoutPosition);
+  const userData = profile ? userRef.current : undefined;
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(props.sector);
   const appearanceSignature = useMemo(
     () => JSON.stringify(resolveSpriteAppearance(userData ?? {})),
@@ -389,6 +402,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // Equal server Dates do not change the visible presence or village snapshot.
       structuralSharing: shareUserCache,
       notifyOnChangeProps: ["data"],
+      // Keep own vitals/appearance and all other presence reactive; own coordinates come from the scene.
+      select: (data) => {
+        const own = data.users?.find((user) => user.userId === profile?.userId);
+        const viewer = own
+          ? (({ longitude, latitude, location, updatedAt, ...info }) => info)(own)
+          : undefined;
+        return {
+          ...data,
+          viewer,
+          users: data.users?.filter((user) => user.userId !== profile?.userId),
+        };
+      },
       // Presence and fights change while the tab is open; pusher events can be
       // missed, so poll the sector snapshot on a short interval. Pause that
       // interval while the tab is in the background.
@@ -400,13 +425,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const villageData = data?.village;
   /** Combines player records and overworld AIs for the shared sector-user rendering path. */
-  const fetchedUsers = useMemo(
-    () =>
-      data?.users === undefined
-        ? undefined
-        : [...data.users, ...(data.overworldAis ?? [])],
-    [data?.users, data?.overworldAis],
-  );
+  const fetchedUsers = useMemo(() => {
+    if (data?.users === undefined) return undefined;
+    const own = userRef.current;
+    const viewer =
+      data.viewer && own && own.sector === sector
+        ? [
+            {
+              ...data.viewer,
+              longitude: own.longitude,
+              latitude: own.latitude,
+              location: own.location,
+              updatedAt: own.updatedAt,
+            },
+          ]
+        : [];
+    return [...data.users, ...(data.overworldAis ?? []), ...viewer];
+  }, [data?.users, data?.viewer, data?.overworldAis, profile, sector]);
   const warData = data?.warData;
   // Poll authored entrances so publication and expiration update the current sector without reloads.
   const { data: sectorDungeons } = api.coop.dungeon.getAvailable.useQuery(
@@ -540,17 +575,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const hoveredLocation = questLocations.find(
     (l) => l.id === hoveredLocationId && l.sector === sector,
   );
-  const arrivedLocations = useMemo(
-    () =>
-      locationGroups
-        .filter(
-          (entries) =>
-            entries[0]?.longitude === userData?.longitude &&
-            entries[0]?.latitude === userData?.latitude,
-        )
-        .flat(),
-    [locationGroups, userData?.longitude, userData?.latitude],
-  );
+  const [arrivedLocations, setArrivedLocations] = useState<MapLocation[]>([]);
+  const arrivedLocationsRef = useRef(arrivedLocations);
+
   useEffect(() => {
     if (
       inspectLocationId &&
@@ -677,7 +704,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             usersRef.current.splice(idx, 1);
             actorRevisionRef.current++;
             if (!skipStateUpdate) {
-              setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+              if (publishSurroundingsRef.current)
+                setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
             }
           }
           return;
@@ -766,7 +794,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     actorRevisionRef.current++;
     // Only update state if not explicitly skipped (to avoid excessive updates during animation)
     if (!skipStateUpdate) {
-      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      if (publishSurroundingsRef.current)
+        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     }
   };
 
@@ -779,6 +808,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
     forceCheck = false,
   ) => {
+    const userData = userRef.current;
     if (!userData) return;
     let shouldCheckQuest = false;
     userData?.userQuests?.forEach((userquest) => {
@@ -1034,14 +1064,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       latitude: data.latitude,
     });
     // Update surrounding users state at the end
-    setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+    if (publishSurroundingsRef.current)
+      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     runQuestTriggers(data);
   };
 
   // Crossing steps that are pre-fired during walk animations resolve
   // through this handler-less mutation; their responses are applied via
   // applyCrossing exactly when the local animation reaches the border
-  const { mutateAsync: moveStepAsync } = api.travel.moveInSector.useMutation({
+  const moveStepAsync = useSceneMutation({
+    mutationKey: getMutationKey(api.travel.moveInSector),
+    mutationFn: (input: RouterInputs["travel"]["moveInSector"]) =>
+      utils.client.travel.moveInSector.mutate(input),
     meta: { handlesTransportError: true },
   });
 
@@ -1248,7 +1282,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         );
       }
       continueMovement();
-      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      if (publishSurroundingsRef.current)
+        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     }
     runQuestTriggers(data, true);
   };
@@ -1327,7 +1362,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (freshUser) {
       snapMovementPosition(freshUser);
       setPosition({ x: freshUser.longitude, y: freshUser.latitude });
-      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      if (publishSurroundingsRef.current)
+        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     }
   };
 
@@ -1346,7 +1382,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         location: d.location,
         updatedAt: new Date(),
       });
-      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      if (publishSurroundingsRef.current)
+        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
       // runQuestTriggers with forceCheck already issues checkQuest(), so calling
       // it here too fired the location-quest mutation twice per crossing (and,
       // through its invalidation, refetched the user's items twice)
@@ -1360,9 +1397,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   const clearAllHighlights = () => travel.scene.current?.clearHighlights();
 
-  const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
+  const [isMoving, setMoving] = useState(false);
+  const movementUiPending = useRef(false);
+  const autoAttackRef = useRef(() => {});
+  const publishMovementStatus = (pending: boolean) => {
+    const next = pending && !!(arrivalNpc || npcDialog);
+    if (next !== movementUiPending.current) {
+      movementUiPending.current = next;
+      setMoving(next);
+    }
+  };
+  const executeMove = useSceneMutation({
+    mutationKey: getMutationKey(api.travel.moveInSector),
+    mutationFn: (input: RouterInputs["travel"]["moveInSector"]) =>
+      utils.client.travel.moveInSector.mutate(input),
     onMutate: (input) => {
       movePendingRef.current = true;
+      publishMovementStatus(true);
       document.body.style.cursor = "wait";
       const targetHex = gridRef.current?.getHex({
         col: input.longitude,
@@ -1423,8 +1474,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       walkAnimatingRef.current = false;
       movePendingRef.current = false;
       if (mountedRef.current) {
+        publishMovementStatus(false);
         document.body.style.cursor = "default";
         continueMovement();
+        autoAttackRef.current();
       } else {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
@@ -1432,6 +1485,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }
     },
   });
+
+  const move = (input: Parameters<typeof executeMove>[0]) => {
+    void executeMove(input).catch(() => undefined);
+  };
 
   /** Step one tile beyond the border: the server resolves this as a crossing */
   const moveAcrossBorder = (
@@ -1613,7 +1670,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             if (idx !== -1) {
               usersRef.current.splice(idx, 1);
               actorRevisionRef.current++;
-              setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+              if (publishSurroundingsRef.current)
+                setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
             }
             return;
           }
@@ -1638,6 +1696,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     showSorroundingRef.current = props.showSorrounding;
     const mount = mountRef.current;
     if (props.showSorrounding) {
+      setSorrounding(usersRef.current.filter((user) => user?.userId));
       if (mount) mount.style.pointerEvents = "none";
       return;
     }
@@ -1666,45 +1725,50 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     npcDialogRef.current = npcDialog;
   }, [npcDialog]);
 
-  // Close an open arrival prompt once it no longer describes reality: the NPC despawned out of the
-  // sector data, or it and the player are no longer on the same tile (either one moved). Without the
-  // position half, walking off the tile leaves the modal up and its CTA trips the server-side
-  // "You are not standing on the NPC's tile" guard for a spurious error toast.
-  useEffect(() => {
-    if (!arrivalNpc) return;
+  /** Refresh arrival UI only when the player's actionable surroundings actually change. */
+  const updatePositionActions = () => {
+    const userData = userRef.current;
+    if (!userData) return;
+    const arrived = locationGroups
+      .filter(
+        (entries) =>
+          entries[0]?.longitude === userData.longitude &&
+          entries[0]?.latitude === userData.latitude,
+      )
+      .flat();
     if (
-      isArrivalPromptStale({
-        promptedPlacementId: arrivalNpc.npcPlacementId ?? null,
-        npcs: data?.overworldAis ?? [],
-        playerLongitude: userData?.longitude,
-        playerLatitude: userData?.latitude,
-      })
+      arrived.length !== arrivedLocationsRef.current.length ||
+      arrived.some((location, index) => location !== arrivedLocationsRef.current[index])
     ) {
-      setArrivalNpc(null);
+      arrivedLocationsRef.current = arrived;
+      setArrivedLocations(arrived);
     }
-  }, [data?.overworldAis, arrivalNpc, userData?.longitude, userData?.latitude]);
-
-  // Same stale-close for the dialog modal (keyed on the pending interaction's placement): close it
-  // when the player walks off the NPC's tile or the NPC despawns, so a later branch click can't fire
-  // an interaction against a tile the player no longer stands on (the server rejects it with a
-  // spurious error toast).
-  useEffect(() => {
-    if (!npcDialog) return;
-    const pending = pendingNpcInteractRef.current;
-    if (
-      !pending ||
-      isArrivalPromptStale({
-        promptedPlacementId: pending.placementId,
-        npcs: data?.overworldAis ?? [],
-        playerLongitude: userData?.longitude,
-        playerLatitude: userData?.latitude,
-      })
-    ) {
-      setNpcDialog(null);
+    if (arrivalNpc) {
+      if (
+        isArrivalPromptStale({
+          promptedPlacementId: arrivalNpc.npcPlacementId ?? null,
+          npcs: data?.overworldAis ?? [],
+          playerLongitude: userData?.longitude,
+          playerLatitude: userData?.latitude,
+        })
+      ) {
+        setArrivalNpc(null);
+      }
     }
-  }, [data?.overworldAis, npcDialog, userData?.longitude, userData?.latitude]);
-
-  useEffect(() => {
+    if (npcDialog) {
+      const pending = pendingNpcInteractRef.current;
+      if (
+        !pending ||
+        isArrivalPromptStale({
+          promptedPlacementId: pending.placementId,
+          npcs: data?.overworldAis ?? [],
+          playerLongitude: userData?.longitude,
+          playerLatitude: userData?.latitude,
+        })
+      ) {
+        setNpcDialog(null);
+      }
+    }
     const longitude = userData?.longitude;
     const latitude = userData?.latitude;
     const status = userData?.status;
@@ -1728,24 +1792,31 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     });
     lastPromptedPlacementIdRef.current = decision.lastPromptedPlacementId;
     if (decision.prompt) setArrivalNpc(decision.prompt);
+  };
+  positionChangedRef.current = () => {
+    updatePositionActions();
+    updateCurrentStructure();
+  };
+  useEffect(() => {
+    updatePositionActions();
   }, [
-    userData?.longitude,
-    userData?.latitude,
-    userData?.status,
     data?.overworldAis,
-    isInteracting,
+    locationGroups,
+    arrivalNpc,
     npcDialog,
+    isInteracting,
     isBlockingPopupOpen,
+    userData?.status,
   ]);
 
   // Auto-attack logic for ANBU users
-  useEffect(() => {
+  const maybeAutoAttack = () => {
+    const userData = userRef.current;
     if (
       autoAttackMode &&
       userData?.anbuId &&
       userData?.status === "AWAKE" &&
       originRef.current &&
-      !isMoving &&
       !movePendingRef.current &&
       !walkAnimatingRef.current &&
       !isAttacking &&
@@ -1836,7 +1907,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }
       }
     }
-  }, [sorrounding, isMoving]);
+  };
+  autoAttackRef.current = maybeAutoAttack;
+  useEffect(() => {
+    maybeAutoAttack();
+  }, [sorrounding, autoAttackMode, isAttacking, userData?.status]);
 
   // Clear heal target if user moves away or target moves away
   useEffect(() => {
@@ -1954,23 +2029,34 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       );
       userRef.current = userData;
 
-      // Check if user is on a structure
-      if (structures) {
-        const structure = structures.find((s) => {
-          if (s.longitude === userData.longitude && s.latitude === userData.latitude)
-            return true;
-          return STRUCTURE_ADJACENTS.some(
-            ({ dCol, dRow }) =>
-              s.longitude === userData.longitude + dCol &&
-              s.latitude === userData.latitude + dRow,
-          );
-        });
-        setCurrentStructure(structure || null);
-      } else {
+      updateCurrentStructure();
+    }
+  }, [userData, villageData, structures]);
+
+  const updateCurrentStructure = () => {
+    const userData = userRef.current;
+    if (!userData) return;
+    if (structures) {
+      const structure = structures.find((s) => {
+        if (s.longitude === userData.longitude && s.latitude === userData.latitude)
+          return true;
+        return STRUCTURE_ADJACENTS.some(
+          ({ dCol, dRow }) =>
+            s.longitude === userData.longitude + dCol &&
+            s.latitude === userData.latitude + dRow,
+        );
+      });
+      if (currentStructureRef.current !== (structure ?? null)) {
+        currentStructureRef.current = structure ?? null;
+        setCurrentStructure(structure ?? null);
+      }
+    } else {
+      if (currentStructureRef.current) {
+        currentStructureRef.current = null;
         setCurrentStructure(null);
       }
     }
-  }, [userData, villageData, structures]);
+  };
 
   const onTravelTap = (hit: TravelPick) => {
     if (

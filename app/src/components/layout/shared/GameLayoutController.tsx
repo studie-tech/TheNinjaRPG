@@ -71,10 +71,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     userId,
     timeDiff,
     updateUser,
-  } = useUserData();
+  } = useUserDataSelector((user) => ({
+    wallpaperOverwrite: user.village?.wallpaperOverwrite,
+  }));
   const pathname = usePublicPathname();
   const isPageActive = usePageActive();
-  const { systems, location } = useGameMenu(userData);
+  const { systems, location } = useGameMenu();
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
@@ -290,7 +292,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const showMobileNotifications = pathname !== "/combat";
   const mobileNotificationCount = shownNotifications?.length ?? 0;
   const season = getCurrentSeason();
-  const wallpaperOverwrite = userData?.village?.wallpaperOverwrite;
+  const wallpaperOverwrite = userData?.wallpaperOverwrite;
   const imageset = useMemo(
     () => getImageSet(wallpaperOverwrite, season),
     [wallpaperOverwrite, season],

@@ -81,6 +81,7 @@ import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { nonCombatConsume } from "@/libs/item";
 import {
@@ -106,7 +107,12 @@ import { isTutorialActive } from "@/libs/tutorial";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  selectUserWithoutPosition,
+  type useRequiredUserData,
+  useRequiredUserDataSelector,
+  useUserDataRef,
+} from "@/utils/UserContext";
 import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 import {
   type FindSectorSchema,
@@ -212,12 +218,33 @@ function Travel() {
 
   // Data from database
   const {
-    data: userData,
+    data: profile,
     timeDiff,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector(selectUserWithoutPosition);
+  const positionChanged = useRef(() => {});
+  const userRef = useUserDataRef(() => positionChanged.current());
+  const userData = profile ? userRef.current : undefined;
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
+  const setScenePosition = useCallback(
+    (point: SectorPoint | null) => {
+      // A pending travel action needs arrival state; ordinary walking only updates the coordinate label.
+      if (pendingAttackTarget || autoDestination || isQuickTravelOpen) {
+        setCurrentPosition((previous) =>
+          previous?.x === point?.x && previous?.y === point?.y ? previous : point,
+        );
+      }
+    },
+    [pendingAttackTarget, autoDestination, isQuickTravelOpen],
+  );
+  positionChanged.current = () => {
+    const user = userRef.current;
+    if (user) setScenePosition({ x: user.longitude, y: user.latitude });
+  };
+  useEffect(() => {
+    positionChanged.current();
+  }, [setScenePosition]);
   const pins = parseTravelPins(storedPins?.[userData?.userId ?? ""]);
   const savePins = (next: TravelPin[]) => {
     if (userData) setStoredPins({ ...storedPins, [userData.userId]: next });
@@ -469,11 +496,7 @@ function Travel() {
   // Sector tab link
   const currentSector = userData?.sector;
   const hasCurrentSector = currentSector !== undefined && currentSector !== null;
-  const sectorLink = hasCurrentSector
-    ? currentPosition
-      ? `You (${currentPosition.x}, ${currentPosition.y})`
-      : `Sector ${currentSector}`
-    : "";
+  const sectorLink = hasCurrentSector ? "You" : "";
   const globalLink = `Global`;
 
   // Quick travel form
@@ -499,14 +522,10 @@ function Travel() {
 
   useEffect(() => {
     if (userData && globe) {
-      const { longitude: x, latitude: y } = userData;
-      setCurrentPosition((previous) =>
-        previous?.x === x && previous.y === y ? previous : { x, y },
-      );
       const tile = globe.tiles[userData.sector];
       if (tile) setCurrentTile(tile);
     }
-  }, [userData?.longitude, userData?.latitude, userData?.sector, globe]);
+  }, [userData?.sector, globe]);
 
   useEffect(() => {
     // Only set initial tab, don't override user's selection
@@ -882,7 +901,7 @@ function Travel() {
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
-          setPosition={setCurrentPosition}
+          setPosition={setScenePosition}
         />
       )
     );
@@ -892,6 +911,7 @@ function Travel() {
     currentSectorMap,
     sectorWindow,
     hasCurrentSector,
+    setScenePosition,
     targetPosition,
     showSorrounding,
     showOtherUsers,
@@ -1265,8 +1285,8 @@ function Travel() {
                         {
                           label: pinLabel.trim(),
                           sector: userData.sector,
-                          longitude: userData.longitude,
-                          latitude: userData.latitude,
+                          longitude: userRef.current?.longitude ?? userData.longitude,
+                          latitude: userRef.current?.latitude ?? userData.latitude,
                         },
                       ]);
                       setPinLabel("");
@@ -1374,6 +1394,7 @@ function Travel() {
             <NavTabs
               current={activeTab}
               options={[sectorLink, globalLink]}
+              labels={{ [sectorLink]: <TravelPositionLabel /> }}
               setValue={setActiveTab}
               onChange={(value) => {
                 if (value !== globalLink)
@@ -1512,11 +1533,13 @@ function Travel() {
       )}
 
       {/* Auto Attack Configuration Modal */}
-      <AutoAttackModal
-        isOpen={showAutoAttackModal}
-        setIsOpen={setShowAutoAttackModal}
-        onEnable={() => setAutoAttackMode(true)}
-      />
+      {showAutoAttackModal && (
+        <AutoAttackModal
+          isOpen={showAutoAttackModal}
+          setIsOpen={setShowAutoAttackModal}
+          onEnable={() => setAutoAttackMode(true)}
+        />
+      )}
 
       {/* Revealed Players Modal (from Sensory Scan) */}
       {showRevealedPlayersModal && revealedPlayers.length > 0 && (
@@ -1570,7 +1593,11 @@ function Travel() {
 const StealthControls: React.FC<{
   onRevealed: (players: RevealedPlayer[]) => void;
 }> = ({ onRevealed }) => {
-  const { data: userData, timeDiff, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    timeDiff,
+    updateUser,
+  } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const utils = api.useUtils();
   const currentSector = userData?.sector;
   const activationInFlightRef = useRef(false);

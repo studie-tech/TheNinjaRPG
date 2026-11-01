@@ -7,7 +7,7 @@ import { type ContextType, type ReactNode, useContext, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { UserContext, UserContextProvider } from "@/utils/UserContext";
+import { UserContextProvider, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
 
 ensureDom();
@@ -65,10 +65,10 @@ const mount = (
     useUtils: () => ({}),
     profile: {
       getUser: {
-        useQuery: () => {
+        useQuery: (_input: unknown, options: { select?: (value: typeof response) => unknown }) => {
           const [notifications, setNotifications] = useState(response.notifications);
           return {
-            data: { ...response, notifications },
+            data: options?.select ? options.select({ ...response, notifications }) : { ...response, notifications },
             status: "success",
             refetch: () => {
               refetch();
@@ -123,10 +123,10 @@ describe("global timed bonus refresh", () => {
   });
 
   it("propagates expiry through the boost notice with unchanged user data and clock offset", () => {
-    const seen: ContextType<typeof UserContext>[] = [];
+    const seen: ReturnType<typeof useUserData>[] = [];
     const Bonus = () => {
       // Bun preserves other suites' useUserData module mocks; read this provider directly.
-      const context = useContext(UserContext);
+      const context = useUserDataSelector((user) => user);
       seen.push(context);
       return (
         <output>

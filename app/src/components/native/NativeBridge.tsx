@@ -31,7 +31,7 @@ import {
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
 import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { type useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 /**
@@ -48,7 +48,7 @@ export default function NativeBridge() {
     pusher,
     status,
     timeDiff,
-  } = useUserData();
+  } = useUserDataSelector((user) => (isNative() ? user : undefined));
   const router = useRouter();
   const pathname = usePublicPathname();
   const setNativeHomeRedirect = useSetAtom(nativeHomeRedirectAtom);

@@ -8,7 +8,7 @@ import {
   initIframeMuteObserver,
   setIframeMuteState,
 } from "@/utils/audio";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface UseIframeMuteReturn {
   isIframesMuted: boolean;
@@ -22,7 +22,7 @@ interface UseIframeMuteReturn {
  * @returns boolean
  */
 const getInitialIframeMuteState = (
-  userData: UserWithRelations | undefined,
+  userData: { iframesMuted?: unknown } | undefined,
 ): boolean => {
   // Respect explicit user preference when logged in
   if (userData && typeof userData === "object" && userData !== undefined) {
@@ -44,7 +44,11 @@ const getInitialIframeMuteState = (
  * Integrates with user database and localStorage fallback
  */
 export const useIframeMute = (): UseIframeMuteReturn => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => ({
+    preferredGeneral1: user.preferredGeneral1,
+    preferredGeneral2: user.preferredGeneral2,
+    iframesMuted: "iframesMuted" in user ? user.iframesMuted : undefined,
+  }));
   const [isIframesMuted, setIsIframesMuted] = useState<boolean>(false);
 
   // Initialize state on mount

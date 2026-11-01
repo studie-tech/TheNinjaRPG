@@ -27,12 +27,18 @@ export const WarFieldActions = () => {
   }));
   const { data: wars } = api.war.getActiveWars.useQuery(
     { villageId: user?.villageId ?? "" },
-    { enabled: !!user, staleTime: 10000, refetchInterval: 10000 },
+    {
+      enabled: !!user,
+      staleTime: 10000,
+      refetchInterval: 10000,
+      notifyOnChangeProps: ["data"],
+    },
   );
   const objectiveWars = useMemo(() => wars?.filter((war) => war.rules) ?? [], [wars]);
   const camps = api.war.getWarCampNotices.useQuery(undefined, {
     enabled: objectiveWars.length > 0,
     refetchInterval: 60000,
+    notifyOnChangeProps: ["data"],
   });
   const attempt = objectiveWars.some((war) => war.id === user?.warMission?.warId)
     ? user?.warMission

@@ -6,11 +6,14 @@ import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import { getIsolatedPyramid, hasQuestContentChanged } from "@/libs/questRun";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Keep isolated runs on combat while allowing authentication to finish on another device. */
 export const PyramidRunBoundary = ({ children }: { children: React.ReactNode }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((user) => ({
+    userQuests: user.userQuests,
+    questData: user.questData,
+  }));
   const pathname = usePublicPathname();
   const router = useRouter();
   const isolated = getIsolatedPyramid(user);
@@ -39,7 +42,10 @@ export const PyramidRunBoundary = ({ children }: { children: React.ReactNode }) 
 
 /** Reuse quest progression and abandonment between fights, including hidden or edited runs. */
 export const PyramidRun = () => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((user) => ({
+    userQuests: user.userQuests,
+    questData: user.questData,
+  }));
   const run =
     getIsolatedPyramid(user) ??
     user?.userQuests.find(

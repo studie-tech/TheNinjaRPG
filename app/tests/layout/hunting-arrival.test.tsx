@@ -27,6 +27,13 @@ const browserEvents = ["Event", "CustomEvent"] as const;
 const eventDescriptors = browserEvents.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+    const info = UserContext.useUserData();
+    return { ...info, data: info.data ? select(info.data) : undefined } as never;
+  });
+});
+
+beforeEach(() => {
   for (const key of browserEvents) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   window.sessionStorage.removeItem(storageKey);
   window.localStorage.removeItem("streakPopupDismissedDateX");

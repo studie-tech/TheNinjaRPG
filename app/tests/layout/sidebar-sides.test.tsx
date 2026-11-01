@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
+import * as iframeMute from "@/hooks/useIframeMute";
 import * as client from "@/app/_trpc/client";
 import { ClassicGameLayout } from "@/components/layout/ClassicGameLayout";
 import { PanelGameLayout } from "@/components/layout/PanelGameLayout";
@@ -187,6 +188,7 @@ describe("swap sidebars setting", () => {
     Object.assign(vi.spyOn(client, "api" as never), {
       profile: { updatePreferences: { useMutation: () => ({ mutate: vi.fn() }) } },
     });
+    vi.spyOn(iframeMute, "useIframeMute").mockReturnValue({ isIframesMuted: false, setIframesMuted: vi.fn(), toggleIframesMute: vi.fn() });
     const view = render(
       <LayoutContextProvider value="17-obsidian-council" isPixelLanding={false}>
         <GlobalAudioProvider>

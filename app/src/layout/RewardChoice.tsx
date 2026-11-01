@@ -27,7 +27,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showRewardToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import type { RewardChoiceDisplay } from "@/validators/rewards";
 
 /**
@@ -35,7 +35,11 @@ import type { RewardChoiceDisplay } from "@/validators/rewards";
  * its own whenever an offer is waiting that the player has not dismissed in this session.
  */
 export const RewardChoiceModal: React.FC = () => {
-  const { data: userData, prepareUserUpdate, updateUser } = useUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector((user) => ({ questPartyId: user.questPartyId }));
   const utils = api.useUtils();
   const [forceOpen, setForceOpen] = useAtom(rewardChoiceOpenAtom);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
@@ -198,7 +202,7 @@ export const RewardChoiceModal: React.FC = () => {
 export const PendingRewardChoices: React.FC<{ className?: string }> = ({
   className,
 }) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => user.userId);
   const openRewardChoice = useOpenRewardChoice();
   const { data: choices } = api.quests.getPendingRewardChoices.useQuery(undefined, {
     enabled: !!userData,

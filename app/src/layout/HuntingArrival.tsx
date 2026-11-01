@@ -10,14 +10,19 @@ import {
 } from "@/hooks/localstorage";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Modal from "@/layout/Modal";
-import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
+import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Open the personal encounter when travel confirmation and global popups permit it.
  * Keep dismissal per account and sector/session across reloads and same-sector combat.
  */
 export function HuntingArrival({ blocked = false }: { blocked?: boolean }) {
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    occupation: user.occupation,
+    status: user.status,
+    sector: user.sector,
+  }));
   const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);
   const openButton = useRef<HTMLButtonElement>(null);
   const storageKey = `huntingArrival:${user?.userId}`;

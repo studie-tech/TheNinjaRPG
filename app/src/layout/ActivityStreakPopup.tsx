@@ -25,7 +25,7 @@ import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
-import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
+import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
@@ -55,7 +55,10 @@ const ActivityStreakPopup: React.FC = () => {
   );
 
   // Query
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector((user) => ({
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+  }));
 
   // Read off userData rather than a shared atom so the suppression holds from
   // the very first render, with no window where both can be on screen.

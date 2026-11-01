@@ -14,7 +14,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { type TicketType, TicketTypes } from "@/validators/misc";
 
 /**
@@ -34,7 +34,19 @@ interface LowerRightHelpProps {
 }
 
 const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+    userQuests: user.userQuests,
+    tutorialOn: user.tutorialOn,
+    musicOn: user.musicOn,
+    buttonSfxOn: user.buttonSfxOn,
+    sfxOn: user.sfxOn,
+    village: user.village,
+    isOutlaw: user.isOutlaw,
+    bloodlineId: user.bloodlineId,
+    status: user.status,
+    preferredGeneral1: user.preferredGeneral1,
+    preferredGeneral2: user.preferredGeneral2,
+  }));
   const [showActive, setShowActive] = useLocalStorage<TicketType>(
     "ticketType2",
     "ai_support",

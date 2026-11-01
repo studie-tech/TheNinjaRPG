@@ -11,6 +11,8 @@ interface NavTabsProps {
   current: string | null;
   options: string[] | readonly string[];
   icons?: Partial<Record<string, React.ReactNode>>;
+  /** Display content can change independently of the stable selection value. */
+  labels?: Partial<Record<string, React.ReactNode>>;
   /** Keep icon tabs named for assistive technology and hover discovery. */
   iconOnlyOptions?: readonly string[];
   /** Customize icon labels, including showing them only in wider containers. */
@@ -87,11 +89,11 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
             <span
               className={cn(isIconOnly && "sr-only", props.labelClassName?.(option))}
             >
-              {option}
+              {props.labels?.[option] ?? option}
             </span>
           </span>
         ) : (
-          option
+          (props.labels?.[option] ?? option)
         )}
         {count > 0 && (
           <span
