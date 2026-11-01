@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { showMutationToast } from "@/libs/toast";

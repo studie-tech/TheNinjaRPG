@@ -37,7 +37,7 @@ import {
 } from "@/libs/mobileNavConfig";
 import { usePublicPathname } from "@/utils/routing";
 import { getCurrentSeason } from "@/utils/time";
-import { useUserData, useUserDataSelector } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type AccountMenuState,
   LayoutLeftSidebar,

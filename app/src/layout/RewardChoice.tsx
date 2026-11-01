@@ -27,7 +27,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showRewardToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { useUserData, useUserDataSelector } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { RewardChoiceDisplay } from "@/validators/rewards";
 
 /**
