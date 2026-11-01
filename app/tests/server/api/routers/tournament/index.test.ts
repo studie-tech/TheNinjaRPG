@@ -2,7 +2,7 @@ import { Pusher } from "@/libs/pusher";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { syncTournamentState } from "@/routers/tournament";
+import { archivedTournamentRecordName, syncTournamentState } from "@/routers/tournament";
 
 const FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";
@@ -255,5 +255,69 @@ describe("syncTournamentState", () => {
     expect(updateRewardsMock).not.toHaveBeenCalled();
     expect(client.delete).toHaveBeenCalledWith(tournamentMatch);
     expect(client.delete).toHaveBeenCalledWith(tournament);
+  });
+
+  const nameKeyConflict = () =>
+    new Error("Failed query: insert into `TournamentRecord`", {
+      cause: new Error(
+        "Duplicate entry 'Test Tournament' for key 'TournamentRecord.HistoricalTournament_name_key' (errno 1062)",
+      ),
+    });
+
+  it("archives the record under a unique name when an older record has the same name", async () => {
+    const { client, insertValues } = createClient();
+    insertValues.mockRejectedValueOnce(nameKeyConflict());
+
+    const result = await syncTournament(client);
+
+    expect(result).toEqual({ success: true, message: "Tournament synchronized." });
+    expect(insertValues).toHaveBeenCalledTimes(2);
+    expect(insertValues).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: "tournament-1",
+        name: archivedTournamentRecordName("Test Tournament", "tournament-1"),
+        winnerId: null,
+      }),
+    );
+    expect(updateRewardsMock).toHaveBeenCalledTimes(1);
+    expect(client.delete).toHaveBeenCalledWith(tournament);
+  });
+
+  it("recognizes the name key when it only appears in sqlMessage", async () => {
+    const { client, insertValues } = createClient();
+    const driverError = Object.assign(new Error("ER_DUP_ENTRY"), {
+      sqlMessage:
+        "Duplicate entry 'Test Tournament' for key 'TournamentRecord.HistoricalTournament_name_key'",
+    });
+    insertValues.mockRejectedValueOnce(
+      new Error("Failed query: insert into `TournamentRecord`", { cause: driverError }),
+    );
+
+    const result = await syncTournament(client);
+
+    expect(result).toEqual({ success: true, message: "Tournament synchronized." });
+    expect(insertValues).toHaveBeenCalledTimes(2);
+    expect(updateRewardsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not pay again when the archived-name retry loses to a pending peer", async () => {
+    const { client, insertValues } = createClient({
+      recordResponses: [null, createTournamentRecord({ winnerId: null })],
+    });
+    insertValues
+      .mockRejectedValueOnce(nameKeyConflict())
+      .mockRejectedValueOnce(new Error("Duplicate entry 'tournament-1' for key 'PRIMARY'"));
+
+    const result = await syncTournament(client);
+
+    expect(result).toEqual({ success: false, message: FINALIZATION_INCOMPLETE });
+    expect(updateRewardsMock).not.toHaveBeenCalled();
+    expect(client.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps archived names within the column length", () => {
+    const name = archivedTournamentRecordName("x".repeat(191), "MR1KargMi8l99v7FB2nkI");
+    expect(name.length).toBe(191);
+    expect(name.endsWith(" (MR1KargM)")).toBe(true);
   });
 });

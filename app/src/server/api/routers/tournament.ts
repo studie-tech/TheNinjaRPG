@@ -38,6 +38,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { secondsFromDate } from "@/utils/time";
 import { checkCoLeader } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -364,6 +365,65 @@ const handleTournamentRecordLedger = async (
   return errorResponse(TOURNAMENT_FINALIZATION_INCOMPLETE);
 };
 
+const TOURNAMENT_RECORD_NAME_KEY = "HistoricalTournament_name_key";
+
+/** True when an insert hit the unique TournamentRecord name index (not the id primary key). */
+const isTournamentRecordNameConflict = (error: unknown): boolean => {
+  if (!isMysqlDuplicateKeyError(error)) return false;
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    const sqlMessage = (current as { sqlMessage?: unknown }).sqlMessage;
+    if (
+      current.message.includes(TOURNAMENT_RECORD_NAME_KEY) ||
+      (typeof sqlMessage === "string" &&
+        sqlMessage.includes(TOURNAMENT_RECORD_NAME_KEY))
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+};
+
+/**
+ * Archived name for a tournament whose name is already used by an older record. It is
+ * derived from the tournament id, so concurrent finalizers of the same tournament collide
+ * on the primary key instead of writing two records.
+ */
+export const archivedTournamentRecordName = (name: string, tournamentId: string) => {
+  const suffix = ` (${tournamentId.slice(0, 8)})`;
+  return `${name.slice(0, 191 - suffix.length)}${suffix}`;
+};
+
+/**
+ * Insert the pending TournamentRecord ledger row. Tournament names are only unique among
+ * live tournaments, so a reused name (e.g. "Test") can clash with an older record; in that
+ * case the record is stored under an archived name instead of blocking finalization.
+ */
+const insertTournamentLedgerRecord = async (
+  client: DrizzleClient,
+  tournamentId: string,
+  currentData: TournamentSyncData,
+) => {
+  try {
+    await insertTournamentRecordForFinalizeTournamentAndPayWinner(
+      client,
+      tournamentId,
+      currentData,
+    );
+  } catch (error) {
+    if (!isTournamentRecordNameConflict(error)) throw error;
+    await insertTournamentRecordForFinalizeTournamentAndPayWinner(
+      client,
+      tournamentId,
+      {
+        ...currentData,
+        name: archivedTournamentRecordName(currentData.name, tournamentId),
+      },
+    );
+  }
+};
+
 /** Final single-match finalization: ledger insert (winnerId null) → COMPLETED CAS → updateRewards → set winner on ledger → cleanup → pusher. */
 const finalizeTournamentAndPayWinner = async (
   client: DrizzleClient,
@@ -387,11 +447,7 @@ const finalizeTournamentAndPayWinner = async (
   }
 
   try {
-    await insertTournamentRecordForFinalizeTournamentAndPayWinner(
-      client,
-      tournamentId,
-      currentData,
-    );
+    await insertTournamentLedgerRecord(client, tournamentId, currentData);
   } catch (error) {
     const recordAfterInsertError = await fetchTournamentRecord(client, tournamentId);
     if (recordAfterInsertError?.winnerId) {
