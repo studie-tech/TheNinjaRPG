@@ -58,13 +58,18 @@ export const useBattleHotkeys = (
     kind === "jutsu"
       ? utils.jutsu.getLoadouts.invalidate()
       : utils.item.getItemLoadouts.invalidate();
+  // Each save sends a whole map, so saves run one at a time: an older map can
+  // never land after a newer one. Both kinds share the scope because a save is
+  // checked against the other kind's keys.
   const saveJutsu = api.jutsu.setLoadoutHotkeys.useMutation({
+    scope: { id: "loadoutHotkeys" },
     onSuccess: (result) => {
       if (!result.success) showMutationToast(result);
     },
     onSettled: onSettled("jutsu"),
   });
   const saveItem = api.item.setLoadoutHotkeys.useMutation({
+    scope: { id: "loadoutHotkeys" },
     onSuccess: (result) => {
       if (!result.success) showMutationToast(result);
     },
