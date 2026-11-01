@@ -488,3 +488,7 @@ export const getCollectDeadline = (
           new Date(Date.parse(progress.timestamp) + configuredMinutes * 60_000),
       )
     : null;
+
+/** Always advances a millisecond-precision snapshot, even within the same clock tick. */
+export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
+  new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));

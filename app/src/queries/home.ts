@@ -6,6 +6,7 @@ import { eq, gt, isNull, lte, or } from "drizzle-orm";
 import type { HomeType } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Cosmetic home writes need account state and its home sector without advancing gameplay timers. */
 export const fetchHomeFurnitureUser = async (client: DrizzleClient, userId: string) => {
@@ -39,8 +40,6 @@ export const fetchHomeFurnitureUser = async (client: DrizzleClient, userId: stri
 
 import { and, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { item, userHome, userRequest } from "@/drizzle/schema";
-
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 
 /**
  * Build the `userRequest` lookup for `getVisitedHome`, selecting only `id`, including

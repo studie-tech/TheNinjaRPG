@@ -18,7 +18,6 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
-
 import {
   deleteBloodlineRollsForRemoveBloodlineFromPoolAtomically,
   deleteUserItemForRestoreStaleUserItemMergeClaims,
@@ -36,6 +35,7 @@ import {
   updateUserItemForUpdateUserItemQuantityAtomically,
 } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 
 type ClaimUserSnapshotParams = {
@@ -45,10 +45,6 @@ type ClaimUserSnapshotParams = {
   where?: QueryCondition[];
   set?: Record<string, unknown>;
 };
-
-/** Always advances a millisecond-precision snapshot, even within the same clock tick. */
-export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
-  new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));
 
 /** CAS on `user.updatedAt`: bumps `updatedAt` and merges optional `set` columns when still fresh. */
 export const claimUserSnapshot = async ({

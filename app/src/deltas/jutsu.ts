@@ -1,5 +1,6 @@
 import type { UserQueueState } from "@/deltas/profile";
 import { hasEnergyQueue } from "@/libs/queue";
+import type { UserJutsuFilteringSchema } from "@/validators/jutsu";
 
 import type { UserCachePatch } from "@/validators/userCache";
 
@@ -96,4 +97,43 @@ export const getUpdateUserJutsuOrderUserUpdate = ({
   newOrder: string[];
 }) => ({
   userPatch: { loadout: { jutsuIds: newOrder } },
+});
+
+/** Apply a committed equip flag; filtered unequips need a read to resolve list membership. */
+export const getEquippedJutsus = <
+  T extends { id: string; jutsuId: string; equipped: boolean },
+>(
+  rows: T[],
+  userJutsuId: string,
+  change: { equipped: boolean; jutsuId: string } | undefined,
+  input: UserJutsuFilteringSchema,
+): T[] | undefined => {
+  if (
+    !change ||
+    !rows.some((row) => row.id === userJutsuId && row.jutsuId === change.jutsuId)
+  )
+    return;
+  if (
+    !change.equipped &&
+    input.includeEquipped &&
+    Object.entries(input).some(
+      ([key, value]) => key !== "includeEquipped" && value !== undefined,
+    )
+  )
+    return;
+  return rows.map((row) =>
+    row.id === userJutsuId ? { ...row, equipped: change.equipped } : row,
+  );
+};
+
+/** Keep the active loadout's IDs aligned with the confirmed equipment flag. */
+export const getEquippedJutsuUserPatch = (
+  jutsuIds: string[],
+  change: { jutsuId: string; equipped: boolean },
+) => ({
+  loadout: {
+    jutsuIds: change.equipped
+      ? [...new Set([...jutsuIds, change.jutsuId])]
+      : jutsuIds.filter((id) => id !== change.jutsuId),
+  },
 });

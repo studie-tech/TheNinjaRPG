@@ -9,6 +9,7 @@ import { JUTSU_EQUIP_CAPS } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import type { baseReskinSchema } from "@/validators/jutsu";
 
 /** Fetch the stable slot order used for both display and allowance checks. */
@@ -131,7 +132,6 @@ import {
 } from "@/drizzle/schema";
 import type { JutsuCapFlags } from "@/libs/jutsu";
 
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { calculateContentDiff } from "@/utils/diff";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 

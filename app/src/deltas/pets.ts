@@ -1,4 +1,8 @@
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import type { RouterOutputs } from "@/app/_trpc/client";
+import type { CombatStatName } from "@/drizzle/constants";
+import type { UserData, UserPet } from "@/drizzle/schema";
+import { petRankUpBlockMessage } from "@/libs/pets/progression";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /**
  * Project the claimed pet slot and account revision together with its confirmed currency
@@ -98,18 +102,105 @@ export const getReleasePetUserUpdate = () => ({
   userPatch: { activePetId: null, petExperience: 0 },
 });
 
-/**
- * Project the remaining XP bank only for the active pet; assigning an inactive pet leaves the
- * profile unchanged.
- */
+/** Project committed integer pet allocations; fractional stat snapshots or costs require a read. */
 export const getAssignExperienceUserUpdate = ({
-  isActive,
+  user,
+  pet,
+  stats,
   availableExperience,
   spent,
+  now,
 }: {
-  isActive: boolean;
+  user: Pick<UserData, "activePetId" | "rank">;
+  pet: UserPet;
+  stats: Pick<UserPet, CombatStatName>;
   availableExperience: number;
   spent: number;
-}) => ({
-  userPatch: isActive ? { petExperience: availableExperience - spent } : {},
-});
+  now: Date;
+}) => {
+  const isActive = user.activePetId === pet.id;
+  // Fractional SQL parameters can round differently from JavaScript doubles.
+  if (!Number.isSafeInteger(spent) || !Object.values(stats).every(Number.isSafeInteger))
+    return { userPatch: isActive ? undefined : {}, petUpdate: undefined };
+  const updated = {
+    ...stats,
+    experience: pet.experience + spent,
+    storedExperience: isActive ? pet.storedExperience : availableExperience - spent,
+    revision: pet.revision + 1,
+    updatedAt: now,
+  };
+  const rankUpReason = petRankUpBlockMessage({ ...pet, ...updated }, user);
+  return {
+    userPatch: isActive ? { petExperience: availableExperience - spent } : {},
+    petUpdate: {
+      id: pet.id,
+      previousRevision: pet.revision,
+      ...updated,
+      unusedExperience: availableExperience - spent,
+      canRankUp: rankUpReason === null,
+      rankUpReason,
+    },
+  };
+};
+
+type PetExperienceUpdate = NonNullable<
+  ReturnType<typeof getAssignExperienceUserUpdate>["petUpdate"]
+>;
+
+/** Update only the selected pet's matching revision, preserving unrelated collection and care data. */
+export const getAssignedPetExperience = (
+  current: RouterOutputs["pets"]["getPet"],
+  update: PetExperienceUpdate | undefined,
+): RouterOutputs["pets"]["getPet"] | undefined => {
+  if (
+    !update ||
+    current.pet?.id !== update.id ||
+    current.pet.revision !== update.previousRevision ||
+    !current.pets.some(
+      (pet) => pet.id === update.id && pet.revision === update.previousRevision,
+    )
+  )
+    return;
+  const {
+    id,
+    previousRevision: _previous,
+    unusedExperience,
+    canRankUp,
+    rankUpReason,
+    ...patch
+  } = update;
+  return {
+    ...current,
+    pet: { ...current.pet, ...patch },
+    pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
+    unusedExperience,
+    canRankUp,
+    rankUpReason,
+  };
+};
+
+/** Apply the same committed XP allocation to a loaded collection, or refetch an unknown pet revision. */
+export const getAssignedPetCollection = (
+  current: RouterOutputs["pets"]["getCollection"],
+  update: PetExperienceUpdate | undefined,
+): RouterOutputs["pets"]["getCollection"] | undefined => {
+  if (
+    !update ||
+    !current.pets.some(
+      (pet) => pet.id === update.id && pet.revision === update.previousRevision,
+    )
+  )
+    return;
+  const {
+    id,
+    previousRevision: _previous,
+    unusedExperience: _unused,
+    canRankUp: _canRankUp,
+    rankUpReason: _reason,
+    ...patch
+  } = update;
+  return {
+    ...current,
+    pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
+  };
+};

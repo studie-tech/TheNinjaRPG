@@ -311,3 +311,47 @@ export const getSelectItemLoadoutUserUpdate = ({
         })
       : undefined,
 });
+
+/** Return changed equipment slots and their loaded baselines after the guarded write succeeds. */
+export const getInventoryEquipmentChanges = (
+  before: Pick<UserItem, "id" | "equipped">[],
+  after: Pick<UserItem, "id" | "equipped">[],
+) =>
+  after.flatMap((row) => {
+    const previous = before.find((entry) => entry.id === row.id);
+    return previous && previous.equipped !== row.equipped
+      ? [{ id: row.id, equipped: row.equipped, beforeEquipped: previous.equipped }]
+      : [];
+  });
+
+/** Apply saved equipment slots without replacing variant data; stale or missing rows refetch. */
+export const getEquippedInventory = <T extends Pick<UserItem, "id" | "equipped">>(
+  rows: T[],
+  changes:
+    | (Pick<UserItem, "id" | "equipped"> & { beforeEquipped: UserItem["equipped"] })[]
+    | undefined,
+): T[] | undefined => {
+  if (
+    !changes ||
+    changes.some(
+      (change) =>
+        !rows.some(
+          (row) => row.id === change.id && row.equipped === change.beforeEquipped,
+        ),
+    )
+  )
+    return;
+  return rows.map((row) => {
+    const change = changes.find((entry) => entry.id === row.id);
+    return change ? { ...row, equipped: change.equipped } : row;
+  });
+};
+
+/** Remove the confirmed sold stack by its instance ID, preserving other stacks and variants. */
+export const getSoldInventory = <T extends { id: string }>(
+  rows: T[],
+  userItemId: string,
+): T[] | undefined =>
+  rows.some((row) => row.id === userItemId)
+    ? rows.filter((row) => row.id !== userItemId)
+    : undefined;

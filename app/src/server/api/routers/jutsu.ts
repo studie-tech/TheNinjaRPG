@@ -30,7 +30,6 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-
 import {
   deletedReason,
   editedReason,
@@ -50,7 +49,6 @@ import {
   hasAnyJutsuEquipCap,
   type JutsuCapFlags,
 } from "@/libs/jutsu";
-
 import {
   getJutsuReskinMechanics,
   inheritJutsuReskinEffects,
@@ -206,7 +204,6 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
@@ -230,6 +227,7 @@ import {
   canReskinFreely,
   canTransferJutsu,
 } from "@/utils/permissions";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import {
   JutsuValidator,
   type ZodAllTags,

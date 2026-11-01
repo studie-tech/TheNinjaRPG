@@ -1,5 +1,6 @@
 "use client";
 
+import { getQueryKey } from "@trpc/react-query";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -15,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { startTransition, useRef, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import { getEquippedInventory, getSoldInventory } from "@/deltas/item";
 import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
@@ -39,6 +41,7 @@ import type {
   UserItemWithRelations,
   UserItemWithVariants,
 } from "@/drizzle/schema";
+import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -871,6 +874,17 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   // tRPC utility
   const utils = api.useUtils();
 
+  const inventoryCache = useQueryCacheUpdate<RouterOutputs["item"]["getUserItems"]>(
+    getQueryKey(api.item.getUserItems, undefined, "query"),
+  );
+  const variantsCache = useQueryCacheUpdate<
+    RouterOutputs["item"]["getUserItemsWithVariants"]
+  >(getQueryKey(api.item.getUserItemsWithVariants, undefined, "query"));
+  const prepareInventoryUpdate = () => ({
+    inventory: inventoryCache.prepareUpdate(),
+    variants: variantsCache.prepareUpdate(),
+  });
+
   // Handler for when mutations are settled
   const onSettled = () => {
     document.body.style.cursor = "default";
@@ -942,28 +956,52 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   });
 
   const { mutate: sell, isPending: isSelling } = api.item.sellUserItem.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, input, context) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
+          inventoryCache.updateCache(
+            (rows) => getSoldInventory(rows, input.userItemId),
+            context.inventory,
+          ),
+          variantsCache.updateCache(
+            (rows) => getSoldInventory(rows, input.userItemId),
+            context.variants,
+          ),
         ]);
       }
     },
+    onError: () =>
+      Promise.all([
+        utils.item.getUserItems.invalidate(),
+        utils.item.getUserItemsWithVariants.invalidate(),
+      ]).then(() => undefined),
     onSettled,
   });
 
   const { mutate: equip, isPending: isEquipping } = api.item.toggleEquip.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, _input, context) => {
       showMutationToast(data);
       if (data.success) {
-        void Promise.allSettled([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
+        await Promise.allSettled([
+          inventoryCache.updateCache(
+            (rows) => getEquippedInventory(rows, data.equipmentChanges),
+            context.inventory,
+          ),
+          variantsCache.updateCache(
+            (rows) => getEquippedInventory(rows, data.equipmentChanges),
+            context.variants,
+          ),
         ]);
       }
     },
+    onError: () =>
+      Promise.all([
+        utils.item.getUserItems.invalidate(),
+        utils.item.getUserItemsWithVariants.invalidate(),
+      ]).then(() => undefined),
     onSettled,
   });
 

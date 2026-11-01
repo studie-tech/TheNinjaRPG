@@ -1,3 +1,4 @@
+import { getNextUserSnapshotAt } from "@/utils/time";
 import { clearActiveNpcQuest } from "@/queries/concurrency";
 
 import type { SQL } from "drizzle-orm";
@@ -9,7 +10,6 @@ import {
   claimActiveNpcQuest,
   claimUserSnapshot,
   consumeUserItemAtomically,
-  getNextUserSnapshotAt,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
   updateUserItemQuantityAtomically,

@@ -940,9 +940,13 @@ export const useCheckRewards = () => {
           utils.profile.getDashboard.invalidate(),
           utils.quests.getQuestHistory.invalidate(),
           utils.quests.allianceBuilding.invalidate(),
-          // Quest rewards can grant items
-          utils.item.getUserItems.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
+          // Missing metadata and inventory-changing rewards need authoritative rows.
+          ...(data.itemsChanged === false
+            ? []
+            : [
+                utils.item.getUserItems.invalidate(),
+                utils.item.getUserItemsWithVariants.invalidate(),
+              ]),
         ]);
         if (
           currentStep?.title === "Academy Dialog Option" &&

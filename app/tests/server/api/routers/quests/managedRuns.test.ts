@@ -1,3 +1,4 @@
+import { getNextUserSnapshotAt } from "@/utils/time";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
@@ -21,7 +22,7 @@ import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
 import { createTRPCRouter } from "@/server/api/trpc";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
+
 import {
   DefeatOpponents,
   DialogObjective,

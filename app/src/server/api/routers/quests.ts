@@ -7,6 +7,7 @@ import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
   getCollectPetTaskUserUpdate,
+  getQuestInventoryUpdate,
   getQuestRewardProjectionUpdate,
   getRetryBattleUserUpdate,
   getRewardUserDelta,
@@ -107,7 +108,6 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
 } from "@/libs/questRun";
-
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -257,7 +257,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot, getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
   fetchPublicQuestLocations,
@@ -296,6 +296,7 @@ import {
   canPlayHiddenQuests,
 } from "@/utils/permissions";
 import {
+  getNextUserSnapshotAt,
   periodStart,
   secondsFromDate,
   secondsFromNow,
@@ -1464,7 +1465,7 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .meta({ mcp: { description: "Check and claim quest rewards" } })
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
-    .output(userDeltaResponseSchema)
+    .output(userDeltaResponseSchema.extend({ itemsChanged: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Reward payout follows the history/account claim; isolated runs publish both together.
       const [
@@ -1473,6 +1474,7 @@ export const questsRouter = createTRPCRouter({
           toastMessages,
           settings,
           requiresProgressionRefresh,
+          craftingItemsChanged,
           publishedAchievementIds,
           progressionQuestCandidates,
         },
@@ -1621,6 +1623,14 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
+        ...getQuestInventoryUpdate({
+          rewards: claim.rewards,
+          requiresProgressionRefresh:
+            requiresProgressionRefresh || toastMessages.length > 0,
+          craftingItemsChanged,
+          hasConsequences:
+            consequences.length > 0 || refreshedTrackers.consequences.length > 0,
+        }),
         ...getQuestRewardProjectionUpdate({
           user: user,
           requiresProgressionRefresh,

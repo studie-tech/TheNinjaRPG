@@ -79,9 +79,9 @@ import {
 } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { canPlayHiddenQuests } from "@/utils/permissions";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import type {
   AllObjectivesType,
   AllObjectiveTask,

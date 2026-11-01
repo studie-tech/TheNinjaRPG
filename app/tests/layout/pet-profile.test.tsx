@@ -1,3 +1,4 @@
+import { getAssignExperienceUserUpdate } from "@/deltas/pets";
 import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
@@ -42,6 +43,7 @@ let owner: {
   sector: number; battleId: string | null; isOutlaw: boolean;
   updatedAt: Date; experience: number; earnedExperience: number; petExperience: number;
   petTask?: PetTask | null;
+  activePetId?: string;
   village: { name: string; type: string; sector: number; structures: { route: string }[]; relationshipA: []; relationshipB: [] };
 };
 let queryClient: QueryClient;
@@ -89,7 +91,7 @@ beforeEach(() => {
   };
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const pet = {
-    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0,
+    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0, revision: 0,
     speciesId: "pet-species-0", species: petSpeciesFixture({ rarity: "UNCOMMON" }), paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
     generationStatus: "READY", avatar: "/miso.webp", artRank: 7, battleEnabled: true,
     spawnPosition: "BEHIND", jutsuIds: [], skillIds: [],
@@ -1131,4 +1133,27 @@ it("reconciles a late allocation response after a newer profile revision", async
   await waitFor(() => expect(getUser).toHaveBeenCalledTimes(1));
   expect(cachedOwner()?.petExperience).toBe(80);
   await view.findByText("80 training points available");
+});
+
+it.each([true, false])("reconciles confirmed XP and the collection without a pet or profile read, active: %s", async (isActive) => {
+  owner.activePetId = isActive ? "companion" : "other";
+  owner.petExperience = isActive ? 100 : 50;
+  data = { ...data, activePetId: owner.activePetId, pet: { ...data.pet!, storedExperience: isActive ? 0 : 100 } };
+  data.pets = [data.pet!];
+  const collectionKey = getQueryKey(testApi.pets.getCollection, undefined, "query");
+  queryClient.setQueryData(collectionKey, { pets: data.pets, activePetId: owner.activePetId });
+  assign.mockImplementation(() => ({ success: true, message: "Assigned", ...getAssignExperienceUserUpdate({
+    user: owner as never, pet: { ...data.pet!, generationToken: null }, stats: { offence: 11, defence: 10, strength: 10, speed: 10, intelligence: 10, willpower: 10 },
+    availableExperience: 100, spent: 1, now: new Date("2026-11-01T12:00:00Z"),
+  }) }));
+  observeProfileCache();
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  fireEvent.click(view.getByRole("button", { name: "Assign experience" }));
+  await view.findByText("99 training points available");
+  await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+  expect(getPet).toHaveBeenCalledTimes(1);
+  expect(getUser).not.toHaveBeenCalled();
+  expect(queryClient.getQueryData<RouterOutputs["pets"]["getCollection"]>(collectionKey)?.pets[0]).toMatchObject({ offence: 11, experience: 1, revision: 1, storedExperience: isActive ? 0 : 99 });
 });

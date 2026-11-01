@@ -18,6 +18,7 @@ import {
   getBuyUserUpdate,
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
+  getInventoryEquipmentChanges,
   getPurchaseVariantUserUpdate,
   getRepairedEquipmentUpdate,
   getSelectItemLoadoutUserUpdate,
@@ -1762,7 +1763,19 @@ export const itemRouter = createTRPCRouter({
   toggleEquip: protectedProcedure
     .meta({ mcp: { description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        equipmentChanges: z
+          .array(
+            z.object({
+              id: z.string(),
+              equipped: z.enum(ItemSlots),
+              beforeEquipped: z.enum(ItemSlots),
+            }),
+          )
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [useritems, user, loadouts, masterySources] = await Promise.all([
@@ -1800,7 +1813,14 @@ export const itemRouter = createTRPCRouter({
           }
         }
         // Return
-        return { success: true, message: result.message };
+        return {
+          success: true,
+          message: result.message,
+          equipmentChanges: getInventoryEquipmentChanges(
+            useritems,
+            result.newUserItems,
+          ),
+        };
       }
       // Else return the result from toggling
       return result;

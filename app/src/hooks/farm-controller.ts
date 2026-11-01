@@ -1,17 +1,12 @@
 "use client";
 
+import { getQueryKey } from "@trpc/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { getFarmMutationUpdate } from "@/deltas/farming";
 import { FARM_MAX_CROP_SELL_QUANTITY } from "@/drizzle/constants";
-import { applyFarmMutationPatch } from "@/libs/farm-state";
-import {
-  applyFertilizerReduction,
-  applyWaterReduction,
-  getPlotGrowthProgress,
-  getPlotGrowthStage,
-  patchFarmPlot,
-  summarizeFarmPlots,
-} from "@/libs/farming";
+import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { summarizeFarmPlots } from "@/libs/farming";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type {
@@ -29,6 +24,9 @@ const isFarmState = (data: FarmQueryData | undefined): data is FarmStateResponse
 
 export function useFarmController() {
   const utils = api.useUtils();
+  const farmCache = useQueryCacheUpdate<RouterOutputs["farming"]["getFarmState"]>(
+    getQueryKey(api.farming.getFarmState, undefined, "query"),
+  );
   const { timeDiff } = useRequiredUserData();
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [pendingPlotSlots, setPendingPlotSlots] = useState<Set<number>>(new Set());
@@ -90,43 +88,31 @@ export function useFarmController() {
     setPendingPlotSlots(next);
   }, []);
 
-  const updateCache = useCallback(
-    (updater: (state: FarmStateResponse) => FarmStateResponse) => {
-      utils.farming.getFarmState.setData(undefined, (current) =>
-        isFarmState(current) ? updater(current) : current,
-      );
-    },
-    [utils],
-  );
-
   const runPlotAction = useCallback(
     async (
       plot: FarmPlotState,
       effect: FarmEffect,
-      optimisticPlot: FarmPlotState,
       request: () => Promise<FarmMutationResponse>,
+      userItemId?: string,
     ) => {
       if (pendingPlotSlotsRef.current.has(plot.slotIndex)) return;
-      const snapshot = utils.farming.getFarmState.getData();
+      const snapshot = farmCache.prepareUpdate();
       setPendingPlot(plot.slotIndex, true);
       try {
-        await utils.farming.getFarmState.cancel();
-        updateCache((state) => ({
-          ...state,
-          plots: patchFarmPlot(state.plots, optimisticPlot),
-        }));
         const result = await request();
         showMutationToast(result);
         setAnnouncement(result.message);
-        if (!result.success) {
-          utils.farming.getFarmState.setData(undefined, snapshot);
-          return;
-        }
-        updateCache((state) => applyFarmMutationPatch(state, result));
+        if (!result.success) return;
+        await farmCache.updateCache(
+          (current) =>
+            isFarmState(current)
+              ? getFarmMutationUpdate(current, result, effect, userItemId)
+              : undefined,
+          snapshot,
+        );
         setEffectEvent({ id: Date.now(), slotIndex: plot.slotIndex, effect });
-        void utils.farming.getFarmState.invalidate();
       } catch (error) {
-        utils.farming.getFarmState.setData(undefined, snapshot);
+        void utils.farming.getFarmState.invalidate();
         const message = error instanceof Error ? error.message : "Farm action failed";
         setAnnouncement(message);
         showMutationToast({ success: false, message });
@@ -134,118 +120,40 @@ export function useFarmController() {
         setPendingPlot(plot.slotIndex, false);
       }
     },
-    [setPendingPlot, updateCache, utils],
+    [setPendingPlot, farmCache, utils],
   );
 
   const plant = useCallback(
     (plot: FarmPlotState, seedItemId: string) => {
-      if (!farmState) return;
-      const seed = farmState.availableSeeds.find(
-        (entry) => entry.itemId === seedItemId,
-      );
-      if (!seed) return;
-      const plantedAt = new Date(Date.now() - timeDiff);
-      const finishAt = new Date(plantedAt.getTime() + seed.growTimeSeconds * 1000);
-      const optimisticPlot: FarmPlotState = {
-        ...plot,
-        seedItemId,
-        seedName: seed.name,
-        cropName: seed.yieldName,
-        cropImage: seed.yieldImage,
-        plantedAt,
-        finishAt,
-        lastWateredAt: null,
-        fertilizerApplied: false,
-        isReady: false,
-        canWater: true,
-        nextWateringAt: null,
-        growthProgress: 0,
-        growthStage: 1,
-        growTimeSeconds: seed.growTimeSeconds,
-        yieldQuantity: seed.yieldQuantity,
-        plantExperience: seed.plantExperience,
-        harvestExperience: seed.harvestExperience,
-      };
-      void runPlotAction(plot, "plant", optimisticPlot, () =>
+      void runPlotAction(plot, "plant", () =>
         plantMutation.mutateAsync({ plotId: plot.id, seedItemId }),
       );
     },
-    [farmState, plantMutation, runPlotAction, timeDiff],
+    [plantMutation, runPlotAction],
   );
-
   const water = useCallback(
     (plot: FarmPlotState) => {
-      if (!plot.finishAt) return;
-      const actionNow = new Date(Date.now() - timeDiff);
-      const finishAt = applyWaterReduction(plot.finishAt, actionNow);
-      void runPlotAction(
-        plot,
-        "water",
-        {
-          ...plot,
-          finishAt,
-          lastWateredAt: actionNow,
-          canWater: false,
-          growthProgress: getPlotGrowthProgress(plot.plantedAt, finishAt, actionNow),
-          growthStage: getPlotGrowthStage(plot.plantedAt, finishAt, actionNow),
-        },
-        () => waterMutation.mutateAsync({ plotId: plot.id }),
+      void runPlotAction(plot, "water", () =>
+        waterMutation.mutateAsync({ plotId: plot.id }),
       );
     },
-    [runPlotAction, timeDiff, waterMutation],
+    [waterMutation, runPlotAction],
   );
-
   const fertilize = useCallback(
     (plot: FarmPlotState, userItemId: string) => {
-      if (!plot.finishAt || !farmState) return;
-      const fertilizer = farmState.availableFertilizers.find(
-        (entry) => entry.userItemId === userItemId,
-      );
-      if (!fertilizer) return;
-      const actionNow = new Date(Date.now() - timeDiff);
-      const finishAt = applyFertilizerReduction(
-        plot.finishAt,
-        fertilizer.timeReductionSeconds,
-        actionNow,
-      );
       void runPlotAction(
         plot,
         "fertilize",
-        {
-          ...plot,
-          finishAt,
-          fertilizerApplied: true,
-          growthProgress: getPlotGrowthProgress(plot.plantedAt, finishAt, actionNow),
-          growthStage: getPlotGrowthStage(plot.plantedAt, finishAt, actionNow),
-        },
         () => fertilizeMutation.mutateAsync({ plotId: plot.id, userItemId }),
+        userItemId,
       );
     },
-    [farmState, fertilizeMutation, runPlotAction, timeDiff],
+    [fertilizeMutation, runPlotAction],
   );
-
   const harvest = useCallback(
     (plot: FarmPlotState) => {
-      void runPlotAction(
-        plot,
-        "harvest",
-        {
-          ...plot,
-          seedItemId: null,
-          seedName: null,
-          cropName: null,
-          cropImage: null,
-          plantedAt: null,
-          finishAt: null,
-          lastWateredAt: null,
-          fertilizerApplied: false,
-          isReady: false,
-          canWater: false,
-          nextWateringAt: null,
-          growthProgress: 0,
-          growthStage: 0,
-        },
-        () => harvestMutation.mutateAsync({ plotId: plot.id }),
+      void runPlotAction(plot, "harvest", () =>
+        harvestMutation.mutateAsync({ plotId: plot.id }),
       );
     },
     [harvestMutation, runPlotAction],
@@ -261,7 +169,6 @@ export function useFarmController() {
         showMutationToast(result);
         setAnnouncement(result.message);
         if (!result.success) return false;
-        updateCache((state) => applyFarmMutationPatch(state, result));
         await utils.farming.getFarmState.invalidate();
         return true;
       } catch (error) {
@@ -275,7 +182,7 @@ export function useFarmController() {
         setPendingBulkAction(null);
       }
     },
-    [updateCache, utils],
+    [utils],
   );
 
   const plantAll = useCallback(
@@ -300,9 +207,13 @@ export function useFarmController() {
   );
 
   const runInventoryAction = useCallback(
-    async (key: string, request: () => Promise<FarmMutationResponse>) => {
+    async (
+      key: string,
+      request: () => Promise<FarmMutationResponse>,
+      userItemId?: string,
+    ) => {
       if (pendingInventoryKeysRef.current.has(key)) return false;
-      const snapshot = utils.farming.getFarmState.getData();
+      const snapshot = farmCache.prepareUpdate();
       const pendingKeys = new Set(pendingInventoryKeysRef.current).add(key);
       pendingInventoryKeysRef.current = pendingKeys;
       setPendingInventoryKeys(pendingKeys);
@@ -311,11 +222,21 @@ export function useFarmController() {
         showMutationToast(result);
         setAnnouncement(result.message);
         if (!result.success) return false;
-        updateCache((state) => applyFarmMutationPatch(state, result));
-        void utils.farming.getFarmState.invalidate();
+        await farmCache.updateCache(
+          (current) =>
+            isFarmState(current)
+              ? getFarmMutationUpdate(
+                  current,
+                  result,
+                  key.split(":")[0] ?? "",
+                  userItemId,
+                )
+              : undefined,
+          snapshot,
+        );
         return true;
       } catch (error) {
-        utils.farming.getFarmState.setData(undefined, snapshot);
+        void utils.farming.getFarmState.invalidate();
         const message = error instanceof Error ? error.message : "Transaction failed";
         setAnnouncement(message);
         showMutationToast({ success: false, message });
@@ -327,7 +248,7 @@ export function useFarmController() {
         setPendingInventoryKeys(next);
       }
     },
-    [updateCache, utils],
+    [farmCache, utils],
   );
 
   const buy = useCallback(
@@ -355,8 +276,10 @@ export function useFarmController() {
 
   const sell = useCallback(
     (userItemId: string, quantity: number) =>
-      runInventoryAction(`sell:${userItemId}`, () =>
-        sellMutation.mutateAsync({ userItemId, quantity }),
+      runInventoryAction(
+        `sell:${userItemId}`,
+        () => sellMutation.mutateAsync({ userItemId, quantity }),
+        userItemId,
       ),
     [runInventoryAction, sellMutation],
   );
@@ -379,6 +302,7 @@ export function useFarmController() {
           let remaining = crop.quantity;
           while (remaining > 0 && !failure) {
             const quantity = Math.min(FARM_MAX_CROP_SELL_QUANTITY, remaining);
+            const snapshot = farmCache.prepareUpdate();
             const result = await sellMutation.mutateAsync({
               userItemId: crop.userItemId,
               quantity,
@@ -387,7 +311,13 @@ export function useFarmController() {
               failure = result.message;
               break;
             }
-            updateCache((state) => applyFarmMutationPatch(state, result));
+            await farmCache.updateCache(
+              (current) =>
+                isFarmState(current)
+                  ? getFarmMutationUpdate(current, result, "sell", crop.userItemId)
+                  : undefined,
+              snapshot,
+            );
             remaining -= quantity;
             sold += quantity;
             earned += quantity * crop.sellValue;
@@ -401,7 +331,7 @@ export function useFarmController() {
         next.delete(key);
         pendingInventoryKeysRef.current = next;
         setPendingInventoryKeys(next);
-        void utils.farming.getFarmState.invalidate();
+        if (failure) void utils.farming.getFarmState.invalidate();
       }
       const summary = `Sold ${sold} ${sold === 1 ? "crop" : "crops"} for ${earned.toLocaleString()} farm coins`;
       const message = failure
@@ -413,7 +343,7 @@ export function useFarmController() {
       setAnnouncement(message);
       return !failure;
     },
-    [sellMutation, updateCache, utils],
+    [sellMutation, farmCache, utils],
   );
   const extract = useCallback(
     (extractorSlot: number, userItemId: string, quantity: number) =>

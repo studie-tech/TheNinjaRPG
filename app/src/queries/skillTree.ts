@@ -6,6 +6,7 @@ import { and, eq, gt, ne } from "drizzle-orm";
 import { userData, userItem, userSkill } from "@/drizzle/schema";
 import type { MasterySources } from "@/libs/mastery";
 import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import type { SkillTreeFolderSchema } from "@/validators/skillTree";
 
 /**
@@ -111,8 +112,6 @@ import {
   skillTree,
   skillTreeFolder,
 } from "@/drizzle/schema";
-
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 
 /** Build the `skillTree` listing for `getAllNames`, using predicates on `pathType`. */
 export const listSkillTreeForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
