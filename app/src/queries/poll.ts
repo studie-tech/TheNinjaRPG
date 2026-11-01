@@ -249,7 +249,7 @@ export const insertActionLogForAddOption2 = (
       `User: ${input.username}`,
     ],
     relatedId: input.pollId,
-    relatedMsg: `Added user option: ${input.username}`,
+    relatedMsg: clampActionLogText(`Added user option: ${input.username}`),
   });
 
 /** Build the `poll` listing for `getPolls`, using the configured predicates. */
