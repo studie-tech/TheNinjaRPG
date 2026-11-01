@@ -162,8 +162,18 @@ export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) =>
   return false;
 };
 
+/** Sign-up stamps `joinedVillageAt` and `createdAt` together; only a later village change counts. */
+const joinedVillageAtSignup = (user: Pick<UserData, "joinedVillageAt" | "createdAt">) =>
+  !!user.createdAt &&
+  Math.abs(
+    new Date(user.joinedVillageAt).getTime() - new Date(user.createdAt).getTime(),
+  ) < 60_000;
+
 export const getReducedGainsDays = (user: UserData) => {
-  if (hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
+  if (
+    hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK) &&
+    !joinedVillageAtSignup(user)
+  ) {
     const daysPassed = secondsPassed(user.joinedVillageAt) / 86400;
     const daysLeft = VILLAGE_REDUCED_GAINS_DAYS - daysPassed;
     if (daysLeft > 0) {
