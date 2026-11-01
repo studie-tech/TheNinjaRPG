@@ -279,3 +279,27 @@ describe("travel scene ground depth", () => {
     expect(physical.every((child) => child.destroyed && !depth.renderLayerChildren.includes(child))).toBe(true);
   });
 });
+
+describe("travel scene window updates", () => {
+  it("keeps a sector installed just before a newer window update interrupts it", async () => {
+    const fixture = gameFixture();
+    const state = snapshotFixture();
+    let scene: Awaited<ReturnType<typeof createTravelScene>> | undefined;
+    let interrupted: Promise<void> | undefined;
+    scene = await createTravelScene({
+      mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false,
+      getSnapshot: () => ({ ...state }), onError: (error) => { throw error; },
+      // An auto travel requests a new window while the previous update yields after installing a sector.
+      onReady: () => { if (scene?.sectors.has(725) && !interrupted) interrupted = scene.updateWindow(); },
+      onTap: () => {}, onHover: () => {}, onZoom: () => {}, initialZoom: 1,
+    });
+    fixture.advance(); await settle();
+    state.window.push(windowEntry(725, 1));
+    await scene.updateWindow();
+    await interrupted;
+    const neighbor = scene.sectors.get(725)!;
+    expect(neighbor.terrain.container.destroyed).toBe(false);
+    await scene.updateWindow();
+    expect(scene.sectors.get(725)).toBe(neighbor);
+  });
+});
