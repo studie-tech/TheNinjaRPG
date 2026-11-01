@@ -40,7 +40,9 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     return getTimeLeftStr(days, hours, minutes, seconds);
   };
 
-  const [countString, setCountString] = useState<string>(calcCountString);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [isFinished, setFinished] = useState(() => targetTime <= Date.now());
+  const finishedRef = useRef(isFinished);
 
   useEffect(() => {
     // Clock recalibration keeps the same countdown; only a new deadline can finish again.
@@ -50,9 +52,16 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     }
     const updateCountdown = () => {
       const msLeft = targetTime - Date.now();
-
-      if (msLeft <= 0) {
-        setCountString("Done");
+      const finished = msLeft <= 0;
+      // Clock text has one DOM owner; only terminal UI changes need React reconciliation.
+      const label = labelRef.current;
+      const text = calcCountString();
+      if (label && label.textContent !== text) label.textContent = text;
+      if (finishedRef.current !== finished) {
+        finishedRef.current = finished;
+        setFinished(finished);
+      }
+      if (finished) {
         // Call onFinish only once per countdown
         if (onFinishRef.current && !hasCalledOnFinishRef.current) {
           hasCalledOnFinishRef.current = true;
@@ -60,8 +69,6 @@ const Countdown: React.FC<CountdownProps> = (props) => {
         }
         return true; // Signal countdown is done
       } else {
-        const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(msLeft);
-        setCountString(getTimeLeftStr(days, hours, minutes, seconds));
         return false;
       }
     };
@@ -81,15 +88,15 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     }
   }, [targetTime, targetDateTime]);
 
-  if (countString === "Done" && onEndShow) {
+  if (isFinished && onEndShow) {
     return onEndShow;
   }
   // The server's string is whatever the clock said when the page was rendered, which
   // for a prerendered page is the build. The effect above replaces it on mount, so the
   // mismatch is the one React allows a timestamp to have.
   return (
-    <span className={className} suppressHydrationWarning>
-      {countString}
+    <span ref={labelRef} className={className} suppressHydrationWarning>
+      {calcCountString()}
     </span>
   );
 };

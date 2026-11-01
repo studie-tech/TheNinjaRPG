@@ -20,7 +20,7 @@ import {
   STRONGEST_USERS_COUNT,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import { GameSettingsPopover } from "@/layout/GameSettings";
+import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
@@ -122,7 +122,10 @@ interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
-  userData?: UserWithRelations | null;
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "userId" | "username" | "status"
+  > | null;
 }
 
 export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
@@ -199,7 +202,10 @@ interface LayoutRightSidebarContentProps {
   variant: LayoutVariant;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
-  userData?: UserWithRelations | null;
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "userId" | "username" | "status"
+  > | null;
   systems: NavBarDropdownLink[];
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
@@ -316,7 +322,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
 interface SignedInIconsProps {
   variant: LayoutVariant;
   isSignedIn: boolean;
-  userData?: UserWithRelations | null;
+  userData?: GameSettingsUser | null;
   updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
   onEventClick: () => void;
   onThemeToggle?: () => void;
@@ -412,7 +418,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
 interface RightSideBarProps {
   variant: LayoutVariant;
   systems: NavBarDropdownLink[];
-  userData: UserWithRelations;
+  userData: Pick<NonNullable<UserWithRelations>, "status">;
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
 }

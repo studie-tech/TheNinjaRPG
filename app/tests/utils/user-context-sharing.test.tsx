@@ -74,7 +74,8 @@ const mount = (initial = snapshot(), children: ReactNode = null) => {
       getUser: {
         // Exercise the provider's query options with a real TanStack cache and observer.
         useQuery: (_input: undefined, options: UseQueryOptions<Snapshot>) =>
-          useQuery({ ...options, queryKey: key, queryFn: async () => response }),
+          // Compiled consumers can enumerate metadata while memoizing a query result.
+          ({ ...useQuery({ ...options, queryKey: key, queryFn: async () => response }) }),
       },
     },
   });

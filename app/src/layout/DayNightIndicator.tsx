@@ -1,7 +1,7 @@
 "use client";
 
 import { Moon, RotateCcw, SlidersHorizontal, Sun } from "lucide-react";
-import { useId } from "react";
+import { memo, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -27,23 +27,25 @@ type DayNightIndicatorProps = {
 };
 
 /** Shows live world time, with local staff controls for the owning map's lighting and weather. */
-export function DayNightIndicator({
+export const DayNightIndicator = memo(function DayNightIndicator({
   className,
   previewDate = null,
   onPreviewDateChange,
   previewWeather = null,
   onPreviewWeatherChange,
 }: DayNightIndicatorProps) {
-  const dayNightCycle = useDayNightCycle();
   const { data: userData, timeDiff } = useUserDataSelector((user) => ({
     role: user.role,
   }));
+  const [isOpen, setOpen] = useState(false);
   const sliderId = useId();
   const weatherId = useId(),
     strengthId = useId();
   const canPreview = isStaffRole(userData?.role) && !!onPreviewDateChange;
   const selectedDate = canPreview ? previewDate : null;
   const selectedWeather = canPreview && onPreviewWeatherChange ? previewWeather : null;
+  // A frozen preview has no live clock changes to publish to the controls.
+  const dayNightCycle = useDayNightCycle(1000, !selectedDate, !(canPreview && isOpen));
   const cycle = selectedDate ? getWorldCycleState(selectedDate) : dayNightCycle;
   const position = getWorldCyclePosition(selectedDate ?? dayNightCycle.now);
   // The inspection clock places dawn at 06:00 and dusk at 18:00, respecting each phase's duration.
@@ -93,7 +95,7 @@ export function DayNightIndicator({
       }
     >
       {canPreview ? (
-        <Popover>
+        <Popover open={isOpen} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button
               type="button"
@@ -219,7 +221,7 @@ export function DayNightIndicator({
       )}
     </div>
   );
-}
+});
 
 const WEATHER_LABELS: Record<WorldWeather["kind"], string> = {
   clear: "Clear",

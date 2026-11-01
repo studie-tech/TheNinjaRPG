@@ -17,7 +17,7 @@ import {
 
 interface LayoutBackgroundProps {
   variant: LayoutVariant;
-  userData?: UserWithRelations | null;
+  userData?: Pick<NonNullable<UserWithRelations>, "village"> | null;
   isAnonymousLayout?: boolean;
 }
 
@@ -120,7 +120,7 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
 }) => {
   const [loadedWallpaper, setLoadedWallpaper] = useState<string | null>(null);
   const wallpaperVariant = useWallpaperVariant();
-  const imageset = getImageSet(userData);
+  const imageset = getImageSet(userData?.village?.wallpaperOverwrite);
   const pixelWallpaper = getPixelWallpaper(userData);
   const isUserWallpaperLoaded = loadedWallpaper === pixelWallpaper;
 

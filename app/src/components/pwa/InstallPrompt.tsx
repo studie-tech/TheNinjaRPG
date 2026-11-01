@@ -4,7 +4,7 @@ import { Download, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function InstallPrompt() {
   const {
@@ -18,7 +18,7 @@ export default function InstallPrompt() {
     isStandalone,
   } = useInstallPrompt();
 
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => user.userId);
 
   // Tutorial mode
   const { currentStep } = useTutorialStep();

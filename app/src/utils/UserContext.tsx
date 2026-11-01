@@ -143,6 +143,7 @@ export function UserContextProvider(props: {
     enabled: !!userId && isSignedIn && isLoaded,
     retry: false,
     refetchInterval: 300000,
+    notifyOnChangeProps: ["data", "status"],
   });
 
   // Profile reads collect completed sessions and start their queued successors.
@@ -315,6 +316,8 @@ export const useUserDataSelector = <T,>(
   const info = useContext(UserInfoContext);
   const { data } = api.profile.getUser.useQuery(undefined, {
     enabled: false,
+    // Compiler-generated dependencies may read query metadata; only the selected data drives this consumer.
+    notifyOnChangeProps: ["data"],
     select: (snapshot) => (snapshot.userData ? select(snapshot.userData) : undefined),
   });
   return { ...info, data };

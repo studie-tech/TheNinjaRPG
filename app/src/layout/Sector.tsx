@@ -103,6 +103,7 @@ import { round } from "@/utils/math";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
 import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
+import { shareUserCache } from "@/utils/userCacheSharing";
 import { MAP_LOCATION_REFRESH_MS, type MapLocation } from "@/validators/mapLocation";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
@@ -137,7 +138,6 @@ interface SectorProps {
   cameraFocusRevision: number;
   setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
-  setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
   setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
 }
 
@@ -187,7 +187,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { sector, sectorWindow, target, showActive, autoAttackMode, centerEntry } =
     props;
   const sectorMap = centerEntry.map;
-  const { setTarget: setMovementTarget, setPosition } = props;
+  const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
   useEffect(() => {
     if (!isWorldExpanded) return;
@@ -220,7 +220,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // State pertaining to the sector
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
   const [healTargetUser, setHealTargetUser] = useState<SectorUser | null>(null);
-  const [moves, setMoves] = useState(0);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
   const [allyAttack, setAllyAttack] = useLocalStorage<boolean>("friendlyAttack", false);
   const [storedBracket, setStoredBracket] = useLocalStorage<number>(
@@ -312,14 +311,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const routeTargetRef = useRef<TravelSnapshot["routeTarget"]>(
     target ? { sector, ...target } : null,
   );
-  useEffect(() => {
-    routeTargetRef.current = target ? { sector: sectorRef.current, ...target } : null;
-  }, [target]);
   /** Qualify a selected tile before crossings advance the sector ahead of React's props. */
   const setTarget = (point: SectorPoint | null) => {
     if (point) travel.scene.current?.recenter();
     routeTargetRef.current = point ? { sector: sectorRef.current, ...point } : null;
-    setMovementTarget(point);
+    continueMovement();
   };
   const pendingNpcInteractRef = useRef<{
     placementId: string;
@@ -390,6 +386,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     {
       enabled: sector !== undefined,
       placeholderData: (previous) => previous,
+      // Equal server Dates do not change the visible presence or village snapshot.
+      structuralSharing: shareUserCache,
+      notifyOnChangeProps: ["data"],
       // Presence and fights change while the tab is open; pusher events can be
       // missed, so poll the sector snapshot on a short interval. Pause that
       // interval while the tab is in the background.
@@ -1015,7 +1014,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       await crossingPromise?.catch(() => undefined);
       return;
     }
-    setMoves((prev) => prev + 1);
     if (crossingPromise) {
       await handleCrossing(
         crossingPromise,
@@ -1249,7 +1247,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           true,
         );
       }
-      setMoves((prev) => prev + 1);
+      continueMovement();
       setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
     }
     runQuestTriggers(data, true);
@@ -1338,8 +1336,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (res.success && res.data) {
       const d = res.data;
       snapMovementPosition(d);
-      // The journey is complete; clear the target so the movement effect
-      // does not re-issue a stale edge move against the new sector's grid
+      // Clear the completed route before a queued request uses the new sector's grid.
       setTarget(null);
       setPosition({ x: d.longitude, y: d.latitude });
       await updateUser({
@@ -1427,6 +1424,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       movePendingRef.current = false;
       if (mountedRef.current) {
         document.body.style.cursor = "default";
+        continueMovement();
       } else {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
@@ -1853,48 +1851,50 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
   }, [healTargetUser, userData, sorrounding]);
 
-  // This is where the actual movement happens
-  useEffect(() => {
-    // A journey animation is authoritative while it runs: its own pipeline
-    // issues every needed move, so the effect must not double-request
-    if (walkAnimatingRef.current || movePendingRef.current || isMoving) return;
-    // The move payload falls back to IMG_AVATAR_DEFAULT, so a missing custom
-    // avatar must not block movement (default-avatar users could not move).
-    if (target && originRef.current && pathFinderRef.current && userData) {
-      // Check user status
-      if (userData.status !== "AWAKE") {
-        setTarget(null);
-        return;
-      }
-      // Get target hex
-      const targetHex = gridRef?.current?.getHex({ col: target.x, row: target.y });
-      // Guards
-      if (!targetHex) return;
-      if (target.x === originRef.current.col && target.y === originRef.current.row) {
-        const cross = pendingCrossRef.current;
-        if (cross) {
-          pendingCrossRef.current = null;
-          moveAcrossBorder(cross, { x: target.x, y: target.y });
-        }
-        return;
-      }
-      // Clear heal target if moving away
-      if (healTargetUser) {
-        setHealTargetUser(null);
-      }
-      // Get shortest path
-      if (!isMoving) {
-        document.body.style.cursor = "wait";
-        move(
-          buildStepPayload(
-            { x: originRef.current.col, y: originRef.current.row },
-            { x: targetHex.col, y: targetHex.row },
-            sectorRef.current,
-          ),
-        );
-      }
+  /** Advance the latest scene destination without a React render for each retarget. */
+  function continueMovement() {
+    if (!mountedRef.current || walkAnimatingRef.current || movePendingRef.current)
+      return;
+    const destination = routeTargetRef.current;
+    const user = userRef.current;
+    if (!destination || !originRef.current || !pathFinderRef.current || !user) return;
+    if (user.status !== "AWAKE") {
+      routeTargetRef.current = null;
+      return;
     }
-  }, [target, userData, moves, sector, isMoving, move]);
+    const targetHex = gridRef.current?.getHex({
+      col: destination.x,
+      row: destination.y,
+    });
+    if (!targetHex) return;
+    if (
+      destination.x === originRef.current.col &&
+      destination.y === originRef.current.row
+    ) {
+      const cross = pendingCrossRef.current;
+      if (cross) {
+        pendingCrossRef.current = null;
+        moveAcrossBorder(cross, destination);
+      }
+      return;
+    }
+    if (healTargetUser) setHealTargetUser(null);
+    movePendingRef.current = true;
+    document.body.style.cursor = "wait";
+    move(
+      buildStepPayload(
+        { x: originRef.current.col, y: originRef.current.row },
+        { x: targetHex.col, y: targetHex.row },
+        sectorRef.current,
+      ),
+    );
+  }
+  // Parent commands (quest destinations and revealed players) share the scene's request path.
+  const requestTargetRef = useRef(setTarget);
+  requestTargetRef.current = setTarget;
+  useEffect(() => {
+    requestTargetRef.current(target);
+  }, [target]);
 
   // Update the state containing sorrounding users on first load
   useEffect(() => {
@@ -2150,6 +2150,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         y: userRef.current?.latitude ?? 0,
       };
       originRef.current = entry.grid.getHex({ col: position.x, row: position.y });
+      continueMovement();
     },
   };
   const travelSnapshot = useRef<TravelSnapshot | null>(null);
@@ -2251,7 +2252,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   useEffect(() => {
     if (!travel.isReady) return;
     travelCallbacks.current.onReady();
-    setMoves((previous) => previous + 1);
+    continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
   }, [travel.isReady]);

@@ -744,18 +744,24 @@ const MenuBoxProfile: React.FC = () => {
 
 export default MenuBoxProfile;
 
-/**
- * The UTC clock owns its per-second state so a tick re-renders this leaf alone. Held one level
- * up it would re-render the whole profile menu — status rows, pools, objectives, avatars — once
- * a second on every page of the game, since the sidebar is part of the root layout.
- */
+/** A live text node keeps UTC clock ticks outside the surrounding React tree. */
 const GameClock: React.FC = () => {
-  const [gameTime, setGameTime] = useState<string>(() => getGameTime());
+  const clock = React.useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const interval = setInterval(() => setGameTime(getGameTime()), 1000);
+    const update = () => {
+      const label = clock.current,
+        time = getGameTime();
+      if (label && label.textContent !== time) label.textContent = time;
+    };
+    update();
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, []);
-  return <>{gameTime}</>;
+  return (
+    <span ref={clock} suppressHydrationWarning>
+      {getGameTime()}
+    </span>
+  );
 };
 
 /**

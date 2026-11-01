@@ -45,9 +45,23 @@ import type { UserWithRelations } from "@/routers/profile";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
+/** Audio and preference fields consumed by settings and playback. */
+export type GameSettingsUser = Pick<
+  NonNullable<UserWithRelations>,
+  | "musicOn"
+  | "buttonSfxOn"
+  | "sfxOn"
+  | "village"
+  | "isOutlaw"
+  | "bloodlineId"
+  | "status"
+  | "preferredGeneral1"
+  | "preferredGeneral2"
+>;
+
 interface GameSettingsProps {
   onNavigate?: () => void;
-  userData?: UserWithRelations | null;
+  userData?: GameSettingsUser | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
   trigger?: "audio" | "settings";
   triggerClassName?: string;
@@ -108,7 +122,7 @@ const AudioContext = createContext<AudioContextValue | null>(null);
  */
 export const GlobalAudioProvider: React.FC<{
   children: ReactNode;
-  userData?: UserWithRelations | null;
+  userData?: GameSettingsUser | null;
 }> = ({ children, userData }) => {
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
@@ -364,7 +378,7 @@ const useGlobalAudio = () => {
  * Manage settings through the global audio instance and persisted preferences.
  */
 export const useGameSettings = (
-  userData?: UserWithRelations | null,
+  userData?: GameSettingsUser | null,
   updateUser?: GameSettingsProps["updateUser"],
 ) => {
   // Use the global audio instance

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { useContext, useState } from "react";
+import { Profiler, useContext, useState } from "react";
 import { WORLD_CYCLE_SECONDS, WORLD_DAY_SECONDS, WORLD_NIGHT_SECONDS, type UserRole } from "@/drizzle/constants";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { getWorldCyclePosition } from "@/libs/dayNight";
@@ -49,6 +49,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); globalThis.CustomEvent = originalCustomEvent; vi.restoreAllMocks(); });
 
 describe("staff lighting preview", () => {
+  it("does not tick the preview popover while the displayed time is frozen", () => {
+    vi.useFakeTimers();
+    const rendered = vi.fn();
+    render(<Profiler id="frozen-preview" onRender={rendered}><PreviewMap initialDate={new Date(cycleStart + WORLD_DAY_SECONDS * 500)} /></Profiler>);
+    rendered.mockClear();
+    act(() => { now += 5000; vi.advanceTimersByTime(5000); });
+    expect(rendered).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
   it.each(["rain", "snow", "sandstorm"] as const)("previews %s locally, adjusts strength and restores regional conditions", (kind) => {
     const view = render(<PreviewMap />);
     fireEvent.click(view.getByRole("button", { name: "Preview map lighting and weather" }));
@@ -93,7 +102,7 @@ describe("staff lighting preview", () => {
     const view = render(<PreviewMap />);
     fireEvent.click(view.getByRole("button", { name: "Preview map lighting and weather" }));
     const slider = view.getByRole("slider", { name: "Time of day" }) as HTMLInputElement;
-    const tick = intervals.mock.calls.find(([, delay]) => delay === 1000)![0] as () => void;
+    const tick = intervals.mock.calls.filter(([, delay]) => delay === 1000).at(-1)![0] as () => void;
     now = cycleStart + WORLD_DAY_SECONDS * 750 + timeDiff;
     act(tick);
     expect(slider.value).toBe("900");

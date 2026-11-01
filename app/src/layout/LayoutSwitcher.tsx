@@ -20,7 +20,7 @@ import {
 import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 /**
  * The cookie repair below refreshes at most once per document, so a cookie the server
@@ -53,7 +53,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   wallpaper,
 }) => {
   const pathname = usePublicPathname();
-  const { isClerkLoaded, isSignedIn } = useUserData();
+  const { isClerkLoaded, isSignedIn } = useUserInfo();
   // Explicit choices replace only the presentation; remounting the root shell would
   // also restart Clerk and could activate another saved account after sign-out.
   const [displayedLayout, setDisplayedLayout] = useState(initialLayout);

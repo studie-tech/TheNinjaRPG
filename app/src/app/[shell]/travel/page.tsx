@@ -235,6 +235,7 @@ function Travel() {
     {
       enabled: !!userData && userData.sector !== undefined,
       select: (data) => data?.sectorData?.village?.name ?? null,
+      notifyOnChangeProps: ["data"],
     },
   );
   // Keep libraries across navigation; refresh artwork so content edits reach existing maps.
@@ -242,6 +243,7 @@ function Travel() {
     enabled: !!userData,
     // Dates prevent structural sharing; the scene only needs the asset content.
     select: (rows) => rows.map(({ createdAt, updatedAt, ...rest }) => rest),
+    notifyOnChangeProps: ["data"],
     staleTime: MAP_LOCATION_REFRESH_MS,
     refetchInterval: MAP_LOCATION_REFRESH_MS,
     refetchIntervalInBackground: false,
@@ -880,7 +882,6 @@ function Travel() {
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
-          setTarget={setTargetPosition}
           setPosition={setCurrentPosition}
         />
       )
