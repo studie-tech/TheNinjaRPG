@@ -65,7 +65,7 @@ Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Dr
 | `app/src/server/api/` | `root.ts`: router registry; `trpc.ts`: middleware and `baseServerResponse`; `routers/`: endpoints |
 | `app/src/libs/` | Game logic by feature (combat, travel, bounty, etc.) |
 | `app/src/queries/` | Application database statements and reusable query helpers, grouped by feature; imported through `@/queries/*` |
-| `app/src/deltas/` | Pure feature-specific cache patch and delta calculations; no database access or side effects. `utils/queryCache.ts` reconciles query revisions; `hooks/useQueryCacheUpdate.ts` binds confirmed mutations to an exact query key |
+| `app/src/deltas/` | Pure feature-specific cache patch and delta calculations; no database access or side effects. `app/src/utils/queryCache.ts` reconciles query revisions; `app/src/hooks/useQueryCacheUpdate.ts` binds confirmed mutations to an exact query key |
 | `app/src/validators/` | Shared Zod schemas and schemas consumed outside routers; router-only contracts stay inline |
 | `app/src/layout/` | Reusable game UI; prefer existing components |
 | `app/drizzle/` | `schema.ts`, `constants.ts`, `migrations/` |

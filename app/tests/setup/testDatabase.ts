@@ -237,11 +237,13 @@ const instrumentQueries = (connection: {
       const active = recorder;
       if (!active) return original(...args);
       const [first, values] = args;
-      const statement = typeof first === "string" ? first : String((first as { sql?: string })?.sql);
-      // Text queries bind values in the driver; prepared statements retain placeholders.
-      active.statements.push(method === "query"
-        ? mysql.format(statement, values as Parameters<typeof mysql.format>[1])
-        : statement);
+      const options = typeof first === "string" ? undefined : first as { sql?: string; values?: unknown };
+      const statement = typeof first === "string" ? first : String(options?.sql);
+      // mysql2 prefers execute's embedded values, but query's separate argument wins.
+      const bindValues = method === "execute"
+        ? options?.values || values
+        : values === undefined ? options?.values : values;
+      active.statements.push(mysql.format(statement, bindValues as Parameters<typeof mysql.format>[1]));
       if (active.inFlight === 0) active.roundTrips += 1;
       active.inFlight += 1;
       try {
