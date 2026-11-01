@@ -51,7 +51,7 @@ export const createCombatScene = async (options: {
   signal: AbortSignal;
   onError: (error: unknown) => void;
   getSnapshot: () => CombatSceneSnapshot;
-  onTap: (tile: TerrainHex) => void;
+  onTap: (tile: TerrainHex, character?: CombatHover) => void;
   onHover: (hover: CombatHover | null) => void;
   onZoom: (zoom: number) => void;
   play: (url: string, volume: number) => void;
@@ -209,7 +209,22 @@ export const createCombatScene = async (options: {
       enabled: () => options.interactive !== false,
       tap: (x, y) => {
         const tile = tileAt(x, y);
-        if (tile) options.onTap(tile);
+        if (!tile) return;
+        const actor = actors.hit(x, y);
+        const bounds = game.canvas.getBoundingClientRect();
+        options.onTap(
+          tile,
+          actor
+            ? {
+                tileKey: `${actor.tile.col},${actor.tile.row}`,
+                userId: actor.userId,
+                position: {
+                  x: bounds.left + (x * bounds.width) / game.renderer.width,
+                  y: bounds.top + (y * bounds.height) / game.renderer.height,
+                },
+              }
+            : undefined,
+        );
       },
       pan: (dx, dy) => {
         if (zoom <= 1 || options.focus) return;

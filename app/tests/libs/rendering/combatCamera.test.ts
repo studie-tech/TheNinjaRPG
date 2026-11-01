@@ -49,10 +49,26 @@ const setup = async (zoom = 2, lightLayout = true) => {
   const drag = (dx: number, dy: number) => { event("pointerdown", 195, height / 2); event("pointermove", 195 + dx, height / 2 + dy); event("pointerup", 195 + dx, height / 2 + dy); tick(); };
   const refresh = (longitude?: number) => { snapshot = { ...snapshot, battle: { ...snapshot.battle, version: snapshot.battle.version + 1, usersState: snapshot.battle.usersState.map((fighter) => longitude === undefined ? { ...fighter } : { ...fighter, longitude }) } }; scene.refresh(); };
   tick(120);
-  return { game, world, scene, user, tick, drag, refresh, onTap, resize: () => resize(390, height) };
+  return { game, world, scene, user, tick, event, drag, refresh, onTap, resize: () => resize(390, height) };
 };
 
 describe("combat camera gestures", () => {
+  it("reports character details only on a tap and clears the character hit on empty terrain", async () => {
+    const { world, user, event, tick, onTap, game } = await setup();
+    const actor = world.getChildByLabel(user.userId, true)!;
+    const bounds = actor.getChildByLabel("combat-art", true)!.getBounds();
+    const x = (bounds.minX + bounds.maxX) / 2, y = (bounds.minY + bounds.maxY) / 2;
+    event("pointermove", x, y); tick();
+    expect(onTap).not.toHaveBeenCalled();
+    event("pointerdown", x, y); event("pointerup", x, y);
+    expect(onTap).toHaveBeenCalledTimes(1);
+    expect(onTap.mock.calls[0]?.[1]).toEqual({
+      tileKey: `${user.longitude},${user.latitude}`, userId: user.userId, position: { x, y },
+    });
+    event("pointerdown", 80, game.renderer.height / 2); event("pointerup", 80, game.renderer.height / 2);
+    expect(onTap).toHaveBeenCalledTimes(2);
+    expect(onTap.mock.calls[1]?.[1]).toBeUndefined();
+  });
   it("keeps grid markings below physical actors and their HUD", async () => {
     const { world, user } = await setup();
     const outlines = world.getChildByLabel("combat-grid-outlines", true)!;
