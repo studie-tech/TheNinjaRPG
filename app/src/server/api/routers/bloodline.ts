@@ -139,10 +139,9 @@ import {
 import { BloodlineValidator, type ZodAllTags } from "@/validators/combat";
 
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
-
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure

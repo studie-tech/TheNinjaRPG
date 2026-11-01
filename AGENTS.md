@@ -100,6 +100,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 
 - Use functional/declarative TypeScript, avoid classes, prefer named component exports and descriptive names (auxiliary verbs for booleans).
 - File order: exported component → subcomponents → helpers → types.
+- Keep static imports together at the top of the file, before declarations or executable code. Use top-level `import type` declarations for type-only dependencies; do not use inline `import("module").Type` annotations.
 - Comments explain purpose, not review history; remove markers such as "Issue X:" or "TODO from review:".
 - The `QueryClient` and tRPC client are built once, during hydration, and are no longer rebuilt when clerk-js loads (`app/src/layout/ActiveSessionBoundary.tsx` rebuilds only on an account switch or a sign-out). Nothing wired into them may capture auth state at construction: read it when it is needed, as `useGlobalOnMutateProtect` reads `useClerk().isSignedIn`. A captured `isSignedIn` is `undefined` during hydration and silently rejects every mutation for the life of the page.
 - Read the path with `usePublicPathname` from `@/utils/routing`, never `usePathname`: a prerendered page renders under its shell variant's internal path, and branching on `usePathname` gives the server and the client different values. Import `Link` from `@/layout/Link`, never `next/link`. Biome enforces both.

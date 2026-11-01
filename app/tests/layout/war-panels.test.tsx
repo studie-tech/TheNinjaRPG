@@ -20,11 +20,12 @@ import type { UserWithRelations } from "@/routers/profile";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 import { SimpleObjective } from "@/validators/objectives";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
 import { ensureDom } from "../setup/dom.mjs";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
-type MutationResult = import("@/validators/userCache").UserDeltaResponse & { battleId?: string };
+type MutationResult = UserDeltaResponse & { battleId?: string };
 type MutationCallbacks = {
   onMutate?: () => number | undefined;
   onSuccess?: (result: MutationResult, variables: unknown, revision: number | undefined) => void | Promise<void>;

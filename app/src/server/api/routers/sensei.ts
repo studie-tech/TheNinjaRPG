@@ -17,10 +17,9 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
-
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const senseiRouter = createTRPCRouter({
   getStudents: protectedProcedure

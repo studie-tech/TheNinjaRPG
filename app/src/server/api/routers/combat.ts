@@ -48,10 +48,12 @@ import {
   type GameSetting,
   type Jutsu,
   type RankedLoadout,
+  type TerritoryWar,
   type UserQuest,
   userData,
   type Village,
   type VillageAlliance,
+  type WarCamp,
 } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
@@ -286,6 +288,7 @@ import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
+import type { BaseServerResponse } from "@/validators/base";
 import {
   type AssignableUserStats,
   BarrierTag,
@@ -298,6 +301,7 @@ import {
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
 import { sectorIdSchema } from "@/validators/travel";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
 
 // Debug flag when testing battle
@@ -1872,9 +1876,9 @@ export const initiateBattle = async (
     /** Attribute battle progress to its owning objective instead of unrelated matching kills. */
     questBattleSource?: { questId: string; objectiveId: string };
     /** Camp identity and guardian snapshot used by combat's final strategic mutation phase. */
-    warCamp?: import("@/drizzle/schema").WarCamp;
+    warCamp?: WarCamp;
     /** Guardian lobby's event; preload political identities and guard its live window at admission. */
-    territoryWar?: import("@/drizzle/schema").TerritoryWar;
+    territoryWar?: TerritoryWar;
     raidQuestId?: string;
     topPlayersLP?: number[];
     /** Reserved lobby/combat IDs used to reject participants after lobby deletion. */
@@ -1904,11 +1908,11 @@ export const initiateBattle = async (
   battleType: BattleType,
   scaleGains = 1,
 ): Promise<
-  import("@/validators/base").BaseServerResponse & {
+  BaseServerResponse & {
     battleId?: string;
     requiresUserRefresh?: boolean;
-    userPatch?: import("@/validators/userCache").UserCachePatch;
-    userDelta?: import("@/validators/userCache").UserDelta;
+    userPatch?: UserCachePatch;
+    userDelta?: UserDelta;
   }
 > => {
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
@@ -3691,18 +3695,17 @@ export const initiateBattle = async (
     !warAggressorIds.includes(cacheActor.userId) &&
     !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
     cacheActor.bracketImmunityLiftedUntil <= now;
-  const userPatch: import("@/validators/userCache").UserCachePatch | undefined =
-    canProject
-      ? {
-          status: "BATTLE",
-          battleId,
-          bracketImmunityPausedAt: null,
-          ...(stealthBreakUserIds.includes(cacheActor.userId)
-            ? { stealthActive: false, stealthActivatedAt: null }
-            : {}),
-        }
-      : undefined;
-  const userDelta: import("@/validators/userCache").UserDelta | undefined = userPatch
+  const userPatch: UserCachePatch | undefined = canProject
+    ? {
+        status: "BATTLE",
+        battleId,
+        bracketImmunityPausedAt: null,
+        ...(stealthBreakUserIds.includes(cacheActor.userId)
+          ? { stealthActive: false, stealthActivatedAt: null }
+          : {}),
+      }
+    : undefined;
+  const userDelta: UserDelta | undefined = userPatch
     ? info.tournamentGame
       ? {}
       : { pveFights: 1 }
