@@ -194,9 +194,6 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     { x: number; y: number; matrix: Matrix; visible: boolean; drawRoot?: Container }
   >();
   const characterFrames = new WeakMap<Texture, MaterialFrame>();
-  let shadowLights = new Set<PointLight>();
-  let shadowLightFlags: number[] = [],
-    shadowSelectionKey = "";
   const pointBuffer = new Buffer({
     data: new Float32Array(0),
     usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
@@ -816,7 +813,6 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                   ? [7.0, 3.4, 0.9]
                   : [3.8, 1.8, 0.5],
               castsShadows: true,
-              fixture: record.id,
             });
           }
         record.cached = {
@@ -1009,39 +1005,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         dynamicField.prisms.source.pixelWidth,
         dynamicField.prisms.source.pixelHeight,
       ]);
-      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.fixture}:${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
-      // Emitter-order flags retain the selection across equivalent cached light objects.
-      if (shadowSelectionKey !== nextPointGeometryKey) {
-        shadowSelectionKey = nextPointGeometryKey;
-        const centerX = (viewport.minX + viewport.maxX) / 2,
-          centerY = (viewport.minY + viewport.maxY) / 2;
-        const ranked = lights
-          .filter(
-            (l) =>
-              l.castsShadows && boundsOverlap(pointLightBounds(l, light.day), viewport),
-          )
-          .sort((a, b) => {
-            const score = (l: PointLight) =>
-              (l.reach * Math.max(...l.color) * (shadowLights.has(l) ? 1.15 : 1)) /
-              (l.reach + Math.hypot(l.x - centerX, l.y * 0.5 + l.z - centerY));
-            return score(b) - score(a);
-          });
-        const fixtures = new Set<string | undefined>(),
-          selected = new Set<PointLight>();
-        // Each nearby building gets a primary shadow before overlapping secondary windows spend the budget.
-        for (const l of ranked) {
-          if (selected.size >= WORLD_DETAIL.shadowLights) break;
-          if (fixtures.has(l.fixture)) continue;
-          fixtures.add(l.fixture);
-          selected.add(l);
-        }
-        for (const l of ranked) {
-          if (selected.size >= WORLD_DETAIL.shadowLights) break;
-          selected.add(l);
-        }
-        shadowLights = selected;
-        shadowLightFlags = lights.map((l) => Number(shadowLights.has(l)));
-      }
+      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
       const nextPointKey =
         nextReceiverKey +
         `${staticField.revision}:${dynamicField.revision}` +
@@ -1069,7 +1033,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         if (pointGeometryKey !== nextPointGeometryKey) {
           pointGeometryKey = nextPointGeometryKey;
           const vertices: number[] = [];
-          for (const [index, l] of lights.entries()) {
+          for (const l of lights) {
             // Expand the ground reach after reading cached fixtures so stationary lights follow dusk and dawn.
             const quad = pointLightBounds(l, light.day);
             const { radius, cy, ry } = quad;
@@ -1083,7 +1047,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                 l.z,
                 radius,
                 ...l.color,
-                shadowLightFlags[index] ?? 0,
+                Number(l.castsShadows),
               );
           }
           pointBuffer.data = new Float32Array(vertices);
@@ -1138,7 +1102,7 @@ const corners = [
   [1, 1],
   [0, 1],
 ] as const;
-/** Light selection and drawing use the same projected sphere, so offscreen fixtures spend no shadow budget. */
+/** Projected light spheres exclude fixtures whose illumination cannot reach the viewport. */
 const pointLightBounds = (light: PointLight, day: number) => {
   const radius = Math.hypot(light.z, light.reach * (1.5 - day * 0.5));
   const cy = light.y * 0.5 + light.z,
@@ -1478,7 +1442,6 @@ type PointLight = {
   color: [number, number, number];
   /** Character fill lights illuminate freely; fixed fixtures trace scene occlusion. */
   castsShadows: boolean;
-  fixture?: string;
 };
 
 /** Numeric snapshots avoid rebuilding strings for stationary scenery on every animation frame. */

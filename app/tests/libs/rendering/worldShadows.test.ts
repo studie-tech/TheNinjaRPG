@@ -104,7 +104,7 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
-  it("keeps every light pool while budgeting visible fixture shadows and retaining stationary light buffers", async () => {
+  it("retains occlusion for every visible fixture emitter and reuses stationary light buffers", async () => {
     const buildFrame = worldMaterials.worldMaterialFrame;
     const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
       ...buildFrame(material, rect), emitters: [0.2, 0.4, 0.6, 0.8].map((x) => ({ x, y: 0.5, height: 0.5 })),
@@ -115,7 +115,7 @@ describe("physical world lighting", () => {
       for (let i = 0; i < 4; i++) {
         const sprite = new Sprite(source.texture);
         sprite.scale.set(20, -20); sprite.position.set(10 + i * 20, 50); f.parent.addChild(sprite);
-        const registration = f.shadows.register(sprite, { id: `budget-${i}`, kind: "structure", image: `fixture-budget-${i}.png`, size: 40, x: sprite.x, y: 50, groundY: 30, shadowCaster: "building" });
+        const registration = f.shadows.register(sprite, { id: `fixture-${i}`, kind: "structure", image: `fixture-emitter-${i}.png`, size: 40, x: sprite.x, y: 50, groundY: 30, shadowCaster: "building" });
         registrations.push(registration); await registration.ready;
       }
       const night = worldSunlight(new Date((WORLD_DAY_SECONDS + 10) * 1000));
@@ -126,8 +126,7 @@ describe("physical world lighting", () => {
       const data = buffer.data as Float32Array;
       expect(data).toHaveLength(16 * 6 * 10);
       const flags = Array.from({ length: 16 }, (_, i) => data[i * 60 + 9]!);
-      expect(flags.reduce((a, b) => a + b, 0)).toBe(12);
-      for (let i = 0; i < 4; i++) expect(flags.slice(i * 4, i * 4 + 4)).toContain(1);
+      expect(flags).toEqual(Array(16).fill(1));
       const upload = vi.spyOn(buffer, "update"), draws = f.render.mock.calls.length;
       f.shadows.update(night, viewport);
       expect(upload).not.toHaveBeenCalled(); expect(f.render).toHaveBeenCalledTimes(draws);
