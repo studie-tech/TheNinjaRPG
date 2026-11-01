@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
@@ -8,7 +9,7 @@ import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { createTRPCRouter } from "@/server/api/trpc";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { InstantNewQuestObjective, InstantStartBattleObjective, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";

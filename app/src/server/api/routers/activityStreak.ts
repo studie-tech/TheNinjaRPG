@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getRewardUserDelta } from "@/delta/quests";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
@@ -47,7 +48,7 @@ import {
 } from "@/queries/activityStreak";
 import { fetchUser } from "@/queries/profile";
 
-import { getRewardUserDelta, updateRewards } from "@/server/api/routers/quests";
+import { updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,

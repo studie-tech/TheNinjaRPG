@@ -24,6 +24,7 @@ import {
 } from "drizzle-orm";
 import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
+import type { CombatCacheSnapshot } from "@/delta/combat";
 import {
   BATTLE_ARENA_HEAL_COST,
   type BattleDataEntryType,
@@ -93,7 +94,6 @@ import {
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
-import type { CombatCacheSnapshot } from "@/libs/combat/userCache";
 import { getVillage } from "@/libs/combat/util";
 import type { DungeonBattleState } from "@/libs/dungeon";
 import { fetchDmgConfig } from "@/libs/gamesettings";

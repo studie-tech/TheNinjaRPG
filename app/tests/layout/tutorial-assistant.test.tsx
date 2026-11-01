@@ -7,7 +7,8 @@ import type { TutorialStepConfig } from "@/hooks/tutorial";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { type UserPatch, updateUserCache } from "@/utils/userCache";
+import type { UserPatch } from "@/delta/profile";
+import { updateUserCache } from "@/utils/userCache";
 import { ensureDom } from "../setup/dom.mjs";
 
 const key = [["profile", "getUser"], { type: "query" }];

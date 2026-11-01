@@ -1,6 +1,13 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+  canCacheCombatCompletion,
+  combatCacheDerived,
+  combatCacheEnergy,
+  combatCacheIntegerDelta,
+  combatCacheItems,
+} from "@/delta/combat";
+import {
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,
   ELITE_JONIN_JUTSU_XP_TO_LEVEL,
@@ -26,13 +33,6 @@ import type {
   CombatResult,
   CompleteBattle,
 } from "@/libs/combat/types";
-import {
-  canCacheCombatCompletion,
-  combatCacheDerived,
-  combatCacheEnergy,
-  combatCacheIntegerDelta,
-  combatCacheItems,
-} from "@/libs/combat/userCache";
 import {
   buildCombatTrackerTasks,
   calcBattleResult,

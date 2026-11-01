@@ -1,6 +1,7 @@
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/delta/profile";
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
@@ -54,7 +55,7 @@ import {
   updateUserItemImbuementForFinishImbuingImmediately,
 } from "@/queries/occupation";
 import { fetchUser } from "@/queries/profile";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchUserItems } from "@/server/api/routers/item";
 import {
   baseServerResponse,

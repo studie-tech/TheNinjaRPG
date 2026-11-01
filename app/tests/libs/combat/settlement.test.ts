@@ -15,7 +15,7 @@ import {
   userItemImbuement,
   userQueue,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot, combatProfilePatch } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot, combatProfilePatch } from "@/delta/combat";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { combatEnergyRecoverySql, updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";

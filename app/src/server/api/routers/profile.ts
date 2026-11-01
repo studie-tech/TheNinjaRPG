@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, notExists, sql } from "drizzle-orm";
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/delta/profile";
 import {
   ACTIVE_VOTING_SITES,
   BasicElementName,
@@ -3742,106 +3743,4 @@ export type UserWithRelations =
 export type AiWithRelations = UserData & {
   jutsus: (UserJutsu & { jutsu: { id: string; name: string } })[];
   items: (UserItem & { item: { id: string; name: string } })[];
-};
-
-/** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
-export const getUserProgressionUpdate = (
-  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
-  publishedAchievementIds: readonly string[],
-) => {
-  const publicUser = getPublicQuestUser(user);
-  const publishedIds = new Set(publishedAchievementIds);
-  const achievementProgress: AchievementProgress[] = [];
-  publicUser.userQuests = publicUser.userQuests.filter((entry) => {
-    if (!publishedIds.has(entry.questId)) return true;
-    const { quest: _definition, ...progress } = entry;
-    achievementProgress.push(progress);
-    return false;
-  });
-  return {
-    achievementProgress,
-    userPatch: {
-      updatedAt: publicUser.updatedAt,
-      regenAt: publicUser.regenAt,
-      curHealth: publicUser.curHealth,
-      curChakra: publicUser.curChakra,
-      curStamina: publicUser.curStamina,
-      curEnergy: publicUser.curEnergy,
-      experience: publicUser.experience,
-      earnedExperience: publicUser.earnedExperience,
-      level: publicUser.level,
-      rank: publicUser.rank,
-      status: publicUser.status,
-      battleId: publicUser.battleId,
-      activeNpcQuestId: publicUser.activeNpcQuestId,
-      senseiId: publicUser.senseiId,
-      maxHealth: publicUser.maxHealth,
-      maxChakra: publicUser.maxChakra,
-      maxStamina: publicUser.maxStamina,
-      regeneration: publicUser.regeneration,
-      regenerationWithoutTimedBuffs: publicUser.regenerationWithoutTimedBuffs,
-      cookingExperience: publicUser.cookingExperience,
-      cookingJobs: publicUser.cookingJobs,
-      elementalMastery: publicUser.elementalMastery,
-      activeTrainedElement: publicUser.activeTrainedElement,
-      primaryElement: publicUser.primaryElement,
-      secondaryElement: publicUser.secondaryElement,
-      ...(publicUser.queue ? { queue: publicUser.queue } : {}),
-      energyQueueHead: publicUser.energyQueueHead,
-      energyQueueTail: publicUser.energyQueueTail,
-      masteryQueueHead: publicUser.masteryQueueHead,
-      elementalQueueHead: publicUser.elementalQueueHead,
-      currentlyTrainingElement: publicUser.currentlyTrainingElement,
-      elementalTrainingStartedAt: publicUser.elementalTrainingStartedAt,
-      elementalTrainingSpeed: publicUser.elementalTrainingSpeed,
-      trainingSpeed: publicUser.trainingSpeed,
-      currentlyTrainingMastery: publicUser.currentlyTrainingMastery,
-      masteryTrainingStartedAt: publicUser.masteryTrainingStartedAt,
-      dailyTrainings: publicUser.dailyTrainings,
-      dailyMissions: publicUser.dailyMissions,
-      dailyErrands: publicUser.dailyErrands,
-      dailyMedicalMissions: publicUser.dailyMedicalMissions,
-      dailyWarMissions: publicUser.dailyWarMissions,
-      dailyArenaFights: publicUser.dailyArenaFights,
-      dailyPvpMissions: publicUser.dailyPvpMissions,
-      dailySageActivations: publicUser.dailySageActivations,
-      questFinishAt: publicUser.questFinishAt,
-      skillPoints: publicUser.skillPoints,
-      missionsD: publicUser.missionsD,
-      missionsC: publicUser.missionsC,
-      missionsB: publicUser.missionsB,
-      missionsA: publicUser.missionsA,
-      missionsS: publicUser.missionsS,
-      missionsH: publicUser.missionsH,
-      crimesD: publicUser.crimesD,
-      crimesC: publicUser.crimesC,
-      crimesB: publicUser.crimesB,
-      crimesA: publicUser.crimesA,
-      crimesS: publicUser.crimesS,
-      crimesH: publicUser.crimesH,
-      errands: publicUser.errands,
-      pveFights: publicUser.pveFights,
-      pvpFights: publicUser.pvpFights,
-      pvpExperience: publicUser.pvpExperience,
-      pvpStreak: publicUser.pvpStreak,
-      offence: user.offence,
-      defence: user.defence,
-      strength: user.strength,
-      speed: user.speed,
-      intelligence: user.intelligence,
-      willpower: user.willpower,
-      ninjutsuMastery: user.ninjutsuMastery,
-      genjutsuMastery: user.genjutsuMastery,
-      taijutsuMastery: user.taijutsuMastery,
-      bukijutsuMastery: user.bukijutsuMastery,
-      bloodlineMastery: user.bloodlineMastery,
-      sageMastery: user.sageMastery,
-
-      questData: publicUser.questData,
-      userQuests: publicUser.userQuests,
-      completedQuests: publicUser.completedQuests,
-      effectiveMasteries: effectiveMasteries(user),
-      maxEnergy: calcMaxEnergy(user),
-    },
-  };
 };

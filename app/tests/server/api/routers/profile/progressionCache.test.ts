@@ -1,10 +1,11 @@
+import { getUserProgressionUpdate } from "@/delta/profile";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MASTERY_RANK_CAPS, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { bloodline, item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { calcCP, calcEnergy, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
 import { getEnergyQueue } from "@/libs/queue";
-import { fetchUpdatedUser, getUserProgressionUpdate, profileRouter } from "@/server/api/routers/profile";
+import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUsers, insertUserItems } from "../../../../setup/factories";

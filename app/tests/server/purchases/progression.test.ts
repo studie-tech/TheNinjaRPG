@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver, type QueryKey } from "@tanstack/react-query";
@@ -14,7 +15,7 @@ import { purchasesRouter } from "@/server/api/routers/purchases";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { grantStorePurchase } from "@/server/utils/purchases/grant";
 import { calcFedUgradeCost } from "@/utils/paypal";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";

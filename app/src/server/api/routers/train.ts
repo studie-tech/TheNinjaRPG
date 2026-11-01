@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { getUserProgressionUpdate } from "@/delta/profile";
 import {
   BasicElementName,
   getUserCaps,
@@ -42,7 +43,7 @@ import {
 } from "@/queries/train";
 import { trainingCaptchaMessage } from "@/routers/misc";
 import type { UserWithRelations } from "@/routers/profile";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,

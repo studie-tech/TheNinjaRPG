@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/delta/profile";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,
@@ -41,7 +42,7 @@ import {
   updateVillageStructureForRestoreStructurePoints,
 } from "@/queries/village";
 import { createConvo } from "@/routers/comments";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { updateRequestState } from "@/routers/sparring";
 import {
   baseServerResponse,

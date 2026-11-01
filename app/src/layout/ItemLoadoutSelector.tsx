@@ -1,11 +1,16 @@
 "use client";
 
+import { getQueryKey } from "@trpc/react-query";
 import type React from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { getRenamedLoadouts } from "@/delta/loadout";
+import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { useRequiredUserData } from "@/utils/UserContext";
+
+const loadoutsKey = getQueryKey(api.item.getItemLoadouts, undefined, "query");
 
 interface ItemLoadoutSelectorProps {
   size?: "small" | "large";
@@ -30,6 +35,8 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   const queryResult = api.item.getItemLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
+  const loadoutsCache =
+    useQueryCacheUpdate<RouterOutputs["item"]["getItemLoadouts"]>(loadoutsKey);
 
   // Mutations
   const mutationResult = api.item.selectItemLoadout.useMutation({
@@ -47,10 +54,14 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   });
 
   const renameResult = api.item.renameLoadout.useMutation({
-    onSuccess: async (data) => {
+    onMutate: loadoutsCache.prepareUpdate,
+    onSuccess: async (data, input, snapshot) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.item.getItemLoadouts.invalidate();
+        await loadoutsCache.updateCache(
+          (current) => getRenamedLoadouts(current, input),
+          snapshot,
+        );
       }
     },
   });

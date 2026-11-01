@@ -1,3 +1,4 @@
+import type { UserUpdate, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
@@ -13,7 +14,7 @@ import { homeRouter } from "@/server/api/routers/home";
 import { profileRouter } from "@/server/api/routers/profile";
 import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
-import type { UserUpdate, UserUpdateOptions } from "@/utils/userCache";
+
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { insertUsers } from "../../../setup/factories";

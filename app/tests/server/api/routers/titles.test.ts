@@ -17,7 +17,7 @@ import { getUnavailableRewardCards, buildRewardChoiceCards } from "@/libs/reward
 import { postProcessRewards } from "@/libs/quest";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import { ObjectiveReward } from "@/validators/rewards";
-import { captureCombatCacheSnapshot, combatCacheDerived, combatProfilePatch, type CombatProfileUpdate } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot, combatCacheDerived, combatProfilePatch, type CombatProfileUpdate } from "@/delta/combat";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";

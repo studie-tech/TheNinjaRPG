@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";
@@ -24,12 +25,7 @@ import * as toast from "@/libs/toast";
 import { SESSION_CHANGED_MESSAGE, SESSION_EXPIRED_MESSAGE } from "@/libs/trpcSession";
 import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
 import { shareUserCache } from "@/utils/userCacheSharing";
-import {
-  prepareUserUpdate,
-  updateUserCache,
-  type UserPatch,
-  type UserUpdateOptions,
-} from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { actualShowMutationToast } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();

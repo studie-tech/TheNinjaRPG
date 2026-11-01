@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as combat from "@/routers/combat";
@@ -21,7 +22,7 @@ import { getRaidChatConversationId } from "@/libs/raids";
 import { Pusher } from "@/libs/pusher";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";

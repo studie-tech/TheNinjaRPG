@@ -1,0 +1,361 @@
+import {
+  MAX_SKILL_POINTS,
+  MEDNIN_EXP_CAP,
+  SAGE_MASTERY_EXP_CAP,
+  SHRINE_BOOST_TYPES,
+  UserRanks,
+} from "@/drizzle/constants";
+import { activeDungeonNotification } from "@/libs/dungeon";
+import { GLOBAL_GAME_BOOSTS } from "@/libs/gameSettingBoost";
+import { effectiveMasteries } from "@/libs/mastery";
+import type { NavBarDropdownLink } from "@/libs/menus";
+import { calcMaxEnergy, canAssignExperience } from "@/libs/profile";
+import { getPublicQuestUser } from "@/libs/quest";
+import { getReducedGainsDays } from "@/libs/train";
+import { getUserFactionNotifications } from "@/libs/userNotifications";
+import type {
+  AchievementProgress,
+  fetchUpdatedUser,
+  UserWithRelations,
+} from "@/server/api/routers/profile";
+import { mergeQueryChanges } from "@/utils/queryCache";
+import { countBoostingShrines, getShrineBoost } from "@/utils/village";
+import type {
+  UserCachePatch,
+  UserDelta,
+  UserDeltaResponse,
+  UserExpected,
+} from "@/validators/userCache";
+
+type User = NonNullable<UserWithRelations>;
+export type UserCache = {
+  userData?: User | null;
+  achievementProgress?: AchievementProgress[];
+  notifications?: NavBarDropdownLink[];
+};
+type KnownUserPatch = Partial<User> | UserCachePatch;
+/** Profile fields, or a pure projection that withholds unsafe state with undefined. */
+export type UserPatch =
+  | KnownUserPatch
+  | ((current: User) => KnownUserPatch | undefined);
+
+/** Standard mutation responses carry their confirmed profile fields and metadata together. */
+type UserResponse = Pick<
+  UserDeltaResponse,
+  "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
+> & { userPatch?: KnownUserPatch };
+
+/** Local projections and server responses share the same identity and revision checks. */
+export type UserUpdate = UserPatch | UserResponse;
+
+/** Cache metadata bound to the profile revision captured before a mutation. */
+export type UserUpdateOptions = {
+  /** The prepareUserUpdate result; undefined forces authoritative recovery. */
+  revision: number | undefined;
+  // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
+  delta?: UserDelta;
+  achievementProgress?: AchievementProgress[];
+  /** Server-known scalar state that must already match the captured cache. */
+  expected?: UserExpected;
+  /** Server-known scalar state that must match the complete projected user. */
+  expectedAfter?: UserExpected;
+  userNotifications?: UserDeltaResponse["userNotifications"];
+  notifications?: (
+    current: NavBarDropdownLink[] | undefined,
+  ) => NavBarDropdownLink[] | undefined;
+};
+
+/** Apply confirmed profile fields, scalar guards and derived navigation together. */
+export const applyUserChanges = (
+  current: UserCache,
+  patch: UserPatch | undefined,
+  delta: UserDelta = {},
+  mutation?: UserUpdateOptions,
+): UserCache | undefined => {
+  if (!current.userData) return;
+  if (
+    mutation &&
+    Object.entries(mutation.expected ?? {}).some(
+      ([field, value]) =>
+        value !== undefined && current.userData?.[field as keyof User] !== value,
+    )
+  )
+    return;
+  const known = typeof patch === "function" ? patch(current.userData) : patch;
+  if (patch && known === undefined) return;
+  const user = mergeQueryChanges(
+    current.userData,
+    known ?? {},
+    delta,
+    mutation ? USER_DELTA_CAPS : undefined,
+    {
+      relations: USER_RELATIONS,
+      replace: (field, value) =>
+        field === "activeMission" ||
+        field === "warMission" ||
+        field === "kageSchedule" ||
+        (field === "shrineSettings" &&
+          Array.isArray(value.unlockedAiIds) &&
+          Array.isArray(value.activeAiIds) &&
+          typeof value.activeBoosts === "object" &&
+          value.activeBoosts !== null),
+    },
+  );
+  if (
+    !user ||
+    (mutation &&
+      Object.entries(mutation.expectedAfter ?? {}).some(
+        ([field, value]) => value !== undefined && user[field as keyof User] !== value,
+      ))
+  )
+    return;
+  const result = mergeUserCache(current, user, mutation?.achievementProgress);
+  if (mutation?.userNotifications && result.notifications) {
+    const { setting, notice } = mutation?.userNotifications.globalBoost;
+    const { href, label } = GLOBAL_GAME_BOOSTS[setting];
+    result.notifications = [
+      ...result.notifications.filter(
+        (entry) =>
+          entry.color !== "toast" &&
+          !(
+            entry.href === href &&
+            entry.group === "Active boosts" &&
+            entry.name.startsWith("Global: ") &&
+            entry.name.includes(`X ${label} | `)
+          ),
+      ),
+      ...(notice ? [notice] : []),
+    ];
+  }
+  if (mutation?.notifications)
+    result.notifications = mutation?.notifications(result.notifications);
+  return result;
+};
+
+/** Foreign-key changes require replacement of the matching embedded relation. */
+const USER_RELATIONS = {
+  anbuSquad: "anbuId",
+  clan: "clanId",
+  village: "villageId",
+  bloodline: "bloodlineId",
+  activeReskin: "bloodlineReskinId",
+  sageMode: "sageModeId",
+  questParty: "questPartyId",
+} as const;
+
+/** Mirror server-side caps when applying confirmed numeric deltas locally. */
+const USER_DELTA_CAPS = {
+  skillPoints: MAX_SKILL_POINTS,
+  medicalExperience: MEDNIN_EXP_CAP,
+  sageMasteryExperience: SAGE_MASTERY_EXP_CAP,
+};
+
+/** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
+export const getUserProgressionUpdate = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+  publishedAchievementIds: readonly string[],
+) => {
+  const publicUser = getPublicQuestUser(user);
+  const publishedIds = new Set(publishedAchievementIds);
+  const achievementProgress: AchievementProgress[] = [];
+  publicUser.userQuests = publicUser.userQuests.filter((entry) => {
+    if (!publishedIds.has(entry.questId)) return true;
+    const { quest: _definition, ...progress } = entry;
+    achievementProgress.push(progress);
+    return false;
+  });
+  return {
+    achievementProgress,
+    userPatch: {
+      updatedAt: publicUser.updatedAt,
+      regenAt: publicUser.regenAt,
+      curHealth: publicUser.curHealth,
+      curChakra: publicUser.curChakra,
+      curStamina: publicUser.curStamina,
+      curEnergy: publicUser.curEnergy,
+      experience: publicUser.experience,
+      earnedExperience: publicUser.earnedExperience,
+      level: publicUser.level,
+      rank: publicUser.rank,
+      status: publicUser.status,
+      battleId: publicUser.battleId,
+      activeNpcQuestId: publicUser.activeNpcQuestId,
+      senseiId: publicUser.senseiId,
+      maxHealth: publicUser.maxHealth,
+      maxChakra: publicUser.maxChakra,
+      maxStamina: publicUser.maxStamina,
+      regeneration: publicUser.regeneration,
+      regenerationWithoutTimedBuffs: publicUser.regenerationWithoutTimedBuffs,
+      cookingExperience: publicUser.cookingExperience,
+      cookingJobs: publicUser.cookingJobs,
+      elementalMastery: publicUser.elementalMastery,
+      activeTrainedElement: publicUser.activeTrainedElement,
+      primaryElement: publicUser.primaryElement,
+      secondaryElement: publicUser.secondaryElement,
+      ...(publicUser.queue ? { queue: publicUser.queue } : {}),
+      energyQueueHead: publicUser.energyQueueHead,
+      energyQueueTail: publicUser.energyQueueTail,
+      masteryQueueHead: publicUser.masteryQueueHead,
+      elementalQueueHead: publicUser.elementalQueueHead,
+      currentlyTrainingElement: publicUser.currentlyTrainingElement,
+      elementalTrainingStartedAt: publicUser.elementalTrainingStartedAt,
+      elementalTrainingSpeed: publicUser.elementalTrainingSpeed,
+      trainingSpeed: publicUser.trainingSpeed,
+      currentlyTrainingMastery: publicUser.currentlyTrainingMastery,
+      masteryTrainingStartedAt: publicUser.masteryTrainingStartedAt,
+      dailyTrainings: publicUser.dailyTrainings,
+      dailyMissions: publicUser.dailyMissions,
+      dailyErrands: publicUser.dailyErrands,
+      dailyMedicalMissions: publicUser.dailyMedicalMissions,
+      dailyWarMissions: publicUser.dailyWarMissions,
+      dailyArenaFights: publicUser.dailyArenaFights,
+      dailyPvpMissions: publicUser.dailyPvpMissions,
+      dailySageActivations: publicUser.dailySageActivations,
+      questFinishAt: publicUser.questFinishAt,
+      skillPoints: publicUser.skillPoints,
+      missionsD: publicUser.missionsD,
+      missionsC: publicUser.missionsC,
+      missionsB: publicUser.missionsB,
+      missionsA: publicUser.missionsA,
+      missionsS: publicUser.missionsS,
+      missionsH: publicUser.missionsH,
+      crimesD: publicUser.crimesD,
+      crimesC: publicUser.crimesC,
+      crimesB: publicUser.crimesB,
+      crimesA: publicUser.crimesA,
+      crimesS: publicUser.crimesS,
+      crimesH: publicUser.crimesH,
+      errands: publicUser.errands,
+      pveFights: publicUser.pveFights,
+      pvpFights: publicUser.pvpFights,
+      pvpExperience: publicUser.pvpExperience,
+      pvpStreak: publicUser.pvpStreak,
+      offence: user.offence,
+      defence: user.defence,
+      strength: user.strength,
+      speed: user.speed,
+      intelligence: user.intelligence,
+      willpower: user.willpower,
+      ninjutsuMastery: user.ninjutsuMastery,
+      genjutsuMastery: user.genjutsuMastery,
+      taijutsuMastery: user.taijutsuMastery,
+      bukijutsuMastery: user.bukijutsuMastery,
+      bloodlineMastery: user.bloodlineMastery,
+      sageMastery: user.sageMastery,
+
+      questData: publicUser.questData,
+      userQuests: publicUser.userQuests,
+      completedQuests: publicUser.completedQuests,
+      effectiveMasteries: effectiveMasteries(user),
+      maxEnergy: calcMaxEnergy(user),
+    },
+  };
+};
+
+/** Keep confirmed profile state and derived navigation in the same cache update. */
+const mergeUserCache = (
+  old: UserCache,
+  user: User,
+  achievementProgress?: AchievementProgress[],
+): UserCache => {
+  const factionNotifications = getUserFactionNotifications(user);
+  const previousFactionNames = new Set(
+    getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
+  );
+  const desired: NavBarDropdownLink[] = [...factionNotifications];
+  if (user.activeDungeonRunId) desired.push(activeDungeonNotification);
+  if (
+    UserRanks.includes(user.rank) &&
+    user.earnedExperience > 0 &&
+    canAssignExperience(user)
+  )
+    desired.push({
+      id: "tutorial-unassigned-stats",
+      href: "/profile/experience",
+      name: "Assign XP",
+      color: "blue",
+    });
+  if (user.status === "BATTLE")
+    desired.push({ href: "/combat", name: "In combat", color: "red" });
+  if (user.status === "HOSPITALIZED")
+    desired.push({ href: "/hospital", name: "In hospital", color: "red" });
+  if (user.deletionAt)
+    desired.push({
+      href: "/profile?tab=edit&settings=deletion&setting=character",
+      name: "Deletion requested",
+      color: "red",
+    });
+  if (user.isBanned) desired.push({ href: "/reports", name: "Banned!", color: "red" });
+  if (user.isTradeBanned)
+    desired.push({ href: "/reports", name: "Trade Banned!", color: "red" });
+  const reducedDays = getReducedGainsDays(user);
+  if (reducedDays > 0)
+    desired.push({
+      href: "/village",
+      name: `Slowed ${Math.ceil(reducedDays)} days`,
+      color: "red",
+    });
+  for (const boostType of SHRINE_BOOST_TYPES) {
+    const boost =
+      getShrineBoost(
+        countBoostingShrines(user.village?.sectors),
+        boostType,
+        user.village,
+      ) * 100;
+    if (boost > 0)
+      desired.push({
+        href: "/shrine",
+        name: `Shrine: +${boost}% ${boostType} gains`,
+        color: "green",
+        group: "Active boosts",
+      });
+  }
+  let notifications = old.notifications?.flatMap((entry) => {
+    if (
+      entry.id !== "tutorial-unassigned-stats" &&
+      ![
+        "Assign XP",
+        "In combat",
+        "In hospital",
+        "Deletion requested",
+        "Banned!",
+        "Trade Banned!",
+        activeDungeonNotification.name,
+      ].includes(entry.name) &&
+      !(entry.href === "/village" && /^Slowed \d+ days$/.test(entry.name)) &&
+      !previousFactionNames.has(entry.name) &&
+      !(
+        entry.href === "/shrine" &&
+        entry.group === "Active boosts" &&
+        entry.name.startsWith("Shrine: +")
+      )
+    )
+      return [entry];
+    const index = desired.findIndex((next) => next.name === entry.name);
+    if (index < 0) return [];
+    const next = desired.splice(index, 1)[0]!;
+    const unchanged = Object.entries({ ...entry, ...next }).every(
+      ([field]) =>
+        entry[field as keyof NavBarDropdownLink] ===
+        next[field as keyof NavBarDropdownLink],
+    );
+    return [unchanged ? entry : next];
+  });
+  if (notifications) {
+    notifications.push(...desired);
+    if (
+      notifications.length === old.notifications?.length &&
+      notifications.every((entry, index) => entry === old.notifications?.[index])
+    )
+      notifications = old.notifications;
+    // Existing toast entries have already been displayed by UserContext. Changing
+    // navigation must not replay them through its notification effect.
+    else notifications = notifications.filter((entry) => entry.color !== "toast");
+  }
+  return {
+    ...old,
+    userData: user,
+    ...(achievementProgress ? { achievementProgress } : {}),
+    ...(notifications ? { notifications } : {}),
+  };
+};

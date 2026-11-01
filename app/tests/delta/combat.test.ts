@@ -2,13 +2,13 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { CombatStatNames, ELEMENTAL_MASTERY_CAP, MasteryNames } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/delta/combat";
 import { calcMaxEnergy } from "@/libs/profile";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { ZodAllTags } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
 import { calcBattleResult, maskBattle } from "@/libs/combat/util";
 import { QuestTracker } from "@/validators/objectives";
 

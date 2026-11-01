@@ -1,3 +1,4 @@
+import type { UserUpdate, UserUpdateOptions } from "@/delta/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as Sentry from "@sentry/nextjs";
@@ -12,7 +13,7 @@ import { miscRouter } from "@/server/api/routers/misc";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { trainRouter } from "@/server/api/routers/train";
-import { prepareUserUpdate, updateUserCache, type UserUpdate, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMasteryTag, IncreaseMaxPoolsTag } from "@/validators/combat";
 import { petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertUsers } from "../../../setup/factories";

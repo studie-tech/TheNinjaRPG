@@ -6,6 +6,7 @@ import { after } from "next/server";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
+import { captureCombatCacheSnapshot } from "@/delta/combat";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
@@ -116,7 +117,6 @@ import type {
   ProcessingBattleUser,
   UserEffect,
 } from "@/libs/combat/types";
-import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
 import {
   alignBattle,
   applyPoolAdjustmentsToBase,

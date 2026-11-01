@@ -18,6 +18,7 @@ import {
 } from "react";
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
+import type { UserUpdate, UserUpdateOptions } from "@/delta/profile";
 import type { StructureRoute } from "@/drizzle/constants";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -30,8 +31,6 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import {
   prepareUserUpdate as captureUserUpdate,
-  type UserUpdate,
-  type UserUpdateOptions,
   updateUserCache,
 } from "@/utils/userCache";
 import { canAccessStructure } from "@/utils/village";

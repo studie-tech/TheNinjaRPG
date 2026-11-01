@@ -6,9 +6,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { combatCacheEnergy } from "@/delta/combat";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import type { UserStatus } from "@/drizzle/schema";
-import { combatCacheEnergy } from "@/libs/combat/userCache";
 import { cn } from "@/libs/shadui";
 import {
   getTimedRegenerationGain,

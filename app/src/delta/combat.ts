@@ -1,5 +1,6 @@
 import { CombatStatNames, MasteryNames, REGEN_SECONDS } from "@/drizzle/constants";
 import type { UserData, UserTitle } from "@/drizzle/schema";
+import type { BattleUserItem, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   effectiveMasteries,
   MASTERY_REQUIREMENT_FIELDS,
@@ -12,7 +13,6 @@ import { getMasteryQueue, hasEnergyQueue } from "@/libs/queue";
 import { getRegenerationPeriodGain, type RegenerationPeriod } from "@/libs/timedBuffs";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserDelta } from "@/validators/userCache";
-import type { BattleUserItem, CombatResult, CompleteBattle } from "./types";
 
 const baselineFields = [
   ...CombatStatNames,
