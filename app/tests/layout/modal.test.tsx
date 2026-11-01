@@ -112,6 +112,47 @@ describe("Modal", () => {
     expect(queryByRole("button", { name: "Close" })).toBeNull();
   });
 
+  it("shows caller extras, Close, then Proceed, styled from the theme unless the caller colours it", () => {
+    const { getByRole, rerender } = render(
+      <Modal
+        isOpen
+        setIsOpen={vi.fn()}
+        title="Confirm"
+        proceed_label="Proceed"
+        onAccept={vi.fn()}
+        footerExtra={<button type="button">Cancel listing</button>}
+      >
+        Body
+      </Modal>,
+    );
+    const proceed = getByRole("button", { name: "Proceed" });
+    const close = getByRole("button", { name: "Close" });
+    // Proceed stays first in the DOM, where the dialog puts focus on open so Enter
+    // confirms; CSS order shows it last, after the extras and Close.
+    expect(proceed.parentElement?.firstElementChild).toBe(proceed);
+    expect(close.className).toContain("order-1");
+    expect(proceed.className).toContain("order-2");
+    expect(getByRole("button", { name: "Cancel listing" }).className).not.toContain("order-");
+    expect(proceed.className).toContain("bg-primary");
+    expect(close.className).toContain("bg-card");
+
+    rerender(
+      <Modal
+        isOpen
+        setIsOpen={vi.fn()}
+        title="Confirm"
+        proceed_label="Abandon"
+        onAccept={vi.fn()}
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+      >
+        Body
+      </Modal>,
+    );
+    const destructive = getByRole("button", { name: "Abandon" }).className;
+    expect(destructive).toContain("bg-red-600");
+    expect(destructive).not.toContain("bg-primary");
+  });
+
   it("blocks confirmation and closure for invalid numeric controls", () => {
     const accept = vi.fn();
     const close = vi.fn();
