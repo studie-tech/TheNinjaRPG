@@ -2143,14 +2143,7 @@ const RerollElement: React.FC = () => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data, {
-            revision,
-            delta:
-              data.userPatch?.primaryElement !== undefined &&
-              data.userPatch.secondaryElement !== undefined
-                ? data.userDelta
-                : undefined,
-          });
+          await updateUser(data, { revision, delta: data.userDelta });
         }
       },
     });
