@@ -1101,15 +1101,32 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         pointLights.length !== lights.length ||
         lights.some((entry, index) => entry !== pointLights[index]);
       if (pointGeometryChanged) pointRevision++;
+      // Shadowless fill depends on wind only where a swaying receiver meets its light pool.
+      const windChangesPoints =
+        (lights.some((entry) => entry.castsShadows) &&
+          (detailedOccluders.some((entry) => entry.wind !== undefined) ||
+            dynamicOccluders.some((entry) => entry.wind !== undefined))) ||
+        (hasWindReceivers &&
+          receivers.some(
+            (entry) =>
+              entry.record.wind &&
+              lights.some((pointLight) => {
+                const { radius, cy, ry } = pointLightBounds(pointLight, light.day);
+                return boundsOverlap(entry.bounds, {
+                  minX: pointLight.x - radius,
+                  maxX: pointLight.x + radius,
+                  minY: cy - ry,
+                  maxY: cy + ry,
+                });
+              }),
+          ));
       const nextPointKey =
-        nextReceiverKey +
-        `${staticField.revision}:${dynamicField.revision}` +
-        `:${pointRevision}:` +
-        (hasWindReceivers ||
-        staticOccluders.some((record) => record.wind !== undefined) ||
-        dynamicOccluders.some((record) => record.wind !== undefined)
-          ? breeze.key
-          : "");
+        lights.length === 0
+          ? "empty"
+          : nextReceiverKey +
+            `${staticField.revision}:${dynamicField.revision}` +
+            `:${pointRevision}:` +
+            (windChangesPoints ? breeze.key : "");
       lightUniforms.uniforms.uStaticBounds.set(
         boundsUniform(staticField.bounds, anchorX, anchorY * 2),
       );

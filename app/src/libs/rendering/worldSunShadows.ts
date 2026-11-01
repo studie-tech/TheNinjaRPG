@@ -21,7 +21,7 @@ import {
   worldWindShader,
 } from "@/libs/rendering/worldWind";
 
-/** Retained scenery and actor depth maps follow their own sun, pose and wind changes. */
+/** Stationary depth stays retained while instanced foliage and actors share the animated depth map. */
 export const createSunShadows = (game: GameRenderer) => {
   const staticTexture = RenderTexture.create({
     width: 1024,
@@ -40,6 +40,8 @@ export const createSunShadows = (game: GameRenderer) => {
     new RenderTarget({ colorTextures: [dynamicTexture], depth: true }),
   ] as const;
   const layers = [new Container(), new Container()] as const;
+  // Actor frame changes leave foliage's instanced render instructions retained.
+  const windLayer = new Container({ isRenderGroup: true, label: "wind-depth" });
   const wind = new UniformGroup(
     {
       uWind: { value: new Float32Array(4), type: "vec4<f32>" },
@@ -65,9 +67,10 @@ export const createSunShadows = (game: GameRenderer) => {
   const idleGeometries = new Map<MaterialFrame, CachedGeometry>();
   const idleBudget = 4 * 1024 * 1024;
   let idleBytes = 0;
-  const acquireGeometry = (frame: MaterialFrame) => {
+  const acquireGeometry = (frame: MaterialFrame, compact: boolean) => {
     let cached = geometries.get(frame);
     if (!cached) {
+      const indices = compact ? shadowIndices(frame) : frame.indices;
       const buffer = new Buffer({ data: frame.vertices, usage: BufferUsage.VERTEX });
       const geometry = new Geometry({
         attributes: {
@@ -75,12 +78,12 @@ export const createSunShadows = (game: GameRenderer) => {
           aUV: { buffer, format: "float32x2", stride: 24, offset: 12 },
           aCutout: { buffer, format: "float32", stride: 24, offset: 20 },
         },
-        indexBuffer: frame.indices,
+        indexBuffer: indices,
       });
       cached = {
         geometry,
         references: 0,
-        bytes: frame.vertices.byteLength + frame.indices.byteLength,
+        bytes: frame.vertices.byteLength + indices.byteLength,
       };
       geometries.set(frame, cached);
     } else if (idleGeometries.delete(frame)) idleBytes -= cached.bytes;
@@ -162,11 +165,7 @@ export const createSunShadows = (game: GameRenderer) => {
         wind.uniforms.uWind.set(breeze.large);
         wind.uniforms.uWindSmall.set(breeze.small);
         wind.update();
-        for (const caster of casters) {
-          if (caster.wind === undefined) continue;
-          if (caster.dynamic) dynamicDirty = true;
-          else staticDirty = true;
-        }
+        if (casters.some((caster) => caster.wind !== undefined)) dynamicDirty = true;
       }
       let maxHeight = 64;
       for (const caster of casters) maxHeight = Math.max(maxHeight, caster.height);
@@ -245,12 +244,13 @@ export const createSunShadows = (game: GameRenderer) => {
       }
       // Cull to the retained atlas footprint so subpixel camera motion reuses its caster batches.
       const batchViewKey = viewKey;
-      const layersCasters = [
+      // Instance batches follow pose ownership; actor motion does not rebuild foliage batches.
+      const casterGroups = [
         casters.filter((caster) => !caster.dynamic),
         casters.filter((caster) => caster.dynamic),
       ];
-      const retained = layersCasters.map((next, layer) => {
-        const previous = previousCasters[layer] ?? [];
+      const retained = casterGroups.map((next, group) => {
+        const previous = previousCasters[group] ?? [];
         return (
           previousBatchView === batchViewKey &&
           previous.length === next.length &&
@@ -282,6 +282,7 @@ export const createSunShadows = (game: GameRenderer) => {
       const batches = new Map<string, { casters: SunCaster[]; instanced: boolean }>();
       for (const caster of casters) {
         if (retained[caster.dynamic ? 1 : 0]) continue;
+        const layer = depthLayer(caster);
         if (
           !shadowReachesViewport(
             caster,
@@ -301,7 +302,7 @@ export const createSunShadows = (game: GameRenderer) => {
         }
         // Animated actors retain their mesh across frame swaps; repeated scenery shares one draw.
         const id = instanced
-          ? `batch:${frameId}:${caster.material.texture.source.uid}`
+          ? `batch:${layer}:${frameId}:${caster.material.texture.source.uid}`
           : `object:${caster.id}`;
         let batch = batches.get(id);
         if (!batch) {
@@ -313,16 +314,19 @@ export const createSunShadows = (game: GameRenderer) => {
       for (const [id, batch] of batches) {
         const caster = batch.casters[0];
         if (!caster) continue;
+        const layer = depthLayer(caster);
+        const parent = layer === 1 && !caster.dynamic ? windLayer : layers[layer];
+        if (parent === windLayer && !windLayer.parent) layers[1].addChild(windLayer);
         let entry = entries.get(id);
         if (entry && entry.frame !== caster.frame) {
-          entry.mesh.geometry = acquireGeometry(caster.frame);
+          entry.mesh.geometry = acquireGeometry(caster.frame, !caster.dynamic);
           releaseGeometry(entry.frame);
           entry.frame = caster.frame;
           entry.shader.resources.uMaterial = caster.material.texture.source;
           entry.key = "";
         }
         if (!entry) {
-          const base = acquireGeometry(caster.frame);
+          const base = acquireGeometry(caster.frame, !caster.dynamic);
           const instances = batch.instanced
             ? new Buffer({
                 data: new Float32Array(0),
@@ -373,27 +377,29 @@ export const createSunShadows = (game: GameRenderer) => {
           state.depthTest = true;
           state.depthMask = true;
           const mesh = new Mesh({ geometry, shader, state });
-          layers[caster.dynamic ? 1 : 0]?.addChild(mesh);
+          parent.addChild(mesh);
           entry = {
             mesh,
             shader,
             key: "",
             frame: caster.frame,
+            layer,
             dynamic: caster.dynamic,
             instances,
           };
           entries.set(id, entry);
         }
-        if (entry.dynamic !== caster.dynamic) {
-          entry.dynamic = caster.dynamic;
-          layers[caster.dynamic ? 1 : 0]?.addChild(entry.mesh);
+        entry.dynamic = caster.dynamic;
+        if (entry.layer !== layer || entry.mesh.parent !== parent) {
+          entry.layer = layer;
+          parent.addChild(entry.mesh);
           staticDirty = dynamicDirty = true;
         }
         const key = batch.casters
           .map((value) => `${value.id}:${value.key}:${value.wind ?? -1}`)
           .join(";");
         if (entry.key !== key) {
-          if (entry.dynamic) dynamicDirty = true;
+          if (entry.layer === 1) dynamicDirty = true;
           else staticDirty = true;
           entry.key = key;
           if (entry.instances) {
@@ -437,15 +443,16 @@ export const createSunShadows = (game: GameRenderer) => {
       }
       for (const [id, entry] of entries)
         if (!retained[entry.dynamic ? 1 : 0] && !batches.has(id)) {
-          if (entry.dynamic) dynamicDirty = true;
+          if (entry.layer === 1) dynamicDirty = true;
           else staticDirty = true;
           releaseEntry(entry);
           entries.delete(id);
         }
+      if (!windLayer.children.length) windLayer.removeFromParent();
       trimGeometries();
-      layersCasters.forEach((next, layer) => {
-        if (!retained[layer])
-          previousCasters[layer] = next.map((caster) => ({ ...caster }));
+      casterGroups.forEach((next, group) => {
+        if (!retained[group])
+          previousCasters[group] = next.map((caster) => ({ ...caster }));
       });
       previousBatchView = batchViewKey;
       renderDepth();
@@ -458,6 +465,7 @@ export const createSunShadows = (game: GameRenderer) => {
       disposed = true;
       for (const entry of entries.values()) releaseEntry(entry);
       for (const layer of layers) layer.destroy({ children: true });
+      if (!windLayer.destroyed) windLayer.destroy({ children: true });
       for (const { geometry } of geometries.values()) geometry.destroy(true);
       entries.clear();
       previousCasters = [];
@@ -536,6 +544,41 @@ const shadowReachesViewport = (
   );
 };
 
+/** Omit discarded collars and exact duplicate faces; retain the source frame for receivers and local occlusion. */
+const shadowIndices = (frame: MaterialFrame) => {
+  const vertices = new Map<string, number>(),
+    canonical = new Uint16Array(frame.vertices.length / 6),
+    triangles = new Set<string>(),
+    indices: number[] = [];
+  for (let i = 0; i < canonical.length; i++) {
+    const key = frame.vertices.subarray(i * 6, i * 6 + 6).join(",");
+    let id = vertices.get(key);
+    if (id === undefined) {
+      id = vertices.size;
+      vertices.set(key, id);
+    }
+    canonical[i] = id;
+  }
+  for (let i = 0; i < frame.indices.length; i += 3) {
+    const face = Array.from(frame.indices.subarray(i, i + 3));
+    if (face.every((index) => (frame.vertices[index * 6 + 5] ?? 0) > 1.5)) continue;
+    const key = face
+      .map((index) => canonical[index])
+      .sort((a, b) => (a ?? 0) - (b ?? 0))
+      .join(":");
+    if (triangles.has(key)) continue;
+    triangles.add(key);
+    indices.push(...face);
+  }
+  return indices.length === frame.indices.length
+    ? frame.indices
+    : new Uint16Array(indices);
+};
+
+/** Wind changes depth each frame without changing foliage's instanced geometry. */
+const depthLayer = (caster: SunCaster): 0 | 1 =>
+  caster.dynamic || caster.wind !== undefined ? 1 : 0;
+
 const dot = (a: number[], b: number[]) =>
   (a[0] ?? 0) * (b[0] ?? 0) + (a[1] ?? 0) * (b[1] ?? 0) + (a[2] ?? 0) * (b[2] ?? 0);
 const sunVertex = (instanced: boolean) => `precision highp float;
@@ -582,6 +625,7 @@ type SunEntry = {
   shader: Shader;
   key: string;
   frame: MaterialFrame;
+  layer: 0 | 1;
   dynamic: boolean;
   instances?: Buffer;
 };

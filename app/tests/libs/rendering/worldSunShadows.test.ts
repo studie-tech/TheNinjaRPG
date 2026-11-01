@@ -19,6 +19,42 @@ const fixture = (instanced = false) => {
 const viewport = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
 
 describe("retained sunlight depth", () => {
+  it("releases a caster that changes from wind scenery to an actor within the animated target", () => {
+    const f = fixture();
+    try {
+      const caster = { ...f.caster("changing", false), wind: 0 };
+      f.sun.update([caster], viewport, worldSunlight());
+      const animated = f.render.mock.calls[1]![0]!.container;
+      expect(animated.children).toHaveLength(1);
+      f.sun.update([{ ...caster, dynamic: true, wind: undefined }], viewport, worldSunlight());
+      expect(animated.children).toHaveLength(1);
+      f.sun.update([], viewport, worldSunlight());
+      expect(animated.children).toHaveLength(0);
+    } finally { f.dispose(); }
+  });
+  it("omits duplicate faces and ground collars without changing source geometry or distinct cutout UVs", () => {
+    const f = fixture();
+    const vertices = new Float32Array([
+      ...f.caster("source", false).frame.vertices,
+      0, 0, 0.5, 0, 0, 1, 1, 0, 0.5, 1, 0, 1, 0, 1, 0.5, 0, 1, 1,
+      0, 0, 0.5, 0.5, 0, 1, 1, 0, 0.5, 1, 0, 1, 0, 1, 0.5, 0, 1, 1,
+      0, 0, 0, 0, 0, 2, 1, 0, 0, 1, 0, 2, 0, 1, 0, 0, 1, 2,
+    ]);
+    const indices = new Uint16Array([0, 1, 2, 5, 4, 3, 6, 7, 8, 9, 10, 11]);
+    const caster = f.caster("faces", false);
+    caster.frame = { ...caster.frame, vertices, indices };
+    try {
+      f.sun.update([caster], viewport, worldSunlight());
+      const geometry = f.render.mock.calls[0]![0]!.container.children[0].geometry;
+      expect(Array.from(geometry.indexBuffer.data)).toEqual([0, 1, 2, 6, 7, 8]);
+      expect(caster.frame.indices).toBe(indices);
+      expect(caster.frame.indices).toHaveLength(12);
+      expect(geometry.getBuffer("aPosition").data).toBe(vertices);
+      f.sun.update([{ ...caster, id: "animated", dynamic: true, frame: { ...caster.frame } }], viewport, worldSunlight());
+      const animated = f.render.mock.calls.at(-1)![0]!.container.children[0].geometry;
+      expect(animated.indexBuffer.data).toBe(indices);
+    } finally { f.dispose(); }
+  });
   it("detaches source bindings from departed shaders while cached geometry stays reusable", () => {
     const f = fixture(), source = f.material.texture.source;
     const initialSourceListeners = source.listenerCount("change"), initialSamplerListeners = source.style.listenerCount("change");
@@ -102,9 +138,12 @@ describe("retained sunlight depth", () => {
     const second = { ...f.caster("second", false), wind: 5, transform: new Float32Array([12, 0, 0, -24, 60, 40]) };
     try {
       f.sun.update([first, second, f.caster("actor", true)], viewport, worldSunlight());
-      const layer = f.render.mock.calls[0]![0]!.container;
-      expect(layer.children).toHaveLength(1);
-      const geometry = layer.children[0].geometry;
+      const layer = f.render.mock.calls[1]![0]!.container;
+      expect(f.render.mock.calls[0]![0]!.container.children).toHaveLength(0);
+      const foliage = layer.children.find((child: { label: string }) => child.label === "wind-depth")!;
+      expect(foliage.isRenderGroup).toBe(true);
+      const mesh = foliage.children[0];
+      const geometry = mesh.geometry;
       expect(geometry.instanceCount).toBe(2);
       expect(geometry.attributes.aObject.instance).toBe(true);
       expect(geometry.attributes.aObjectY.instance).toBe(true);
@@ -119,7 +158,7 @@ describe("retained sunlight depth", () => {
       expect(vertices).not.toHaveBeenCalled();
       expect(f.render.mock.calls).toHaveLength(3);
       f.sun.update([second], viewport, worldSunlight());
-      expect(layer.children[0].geometry).toBe(geometry);
+      expect(foliage.children[0].geometry).toBe(geometry);
       expect(geometry.instanceCount).toBe(1);
       expect(upload).toHaveBeenCalledTimes(1);
     } finally { f.dispose(); }
@@ -198,7 +237,7 @@ describe("retained sunlight depth", () => {
     expect(f.render).toHaveBeenCalledTimes(3);
     f.dispose();
   });
-  it("updates retained vegetation at gust cadence independently of actor motion", () => {
+  it("retains stationary buildings while foliage and actors update the shared animated depth", () => {
     const f = fixture();
     try {
       const tree = { ...f.caster("wind-tree", false), wind: 2 };
@@ -206,14 +245,15 @@ describe("retained sunlight depth", () => {
       const still = { large: new Float32Array(4), small: new Float32Array(4), key: "still" };
       f.sun.update([hall, tree, actor], viewport, worldSunlight(), still);
       const scenery = f.render.mock.calls[0]![0]!, actors = f.render.mock.calls[1]![0]!;
-      const mesh = scenery.container.children[1];
+      expect(scenery.container.children).toHaveLength(1);
+      const mesh = actors.container.children.find((child: { label: string }) => child.label === "wind-depth")!.children[0];
       const buffer = mesh.geometry.getBuffer("aPosition");
       const upload = vi.spyOn(buffer, "update");
       expect(mesh.shader.resources.object.uniforms.uObjectY[3]).toBe(3);
       const gust = { ...still, large: new Float32Array([0, 0, 2, 0]), key: "gust" };
       f.sun.update([hall, tree, actor], viewport, worldSunlight(), gust);
       expect(f.render.mock.calls).toHaveLength(3);
-      expect(f.render.mock.calls[2]![0]!.target).toBe(scenery.target);
+      expect(f.render.mock.calls[2]![0]!.target).toBe(actors.target);
       expect(mesh.geometry.getBuffer("aPosition")).toBe(buffer);
       expect(upload).not.toHaveBeenCalled();
       expect(Array.from(mesh.shader.resources.wind.uniforms.uWind)).toEqual([0, 0, 2, 0]);

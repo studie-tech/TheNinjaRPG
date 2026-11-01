@@ -353,6 +353,34 @@ describe("physical world lighting", () => {
     }
   });
 
+  it("retains shadowless character fill for distant wind and refreshes it when foliage reaches the light pool", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    const sprite = new Sprite(source.texture);
+    sprite.scale.set(20, -20); sprite.position.set(40, 40); f.parent.addChild(sprite);
+    const registration = f.shadows.register(sprite, { id: "fill", kind: "character", image: "wind-fill.png", size: 40, x: 40, y: 40, groundY: 0, shadowCaster: "character" });
+    const art = await createWorldSprites(f.game, [{ id: "distant-wind", kind: "decoration", image: "distant-wind.png", size: 40, x: 300, y: 40, groundY: 0, anchorY: 1, wind: 0, shadowCaster: "canopy" }], f.shadows);
+    f.parent.addChild(art.container);
+    try {
+      await registration.ready;
+      const still = { large: new Float32Array(4), small: new Float32Array(4), key: "still" };
+      art.animate({ now: 0, delta: 0, reducedMotion: false }, 1, null, still);
+      f.shadows.update(worldSunlight(), viewport, still);
+      const layer = f.render.mock.calls.at(-1)![0]!.container;
+      const count = () => f.render.mock.calls.filter(([draw]) => draw.container === layer).length;
+      const gust = { ...still, large: new Float32Array([2, 0, 0, 0]), key: "gust" };
+      art.animate({ now: 0, delta: 0, reducedMotion: false }, 1, null, gust);
+      f.shadows.update(worldSunlight(), viewport, gust);
+      expect(count()).toBe(1);
+      art.container.x -= 250;
+      f.shadows.update(worldSunlight(), viewport, gust);
+      const before = count();
+      expect(before).toBeGreaterThan(1);
+      const next = { ...gust, large: new Float32Array([3, 0, 0, 0]), key: "next" };
+      art.animate({ now: 0, delta: 0, reducedMotion: false }, 1, null, next);
+      f.shadows.update(worldSunlight(), viewport, next);
+      expect(count()).toBe(before + 1);
+    } finally { registration(); art.dispose(); f.dispose(); source.dispose(); }
+  });
   it.each([false, true])("shares foliage wind across receivers and shadow passes without uploading retained geometry (casts: %s)", async (castsShadow) => {
     const f = fixture(), source = materialSourceFixture();
     try {
@@ -384,7 +412,7 @@ describe("physical world lighting", () => {
       const draws = f.render.mock.calls.slice(count).map(([draw]) => draw.container);
       expect(draws).toContain(layer);
       expect(draws).toContain(pointMesh.parent);
-      const sun = draws.find((container) => container.children[0]?.shader?.resources.object?.uniforms.uObjectY);
+      const sun = draws.flatMap((container) => container.children).find((child) => child.label === "wind-depth");
       if (castsShadow) expect(Array.from(sun!.children[0].shader.resources.wind.uniforms.uWind)).toEqual([2, 0, 0, 0]);
       else expect(sun).toBeUndefined();
       const after = f.render.mock.calls.length;
