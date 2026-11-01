@@ -442,8 +442,13 @@ const mergeUserCache = (
       return [entry];
     const index = desired.findIndex((next) => next.name === entry.name);
     if (index < 0) return [];
-    desired.splice(index, 1);
-    return [entry];
+    const next = desired.splice(index, 1)[0]!;
+    const unchanged = Object.entries({ ...entry, ...next }).every(
+      ([field]) =>
+        entry[field as keyof NavBarDropdownLink] ===
+        next[field as keyof NavBarDropdownLink],
+    );
+    return [unchanged ? entry : next];
   });
   if (notifications) {
     notifications.push(...desired);

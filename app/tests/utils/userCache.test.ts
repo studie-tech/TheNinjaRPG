@@ -1,7 +1,9 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, setSystemTime } from "bun:test";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
+import { KAGE_DEFENSE_REMINDER_HOURS, VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
+import type { NavBarDropdownLink } from "@/libs/menus";
+import { getUserFactionNotifications } from "@/libs/userNotifications";
 import { QuestTracker } from "@/validators/objectives";
 import type { KageDefenseSchedule } from "@/validators/kage";
 import type { WarMissionAttempt } from "@/validators/war";
@@ -855,6 +857,48 @@ describe("progression cache reconciliation", () => {
 
 
 describe("notification effects during cache updates", () => {
+  it.each(["urgent", "paused"] as const)("refreshes same-name Kage metadata when %s without fetching or replaying toasts", async (change) => {
+    const test = setup();
+    const threshold = Date.parse("2026-11-01T00:00:00Z");
+    const tenure = new Date(threshold - 86400000);
+    const schedule: KageDefenseSchedule = {
+      kageId: "kage", tenure: tenure.toISOString(), windows: [], publishedAt: null,
+      setupDueAt: new Date(threshold + KAGE_DEFENSE_REMINDER_HOURS * 3600_000).toISOString(),
+      missedStarts: 0, paused: false, observedAt: tenure.toISOString(),
+    };
+    const user = { ...profile(100).userData, userId: "kage", isAi: false, activePetId: "previous", villageId: "village",
+      village: { id: "village", type: "VILLAGE", kageId: "kage", leaderUpdatedAt: tenure, kageScheduleAvailableAt: tenure, kageSchedule: schedule },
+    } as NonNullable<UserWithRelations>;
+    try {
+      setSystemTime(new Date(threshold + (change === "urgent" ? -60000 : 60000)));
+      const previous = getUserFactionNotifications(user)[0]!;
+      const mail: NavBarDropdownLink = { href: "/inbox", name: "Mail", color: "green" };
+      const notifications = [mail, previous, previous, { href: "/news", name: "Reward received", color: "toast" as const }];
+      test.client.setQueryData(key, { userData: user, notifications });
+      expect(previous.color).toBe(change === "urgent" ? "blue" : "red");
+      if (change === "urgent") setSystemTime(new Date(threshold + 60000));
+      await updateUserCache(test.client, key, { success: true, userPatch: change === "urgent"
+        ? { activePetId: "next", petExperience: 0 }
+        : { village: { id: "village", kageSchedule: { ...schedule, paused: true } } },
+      }, { revision: prepareUserUpdate(test.client, key) });
+      type Snapshot = { userData: NonNullable<UserWithRelations>; notifications: NavBarDropdownLink[] };
+      const updated = test.client.getQueryData<Snapshot>(key)!;
+      expect(updated.notifications).toEqual([mail, { href: "/townhall", name: "Missing kage schedule!", color: change === "urgent" ? "red" : "blue", alwaysShow: true }]);
+      expect(updated.notifications).not.toBe(notifications);
+      expect(updated.notifications[0]).toBe(mail);
+      expect(updated.notifications[1]).not.toBe(previous);
+      if (change === "urgent") expect(updated.userData.activePetId).toBe("next");
+      else expect(updated.userData.village?.kageSchedule?.paused).toBe(true);
+      await updateUserCache(test.client, key, { money: 150 }, { revision: prepareUserUpdate(test.client, key) });
+      expect(test.client.getQueryData<Snapshot>(key)?.notifications).toBe(updated.notifications);
+      expect(test.reads()).toBe(0);
+      expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+    } finally {
+      test.close();
+      setSystemTime();
+    }
+  });
+
   it("adds, replaces and removes the reduced-gains notice after confirmed village timestamps", async () => {
     const test = setup();
     const mail = { href: "/inbox", name: "Mail", color: "blue" };
