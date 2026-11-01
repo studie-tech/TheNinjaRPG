@@ -34,6 +34,7 @@ import Image from "@/layout/Image";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
+import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
   getActiveObjective,
   isQuestComplete,
@@ -358,10 +359,12 @@ interface TutorialAssistantProps {
  * @returns
  */
 const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
+  const pathname = usePublicPathname();
   const { data: userData } = useUserDataSelector((user) => user.userId);
   // The game shell also wraps public pages. Reward hooks require a player and redirect
   // anonymous visitors, so keep them unmounted until the profile is available.
-  if (!userData) return null;
+  // Browser authentication must also finish without game actions covering it.
+  if (!userData || isBrowserAuthPath(pathname)) return null;
   return <PlayerTutorialAssistant {...props} />;
 };
 

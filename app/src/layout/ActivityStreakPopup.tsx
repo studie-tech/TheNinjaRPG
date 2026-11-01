@@ -21,6 +21,7 @@ import {
   resolveActivityStreakPopupOpen,
   shouldFetchActivityStreaksForPopup,
 } from "@/libs/activityStreak";
+import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
@@ -29,7 +30,12 @@ import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext"
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
-  const isMerch = pathname === "/merch" || pathname.startsWith("/merch/");
+  // Browser authentication must keep its account confirmation reachable without
+  // claiming or dismissing rewards that remain eligible in the game.
+  const isSuppressedRoute =
+    pathname === "/merch" ||
+    pathname.startsWith("/merch/") ||
+    isBrowserAuthPath(pathname);
   // The profile dashboard owns this claim surface. Suppressing the global dialog on
   // the profile route prevents the same reward appearing twice.
   const dashboardOwnsStreak = pathname === "/profile";
@@ -69,7 +75,7 @@ const ActivityStreakPopup: React.FC = () => {
   // for a popup that cannot appear. Re-enables when those latches clear (tutorial
   // finished, date rollover) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
-    hasUser: !!userData && !dashboardOwnsStreak && !isMerch,
+    hasUser: !!userData && !dashboardOwnsStreak && !isSuppressedRoute,
     tutorialActive,
     dismissedToday,
     userClosed,
@@ -86,13 +92,13 @@ const ActivityStreakPopup: React.FC = () => {
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup =
     !dashboardOwnsStreak &&
-    !isMerch &&
+    !isSuppressedRoute &&
     (hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll);
 
   useEffect(() => {
     setIsModalOpen(
       (isOpen) =>
-        !isMerch &&
+        !isSuppressedRoute &&
         resolveActivityStreakPopupOpen({
           isOpen,
           isLoading,
@@ -102,14 +108,21 @@ const ActivityStreakPopup: React.FC = () => {
           tutorialActive,
         }),
     );
-  }, [isLoading, shouldShowPopup, dismissedToday, userClosed, tutorialActive, isMerch]);
+  }, [
+    isLoading,
+    shouldShowPopup,
+    dismissedToday,
+    userClosed,
+    tutorialActive,
+    isSuppressedRoute,
+  ]);
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
   // prompt would otherwise open in the gap before this dialog mounts. Gated on `userClosed`
   // so that once the user closes it, the arrival prompt is free to fire.
   const isBlocking =
-    !isMerch &&
+    !isSuppressedRoute &&
     isActivityStreakPopupBlocking(!!userData, {
       isOpen: isModalOpen,
       isLoading,
@@ -137,7 +150,7 @@ const ActivityStreakPopup: React.FC = () => {
   };
 
   // Don't render anything if no user, loading, dismissed today, or no rewards
-  if (isMerch || !userData || !isModalOpen) {
+  if (isSuppressedRoute || !userData || !isModalOpen) {
     return null;
   }
 
