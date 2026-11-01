@@ -138,6 +138,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         type: "vec4<f32>",
       },
       uLightStrength: { value: 1, type: "f32" },
+      uShadows: { value: 1, type: "f32" },
       uInstanceCounts: { value: new Float32Array(2), type: "vec2<f32>" },
     },
     { isStatic: true },
@@ -463,6 +464,16 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       breeze: WorldWind = STILL_WORLD_WIND,
     ) => {
       if (disposed) return;
+      const { lighting, shadows } = game.visualEffects;
+      if (filter.enabled !== lighting) {
+        filter.enabled = lighting;
+        invalidate();
+      }
+      // Unlit albedo needs no material, depth or local-light targets.
+      if (!lighting) {
+        for (const release of retired.splice(0)) release();
+        return;
+      }
       wind.uniforms.uWind.set(breeze.large);
       wind.uniforms.uWindSmall.set(breeze.small);
       wind.update();
@@ -1037,7 +1048,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           clear: false,
         });
       }
-      if (light.day > 0) {
+      if (shadows && light.day > 0) {
         sun.update(
           detailedSunCasters,
           screenViewport,
@@ -1046,9 +1057,13 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           minReceiverHeight,
         );
         hasSunCasters = true;
-      } else if (hasSunCasters) {
+      } else if (shadows && hasSunCasters) {
         sun.update([], screenViewport, light);
         hasSunCasters = false;
+      }
+      if (!shadows) {
+        // Surface lighting follows the sun even when its depth maps are disabled.
+        sun.setUnshadowedDirection(light);
       }
       const fieldBounds = {
         minX: globalViewport.minX - 192,
@@ -1056,16 +1071,18 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         minY: globalViewport.minY * 2 - 640,
         maxY: globalViewport.maxY * 2 + 192,
       };
-      staticField.update(
-        detailedOccluders,
-        fieldBounds,
-        occlusionHeightRange(detailedOccluders),
-      );
-      dynamicField.update(
-        dynamicOccluders,
-        fieldBounds,
-        occlusionHeightRange(dynamicOccluders),
-      );
+      if (shadows) {
+        staticField.update(
+          detailedOccluders,
+          fieldBounds,
+          occlusionHeightRange(detailedOccluders),
+        );
+        dynamicField.update(
+          dynamicOccluders,
+          fieldBounds,
+          occlusionHeightRange(dynamicOccluders),
+        );
+      }
       let receiverHalfQuantum = 0;
       for (const entry of receivers)
         if (!entry.material.isBillboard && boundsOverlap(entry.bounds, viewport, 2))
@@ -1103,7 +1120,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       if (pointGeometryChanged) pointRevision++;
       // Shadowless fill depends on wind only where a swaying receiver meets its light pool.
       const windChangesPoints =
-        (lights.some((entry) => entry.castsShadows) &&
+        (shadows &&
+          lights.some((entry) => entry.castsShadows) &&
           (detailedOccluders.some((entry) => entry.wind !== undefined) ||
             dynamicOccluders.some((entry) => entry.wind !== undefined))) ||
         (hasWindReceivers &&
@@ -1125,7 +1143,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           ? "empty"
           : nextReceiverKey +
             `${staticField.revision}:${dynamicField.revision}` +
-            `:${pointRevision}:` +
+            `:${pointRevision}:${shadows}:` +
             (windChangesPoints ? breeze.key : "");
       lightUniforms.uniforms.uStaticBounds.set(
         boundsUniform(staticField.bounds, anchorX, anchorY * 2),
@@ -1137,6 +1155,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         staticField.instanceCount,
         dynamicField.instanceCount,
       ]);
+      lightUniforms.uniforms.uShadows = Number(shadows);
       lightUniforms.uniforms.uLightStrength = 1 - light.day * 0.85;
       lightUniforms.update();
       if (pointKey !== nextPointKey) {

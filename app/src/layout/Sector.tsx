@@ -31,13 +31,13 @@ import {
   WAR_SHRINE_IMAGE_BY_BIOME,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
-import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
+import { useVisualEffects } from "@/hooks/visual-effects";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -220,7 +220,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // Day/night map shading preference — ref so the long-running render loop
   // reacts without rebuilding the map
-  const { showDayNightMapOverlays } = useDayNightMapOverlays();
+  const { visualEffects } = useVisualEffects();
+  const showDayNightMapOverlays = visualEffects.lighting;
   const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
   showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
 

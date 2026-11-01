@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutTemplate, RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
+import { RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
 import {
   createContext,
   type Dispatch,
@@ -8,6 +8,7 @@ import {
   type SetStateAction,
   use,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -16,8 +17,8 @@ import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BUTTON_CLICK_SFX_URLS, CONFETTI_SFX_URL } from "@/drizzle/constants";
-import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageSetItem,
@@ -26,6 +27,7 @@ import {
 import { useAudio } from "@/hooks/useAudio";
 import { useSelectGameLayout } from "@/hooks/useGameLayout";
 import { useIframeMute } from "@/hooks/useIframeMute";
+import { useVisualEffects } from "@/hooks/visual-effects";
 import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
 import Link from "@/layout/Link";
 import { UncontrolledSliderField } from "@/layout/SliderField";
@@ -418,9 +420,7 @@ export const useGameSettings = (
     false,
   );
 
-  // Day/night map overlay preference (applies immediately, no refresh)
-  const { showDayNightMapOverlays, setShowDayNightMapOverlays } =
-    useDayNightMapOverlays();
+  const { visualEffects, setVisualEffect } = useVisualEffects();
 
   // Embedded iframe mute state
   const { isIframesMuted, setIframesMuted } = useIframeMute();
@@ -482,8 +482,8 @@ export const useGameSettings = (
     setLightLayout,
     swapSidebars,
     setSwapSidebars,
-    showDayNightMapOverlays,
-    setShowDayNightMapOverlays,
+    visualEffects,
+    setVisualEffect,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -494,14 +494,9 @@ export const useGameSettings = (
 /**
  * Shared settings content component
  */
-interface GameSettingsContentProps extends GameSettingsProps {
-  variant?: "panel" | "popover";
-}
-
-const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
+const GameSettingsContent: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
-  variant = "panel",
   onNavigate,
 }) => {
   const {
@@ -517,8 +512,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     setLightLayout,
     swapSidebars,
     setSwapSidebars,
-    showDayNightMapOverlays,
-    setShowDayNightMapOverlays,
+    visualEffects,
+    setVisualEffect,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -593,203 +588,192 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
 
   const handleLayoutChange = useSelectGameLayout();
 
-  const isPanel = variant === "panel";
-  const sectionClass = isPanel ? "space-y-4" : "space-y-3";
-  const textClass = isPanel ? "text-sm" : "text-xs text-muted-foreground";
-  const headerClass = "text-lg font-bold";
-
   return (
-    <div className={sectionClass}>
-      <div>
-        <p className={headerClass}>Music</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={textClass}>Background soundtrack</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {audioEnabled ? "Playing" : "Paused"}
-              </p>
-            )}
-          </div>
-          <Switch
+    <Tabs defaultValue="audio" className="min-w-0">
+      <TabsList aria-label="Settings categories" className="flex-nowrap">
+        <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
+          Audio
+        </TabsTrigger>
+        <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
+          Game layout
+        </TabsTrigger>
+        <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
+          Visual effects
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="audio" className="space-y-3 pt-2">
+        <p className="text-base font-semibold">Audio</p>
+        <div className="divide-border/50 divide-y">
+          <SettingsToggle
+            label="Music"
+            description="Background soundtrack"
             checked={!!audioEnabled}
             onCheckedChange={handleMusicToggle}
-            aria-label="Toggle music"
           />
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <p className={textClass}>Nindo Audio</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                Embedded iframe audio control
-              </p>
-            )}
-          </div>
-          <Switch
+          <SettingsToggle
+            label="Nindo audio"
+            description="Embedded profile audio"
             checked={!isIframesMuted}
             onCheckedChange={(checked) => setIframesMuted(!checked)}
-            aria-label="Toggle embedded iframe audio"
           />
-        </div>
-      </div>
-
-      <div>
-        <p className={headerClass}>Sound effects</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={textClass}>Combat SFX</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {sfxOn ? "Enabled" : "Disabled"}
-              </p>
-            )}
-          </div>
-          <Switch
+          <SettingsToggle
+            label="Combat sounds"
             checked={!!sfxOn}
             onCheckedChange={setSfxEnabled}
-            aria-label="Toggle sound effects"
           />
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className={textClass}>Button SFX</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {buttonSfxOn ? "Enabled" : "Disabled"}
-              </p>
-            )}
-          </div>
-          <Switch
+          <SettingsToggle
+            label="Button sounds"
             checked={!!buttonSfxOn}
             onCheckedChange={handleButtonSfxToggle}
-            aria-label="Toggle button sound effects"
           />
         </div>
-      </div>
-
-      {(sfxOn || buttonSfxOn) && (
-        <div className="space-y-2">
-          <div>
-            <p className={textClass}>
-              {isPanel ? "SFX Volume" : `SFX Volume (${Math.round(sfxVolume * 100)}%)`}
-            </p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                Current volume: {Math.round(sfxVolume * 100)}%
-              </p>
-            )}
-          </div>
-          <UncontrolledSliderField
-            id="sfxVolume"
-            label=""
-            value={Math.round(sfxVolume * 100)}
-            min={0}
-            max={100}
-            setValue={handleSfxVolumeChange}
-          />
-        </div>
-      )}
-
-      <div>
-        <p className={headerClass}>Display</p>
-        <div className="mb-4 space-y-2">
-          <div className="flex items-start gap-2">
-            <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>
-              <p className={textClass}>Game Layout</p>
-            </div>
-          </div>
-          <GameLayoutPicker layout={activeLayout} onLayoutChange={handleLayoutChange} />
-          <Link
-            href="/layouts"
-            className="inline-flex min-h-11 items-center text-primary text-sm underline"
-          >
-            Explore game layouts
-          </Link>
-        </div>
-        {isClassicLayout && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={textClass}>Lighter Layout</p>
-              {isPanel && (
-                <p className="text-muted-foreground text-xs">
-                  {lightLayout ? "Enabled" : "Disabled"}
-                </p>
-              )}
-            </div>
-            <Switch
-              checked={!!lightLayout}
-              onCheckedChange={setLightLayout}
-              aria-label="Toggle lighter layout"
+        {(sfxOn || buttonSfxOn) && (
+          <div className="space-y-2 pb-2">
+            <label htmlFor="sfxVolume" className="block text-sm">
+              Effects volume{" "}
+              <span className="text-muted-foreground float-right tabular-nums">
+                {Math.round(sfxVolume * 100)}%
+              </span>
+            </label>
+            <UncontrolledSliderField
+              id="sfxVolume"
+              label=""
+              value={Math.round(sfxVolume * 100)}
+              min={0}
+              max={100}
+              setValue={handleSfxVolumeChange}
             />
           </div>
         )}
-        <div
-          className={`flex items-center justify-between ${isClassicLayout ? "mt-3" : ""}`}
-        >
-          <div>
-            <p className={textClass}>Day/night map overlays</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {showDayNightMapOverlays ? "Enabled" : "Disabled"}
-              </p>
-            )}
-          </div>
-          <Switch
-            checked={!!showDayNightMapOverlays}
-            onCheckedChange={setShowDayNightMapOverlays}
-            aria-label="Toggle day/night map overlays"
-          />
+        {requiresInteraction && audioEnabled && (
+          <p className="text-muted-foreground text-xs">
+            Click anywhere to start audio.
+          </p>
+        )}
+      </TabsContent>
+      <TabsContent value="layout" className="space-y-3 pt-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-base font-semibold">Game layout</p>
+          <Link
+            href="/layouts"
+            onClick={onNavigate}
+            className="text-primary inline-flex min-h-9 items-center text-xs underline underline-offset-2"
+          >
+            Explore layouts
+          </Link>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className={textClass}>Swap sidebars</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {swapSidebars
-                  ? "Player and world panels on opposite sides"
-                  : "Layout default"}
-              </p>
-            )}
-          </div>
-          <Switch
+        <GameLayoutPicker layout={activeLayout} onLayoutChange={handleLayoutChange} />
+        <div className="divide-border/50 divide-y">
+          {isClassicLayout && (
+            <SettingsToggle
+              label="Lighter layout"
+              checked={!!lightLayout}
+              onCheckedChange={setLightLayout}
+            />
+          )}
+          <SettingsToggle
+            label="Swap sidebars"
+            description={
+              swapSidebars
+                ? "Player and world panels on opposite sides"
+                : "Layout default"
+            }
             checked={!!swapSidebars}
             onCheckedChange={setSwapSidebars}
-            aria-label="Swap sidebars"
           />
         </div>
         {lightLayoutChanged && (
-          <div className={isPanel ? "mt-3" : "mt-2"}>
-            <Button
-              onClick={handleRefreshPage}
-              variant="default"
-              size="sm"
-              className="w-full"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {isPanel ? "Refresh to Apply Changes" : "Refresh to Apply"}
-            </Button>
-          </div>
+          <Button
+            onClick={handleRefreshPage}
+            variant="default"
+            size="sm"
+            className="w-full"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh to apply
+          </Button>
         )}
-      </div>
-
-      <NativeSettingsEntry onNavigate={onNavigate} />
-
-      {requiresInteraction && audioEnabled && (
-        <p
-          className={
-            isPanel
-              ? "text-muted-foreground text-xs italic"
-              : "text-[10px] text-muted-foreground"
-          }
-        >
-          Audio requires interaction on this browser; click anywhere to start
+        <NativeSettingsEntry onNavigate={onNavigate} />
+      </TabsContent>
+      <TabsContent value="effects" className="space-y-3 pt-2">
+        <div>
+          <p className="text-base font-semibold">Visual effects</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Adjust graphics for your device.
+          </p>
+        </div>
+        <div className="divide-border/50 divide-y">
+          <SettingsToggle
+            label="Lighting"
+            description="Sunlight, day/night colors and local lights"
+            checked={visualEffects.lighting}
+            onCheckedChange={(enabled) => setVisualEffect("lighting", enabled)}
+          />
+          <SettingsToggle
+            label="Shadows"
+            description={
+              visualEffects.lighting
+                ? "Shadows from the sun and nearby lights"
+                : "Enable lighting to show shadows"
+            }
+            checked={visualEffects.shadows}
+            disabled={!visualEffects.lighting}
+            onCheckedChange={(enabled) => setVisualEffect("shadows", enabled)}
+          />
+          <SettingsToggle
+            label="Animations"
+            description="Wind, weather and sprite animations"
+            checked={visualEffects.animations}
+            onCheckedChange={(enabled) => setVisualEffect("animations", enabled)}
+          />
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Changes apply immediately and save on this device.
         </p>
-      )}
+      </TabsContent>
+    </Tabs>
+  );
+};
+
+/** A compact, labelled preference row with a full text target and optional explanation. */
+const SettingsToggle = ({
+  label,
+  description,
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) => {
+  const id = useId();
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-4 py-2">
+      <label
+        htmlFor={id}
+        className={`flex-1 cursor-pointer text-sm ${disabled ? "opacity-50" : ""}`}
+      >
+        {label}
+        {description && (
+          <span
+            id={`${id}-description`}
+            className="text-muted-foreground mt-0.5 block text-xs"
+          >
+            {description}
+          </span>
+        )}
+      </label>
+      <Switch
+        id={id}
+        aria-label={label}
+        aria-describedby={description ? `${id}-description` : undefined}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
     </div>
   );
 };
@@ -807,7 +791,6 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
       <GameSettingsContent
         userData={userData}
         updateUser={updateUser}
-        variant="panel"
         onNavigate={onNavigate}
       />
     </div>
@@ -815,7 +798,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
 };
 
 /**
- * Audio settings popover button (for use in navbar/header)
+ * Categorized settings popover for the game header.
  */
 export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   userData,
@@ -856,13 +839,13 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
         </button>
       </PopoverTrigger>
       <PopoverContent
+        aria-label="Game settings"
         className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
         sideOffset={8}
       >
         <GameSettingsContent
           userData={userData}
           updateUser={updateUser}
-          variant="popover"
           onNavigate={() => setOpen(false)}
         />
       </PopoverContent>

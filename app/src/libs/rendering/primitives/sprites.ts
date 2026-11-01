@@ -415,6 +415,7 @@ export const createWorldSprites = async (
     ui: RenderLayer;
     offsetY: number;
   } | null = null;
+  const softEffects = entries.filter((entry) => entry.shadow || entry.light);
   return {
     container,
     entries,
@@ -506,6 +507,16 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
+      for (const entry of softEffects) {
+        if (entry.shadow)
+          entry.shadow.visible =
+            entry.sprite.visible &&
+            game.visualEffects?.shadows !== false &&
+            game.visualEffects?.lighting !== false;
+        if (entry.light)
+          entry.light.visible =
+            entry.sprite.visible && game.visualEffects?.lighting !== false;
+      }
       if (zoom !== detailZoom && groundDetails.length) {
         detailZoom = zoom;
         const [hidden, visible] = WORLD_DETAIL.groundFadePixels;

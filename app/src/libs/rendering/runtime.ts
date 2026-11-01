@@ -3,6 +3,7 @@ import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
+import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
 const frames = createFrameLoop(
   (callback) => requestAnimationFrame(callback),
@@ -72,6 +73,7 @@ export const createGameRenderer = async (options: {
   if (options.resolution !== undefined) canvas.style.imageRendering = "pixelated";
   canvas.style.touchAction = options.touchAction ?? "none";
   mount.appendChild(canvas);
+  const visualEffects = readVisualEffects();
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
   let contextLost = false;
@@ -89,12 +91,13 @@ export const createGameRenderer = async (options: {
     if (disposed) return;
     dirty = false;
     try {
-      animation.uniforms.uTime = motion.matches ? 0 : now / 1000;
+      const reducedMotion = motion.matches || !visualEffects.animations;
+      animation.uniforms.uTime = reducedMotion ? 0 : now / 1000;
       animation.update();
       update({
         now,
         delta: previousTime === null ? 0 : Math.min(0.1, (now - previousTime) / 1000),
-        reducedMotion: motion.matches,
+        reducedMotion,
       });
       previousTime = now;
       renderer.render({ container: stage });
@@ -145,6 +148,12 @@ export const createGameRenderer = async (options: {
     dirty = true;
     updateSubscription();
   };
+  cleanups.add(
+    subscribeVisualEffects((effect, enabled) => {
+      visualEffects[effect] = enabled;
+      invalidate();
+    }),
+  );
   motion.addEventListener("change", invalidate, { signal: listeners.signal });
   document.addEventListener("visibilitychange", updateSubscription, {
     signal: listeners.signal,
@@ -187,6 +196,7 @@ export const createGameRenderer = async (options: {
     lpcCatalog: options.lpcCatalog,
     stage,
     animation,
+    visualEffects,
     renderer,
     canvas,
     assets,

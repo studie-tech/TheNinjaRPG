@@ -25,7 +25,7 @@ const fixture = () => {
   const world = new Container(), parent = new Container();
   const render = vi.fn();
   const canvas = document.createElement("canvas");
-  const game = { canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, render } } as unknown as GameRenderer;
+  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, render } } as unknown as GameRenderer;
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
@@ -104,6 +104,54 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("bypasses lighting targets while disabled and restores them on the next frame", () => {
+    const f = fixture();
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      f.shadows.update(worldSunlight(), viewport);
+      const filter = f.shadows.container.filters![0]!;
+      const before = f.render.mock.calls.length;
+      f.game.visualEffects.lighting = false;
+      f.shadows.update(worldSunlight(), viewport);
+      f.shadows.update(worldSunlight(), { ...viewport, minX: 5, maxX: 105 });
+      expect(filter.enabled).toBe(false);
+      expect(f.render).toHaveBeenCalledTimes(before);
+      f.game.visualEffects.lighting = true;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(filter.enabled).toBe(true);
+      expect(f.render.mock.calls.length).toBeGreaterThan(before);
+    } finally { f.dispose(); }
+  });
+  it("disables sun and local occlusion work while retaining illuminated materials", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    let release: (() => void) | undefined;
+    try {
+      const sprite = new Sprite(source.texture);
+      sprite.scale.set(20, -20); sprite.position.set(40, 40); f.parent.addChild(sprite);
+      const registration = f.shadows.register(sprite, { id: "settings-building", kind: "structure", image: "settings-building.png", size: 40, x: 40, y: 40, groundY: 30, shadowCaster: "building" });
+      release = registration; await registration.ready;
+      f.shadows.update(worldSunlight(), viewport);
+      const filter = f.shadows.container.filters![0]!;
+      const sun = (filter.resources.sun as { uniforms: { uSun: Float32Array } }).uniforms.uSun;
+      const shadowedDirection = Array.from(sun);
+      f.render.mockClear();
+      f.game.visualEffects.shadows = false;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(filter.enabled).toBe(true);
+      expect((filter.resources.lights as { uniforms: { uShadows: number } }).uniforms.uShadows).toBe(0);
+      const morning = worldSunlight(new Date(WORLD_DAY_SECONDS * 0.2 * 1000));
+      f.shadows.update(morning, viewport);
+      expect(Array.from(sun)).toEqual(Array.from(new Float32Array([morning.x, morning.y, morning.z])));
+      // A shadowless frame has material and local-light draws, without either sun-depth target.
+      expect(f.render.mock.calls.every(([call]) => call.target.source !== filter.resources.uStaticSun && call.target.source !== filter.resources.uDynamicSun)).toBe(true);
+      f.game.visualEffects.shadows = true;
+      const before = f.render.mock.calls.length;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(Array.from(sun)).toEqual(shadowedDirection);
+      expect((filter.resources.lights as { uniforms: { uShadows: number } }).uniforms.uShadows).toBe(1);
+      expect(f.render.mock.calls.length).toBeGreaterThan(before);
+    } finally { release?.(); f.dispose(); source.dispose(); }
+  });
   it("retains screen-density lighting through a pan and refreshes coverage, zoom and resize", () => {
     const f = fixture();
     try {

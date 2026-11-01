@@ -71,6 +71,7 @@ const rendererFixture = () => {
   let update: (frame: runtime.GameFrame) => void = () => {};
   let disposed = false;
   const game = {
+    visualEffects: { lighting: true, shadows: true, animations: true },
     stage, canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
     renderer: { width: 800, height: 600, render: vi.fn() },

@@ -21,6 +21,7 @@ import {
   SWAP_SIDEBARS_ATTRIBUTE,
   SWAP_SIDEBARS_STORAGE_KEY,
 } from "@/libs/layoutPreference";
+import { VISUAL_EFFECT_KEYS } from "@/libs/visualEffects";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 
 ensureDom();
@@ -50,6 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   document.documentElement.removeAttribute(SWAP_SIDEBARS_ATTRIBUTE);
   localStorage.removeItem(SWAP_SIDEBARS_STORAGE_KEY);
+  for (const key of Object.values(VISUAL_EFFECT_KEYS)) localStorage.removeItem(key);
   browserGlobals.forEach((key, index) => {
     const descriptor = browserDescriptors[index];
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -177,8 +179,8 @@ describe("sidebar sides in flex layouts", () => {
   });
 });
 
-describe("swap sidebars setting", () => {
-  it("is off by default and stores the choice for every layout", () => {
+describe("game settings categories", () => {
+  const renderSettings = () => {
     // useLocalStorage syncs same-page readers with the DOM's own CustomEvent.
     for (const key of browserGlobals) {
       Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
@@ -189,13 +191,17 @@ describe("swap sidebars setting", () => {
       profile: { updatePreferences: { useMutation: () => ({ mutate: vi.fn() }) } },
     });
     vi.spyOn(iframeMute, "useIframeMute").mockReturnValue({ isIframesMuted: false, setIframesMuted: vi.fn(), toggleIframesMute: vi.fn() });
-    const view = render(
+    return render(
       <LayoutContextProvider value="17-obsidian-council" isPixelLanding={false}>
         <GlobalAudioProvider>
           <GameSettingsPanel />
         </GlobalAudioProvider>
       </LayoutContextProvider>,
     );
+  };
+  it("stores the sidebar choice in the game layout category", () => {
+    const view = renderSettings();
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Game layout" }), { button: 0, ctrlKey: false });
     const toggle = view.getByRole("switch", { name: "Swap sidebars" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(view.getByText("Layout default")).toBeTruthy();
@@ -203,5 +209,25 @@ describe("swap sidebars setting", () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     expect(localStorage.getItem(SWAP_SIDEBARS_STORAGE_KEY)).toBe("true");
+  });
+
+  it("keeps graphics in their own category and retains the shadow preference while lighting is off", () => {
+    const view = renderSettings();
+    expect(view.queryByRole("switch", { name: "Lighting" })).toBeNull();
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
+    const lighting = view.getByRole("switch", { name: "Lighting" });
+    const shadows = view.getByRole("switch", { name: "Shadows" });
+    const animations = view.getByRole("switch", { name: "Animations" });
+    fireEvent.click(shadows);
+    fireEvent.click(animations);
+    fireEvent.click(lighting);
+    expect(shadows.hasAttribute("disabled")).toBe(true);
+    expect(shadows.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(lighting);
+    expect(shadows.hasAttribute("disabled")).toBe(false);
+    expect(shadows.getAttribute("aria-checked")).toBe("false");
+    expect(localStorage.getItem(VISUAL_EFFECT_KEYS.shadows)).toBe("false");
+    expect(localStorage.getItem(VISUAL_EFFECT_KEYS.animations)).toBe("false");
+    expect(view.queryByRole("switch", { name: "Swap sidebars" })).toBeNull();
   });
 });

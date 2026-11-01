@@ -151,6 +151,12 @@ export const createSunShadows = (game: GameRenderer) => {
     staticTexture,
     dynamicTexture,
     uniforms,
+    /** Updates diffuse light without drawing depth; the next shadowed frame restores its matching basis. */
+    setUnshadowedDirection: (direction: { x: number; y: number; z: number }) => {
+      uniforms.uniforms.uSun.set([direction.x, direction.y, direction.z]);
+      uniforms.update();
+      cachedView = "";
+    },
     /** Sun-space bounds are snapped in world coordinates; camera subpixel movement reuses depth contents. */
     update: (
       casters: SunCaster[],

@@ -61,6 +61,7 @@ uniform vec4 uDynamicTables;
 uniform vec4 uFieldHeights;
 ${worldWindShader}
 uniform float uLightStrength;
+uniform float uShadows;
 uniform vec2 uInstanceCounts;
 ${materialShader}
 float unsigned16(vec2 bytes) { return dot(bytes, vec2(256.0, 1.0)) / 257.0; }
@@ -249,7 +250,7 @@ void main() {
   if (diffuse <= 0.001) discard;
   float visibility = 1.0;
   // Foot-centered fill lights bypass occlusion; sunlight and fixed fixtures own projected shadows.
-  if (vCastsShadows > 0.5) {
+  if (uShadows > 0.5 && vCastsShadows > 0.5) {
     float surface = mod(floor(data.r * 255.0 + 0.5), 4.0);
     float heightError = (surface < 0.5 ? 0.0 : uFieldHeights.z) + 512.0 / 65025.0;
     float guard = heightError * abs(normal.z - 2.0 * normal.y) + uFieldHeights.w;
@@ -315,6 +316,7 @@ uniform vec4 uSunDepth;
 uniform vec3 uAmbient;
 uniform vec3 uSunColor;
 uniform float uDay;
+uniform float uShadows;
 ${materialShader}
 vec3 linearColor(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
 vec3 displayColor(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }
@@ -347,7 +349,7 @@ void main() {
   vec3 p = receiverPosition(screenWorld, height, n, uViewport, uReceiverSize);
   float shade = 1.0;
   float facingSun = dot(n, uSun);
-  if (uDay > 0.0 && facingSun > 0.001) {
+  if (uShadows > 0.5 && uDay > 0.0 && facingSun > 0.001) {
     vec3 relative = p - uSunOrigin;
     vec2 sunUV = (vec2(dot(relative, uSunRight), dot(relative, uSunUp)) - uSunBounds.xy) / uSunBounds.zw;
     float depth = (dot(relative, uSun) - uSunDepth.x) / uSunDepth.y;
@@ -373,7 +375,8 @@ void main() {
   }
   vec2 staticUV = (p.xy - uStaticBounds.xy) / uStaticBounds.zw;
   vec2 dynamicUV = (p.xy - uDynamicBounds.xy) / uDynamicBounds.zw;
-  float contact = max(contactCoverage(uStaticField, staticUV), contactCoverage(uDynamicField, dynamicUV)) * (1.0 - smoothstep(1.0, 8.0, p.z));
+  float contact = 0.0;
+  if (uShadows > 0.5) contact = max(contactCoverage(uStaticField, staticUV), contactCoverage(uDynamicField, dynamicUV)) * (1.0 - smoothstep(1.0, 8.0, p.z));
   vec3 light = uAmbient * (1.0 - contact * 0.22) + uSunColor * max(dot(n, uSun), 0.0) * shade * uDay + texture2D(uPoints, lightingUV).rgb;
   vec3 albedo = color.rgb / max(color.a, 0.00001);
   // The diffuse art already contains painted highlights. Bounded compensation preserves their pixel detail under a moving sun.

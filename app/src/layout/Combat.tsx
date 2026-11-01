@@ -18,7 +18,6 @@ import {
   useBattleMaps,
   useCombatUpdates,
 } from "@/hooks/combat";
-import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
@@ -27,6 +26,7 @@ import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useVisualEffects } from "@/hooks/visual-effects";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatRewards } from "@/layout/CombatRewards";
@@ -115,7 +115,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
-  const { showDayNightMapOverlays } = useDayNightMapOverlays();
+  const { visualEffects } = useVisualEffects();
+  const showDayNightMapOverlays = visualEffects.lighting;
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
   // References which shouldn't update
