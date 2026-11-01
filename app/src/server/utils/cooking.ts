@@ -16,8 +16,8 @@ import {
   insertUserRaidBuffForConsumeMeal,
 } from "@/queries/item";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /**
  * Atomically exchanges each due receipt's XP for an account increment, independently of

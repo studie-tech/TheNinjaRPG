@@ -13,9 +13,8 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
-import { secondsFromNow } from "@/utils/time";
+import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
 
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
 const recipient = alias(userData, "recipient");

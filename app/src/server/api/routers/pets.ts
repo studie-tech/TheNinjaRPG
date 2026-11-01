@@ -673,7 +673,30 @@ export const petsRouter = createTRPCRouter({
   /** Spend the active or parked bank together with its companion stat gains. */
   assignExperience: protectedProcedure
     .input(assignPetExperienceSchema)
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        // Only exact committed projections are returned; fractional writes use client refetches.
+        petUpdate: z
+          .object({
+            offence: z.number(),
+            defence: z.number(),
+            strength: z.number(),
+            speed: z.number(),
+            intelligence: z.number(),
+            willpower: z.number(),
+            id: z.string(),
+            previousRevision: z.number(),
+            revision: z.number(),
+            experience: z.number(),
+            storedExperience: z.number(),
+            updatedAt: z.date(),
+            unusedExperience: z.number(),
+            canRankUp: z.boolean(),
+            rankUpReason: z.string().nullable(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
       const restriction = petMutationBlockMessage(user, pet);
@@ -732,7 +755,14 @@ export const petsRouter = createTRPCRouter({
         ? {
             success: true,
             message: `${spent.toLocaleString("en-US")} companion experience assigned.`,
-            ...getAssignExperienceUserUpdate({ isActive, availableExperience, spent }),
+            ...getAssignExperienceUserUpdate({
+              user,
+              pet,
+              stats,
+              availableExperience,
+              spent,
+              now,
+            }),
           }
         : changedResponse();
     }),

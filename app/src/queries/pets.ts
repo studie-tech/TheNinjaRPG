@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import type { CombatStatName } from "@/drizzle/constants";
 import { jutsu, userData, userPet, userSkill } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Load independent owner and collection snapshots in parallel. */
 export const fetchPetOwner = async (
@@ -56,8 +57,6 @@ import {
   userItem,
   userUpload,
 } from "@/drizzle/schema";
-
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 
 /** Table alias for previous pet joins, keeping its columns distinct from other participants. */
 const previousPet = alias(userPet, "previous_pet");

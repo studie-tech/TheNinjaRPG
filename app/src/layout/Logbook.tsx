@@ -940,7 +940,7 @@ export const useCheckRewards = () => {
           utils.profile.getDashboard.invalidate(),
           utils.quests.getQuestHistory.invalidate(),
           utils.quests.allianceBuilding.invalidate(),
-          // Quest rewards can grant items
+          // Profile reconciliation can grant collection items from unlocked achievements.
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

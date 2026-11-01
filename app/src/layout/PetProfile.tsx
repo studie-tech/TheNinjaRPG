@@ -45,6 +45,7 @@ import {
   PetGenders,
   PetSpawnPositions,
 } from "@/drizzle/constants";
+import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
@@ -143,6 +144,7 @@ export function PetProfile() {
         ? 3000
         : false,
   });
+  const { preparePetUpdate, updatePet } = usePetCacheUpdate(petInput);
   const pet = data?.pet;
   const isGenerating = !!pet && generatingPetIds.includes(pet.id);
   const aiProfile = useMemo(
@@ -265,16 +267,24 @@ export function PetProfile() {
     onError: failMutation,
   });
   const assign = api.pets.assignExperience.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _variables, revision) => {
+    onMutate: () => ({
+      user: prepareUserUpdate(),
+      pet: preparePetUpdate(),
+    }),
+    onSuccess: async (result, _variables, context) => {
       setMessage(result.success ? null : result.message);
       showMutationToast(result);
       if (result.success) {
-        await Promise.all([
-          updateUser(result, { revision }),
-          utils.pets.getPet.invalidate(),
-          utils.pets.getCollection.invalidate(),
-        ]);
+        await updatePet(result.petUpdate, context.pet);
+        // The confirmed owner update must not trigger a second pet-bank read.
+        const next = result.userPatch;
+        previousOwnerProgress.current = [
+          next?.updatedAt?.getTime() ?? ownerUpdatedAt,
+          ownerExperience,
+          ownerEarnedExperience,
+          next?.petExperience ?? ownerPetExperience,
+        ];
+        await updateUser(result, { revision: context.user });
       } else {
         await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
       }

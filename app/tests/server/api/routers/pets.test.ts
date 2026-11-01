@@ -1,3 +1,4 @@
+import { getAssignedPetExperience, getAssignedPetCollection } from "@/deltas/pets";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { ItemRarities, PetRarities, PET_ABILITY_SLOTS_BY_RARITY, type ItemRarity, MAP_WAKE_ISLAND_SECTOR, PET_BATTLE_CONFIG, PET_COLLECTION_SLOT_COST, PET_FEED_COOLDOWN_HOURS, PET_FEED_EXPERIENCE_BY_RARITY, PET_GENERATION_LEASE_MS, PET_GENERATION_RETRY_MS, PET_MAX_COLLECTION_SLOTS, PET_MAX_GENERATION_ATTEMPTS, PET_REPLACEMENT_COST, PET_SEICHI_SILVER_COST, PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
@@ -1021,14 +1022,31 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect((await readPet(database))?.experience).toBe(0);
   });
 
-  it("returns the authoritative active bank after allocating newly earned experience", async () => {
+  it.each([10, 10.125])("returns exact committed pet stats and active XP bank, initial offence: %s", async (offence) => {
     const database = await getTestDatabase();
-    await readyPet(database);
+    await readyPet(database, { offence });
     await database.update(userData).set({ petExperience: 100.5 }).where(eq(userData.userId, userId));
-    const result = await callerForDatabase(petsRouter, userId, database).assignExperience({ ...stats, petId });
-    expect(result).toMatchObject({ success: true, userPatch: { petExperience: 90.5 } });
+    const api = callerForDatabase(petsRouter, userId, database);
+    const before = await api.getPet({ petId });
+    const collection = await api.getCollection();
+    const result = await api.assignExperience({ ...stats, petId });
+    const saved = await readPet(database);
+    expect(saved).toMatchObject({ offence: offence + 10 });
     expect((await readOwner(database))?.petExperience).toBe(90.5);
-    expect(await readPet(database)).toMatchObject({ offence: 20, experience: 10 });
+    if (offence !== 10) {
+      expect(result).toMatchObject({ success: true });
+      expect(result.petUpdate).toBeUndefined();
+      expect(result.userPatch).toBeUndefined();
+      expect(getAssignedPetExperience(before, result.petUpdate)).toBeUndefined();
+    } else {
+      expect(result).toMatchObject({ success: true, userPatch: { petExperience: 90.5 },
+        petUpdate: { id: petId, offence: 20, experience: 10, unusedExperience: 90.5, previousRevision: 0, revision: 1 } });
+      expect(saved?.experience).toBe(10);
+      expect(getAssignedPetExperience(before, result.petUpdate)).toEqual(await api.getPet({ petId }));
+      expect(getAssignedPetCollection(collection, result.petUpdate)).toEqual(await api.getCollection());
+      expect(getAssignedPetExperience({ ...before, pet: { ...before.pet!, revision: 99 } }, result.petUpdate)).toBeUndefined();
+      expect(getAssignedPetExperience({ ...before, pet: null }, result.petUpdate)).toBeUndefined();
+    }
   });
 
   it.each([true, false])("rejects a changed XP bank without spending it or returning a stale balance, active: %s", async (isActive) => {
@@ -1052,10 +1070,25 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect((await readOwner(database))?.petExperience).toBe(isActive ? 55 : 50);
     expect(await readPet(database, selectedPetId)).toMatchObject({ offence: 10, experience: 0, storedExperience: isActive ? 0 : 55 });
 
-    const accepted = await callerForDatabase(petsRouter, userId, database).assignExperience({ ...stats, petId: selectedPetId });
+    const api = callerForDatabase(petsRouter, userId, database);
+    const before = await api.getPet({ petId: selectedPetId });
+    const accepted = await api.assignExperience({ ...stats, petId: selectedPetId });
+    expect(getAssignedPetExperience(before, accepted.petUpdate)).toEqual(await api.getPet({ petId: selectedPetId }));
     expect(accepted).toMatchObject({ success: true, userPatch: isActive ? { petExperience: 45 } : {} });
     expect((await readOwner(database))?.petExperience).toBe(isActive ? 45 : 50);
     expect(await readPet(database, selectedPetId)).toMatchObject({ offence: 20, experience: 10, storedExperience: isActive ? 0 : 45 });
+  });
+
+  it("returns evolution eligibility unlocked by the committed allocation", async () => {
+    const database = await getTestDatabase();
+    await readyPet(database, { experience: 7495 });
+    await database.update(userData).set({ petExperience: 20 }).where(eq(userData.userId, userId));
+    const api = callerForDatabase(petsRouter, userId, database);
+    const before = await api.getPet({ petId });
+    expect(before.canRankUp).toBe(false);
+    const result = await api.assignExperience({ ...stats, petId });
+    expect(result.petUpdate).toMatchObject({ canRankUp: true, rankUpReason: null });
+    expect(getAssignedPetExperience(before, result.petUpdate)).toEqual(await api.getPet({ petId }));
   });
 
   it("uses allocated XP and owner rank for evolution and requires finished art before another", async () => {

@@ -1,3 +1,4 @@
+import { getNextUserSnapshotAt } from "@/utils/time";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { HOME_FURNITURE_STORAGE_CAPACITY, HomeTypeDetails } from "@/drizzle/constants";
@@ -6,7 +7,7 @@ import { calcMaxItems } from "@/libs/item";
 import { homeRouter } from "@/server/api/routers/home";
 import { itemRouter } from "@/server/api/routers/item";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
+
 import { FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../setup/statements";

@@ -8,8 +8,8 @@ import {
   type QuestConsequence,
 } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";

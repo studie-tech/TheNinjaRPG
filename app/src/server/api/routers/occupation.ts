@@ -6,7 +6,6 @@ import {
   getCraftingUserUpdate,
   getSelectOccupationUserUpdate,
 } from "@/deltas/occupation";
-
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
@@ -70,7 +69,6 @@ import {
 } from "@/server/api/trpc";
 import {
   claimUserSnapshot,
-  getNextUserSnapshotAt,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
@@ -87,7 +85,11 @@ import {
 } from "@/server/utils/userQueue";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
-import { formatSecondsToTimeDisplay, getSecondPrecisionDate } from "@/utils/time";
+import {
+  formatSecondsToTimeDisplay,
+  getNextUserSnapshotAt,
+  getSecondPrecisionDate,
+} from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { cookItemInputSchema } from "@/validators/cooking";
 import {

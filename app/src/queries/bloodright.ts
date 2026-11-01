@@ -6,8 +6,8 @@ import { nanoid } from "nanoid";
 import type { UserRole } from "@/drizzle/constants";
 import { actionLog, skillTree, skillTreeFolder, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Build the `skillTree` listing for `get`, using predicates on `pathType`. */
 export const listSkillTreeForGet = (client: Pick<DrizzleClient, "query">) =>

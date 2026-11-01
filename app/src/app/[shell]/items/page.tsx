@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import { getEquippedInventory, getSoldInventory } from "@/deltas/item";
 import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
@@ -39,6 +40,7 @@ import type {
   UserItemWithRelations,
   UserItemWithVariants,
 } from "@/drizzle/schema";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -871,6 +873,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   // tRPC utility
   const utils = api.useUtils();
 
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
+
   // Handler for when mutations are settled
   const onSettled = () => {
     document.body.style.cursor = "default";
@@ -942,27 +947,47 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   });
 
   const { mutate: sell, isPending: isSelling } = api.item.sellUserItem.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, input, context) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
+        await updateInventory(
+          (rows) => getSoldInventory(rows, input.userItemId),
+          context,
+        );
       }
+    },
+    onError: async (error) => {
+      // A local handler replaces the provider's default toast; report before recovery reads.
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await invalidateInventory();
     },
     onSettled,
   });
 
   const { mutate: equip, isPending: isEquipping } = api.item.toggleEquip.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, _input, context) => {
       showMutationToast(data);
       if (data.success) {
-        void Promise.allSettled([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
+        await updateInventory(
+          (rows) => getEquippedInventory(rows, data.equipmentChanges),
+          context,
+        );
       }
+    },
+    onError: async (error) => {
+      // The write may have committed before the error; show feedback and recover both views.
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await invalidateInventory();
     },
     onSettled,
   });

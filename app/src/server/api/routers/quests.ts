@@ -107,7 +107,6 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
 } from "@/libs/questRun";
-
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -257,7 +256,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot, getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
   fetchPublicQuestLocations,
@@ -296,6 +295,7 @@ import {
   canPlayHiddenQuests,
 } from "@/utils/permissions";
 import {
+  getNextUserSnapshotAt,
   periodStart,
   secondsFromDate,
   secondsFromNow,

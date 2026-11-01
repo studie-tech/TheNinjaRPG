@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
+import { getEquippedJutsuUserPatch } from "@/deltas/jutsu";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
@@ -32,6 +33,7 @@ import {
   RESKIN_LIMIT,
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
+import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -140,8 +142,10 @@ export default function MyJutsu() {
   });
 
   // User Jutsus & items
+  const jutsuInput = { ...getFilter(state), includeEquipped: true };
+  const { prepareJutsuUpdate, updateJutsus } = useJutsuCacheUpdate(jutsuInput);
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
-    { ...getFilter(state), includeEquipped: true },
+    jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
   );
   const { data: userItems, isFetching: l2 } = api.item.getUserItems.useQuery(
@@ -201,42 +205,41 @@ export default function MyJutsu() {
 
   // Mutations
   const { mutate: equip, isPending: isToggling } = api.jutsu.toggleEquip.useMutation({
-    onSuccess: async (data, variables) => {
+    onMutate: () => ({
+      jutsus: prepareJutsuUpdate(),
+      user: prepareUserUpdate(),
+    }),
+    onSuccess: async (data, variables, context) => {
       showMutationToast(data);
       if (data.success) {
-        // Cancel older reads before applying the confirmed state to every cached filter.
-        await utils.jutsu.getUserJutsus.cancel();
         const change = data.data;
-        if (change) {
-          utils.jutsu.getUserJutsus.setQueriesData({}, {}, (rows) =>
-            rows?.map((row) =>
-              row.id === variables.userJutsuId
-                ? { ...row, equipped: change.equipped }
-                : row,
-            ),
-          );
-        }
-        // Reconcile in the background so a completed equip can close its dialog.
-        // Sharing exports saved IDs, so equipment edits must refresh that query too.
-        void Promise.allSettled([
+        await Promise.allSettled([
+          updateJutsus(variables.userJutsuId, change, context.jutsus),
           ...(change
             ? [
-                updateUser((current) => {
-                  const jutsuIds = current.loadout?.jutsuIds ?? [];
-                  return {
-                    loadout: {
-                      jutsuIds: change.equipped
-                        ? [...new Set([...jutsuIds, change.jutsuId])]
-                        : jutsuIds.filter((id) => id !== change.jutsuId),
-                    },
-                  };
-                }),
+                updateUser(
+                  (current) =>
+                    getEquippedJutsuUserPatch(current.loadout?.jutsuIds ?? [], change),
+                  { revision: context.user },
+                ),
               ]
             : []),
-          utils.jutsu.getUserJutsus.invalidate(),
           utils.jutsu.getLoadouts.invalidate(),
         ]);
       }
+    },
+    onError: async (error) => {
+      // Local recovery replaces the provider's error handler, so feedback must be explicit.
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await Promise.all([
+        utils.jutsu.getUserJutsus.invalidate(),
+        utils.jutsu.getLoadouts.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
     },
     onSettled: () => {
       loadoutRequestInFlightRef.current = false;

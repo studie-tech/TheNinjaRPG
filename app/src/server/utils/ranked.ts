@@ -7,7 +7,7 @@ import {
   updateRankedLoadoutForCleanRankedProhibitedSelections,
 } from "@/queries/pvprank";
 import type { DrizzleClient } from "@/server/db";
-import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 const RANKED_LOADOUT_CLEANUP_MAX_ATTEMPTS = 3;
 
