@@ -128,7 +128,7 @@ it("recovers unconfirmed announcements through the canonical profile without inv
 it("delivers consumed announcements before awaiting profile reconciliation", async () => {
   const test = setup();
   let finish!: () => void;
-  test.updateUser.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+  test.updateUser.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finish = () => resolve(false); }));
   const pending = onSuccess(result, {}, undefined);
   expect(shown.mock.calls.filter(([message]) => message.title === "Notification!")).toHaveLength(1);
   finish();

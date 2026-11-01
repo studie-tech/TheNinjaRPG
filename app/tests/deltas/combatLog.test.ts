@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { RouterInputs } from "@/app/_trpc/client";
 import type { BattleAction } from "@/drizzle/schema";
-import { mergeBattleEntries } from "@/libs/combat/log";
+import { mergeBattleEntries } from "@/deltas/combat";
 
 const entry = (version: number, userId = "me", actionId = "jutsu") =>
   ({ id: `${version}`, battleId: "battle", battleVersion: version, battleRound: 1,
@@ -33,7 +33,6 @@ describe("mergeBattleEntries", () => {
     [previous, [entry(3), entry(3)], input, 5],
     [previous, incoming, { ...input, battleId: "other-battle" }, 5],
     [previous, incoming, { ...input, offset: 5 }, 5],
-    [previous, incoming, { ...input, refreshKey: undefined }, 5],
     [[entry(3)], incoming, input, 5],
     [previous, [], input, 3],
   ])("refetches on missing history, gaps, mismatched battles or pages", (old, delta, key, next) => {
@@ -53,4 +52,11 @@ describe("mergeBattleEntries", () => {
     expect(mergeBattleEntries(repaired, [entry(1)], key, 2)).toEqual(repaired);
     expect(mergeBattleEntries([entry(2)], incoming, input, 5)?.map((row) => row.battleVersion)).toEqual([4, 3, 2]);
   });
+});
+
+it("extends a complete unversioned saved log and preserves newer committed rows", () => {
+  const saved = { ...input, refreshKey: undefined };
+  expect(mergeBattleEntries(previous, incoming, saved, 5)?.map(row => row.battleVersion)).toEqual([4, 3, 2]);
+  expect(mergeBattleEntries([entry(6), entry(5), entry(4)], incoming, saved, 5)?.map(row => row.battleVersion)).toEqual([6, 5, 4]);
+  expect(mergeBattleEntries([entry(1)], [entry(4)], saved, 5)).toBeUndefined();
 });

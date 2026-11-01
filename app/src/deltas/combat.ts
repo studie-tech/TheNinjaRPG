@@ -1,3 +1,4 @@
+import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { BattleType } from "@/drizzle/constants";
 import {
   CombatStatNames,
@@ -5,8 +6,13 @@ import {
   MasteryNames,
   REGEN_SECONDS,
 } from "@/drizzle/constants";
-import type { UserData, UserTitle } from "@/drizzle/schema";
-import type { BattleUserItem, CombatResult, CompleteBattle } from "@/libs/combat/types";
+import type { BattleAction, UserData, UserTitle } from "@/drizzle/schema";
+import type {
+  BattleState,
+  BattleUserItem,
+  CombatResult,
+  CompleteBattle,
+} from "@/libs/combat/types";
 import {
   effectiveMasteries,
   MASTERY_REQUIREMENT_FIELDS,
@@ -427,3 +433,61 @@ export const getAutoCombatPreferencePatch = (
   enabled: boolean,
 ) =>
   ManualStartBattleTypes.includes(battleType) ? {} : { defaultAutoCombat: enabled };
+
+/** Merge complete, unfiltered first pages, including saved logs and reordered committed deltas. */
+export const mergeBattleEntries = (
+  previous: BattleAction[] | undefined,
+  incoming: BattleAction[],
+  input: RouterInputs["combat"]["getBattleEntries"],
+  nextVersion: number,
+): BattleAction[] | undefined => {
+  const version = input.refreshKey;
+  const limit = input.limit ?? 30;
+  const targetVersion = (previous ?? []).reduce(
+    (latest, row) => Math.max(latest, row.battleVersion + 1),
+    Math.max(version ?? 0, nextVersion),
+  );
+  if (
+    !previous ||
+    targetVersion < 1 ||
+    (input.userFilter !== undefined && input.userFilter !== "all") ||
+    input.showBasicActions === false ||
+    input.offset ||
+    !incoming.length ||
+    incoming.some((entry) => entry.battleId !== input.battleId) ||
+    previous.some((entry) => entry.battleId !== input.battleId)
+  )
+    return undefined;
+
+  // The DB's unique key includes round: duplicate delivery must not duplicate rows.
+  const entries = [
+    ...new Map(
+      [...previous, ...incoming].map((entry) => [
+        `${entry.battleVersion}:${entry.battleRound}`,
+        entry,
+      ]),
+    ).values(),
+  ]
+    .sort((a, b) => b.battleRound - a.battleRound || b.battleVersion - a.battleVersion)
+    .slice(0, limit);
+  // A claimed version alone cannot prove its log insert finished. Only a full,
+  // contiguous page is safe to reuse; filtered pages and genuine gaps still read.
+  if (
+    entries.length !== Math.min(targetVersion - 1, limit) ||
+    entries.some((entry, i) => entry.battleVersion !== targetVersion - 1 - i)
+  )
+    return undefined;
+  return entries;
+};
+
+/** Apply only this battle's confirmed action response, never replacing a newer cached version. */
+export const getCombatStateUpdate = (
+  current: RouterOutputs["combat"]["getBattle"],
+  response: Pick<BattleState, "battle" | "result">,
+  battleId: string,
+): RouterOutputs["combat"]["getBattle"] | undefined => {
+  if (current.battle?.id !== battleId || response.battle?.id !== battleId) return;
+  return current.battle.version > response.battle.version
+    ? current
+    : { battle: response.battle, result: response.result ?? null };
+};

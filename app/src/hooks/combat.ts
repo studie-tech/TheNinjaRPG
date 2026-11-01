@@ -2,13 +2,16 @@ import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import superjson from "superjson";
-import { api, type RouterInputs } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
+import { getCombatStateUpdate, mergeBattleEntries } from "@/deltas/combat";
 import type { BattleAction } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { type BattleMaps, computeBattleMaps } from "@/libs/combat/battleMaps";
-import { type BattleUpdate, mergeBattleEntries } from "@/libs/combat/log";
+import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState, ReturnedBattle } from "@/libs/combat/types";
 import { showMutationToast } from "@/libs/toast";
+import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { useUserData } from "@/utils/UserContext";
 
 export type { BattleMaps } from "@/libs/combat/battleMaps";
@@ -28,29 +31,44 @@ export const useBattleMaps = (battle: ReturnedBattle | null): BattleMaps => {
 
 /**
  * Apply committed deltas to actor and observer history caches.
- * Only settlement and unversioned saved logs force recovery reads. Ordinary
- * version changes use their normal query keys; newer events refresh active
- * battle state.
+ * Complete saved logs reuse committed rows; gaps, filters and pending reads recover.
+ * Confirmed ongoing actions update their captured query; newer observer events still read.
  */
 export const useCombatUpdates = (state: BattleState) => {
   const { pusher } = useUserData();
   const utils = api.useUtils();
   const queryClient = useQueryClient();
+  const battleCache = useQueryCacheUpdate<RouterOutputs["combat"]["getBattle"]>(
+    getQueryKey(api.combat.getBattle, { battleId: state.battle?.id }, "query"),
+  );
   // Keep the subscription stable while its handler reads the latest battle/result.
   const stateRef = useRef(state);
   stateRef.current = state;
   const battleId = state.battle?.id;
-  const pendingActionRef = useRef<{ battleId: string; version: number } | null>(null);
+  const pendingActionRef = useRef<{
+    battleId: string;
+    version: number;
+    snapshot: ReturnType<typeof battleCache.prepareUpdate>;
+  } | null>(null);
   const responseVersionRef = useRef<{ battle: ReturnedBattle; version: number } | null>(
     null,
   );
 
-  const startAction = useCallback((id: string) => {
-    if (pendingActionRef.current) return false;
-    pendingActionRef.current = { battleId: id, version: 0 };
-    return true;
-  }, []);
+  /** Reserve the action and capture its exact battle-query revision before sending it. */
+  const startAction = useCallback(
+    (id: string) => {
+      if (pendingActionRef.current) return false;
+      pendingActionRef.current = {
+        battleId: id,
+        version: 0,
+        snapshot: battleCache.prepareUpdate(),
+      };
+      return true;
+    },
+    [battleCache.prepareUpdate],
+  );
 
+  /** Reuse the committed response unless an error, cache race or newer event requires recovery. */
   const settleAction = useCallback(
     (
       id: string,
@@ -66,14 +84,24 @@ export const useCombatUpdates = (state: BattleState) => {
       const version =
         response.battle?.id === id ? response.battle.version : battle.version;
       responseVersionRef.current = { battle, version };
+      // Held results outlive deleted battle rows; do not start recovery reads for them.
       if (result || response.result) return;
       // Compare with the response being applied, even if an independent poll
       // already rendered a newer state that onSuccess is about to replace.
-      if (shouldRefresh || (pending?.battleId === id && pending.version > version)) {
-        void utils.combat.getBattle.invalidate();
+      if (
+        shouldRefresh ||
+        Math.max(battle.version, pending?.battleId === id ? pending.version : 0) >
+          version
+      ) {
+        void utils.combat.getBattle.invalidate({ battleId: id });
+      } else if (response.battle && pending?.battleId === id) {
+        void battleCache.updateCache(
+          (current) => getCombatStateUpdate(current, response, id),
+          pending.snapshot,
+        );
       }
     },
-    [utils],
+    [battleCache.updateCache, utils],
   );
 
   const updateLogs = useCallback(
@@ -154,6 +182,23 @@ export const useCombatUpdates = (state: BattleState) => {
           }
         }
         for (const { input, query } of sources) {
+          // An inactive stale page already recovers on mount; keep pending reads cancellable.
+          if (
+            query.state.isInvalidated &&
+            query.state.fetchStatus === "idle" &&
+            query.getObserversCount() === 0
+          )
+            continue;
+          if (!input.refreshKey && logEntries) {
+            // Saved logs share committed rows too; gaps, filters and unfinished reads still recover.
+            await updateQueryCache<BattleAction[]>(
+              queryClient,
+              query.queryKey,
+              (rows) => mergeBattleEntries(rows, logEntries, input, version),
+              { revision: prepareQueryUpdate(queryClient, query.queryKey) },
+            );
+            continue;
+          }
           if (input.refreshKey && entries) {
             if (
               finished &&

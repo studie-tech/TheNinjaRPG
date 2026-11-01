@@ -12,6 +12,7 @@ import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) =>
   prepareQueryUpdate<UserCache>(client, key, (cache) => !!cache.userData);
 
+/** Reconcile the profile and report whether related caches can rely on a local projection. */
 export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
@@ -58,7 +59,7 @@ export const updateUserCache = async (
     !mutation?.userNotifications &&
     !mutation?.notifications
   )
-    return;
+    return false;
   return updateQueryCache<UserCache>(
     client,
     key,

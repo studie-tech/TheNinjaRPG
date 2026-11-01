@@ -62,7 +62,7 @@ let evolve: ReturnType<typeof vi.fn>;
 let timeDiff: number;
 let previousBattleEnabled: boolean;
 const prepareUserUpdate = vi.fn<() => number | undefined>(() => 17);
-const updateUser = vi.fn<(patch: UserPatch | undefined, mutation?: UserUpdateOptions) => Promise<void>>(async () => undefined);
+const updateUser = vi.fn<(patch: UserPatch | undefined, mutation?: UserUpdateOptions) => Promise<boolean>>(async () => false);
 let scrollDescriptor: PropertyDescriptor | undefined;
 
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
@@ -70,7 +70,7 @@ const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDesc
 
 beforeEach(() => {
   prepareUserUpdate.mockReset().mockReturnValue(17);
-  updateUser.mockReset().mockResolvedValue(undefined);
+  updateUser.mockReset().mockResolvedValue(false);
   ensureDom();
   scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });

@@ -1,6 +1,7 @@
+import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
-import type { Quest } from "@/drizzle/schema";
+import type { Quest, QuestHistory } from "@/drizzle/schema";
 import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
 import {
   getQuestTargetSectorsToCheck,
@@ -8,7 +9,7 @@ import {
   type QuestConsequence,
 } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
-import { getNextUserSnapshotAt } from "@/utils/time";
+import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 
 import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
@@ -256,4 +257,79 @@ export const getQuestRewardProjectionUpdate = ({
     canProject ? getUserProgressionUpdate(user, publishedAchievementIds) : undefined,
     delta,
   );
+};
+
+/**
+ * Project the completion counters written by a successful claim. Only reward-free,
+ * nonterminal progress leaves discovery and history unchanged; other lists still refresh.
+ */
+export const getQuestRewardCacheUpdate = (
+  entry: Pick<
+    QuestHistory,
+    | "questId"
+    | "previousAttempts"
+    | "previousCompletes"
+    | "periodCompletes"
+    | "periodStartAt"
+  > & { quest: Pick<Quest, "retryDelay"> },
+  completedAt: Date | null,
+  rewards: GetRewardResult,
+  requiresDiscoveryRefresh: boolean,
+) => {
+  const before = {
+    previousCompletes: entry.previousCompletes ?? 0,
+    periodCompletes: entry.periodCompletes ?? 0,
+    periodStartAt: entry.periodStartAt ?? null,
+  };
+  const retryDelay = entry.quest.retryDelay ?? "none";
+  const start =
+    completedAt && retryDelay !== "none" ? periodStart(retryDelay, completedAt) : null;
+  const delta = getRewardUserDelta(rewards);
+  return {
+    questId: entry.questId,
+    before,
+    after: completedAt
+      ? {
+          previousAttempts: entry.previousAttempts ?? 0,
+          previousCompletes: before.previousCompletes + 1,
+          periodCompletes: start
+            ? !before.periodStartAt || before.periodStartAt < start
+              ? 1
+              : before.periodCompletes + 1
+            : before.periodCompletes,
+          periodStartAt: start ?? before.periodStartAt,
+        }
+      : { ...before, previousAttempts: entry.previousAttempts ?? 0 },
+    discoveryUnchanged:
+      !completedAt &&
+      !requiresDiscoveryRefresh &&
+      !rewards.reward_level &&
+      !rewards.reward_stats &&
+      delta !== undefined &&
+      Object.values(delta).every((value) => value === 0),
+  };
+};
+
+/** Patch loaded discovery counters only against their confirmed baseline, preserving raid summaries. */
+export const getQuestRewardDashboardUpdate = (
+  current: RouterOutputs["profile"]["getDashboard"],
+  update: ReturnType<typeof getQuestRewardCacheUpdate>,
+): RouterOutputs["profile"]["getDashboard"] | undefined => {
+  const candidate = current.candidates.find((entry) => entry.id === update.questId);
+  // Achievements are not discovery candidates; an absent row has no counters to update.
+  if (!candidate) return current;
+  if (
+    (candidate.previousAttempts ?? 0) > update.after.previousAttempts ||
+    (candidate.previousCompletes ?? 0) !== update.before.previousCompletes ||
+    (candidate.periodCompletes ?? 0) !== update.before.periodCompletes ||
+    (candidate.periodStartAt?.getTime() ?? null) !==
+      (update.before.periodStartAt?.getTime() ?? null)
+  )
+    return;
+  return {
+    ...current,
+    candidates: current.candidates.map((entry) =>
+      entry.id === update.questId ? { ...entry, ...update.after } : entry,
+    ),
+  };
 };

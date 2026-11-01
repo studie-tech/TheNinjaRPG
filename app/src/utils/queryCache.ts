@@ -25,6 +25,7 @@ export const prepareQueryUpdate = <T>(
 /**
  * Apply a local change or reconcile a confirmed mutation against its captured revision.
  * Returning undefined from the updater requests an authoritative refresh.
+ * Resolve true only when cached data was updated without requesting recovery.
  */
 export const updateQueryCache = async <T>(
   client: QueryClient,
@@ -34,8 +35,9 @@ export const updateQueryCache = async <T>(
 ) => {
   const filter = { queryKey: key, exact: true };
   if (!mutation) {
-    if (!update) return;
+    if (!update) return false;
     const before = client.getQueryState(key);
+    let applied = false;
     let needsRefresh =
       before?.status === "error" ||
       !!before?.isInvalidated ||
@@ -49,25 +51,26 @@ export const updateQueryCache = async <T>(
         state?.fetchStatus !== "idle";
       if (old === undefined) return undefined;
       const next = update(old);
+      applied = next !== undefined;
       needsRefresh ||= next === undefined;
       return next;
     });
     // A local patch must preserve reconciliation of unrelated fields.
     if (needsRefresh) await client.invalidateQueries(filter);
-    return;
+    return applied && !needsRefresh;
   }
   if (!update || mutation.revision === undefined) {
     // An initial fetch may contain a snapshot taken before the mutation.
     await client.cancelQueries(filter);
     await client.invalidateQueries(filter);
-    return;
+    return false;
   }
   const wasFetching = client.getQueryState(key)?.fetchStatus !== "idle";
   await client.cancelQueries(filter);
   // Another action may depend on this unfinished read for reconciliation.
   if (wasFetching) {
     await client.invalidateQueries(filter);
-    return;
+    return false;
   }
   let applied = false;
   client.setQueryData<T>(key, (old) => {
@@ -87,6 +90,7 @@ export const updateQueryCache = async <T>(
     return next;
   });
   if (!applied) await client.invalidateQueries(filter);
+  return applied;
 };
 
 /** Objects merge recursively; arrays, Dates and null are absolute replacements. */

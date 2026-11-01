@@ -283,7 +283,7 @@ export default function Training() {
 interface TrainingProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
   /** Whichever box comes second carries this: it spaces the boxes apart and
    *  demotes the heading, so the leading box is the one titling the page. */
   initialBreak?: boolean;

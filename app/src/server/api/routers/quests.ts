@@ -7,6 +7,7 @@ import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
   getCollectPetTaskUserUpdate,
+  getQuestRewardCacheUpdate,
   getQuestRewardProjectionUpdate,
   getRetryBattleUserUpdate,
   getRewardUserDelta,
@@ -1464,7 +1465,28 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .meta({ mcp: { description: "Check and claim quest rewards" } })
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        // Confirmed counters are optional; absent projections retain the full refetch path.
+        questCacheUpdate: z
+          .object({
+            questId: z.string(),
+            before: z.object({
+              previousCompletes: z.number(),
+              periodCompletes: z.number(),
+              periodStartAt: z.date().nullable(),
+            }),
+            after: z.object({
+              previousAttempts: z.number(),
+              previousCompletes: z.number(),
+              periodCompletes: z.number(),
+              periodStartAt: z.date().nullable(),
+            }),
+            discoveryUnchanged: z.boolean(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Reward payout follows the history/account claim; isolated runs publish both together.
       const [
@@ -1473,6 +1495,7 @@ export const questsRouter = createTRPCRouter({
           toastMessages,
           settings,
           requiresProgressionRefresh,
+          requiresUserRefresh,
           publishedAchievementIds,
           progressionQuestCandidates,
         },
@@ -1552,6 +1575,7 @@ export const questsRouter = createTRPCRouter({
         consequences,
         existingHistory: questHistoryPrefetch ?? null,
         rewardChoice,
+        requiresDiscoveryRefresh: requiresUserRefresh,
         ...(resolved && isolatedRun?.questId === input.questId
           ? {
               postClaimUserDataPatch: {
@@ -1621,6 +1645,7 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
+        questCacheUpdate: claim.questCacheUpdate,
         ...getQuestRewardProjectionUpdate({
           user: user,
           requiresProgressionRefresh,
@@ -3466,6 +3491,7 @@ type CommitQuestObjectiveRewardsResult =
       rewardChoicePending: boolean;
       userDelta: UserDelta | undefined;
       userCacheEligible: boolean;
+      questCacheUpdate?: ReturnType<typeof getQuestRewardCacheUpdate>;
     }
   /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
   | { outcome: "already_completed" }
@@ -3517,6 +3543,8 @@ export const commitQuestObjectiveRewards = async (info: {
   postClaimUserDataPatch?: Record<string, unknown>;
   /** Delegated attempts claim the owner receipt and history together before normal final rewards. */
   petTask?: PetTask;
+  /** Initial profile settlement can change discovery eligibility before the reward claim. */
+  requiresDiscoveryRefresh?: boolean;
 }): Promise<CommitQuestObjectiveRewardsResult> => {
   const {
     client,
@@ -3530,6 +3558,8 @@ export const commitQuestObjectiveRewards = async (info: {
     consequences,
   } = info;
   const petTask = info.petTask;
+  const requiresDiscoveryRefresh =
+    !!info.requiresDiscoveryRefresh || consequences.length > 0;
   const milestoneLevel = resolved ? rewards.reward_level : undefined;
   // Validate before claiming history or delivering any objective or completion rewards.
   if (
@@ -3991,22 +4021,23 @@ export const commitQuestObjectiveRewards = async (info: {
     user.villagePrestige += rewards.reward_prestige;
     if (confirmedSkillPoints) user.skillPoints = confirmedSkillPoints.skillPoints;
   }
+  let questCacheUpdate =
+    !resolved && userQuest
+      ? getQuestRewardCacheUpdate(userQuest, null, rewards, requiresDiscoveryRefresh)
+      : undefined;
   if (resolved && userQuest && completedEndAt) {
     const entry = user.userQuests.find((entry) => entry.questId === userQuest.questId);
     if (entry) {
+      questCacheUpdate = getQuestRewardCacheUpdate(
+        entry,
+        completedEndAt,
+        rewards,
+        requiresDiscoveryRefresh,
+      );
       entry.completed = 1;
       entry.endAt = completedEndAt;
-      entry.previousCompletes = (entry.previousCompletes ?? 0) + 1;
+      Object.assign(entry, questCacheUpdate.after);
       entry.pendingRewardChoice = rewardChoice;
-      const retryDelay = userQuest.quest.retryDelay ?? "none";
-      if (retryDelay !== "none") {
-        const start = periodStart(retryDelay, completedEndAt);
-        entry.periodCompletes =
-          !entry.periodStartAt || entry.periodStartAt < start
-            ? 1
-            : (entry.periodCompletes ?? 0) + 1;
-        entry.periodStartAt = start;
-      }
     }
     user.completedQuests = [
       ...user.completedQuests.filter((entry) => entry.questId !== userQuest.questId),
@@ -4063,6 +4094,7 @@ export const commitQuestObjectiveRewards = async (info: {
     rewards,
     badges,
     rewardChoicePending: !!rewardChoice,
+    questCacheUpdate,
     userDelta,
     userCacheEligible:
       userCacheEligible &&

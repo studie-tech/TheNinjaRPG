@@ -108,6 +108,16 @@ describe("query cache reconciliation", () => {
   });
 });
 
+it("reports local application separately from authoritative recovery for dependent caches", async () => {
+  const test = setup();
+  const snapshot = { revision: prepareQueryUpdate(test.client, key) };
+  expect(await updateQueryCache<Rows>(test.client, key, rows => rows, snapshot)).toBe(true);
+  expect(await updateQueryCache<Rows>(test.client, key, rows => rows, snapshot)).toBe(false);
+  expect(test.reads()).toBe(1);
+  expect(await updateQueryCache<Rows>(test.client, key, undefined, { revision: prepareQueryUpdate(test.client, key) })).toBe(false);
+  expect(test.reads()).toBe(2);
+});
+
 describe("query patch and delta merging", () => {
   it("merges nested values, keeps sibling fields and adds to the original balances", () => {
     const current = { id: "one", count: 10, relation: { id: "two", count: 20, name: "kept" } };

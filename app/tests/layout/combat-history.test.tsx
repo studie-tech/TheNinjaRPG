@@ -342,3 +342,33 @@ it("does not overwrite a newer page committed while cancellation is pending", as
   await act(async () => { finishCancellation(); await pendingUpdate; });
   expect(queryClient.getQueryData<BattleAction[]>(targetKey)?.map((entry) => entry.battleVersion)).toEqual([4, 3, 2, 1]);
 });
+
+it("updates complete saved logs without reads, preserving gap recovery and reordered events", async () => {
+  const row = (version: number) => ({ ...lethalEntry, id: `hit-${version}`, battleVersion: version });
+  entries = [2, 1].map(row);
+  const view = mount(false);
+  await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
+  for (const [version, delta] of [[4, 3], [4, 3], [3, 2]]) {
+    await act(async () => applyLogs("battle", version!, [row(delta!)]));
+  }
+  await waitFor(() => expect(view.getAllByText(/Victim takes 100 damage/)).toHaveLength(3));
+  expect(readEntries).toHaveBeenCalledTimes(1);
+  entries = [5, 4, 3, 2, 1].map(row);
+  await act(async () => applyLogs("battle", 6, [row(5)]));
+  await waitFor(() => expect(view.getAllByText(/Victim takes 100 damage/)).toHaveLength(5));
+  expect(readEntries).toHaveBeenCalledTimes(2);
+});
+
+it("marks an inactive saved log stale once until it is reopened", async () => {
+  const key = getQueryKey(testApi.combat.getBattleEntries, { battleId: "battle", checkBattle: false, limit: 30 }, "query");
+  queryClient.setQueryData(key, []);
+  mount();
+  await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
+  const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+  for (const version of [4, 5, 6]) {
+    await act(async () => applyLogs("battle", version, [{ ...lethalEntry, battleVersion: version - 1 }]));
+  }
+  expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  expect(readEntries).toHaveBeenCalledTimes(1);
+});

@@ -26,7 +26,7 @@ import type { UserWithRelations } from "@/routers/profile";
 interface UserCombatSettingsProps {
   config: CombatPreferences;
   userData?: UserWithRelations | null;
-  updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
 }
 
 export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({

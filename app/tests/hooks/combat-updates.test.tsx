@@ -108,6 +108,7 @@ it("avoids the extra getBattle request when the actor broadcast precedes the sam
   expect(reads).toHaveLength(1);
   await respond();
   expect(reads).toHaveLength(1);
+  expect(queryClient.getQueryData<BattleState>(getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query"))?.battle?.version).toBe(2);
 });
 
 it("does not refresh when the mutation response precedes its broadcast", async () => {
@@ -120,21 +121,19 @@ it("does not refresh when the mutation response precedes its broadcast", async (
   expect(reads).toHaveLength(2);
 });
 
-it("recovers an older poll applied after the response renders before its late broadcast", async () => {
+it("cancels an older poll and recovers without regressing the committed action", async () => {
   mount();
   await beginAction();
   const key = getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query");
   await act(async () => { void queryClient.invalidateQueries({ queryKey: key }); });
   await waitFor(() => expect(reads).toHaveLength(2));
+  const finishOldRead = finishRead;
   await respond();
-  await waitFor(() => expect(latestState.battle?.version).toBe(2));
-  // getBattle aligns updatedAt even when its captured version has not advanced.
-  await act(async () => finishRead?.(stateAt(1, { battle: {
-    ...stateAt(1).battle!, updatedAt: new Date(1),
-  } as never })));
-  await waitFor(() => expect(latestState.battle?.version).toBe(1));
-  await act(async () => onEvent({ version: 2 }));
   await waitFor(() => expect(reads).toHaveLength(3));
+  await act(async () => finishOldRead?.(stateAt(1, { battle: { ...stateAt(1).battle!, updatedAt: new Date(1) } as never })));
+  expect(latestState.battle?.version).toBe(2);
+  await act(async () => onEvent({ version: 2 }));
+  expect(reads).toHaveLength(3);
   await act(async () => finishRead?.(stateAt(2)));
   await waitFor(() => expect(latestState.battle?.version).toBe(2));
 });
@@ -272,4 +271,15 @@ it("does not leak deferred versions into a different battle", async () => {
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
   // The new query key loads once; the old event must not cause a refresh of it.
   expect(reads).toHaveLength(2);
+});
+
+it("keeps final results out of recovery reads even if their battle cache is stale", async () => {
+  mount();
+  await beginAction();
+  const key = getQueryKey(testApi.combat.getBattle, { battleId: "battle" }, "query");
+  await act(async () => { await queryClient.invalidateQueries({ queryKey: key, exact: true, refetchType: "none" }); });
+  await act(async () => finishAction({ ...actionResponse(2), result: { outcome: "Won" } as never }));
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(reads).toHaveLength(1);
+  expect(latestState.result?.outcome).toBe("Won");
 });

@@ -75,10 +75,11 @@ type UserContextValue = {
   /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
   isSignedIn: boolean;
   prepareUserUpdate: () => number | undefined;
+  /** Resolve true for an accepted local projection; false retains dependent-cache recovery. */
   updateUser: (
     patch: UserUpdate | undefined,
     mutation?: UserUpdateOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
@@ -97,9 +98,7 @@ export const UserContext = createContext<UserContextValue>({
   isClerkLoaded: false,
   isSignedIn: false,
   prepareUserUpdate: () => undefined,
-  updateUser: async () => {
-    // do nothing
-  },
+  updateUser: async () => false,
   updateNotifications: async () => {
     // do nothing
   },
