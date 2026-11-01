@@ -1,25 +1,37 @@
 import {
+  COST_CHANGE_USERNAME,
   MAX_SKILL_POINTS,
   MEDNIN_EXP_CAP,
   SAGE_MASTERY_EXP_CAP,
   SHRINE_BOOST_TYPES,
   UserRanks,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { GLOBAL_GAME_BOOSTS } from "@/libs/gameSettingBoost";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { calcMaxEnergy, canAssignExperience } from "@/libs/profile";
-import { getPublicQuestUser } from "@/libs/quest";
+import { getPublicQuestUser, getQuestMaxLevel } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import { getReducedGainsDays } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
+import type {
+  fetchUser,
+  findUserDataForUseUnusedExperiencePoints,
+} from "@/queries/profile";
+import type { fetchQuestBootstrap } from "@/routers/profile";
 import type {
   AchievementProgress,
   fetchUpdatedUser,
   UserWithRelations,
 } from "@/server/api/routers/profile";
-import { mergeQueryChanges } from "@/utils/queryCache";
+import { mergeQueryChanges, type QueryPatch } from "@/utils/queryCache";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
+import type {
+  TavernColorChangeSchema,
+  UpdateUserPreferencesSchema,
+} from "@/validators/user";
 import type {
   UserCachePatch,
   UserDelta,
@@ -43,7 +55,9 @@ export type UserPatch =
 type UserResponse = Pick<
   UserDeltaResponse,
   "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
-> & { userPatch?: KnownUserPatch };
+> & {
+  userPatch?: KnownUserPatch;
+};
 
 /** Local projections and server responses share the same identity and revision checks. */
 export type UserUpdate = UserPatch | UserResponse;
@@ -85,7 +99,7 @@ export const applyUserChanges = (
   if (patch && known === undefined) return;
   const user = mergeQueryChanges(
     current.userData,
-    known ?? {},
+    (known ?? {}) as QueryPatch<User>,
     delta,
     mutation ? USER_DELTA_CAPS : undefined,
     {
@@ -111,7 +125,7 @@ export const applyUserChanges = (
     return;
   const result = mergeUserCache(current, user, mutation?.achievementProgress);
   if (mutation?.userNotifications && result.notifications) {
-    const { setting, notice } = mutation?.userNotifications.globalBoost;
+    const { setting, notice } = mutation.userNotifications.globalBoost;
     const { href, label } = GLOBAL_GAME_BOOSTS[setting];
     result.notifications = [
       ...result.notifications.filter(
@@ -128,7 +142,7 @@ export const applyUserChanges = (
     ];
   }
   if (mutation?.notifications)
-    result.notifications = mutation?.notifications(result.notifications);
+    result.notifications = mutation.notifications(result.notifications);
   return result;
 };
 
@@ -359,3 +373,196 @@ const mergeUserCache = (
     ...(notifications ? { notifications } : {}),
   };
 };
+
+export const getUpdateTutorialStepUserUpdate = ({
+  inputStep,
+}: {
+  inputStep: number;
+}) => ({
+  userPatch: { tutorialStep: inputStep },
+});
+
+export const getUpdatePreferencesUserUpdate = ({
+  resultRowsAffected,
+  input,
+}: {
+  resultRowsAffected: number;
+  input: UpdateUserPreferencesSchema;
+}) => ({
+  userPatch: resultRowsAffected > 0 ? input : undefined,
+});
+
+export const getUpdateSpriteBodyUserUpdate = ({
+  inputBody,
+}: {
+  inputBody: "male" | "female";
+}) => ({
+  userPatch: { spriteBodyStyle: inputBody },
+});
+
+export const getUpdateUsernameUserUpdate = ({
+  inputUsername,
+  userReputationPoints,
+}: {
+  inputUsername: string;
+  userReputationPoints: number;
+}) => ({
+  userPatch: {
+    username: inputUsername,
+    reputationPoints: userReputationPoints - COST_CHANGE_USERNAME,
+  },
+});
+
+export const getUpdateTavernColorUserUpdate = ({
+  colorUpdate,
+  cost,
+}: {
+  colorUpdate:
+    | {
+        tavernUsernameColor:
+          | "GOLD"
+          | "DEFAULT"
+          | "MIDNIGHT"
+          | "NAVY"
+          | "COBALT"
+          | "YELLOW"
+          | "SLATE"
+          | "CHARCOAL"
+          | "CRIMSON"
+          | "FUCHSIA"
+          | "MINT"
+          | "LIME";
+        tavernTitleColor?: undefined;
+      }
+    | {
+        tavernTitleColor:
+          | "GOLD"
+          | "DEFAULT"
+          | "MIDNIGHT"
+          | "NAVY"
+          | "COBALT"
+          | "YELLOW"
+          | "SLATE"
+          | "CHARCOAL"
+          | "CRIMSON"
+          | "FUCHSIA"
+          | "MINT"
+          | "LIME";
+        tavernUsernameColor?: undefined;
+      };
+  cost: number;
+}) => ({
+  userPatch: {
+    ...colorUpdate,
+  },
+  userDelta: { reputationPoints: -cost },
+});
+
+export const getUseUnusedExperiencePointsUserUpdate = ({
+  data,
+  resultClaimedAt,
+  user,
+}: {
+  data: AssignedExperiencePatch;
+  resultClaimedAt: Date;
+  user: NonNullable<
+    Awaited<ReturnType<typeof findUserDataForUseUnusedExperiencePoints>>
+  >;
+}) => {
+  if (hasEnergyQueue(user)) return {};
+  return {
+    userPatch: {
+      ...data,
+      updatedAt: resultClaimedAt,
+      effectiveMasteries: effectiveMasteries({ ...user, ...data }),
+      maxEnergy: calcMaxEnergy({ ...user, ...data }),
+    },
+  };
+};
+
+export const getToggleDeletionTimerUserUpdate = ({
+  inputUserId,
+  ctxUserId,
+  deletionAt,
+}: {
+  inputUserId: string;
+  ctxUserId: string;
+  deletionAt: Date | null;
+}) => ({
+  userPatch: inputUserId === ctxUserId ? { deletionAt } : {},
+  userDelta: {},
+});
+
+export const getAwardExperienceUserUpdate = ({
+  inputTargetUserId,
+  ctxUserId,
+  target,
+  inputAmount,
+}: {
+  inputTargetUserId: string;
+  ctxUserId: string;
+  target: NonNullable<Awaited<ReturnType<typeof fetchUser>>>;
+  inputAmount: number;
+}) => ({
+  userDelta:
+    inputTargetUserId === ctxUserId &&
+    target.earnedExperience > 0 &&
+    !hasEnergyQueue(target) &&
+    Number.isInteger(inputAmount)
+      ? { earnedExperience: inputAmount }
+      : undefined,
+});
+
+export const getAwardExperienceToAllUserUpdate = ({
+  awarder,
+  inputAmount,
+}: {
+  awarder: NonNullable<Awaited<ReturnType<typeof fetchUser>>>;
+  inputAmount: number;
+}) => ({
+  userDelta:
+    hasEnergyQueue(awarder) ||
+    awarder.earnedExperience <= 0 ||
+    !Number.isInteger(inputAmount)
+      ? undefined
+      : { earnedExperience: inputAmount },
+});
+
+type AssignedExperiencePatch = Pick<
+  UserData,
+  | "offence"
+  | "defence"
+  | "strength"
+  | "speed"
+  | "intelligence"
+  | "willpower"
+  | "ninjutsuMastery"
+  | "genjutsuMastery"
+  | "taijutsuMastery"
+  | "bukijutsuMastery"
+  | "experience"
+  | "earnedExperience"
+> &
+  Partial<Pick<UserData, "elementalMastery">>;
+
+export const canBootstrapQuestType = (
+  candidates: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
+  questType: "tier" | "exam",
+  level: number,
+) =>
+  candidates.some(
+    (candidate) =>
+      candidate.questType === questType &&
+      candidate.completed === null &&
+      candidate.requiredLevel <= level &&
+      getQuestMaxLevel(candidate) >= level,
+  );
+
+export const getTavernColorPatch = (
+  input: Pick<TavernColorChangeSchema, "target" | "color">,
+) =>
+  input.target === "username"
+    ? { tavernUsernameColor: input.color }
+    : { tavernTitleColor: input.color };
+
+export type UserQueueState = Pick<UserData, "energyQueueHead" | "energyQueueTail">;

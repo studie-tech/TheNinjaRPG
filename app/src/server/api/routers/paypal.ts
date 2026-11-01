@@ -1,6 +1,11 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getCaptureStoreOrderUserUpdate,
+  getReconcilePaypalSubscriptionUserUpdate,
+  getSubscribeWithRepsUserUpdate,
+} from "@/delta/paypal";
+import {
   FEDERAL_MONTHLY_USD_CENTS,
   FederalStatuses,
   type TransactionType,
@@ -364,7 +369,7 @@ export const paypalRouter = createTRPCRouter({
       const { delivery, ...response } = result;
       if (!delivery) return response;
       if (delivery.recipientId !== ctx.userId)
-        return { ...response, userPatch: {}, userDelta: {} };
+        return { ...response, ...getCaptureStoreOrderUserUpdate() };
       return {
         ...response,
         ...(!delivery.contents.items.length
@@ -554,8 +559,12 @@ export const paypalRouter = createTRPCRouter({
       return {
         success: true,
         message: "OK",
-        userDelta: { reputationPoints: -cost },
-        userPatch: input.userId === ctx.userId ? { federalStatus: input.status } : {},
+        ...getSubscribeWithRepsUserUpdate({
+          cost,
+          inputUserId: input.userId,
+          ctxUserId: ctx.userId,
+          inputStatus: input.status,
+        }),
       };
     }),
   // Upgrade a subscription for a user. Can only be done by the user who created the subscription
@@ -1349,10 +1358,11 @@ export const reconcilePaypalSubscription = async (input: {
   return {
     ...result,
     // Only the canonical recipient's cross-provider entitlement changes.
-    userPatch:
-      result.success && input.callerId && input.callerId !== owners.affectedUserId
-        ? {}
-        : undefined,
+    ...getReconcilePaypalSubscriptionUserUpdate({
+      resultSuccess: result.success,
+      inputCallerId: input.callerId,
+      ownersAffectedUserId: owners.affectedUserId,
+    }),
   };
 };
 

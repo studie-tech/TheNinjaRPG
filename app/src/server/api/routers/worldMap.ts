@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getMoveStructureUserUpdate } from "@/delta/worldMap";
 import { type SectorMapStatus, SectorMapStatuses } from "@/drizzle/constants";
 import { sectorMap } from "@/drizzle/schema";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
@@ -504,24 +505,13 @@ export const worldMapRouter = createTRPCRouter({
       return {
         success: true,
         message: `${structure.name} moved to ${to}`,
-        userPatch: {},
-        userDelta:
-          user.villageId === structure.villageId
-            ? {
-                village: {
-                  id: structure.villageId,
-                  structures: {
-                    update: [
-                      {
-                        id: structure.id,
-                        longitude: input.longitude,
-                        latitude: input.latitude,
-                      },
-                    ],
-                  },
-                },
-              }
-            : {},
+        ...getMoveStructureUserUpdate({
+          userVillageId: user.villageId,
+          structureVillageId: structure.villageId,
+          structureId: structure.id,
+          inputLongitude: input.longitude,
+          inputLatitude: input.latitude,
+        }),
       };
     }),
 });

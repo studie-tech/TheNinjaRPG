@@ -3,6 +3,10 @@ import { eq, gte, isNull, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { getUserProgressionUpdate } from "@/delta/profile";
 import {
+  getSavedTrainingQueueUserUpdate,
+  getSelectTrainedElementUserUpdate,
+} from "@/delta/train";
+import {
   BasicElementName,
   getUserCaps,
   MAX_DAILY_TRAININGS,
@@ -99,10 +103,10 @@ export const trainRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Active trained element updated",
-            userPatch: {
-              activeTrainedElement: input.element,
-              updatedAt: result.claimedAt,
-            },
+            ...getSelectTrainedElementUserUpdate({
+              inputElement: input.element,
+              resultClaimedAt: result.claimedAt,
+            }),
           }
         : errorResponse("Your elements changed. Please try again");
     }),
@@ -583,8 +587,11 @@ const withSavedQueue = (
   return {
     success: true,
     message: result.message,
-    ...(!requiresProgressionRefresh
-      ? getUserProgressionUpdate({ ...user, ...result.saved }, publishedAchievementIds)
-      : {}),
+    ...getSavedTrainingQueueUserUpdate({
+      user,
+      saved: result.saved,
+      requiresProgressionRefresh,
+      publishedAchievementIds,
+    }),
   };
 };

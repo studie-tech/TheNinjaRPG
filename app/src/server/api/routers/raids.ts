@@ -1,5 +1,15 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/delta/profile";
+import { getRewardUserUpdate } from "@/delta/quests";
+import {
+  confirmRaidBattleUpdate,
+  getJoinRaidQueueUserUpdate,
+  getRaidQueueExpectedUpdate,
+  getRaidQueueWakeUserUpdate,
+  getRaidSnapshotUpdate,
+  raidQueueWakeUpdate,
+} from "@/delta/raids";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,
@@ -84,7 +94,7 @@ import {
 } from "@/queries/raids";
 import { deleteSectorByNumber } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
@@ -97,17 +107,13 @@ import type { DrizzleClient } from "@/server/db";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
-import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import {
-  type UserDeltaResponse,
-  userDeltaResponseSchema,
-} from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const raidsRouter = createTRPCRouter({
   /**
@@ -590,8 +596,7 @@ export const raidsRouter = createTRPCRouter({
       // Validation does not change the profile; reconcile only a mismatched activity status.
       const reject = (message: string) => ({
         ...errorResponse(message),
-        userDelta: {},
-        userExpected: { status: user.status },
+        ...getRaidQueueExpectedUpdate({ userStatus: user.status }),
       });
       const bannedReady = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedReady) return bannedReady;
@@ -689,9 +694,7 @@ export const raidsRouter = createTRPCRouter({
         message: confirmedAwake
           ? "You are ready to queue!"
           : "Ready status checked; refresh your current activity if needed.",
-        userPatch: confirmedAwake
-          ? { status: "AWAKE" as const, travelFinishAt: null, battleId: null }
-          : undefined,
+        ...getRaidQueueWakeUserUpdate({ confirmedAwake }),
       };
     }),
 
@@ -731,8 +734,7 @@ export const raidsRouter = createTRPCRouter({
       // Rejections before admission leave profile data untouched unless its status is stale.
       const reject = (message: string) => ({
         ...errorResponse(message),
-        userDelta: {},
-        userExpected: { status: user.status },
+        ...getRaidQueueExpectedUpdate({ userStatus: user.status }),
       });
       const bannedJoin = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedJoin) return bannedJoin;
@@ -910,8 +912,7 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Joined raid queue",
         teamId,
-        userPatch: { status: "QUEUED" },
-        userDelta: {},
+        ...getJoinRaidQueueUserUpdate(),
       };
     }),
 
@@ -1508,48 +1509,3 @@ const ensureRaidChatConversation = async (
 
   return conversationId;
 };
-
-/** Reuse the upfront progression projection unless automatic effects still need reconciliation. */
-const getRaidSnapshotUpdate = (
-  snapshot: Awaited<ReturnType<typeof fetchUpdatedUser>>,
-) => {
-  const update =
-    snapshot.user && !snapshot.requiresProgressionRefresh
-      ? getUserProgressionUpdate(snapshot.user, snapshot.publishedAchievementIds)
-      : undefined;
-  return { ...update, userDelta: update ? {} : undefined };
-};
-
-/** A successful guarded wake changes only the actor's queue status. */
-const raidQueueWakeUpdate = (
-  initial: ReturnType<typeof getRaidSnapshotUpdate>,
-  woke: boolean,
-) => ({
-  ...initial,
-  userPatch:
-    woke && initial.userPatch
-      ? { ...initial.userPatch, status: "AWAKE" as const }
-      : undefined,
-  userDelta: woke && initial.userPatch ? {} : undefined,
-});
-
-/**
- * Combine admission state with a safe upfront progression snapshot.
- * Unknown admission or progression state must reconcile as one profile.
- */
-const confirmRaidBattleUpdate = (
-  initial: ReturnType<typeof getRaidSnapshotUpdate>,
-  result: Pick<UserDeltaResponse, "userPatch" | "userDelta"> & {
-    requiresUserRefresh?: boolean;
-  },
-) => ({
-  ...initial,
-  userPatch:
-    !result.requiresUserRefresh && result.userPatch && initial.userPatch
-      ? { ...initial.userPatch, ...result.userPatch }
-      : undefined,
-  userDelta:
-    !result.requiresUserRefresh && result.userPatch && initial.userPatch
-      ? result.userDelta
-      : undefined,
-});

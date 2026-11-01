@@ -1,7 +1,12 @@
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
+import {
+  getCancelQueuedCraftUserUpdate,
+  getCraftingUserUpdate,
+  getSelectOccupationUserUpdate,
+} from "@/delta/occupation";
+
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
@@ -138,7 +143,10 @@ export const occupationRouter = createTRPCRouter({
         return {
           success: true,
           message: "Occupation selected successfully!",
-          userPatch: { occupation: input.occupation, occupationSignupAt },
+          ...getSelectOccupationUserUpdate({
+            inputOccupation: input.occupation,
+            occupationSignupAt,
+          }),
         };
       }
       const result = await updateUserDataForSelectOccupation(
@@ -154,7 +162,10 @@ export const occupationRouter = createTRPCRouter({
       return {
         success: true,
         message: "Occupation selected successfully!",
-        userPatch: { occupation: input.occupation, occupationSignupAt },
+        ...getSelectOccupationUserUpdate({
+          inputOccupation: input.occupation,
+          occupationSignupAt,
+        }),
       };
     }),
 
@@ -398,38 +409,6 @@ export const occupationRouter = createTRPCRouter({
             : [];
         },
       );
-      const profileUpdate = () => {
-        if (
-          updatedUser.requiresProgressionRefresh ||
-          consequences.some(
-            (consequence) =>
-              consequence.type !== "update_user" ||
-              consequence.ids.some((id) => id !== "activity_completion"),
-          ) ||
-          // Passive rewards and team quest navigation use the authoritative profile flow.
-          user.userQuests.some(
-            (entry) =>
-              questIdsUpdated.some((id) => id === entry.questId) &&
-              (entry.quest.teamEnabled ||
-                ["tier", "daily", "achievement"].includes(entry.quest.questType)),
-          ) ||
-          allConsumptions.some((consumption) =>
-            user.items.some((entry) => entry.id === consumption.userItemId),
-          )
-        )
-          return {};
-        const progression = getUserProgressionUpdate(
-          user,
-          updatedUser.publishedAchievementIds,
-        );
-        return {
-          ...progression,
-          userPatch: {
-            ...progression.userPatch,
-            craftingExperience: user.craftingExperience,
-          },
-        };
-      };
       if (isQueued) {
         // The snapshot claim serializes this user's crafts; the materials are taken next
         // and only then is the craft recorded, so a failed step returns what was taken.
@@ -508,7 +487,13 @@ export const occupationRouter = createTRPCRouter({
           success: true,
           message: `Queued ${outputQuantity}x ${itemWithRequirements.name}. Starts in ${formatSecondsToTimeDisplay(Math.max(0, Math.round((queueSchedule.startsAt.getTime() - Date.now()) / 1000)))}.`,
           finishTime: queueSchedule.finishesAt.toISOString(),
-          ...profileUpdate(),
+          ...getCraftingUserUpdate({
+            user,
+            updatedUser,
+            consequences,
+            questIdsUpdated,
+            allConsumptions,
+          }),
         };
       }
       const cookingJob = isMeal
@@ -578,7 +563,13 @@ export const occupationRouter = createTRPCRouter({
         success: true,
         message: `Started ${isMeal ? "cooking" : "crafting"} ${outputQuantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
         finishTime: finishTime.toISOString(),
-        ...profileUpdate(),
+        ...getCraftingUserUpdate({
+          user,
+          updatedUser,
+          consequences,
+          questIdsUpdated,
+          allConsumptions,
+        }),
       };
     }),
 
@@ -642,17 +633,13 @@ export const occupationRouter = createTRPCRouter({
       return {
         success: true,
         message: "Queued craft cancelled, materials returned",
-        userPatch:
-          cancelled.remaining === 0 &&
-          !cancelled.entry.materials?.some((material) =>
-            snapshot.items.some((entry) => entry.id === material.userItemId),
-          )
-            ? {
-                queue: snapshot.queue
-                  .filter((row) => row.id !== cancelled.entry.id)
-                  .map(({ item: _item, ...row }) => row),
-              }
-            : undefined,
+        ...getCancelQueuedCraftUserUpdate({
+          cancelledRemaining: cancelled.remaining,
+          cancelledEntryMaterials: cancelled.entry.materials,
+          snapshotItems: snapshot.items,
+          snapshotQueue: snapshot.queue,
+          cancelledEntryId: cancelled.entry.id,
+        }),
       };
     }),
 

@@ -3,6 +3,23 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getClanDonationUserUpdate,
+  getConvertPointsToRyoUserUpdate,
+  getDemoteMemberUserUpdate,
+  getEditClanColorUserUpdate,
+  getInstantJoinAndLeadUserUpdate,
+  getJoinClanBattleUserUpdate,
+  getKickFromClanBattleUserUpdate,
+  getKickMemberUserUpdate,
+  getLeaveClanBattleUserUpdate,
+  getLeaveClanUserUpdate,
+  getPromoteMemberUserUpdate,
+  getToBankUserUpdate,
+  getUnchangedClanUserUpdate,
+  getUpgradeHideoutToStrongholdUserUpdate,
+} from "@/delta/clan";
+
+import {
   ASSASSIN_MAX_PER_FACTION,
   CLAN_ASSASSIN_SLOTS,
   CLAN_BOOST_CONFIG,
@@ -124,7 +141,6 @@ import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
-import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -267,15 +283,11 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Stronghold restored successfully",
-        userDelta: { clan: { id: fetchedClan.id, bank: -STRONGHOLD_REESTABLISH_COST } },
-        userPatch: {
-          village: {
-            id: clanHideout.id,
-            type: "STRONGHOLD",
-            belowMemberMinimumSince: null,
-            lastMaintenancePaidAt,
-          },
-        },
+        ...getUpgradeHideoutToStrongholdUserUpdate({
+          fetchedClanId: fetchedClan.id,
+          clanHideoutId: clanHideout.id,
+          lastMaintenancePaidAt,
+        }),
       };
     }),
   clanDonate: protectedProcedure
@@ -316,8 +328,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
-          userDelta: {},
-          userPatch: {},
+          ...getUnchangedClanUserUpdate(),
         };
       }
       // Mutate step 1 - update user
@@ -337,13 +348,11 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message,
-          userDelta: hasEnergyQueue(user)
-            ? undefined
-            : {
-                reputationPoints: -repsCost,
-                // The INT treasury rounds fractional donations; personal reputation is FLOAT.
-                clan: { id: fetchedClan.id, repTreasury: Math.round(repsCost) },
-              },
+          ...getClanDonationUserUpdate({
+            user,
+            repsCost,
+            fetchedClanId: fetchedClan.id,
+          }),
         };
       }
     }),
@@ -758,12 +767,14 @@ export const clanRouter = createTRPCRouter({
       // Create
       return {
         success: true,
-        userDelta:
-          hasEnergyQueue(user) || colorResult.rowsAffected === 0
-            ? undefined
-            : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
-        userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
-        userExpected: { clanId: fetchedClan.id },
+        ...getEditClanColorUserUpdate({
+          user,
+          colorResultRowsAffected: colorResult.rowsAffected,
+          fetchedClanVillageId: fetchedClan.villageId,
+          inputColor: input.color,
+          fetchedClanId: fetchedClan.id,
+        }),
+
         message: `${groupLabel} color updated`,
       };
     }),
@@ -871,14 +882,16 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Member promoted",
-        userPatch: {
-          ...(user.clanId === fetchedClan.id
-            ? { clan: { id: fetchedClan.id, ...updateData } }
-            : {}),
-          ...(isMemberColeader && hadHideout && user.villageId === fetchedClan.villageId
-            ? { village: { id: fetchedClan.villageId, kageId: input.memberId } }
-            : {}),
-        },
+        ...getPromoteMemberUserUpdate({
+          userClanId: user.clanId,
+          fetchedClanId: fetchedClan.id,
+          updateData,
+          isMemberColeader,
+          hadHideout,
+          userVillageId: user.villageId,
+          fetchedClanVillageId: fetchedClan.villageId,
+          inputMemberId: input.memberId,
+        }),
       };
     }),
   demoteMember: protectedProcedure
@@ -930,15 +943,11 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Member demoted",
-        userPatch:
-          user.clanId === clanData.id
-            ? {
-                clan: {
-                  id: clanData.id,
-                  ...updateData,
-                },
-              }
-            : {},
+        ...getDemoteMemberUserUpdate({
+          userClanId: user.clanId,
+          clanDataId: clanData.id,
+          updateData,
+        }),
       };
     }),
   kickMember: protectedProcedure
@@ -989,18 +998,15 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Member kicked",
-        userPatch: ["HIDEOUT", "STRONGHOLD"].includes(fetchedClan.village?.type ?? "")
-          ? undefined
-          : member.userId === ctx.userId
-            ? user.status === "AWAKE" &&
-              !user.isOutlaw &&
-              settings &&
-              "bloodline" in user
-              ? getMembershipUserPatch(user, null, settings)
-              : undefined
-            : user.clanId === fetchedClan.id
-              ? membership
-              : {},
+        ...getKickMemberUserUpdate({
+          fetchedClanVillageType: fetchedClan.village?.type,
+          memberUserId: member.userId,
+          ctxUserId: ctx.userId,
+          user,
+          settings,
+          fetchedClanId: fetchedClan.id,
+          membership,
+        }),
       };
     }),
   leaveClan: protectedProcedure
@@ -1033,9 +1039,7 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `User left ${groupLabel}`,
-        userPatch: user.isOutlaw
-          ? undefined
-          : getMembershipUserPatch(user, null, settings),
+        ...getLeaveClanUserUpdate({ user, settings }),
       };
     }),
   upsertNotice: protectedProcedure
@@ -1137,7 +1141,11 @@ export const clanRouter = createTRPCRouter({
         return errorResponse("Not enough clan points or leadership changed");
       return {
         success: true,
-        userDelta: { clan: { id: fetchedClan.id, points: -input.points, bank: ryo } },
+        ...getConvertPointsToRyoUserUpdate({
+          fetchedClanId: fetchedClan.id,
+          inputPoints: input.points,
+          ryo,
+        }),
         message: `Converted ${input.points.toLocaleString()} clan points to ${ryo.toLocaleString()} ryo in the clan bank`,
       };
     }),
@@ -1159,8 +1167,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: "Successfully deposited 0 ryo",
-          userDelta: {},
-          userPatch: {},
+          ...getUnchangedClanUserUpdate(),
         };
       }
       const result = await debitUserMoney(ctx.drizzle, input.amount, ctx);
@@ -1175,9 +1182,11 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
-        userDelta: needsUserRefresh
-          ? undefined
-          : { money: -input.amount, clan: { id: fetchedClan.id, bank: input.amount } },
+        ...getToBankUserUpdate({
+          needsUserRefresh,
+          inputAmount: input.amount,
+          fetchedClanId: fetchedClan.id,
+        }),
       };
     }),
   purchaseBoost: protectedProcedure
@@ -1477,7 +1486,7 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Joined ${groupLabel} battle`,
-        userPatch: { status: "QUEUED" },
+        ...getJoinClanBattleUserUpdate(),
       };
     }),
   leaveClanBattle: protectedProcedure
@@ -1509,7 +1518,7 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Left ${groupLabel} battle`,
-        userPatch: woke?.rowsAffected ? { status: "AWAKE" } : undefined,
+        ...getLeaveClanBattleUserUpdate({ wokeRowsAffected: woke?.rowsAffected }),
       };
     }),
   kickFromClanBattle: protectedProcedure
@@ -1557,12 +1566,11 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Kicked from ${groupLabel} battle`,
-        userPatch:
-          input.targetId === ctx.userId
-            ? woke?.rowsAffected
-              ? { status: "AWAKE" }
-              : undefined
-            : {},
+        ...getKickFromClanBattleUserUpdate({
+          inputTargetId: input.targetId,
+          ctxUserId: ctx.userId,
+          wokeRowsAffected: woke?.rowsAffected,
+        }),
       };
     }),
   /** Authorize staff or participating leadership, then remove the observed battle. */
@@ -1734,21 +1742,13 @@ export const clanRouter = createTRPCRouter({
       } = fetchedClan;
       return {
         success: true,
-        userPatch:
-          user.villageId !== fetchedClan.village?.id ||
-          ["HIDEOUT", "STRONGHOLD"].includes(fetchedClan.village?.type ?? "")
-            ? undefined
-            : getMembershipUserPatch(
-                user,
-                {
-                  ...savedClan,
-                  leaderId: user.userId,
-                  coLeader1: null,
-                  coLeader2: null,
-                  coLeader3: null,
-                },
-                settings,
-              ),
+        ...getInstantJoinAndLeadUserUpdate({
+          user,
+          fetchedClanVillageId: fetchedClan.village?.id,
+          fetchedClanVillageType: fetchedClan.village?.type,
+          savedClan,
+          settings,
+        }),
         message: `You have instantly joined and taken leadership of ${fetchedClan.name}`,
       };
     }),

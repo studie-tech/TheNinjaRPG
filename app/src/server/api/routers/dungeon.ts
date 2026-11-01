@@ -1,6 +1,13 @@
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import {
+  getActUserUpdate,
+  getCreatedDungeonUserUpdate,
+  getDungeonRewardUserUpdate,
+  getDungeonStateUserUpdate,
+  getUnchangedDungeonUserUpdate,
+} from "@/delta/dungeon";
 import { DUNGEON_RUN_SECONDS, DUNGEON_SOLO_PETS } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { transitionCoopParty } from "@/libs/coop";
@@ -63,7 +70,6 @@ import type { DrizzleClient } from "@/server/db";
 import { launchCoopEncounter } from "@/server/utils/coop";
 import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
-import { getDungeonRewardUserUpdate } from "@/server/utils/dungeonUserCache";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canChangeContent } from "@/utils/permissions";
@@ -189,20 +195,15 @@ export const dungeonRouter = createTRPCRouter({
       users: users.map(({ battleId: _battleId, ...user }) => user),
       members: members.filter((m) => m.userId === ctx.userId),
       serverTime: new Date(),
-      userPatch: requiresUserRefresh ? undefined : {},
+      ...getDungeonStateUserUpdate({
+        requiresUserRefresh,
+        actor,
+        members,
+        ctxUserId: ctx.userId,
+        currentRuns,
+      }),
       // A different poll may have performed cleanup before these reads. Validate the
       // observed account and reservation even when this invocation performed no writes.
-      userExpected: {
-        ...(actor ? { status: actor.status, battleId: actor.battleId } : {}),
-        activeDungeonRunId:
-          members.find(
-            (member) =>
-              member.activeUserId === ctx.userId &&
-              currentRuns.some(
-                (run) => run.id === member.runId && run.status !== "ENDED",
-              ),
-          )?.runId ?? null,
-      },
     };
   }),
   /** Staff may inspect hidden and expired definitions when authoring dungeon content. */
@@ -357,7 +358,10 @@ export const dungeonRouter = createTRPCRouter({
         content.hidden ||
         (content.expiresAt && content.expiresAt.getTime() <= Date.now())
       )
-        return { ...errorResponse("This dungeon is unavailable."), userDelta: {} };
+        return {
+          ...errorResponse("This dungeon is unavailable."),
+          ...getUnchangedDungeonUserUpdate(),
+        };
       if (user.sector !== content.sector)
         return errorResponse("Travel to the dungeon's sector to create a lobby.");
       const admission = dungeonAdmission(admissionData, user, definition.id, content);
@@ -416,7 +420,7 @@ export const dungeonRouter = createTRPCRouter({
       return {
         success: true,
         message: "Lobby created.",
-        userPatch: { status: "QUEUED" as const, activeDungeonRunId: id },
+        ...getCreatedDungeonUserUpdate({ id }),
         id,
       };
     }),
@@ -574,11 +578,13 @@ export const dungeonRouter = createTRPCRouter({
           ? {
               success: true,
               message: "Party updated.",
-              userPatch: joined
-                ? { status: "QUEUED" as const, activeDungeonRunId: run.id }
-                : ending || removedUser === ctx.userId
-                  ? undefined
-                  : {},
+              ...getActUserUpdate({
+                joined,
+                runId: run.id,
+                ending,
+                removedUser,
+                ctxUserId: ctx.userId,
+              }),
             }
           : errorResponse("The party changed. Refresh and try again.");
       } catch (error) {

@@ -3,7 +3,17 @@ import { and, eq, gte, inArray, isNull, lte, ne, notExists, sql } from "drizzle-
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getUserProgressionUpdate } from "@/delta/profile";
-import { getRewardUserDelta } from "@/delta/quests";
+import {
+  getCancelPetTaskUserUpdate,
+  getClaimedRewardChoiceUserUpdate,
+  getCollectPetTaskUserUpdate,
+  getConfirmedRewardUserUpdate,
+  getQuestRewardProjectionUpdate,
+  getRetryBattleUserUpdate,
+  getRewardUserDelta,
+  getStartPetTaskUserUpdate,
+  getUnchangedRewardChoiceUserUpdate,
+} from "@/delta/quests";
 import {
   ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
@@ -98,7 +108,7 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
 } from "@/libs/questRun";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -1305,7 +1315,13 @@ export const questsRouter = createTRPCRouter({
         success: true,
         message: `${pet.name} left to complete ${contract.name}.`,
         ...(projection
-          ? { ...projection, userPatch: { ...projection.userPatch, petTask: task } }
+          ? {
+              ...projection,
+              ...getStartPetTaskUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                task,
+              }),
+            }
           : {}),
       };
     }),
@@ -1395,8 +1411,10 @@ export const questsRouter = createTRPCRouter({
         ...(projection
           ? {
               ...projection,
-              userPatch: { ...projection.userPatch, petTask: null },
-              userDelta: claim.userDelta,
+              ...getCollectPetTaskUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                claimUserDelta: claim.userDelta,
+              }),
             }
           : {}),
         success: true,
@@ -1432,15 +1450,12 @@ export const questsRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Your companion returned without task rewards.",
-            userPatch: {
-              petTask: null,
-              updatedAt: getNextUserSnapshotAt(owner.updatedAt, now),
-            },
-            userDelta: {
-              userQuests: {
-                remove: [{ id: task.questHistoryId, startedAt: task.startedAt }],
-              },
-            },
+            ...getCancelPetTaskUserUpdate({
+              ownerUpdatedAt: owner.updatedAt,
+              now,
+              taskQuestHistoryId: task.questHistoryId,
+              taskStartedAt: task.startedAt,
+            }),
           }
         : errorResponse(
             "Task state changed. Refresh and try returning your companion again.",
@@ -1590,28 +1605,6 @@ export const questsRouter = createTRPCRouter({
 
       const refreshedTrackers = getNewTrackers(user, [{ task: "any" }]);
       user.questData = refreshedTrackers.trackers;
-      // XP is already included in the accepted progression snapshot.
-      const { earnedExperience: _earnedExperience, ...balanceDelta } =
-        claim.userDelta ?? {};
-      const projectedQuestIds = new Set(user.userQuests.map((entry) => entry.questId));
-      const cacheUpdate =
-        !requiresProgressionRefresh &&
-        claim.userCacheEligible &&
-        // Newly eligible achievements need getUser to hydrate their trackers.
-        !progressionQuestCandidates.some(
-          (entry) =>
-            entry.quest.questType === "achievement" &&
-            !projectedQuestIds.has(entry.questId) &&
-            isAvailableUserQuests({ ...entry.quest, ...entry }, user, true).check,
-        ) &&
-        refreshedTrackers.consequences.length === 0 &&
-        claim.userDelta !== undefined &&
-        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
-          ? getUserProgressionUpdate(user, publishedAchievementIds)
-          : undefined;
-      // Energy payouts advance the DB version in SQL; preserve the cached stamp
-      // until the next authoritative read can supply its new value.
-      const { updatedAt: _updatedAt, ...userPatch } = cacheUpdate?.userPatch ?? {};
       return {
         success: true,
         message: "Quest progress updated",
@@ -1629,13 +1622,15 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
-        ...(cacheUpdate
-          ? {
-              ...cacheUpdate,
-              userPatch,
-              userDelta: balanceDelta,
-            }
-          : {}),
+        ...getQuestRewardProjectionUpdate({
+          user: user,
+          requiresProgressionRefresh,
+          userCacheEligible: claim.userCacheEligible,
+          delta: claim.userDelta,
+          consequences: refreshedTrackers.consequences,
+          progressionQuestCandidates,
+          publishedAchievementIds,
+        }),
       };
     }),
   getPendingRewardChoices: protectedProcedure
@@ -1707,7 +1702,7 @@ export const questsRouter = createTRPCRouter({
           message: `You already have every reward offered by ${questName}`,
           rewards,
           badges: [],
-          userDelta: hasEnergyQueue(user) ? undefined : {},
+          ...getUnchangedRewardChoiceUserUpdate({ user }),
         };
       }
       // Picked profession experience advances other quests' objectives, as at completion.
@@ -1743,7 +1738,7 @@ export const questsRouter = createTRPCRouter({
         message: `Claimed rewards from ${questName}`,
         rewards,
         badges,
-        userDelta: hasEnergyQueue(user) ? undefined : getRewardUserDelta(rewards),
+        ...getClaimedRewardChoiceUserUpdate({ user, rewards }),
       };
     }),
   checkLocationQuest: protectedProcedure
@@ -1996,8 +1991,12 @@ export const questsRouter = createTRPCRouter({
         ...(projection
           ? {
               ...projection,
-              userPatch: { ...projection.userPatch, ...committedBattlePatch },
-              userDelta: battleAttempted ? battleUserUpdate?.userDelta : {},
+              ...getRetryBattleUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                committedBattlePatch,
+                battleAttempted,
+                battleUserUpdateUserDelta: battleUserUpdate?.userDelta,
+              }),
             }
           : {}),
       };

@@ -1,10 +1,11 @@
+import { canBootstrapQuestType } from "@/delta/profile";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { calcHP } from "@/libs/profile";
 import { isAvailableUserQuests } from "@/libs/quest";
-import { canBootstrapQuestType, fetchQuestBootstrap } from "@/server/api/routers/profile";
+import { fetchQuestBootstrap } from "@/server/api/routers/profile";
 import { fetchUncompletedQuests, questsRouter } from "@/server/api/routers/quests";
 import { commitQuestObjectiveRewards } from "@/server/api/routers/quests";
 

@@ -1,14 +1,19 @@
 import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
 import { type inferRouterOutputs, TRPCError } from "@trpc/server";
-
 import { after } from "next/server";
 import { z } from "zod";
+import {
+  getForceAwakeUserUpdate,
+  getUnequipAllGearUserUpdate,
+  getUnequipAllJutsusUserUpdate,
+  getUpdateUserIdUserUpdate,
+} from "@/delta/staff";
 import type { UserStatus } from "@/drizzle/constants";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
-import { effectiveMasteries } from "@/libs/mastery";
+
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
-import { calcMaxEnergy } from "@/libs/profile";
+
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
@@ -437,9 +442,10 @@ export const staffRouter = createTRPCRouter({
         updateJutsuLoadoutForUnequipAllJutsus(ctx.drizzle),
       ]);
       return {
-        userPatch: user.isAi
-          ? {}
-          : { ...(user.jutsuLoadout ? { loadout: { jutsuIds: [] } } : {}) },
+        ...getUnequipAllJutsusUserUpdate({
+          userIsAi: user.isAi,
+          userJutsuLoadout: user.jutsuLoadout,
+        }),
         success: true,
         message: `All jutsu has been unequipped for all non-AI users.`,
       };
@@ -464,20 +470,7 @@ export const staffRouter = createTRPCRouter({
         updateItemLoadoutForUnequipAllGear(ctx.drizzle),
       ]);
       return {
-        userPatch:
-          !user.isAi && sources
-            ? {
-                items: [],
-                effectiveMasteries: effectiveMasteries({
-                  ...user,
-                  ...sources,
-                  items: [],
-                }),
-                maxEnergy: calcMaxEnergy({ ...user, ...sources, items: [] }),
-              }
-            : user.isAi
-              ? {}
-              : undefined,
+        ...getUnequipAllGearUserUpdate({ user, sources }),
         success: true,
         message: `All gear has been unequipped for all non-AI users.`,
       };
@@ -566,7 +559,10 @@ export const staffRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have changed user's state to awake",
-        userPatch: input.userId === ctx.userId ? undefined : {},
+        ...getForceAwakeUserUpdate({
+          inputUserId: input.userId,
+          ctxUserId: ctx.userId,
+        }),
       };
     }),
   insertUserBadge: protectedProcedure
@@ -947,7 +943,7 @@ export const staffRouter = createTRPCRouter({
       return {
         success: true,
         message: "UserId updated",
-        userPatch: user.villageId ? undefined : {},
+        ...getUpdateUserIdUserUpdate({ userVillageId: user.villageId }),
       };
     }),
   // Delete referral from user

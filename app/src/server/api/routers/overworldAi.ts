@@ -1,6 +1,19 @@
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import {
+  getAssignedOverworldQuestUserUpdate,
+  getOverworldBattleResponseUpdate,
+  getOverworldBattleUserUpdate,
+  getOverworldRollUserUpdate,
+  getOverworldUnchangedPatch,
+  getReleasedOverworldQuestUserUpdate,
+} from "@/delta/overworldAi";
+import { getUserProgressionUpdate } from "@/delta/profile";
+import {
+  getConfirmedRewardUserUpdate,
+  getQuestRewardProjectionUpdate,
+} from "@/delta/quests";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
 
 import {
@@ -50,7 +63,7 @@ import { fetchUser } from "@/queries/profile";
 import { listQuestForGetAllNames, listQuestsByIds } from "@/queries/quests";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { startQuestPartyEncounter } from "@/routers/questParty";
 import {
   assignQuestToUser,
@@ -412,7 +425,7 @@ export const overworldAiRouter = createTRPCRouter({
       // inventory fetched above for an unequipped delivery item to be consumed.
       const userForTrackers = { ...activeUser, items: useritems, useritems };
       const ownedItemIds = useritems.map((i) => i.itemId);
-      const noUserChange = requiresUserRefresh ? undefined : {};
+      const noUserChange = getOverworldUnchangedPatch(requiresUserRefresh);
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const boundCandidates = getBoundObjectiveCandidates(activeUser);
       const matchedBound = findActionableBoundObjective({
@@ -442,18 +455,11 @@ export const overworldAiRouter = createTRPCRouter({
             });
             return {
               ...battle,
-              userPatch:
-                !requiresUserRefresh &&
-                !requiresProgressionRefresh &&
-                "userPatch" in battle
-                  ? battle.userPatch
-                  : undefined,
-              userDelta:
-                !requiresUserRefresh &&
-                !requiresProgressionRefresh &&
-                "userDelta" in battle
-                  ? battle.userDelta
-                  : undefined,
+              ...getOverworldBattleResponseUpdate({
+                requiresUserRefresh,
+                requiresProgressionRefresh,
+                battle,
+              }),
             };
           }
           if (
@@ -508,14 +514,12 @@ export const overworldAiRouter = createTRPCRouter({
                 success: true,
                 message: "Battle started",
                 battleId: battle.battleId,
-                userPatch:
-                  !requiresUserRefresh && !requiresProgressionRefresh
-                    ? battle.userPatch
-                    : undefined,
-                userDelta:
-                  !requiresUserRefresh && !requiresProgressionRefresh
-                    ? battle.userDelta
-                    : undefined,
+                ...getOverworldBattleUserUpdate({
+                  requiresUserRefresh,
+                  requiresProgressionRefresh,
+                  battleUserPatch: battle.userPatch,
+                  battleUserDelta: battle.userDelta,
+                }),
               }
             : errorResponse(battle.message);
         }
@@ -619,34 +623,19 @@ export const overworldAiRouter = createTRPCRouter({
 
         const refreshed = getNewTrackers(userForTrackers, [{ task: "any" }]);
         userForTrackers.questData = refreshed.trackers;
-        const projectedIds = new Set(
-          userForTrackers.userQuests.map((entry) => entry.questId),
-        );
-        const cacheUpdate =
-          !requiresProgressionRefresh &&
-          claim.userCacheEligible &&
-          claim.userDelta !== undefined &&
-          refreshed.consequences.length === 0 &&
-          getQuestTargetSectorsToCheck(userForTrackers, userForTrackers.questData ?? [])
-            .length === 0 &&
-          !progressionQuestCandidates.some(
-            (entry) =>
-              entry.quest.questType === "achievement" &&
-              !projectedIds.has(entry.questId) &&
-              isAvailableUserQuests({ ...entry.quest, ...entry }, userForTrackers, true)
-                .check,
-          )
-            ? getUserProgressionUpdate(userForTrackers, publishedAchievementIds)
-            : undefined;
-        const { earnedExperience: _earned, ...balanceDelta } = claim.userDelta ?? {};
-        const { updatedAt: _updatedAt, ...userPatch } = cacheUpdate?.userPatch ?? {};
         return {
           success: true,
           message: messages.join(" ") || "Interaction complete",
           rewardChoicePending: claim.rewardChoicePending,
-          ...(cacheUpdate
-            ? { ...cacheUpdate, userPatch, userDelta: balanceDelta }
-            : {}),
+          ...getQuestRewardProjectionUpdate({
+            user: userForTrackers,
+            requiresProgressionRefresh,
+            userCacheEligible: claim.userCacheEligible,
+            delta: claim.userDelta,
+            consequences: refreshed.consequences,
+            progressionQuestCandidates,
+            publishedAchievementIds,
+          }),
         };
       }
 
@@ -666,14 +655,12 @@ export const overworldAiRouter = createTRPCRouter({
               success: true,
               message: "Battle started",
               battleId: battle.battleId,
-              userPatch:
-                !requiresUserRefresh && !requiresProgressionRefresh
-                  ? battle.userPatch
-                  : undefined,
-              userDelta:
-                !requiresUserRefresh && !requiresProgressionRefresh
-                  ? battle.userDelta
-                  : undefined,
+              ...getOverworldBattleUserUpdate({
+                requiresUserRefresh,
+                requiresProgressionRefresh,
+                battleUserPatch: battle.userPatch,
+                battleUserDelta: battle.userDelta,
+              }),
             }
           : errorResponse(battle.message);
       }
@@ -832,21 +819,12 @@ export const overworldAiRouter = createTRPCRouter({
         return {
           success: true,
           message: "The NPC had nothing for you this time.",
-          userPatch:
-            !requiresUserRefresh &&
-            (!activeNpcQuestId || clearedStale?.rowsAffected === 1)
-              ? activeNpcQuestId
-                ? { activeNpcQuestId: null }
-                : {}
-              : undefined,
-          userDelta:
-            !requiresUserRefresh &&
-            (!activeNpcQuestId || clearedStale?.rowsAffected === 1)
-              ? { dailyOverworldQuestRolls: 1 }
-              : undefined,
-          userExpected: {
-            dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-          },
+          ...getOverworldRollUserUpdate({
+            requiresUserRefresh,
+            activeNpcQuestId,
+            clearedStaleRowsAffected: clearedStale?.rowsAffected,
+            activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+          }),
         };
       }
       // Claim the single active-NPC-mission slot atomically before granting. If the slot is
@@ -895,17 +873,11 @@ export const overworldAiRouter = createTRPCRouter({
         const released = await releaseClaimedSlot();
         return {
           ...errorResponse(result.message),
-          userPatch:
-            !requiresUserRefresh && released.rowsAffected === 1
-              ? { activeNpcQuestId: null }
-              : undefined,
-          userDelta:
-            !requiresUserRefresh && released.rowsAffected === 1
-              ? { dailyOverworldQuestRolls: 1 }
-              : undefined,
-          userExpected: {
-            dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-          },
+          ...getReleasedOverworldQuestUserUpdate({
+            requiresUserRefresh,
+            releasedRowsAffected: released.rowsAffected,
+            activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+          }),
         };
       }
       const cacheUpdate =
@@ -921,14 +893,11 @@ export const overworldAiRouter = createTRPCRouter({
         ...(cacheUpdate
           ? {
               ...cacheUpdate,
-              userPatch: {
-                ...cacheUpdate.userPatch,
-                activeNpcQuestId: chosen.quest.id,
-              },
-              userDelta: { dailyOverworldQuestRolls: 1 },
-              userExpected: {
-                dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
-              },
+              ...getAssignedOverworldQuestUserUpdate({
+                cacheUpdateUserPatch: cacheUpdate.userPatch,
+                chosenQuestId: chosen.quest.id,
+                activeUserDailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+              }),
             }
           : {}),
       };

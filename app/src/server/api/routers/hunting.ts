@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getUnchangedHuntingUserUpdate } from "@/delta/hunting";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
@@ -249,7 +250,7 @@ export const huntingRouter = createTRPCRouter({
       if (session?.contractId === contract.id)
         return {
           success: true,
-          userPatch: {},
+          ...getUnchangedHuntingUserUpdate(),
           message: "Your existing encounter is still assigned.",
         };
       // Maps carry large JSON payloads; load only the contract's sectors after
@@ -312,7 +313,7 @@ export const huntingRouter = createTRPCRouter({
       }
       return {
         success: true,
-        userPatch: {},
+        ...getUnchangedHuntingUserUpdate(),
         message: `Contract accepted. Travel to sector ${sector}.`,
       };
     }),
@@ -361,7 +362,7 @@ export const huntingRouter = createTRPCRouter({
         return saved.rowsAffected === 1
           ? {
               success: true,
-              userPatch: {},
+              ...getUnchangedHuntingUserUpdate(),
               message: "Hunting finished. Your contract allowance is preserved.",
             }
           : errorResponse("Your session changed.");
@@ -383,7 +384,7 @@ export const huntingRouter = createTRPCRouter({
       if (session.readyAt)
         return {
           success: true,
-          userPatch: {},
+          ...getUnchangedHuntingUserUpdate(),
           message: "Preparation has already started.",
         };
       const saved = await updateHuntingSessionForSessionAction(
@@ -392,7 +393,11 @@ export const huntingRouter = createTRPCRouter({
         guard,
       );
       return saved.rowsAffected === 1
-        ? { success: true, userPatch: {}, message: "Preparation started." }
+        ? {
+            success: true,
+            ...getUnchangedHuntingUserUpdate(),
+            message: "Preparation started.",
+          }
         : errorResponse("Your session changed.");
     }),
   /** Validate accepted terms and preload combat data before guarded encounter admission. */

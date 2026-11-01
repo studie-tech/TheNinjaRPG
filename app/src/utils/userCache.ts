@@ -12,7 +12,7 @@ import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) =>
   prepareQueryUpdate<UserCache>(client, key, (cache) => !!cache.userData);
 
-export const updateUserCache = (
+export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
   update: UserUpdate | undefined,

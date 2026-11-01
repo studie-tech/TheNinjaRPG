@@ -4,6 +4,13 @@ import { and, eq, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  bloodlineCachePatch,
+  getPityRollUserUpdate,
+  getPurchaseBloodlineUserUpdate,
+  getRollUserUpdate,
+} from "@/delta/bloodline";
+
+import {
   BLOODLINE_COST,
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   COST_SWAP_BLOODLINE,
@@ -20,13 +27,11 @@ import {
   type UserData,
   userData,
 } from "@/drizzle/schema";
-
 import {
   filterRollableBloodlines,
   getFreeBloodlineSwaps,
   getPityRolls,
 } from "@/libs/bloodline";
-import { getBloodlinePassivePatch } from "@/libs/bloodlineUserCache";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import {
   deletedReason,
@@ -34,7 +39,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
-import { getUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
+
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
@@ -92,11 +97,7 @@ import {
   fetchAllGameSettings,
   fetchUser,
 } from "@/queries/profile";
-import {
-  canBootstrapQuestType,
-  fetchQuestBootstrap,
-  fetchUpdatedUser,
-} from "@/routers/profile";
+import { fetchQuestBootstrap, fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -801,12 +802,7 @@ export const bloodlineRouter = createTRPCRouter({
             }
             return {
               success: true,
-              userPatch: bloodlineCachePatch(
-                user,
-                randomBloodline,
-                settings,
-                progression,
-              ),
+              ...getRollUserUpdate({ user, randomBloodline, settings, progression }),
               message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
             };
           }
@@ -915,13 +911,13 @@ export const bloodlineRouter = createTRPCRouter({
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
       return {
         success: true,
-        userPatch: bloodlineCachePatch(
+        ...getPityRollUserUpdate({
           user,
           randomBloodline,
           settings,
           progression,
           grantedAt,
-        ),
+        }),
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
     }),
@@ -1013,8 +1009,7 @@ export const bloodlineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Bloodline purchased",
-        userPatch: patch,
-        userDelta: patch ? { reputationPoints: -BLOODLINE_COST[line.rank] } : undefined,
+        ...getPurchaseBloodlineUserUpdate({ patch, lineRank: line.rank }),
       };
     }),
 });
@@ -1153,60 +1148,4 @@ const fetchBloodlineProgression = async (client: DrizzleClient, userId: string) 
     fetchQuestBootstrap(client, userId),
   ]);
   return { achievements, questBootstrap };
-};
-
-/** Project new acquisitions; live refunds and progression reconcile through the profile. */
-const bloodlineCachePatch = (
-  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>,
-  line: Bloodline | null,
-  settings: Parameters<typeof getBloodlinePassivePatch>[2],
-  progression: {
-    questBootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>;
-    achievements?: Awaited<ReturnType<typeof fetchAchievementCatalogue>>;
-  },
-  updatedAt?: Date,
-) => {
-  // Existing lineage can have concurrent Bloodright purchases refunded at live prices.
-  if (user.bloodlineId) return undefined;
-  const questUser = {
-    ...user,
-    userQuests: [...user.userQuests],
-  };
-  questUser.userQuests.push(
-    ...mockAchievementHistoryEntries(progression.achievements ?? [], questUser),
-  );
-  const activeQuestIds = new Set(getUserQuests(questUser).map((quest) => quest.id));
-  questUser.bloodlineId = line?.id ?? null;
-  const quests = getUserQuests(questUser);
-  const hasQuestEligibilityChange =
-    activeQuestIds.size !== quests.length ||
-    quests.some((quest) => !activeQuestIds.has(quest.id));
-  // Only acquisition changes the roll history that drives collection objectives.
-  const needsCollectionProgression =
-    line !== null &&
-    progression.achievements !== undefined &&
-    quests.some((quest) =>
-      quest.content.objectives.some(
-        (objective) =>
-          objective.task === "bloodline_collection" &&
-          objective.bloodlineRanks.includes(line.rank) &&
-          !user.questData
-            ?.find((tracker) => tracker.id === quest.id)
-            ?.goals.find((goal) => goal.id === objective.id)?.done,
-      ),
-    );
-  const needsQuestBootstrap = (["tier", "exam"] as const).some(
-    (type) =>
-      !quests.some((quest) => quest.questType === type) &&
-      canBootstrapQuestType(progression.questBootstrap, type, user.level),
-  );
-  // The canonical read owns collection receipts, quest admission and tracker retirement.
-  if (hasQuestEligibilityChange || needsCollectionProgression || needsQuestBootstrap)
-    return undefined;
-  return {
-    ...getBloodlinePassivePatch(user, line, settings),
-    bloodright: [],
-    bloodrightSpent: 0,
-    ...(updatedAt ? { updatedAt, bloodlineReskinId: null, activeReskin: null } : {}),
-  };
 };

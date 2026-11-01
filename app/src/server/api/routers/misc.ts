@@ -4,6 +4,10 @@ import { nanoid } from "nanoid";
 import TextToSVG from "text-to-svg";
 import { z } from "zod";
 import {
+  getAwardReputationUserUpdate,
+  getSetEventGameSettingUserUpdate,
+} from "@/delta/misc";
+import {
   DMG_SETTING_NAMES,
   Sentiment,
   TRAINING_CAPTCHA_REFRESHES_PER_MINUTE,
@@ -13,11 +17,10 @@ import {
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
-import { getGlobalGameSettingNotification } from "@/libs/gameSettingBoost";
+
 import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
-import { calcActiveUserRegen } from "@/libs/profile";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -256,23 +259,12 @@ export const miscRouter = createTRPCRouter({
       return {
         success: true,
         message: `Setting set to: ${input.multiplier}X`,
-        userPatch:
-          input.setting === "regenGainMultiplier"
-            ? {
-                regeneration: calcActiveUserRegen(user, changedSettings),
-                regenerationWithoutTimedBuffs: calcActiveUserRegen(
-                  user,
-                  changedSettings,
-                  false,
-                ),
-              }
-            : {},
-        userNotifications: {
-          globalBoost: {
-            setting: input.setting,
-            notice: getGlobalGameSettingNotification(input.setting, setting),
-          },
-        },
+        ...getSetEventGameSettingUserUpdate({
+          inputSetting: input.setting,
+          user,
+          changedSettings,
+          setting,
+        }),
       };
     }),
   getDmgConfig: publicProcedure
@@ -350,14 +342,15 @@ export const miscRouter = createTRPCRouter({
       return {
         success: true,
         // Reputation changes advance quest and achievement objectives on the next profile fetch.
-        userDelta:
-          !input.reputationAmount &&
-          input.userIds.includes(ctx.userId) &&
-          !hasEnergyQueue(admin) &&
-          credited.rowsAffected === users.length &&
-          Number.isInteger(input.moneyAmount ?? 0)
-            ? { money: input.moneyAmount ?? 0 }
-            : undefined,
+        ...getAwardReputationUserUpdate({
+          inputReputationAmount: input.reputationAmount,
+          inputUserIds: input.userIds,
+          ctxUserId: ctx.userId,
+          admin,
+          creditedRowsAffected: credited.rowsAffected,
+          usersLength: users.length,
+          inputMoneyAmount: input.moneyAmount,
+        }),
         message: `Rewards awarded successfully to ${users.length} user(s)`,
       };
     }),

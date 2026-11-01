@@ -2,7 +2,20 @@ import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, notExists, sql } from "drizzle-orm";
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
+import {
+  canBootstrapQuestType,
+  getAwardExperienceToAllUserUpdate,
+  getAwardExperienceUserUpdate,
+  getTavernColorPatch,
+  getToggleDeletionTimerUserUpdate,
+  getUpdatePreferencesUserUpdate,
+  getUpdateSpriteBodyUserUpdate,
+  getUpdateTavernColorUserUpdate,
+  getUpdateTutorialStepUserUpdate,
+  getUpdateUsernameUserUpdate,
+  getUserProgressionUpdate,
+  getUseUnusedExperiencePointsUserUpdate,
+} from "@/delta/profile";
 import {
   ACTIVE_VOTING_SITES,
   BasicElementName,
@@ -97,7 +110,6 @@ import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
   getPublicQuestUser,
-  getQuestMaxLevel,
   getQuestTargetSectorsToCheck,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
@@ -566,7 +578,7 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: `Tutorial step updated to ${input.step}`,
-        userPatch: { tutorialStep: input.step },
+        ...getUpdateTutorialStepUserUpdate({ inputStep: input.step }),
       };
     }),
   // Update user preferences
@@ -580,7 +592,10 @@ export const profileRouter = createTRPCRouter({
       const result = await updateUserDataForUpdatePreferences(ctx.drizzle, input, ctx);
       return {
         success: result.rowsAffected > 0,
-        userPatch: result.rowsAffected > 0 ? input : undefined,
+        ...getUpdatePreferencesUserUpdate({
+          resultRowsAffected: result.rowsAffected,
+          input,
+        }),
         message:
           result.rowsAffected > 0
             ? "Updated preferences"
@@ -1611,7 +1626,7 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: "Body style updated",
-        userPatch: { spriteBodyStyle: input.body },
+        ...getUpdateSpriteBodyUserUpdate({ inputBody: input.body }),
       };
     }),
   // Get user attributes
@@ -1671,10 +1686,10 @@ export const profileRouter = createTRPCRouter({
         return {
           success: true,
           message: "Username updated",
-          userPatch: {
-            username: input.username,
-            reputationPoints: user.reputationPoints - COST_CHANGE_USERNAME,
-          },
+          ...getUpdateUsernameUserUpdate({
+            inputUsername: input.username,
+            userReputationPoints: user.reputationPoints,
+          }),
         };
       }
     }),
@@ -1705,10 +1720,7 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("Not enough reputation points");
       }
 
-      const colorUpdate =
-        input.target === "username"
-          ? { tavernUsernameColor: input.color }
-          : { tavernTitleColor: input.color };
+      const colorUpdate = getTavernColorPatch(input);
       const result = await updateUserDataForUpdateTavernColor(
         ctx.drizzle,
         colorUpdate,
@@ -1726,10 +1738,8 @@ export const profileRouter = createTRPCRouter({
       await insertActionLogForUpdateTavernColor(ctx.drizzle, ctx, input, cost, user);
       return {
         success: true,
-        userPatch: {
-          ...colorUpdate,
-        },
-        userDelta: { reputationPoints: -cost },
+        ...getUpdateTavernColorUserUpdate({ colorUpdate, cost }),
+
         message: `Tavern ${input.target} color updated for ${cost} reputation points`,
       };
     }),
@@ -1855,12 +1865,11 @@ export const profileRouter = createTRPCRouter({
           ...(hasEnergyQueue(user)
             ? {}
             : {
-                userPatch: {
-                  ...data,
-                  updatedAt: result.claimedAt,
-                  effectiveMasteries: effectiveMasteries({ ...user, ...data }),
-                  maxEnergy: calcMaxEnergy({ ...user, ...data }),
-                },
+                ...getUseUnusedExperiencePointsUserUpdate({
+                  data,
+                  resultClaimedAt: result.claimedAt,
+                  user,
+                }),
               }),
         };
       }
@@ -2140,8 +2149,11 @@ export const profileRouter = createTRPCRouter({
         success: true,
         message: "Deletion timer toggled",
         affectedUserId: input.userId,
-        userPatch: input.userId === ctx.userId ? { deletionAt } : {},
-        userDelta: {},
+        ...getToggleDeletionTimerUserUpdate({
+          inputUserId: input.userId,
+          ctxUserId: ctx.userId,
+          deletionAt,
+        }),
       };
     }),
   /** Enforce the elapsed wait and self-confirmation before the deletion safeguards run. */
@@ -2378,13 +2390,12 @@ export const profileRouter = createTRPCRouter({
 
       return {
         success: true,
-        userDelta:
-          input.targetUserId === ctx.userId &&
-          target.earnedExperience > 0 &&
-          !hasEnergyQueue(target) &&
-          Number.isInteger(input.amount)
-            ? { earnedExperience: input.amount }
-            : undefined,
+        ...getAwardExperienceUserUpdate({
+          inputTargetUserId: input.targetUserId,
+          ctxUserId: ctx.userId,
+          target,
+          inputAmount: input.amount,
+        }),
         message: `Awarded ${input.amount} experience points to ${target.username}`,
       };
     }),
@@ -2420,12 +2431,7 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: `Awarded ${input.amount} experience points to all users`,
-        userDelta:
-          hasEnergyQueue(awarder) ||
-          awarder.earnedExperience <= 0 ||
-          !Number.isInteger(input.amount)
-            ? undefined
-            : { earnedExperience: input.amount },
+        ...getAwardExperienceToAllUserUpdate({ awarder, inputAmount: input.amount }),
       };
     }),
 });
@@ -3603,18 +3609,6 @@ export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
  * leaving a filter out can only let a call through that would have been skipped, never the
  * reverse. A `true` still goes to insertNextQuest, which remains the authority.
  */
-export const canBootstrapQuestType = (
-  candidates: Awaited<ReturnType<typeof fetchQuestBootstrap>>,
-  questType: (typeof BOOTSTRAP_QUEST_TYPES)[number],
-  level: number,
-) =>
-  candidates.some(
-    (candidate) =>
-      candidate.questType === questType &&
-      candidate.completed === null &&
-      candidate.requiredLevel <= level &&
-      getQuestMaxLevel(candidate) >= level,
-  );
 
 /**
  * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.

@@ -1,6 +1,17 @@
-import type { GetRewardResult } from "@/libs/quest";
+import type { UserQueueState } from "@/delta/profile";
+import { getUserProgressionUpdate } from "@/delta/profile";
+import type { Quest } from "@/drizzle/schema";
+import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
+import {
+  getQuestTargetSectorsToCheck,
+  isAvailableUserQuests,
+  type QuestConsequence,
+} from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
+
+import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
-import type { UserDelta } from "@/validators/userCache";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /**
  * Scalar rewards compose with accepted cache updates; derived state needs reconciliation.
@@ -58,4 +69,168 @@ export const getRewardUserDelta = (
     reputationPointsTotal: rewards.reward_reputation,
     villagePrestige: rewards.reward_prestige,
   };
+};
+
+export const getStartPetTaskUserUpdate = ({
+  projectionUserPatch,
+  task,
+}: {
+  projectionUserPatch: UserCachePatch | undefined;
+  task: {
+    petId: string;
+    questHistoryId: string;
+    questId: string;
+    startedAt: number;
+    questVersion: number;
+    finishesAt: number;
+  };
+}) => ({
+  userPatch: { ...projectionUserPatch, petTask: task },
+});
+
+export const getCollectPetTaskUserUpdate = ({
+  projectionUserPatch,
+  claimUserDelta,
+}: {
+  projectionUserPatch: UserCachePatch | undefined;
+  claimUserDelta: UserDelta | undefined;
+}) => ({
+  userPatch: { ...projectionUserPatch, petTask: null },
+  userDelta: claimUserDelta,
+});
+
+export const getCancelPetTaskUserUpdate = ({
+  ownerUpdatedAt,
+  now,
+  taskQuestHistoryId,
+  taskStartedAt,
+}: {
+  ownerUpdatedAt: Date;
+  now: Date;
+  taskQuestHistoryId: string;
+  taskStartedAt: number;
+}) => ({
+  userPatch: {
+    petTask: null,
+    updatedAt: getNextUserSnapshotAt(ownerUpdatedAt, now),
+  },
+  userDelta: {
+    userQuests: {
+      remove: [{ id: taskQuestHistoryId, startedAt: taskStartedAt }],
+    },
+  },
+});
+
+export const getUnchangedRewardChoiceUserUpdate = ({
+  user,
+}: {
+  user: UserQueueState;
+}) => ({
+  userDelta: hasEnergyQueue(user) ? undefined : {},
+});
+
+export const getClaimedRewardChoiceUserUpdate = ({
+  user,
+  rewards,
+}: {
+  user: UserQueueState;
+  rewards: NonNullable<Awaited<ReturnType<typeof postProcessRewards>>>;
+}) => ({
+  userDelta: hasEnergyQueue(user) ? undefined : getRewardUserDelta(rewards),
+});
+
+export const getRetryBattleUserUpdate = ({
+  projectionUserPatch,
+  committedBattlePatch,
+  battleAttempted,
+  battleUserUpdateUserDelta,
+}: {
+  projectionUserPatch: UserCachePatch | undefined;
+  committedBattlePatch: UserCachePatch | undefined;
+  battleAttempted: boolean;
+  battleUserUpdateUserDelta: UserDelta | undefined;
+}) => ({
+  userPatch: { ...projectionUserPatch, ...committedBattlePatch },
+  userDelta: battleAttempted ? battleUserUpdateUserDelta : {},
+});
+
+/**
+ * Return confirmed integer payouts. Conditional pet-bank grants and relation
+ * changes reconcile through the canonical profile query.
+ */
+export const getRewardUserUpdate = (input: {
+  rewards: GetRewardResult;
+  requiresRelations?: boolean;
+  progression?: () => ReturnType<typeof getUserProgressionUpdate>;
+}) => {
+  const { rewards } = input;
+  const delta = getRewardUserDelta(rewards);
+  const needsReconciliation =
+    input.requiresRelations || delta === undefined || rewards.reward_exp > 0;
+  const fallback = {
+    userPatch: undefined,
+    userDelta: undefined,
+    achievementProgress: undefined,
+    announcements: undefined,
+  };
+  if (needsReconciliation) return fallback;
+  const progression = input.progression?.();
+  return {
+    announcements: undefined,
+    userDelta: delta,
+    achievementProgress: progression?.achievementProgress,
+    userPatch: progression?.userPatch ?? {},
+  };
+};
+
+/** SQL advances the account stamp independently; the projection already includes earned XP. */
+export const getConfirmedRewardUserUpdate = (
+  projection: ReturnType<typeof getUserProgressionUpdate> | undefined,
+  delta: UserDelta | undefined,
+) => {
+  if (!projection) return {};
+  const { earnedExperience: _earnedExperience, ...balanceDelta } = delta ?? {};
+  const { updatedAt: _updatedAt, ...userPatch } = projection.userPatch;
+  return { ...projection, userPatch, userDelta: balanceDelta };
+};
+
+/** A reward projection must already contain every eligible achievement and reachable target. */
+export const getQuestRewardProjectionUpdate = ({
+  user,
+  requiresProgressionRefresh,
+  userCacheEligible,
+  delta,
+  consequences,
+  progressionQuestCandidates,
+  publishedAchievementIds,
+}: {
+  user: Parameters<typeof getUserProgressionUpdate>[0];
+  requiresProgressionRefresh: boolean;
+  userCacheEligible: boolean;
+  delta: UserDelta | undefined;
+  consequences: QuestConsequence[];
+  progressionQuestCandidates: {
+    questId: string;
+    quest: Quest;
+    completed?: number | null;
+  }[];
+  publishedAchievementIds: readonly string[];
+}) => {
+  const projectedIds = new Set(user.userQuests.map((entry) => entry.questId));
+  const canProject =
+    !requiresProgressionRefresh &&
+    userCacheEligible &&
+    delta !== undefined &&
+    consequences.length === 0 &&
+    !progressionQuestCandidates.some(
+      (entry) =>
+        entry.quest.questType === "achievement" &&
+        !projectedIds.has(entry.questId) &&
+        isAvailableUserQuests({ ...entry.quest, ...entry }, user, true).check,
+    ) &&
+    getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0;
+  return getConfirmedRewardUserUpdate(
+    canProject ? getUserProgressionUpdate(user, publishedAchievementIds) : undefined,
+    delta,
+  );
 };

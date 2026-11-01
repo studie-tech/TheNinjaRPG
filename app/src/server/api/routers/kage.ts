@@ -1,5 +1,6 @@
 import { and, eq, exists, gte, lte } from "drizzle-orm";
 import { z } from "zod";
+import { getNominateKageUserUpdate } from "@/delta/kage";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
   ELDER_MIN_VOTING_COUNT,
@@ -524,17 +525,13 @@ export const kageRouter = createTRPCRouter({
           return {
             success: true,
             message: `${candidate.username} appointed Kage. Publish a schedule within ${KAGE_DEFENSE_SETUP_HOURS} hours.`,
-            userPatch: {
-              village: {
-                id: input.villageId,
-                kageId: candidate.userId,
-                leaderUpdatedAt,
-                kageSchedule: null,
-              },
-              ...(candidate.userId === ctx.userId && candidate.rank === "ELDER"
-                ? { rank: "JONIN" as const }
-                : {}),
-            },
+            ...getNominateKageUserUpdate({
+              inputVillageId: input.villageId,
+              candidateUserId: candidate.userId,
+              leaderUpdatedAt,
+              ctxUserId: ctx.userId,
+              candidateRank: candidate.rank,
+            }),
           };
         })) ?? errorResponse("Village not found");
       return result;

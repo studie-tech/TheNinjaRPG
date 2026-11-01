@@ -1,4 +1,10 @@
-import { CombatStatNames, MasteryNames, REGEN_SECONDS } from "@/drizzle/constants";
+import type { BattleType } from "@/drizzle/constants";
+import {
+  CombatStatNames,
+  ManualStartBattleTypes,
+  MasteryNames,
+  REGEN_SECONDS,
+} from "@/drizzle/constants";
 import type { UserData, UserTitle } from "@/drizzle/schema";
 import type { BattleUserItem, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
@@ -12,7 +18,7 @@ import { calcMaxEnergy } from "@/libs/profile";
 import { getMasteryQueue, hasEnergyQueue } from "@/libs/queue";
 import { getRegenerationPeriodGain, type RegenerationPeriod } from "@/libs/timedBuffs";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { UserDelta } from "@/validators/userCache";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 const baselineFields = [
   ...CombatStatNames,
@@ -331,3 +337,60 @@ export const combatCacheIntegerDelta = (
       },
     ),
   ) as Pick<UserDelta, "money" | "experience" | "earnedExperience" | "seichiSilver">;
+
+/** Admission changes no profile pools or trackers when the opening snapshot is settled. */
+export const getCombatAdmissionUserUpdate = ({
+  cacheActor,
+  requiresUserRefresh,
+  allParticipantIds,
+  queuedParticipants,
+  battleType,
+  warAggressorIds,
+  bracketImmunityAggressorIds,
+  now,
+  battleId,
+  stealthBreakUserIds,
+  isTournament,
+}: {
+  cacheActor: Pick<UserData, "userId" | "bracketImmunityLiftedUntil"> | undefined;
+  requiresUserRefresh: boolean;
+  allParticipantIds: string[];
+  queuedParticipants: { user: { userId: string } }[];
+  battleType: BattleType;
+  warAggressorIds: string[];
+  bracketImmunityAggressorIds: string[];
+  now: Date;
+  battleId: string;
+  stealthBreakUserIds: string[];
+  isTournament: boolean;
+}): { userPatch: UserCachePatch | undefined; userDelta: UserDelta | undefined } => {
+  const canProject =
+    !!cacheActor &&
+    !requiresUserRefresh &&
+    allParticipantIds.includes(cacheActor.userId) &&
+    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
+    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
+    !warAggressorIds.includes(cacheActor.userId) &&
+    !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
+    cacheActor.bracketImmunityLiftedUntil <= now;
+  const userPatch: UserCachePatch | undefined = canProject
+    ? {
+        status: "BATTLE",
+        battleId,
+        bracketImmunityPausedAt: null,
+        ...(stealthBreakUserIds.includes(cacheActor.userId)
+          ? { stealthActive: false, stealthActivatedAt: null }
+          : {}),
+      }
+    : undefined;
+  return {
+    userPatch,
+    userDelta: userPatch ? (isTournament ? {} : { pveFights: 1 }) : undefined,
+  };
+};
+
+export const getAutoCombatPreferencePatch = (
+  battleType: BattleType,
+  enabled: boolean,
+) =>
+  ManualStartBattleTypes.includes(battleType) ? {} : { defaultAutoCombat: enabled };

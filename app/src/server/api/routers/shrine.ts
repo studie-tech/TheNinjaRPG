@@ -1,6 +1,18 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getActivateBoostUserUpdate,
+  getChallengeShrineUserUpdate,
+  getJoinShrineBattleUserUpdate,
+  getLeftShrineBattleUserUpdate,
+  getPayWeeklyMaintenanceUserUpdate,
+  getSetBoostTemplateUserUpdate,
+  getShrineQueueWakeUserUpdate,
+  getToggleVillageAiDefenderUserUpdate,
+  getUnlockAiDefenderUserUpdate,
+  getUpgradeShrineUserUpdate,
+} from "@/delta/shrine";
+import {
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   SHRINE_AI_UNLOCK_COST,
@@ -72,7 +84,7 @@ import {
   findVillageBySector,
 } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
-import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import {
   createTRPCRouter,
   errorResponse,
@@ -180,9 +192,10 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
-        userDelta: requiresUserRefresh
-          ? undefined
-          : { village: { id: user.villageId, tokens: -SHRINE_UPGRADE_COST } },
+        ...getUpgradeShrineUserUpdate({
+          requiresUserRefresh,
+          userVillageId: user.villageId,
+        }),
       };
     }),
 
@@ -248,17 +261,12 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
-        userPatch: {
-          village: {
-            id: user.villageId,
-            shrineSettings: {
-              activeBoosts: { [input.boostType]: boostExpiry.toISOString() },
-            },
-          },
-        },
-        userDelta: requiresUserRefresh
-          ? undefined
-          : { village: { id: user.villageId, tokens: -SHRINE_BOOST_COST } },
+        ...getActivateBoostUserUpdate({
+          userVillageId: user.villageId,
+          inputBoostType: input.boostType,
+          boostExpiry,
+          requiresUserRefresh,
+        }),
       };
     }),
 
@@ -309,15 +317,11 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `AI defender unlocked! Cost: ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens`,
-        userPatch: {
-          village: {
-            id: user.villageId,
-            shrineSettings: { unlockedAiIds: updatedUnlocks },
-          },
-        },
-        userDelta: requiresUserRefresh
-          ? undefined
-          : { village: { id: user.villageId, tokens: -SHRINE_AI_UNLOCK_COST } },
+        ...getUnlockAiDefenderUserUpdate({
+          userVillageId: user.villageId,
+          updatedUnlocks,
+          requiresUserRefresh,
+        }),
       };
     }),
 
@@ -374,13 +378,11 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message,
-        userPatch: {
-          village: {
-            id: user.villageId,
-            shrineSettings: { activeAiIds: newAssigns },
-          },
-        },
-        userDelta: requiresUserRefresh ? undefined : {},
+        ...getToggleVillageAiDefenderUserUpdate({
+          userVillageId: user.villageId,
+          newAssigns,
+          requiresUserRefresh,
+        }),
       };
     }),
 
@@ -458,11 +460,10 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
-        userDelta: requiresUserRefresh
-          ? undefined
-          : {
-              village: { id: user.villageId, tokens: -SHRINE_WEEKLY_MAINTENANCE_COST },
-            },
+        ...getPayWeeklyMaintenanceUserUpdate({
+          requiresUserRefresh,
+          userVillageId: user.villageId,
+        }),
       };
     }),
 
@@ -541,17 +542,13 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Boost template saved",
-        userPatch: {
-          village: {
-            id: user.villageId,
-            shrineSettings: {
-              boostTemplate: input.template,
-              boostTemplateUpdatedBy: user.username,
-              boostTemplateUpdatedAt: templateUpdatedAt,
-            },
-          },
-        },
-        userDelta: requiresUserRefresh ? undefined : {},
+        ...getSetBoostTemplateUserUpdate({
+          userVillageId: user.villageId,
+          inputTemplate: input.template,
+          userUsername: user.username,
+          templateUpdatedAt,
+          requiresUserRefresh,
+        }),
       };
     }),
 
@@ -813,30 +810,15 @@ export const shrineRouter = createTRPCRouter({
 
       return {
         success: true,
-        userPatch: requiresUserRefresh
-          ? undefined
-          : {
-              status: "QUEUED",
-              shrineBattles: [
-                ...((user as NonNullable<UserWithRelations>).shrineBattles ?? []),
-                ...(attackerSide === user.villageId ||
-                targetSector.villageId === user.villageId
-                  ? [
-                      {
-                        id: shrineBattleId,
-                        createdAt,
-                        battleType: "SHRINE_BATTLE" as const,
-                        attackerEntityId: attackerSide,
-                        defenderEntityId: targetSector.villageId,
-                        sector: input.sectorNumber,
-                        battleId: null,
-                        winnerId: null,
-                        territoryWarId: null,
-                      },
-                    ]
-                  : []),
-              ],
-            },
+        ...getChallengeShrineUserUpdate({
+          requiresUserRefresh,
+          user,
+          attackerSide,
+          targetSectorVillageId: targetSector.villageId,
+          shrineBattleId,
+          createdAt,
+          inputSectorNumber: input.sectorNumber,
+        }),
         message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
       };
     }),
@@ -975,7 +957,7 @@ export const shrineRouter = createTRPCRouter({
 
       return {
         success: true,
-        userPatch: requiresUserRefresh ? undefined : { status: "QUEUED" },
+        ...getJoinShrineBattleUserUpdate({ requiresUserRefresh }),
         message: `Joined shrine battle as ${input.side.toLowerCase()}`,
       };
     }),
@@ -1027,14 +1009,11 @@ export const shrineRouter = createTRPCRouter({
           const wake = await wakeQueuedUser(ctx.drizzle, user.userId);
           return {
             ...errorResponse("Shrine battle expired"),
-            userPatch:
-              !requiresUserRefresh && wake.rowsAffected === 1
-                ? {
-                    status: "AWAKE",
-                    shrineBattles:
-                      (user as NonNullable<UserWithRelations>).shrineBattles ?? [],
-                  }
-                : undefined,
+            ...getShrineQueueWakeUserUpdate({
+              requiresUserRefresh,
+              wakeRowsAffected: wake.rowsAffected,
+              user,
+            }),
           };
         }
         return errorResponse("Not in this shrine battle queue");
@@ -1055,17 +1034,14 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Left shrine battle queue",
-        userPatch:
-          !requiresUserRefresh &&
-          wake.rowsAffected === 1 &&
-          (remaining > 0 || removed?.rowsAffected === 1)
-            ? {
-                status: "AWAKE",
-                shrineBattles: (
-                  (user as NonNullable<UserWithRelations>).shrineBattles ?? []
-                ).filter((entry) => remaining > 0 || entry.id !== input.shrineBattleId),
-              }
-            : undefined,
+        ...getLeftShrineBattleUserUpdate({
+          requiresUserRefresh,
+          wakeRowsAffected: wake.rowsAffected,
+          remaining,
+          removedRowsAffected: removed?.rowsAffected,
+          user,
+          inputShrineBattleId: input.shrineBattleId,
+        }),
       };
     }),
 

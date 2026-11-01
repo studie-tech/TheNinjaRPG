@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
+
+import { getBuyFoodUserUpdate } from "@/delta/village";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,
@@ -198,16 +199,14 @@ export const villageRouter = createTRPCRouter({
         return {
           success: true,
           message: `You have bought food and healed to ${newStamina}SP and ${newChakra}CP`,
-          ...(!updatedUser.requiresProgressionRefresh
-            ? {
-                ...getUserProgressionUpdate(
-                  { ...user, curStamina: newStamina, curChakra: newChakra },
-                  updatedUser.publishedAchievementIds,
-                ),
-                // MySQL rounds the remaining nonnegative integer balance, including half ryo.
-                userDelta: { money: Math.round(user.money - cost) - user.money },
-              }
-            : {}),
+          ...getBuyFoodUserUpdate({
+            user,
+            newStamina,
+            newChakra,
+            cost,
+            requiresProgressionRefresh: updatedUser.requiresProgressionRefresh,
+            publishedAchievementIds: updatedUser.publishedAchievementIds,
+          }),
         };
       }
     }),

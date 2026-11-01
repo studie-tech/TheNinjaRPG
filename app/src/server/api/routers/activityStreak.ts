@@ -1,7 +1,11 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getRewardUserDelta } from "@/delta/quests";
+import {
+  getClaimStreakDayUserUpdate,
+  getPurchaseEventPassUserUpdate,
+} from "@/delta/activityStreak";
+
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
@@ -12,7 +16,7 @@ import {
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import {
   createRewardsForConfig,
   deleteActivityStreakConfigForDeleteConfig,
@@ -340,15 +344,12 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : {
-              ...(config.ryoCost > 0 ? { money: -config.ryoCost } : {}),
-              ...(config.repsCost > 0 ? { reputationPoints: -config.repsCost } : {}),
-              ...(config.seichiSilverCost > 0
-                ? { seichiSilver: -config.seichiSilverCost }
-                : {}),
-            },
+        ...getPurchaseEventPassUserUpdate({
+          user,
+          configRyoCost: config.ryoCost,
+          configRepsCost: config.repsCost,
+          configSeichiSilverCost: config.seichiSilverCost,
+        }),
       };
     }),
 
@@ -599,10 +600,7 @@ export const activityStreakRouter = createTRPCRouter({
         message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
         // Scalar reward increments leave queued training and its recovery clock alone.
         // The shared cache revision guard reconciles any concurrently completed queue read.
-        userDelta: getRewardUserDelta(
-          processedRewards,
-          paidCatchUp ? COST_STREAK_CATCHUP_DAY : 0,
-        ),
+        ...getClaimStreakDayUserUpdate({ processedRewards, paidCatchUp }),
       };
     }),
 

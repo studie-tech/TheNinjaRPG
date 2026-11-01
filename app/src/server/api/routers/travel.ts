@@ -4,6 +4,7 @@ import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
+import { getFinishGlobalMoveUserUpdate } from "@/delta/travel";
 import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,
@@ -38,7 +39,6 @@ import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
-  getPublicQuestUser,
   getQuestTargetSectorsToCheck,
   getUserQuests,
   isAvailableUserQuests,
@@ -809,10 +809,6 @@ export const travelRouter = createTRPCRouter({
       user.travelFinishAt = null;
       if (!isUserCurrentlyStealthed(user))
         after(() => updateUserOnMap(pusher, user.sector, user));
-      const publicArrival = getPublicQuestUser({
-        ...arrival,
-        questData: progress.trackers,
-      });
       return {
         success: true,
         message:
@@ -822,14 +818,12 @@ export const travelRouter = createTRPCRouter({
         ...(canProject
           ? {
               projectedQuestIds,
-              userDelta: {},
-              userPatch: {
-                status: "AWAKE" as const,
-                travelFinishAt: null,
-                ...(claim.success ? { updatedAt: claim.claimedAt } : {}),
-                userQuests: publicArrival.userQuests,
-                questData: publicArrival.questData,
-              },
+              ...getFinishGlobalMoveUserUpdate({
+                claimSuccess: claim.success,
+                claimClaimedAt: claim.claimedAt,
+                arrival,
+                trackers: progress.trackers,
+              }),
             }
           : {}),
       };
