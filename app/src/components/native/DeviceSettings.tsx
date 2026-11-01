@@ -165,7 +165,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
             </p>
           </div>
           <Switch
-            className="relative after:absolute after:-inset-3"
+            touchTarget
             id="native-haptics"
             checked={hapticsOn}
             onCheckedChange={(checked) => {
@@ -250,7 +250,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
                       </span>
                     )}
                     <Switch
-                      className="relative after:absolute after:-inset-3"
+                      touchTarget
                       id={`native-push-${category}`}
                       checked={displayedValue}
                       disabled={isSaving}
