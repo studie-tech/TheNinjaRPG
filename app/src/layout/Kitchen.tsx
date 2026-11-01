@@ -85,9 +85,7 @@ export default function Kitchen({ image }: { image?: string }) {
       setMessage(result.message);
       await Promise.all([
         refresh(),
-        result.success
-          ? updateUser(result, { revision })
-          : utils.profile.getUser.invalidate(),
+        ...(result.success ? [updateUser(result, { revision })] : []),
       ]);
     },
     onError: (error) => setMessage(error.message),
