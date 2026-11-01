@@ -33,6 +33,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   config,
   userData,
   updateUser,
+  autoCombatControl,
 }) => {
   const { sfxOn, setSfxEnabled, lightLayout, setLightLayout } = useGameSettings(
     userData,
@@ -87,6 +88,9 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </TabsList>
           <TabsContent value="battle" className="space-y-3 pt-2">
             <p className="text-base font-semibold">Battle interface</p>
+            {autoCombatControl && (
+              <div className="border-b pb-3">{autoCombatControl}</div>
+            )}
             <div className="space-y-2">
               <Label htmlFor={resourceBarsId} className="text-sm">
                 Resource bars
@@ -247,6 +251,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
 
 interface UserCombatSettingsProps {
   config: CombatPreferences;
+  /** The page owns the mutation and checks whether the battle permits switching control. */
+  autoCombatControl?: React.ReactNode;
   userData?: UserWithRelations | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
 }
