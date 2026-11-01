@@ -13,22 +13,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SortableList } from "@/components/ui/sortable-list";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CombatPreferences } from "@/hooks/combat";
 import {
   COMBAT_LAYOUT_COMPONENTS,
   type CombatLayoutComponentId,
   DEFAULT_LAYOUT_ORDER,
 } from "@/hooks/combat";
-import { useGameSettings } from "@/layout/GameSettings";
+import { useLocalStorage } from "@/hooks/localstorage";
+import {
+  SettingsToggle,
+  useGameSettings,
+  VisualEffectsSettings,
+} from "@/layout/GameSettings";
 import type { UserWithRelations } from "@/routers/profile";
 
-interface UserCombatSettingsProps {
-  config: CombatPreferences;
-  userData?: UserWithRelations | null;
-  updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
-}
-
+/** Battle controls and panel ordering stay separate from the shared graphics preferences. */
 export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   config,
   userData,
@@ -38,20 +38,16 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
     userData,
     updateUser,
   );
-
-  const [initialLightLayout] = React.useState<boolean>(lightLayout);
-  const [lightLayoutChanged, setLightLayoutChanged] = React.useState(false);
+  const [settingsTab, setSettingsTab] = useLocalStorage<string>(
+    "combatSettingsTab",
+    "battle",
+  );
+  const activeSettingsTab = ["battle", "layout", "effects"].includes(settingsTab)
+    ? settingsTab
+    : "battle";
+  const [initialLightLayout] = React.useState(lightLayout);
+  const lightLayoutChanged = lightLayout !== initialLightLayout;
   const resourceBarsId = React.useId();
-
-  React.useEffect(() => {
-    setLightLayoutChanged(lightLayout !== initialLightLayout);
-  }, [lightLayout, initialLightLayout]);
-
-  const handleRefreshPage = () => {
-    if (typeof window !== "undefined") {
-      window.location.reload();
-    }
-  };
 
   return (
     <Popover>
@@ -65,224 +61,192 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="max-h-[80dvh] w-80 space-y-5 overflow-y-auto"
+        aria-label="Combat settings"
+        collisionPadding={8}
+        className="max-h-[min(80dvh,var(--radix-popover-content-available-height))] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
         sideOffset={8}
       >
-        <section className="space-y-3 rounded-lg border p-3">
-          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-            Battle visuals
-          </p>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Grid numbers</p>
-              <p className="text-muted-foreground text-xs">Toggle coordinate labels</p>
-            </div>
-            <Switch
-              checked={config.showGridNumbers}
-              onCheckedChange={config.toggleGridNumbers}
-              aria-label="Toggle grid numbers"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Light layout</p>
-              <p className="text-muted-foreground text-xs">
-                {lightLayout ? "Enabled" : "Disabled"}
-              </p>
-            </div>
-            <Switch
-              checked={!!lightLayout}
-              onCheckedChange={setLightLayout}
-              aria-label="Toggle light layout"
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border p-3">
-          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-            Interface
-          </p>
-          <div className="space-y-2">
-            <Label htmlFor={resourceBarsId} className="font-semibold text-sm">
-              Resource bars
-            </Label>
-            <p className="text-muted-foreground text-xs">
-              HP, chakra and stamina on the battlefield
-            </p>
-            <Select
-              value={config.resourceBarsVisibility}
-              onValueChange={(value) => {
-                if (value === "mobile-only" || value === "on" || value === "off") {
-                  config.setResourceBarsVisibility(value);
-                }
-              }}
-            >
-              <SelectTrigger id={resourceBarsId}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mobile-only">Mobile only</SelectItem>
-                <SelectItem value="on">On</SelectItem>
-                <SelectItem value="off">Off</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Small action icons</p>
-              <p className="text-muted-foreground text-xs">
-                Hide labels and fit more per row
-              </p>
-            </div>
-            <Switch
-              checked={config.useSmallActions}
-              onCheckedChange={config.toggleSmallActions}
-              aria-label="Toggle compact action icons"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show battle log</p>
-              <p className="text-muted-foreground text-xs">
-                Display combat history below the field
-              </p>
-            </div>
-            <Switch
-              checked={config.showBattleLog}
-              onCheckedChange={config.toggleBattleLog}
-              aria-label="Toggle battle log visibility"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show timeline</p>
-              <p className="text-muted-foreground text-xs">
-                Display recent actions timeline
-              </p>
-            </div>
-            <Switch
-              checked={config.showTimeline}
-              onCheckedChange={config.toggleTimeline}
-              aria-label="Toggle combat timeline visibility"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show aggro meters</p>
-              <p className="text-muted-foreground text-xs">
-                Compare team aggro against NPCs; hover or tap for details
-              </p>
-            </div>
-            <Switch
-              checked={config.showAggro}
-              onCheckedChange={config.toggleAggro}
-              aria-label="Toggle aggro meter visibility"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show basic actions</p>
-              <p className="text-muted-foreground text-xs">
-                Include basic actions in timeline
-              </p>
-            </div>
-            <Switch
-              checked={config.showBasicActions}
-              onCheckedChange={config.toggleBasicActions}
-              aria-label="Toggle basic actions in timeline"
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border p-3">
-          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-            Audio
-          </p>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Sound SFX</p>
-              <p className="text-muted-foreground text-xs">
-                {sfxOn ? "Enabled" : "Disabled"}
-              </p>
-            </div>
-            <Switch
-              checked={!!sfxOn}
-              onCheckedChange={setSfxEnabled}
-              aria-label="Toggle sound effects"
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-lg border p-3">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-              Layout Order
-            </p>
-            {JSON.stringify(config.layoutOrder) !==
-              JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={config.resetLayoutOrder}
-              >
-                <RotateCcw className="mr-1 h-3 w-3" />
-                Reset
-              </Button>
-            )}
-          </div>
-          <SortableList
-            items={config.layoutOrder
-              .filter((id) => {
-                if (id === "timeline" && !config.showTimeline) return false;
-                if (id === "battlelog" && !config.showBattleLog) return false;
-                return true;
-              })
-              .map((id) => ({
-                id,
-                label: COMBAT_LAYOUT_COMPONENTS.find((c) => c.id === id)?.label ?? id,
-              }))}
-            onReorder={(items) => {
-              const reorderedIds = items.map(
-                (item) => item.id as CombatLayoutComponentId,
-              );
-              // Hidden items stay at the end in their original relative order
-              const hiddenIds = config.layoutOrder.filter(
-                (id) =>
-                  (id === "timeline" && !config.showTimeline) ||
-                  (id === "battlelog" && !config.showBattleLog),
-              );
-              config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
-            }}
-            itemClassName="py-1.5"
-          />
-          <div className="flex items-center justify-between gap-3 border-t pt-2">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Use tabs</p>
-              <p className="text-muted-foreground text-xs">
-                Group actions, timeline & log in tabs
-              </p>
-            </div>
-            <Switch
-              checked={config.useTabs}
-              onCheckedChange={config.toggleUseTabs}
-              aria-label="Toggle tabs layout"
-            />
-          </div>
-        </section>
-
-        {lightLayoutChanged && (
-          <Button
-            onClick={handleRefreshPage}
-            variant="default"
-            size="sm"
-            className="w-full"
+        <Tabs
+          value={activeSettingsTab}
+          onValueChange={setSettingsTab}
+          className="min-w-0"
+        >
+          <TabsList
+            aria-label="Combat settings categories"
+            className="sticky top-0 z-10 flex-nowrap"
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh to apply
-          </Button>
-        )}
+            <TabsTrigger value="battle" className="min-h-9 flex-1 px-2 text-xs">
+              Battle
+            </TabsTrigger>
+            <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
+              Layout
+            </TabsTrigger>
+            <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
+              Visual effects
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="battle" className="space-y-3 pt-2">
+            <p className="text-base font-semibold">Battle interface</p>
+            <div className="space-y-2">
+              <Label htmlFor={resourceBarsId} className="text-sm">
+                Resource bars
+              </Label>
+              <p
+                id={`${resourceBarsId}-description`}
+                className="text-muted-foreground text-xs"
+              >
+                HP, chakra and stamina on the battlefield
+              </p>
+              <Select
+                value={config.resourceBarsVisibility}
+                onValueChange={(value) => {
+                  if (value === "mobile-only" || value === "on" || value === "off")
+                    config.setResourceBarsVisibility(value);
+                }}
+              >
+                <SelectTrigger
+                  id={resourceBarsId}
+                  aria-describedby={`${resourceBarsId}-description`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mobile-only">Mobile only</SelectItem>
+                  <SelectItem value="on">On</SelectItem>
+                  <SelectItem value="off">Off</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="divide-border/50 divide-y">
+              <SettingsToggle
+                label="Grid numbers"
+                description="Coordinates on the battlefield"
+                checked={config.showGridNumbers}
+                onCheckedChange={config.toggleGridNumbers}
+              />
+              <SettingsToggle
+                label="Small action icons"
+                description="Hide labels and fit more per row"
+                checked={config.useSmallActions}
+                onCheckedChange={config.toggleSmallActions}
+              />
+              <SettingsToggle
+                label="Aggro meters"
+                description="Team aggro against NPCs; tap for details"
+                checked={config.showAggro}
+                onCheckedChange={config.toggleAggro}
+              />
+              <SettingsToggle
+                label="Combat sounds"
+                description="Shared with game audio settings"
+                checked={!!sfxOn}
+                onCheckedChange={setSfxEnabled}
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="layout" className="space-y-3 pt-2">
+            <p className="text-base font-semibold">Combat layout</p>
+            <div className="divide-border/50 divide-y">
+              <SettingsToggle
+                label="Show battle log"
+                description="Combat history below the field"
+                checked={config.showBattleLog}
+                onCheckedChange={config.toggleBattleLog}
+              />
+              <SettingsToggle
+                label="Show timeline"
+                description="Recent actions in the battle"
+                checked={config.showTimeline}
+                onCheckedChange={config.toggleTimeline}
+              />
+              <SettingsToggle
+                label="Show basic actions"
+                description="Include basic actions in the timeline"
+                checked={config.showBasicActions}
+                disabled={!config.showTimeline}
+                onCheckedChange={config.toggleBasicActions}
+              />
+              <SettingsToggle
+                label="Use tabs"
+                description="Group actions, timeline and log in tabs"
+                checked={config.useTabs}
+                onCheckedChange={config.toggleUseTabs}
+              />
+            </div>
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex min-h-8 items-center justify-between gap-2">
+                <p className="text-sm font-medium">Panel order</p>
+                {JSON.stringify(config.layoutOrder) !==
+                  JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    onClick={config.resetLayoutOrder}
+                  >
+                    <RotateCcw className="mr-1 h-3 w-3" />
+                    Reset
+                  </Button>
+                )}
+              </div>
+              <SortableList
+                items={config.layoutOrder
+                  .filter((id) => {
+                    if (id === "timeline" && !config.showTimeline) return false;
+                    if (id === "battlelog" && !config.showBattleLog) return false;
+                    return true;
+                  })
+                  .map((id) => ({
+                    id,
+                    label:
+                      COMBAT_LAYOUT_COMPONENTS.find((component) => component.id === id)
+                        ?.label ?? id,
+                  }))}
+                onReorder={(items) => {
+                  const reorderedIds = items.map(
+                    (item) => item.id as CombatLayoutComponentId,
+                  );
+                  // Hidden panels retain their relative order until shown again.
+                  const hiddenIds = config.layoutOrder.filter(
+                    (id) =>
+                      (id === "timeline" && !config.showTimeline) ||
+                      (id === "battlelog" && !config.showBattleLog),
+                  );
+                  config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
+                }}
+                itemClassName="py-1.5"
+              />
+            </div>
+            <div className="border-t">
+              <SettingsToggle
+                label="Light layout"
+                checked={!!lightLayout}
+                onCheckedChange={setLightLayout}
+              />
+              {lightLayoutChanged && (
+                <Button
+                  onClick={() => window.location.reload()}
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh to apply
+                </Button>
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value="effects" className="space-y-3 pt-2">
+            <VisualEffectsSettings />
+          </TabsContent>
+        </Tabs>
       </PopoverContent>
     </Popover>
   );
 };
+
+interface UserCombatSettingsProps {
+  config: CombatPreferences;
+  userData?: UserWithRelations | null;
+  updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
+}

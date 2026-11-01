@@ -1,9 +1,11 @@
 import { ensureDom } from "../setup/dom.mjs";
 import * as clerk from "@clerk/nextjs";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
+import { useCombatPreferences } from "@/hooks/combat";
+import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import * as iframeMute from "@/hooks/useIframeMute";
 import * as client from "@/app/_trpc/client";
 import { ClassicGameLayout } from "@/components/layout/ClassicGameLayout";
@@ -52,6 +54,9 @@ afterEach(() => {
   document.documentElement.removeAttribute(SWAP_SIDEBARS_ATTRIBUTE);
   localStorage.removeItem(SWAP_SIDEBARS_STORAGE_KEY);
   localStorage.removeItem("gameSettingsTab");
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith("combat") || key === "showGridNumbers") localStorage.removeItem(key);
+  }
   for (const key of Object.values(VISUAL_EFFECT_KEYS)) localStorage.removeItem(key);
   browserGlobals.forEach((key, index) => {
     const descriptor = browserDescriptors[index];
@@ -181,7 +186,8 @@ describe("sidebar sides in flex layouts", () => {
 });
 
 describe("game settings categories", () => {
-  const renderSettings = () => {
+  const CombatSettingsProbe = () => <UserCombatSettings config={useCombatPreferences()} />;
+  const renderSettings = (withCombat = false) => {
     // useLocalStorage syncs same-page readers with the DOM's own CustomEvent.
     for (const key of browserGlobals) {
       Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
@@ -196,6 +202,7 @@ describe("game settings categories", () => {
       <LayoutContextProvider value="17-obsidian-council" isPixelLanding={false}>
         <GlobalAudioProvider>
           <GameSettingsPanel />
+          {withCombat && <CombatSettingsProbe />}
         </GlobalAudioProvider>
       </LayoutContextProvider>,
     );
@@ -235,5 +242,33 @@ describe("game settings categories", () => {
     const reopened = renderSettings();
     expect(reopened.getByRole("tab", { name: "Visual effects" }).getAttribute("aria-selected")).toBe("true");
     expect(reopened.getByRole("switch", { name: "Lighting" })).toBeTruthy();
+  });
+
+  it("shares graphics between game and combat, remembers the combat category and keeps hidden panels out of ordering", () => {
+    const view = renderSettings(true);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
+    const sharedShadows = view.getByRole("switch", { name: "Shadows" });
+    fireEvent.click(sharedShadows);
+    fireEvent.click(view.getByRole("switch", { name: "Animations" }));
+    fireEvent.click(view.getByRole("button", { name: "Open combat settings" }));
+    let dialog = within(view.getByRole("dialog", { name: "Combat settings" }));
+    expect(dialog.getByRole("tab", { name: "Battle" }).getAttribute("aria-selected")).toBe("true");
+    expect(dialog.getByRole("combobox", { name: "Resource bars" })).toBeTruthy();
+    fireEvent.mouseDown(dialog.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
+    expect(dialog.getByRole("switch", { name: "Shadows" }).getAttribute("aria-checked")).toBe("false");
+    expect(dialog.getByRole("switch", { name: "Animations" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(dialog.getByRole("switch", { name: "Lighting" }));
+    expect(sharedShadows.hasAttribute("disabled")).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(view.queryByRole("dialog", { name: "Combat settings" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Open combat settings" }));
+    dialog = within(view.getByRole("dialog", { name: "Combat settings" }));
+    expect(dialog.getByRole("tab", { name: "Visual effects" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.mouseDown(dialog.getByRole("tab", { name: "Layout" }), { button: 0, ctrlKey: false });
+    fireEvent.click(dialog.getByRole("switch", { name: "Show timeline" }));
+    expect(dialog.getByRole("switch", { name: "Show basic actions" }).hasAttribute("disabled")).toBe(true);
+    expect(dialog.queryByText("Timeline")).toBeNull();
+    expect(dialog.queryByText("Battle Log")).toBeNull();
+    expect(dialog.getByText("Battlefield")).toBeTruthy();
   });
 });

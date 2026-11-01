@@ -420,8 +420,6 @@ export const useGameSettings = (
     false,
   );
 
-  const { visualEffects, setVisualEffect } = useVisualEffects();
-
   // Embedded iframe mute state
   const { isIframesMuted, setIframesMuted } = useIframeMute();
 
@@ -482,8 +480,6 @@ export const useGameSettings = (
     setLightLayout,
     swapSidebars,
     setSwapSidebars,
-    visualEffects,
-    setVisualEffect,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -512,8 +508,6 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     setLightLayout,
     swapSidebars,
     setSwapSidebars,
-    visualEffects,
-    setVisualEffect,
     isIframesMuted,
     setIframesMuted,
     requiresInteraction,
@@ -704,47 +698,57 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
         <NativeSettingsEntry onNavigate={onNavigate} />
       </TabsContent>
       <TabsContent value="effects" className="space-y-3 pt-2">
-        <div>
-          <p className="text-base font-semibold">Visual effects</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Adjust graphics for your device.
-          </p>
-        </div>
-        <div className="divide-border/50 divide-y">
-          <SettingsToggle
-            label="Lighting"
-            description="Sunlight, day/night colors and local lights"
-            checked={visualEffects.lighting}
-            onCheckedChange={(enabled) => setVisualEffect("lighting", enabled)}
-          />
-          <SettingsToggle
-            label="Shadows"
-            description={
-              visualEffects.lighting
-                ? "Shadows from the sun and nearby lights"
-                : "Enable lighting to show shadows"
-            }
-            checked={visualEffects.shadows}
-            disabled={!visualEffects.lighting}
-            onCheckedChange={(enabled) => setVisualEffect("shadows", enabled)}
-          />
-          <SettingsToggle
-            label="Animations"
-            description="Wind, weather and sprite animations"
-            checked={visualEffects.animations}
-            onCheckedChange={(enabled) => setVisualEffect("animations", enabled)}
-          />
-        </div>
-        <p className="text-muted-foreground text-xs">
-          Changes apply immediately and save on this device.
-        </p>
+        <VisualEffectsSettings />
       </TabsContent>
     </Tabs>
   );
 };
 
+/** Graphics controls share one device preference across game and combat settings. */
+export const VisualEffectsSettings = () => {
+  const { visualEffects, setVisualEffect } = useVisualEffects();
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-base font-semibold">Visual effects</p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Adjust graphics for your device.
+        </p>
+      </div>
+      <div className="divide-border/50 divide-y">
+        <SettingsToggle
+          label="Lighting"
+          description="Sunlight, day/night colors and local lights"
+          checked={visualEffects.lighting}
+          onCheckedChange={(enabled) => setVisualEffect("lighting", enabled)}
+        />
+        <SettingsToggle
+          label="Shadows"
+          description={
+            visualEffects.lighting
+              ? "Shadows from the sun and nearby lights"
+              : "Enable lighting to show shadows"
+          }
+          checked={visualEffects.shadows}
+          disabled={!visualEffects.lighting}
+          onCheckedChange={(enabled) => setVisualEffect("shadows", enabled)}
+        />
+        <SettingsToggle
+          label="Animations"
+          description="Wind, weather and sprite animations"
+          checked={visualEffects.animations}
+          onCheckedChange={(enabled) => setVisualEffect("animations", enabled)}
+        />
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Shared across the game; saved on this device.
+      </p>
+    </div>
+  );
+};
+
 /** A compact, labelled preference row with a full text target and optional explanation. */
-const SettingsToggle = ({
+export const SettingsToggle = ({
   label,
   description,
   checked,
