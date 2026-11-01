@@ -3,6 +3,15 @@ import { and, eq, exists, gte, isNull, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getAcquirePetUserUpdate,
+  getActivatePetUserUpdate,
+  getAssignExperienceUserUpdate,
+  getFeedPetUserUpdate,
+  getReleasePetUserUpdate,
+  getUnchangedPetUserUpdate,
+  getUnlockSlotUserUpdate,
+} from "@/deltas/pets";
+import {
   CombatStatNames,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
@@ -73,7 +82,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot, getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -135,8 +144,12 @@ export const petsRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Companion collection slot unlocked.",
-            userPatch: { petSlots: user.petSlots + 1, updatedAt: claim.claimedAt },
-            userDelta: { [payment.column.name]: -payment.cost },
+            ...getUnlockSlotUserUpdate({
+              userPetSlots: user.petSlots,
+              claimClaimedAt: claim.claimedAt,
+              paymentColumnName: payment.column.name,
+              paymentCost: payment.cost,
+            }),
           }
         : changedResponse();
     }),
@@ -185,11 +198,12 @@ export const petsRouter = createTRPCRouter({
         ? {
             success: true,
             message: `${pet.name} is now your active companion.`,
-            userPatch: {
-              activePetId: pet.id,
-              petExperience: pet.storedExperience,
-              updatedAt: getNextUserSnapshotAt(user.updatedAt, now),
-            },
+            ...getActivatePetUserUpdate({
+              petId: pet.id,
+              petStoredExperience: pet.storedExperience,
+              userUpdatedAt: user.updatedAt,
+              now,
+            }),
           }
         : changedResponse();
     }),
@@ -217,7 +231,11 @@ export const petsRouter = createTRPCRouter({
         skillIds: input.skillIds,
       });
       return changed
-        ? { success: true, message: "Companion abilities updated.", userPatch: {} }
+        ? {
+            success: true,
+            message: "Companion abilities updated.",
+            ...getUnchangedPetUserUpdate(),
+          }
         : changedResponse();
     }),
 
@@ -290,8 +308,13 @@ export const petsRouter = createTRPCRouter({
       }
       return {
         success: true,
-        userPatch: { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) },
-        userDelta: isActive ? { petExperience: experience } : {},
+        ...getFeedPetUserUpdate({
+          userUpdatedAt: user.updatedAt,
+          now,
+          isActive,
+          experience,
+        }),
+
         message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
       };
     }),
@@ -509,15 +532,17 @@ export const petsRouter = createTRPCRouter({
         return {
           success: true,
           petId,
-          userPatch: {
-            ...(!user.activePetId ? { activePetId: petId, petExperience: 0 } : {}),
-            petAcquisitions: user.petAcquisitions + 1,
-            petDailyClaims: {
-              dayKey,
-              speciesIds: [...claimedSpecies, input.speciesId],
-            },
-          },
-          userDelta: { [payment.column.name]: -payment.cost },
+          ...getAcquirePetUserUpdate({
+            userActivePetId: user.activePetId,
+            petId,
+            userPetAcquisitions: user.petAcquisitions,
+            dayKey,
+            claimedSpecies,
+            inputSpeciesId: input.speciesId,
+            paymentColumnName: payment.column.name,
+            paymentCost: payment.cost,
+          }),
+
           message: payment.cost
             ? `Companion adopted for ${payment.cost} ${payment.label}. Its appearance is ready to generate.`
             : "Your first companion is adopted free. Its appearance is ready to generate.",
@@ -558,7 +583,7 @@ export const petsRouter = createTRPCRouter({
           return removed.rowsAffected === 1
             ? {
                 success: true,
-                userPatch: {},
+                ...getUnchangedPetUserUpdate(),
                 message:
                   "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
               }
@@ -584,7 +609,7 @@ export const petsRouter = createTRPCRouter({
         return released
           ? {
               success: true,
-              userPatch: { activePetId: null, petExperience: 0 },
+              ...getReleasePetUserUpdate(),
               message:
                 "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
             }
@@ -613,7 +638,11 @@ export const petsRouter = createTRPCRouter({
       const { petId: _petId, ...patch } = input;
       const changed = await updateOwnedPet(ctx.drizzle, user, pet, patch);
       return changed
-        ? { success: true, message: "Companion settings updated.", userPatch: {} }
+        ? {
+            success: true,
+            message: "Companion settings updated.",
+            ...getUnchangedPetUserUpdate(),
+          }
         : changedResponse();
     }),
 
@@ -633,7 +662,11 @@ export const petsRouter = createTRPCRouter({
         includeDefaultRules: input.includeDefaultRules,
       });
       return changed
-        ? { success: true, message: "Companion AI settings updated.", userPatch: {} }
+        ? {
+            success: true,
+            message: "Companion AI settings updated.",
+            ...getUnchangedPetUserUpdate(),
+          }
         : changedResponse();
     }),
 
@@ -699,7 +732,7 @@ export const petsRouter = createTRPCRouter({
         ? {
             success: true,
             message: `${spent.toLocaleString("en-US")} companion experience assigned.`,
-            userPatch: isActive ? { petExperience: availableExperience - spent } : {},
+            ...getAssignExperienceUserUpdate({ isActive, availableExperience, spent }),
           }
         : changedResponse();
     }),
@@ -728,7 +761,7 @@ export const petsRouter = createTRPCRouter({
       return changed
         ? {
             success: true,
-            userPatch: {},
+            ...getUnchangedPetUserUpdate(),
             message: `Your companion is now ${next.name}. Generate its evolved appearance to continue training.`,
           }
         : changedResponse();
@@ -854,7 +887,7 @@ export const petsRouter = createTRPCRouter({
         return {
           success: true,
           message: "Your companion's appearance is ready.",
-          userPatch: {},
+          ...getUnchangedPetUserUpdate(),
         };
       } catch (error) {
         // Returned failures bypass tRPC's onError; retain diagnostics while the UI offers a retry.

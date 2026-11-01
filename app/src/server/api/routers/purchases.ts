@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getPurchaseSnapshotUserUpdate } from "@/deltas/purchases";
 import {
   STORE_FEDERAL_PRODUCTS,
   STORE_PLATFORMS,
@@ -15,7 +16,7 @@ export const purchasesRouter = createTRPCRouter({
     const update = await getPurchaseUserUpdate(ctx.drizzle, ctx.userId);
     return {
       userId: ctx.userId,
-      userPatch: update.userPatch ?? null,
+      ...getPurchaseSnapshotUserUpdate({ updateUserPatch: update.userPatch }),
     };
   }),
   /**

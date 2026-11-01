@@ -1,11 +1,16 @@
 "use client";
 
+import { getQueryKey } from "@trpc/react-query";
 import type React from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { getRenamedLoadouts } from "@/deltas/loadout";
+import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useRequiredUserData } from "@/utils/UserContext";
+
+const loadoutsKey = getQueryKey(api.jutsu.getLoadouts, undefined, "query");
 
 interface JutsuLoadoutSelectorProps {
   size?: "small" | "large";
@@ -30,6 +35,8 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   const queryResult = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
+  const loadoutsCache =
+    useQueryCacheUpdate<RouterOutputs["jutsu"]["getLoadouts"]>(loadoutsKey);
 
   // Mutations
   const mutationResult = api.jutsu.selectJutsuLoadout.useMutation({
@@ -47,10 +54,14 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   });
 
   const renameResult = api.jutsu.renameLoadout.useMutation({
-    onSuccess: async (data) => {
+    onMutate: loadoutsCache.prepareUpdate,
+    onSuccess: async (data, input, snapshot) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.jutsu.getLoadouts.invalidate();
+        await loadoutsCache.updateCache(
+          (current) => getRenamedLoadouts(current, input),
+          snapshot,
+        );
       }
     },
   });

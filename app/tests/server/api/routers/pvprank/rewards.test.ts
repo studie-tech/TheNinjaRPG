@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { RANKED_ENTRY_COST } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -10,7 +11,7 @@ import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import * as profileApi from "@/server/api/routers/profile";
 import { withRequestScope } from "@/server/requestScope";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { ObjectiveReward } from "@/validators/rewards";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { insertQuests, insertUsers } from "../../../../setup/factories";

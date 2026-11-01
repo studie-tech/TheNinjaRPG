@@ -1,5 +1,15 @@
 import { eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  getBuyItemSlotUserUpdate,
+  getBuyJutsuSlotUserUpdate,
+  getChangedGenderUserPatch,
+  getCreateOfferUserUpdate,
+  getDelistOfferUserUpdate,
+  getRerollElementUserUpdate,
+  getTakeOfferUserUpdate,
+  getUpdateStatsUserUpdate,
+} from "@/deltas/blackmarket";
 import type { ElementName } from "@/drizzle/constants";
 import {
   BasicElementName,
@@ -24,7 +34,7 @@ import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { getBloodlineElements } from "@/libs/userElements";
 import {
@@ -157,7 +167,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer created",
-        userDelta: hasEnergyQueue(user) ? undefined : { reputationPoints: -input.reps },
+        ...getCreateOfferUserUpdate({ user, inputReps: input.reps }),
       };
     }),
   delistOffer: protectedProcedure
@@ -190,11 +200,12 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer delisted",
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : creatorId === ctx.userId
-            ? { reputationPoints: offer.repsForSale }
-            : {},
+        ...getDelistOfferUserUpdate({
+          user,
+          creatorId,
+          ctxUserId: ctx.userId,
+          offerRepsForSale: offer.repsForSale,
+        }),
       };
     }),
   takeOffer: protectedProcedure
@@ -288,9 +299,11 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Bought ${offer.repsForSale} reputation points for ${offer.requestedRyo} ryo.`,
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : { money: -offer.requestedRyo, reputationPoints: offer.repsForSale },
+        ...getTakeOfferUserUpdate({
+          user,
+          offerRequestedRyo: offer.requestedRyo,
+          offerRepsForSale: offer.repsForSale,
+        }),
       };
     }),
   changeUserGender: protectedProcedure
@@ -315,10 +328,10 @@ export const blackMarketRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        const userPatch = {
-          gender: input.gender,
-          reputationPoints: user.reputationPoints - COST_CHANGE_GENDER,
-        };
+        const userPatch = getChangedGenderUserPatch(
+          input.gender,
+          user.reputationPoints,
+        );
         return {
           success: true,
           message: `Change gender in ${input.gender}`,
@@ -345,9 +358,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: "Item slot purchased",
-          userDelta: hasEnergyQueue(user)
-            ? undefined
-            : { reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 },
+          ...getBuyItemSlotUserUpdate({ user }),
         };
       }
     }),
@@ -372,9 +383,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: "Jutsu slot purchased",
-          userDelta: hasEnergyQueue(user)
-            ? undefined
-            : { reputationPoints: -COST_EXTRA_JUTSU_SLOT, extraJutsuSlots: 1 },
+          ...getBuyJutsuSlotUserUpdate({ user }),
         };
       }
     }),
@@ -479,15 +488,11 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Element rerolled successfully. ${result.changes.join(", ")}`,
-        userPatch: {
-          primaryElement:
-            input.elementType === "primary" ? result.element : user.primaryElement,
-          secondaryElement:
-            input.elementType === "secondary" ? result.element : user.secondaryElement,
-        },
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : { reputationPoints: -COST_REROLL_ELEMENT },
+        ...getRerollElementUserUpdate({
+          inputElementType: input.elementType,
+          resultElement: result.element,
+          user,
+        }),
       };
     }),
   // Update stats
@@ -558,8 +563,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: `User stats updated for ${cost} reputation points`,
-          userPatch: input,
-          userDelta: hasEnergyQueue(user) ? undefined : { reputationPoints: -cost },
+          ...getUpdateStatsUserUpdate({ input, user, cost }),
         };
       }
     }),

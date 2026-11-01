@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
 import { aiProfile, battle, jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
-import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { refreshMasteries } from "@/libs/combat/util";
 import { effectiveMasteries } from "@/libs/mastery";
 import { Pusher } from "@/libs/pusher";

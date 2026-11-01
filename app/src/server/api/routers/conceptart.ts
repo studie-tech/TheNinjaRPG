@@ -2,12 +2,16 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getCreateConceptArtUserUpdate,
+  getCreateVideoUserUpdate,
+} from "@/deltas/conceptart";
+import {
   COST_CONCEPT_IMAGE,
   COST_CONCEPT_VIDEO,
   SmileyEmotions,
 } from "@/drizzle/constants";
 import { classifyNsfwPrompt } from "@/libs/moderator";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import {
   fastTxt2imgReplicate,
   getVideoGenerationStatus,
@@ -141,9 +145,7 @@ export const conceptartRouter = createTRPCRouter({
         success: true,
         message: "Image created",
         imageId,
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : { reputationPoints: -COST_CONCEPT_IMAGE },
+        ...getCreateConceptArtUserUpdate({ user }),
       };
     }),
   createVideo: protectedProcedure
@@ -220,9 +222,7 @@ export const conceptartRouter = createTRPCRouter({
           success: true,
           message: "Video generation started",
           videoId,
-          userDelta: hasEnergyQueue(user)
-            ? undefined
-            : { reputationPoints: -COST_CONCEPT_VIDEO },
+          ...getCreateVideoUserUpdate({ user }),
         };
       } catch (error) {
         // Restore reputation points on failure

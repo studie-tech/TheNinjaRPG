@@ -1,6 +1,11 @@
 import { eq, isNull, like, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import {
+  getPurchaseSkillUserUpdate,
+  getResetSkillPointsUserUpdate,
+} from "@/deltas/skillTree";
 import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
@@ -10,8 +15,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { skillTree } from "@/drizzle/schema";
-import { effectiveMasteries } from "@/libs/mastery";
-import { calcMaxEnergy } from "@/libs/profile";
+
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteSkillTreeFolderForDeleteFolder,
@@ -54,7 +58,7 @@ import {
   updateUserDataForResetSkillPoints,
   updateUserSkillForPurchaseSkill,
 } from "@/queries/skillTree";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -253,15 +257,11 @@ export const skillTreeRouter = createTRPCRouter({
       const cacheUpdate = progression
         ? {
             ...progression,
-            userPatch: {
-              ...progression.userPatch,
-              userSkills: activatedSkills,
-              effectiveMasteries: effectiveMasteries({
-                ...user,
-                userSkills: activatedSkills,
-              }),
-              maxEnergy: calcMaxEnergy({ ...user, userSkills: activatedSkills }),
-            },
+            ...getPurchaseSkillUserUpdate({
+              progressionUserPatch: progression.userPatch,
+              activatedSkills,
+              user,
+            }),
           }
         : {};
 
@@ -606,23 +606,16 @@ export const skillTreeRouter = createTRPCRouter({
 
       await Promise.all(writes);
 
-      const maxEnergy = calcMaxEnergy({ ...user, userSkills: [] });
       return {
         success: true,
-        userDelta: updatedUser.requiresUserRefresh
-          ? undefined
-          : isFreeReset
-            ? {}
-            : { reputationPoints: -COST_SKILL_RESET },
-        userPatch: {
-          userSkills: [],
-          monthlySkillResets: {
-            ...resetState,
-            count: resetState.count + (isStaffFreeReset ? 0 : 1),
-          },
-          maxEnergy,
-          effectiveMasteries: effectiveMasteries({ ...user, userSkills: [] }),
-        },
+        ...getResetSkillPointsUserUpdate({
+          updatedUserRequiresUserRefresh: updatedUser.requiresUserRefresh,
+          isFreeReset,
+          resetState,
+          isStaffFreeReset,
+          user,
+        }),
+
         message: `Skills points reset!${isFreeReset ? (isStaffFreeReset ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
     }),

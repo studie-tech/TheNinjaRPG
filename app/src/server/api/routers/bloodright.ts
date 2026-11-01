@@ -1,3 +1,8 @@
+import {
+  getPurchaseUserUpdate,
+  getRefundUserUpdate,
+  getResetUserUpdate,
+} from "@/deltas/bloodright";
 import { COST_SKILL_RESET, MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import { getBloodrightRefundIds } from "@/libs/bloodright";
 import {
@@ -94,13 +99,11 @@ export const bloodrightRouter = createTRPCRouter({
       return {
         success: true,
         message: `Activated ${tier.name}`,
-        userDelta: updatedUser.requiresUserRefresh
-          ? undefined
-          : {
-              seichiSilver: -tier.seichiSilverCost,
-              bloodrightSpent: tier.seichiSilverCost,
-            },
-        userPatch: { bloodright },
+        ...getPurchaseUserUpdate({
+          updatedUserRequiresUserRefresh: updatedUser.requiresUserRefresh,
+          tierSeichiSilverCost: tier.seichiSilverCost,
+          bloodright,
+        }),
       };
     }),
   refund: protectedProcedure
@@ -139,10 +142,12 @@ export const bloodrightRouter = createTRPCRouter({
         return errorResponse("Your Bloodright changed. Refresh and try again");
       return {
         success: true,
-        userDelta: updatedUser.requiresUserRefresh
-          ? undefined
-          : { seichiSilver: refund, bloodrightSpent: -refund },
-        userPatch: { bloodright },
+        ...getRefundUserUpdate({
+          updatedUserRequiresUserRefresh: updatedUser.requiresUserRefresh,
+          refund,
+          bloodright,
+        }),
+
         message: `Refunded ${refund} Seichi Silver and removed ${removed.length} tier(s)`,
       };
     }),
@@ -180,13 +185,13 @@ export const bloodrightRouter = createTRPCRouter({
       await insertActionLogForReset(ctx.drizzle, ctx, isStaff, cost, user);
       return {
         success: true,
-        userDelta: updatedUser.requiresUserRefresh
-          ? undefined
-          : {
-              seichiSilver: user.bloodrightSpent,
-              ...(cost > 0 ? { reputationPoints: -cost } : {}),
-            },
-        userPatch: { bloodright: [], bloodrightSpent: 0, monthlySkillResets },
+        ...getResetUserUpdate({
+          updatedUserRequiresUserRefresh: updatedUser.requiresUserRefresh,
+          userBloodrightSpent: user.bloodrightSpent,
+          cost,
+          monthlySkillResets,
+        }),
+
         message: `Bloodright reset; refunded ${user.bloodrightSpent} Seichi Silver${cost ? ` (-${cost} Reps)` : " (free)"}`,
       };
     }),

@@ -1,5 +1,12 @@
-import { CombatStatNames, MasteryNames, REGEN_SECONDS } from "@/drizzle/constants";
+import type { BattleType } from "@/drizzle/constants";
+import {
+  CombatStatNames,
+  ManualStartBattleTypes,
+  MasteryNames,
+  REGEN_SECONDS,
+} from "@/drizzle/constants";
 import type { UserData, UserTitle } from "@/drizzle/schema";
+import type { BattleUserItem, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
   effectiveMasteries,
   MASTERY_REQUIREMENT_FIELDS,
@@ -11,8 +18,7 @@ import { calcMaxEnergy } from "@/libs/profile";
 import { getMasteryQueue, hasEnergyQueue } from "@/libs/queue";
 import { getRegenerationPeriodGain, type RegenerationPeriod } from "@/libs/timedBuffs";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { UserDelta } from "@/validators/userCache";
-import type { BattleUserItem, CombatResult, CompleteBattle } from "./types";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 const baselineFields = [
   ...CombatStatNames,
@@ -29,6 +35,11 @@ const baselineFields = [
   "petExperience",
 ] as const;
 type BaselineField = (typeof baselineFields)[number];
+
+/**
+ * Persisted profile values captured at battle admission and checked before applying a
+ * settlement.
+ */
 export type CombatCacheBaseline = Pick<UserData, BaselineField> & {
   regenAt: string;
   hadTrainingQueue: boolean;
@@ -39,6 +50,11 @@ export type CombatCacheBaseline = Pick<UserData, BaselineField> & {
     "id" | "quantity" | "durability" | "level" | "experience" | "equipped"
   >[];
 };
+
+/**
+ * Battle admission baseline with unscaled mastery sources for reconstructing derived profile
+ * values.
+ */
 export type CombatCacheSnapshot = CombatCacheBaseline & {
   masterySources: MasterySources &
     Pick<MasteryBuffUser, "bloodlineId"> & {
@@ -46,6 +62,11 @@ export type CombatCacheSnapshot = CombatCacheBaseline & {
       titles?: UserTitle[];
     };
 };
+
+/**
+ * Confirmed combat settlement tied to one user, battle and admission baseline, including
+ * sparse tracker and gear changes.
+ */
 export type CombatProfileUpdate = {
   userId: string;
   battleId: string;
@@ -133,7 +154,11 @@ export const captureCombatCacheSnapshot = (
   ),
 });
 
-/** Only the session player's confirmed settlement may reconcile their profile. */
+/**
+ * Project the session player's confirmed settlement only while identity, battle, baseline
+ * values, title ownership and equipment still match. Return undefined when queued training or
+ * changed sources require a canonical profile read.
+ */
 export const combatProfilePatch = (
   current: NonNullable<UserWithRelations>,
   update: CombatProfileUpdate,
@@ -206,7 +231,10 @@ export const combatProfilePatch = (
   };
 };
 
-/** Match the bound settlement timestamp used by combatEnergyRecoverySql. */
+/**
+ * Calculate capped energy at the bound settlement timestamp, including rewards, passive
+ * regeneration and timed periods, to match combatEnergyRecoverySql.
+ */
 export const combatCacheEnergy = (
   snapshot: Pick<CombatCacheBaseline, "curEnergy" | "regenAt">,
   capacity: number,
@@ -230,6 +258,10 @@ export const combatCacheEnergy = (
         (REGEN_SECONDS * 1000),
   );
 
+/**
+ * Allow local settlement only for a surviving solo PvE actor with a valid baseline, stable
+ * active pet, no queued training and no shared reward effects.
+ */
 export const canCacheCombatCompletion = (
   battle: CompleteBattle,
   result: CombatResult,
@@ -297,7 +329,10 @@ export const combatCacheDerived = (
   };
 };
 
-/** Battle gates do not change persisted equipment slots or item progression. */
+/**
+ * Apply battle quantity and durability changes while retaining persisted equipment slots,
+ * levels and experience.
+ */
 export const combatCacheItems = (
   baseline: CombatCacheBaseline,
   items: BattleUserItem[],
@@ -331,3 +366,64 @@ export const combatCacheIntegerDelta = (
       },
     ),
   ) as Pick<UserDelta, "money" | "experience" | "earnedExperience" | "seichiSilver">;
+
+/**
+ * Project battle admission, stealth breaks and the non-tournament PvE counter for a settled
+ * actor. Withhold both fields when queues, PvP or immunity changes require a profile refresh.
+ */
+export const getCombatAdmissionUserUpdate = ({
+  cacheActor,
+  requiresUserRefresh,
+  allParticipantIds,
+  queuedParticipants,
+  battleType,
+  warAggressorIds,
+  bracketImmunityAggressorIds,
+  now,
+  battleId,
+  stealthBreakUserIds,
+  isTournament,
+}: {
+  cacheActor: Pick<UserData, "userId" | "bracketImmunityLiftedUntil"> | undefined;
+  requiresUserRefresh: boolean;
+  allParticipantIds: string[];
+  queuedParticipants: { user: { userId: string } }[];
+  battleType: BattleType;
+  warAggressorIds: string[];
+  bracketImmunityAggressorIds: string[];
+  now: Date;
+  battleId: string;
+  stealthBreakUserIds: string[];
+  isTournament: boolean;
+}): { userPatch: UserCachePatch | undefined; userDelta: UserDelta | undefined } => {
+  const canProject =
+    !!cacheActor &&
+    !requiresUserRefresh &&
+    allParticipantIds.includes(cacheActor.userId) &&
+    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
+    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
+    !warAggressorIds.includes(cacheActor.userId) &&
+    !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
+    cacheActor.bracketImmunityLiftedUntil <= now;
+  const userPatch: UserCachePatch | undefined = canProject
+    ? {
+        status: "BATTLE",
+        battleId,
+        bracketImmunityPausedAt: null,
+        ...(stealthBreakUserIds.includes(cacheActor.userId)
+          ? { stealthActive: false, stealthActivatedAt: null }
+          : {}),
+      }
+    : undefined;
+  return {
+    userPatch,
+    userDelta: userPatch ? (isTournament ? {} : { pveFights: 1 }) : undefined,
+  };
+};
+
+/** Project the auto-combat preference only for battle types that support automatic starts. */
+export const getAutoCombatPreferencePatch = (
+  battleType: BattleType,
+  enabled: boolean,
+) =>
+  ManualStartBattleTypes.includes(battleType) ? {} : { defaultAutoCombat: enabled };

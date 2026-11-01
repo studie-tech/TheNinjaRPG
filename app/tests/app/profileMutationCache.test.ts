@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
@@ -5,7 +6,7 @@ import { describe, expect, it, vi } from "bun:test";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [

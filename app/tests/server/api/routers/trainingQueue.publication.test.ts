@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
-import { userData, userQueue, userVote } from "@/drizzle/schema";
+import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { getMasteryQueue } from "@/libs/queue";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
@@ -123,7 +123,8 @@ const readUser = async () => {
 
 describeWithDatabase("Training queue atomic publication", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userVote, userData);
+    // Queue publication's query budget assumes no quest bootstrapping.
+    await resetTables(userQueue, userVote, questHistory, quest, userData);
     const now = new Date();
     await insertUsers([
       {
@@ -159,7 +160,7 @@ describeWithDatabase("Training queue atomic publication", () => {
       normal.updateMasteryTrainingQueue({ expectedEntries: [], entries: [genjutsu] }),
     );
     expect(saved.result.success).toBe(true);
-    expect(saved.roundTrips).toBe(7);
+    expect(saved.roundTrips, saved.statements.join("\n")).toBe(7);
     expect(
       (
         await normal.updateMasteryTrainingQueue({
@@ -180,7 +181,7 @@ describeWithDatabase("Training queue atomic publication", () => {
       }),
     );
     expect(saved.result.success).toBe(true);
-    expect(saved.roundTrips).toBe(7);
+    expect(saved.roundTrips, saved.statements.join("\n")).toBe(7);
   });
 
   it.each(["ENERGY", "MASTERY"] as const)("rejects a %s addition if the player falls asleep before publication", async (kind) => {

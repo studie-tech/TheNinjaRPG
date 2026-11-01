@@ -128,9 +128,13 @@ const truncateEveryTable = async () => {
 export const getTestDatabase = async (): Promise<DrizzleClient> => {
   if (!client) {
     pool = mysql.createPool({ uri: url, multipleStatements: true, connectionLimit: 10 });
-    pool.pool.on("connection", (connection) =>
-      instrumentConnection(connection as unknown as Parameters<typeof instrumentConnection>[0]),
-    );
+    instrumentQueries(pool as unknown as Parameters<typeof instrumentQueries>[0]);
+    const getConnection = pool.getConnection.bind(pool);
+    pool.getConnection = async () => {
+      const connection = await getConnection();
+      instrumentQueries(connection as unknown as Parameters<typeof instrumentQueries>[0]);
+      return connection;
+    };
     const database = drizzle(pool, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
@@ -220,43 +224,41 @@ type QueryRecorder = { statements: string[]; roundTrips: number; inFlight: numbe
 let recorder: QueryRecorder | undefined;
 
 /**
- * Report every statement of a pooled connection to the active recorder, including the
- * ones inside transactions. Installed once per connection; idle when nothing records.
+ * Count promise API submissions before pool acquisition, or directly on a transaction's
+ * checked-out connection. Each statement is recorded once, including transaction boundaries.
  */
-const instrumentConnection = (connection: {
+const instrumentQueries = (connection: {
   query: (...args: unknown[]) => unknown;
   execute: (...args: unknown[]) => unknown;
 }) => {
   for (const method of ["query", "execute"] as const) {
     const original = connection[method].bind(connection);
-    connection[method] = (...args: unknown[]) => {
+    connection[method] = async (...args: unknown[]) => {
       const active = recorder;
-      const command = original(...args) as { once?: (event: string, cb: () => void) => void };
-      if (!active) return command;
-      const [first] = args;
-      active.statements.push(
-        typeof first === "string" ? first : String((first as { sql?: string })?.sql),
-      );
-      // A statement sent while none is in flight starts a new sequential round trip.
+      if (!active) return original(...args);
+      const [first, values] = args;
+      const options = typeof first === "string" ? undefined : first as { sql?: string; values?: unknown };
+      const statement = typeof first === "string" ? first : String(options?.sql);
+      // mysql2 prefers execute's embedded values, but query's separate argument wins.
+      const bindValues = method === "execute"
+        ? options?.values || values
+        : values === undefined ? options?.values : values;
+      active.statements.push(mysql.format(statement, bindValues as Parameters<typeof mysql.format>[1]));
       if (active.inFlight === 0) active.roundTrips += 1;
       active.inFlight += 1;
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
+      try {
+        return await original(...args);
+      } finally {
         active.inFlight -= 1;
-      };
-      command?.once?.("end", finish);
-      command?.once?.("error", finish);
-      return command;
+      }
     };
   }
 };
 
 /**
- * Run `work` and return the statements it sent and the number of sequential database
- * round trips (statements sent while no other was in flight), e.g. to pin what a hot
- * path costs. Transactions count statement by statement, as they do on PlanetScale.
+ * Return SQL statements and sequential application query waves to pin a hot path's cost.
+ * Requests are pending while waiting for a local pool connection, so pool contention
+ * cannot inflate the count. Transaction boundaries and statements are included.
  */
 export const recordQueries = async <T>(work: () => Promise<T>) => {
   await getTestDatabase();

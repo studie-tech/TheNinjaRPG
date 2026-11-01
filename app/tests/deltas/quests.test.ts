@@ -1,5 +1,5 @@
+import { getRewardUserDelta } from "@/deltas/quests";
 import { describe, expect, it } from "bun:test";
-import { getRewardUserDelta } from "@/server/api/routers/quests";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 
 const reward = (input: Record<string, unknown> = {}) =>

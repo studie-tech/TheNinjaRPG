@@ -1,6 +1,11 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getCreateTeamUserUpdate,
+  getJoinTeamUserUpdate,
+  getLeaveTeamUserUpdate,
+} from "@/deltas/territoryWar";
+import {
   TERRITORY_WAR_INTERVAL_HOURS,
   TERRITORY_WAR_TEAM_SIZE,
 } from "@/drizzle/constants";
@@ -80,7 +85,10 @@ export const territoryWarRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       if (!event || event.resolvedAt || event.endsAt <= new Date())
-        return { ...errorResponse("This Territory War has ended"), userDelta: {} };
+        return {
+          ...errorResponse("This Territory War has ended"),
+          ...getCreateTeamUserUpdate(),
+        };
       if (user.isBanned || user.status !== "AWAKE" || user.sector !== event.sector)
         return errorResponse("You must be awake in the event sector");
       const competitor = getTerritoryCompetitor(user);
@@ -120,7 +128,7 @@ export const territoryWarRouter = createTRPCRouter({
       return {
         success: true,
         message: "Left the team",
-        userPatch: woke.rowsAffected ? { status: "AWAKE" } : undefined,
+        ...getLeaveTeamUserUpdate({ wokeRowsAffected: woke.rowsAffected }),
       };
     }),
 
@@ -220,7 +228,7 @@ const joinTeam = async (
       ? {
           success: true,
           message: "Joined the team. Start solo or wait for teammates",
-          userPatch: { status: "QUEUED" as const },
+          ...getJoinTeamUserUpdate(),
         }
       : errorResponse("Your status or this team changed. Try again");
   } finally {

@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import * as crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ import { BLOODLINE_COST, PITY_BLOODLINE_ROLLS, ROLL_CHANCE } from "@/drizzle/con
 import { actionLog, bloodline, bloodlineRolls, gameSetting, quest, questHistory, userData, userVote } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { BloodlineCollection, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";

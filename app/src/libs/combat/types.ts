@@ -1,3 +1,4 @@
+import type { CombatCacheSnapshot, CombatProfileUpdate } from "@/deltas/combat";
 import type {
   AttackMethods,
   AttackTargets,
@@ -47,7 +48,6 @@ import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
 import type { MethodSize } from "@/validators/methodSize";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { DmgConfig } from "./constants";
-import type { CombatCacheSnapshot, CombatProfileUpdate } from "./userCache";
 
 export type BattleWar = War & {
   mercenaryWarIds?: Record<string, string>;

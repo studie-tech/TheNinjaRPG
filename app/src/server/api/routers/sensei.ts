@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
 import { SENSEI_RANKS } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUser } from "@/queries/profile";
@@ -148,7 +149,7 @@ export const senseiRouter = createTRPCRouter({
         return {
           success: true,
           message: "Request accepted",
-          userPatch: user.rank === "GENIN" ? { senseiId } : {},
+          ...getAcceptRequestUserUpdate({ userRank: user.rank, senseiId }),
         };
       }
       return errorResponse("Student already has a sensei");
@@ -188,6 +189,6 @@ export const senseiRouter = createTRPCRouter({
       }
       // Update
       await updateUserDataForRemoveStudent(ctx.drizzle, user);
-      return { success: true, message: "Left sensei", userPatch: { senseiId: null } };
+      return { success: true, message: "Left sensei", ...getLeaveSenseiUserUpdate() };
     }),
 });

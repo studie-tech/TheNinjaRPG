@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,7 +21,7 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {

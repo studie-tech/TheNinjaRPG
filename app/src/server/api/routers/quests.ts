@@ -2,6 +2,17 @@ import * as Sentry from "@sentry/nextjs";
 import { and, eq, gte, inArray, isNull, lte, ne, notExists, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import {
+  getCancelPetTaskUserUpdate,
+  getClaimedRewardChoiceUserUpdate,
+  getCollectPetTaskUserUpdate,
+  getQuestRewardProjectionUpdate,
+  getRetryBattleUserUpdate,
+  getRewardUserDelta,
+  getStartPetTaskUserUpdate,
+  getUnchangedRewardChoiceUserUpdate,
+} from "@/deltas/quests";
 import {
   ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
@@ -96,7 +107,7 @@ import {
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
 } from "@/libs/questRun";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -232,7 +243,6 @@ import { fetchUserItems } from "@/routers/item";
 import {
   fetchPublishedAchievements,
   fetchUpdatedUser,
-  getUserProgressionUpdate,
   type UserWithRelations,
 } from "@/routers/profile";
 import { startQuestPartyEncounter } from "@/routers/questParty";
@@ -1304,7 +1314,13 @@ export const questsRouter = createTRPCRouter({
         success: true,
         message: `${pet.name} left to complete ${contract.name}.`,
         ...(projection
-          ? { ...projection, userPatch: { ...projection.userPatch, petTask: task } }
+          ? {
+              ...projection,
+              ...getStartPetTaskUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                task,
+              }),
+            }
           : {}),
       };
     }),
@@ -1394,8 +1410,10 @@ export const questsRouter = createTRPCRouter({
         ...(projection
           ? {
               ...projection,
-              userPatch: { ...projection.userPatch, petTask: null },
-              userDelta: claim.userDelta,
+              ...getCollectPetTaskUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                claimUserDelta: claim.userDelta,
+              }),
             }
           : {}),
         success: true,
@@ -1431,15 +1449,12 @@ export const questsRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Your companion returned without task rewards.",
-            userPatch: {
-              petTask: null,
-              updatedAt: getNextUserSnapshotAt(owner.updatedAt, now),
-            },
-            userDelta: {
-              userQuests: {
-                remove: [{ id: task.questHistoryId, startedAt: task.startedAt }],
-              },
-            },
+            ...getCancelPetTaskUserUpdate({
+              ownerUpdatedAt: owner.updatedAt,
+              now,
+              taskQuestHistoryId: task.questHistoryId,
+              taskStartedAt: task.startedAt,
+            }),
           }
         : errorResponse(
             "Task state changed. Refresh and try returning your companion again.",
@@ -1589,28 +1604,6 @@ export const questsRouter = createTRPCRouter({
 
       const refreshedTrackers = getNewTrackers(user, [{ task: "any" }]);
       user.questData = refreshedTrackers.trackers;
-      // XP is already included in the accepted progression snapshot.
-      const { earnedExperience: _earnedExperience, ...balanceDelta } =
-        claim.userDelta ?? {};
-      const projectedQuestIds = new Set(user.userQuests.map((entry) => entry.questId));
-      const cacheUpdate =
-        !requiresProgressionRefresh &&
-        claim.userCacheEligible &&
-        // Newly eligible achievements need getUser to hydrate their trackers.
-        !progressionQuestCandidates.some(
-          (entry) =>
-            entry.quest.questType === "achievement" &&
-            !projectedQuestIds.has(entry.questId) &&
-            isAvailableUserQuests({ ...entry.quest, ...entry }, user, true).check,
-        ) &&
-        refreshedTrackers.consequences.length === 0 &&
-        claim.userDelta !== undefined &&
-        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
-          ? getUserProgressionUpdate(user, publishedAchievementIds)
-          : undefined;
-      // Energy payouts advance the DB version in SQL; preserve the cached stamp
-      // until the next authoritative read can supply its new value.
-      const { updatedAt: _updatedAt, ...userPatch } = cacheUpdate?.userPatch ?? {};
       return {
         success: true,
         message: "Quest progress updated",
@@ -1628,13 +1621,15 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
-        ...(cacheUpdate
-          ? {
-              ...cacheUpdate,
-              userPatch,
-              userDelta: balanceDelta,
-            }
-          : {}),
+        ...getQuestRewardProjectionUpdate({
+          user: user,
+          requiresProgressionRefresh,
+          userCacheEligible: claim.userCacheEligible,
+          delta: claim.userDelta,
+          consequences: refreshedTrackers.consequences,
+          progressionQuestCandidates,
+          publishedAchievementIds,
+        }),
       };
     }),
   getPendingRewardChoices: protectedProcedure
@@ -1706,7 +1701,7 @@ export const questsRouter = createTRPCRouter({
           message: `You already have every reward offered by ${questName}`,
           rewards,
           badges: [],
-          userDelta: hasEnergyQueue(user) ? undefined : {},
+          ...getUnchangedRewardChoiceUserUpdate({ user }),
         };
       }
       // Picked profession experience advances other quests' objectives, as at completion.
@@ -1742,7 +1737,7 @@ export const questsRouter = createTRPCRouter({
         message: `Claimed rewards from ${questName}`,
         rewards,
         badges,
-        userDelta: hasEnergyQueue(user) ? undefined : getRewardUserDelta(rewards),
+        ...getClaimedRewardChoiceUserUpdate({ user, rewards }),
       };
     }),
   checkLocationQuest: protectedProcedure
@@ -1995,8 +1990,12 @@ export const questsRouter = createTRPCRouter({
         ...(projection
           ? {
               ...projection,
-              userPatch: { ...projection.userPatch, ...committedBattlePatch },
-              userDelta: battleAttempted ? battleUserUpdate?.userDelta : {},
+              ...getRetryBattleUserUpdate({
+                projectionUserPatch: projection.userPatch,
+                committedBattlePatch,
+                battleAttempted,
+                battleUserUpdateUserDelta: battleUserUpdate?.userDelta,
+              }),
             }
           : {}),
       };
@@ -4674,64 +4673,6 @@ export const claimRewardChoiceTrackers = async (
     set: { questData: filterQuestTrackersForDbPersist(trackers, user) },
   });
   return claim.success;
-};
-
-/**
- * Scalar rewards compose with accepted cache updates; derived state needs reconciliation.
- * Pet XP needs a refresh because its committed amount depends on live SQL eligibility.
- */
-export const getRewardUserDelta = (
-  rewards: GetRewardResult,
-  reputationCost = 0,
-  hasQuestSnapshot = false,
-): UserDelta | undefined => {
-  if (
-    // Integer columns round SQL payouts; fractional atomic increments need reconciliation.
-    [
-      rewards.reward_money,
-      rewards.reward_seichi_silver,
-      rewards.reward_exp,
-      rewards.reward_skillpoints,
-    ].some((amount) => !Number.isInteger(amount)) ||
-    (!hasQuestSnapshot && rewards.reward_reputation !== 0) ||
-    rewards.reward_prestige < 0 ||
-    rewards.reward_rank !== "NONE" ||
-    rewards.reward_village_membership !== "NONE" ||
-    (!hasQuestSnapshot &&
-      (rewards.reward_items.length > 0 ||
-        rewards.reward_jutsus.length > 0 ||
-        rewards.reward_badges.length > 0 ||
-        rewards.reward_skillpoints !== 0)) ||
-    rewards.reward_bloodlines.length > 0 ||
-    rewards.reward_sage_modes.length > 0 ||
-    (rewards.reward_titles?.length ?? 0) > 0 ||
-    rewards.reward_hunter_items ||
-    rewards.reward_gathering_items ||
-    rewards.reward_clanpoints !== 0 ||
-    rewards.reward_anbupoints !== 0 ||
-    rewards.reward_tokens !== 0 ||
-    rewards.reward_war_damage !== 0 ||
-    rewards.reward_war_healing !== 0 ||
-    rewards.reward_medical_experience !== 0 ||
-    rewards.reward_hunting_experience !== 0 ||
-    rewards.reward_crafting_experience !== 0 ||
-    rewards.reward_gathering_experience !== 0 ||
-    (rewards.reward_pet_experience ?? 0) !== 0 ||
-    MASTERY_EXPERIENCE_FIELDS.some((field) => (rewards[field] ?? 0) > 0) ||
-    (rewards.reward_mastery_rank && rewards.reward_mastery_rank !== "NONE") ||
-    rewards.reward_sage_mastery_experience !== 0
-  ) {
-    // Content grants, profession milestones and shared relations change derived profile data.
-    return undefined;
-  }
-  return {
-    money: rewards.reward_money,
-    seichiSilver: rewards.reward_seichi_silver,
-    earnedExperience: rewards.reward_exp,
-    reputationPoints: rewards.reward_reputation - reputationCost,
-    reputationPointsTotal: rewards.reward_reputation,
-    villagePrestige: rewards.reward_prestige,
-  };
 };
 
 /** Describe complete bundle contents with resolved names and original item quantities/chances. */

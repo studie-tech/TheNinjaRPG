@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { settleDungeonBattle } from "@/server/utils/dungeon";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { type UserDeltaResponse, userDeltaResponseSchema } from "@/validators/userCache";

@@ -1,10 +1,11 @@
 import { eq, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getRemoveSageModeUserUpdate } from "@/deltas/sageMode";
 import { REMOVAL_COST } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser, findUserRoleById } from "@/queries/profile";
 import {
@@ -252,9 +253,7 @@ export const sageModeRouter = createTRPCRouter({
       return {
         success: true,
         message: `Sage Mode removed for ${REMOVAL_COST} reps`,
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : { reputationPoints: -REMOVAL_COST },
+        ...getRemoveSageModeUserUpdate({ user }),
       };
     }),
 });

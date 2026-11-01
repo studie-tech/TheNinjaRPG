@@ -3,6 +3,15 @@ import { and, eq, gte, inArray, like, ne, or, type SQL, sql } from "drizzle-orm"
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getCancelQueuedTrainingUserUpdate,
+  getEvolveJutsuUserUpdate,
+  getImportJutsuLoadoutUserUpdate,
+  getSelectJutsuLoadoutUserUpdate,
+  getTransferLevelUserUpdate,
+  getUpdateUserJutsuOrderUserUpdate,
+} from "@/deltas/jutsu";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import {
   COST_RESKIN_JUTSU,
   JUTSU_LEVEL_CAP,
   JUTSU_TRANSFER_COST,
@@ -60,7 +69,7 @@ import {
   getNewTrackers,
   getPublicQuestUser,
 } from "@/libs/quest";
-import { hasEnergyQueue, liveQueueRows } from "@/libs/queue";
+import { liveQueueRows } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -252,7 +261,7 @@ import {
   jutsuTrainingQueueOutputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "./profile";
+import { fetchUpdatedUser } from "./profile";
 
 /** "level 3" or "levels 3-5" */
 const formatLevelRange = (from: number, to: number) =>
@@ -371,9 +380,7 @@ export const jutsuRouter = createTRPCRouter({
 
       return {
         success: true,
-        userDelta: hasEnergyQueue(user)
-          ? undefined
-          : { reputationPoints: needsReputation ? -transferCost : 0 },
+        ...getTransferLevelUserUpdate({ user, needsReputation, transferCost }),
         message: needsReputation
           ? `Level transferred for ${transferCost} reputation points`
           : "Level transferred for free",
@@ -502,11 +509,11 @@ export const jutsuRouter = createTRPCRouter({
         ? {
             ...result,
             ...progression,
-            userPatch: {
-              ...progression.userPatch,
-              jutsuLoadout: id,
-              loadout: { jutsuIds: loadout.jutsuIds },
-            },
+            ...getSelectJutsuLoadoutUserUpdate({
+              progressionUserPatch: progression.userPatch,
+              id,
+              loadoutJutsuIds: loadout.jutsuIds,
+            }),
           }
         : result;
     }),
@@ -546,12 +553,12 @@ export const jutsuRouter = createTRPCRouter({
       const appliedUpdate = cacheUpdate
         ? {
             ...cacheUpdate,
-            userPatch: {
-              ...cacheUpdate.userPatch,
-              ...(isActive
-                ? { jutsuLoadout: loadout.id, loadout: { jutsuIds: preview.jutsuIds } }
-                : {}),
-            },
+            ...getImportJutsuLoadoutUserUpdate({
+              cacheUpdateUserPatch: cacheUpdate.userPatch,
+              isActive,
+              loadoutId: loadout.id,
+              previewJutsuIds: preview.jutsuIds,
+            }),
           }
         : {};
       const guard = and(
@@ -961,12 +968,10 @@ export const jutsuRouter = createTRPCRouter({
         ...(progression
           ? {
               ...progression,
-              userPatch: {
-                ...progression.userPatch,
-                ...(activeLoadout
-                  ? { loadout: { jutsuIds: activeLoadout.jutsuIds } }
-                  : {}),
-              },
+              ...getEvolveJutsuUserUpdate({
+                progressionUserPatch: progression.userPatch,
+                activeLoadout,
+              }),
             }
           : {}),
       };
@@ -1635,7 +1640,11 @@ export const jutsuRouter = createTRPCRouter({
         // Only the refund changed the profile, unless the cancellation let a queued
         // level start (it may refund the difference and advance quests): refresh then.
         ...(cancelled.started === 0
-          ? { userDelta: { money: cancelled.refunded } }
+          ? {
+              ...getCancelQueuedTrainingUserUpdate({
+                cancelledRefunded: cancelled.refunded,
+              }),
+            }
           : {}),
       };
     }),
@@ -1892,7 +1901,7 @@ export const jutsuRouter = createTRPCRouter({
       return {
         success: true,
         message: `Order updated`,
-        userPatch: { loadout: { jutsuIds: newOrder } },
+        ...getUpdateUserJutsuOrderUserUpdate({ newOrder }),
       };
     }),
 

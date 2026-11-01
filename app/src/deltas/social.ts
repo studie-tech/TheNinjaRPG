@@ -5,7 +5,10 @@ import { regenerationBuffs } from "@/libs/titles";
 import type { fetchAllGameSettings } from "@/queries/profile";
 import type { findMembershipUserCache } from "@/queries/socialUserCache";
 
-/** Recompute the changed clan bonus from raw opening profile sources. */
+/**
+ * Replace the confirmed clan relationship and recompute its regeneration bonus from raw
+ * opening profile sources and timed buffs.
+ */
 export const getMembershipUserPatch = (
   before: NonNullable<Awaited<ReturnType<typeof findMembershipUserCache>>>,
   clan: Clan | null,

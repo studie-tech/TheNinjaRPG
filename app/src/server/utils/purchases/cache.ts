@@ -1,10 +1,8 @@
+import { canBootstrapQuestType } from "@/deltas/profile";
 import { isAvailableUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
 import { fetchAchievementCatalogue } from "@/queries/profile";
 import { findPurchaseUserSnapshot } from "@/queries/purchases";
-import {
-  canBootstrapQuestType,
-  fetchQuestBootstrap,
-} from "@/server/api/routers/profile";
+import { fetchQuestBootstrap } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import type {

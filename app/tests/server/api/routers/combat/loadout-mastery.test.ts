@@ -4,7 +4,7 @@ import { type BattleType, MAX_PLAYER_LEVEL, RANKED_PVP_STATS, REGEN_SECONDS } fr
 import { userJutsuToAction } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
 import { refreshMasteries } from "@/libs/combat/util";
-import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { effectiveMasteries } from "@/libs/mastery";
 import { jutsuRequirementWarning } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";

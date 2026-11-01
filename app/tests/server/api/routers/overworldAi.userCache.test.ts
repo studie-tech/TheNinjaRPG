@@ -1,3 +1,4 @@
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import { aiProfile, anbuSquad, battle, battleHistory, trainingLog, userCookingJo
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { updateUserDataForGET } from "@/queries/profile";
-import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";

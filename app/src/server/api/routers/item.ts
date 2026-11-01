@@ -15,6 +15,17 @@ import {
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getBuyUserUpdate,
+  getConsumedItemUserUpdate,
+  getConsumedMealUserUpdate,
+  getPurchaseVariantUserUpdate,
+  getRepairedEquipmentUpdate,
+  getSelectItemLoadoutUserUpdate,
+  getUnchangedEquipmentUserUpdate,
+  getUnequippedUserUpdate,
+} from "@/deltas/item";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   CACHE_MAX_GRANTED_ITEMS,
   DURABILITY_MAX_DEFAULT,
@@ -94,7 +105,6 @@ import {
 
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getMaxPetRank, getPetCollectionCapacity } from "@/libs/pets/progression";
-import { calcMaxEnergy } from "@/libs/profile";
 import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
@@ -102,7 +112,7 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-import { hasEnergyQueue } from "@/libs/queue";
+
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import { shopItemDiscountFactor } from "@/libs/shop";
@@ -257,7 +267,7 @@ import {
   findRequiredSkillTreeEntry,
 } from "@/queries/skillTree";
 import { fetchStructures } from "@/queries/village";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -1381,19 +1391,11 @@ export const itemRouter = createTRPCRouter({
       return {
         success: true,
         message: `Variant "${variant.name}" unlocked!`,
-        userDelta:
-          hasEnergyQueue(user) ||
-          (variant.cost > 0 && variant.costType === "VILLAGE_PRESTIGE")
-            ? undefined
-            : variant.cost === 0
-              ? {}
-              : {
-                  [variant.costType === "MONEY"
-                    ? "money"
-                    : variant.costType === "REPUTATION"
-                      ? "reputationPoints"
-                      : "seichiSilver"]: -variant.cost,
-                },
+        ...getPurchaseVariantUserUpdate({
+          user,
+          variantCost: variant.cost,
+          variantCostType: variant.costType,
+        }),
       };
     }),
   // Set the active variant on a user item (null to clear)
@@ -1832,15 +1834,13 @@ export const itemRouter = createTRPCRouter({
           return {
             success: true,
             message: "Cleared active loadout",
-            userPatch: hasEnergyQueue(user) ? undefined : {},
-            userDelta: hasEnergyQueue(user) ? undefined : {},
+            ...getUnchangedEquipmentUserUpdate({ user }),
           };
         }
         return {
           success: true,
           message: "Nothing equipped",
-          userPatch: hasEnergyQueue(user) ? undefined : {},
-          userDelta: hasEnergyQueue(user) ? undefined : {},
+          ...getUnchangedEquipmentUserUpdate({ user }),
         };
       }
 
@@ -1868,19 +1868,8 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
-        userPatch: outcomes.every((outcome) => outcome.rowsAffected === 1)
-          ? getUserEquipmentPatch({
-              ...user,
-              items: user.items.filter(
-                (entry) => !equippedItems.some((row) => row.id === entry.id),
-              ),
-            })
-          : undefined,
-        userDelta:
-          outcomes.every((outcome) => outcome.rowsAffected === 1) &&
-          !hasEnergyQueue(user)
-            ? {}
-            : undefined,
+        ...getUnequippedUserUpdate({ outcomes, user, equippedItems }),
+
         message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
       };
     }),
@@ -1950,8 +1939,10 @@ export const itemRouter = createTRPCRouter({
         return {
           ...response,
           ...progression,
-          userPatch: { ...progression.userPatch, ...userPatch },
-          userDelta: {},
+          ...getConsumedMealUserUpdate({
+            progressionUserPatch: progression.userPatch,
+            userPatch,
+          }),
         };
       }
       if (useritem.isInAuction) {
@@ -2531,28 +2522,6 @@ export const itemRouter = createTRPCRouter({
         }
         // A plain consumable changes only the claimed scalar fields and its equipped stack.
         // Grants that select content or reward relations retain profile reconciliation.
-        const canProject =
-          updatedUser.requiresProgressionRefresh === false &&
-          !grantedRewards &&
-          !petReward &&
-          !grantedQuest &&
-          changedBloodlineId === undefined &&
-          !grantedSageModeId;
-        const projection = canProject
-          ? getUserProgressionUpdate(
-              {
-                ...user,
-                ...updates,
-                curHealth: Math.round(updates.curHealth),
-                curStamina: Math.round(updates.curStamina),
-                curChakra: Math.round(updates.curChakra),
-              },
-              updatedUser.publishedAchievementIds,
-            )
-          : undefined;
-        // The joined account update advances its stamp in SQL; keep the cache's stamp
-        // until a response carries that exact bound value.
-        const { updatedAt: _updatedAt, ...userPatch } = projection?.userPatch ?? {};
         // Return
         return {
           success: true as const,
@@ -2562,25 +2531,20 @@ export const itemRouter = createTRPCRouter({
           notifications: messages,
           rewards: grantedRewards,
           cacheRewards,
-          ...(projection
-            ? {
-                ...projection,
-                userDelta: {},
-                userPatch: {
-                  ...userPatch,
-                  items: user.items.flatMap((entry) =>
-                    entry.id !== useritem.id
-                      ? [entry]
-                      : useritem.quantity > 1
-                        ? [{ ...entry, quantity: useritem.quantity - 1 }]
-                        : [],
-                  ),
-                  marriageSlots: Math.round(updates.marriageSlots),
-                  extraReskinSlots: Math.round(updates.extraReskinSlots),
-                  extraJutsuSlots: user.extraJutsuSlots + jutsuSlotIncrease,
-                },
-              }
-            : {}),
+          ...getConsumedItemUserUpdate({
+            user,
+            updates,
+            useritem,
+            jutsuSlotIncrease,
+            requiresProgressionRefresh:
+              updatedUser.requiresProgressionRefresh !== false,
+            hasReward: !!grantedRewards,
+            hasPetReward: !!petReward,
+            hasQuestReward: !!grantedQuest,
+            hasBloodlineChange: changedBloodlineId !== undefined,
+            hasSageModeReward: !!grantedSageModeId,
+            publishedAchievementIds: updatedUser.publishedAchievementIds,
+          }),
           ...(petReward
             ? {
                 petRewards: [
@@ -3348,24 +3312,16 @@ export const itemRouter = createTRPCRouter({
         success: true,
         message: `You bought ${info.name}`,
         // Quest purchases keep the full refresh so achievement and masked objective state agree.
-        userDelta:
-          advancesBuyItemObjective || hasEnergyQueue(user)
-            ? undefined
-            : {
-                money: -ryoCost,
-                reputationPoints: -repsCost,
-                seichiSilver: -seichiSilverCost,
-              },
-        userPatch:
-          !advancesBuyItemObjective && equipped !== "NONE"
-            ? getUserEquipmentPatch({
-                ...user,
-                items: [
-                  ...user.items,
-                  { ...purchasedItem, item: info, imbuements: [] },
-                ],
-              })
-            : undefined,
+        ...getBuyUserUpdate({
+          advancesBuyItemObjective,
+          user,
+          ryoCost,
+          repsCost,
+          seichiSilverCost,
+          equipped,
+          purchasedItem,
+          info,
+        }),
       };
     }),
   // Auto-equip optimal items based on cost
@@ -3468,17 +3424,13 @@ export const itemRouter = createTRPCRouter({
       return result.success
         ? {
             ...result,
-            userPatch:
-              "userCacheEligible" in result && result.userCacheEligible
-                ? getUserEquipmentPatch({
-                    ...user,
-                    ...masterySources,
-                    itemLoadout: id,
-                    items: useritems.filter(
-                      (entry) => entry.equipped !== "NONE" && entry.quantity > 0,
-                    ),
-                  })
-                : undefined,
+            ...getSelectItemLoadoutUserUpdate({
+              result,
+              user,
+              masterySources,
+              id,
+              useritems,
+            }),
           }
         : result;
     }),
@@ -4455,61 +4407,3 @@ async function executeMergeStacksForItem(
     message: `Merged stacks of ${info.name}`,
   };
 }
-
-type EquipmentSnapshot = Omit<MasteryBuffUser, "items"> &
-  Pick<UserData, "energyQueueHead" | "energyQueueTail" | "itemLoadout"> & {
-    items: UserItemWithRelations[];
-  };
-
-/** Derive only the gear fields affected by a confirmed write; balances remain deltas. */
-const getUserEquipmentPatch = (user: EquipmentSnapshot) => {
-  if (hasEnergyQueue(user)) return;
-  return {
-    items: user.items,
-    itemLoadout: user.itemLoadout,
-    maxEnergy: calcMaxEnergy(user),
-    effectiveMasteries: effectiveMasteries(user),
-  };
-};
-
-/** A mismatched initial gear read cannot describe the target claimed by a repair. */
-const getRepairedEquipmentUpdate = (
-  user: EquipmentSnapshot,
-  changes: {
-    before: Pick<
-      UserItem,
-      "id" | "durability" | "quantity" | "equipped" | "level" | "experience"
-    >;
-    durability?: number;
-    quantity?: number;
-  }[],
-  cost = 0,
-) => {
-  if (
-    changes.some(({ before }) => {
-      const original = user.items.find((entry) => entry.id === before.id);
-      return original
-        ? original.durability !== before.durability ||
-            original.quantity !== before.quantity ||
-            original.equipped !== before.equipped ||
-            original.level !== before.level ||
-            original.experience !== before.experience
-        : before.equipped !== "NONE";
-    })
-  )
-    return {};
-  const items = user.items.flatMap((entry) => {
-    const updated = { ...entry };
-    for (const change of changes) {
-      if (change.before.id !== entry.id) continue;
-      if (change.durability !== undefined) updated.durability = change.durability;
-      if (change.quantity !== undefined) updated.quantity = change.quantity;
-    }
-    return updated.quantity > 0 ? [updated] : [];
-  });
-  const userPatch = getUserEquipmentPatch({ ...user, items });
-  return {
-    userPatch,
-    userDelta: userPatch ? { money: cost > 0 ? -cost : 0 } : undefined,
-  };
-};

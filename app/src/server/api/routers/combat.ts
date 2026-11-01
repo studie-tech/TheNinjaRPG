@@ -7,6 +7,11 @@ import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
 import {
+  captureCombatCacheSnapshot,
+  getAutoCombatPreferencePatch,
+  getCombatAdmissionUserUpdate,
+} from "@/deltas/combat";
+import {
   AdjustableBasicActions,
   AutoBattleTypes,
   AutoCombatBattleTypes,
@@ -27,7 +32,6 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAX_PLAYER_LEVEL,
-  ManualStartBattleTypes,
   MasteryNames,
   NonActionItemTypes,
   PoolTypes,
@@ -116,7 +120,6 @@ import type {
   ProcessingBattleUser,
   UserEffect,
 } from "@/libs/combat/types";
-import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
 import {
   alignBattle,
   applyPoolAdjustmentsToBase,
@@ -1561,9 +1564,10 @@ export const combatRouter = createTRPCRouter({
       // PvP handovers belong to this encounter; only PvE toggles update the
       // non-PvP default, after the battle change succeeds.
       const rememberPreference = async (battleType: BattleType) => {
-        if (ManualStartBattleTypes.includes(battleType)) return {};
-        await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
-        return { defaultAutoCombat: input.enabled };
+        const patch = getAutoCombatPreferencePatch(battleType, input.enabled);
+        if ("defaultAutoCombat" in patch)
+          await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
+        return patch;
       };
 
       // Retry loop
@@ -3684,39 +3688,25 @@ export const initiateBattle = async (
     Sentry.captureException(error, { tags: { source: "dungeonBattlePublication" } });
   }
 
-  // Ordinary admission leaves profile pools, trackers and passive sources unchanged.
-  // Training/pet-bank settlement and live immunity timers require canonical recovery.
-  const canProject =
-    !!cacheActor &&
-    !requiresUserRefresh &&
-    allParticipantIds.includes(cacheActor.userId) &&
-    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
-    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
-    !warAggressorIds.includes(cacheActor.userId) &&
-    !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
-    cacheActor.bracketImmunityLiftedUntil <= now;
-  const userPatch: UserCachePatch | undefined = canProject
-    ? {
-        status: "BATTLE",
-        battleId,
-        bracketImmunityPausedAt: null,
-        ...(stealthBreakUserIds.includes(cacheActor.userId)
-          ? { stealthActive: false, stealthActivatedAt: null }
-          : {}),
-      }
-    : undefined;
-  const userDelta: UserDelta | undefined = userPatch
-    ? info.tournamentGame
-      ? {}
-      : { pveFights: 1 }
-    : undefined;
+  const userUpdate = getCombatAdmissionUserUpdate({
+    cacheActor,
+    requiresUserRefresh,
+    allParticipantIds,
+    queuedParticipants,
+    battleType,
+    warAggressorIds,
+    bracketImmunityAggressorIds,
+    now,
+    battleId,
+    stealthBreakUserIds,
+    isTournament: !!info.tournamentGame,
+  });
   return {
     success: true,
     message: "You have attacked",
     battleId,
     requiresUserRefresh,
-    userPatch,
-    userDelta,
+    ...userUpdate,
   };
 };
 

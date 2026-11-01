@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  getCreatedAvatarUserUpdate,
+  getGeneratedAvatarPatch,
+  getSelectedAvatarPatch,
+  getUnchargedAvatarUserUpdate,
+} from "@/deltas/avatar";
 import { COST_GENERATE_AVATAR, ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
@@ -52,8 +58,11 @@ export const avatarRouter = createTRPCRouter({
         true,
       );
       if (!avatarUrl)
-        return { ...errorResponse("Failed to create avatar"), userDelta: {} };
-      const userPatch = { avatar: avatarUrl, avatarLight: thumbnailUrl || null };
+        return {
+          ...errorResponse("Failed to create avatar"),
+          ...getUnchargedAvatarUserUpdate(),
+        };
+      const userPatch = getGeneratedAvatarPatch(avatarUrl, thumbnailUrl);
 
       // Mutate
       const [result] = await Promise.all([
@@ -64,8 +73,7 @@ export const avatarRouter = createTRPCRouter({
         return {
           success: true,
           message: "Avatar created",
-          userPatch,
-          userDelta: { reputationPoints: -COST_GENERATE_AVATAR },
+          ...getCreatedAvatarUserUpdate({ userPatch }),
         };
       } else {
         return errorResponse("Failed to upload avatar");
@@ -119,10 +127,7 @@ export const avatarRouter = createTRPCRouter({
         thumbnailUrl = await createThumbnail(avatar.avatar);
         await updateHistoricalAvatarForUpdateAvatar(ctx.drizzle, thumbnailUrl, input);
       }
-      const data =
-        input.type === "user"
-          ? { avatar: avatar.avatar, avatarLight: thumbnailUrl }
-          : undefined;
+      const data = getSelectedAvatarPatch(input.type, avatar.avatar, thumbnailUrl);
       if (
         data &&
         (user.avatar !== data.avatar || user.avatarLight !== data.avatarLight)

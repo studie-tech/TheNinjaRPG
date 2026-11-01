@@ -7,7 +7,7 @@ import { REGEN_SECONDS } from "@/drizzle/constants";
 import {
   craftingRequirement, item, userCookingJob, userData, userItem, userQueue, userRaidBuff, userVote } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
-import { combatCacheEnergy } from "@/libs/combat/userCache";
+import { combatCacheEnergy } from "@/deltas/combat";
 import { itemRouter } from "@/server/api/routers/item";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";

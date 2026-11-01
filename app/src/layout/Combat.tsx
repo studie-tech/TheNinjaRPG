@@ -5,6 +5,7 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { combatProfilePatch } from "@/deltas/combat";
 import {
   AutoBattleTypes,
   IMG_INITIATIVE_D20,
@@ -45,7 +46,6 @@ import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
-import { combatProfilePatch } from "@/libs/combat/userCache";
 import {
   getTurnControl,
   isPvpEnergyRewardBattle,

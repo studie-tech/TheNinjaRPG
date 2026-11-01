@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getEnterRankedSeasonUserUpdate } from "@/deltas/pvprank";
+import { getRewardUserUpdate } from "@/deltas/quests";
 import {
   RANKED_ENTRY_COST,
   RANKED_LEGEND_LP_REQUIREMENT,
@@ -65,7 +67,6 @@ import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,
 } from "@/server/utils/ranked";
-import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -453,8 +454,7 @@ export const pvpRankRouter = createTRPCRouter({
       return {
         success: true,
         message: "Ranked season entered successfully",
-        userPatch: { rankedLp: 150 },
-        userDelta: { villagePrestige: -RANKED_ENTRY_COST },
+        ...getEnterRankedSeasonUserUpdate(),
       };
     }),
 

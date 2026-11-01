@@ -1,3 +1,4 @@
+import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,7 +24,8 @@ import { getPetAbilityCapacity } from "@/libs/pets/abilities";
 import { getDailyPetOptions, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { prepareUserUpdate as captureUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
+import type { UserPatch } from "@/deltas/profile";
+import { prepareUserUpdate as captureUserUpdate, updateUserCache } from "@/utils/userCache";
 import { petSpeciesFixture } from "../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities";
 import { IncreaseStatTag } from "@/validators/combat";

@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { getCancelUserUpdate, getClaimUserUpdate } from "@/deltas/villageMission";
 
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { collapseRewards } from "@/libs/rewards";
@@ -143,7 +144,7 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: { village: { id: input.villageId, activeMission: null } },
+        ...getCancelUserUpdate({ inputVillageId: input.villageId }),
         message:
           "Village Mission cancelled without penalty. A new mission can be selected immediately.",
       };
@@ -194,8 +195,8 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: { village: { id: input.villageId, activeMission: null } },
-        userDelta: { village: { id: input.villageId, tokens: rewardTokens } },
+        ...getClaimUserUpdate({ inputVillageId: input.villageId, rewardTokens }),
+
         message: `${rewardTokens.toLocaleString()} tokens awarded to the village`,
       };
     }),

@@ -8,7 +8,7 @@ import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { shrineRouter } from "@/server/api/routers/shrine";
-import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
+import { getMembershipUserPatch } from "@/deltas/social";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";

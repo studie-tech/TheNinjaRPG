@@ -1,6 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import {
+  getSavedTrainingQueueUserUpdate,
+  getSelectTrainedElementUserUpdate,
+} from "@/deltas/train";
 import {
   BasicElementName,
   getUserCaps,
@@ -42,7 +47,7 @@ import {
 } from "@/queries/train";
 import { trainingCaptchaMessage } from "@/routers/misc";
 import type { UserWithRelations } from "@/routers/profile";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -98,10 +103,10 @@ export const trainRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Active trained element updated",
-            userPatch: {
-              activeTrainedElement: input.element,
-              updatedAt: result.claimedAt,
-            },
+            ...getSelectTrainedElementUserUpdate({
+              inputElement: input.element,
+              resultClaimedAt: result.claimedAt,
+            }),
           }
         : errorResponse("Your elements changed. Please try again");
     }),
@@ -582,8 +587,11 @@ const withSavedQueue = (
   return {
     success: true,
     message: result.message,
-    ...(!requiresProgressionRefresh
-      ? getUserProgressionUpdate({ ...user, ...result.saved }, publishedAchievementIds)
-      : {}),
+    ...getSavedTrainingQueueUserUpdate({
+      user,
+      saved: result.saved,
+      requiresProgressionRefresh,
+      publishedAchievementIds,
+    }),
   };
 };

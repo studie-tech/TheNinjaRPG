@@ -1,4 +1,8 @@
 import { nanoid } from "nanoid";
+import {
+  getAuctionOfferCreditUserUpdate,
+  getCreateAuctionOfferUserUpdate,
+} from "@/deltas/auctionOffers";
 import { AUCTION_HOUSE_MIN_LEVEL, auctionHouseLevelMessage } from "@/drizzle/constants";
 import type { UserItemWithRelations, userData } from "@/drizzle/schema";
 import { isEquippableUserItem, isImbuing } from "@/libs/item";
@@ -120,7 +124,7 @@ export const auctionOfferProcedures = {
         return {
           success: true,
           message: "Offer posted; your payment is reserved until accepted or cancelled",
-          userDelta: input.offerType === "REQUEST" ? { bank: -input.ryo } : {},
+          ...getCreateAuctionOfferUserUpdate({ input }),
         };
       });
     }),
@@ -203,7 +207,10 @@ export const auctionOfferProcedures = {
         return {
           success: true,
           message: "Offer accepted; items and payment delivered",
-          userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {},
+          ...getAuctionOfferCreditUserUpdate({
+            offerOfferType: offer.offerType,
+            offerRyo: offer.ryo,
+          }),
         };
       });
       if (result.success)
@@ -242,7 +249,10 @@ export const auctionOfferProcedures = {
         return {
           success: true,
           message: "Offer cancelled; reserved payment returned",
-          userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {},
+          ...getAuctionOfferCreditUserUpdate({
+            offerOfferType: offer.offerType,
+            offerRyo: offer.ryo,
+          }),
         };
       });
     }),

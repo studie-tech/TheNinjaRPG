@@ -3,6 +3,11 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import {
+  getCancelWarMissionUserUpdate,
+  getCompleteWarMissionUserUpdate,
+  getInviteMercenaryUserUpdate,
+} from "@/deltas/war";
+import {
   ELDER_MIN_VOTING_COUNT,
   ELDER_WAR_VOTE_HOURS,
   FACTION_RAID_COST,
@@ -259,7 +264,7 @@ export const warRouter = createTRPCRouter({
         return saved.rowsAffected > 0
           ? {
               success: true,
-              userPatch: {},
+              ...getInviteMercenaryUserUpdate(),
               message:
                 "Invitation sent. Tokens are charged only when the player accepts.",
             }
@@ -582,7 +587,7 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "War objective completed",
-            userPatch: { warMission: null },
+            ...getCompleteWarMissionUserUpdate(),
           }
         : errorResponse(
             "The war or mission changed before completion. Refresh to continue.",
@@ -601,7 +606,9 @@ export const warRouter = createTRPCRouter({
       return {
         success: true,
         message: "War mission cancelled",
-        userPatch: cancelled.rowsAffected ? { warMission: null } : undefined,
+        ...getCancelWarMissionUserUpdate({
+          cancelledRowsAffected: cancelled.rowsAffected,
+        }),
       };
     }),
   /** Enter shrine combat with the camp snapshot preloaded for later score settlement. */
