@@ -972,7 +972,8 @@ export const insertActionLogForUpdateUser = (
     id: nanoid(),
     userId: ctx.userId,
     tableName: "user",
-    changes: [],
+    // relatedMsg is clamped to the column width; keep the full reason here.
+    changes: [`Rejected reason: ${input.data.reason}`],
     relatedId: target.userId,
     relatedMsg: clampActionLogText(
       `Updated attempted. Reason rejected by AI: ${input.data.reason}`,
@@ -1054,7 +1055,12 @@ export const insertActionLogForUpdateUser2 = (
     id: nanoid(),
     userId: ctx.userId,
     tableName: "user",
-    changes: diff,
+    // relatedMsg is clamped to the column width; keep the full reason in
+    // changes when it would otherwise be cut off.
+    changes:
+      clampActionLogText(input.data.reason) === input.data.reason
+        ? diff
+        : [...diff, `Reason: ${input.data.reason}`],
     relatedId: target.userId,
     relatedMsg: clampActionLogText(input.data.reason),
     relatedImage: target.avatarLight,

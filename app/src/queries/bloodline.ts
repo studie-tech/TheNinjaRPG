@@ -282,7 +282,8 @@ export const insertActionLogForUpdateReskin = (
     id: nanoid(),
     userId: ctx.userId,
     tableName: "bloodline",
-    changes: [],
+    // relatedMsg is clamped to the column width; keep the full reason here.
+    changes: [`Rejected reason: ${reason}`],
     relatedId: reskin.bloodlineId,
     relatedMsg: clampActionLogText(`Reskin update rejected by AI: ${reason}`),
     relatedImage: reskin.image,
