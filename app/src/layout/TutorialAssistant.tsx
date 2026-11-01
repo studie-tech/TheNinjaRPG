@@ -42,6 +42,9 @@ import {
 import { cn } from "@/libs/shadui";
 import {
   canPositionTutorialHighlight,
+  getStarterQuestCaptureObjectiveId,
+  getStarterQuestCatchUpStepId,
+  isTutorialActive,
   isTutorialCaptureStep,
   isTutorialPageMatch,
   isUsableHighlightRect,
@@ -1099,12 +1102,21 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
   const soleDialogOption =
     dialogOptions?.options.length === 1 ? dialogOptions.options[0] : undefined;
   const soleDialogQuestId = dialogOptions?.questId;
+  // Only the dialog that opens the puppy objective is answered for the player.
+  // A player who already beat the puppy has the quest's closing dialog active
+  // instead; answering that one completed the starter quest behind their back
+  // and left the step pointing at a puppy that no longer exists.
+  const captureObjectiveId = getStarterQuestCaptureObjectiveId(
+    userData?.userQuests?.find((uq) => uq.questId === soleDialogQuestId)?.quest.content
+      .objectives,
+  );
   useEffect(() => {
     // currentStep, not currentTutorialStep: once a quest supplies a dynamic step
     // the latter carries a synthesized `quest-<id>`, so matching on the tutorial
     // step id there succeeds only while that overlay happens to be absent.
     if (!isTutorialCaptureStep(currentStep)) return;
     if (!soleDialogQuestId || !soleDialogOption?.nextObjectiveId) return;
+    if (soleDialogOption.nextObjectiveId !== captureObjectiveId) return;
     const key = `${soleDialogQuestId}:${soleDialogOption.nextObjectiveId}`;
     if (autoAnsweredDialogRef.current === key) return;
     autoAnsweredDialogRef.current = key;
@@ -1112,7 +1124,29 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
       questId: soleDialogQuestId,
       nextObjectiveId: soleDialogOption.nextObjectiveId,
     });
-  }, [currentStep, soleDialogQuestId, soleDialogOption, checkRewards]);
+  }, [
+    currentStep,
+    soleDialogQuestId,
+    soleDialogOption,
+    captureObjectiveId,
+    checkRewards,
+  ]);
+
+  // The puppy mission assumes the puppy is still out there. A player who
+  // already beat it, or already finished the starter quest, reaches these
+  // steps with no marker to approach and nothing that would ever advance them,
+  // so move them on to the step that matches where their quest actually is.
+  const catchUpStepId = isTutorialActive(userData)
+    ? getStarterQuestCatchUpStepId(currentStep, userData)
+    : undefined;
+  const catchUpRef = React.useRef<string>("");
+  useEffect(() => {
+    if (!catchUpStepId || !currentStep?.id) return;
+    const key = `${currentStep.id}:${catchUpStepId}`;
+    if (catchUpRef.current === key) return;
+    catchUpRef.current = key;
+    void handleNextStepAsync(catchUpStepId);
+  }, [catchUpStepId, currentStep?.id, handleNextStepAsync]);
 
   // Get character images for post-tutorial quest (no background)
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
