@@ -254,11 +254,7 @@ const useMercenaryFeedback = () => {
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    if (result.success || result.userPatch)
-      await updateUser(result.userPatch, {
-        revision,
-        ...(result.userDelta ? { delta: result.userDelta } : {}),
-      });
+    if (result.success || result.userPatch) await updateUser(result, { revision });
     setFeedback(result);
     void Promise.all([
       utils.war.getMercenaries.invalidate(),

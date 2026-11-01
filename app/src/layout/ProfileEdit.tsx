@@ -1321,19 +1321,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         !disabledRef.current &&
         updateGenerationRef.current === operationGenerationRef.current
       ) {
-        if (
-          data.userPatch?.avatar !== undefined &&
-          data.userPatch.avatarLight !== undefined
-        )
-          await updateUser(
-            {
-              avatar: data.userPatch.avatar,
-              avatarLight: data.userPatch.avatarLight,
-            },
-            { revision },
-          );
-        else if (props.contentType === "user")
-          await updateUser(undefined, { revision });
+        if (data.userPatch || props.contentType === "user")
+          await updateUser(data, { revision });
         if (
           props.onUpdate &&
           !disabledRef.current &&
@@ -1562,10 +1551,7 @@ const SwapBloodline: React.FC = () => {
       onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         await Promise.all([
-          updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-          }),
+          updateUser(data, { revision }),
           utils.bloodline.getSwapInfo.invalidate(),
         ]);
       },
@@ -1714,10 +1700,9 @@ const ResetStats: React.FC = () => {
       onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-          }).catch(() => undefined);
+          await updateUser(data, { revision, delta: data.userDelta }).catch(
+            () => undefined,
+          );
         }
       },
       onError: (error) => {
@@ -2158,7 +2143,7 @@ const RerollElement: React.FC = () => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data.userPatch, {
+          await updateUser(data, {
             revision,
             delta:
               data.userPatch?.primaryElement !== undefined &&
@@ -2753,7 +2738,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision }),
+            updateUser(data, { revision }),
             utils.item.getUserItems.invalidate(),
           ]);
         }
@@ -2767,7 +2752,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision }),
+            updateUser(data, { revision }),
             utils.jutsu.getUserJutsus.invalidate(),
           ]);
         }
@@ -2805,10 +2790,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, {
-              revision,
-              achievementProgress: data.achievementProgress,
-            }),
+            updateUser(data, { revision }),
             utils.skillTree.getUserSkills.invalidate(),
           ]);
         }
@@ -3037,7 +3019,7 @@ const ResetSkills: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data, { revision, delta: data.userDelta }),
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getResetInfo.invalidate(),
           ]);

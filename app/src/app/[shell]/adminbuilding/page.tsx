@@ -39,11 +39,7 @@ export default function AdministrationBuilding() {
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      await updateUser(data.userPatch, {
-        revision,
-        ...(data.userDelta ? { delta: data.userDelta } : {}),
-        achievementProgress: data.achievementProgress,
-      });
+      await updateUser(data, { revision });
       showMutationToast(data);
       await util.quests.allianceBuilding.invalidate();
     },

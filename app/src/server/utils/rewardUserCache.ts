@@ -9,7 +9,7 @@ import { getRewardUserDelta } from "@/server/api/routers/quests";
 export const getRewardUserUpdate = (input: {
   rewards: GetRewardResult;
   requiresRelations?: boolean;
-  progression?: ReturnType<typeof getUserProgressionUpdate>;
+  progression?: () => ReturnType<typeof getUserProgressionUpdate>;
 }) => {
   const { rewards } = input;
   const delta = getRewardUserDelta(rewards);
@@ -22,7 +22,7 @@ export const getRewardUserUpdate = (input: {
     announcements: undefined,
   };
   if (needsReconciliation) return fallback;
-  const progression = input.progression;
+  const progression = input.progression?.();
   return {
     announcements: undefined,
     userDelta: delta,

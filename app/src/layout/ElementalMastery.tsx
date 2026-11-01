@@ -35,7 +35,7 @@ export const ElementalMastery = () => {
     showMutationToast(result);
     await Promise.all([
       ...(result.success
-        ? [updateUser(result.userPatch, { revision })]
+        ? [updateUser(result, { revision })]
         : [utils.profile.getUser.invalidate()]),
       utils.profile.getPublicUser.invalidate(),
     ]);

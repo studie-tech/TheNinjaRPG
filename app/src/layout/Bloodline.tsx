@@ -57,11 +57,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success) await updateUser(data, { revision });
       },
       onSettled: (_data, error) => {
         setIsOpen(false);
@@ -192,7 +188,7 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data.userPatch, { revision });
+          await updateUser(data, { revision });
         }
       },
     });
@@ -260,7 +256,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
       props.refetch();
       showMutationToast({ ...data, title: "Bloodline Roll" });
       if (data.success) {
-        await updateUser(data.userPatch, { revision });
+        await updateUser(data, { revision });
       }
     },
   });

@@ -275,10 +275,7 @@ export const paypalRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       if (isNativeUserAgent(ctx.userAgent))
         return errorResponse("Use the in-app store to make purchases");
-      const [token, purchaseInputs] = await Promise.all([
-        getPaypalAccessToken(),
-        fetchPurchaseUserCacheInputs(ctx.drizzle, ctx.userId).catch(() => undefined),
-      ]);
+      const token = await getPaypalAccessToken();
       let order = await getPaypalOrder({ orderId: input.orderId, token });
       const snapshotId = readStoreCustomId(order?.purchase_units?.[0]?.custom_id);
       if (!snapshotId) return errorResponse("Checkout not found");
@@ -297,6 +294,18 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(
           "Payment does not match this checkout. No payment was captured.",
         );
+      if (order?.status !== "COMPLETED" && order?.status !== "APPROVED")
+        return errorResponse(
+          "Approve this checkout with PayPal before capturing payment. No payment was captured.",
+        );
+      // Only an undelivered scalar self purchase can use an arithmetic projection.
+      // Gifts leave the actor unchanged; inventory and receipt replays need recovery.
+      const purchaseInputsQuery =
+        !snapshot.grantedAt &&
+        snapshot.recipientId === ctx.userId &&
+        !snapshot.contents.items.length
+          ? fetchPurchaseUserCacheInputs(ctx.drizzle, ctx.userId).catch(() => undefined)
+          : undefined;
       // A completed order can still contain a failed capture: recovery releases the
       // saved attempt, while a new capture POST below must claim a fresh token.
       let captureAttemptId = snapshot.captureAttemptId;
@@ -310,17 +319,11 @@ export const paypalRouter = createTRPCRouter({
             )
           : Promise.resolve();
       if (order?.status !== "COMPLETED") {
-        if (order?.status !== "APPROVED")
-          return errorResponse(
-            "Approve this checkout with PayPal before capturing payment. No payment was captured.",
-          );
         captureAttemptId = nanoid();
-        const allowanceError = await authorizeStoreCapture(
-          ctx.drizzle,
-          snapshotId,
-          ctx.userId,
-          captureAttemptId,
-        );
+        const [allowanceError] = await Promise.all([
+          authorizeStoreCapture(ctx.drizzle, snapshotId, ctx.userId, captureAttemptId),
+          purchaseInputsQuery,
+        ]);
         if (allowanceError) return errorResponse(allowanceError);
         order = await requestStorePaypalOrder(
           token,
@@ -348,6 +351,7 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(
           "Payment is awaiting confirmation. Use Lookup Transaction after it clears.",
         );
+      const purchaseInputs = await purchaseInputsQuery;
       const result = await deliverStoreOrder(ctx.drizzle, {
         snapshotId,
         captureId: capture.id,
@@ -358,20 +362,20 @@ export const paypalRouter = createTRPCRouter({
         raw: order,
       });
       const { delivery, ...response } = result;
+      if (!delivery) return response;
+      if (delivery.recipientId !== ctx.userId)
+        return { ...response, userPatch: {}, userDelta: {} };
       return {
         ...response,
-        ...(delivery &&
-        (delivery.recipientId !== ctx.userId || !delivery.contents.items.length)
+        ...(!delivery.contents.items.length
           ? getKnownPurchaseUserUpdate(
               purchaseInputs,
               {},
-              delivery.recipientId === ctx.userId
-                ? {
-                    money: delivery.contents.money,
-                    reputationPoints: delivery.contents.reputationPoints,
-                    reputationPointsTotal: delivery.contents.reputationPoints,
-                  }
-                : {},
+              {
+                money: delivery.contents.money,
+                reputationPoints: delivery.contents.reputationPoints,
+                reputationPointsTotal: delivery.contents.reputationPoints,
+              },
             )
           : {}),
       };
@@ -462,14 +466,13 @@ export const paypalRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
-      const result = await reconcilePaypalSubscription({
+      return reconcilePaypalSubscription({
         client: ctx.drizzle,
         subscription,
         subscriptionId: input.subscriptionId,
         orderId: input.orderId,
         callerId: ctx.userId,
       });
-      return result;
     }),
   // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure

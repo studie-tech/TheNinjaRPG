@@ -333,7 +333,6 @@ export const overworldAiRouter = createTRPCRouter({
       userDeltaResponseSchema.extend({
         battleId: z.string().optional(),
         grantedQuestId: z.string().optional(),
-        dailyOverworldQuestRollsBefore: z.number().optional(),
         /** The interaction completed a quest whose reward the player now picks. */
         rewardChoicePending: z.boolean().optional(),
         dialog: z
@@ -845,7 +844,9 @@ export const overworldAiRouter = createTRPCRouter({
             (!activeNpcQuestId || clearedStale?.rowsAffected === 1)
               ? { dailyOverworldQuestRolls: 1 }
               : undefined,
-          dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
+          userExpected: {
+            dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+          },
         };
       }
       // Claim the single active-NPC-mission slot atomically before granting. If the slot is
@@ -902,7 +903,9 @@ export const overworldAiRouter = createTRPCRouter({
             !requiresUserRefresh && released.rowsAffected === 1
               ? { dailyOverworldQuestRolls: 1 }
               : undefined,
-          dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
+          userExpected: {
+            dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+          },
         };
       }
       const cacheUpdate =
@@ -923,7 +926,9 @@ export const overworldAiRouter = createTRPCRouter({
                 activeNpcQuestId: chosen.quest.id,
               },
               userDelta: { dailyOverworldQuestRolls: 1 },
-              dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
+              userExpected: {
+                dailyOverworldQuestRolls: activeUser.dailyOverworldQuestRolls,
+              },
             }
           : {}),
       };

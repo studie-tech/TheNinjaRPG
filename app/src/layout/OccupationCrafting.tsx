@@ -55,7 +55,7 @@ export default function OccupationCrafting() {
         await Promise.all([
           utils.occupation.getCraftingQueue.invalidate(),
           utils.item.getUserItems.invalidate(),
-          ...(data.success ? [updateUser(data.userPatch, { revision })] : []),
+          ...(data.success ? [updateUser(data, { revision })] : []),
         ]);
       },
     });
@@ -116,7 +116,7 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUser(data.userPatch, { revision, delta: data.userDelta }),
+          updateUser(data, { revision, delta: data.userDelta }),
         ]);
       }
     },
@@ -129,7 +129,7 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUser(data.userPatch, { revision, delta: data.userDelta }),
+          updateUser(data, { revision, delta: data.userDelta }),
         ]);
       }
     },

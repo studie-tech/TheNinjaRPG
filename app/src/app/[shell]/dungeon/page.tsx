@@ -82,14 +82,9 @@ export default function DungeonPage() {
     // Canonical recovery must include any expiry or interrupted-start effects from the state read.
     const canApplyUserUpdate =
       !refreshed.isError && refreshed.data?.userPatch !== undefined;
-    await updateUser(canApplyUserUpdate ? response.userPatch : undefined, {
+    await updateUser(canApplyUserUpdate ? response : undefined, {
       revision,
-      ...(canApplyUserUpdate && response.userDelta
-        ? { delta: response.userDelta }
-        : {}),
-      expected: response.userExpected,
       expectedAfter: refreshed.data?.userExpected,
-      achievementProgress: response.achievementProgress,
     });
   };
   const create = api.coop.dungeon.create.useMutation({

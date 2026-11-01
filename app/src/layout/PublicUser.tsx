@@ -602,7 +602,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     onSuccess: async (result, _variables, revision) => {
       const response: UserDeltaResponse = result;
       if (response.success || response.userPatch)
-        await updateUser(response.userPatch, { revision });
+        await updateUser(response, { revision });
     },
   });
 
@@ -610,8 +610,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     meta: { handlesTransportError: true },
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
-      if (result.success || result.userPatch)
-        await updateUser(result.userPatch, { revision });
+      if (result.success || result.userPatch) await updateUser(result, { revision });
     },
   });
 

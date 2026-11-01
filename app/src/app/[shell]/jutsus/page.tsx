@@ -368,10 +368,7 @@ export default function MyJutsu() {
             utils.jutsu.getUserJutsus.invalidate(),
             utils.jutsu.getEvolutions.invalidate(),
             utils.jutsu.getLoadouts.invalidate(),
-            updateUser(data.userPatch, {
-              revision,
-              achievementProgress: data.achievementProgress,
-            }),
+            updateUser(data, { revision }),
           ]);
           setIsOpen(false);
           setUserJutsu(undefined);

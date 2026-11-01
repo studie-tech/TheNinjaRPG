@@ -34,7 +34,7 @@ export function DashboardSettings({
         setMessage(result.message);
         return;
       }
-      await updateUser(result.userPatch, { revision });
+      await updateUser(result, { revision });
       setMessage("Dashboard preferences saved.");
     },
     onError: (error) => setMessage(error.message),

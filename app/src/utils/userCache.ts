@@ -7,6 +7,7 @@ import {
   UserRanks,
 } from "@/drizzle/constants";
 import { activeDungeonNotification } from "@/libs/dungeon";
+import { GLOBAL_GAME_BOOSTS } from "@/libs/gameSettingBoost";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
 import { getReducedGainsDays } from "@/libs/train";
@@ -17,7 +18,12 @@ import type {
 } from "@/server/api/routers/profile";
 import { isPlainObject } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
-import type { UserCachePatch, UserDelta, UserExpected } from "@/validators/userCache";
+import type {
+  UserCachePatch,
+  UserDelta,
+  UserDeltaResponse,
+  UserExpected,
+} from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
 type UserCache = {
@@ -30,6 +36,15 @@ type KnownUserPatch = Partial<User> | UserCachePatch;
 export type UserPatch =
   | KnownUserPatch
   | ((current: User) => KnownUserPatch | undefined);
+
+/** Standard mutation responses carry their confirmed profile fields and metadata together. */
+type UserResponse = Pick<
+  UserDeltaResponse,
+  "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
+> & { userPatch?: KnownUserPatch };
+
+/** Local projections and server responses share the same identity and revision checks. */
+export type UserUpdate = UserPatch | UserResponse;
 
 /** Capture a settled profile revision; undefined requires mutation reconciliation. */
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
@@ -58,6 +73,7 @@ export type UserUpdateOptions = {
   expected?: UserExpected;
   /** Server-known scalar state that must match the complete projected user. */
   expectedAfter?: UserExpected;
+  userNotifications?: UserDeltaResponse["userNotifications"];
   notifications?: (
     current: NavBarDropdownLink[] | undefined,
   ) => NavBarDropdownLink[] | undefined;
@@ -71,9 +87,50 @@ export type UserUpdateOptions = {
 export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
-  patch: UserPatch | undefined,
+  update: UserUpdate | undefined,
   mutation?: UserUpdateOptions,
 ) => {
+  let patch: UserPatch | undefined;
+  const response =
+    update &&
+    typeof update !== "function" &&
+    "success" in update &&
+    typeof update.success === "boolean"
+      ? update
+      : undefined;
+  if (response) {
+    patch = response.userPatch;
+    mutation = {
+      ...mutation,
+      revision: mutation?.revision,
+      // An explicitly withheld delta must keep authoritative recovery even with a patch.
+      ...("userDelta" in response ? { delta: response.userDelta } : {}),
+      expected: response.userExpected ?? mutation?.expected,
+      achievementProgress:
+        response.achievementProgress ?? mutation?.achievementProgress,
+      userNotifications: response.userNotifications ?? mutation?.userNotifications,
+    };
+  } else patch = update as UserPatch | undefined;
+
+  const delta =
+    mutation && "delta" in mutation
+      ? mutation.delta
+      : patch === undefined
+        ? undefined
+        : {};
+  // Confirmed no-ops leave in-flight reconciliation and other mutations' revisions intact.
+  if (
+    response &&
+    delta !== undefined &&
+    Object.keys(delta).length === 0 &&
+    !Object.keys(patch ?? {}).length &&
+    mutation?.achievementProgress === undefined &&
+    !mutation?.expected &&
+    !mutation?.expectedAfter &&
+    !mutation?.userNotifications &&
+    !mutation?.notifications
+  )
+    return;
   if (!mutation) {
     if (!patch) return;
     const before = client.getQueryState(key);
@@ -103,8 +160,6 @@ export const updateUserCache = async (
     return;
   }
   const { revision } = mutation;
-  const delta =
-    "delta" in mutation ? mutation.delta : patch === undefined ? undefined : {};
   if (delta === undefined || revision === undefined) {
     // An initial fetch may contain a pre-mutation snapshot. Cancel it first so
     // a snapshot taken before the mutation cannot satisfy this reconciliation.
@@ -156,6 +211,23 @@ export const updateUserCache = async (
       return undefined;
     applied = true;
     const result = mergeUserCache(old, user, mutation.achievementProgress);
+    if (mutation.userNotifications && result.notifications) {
+      const { setting, notice } = mutation.userNotifications.globalBoost;
+      const { href, label } = GLOBAL_GAME_BOOSTS[setting];
+      result.notifications = [
+        ...result.notifications.filter(
+          (entry) =>
+            entry.color !== "toast" &&
+            !(
+              entry.href === href &&
+              entry.group === "Active boosts" &&
+              entry.name.startsWith("Global: ") &&
+              entry.name.includes(`X ${label} | `)
+            ),
+        ),
+        ...(notice ? [notice] : []),
+      ];
+    }
     if (mutation.notifications)
       result.notifications = mutation.notifications(result.notifications);
     return result;
@@ -223,6 +295,37 @@ const mergeUserChanges = <T extends object>(
     )
       continue;
     if (amount === undefined && value === original[field]) continue;
+    // Sparse list changes preserve unrelated entries and reject unknown update targets.
+    if (isCacheObject(amount) && ("remove" in amount || "update" in amount)) {
+      const entries = original[field];
+      if (!Array.isArray(entries) || value !== undefined) return undefined;
+      const changes = amount as {
+        remove?: Record<string, string | number>[];
+        update?: (Record<string, unknown> & { id: string })[];
+      };
+      if (
+        changes.update?.some(
+          (change) => !entries.some((entry) => entry.id === change.id),
+        )
+      )
+        return undefined;
+      updated[field] = entries
+        .filter(
+          (entry) =>
+            !changes.remove?.some((match) =>
+              Object.entries(match).every(
+                ([key, expected]) =>
+                  (entry[key] instanceof Date ? entry[key].getTime() : entry[key]) ===
+                  expected,
+              ),
+            ),
+        )
+        .map((entry) => {
+          const change = changes.update?.find((change) => change.id === entry.id);
+          return change ? { ...entry, ...change } : entry;
+        });
+      continue;
+    }
     // Mission assignments, Kage schedules and complete shrine settings are saved JSON snapshots.
     if (
       amount === undefined &&

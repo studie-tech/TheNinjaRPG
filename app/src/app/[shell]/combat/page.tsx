@@ -79,7 +79,7 @@ export default function CombatPage() {
         if (result.message) showMutationToast(result);
         await Promise.all([
           utils.combat.getBattle.invalidate(),
-          ...(result.success ? [updateUser(result.userPatch, { revision })] : []),
+          ...(result.success ? [updateUser(result, { revision })] : []),
         ]);
       },
       onError: (error) => setAutoCombatError(error.message),

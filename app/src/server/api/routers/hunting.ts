@@ -448,7 +448,7 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse(
           "A contract material is unavailable. Please contact staff.",
         );
-      const result = await initiateBattle(
+      return initiateBattle(
         {
           client: ctx.drizzle,
           cacheUserId: ctx.userId,
@@ -475,7 +475,6 @@ export const huntingRouter = createTRPCRouter({
         "HUNTING",
         0,
       );
-      return result;
     }),
 });
 

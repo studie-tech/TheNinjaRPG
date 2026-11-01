@@ -17,6 +17,7 @@ import type {
   UserWithRelations,
 } from "@/server/api/routers/profile";
 import { baseServerResponse } from "@/validators/base";
+import { changeSettingSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 
@@ -33,6 +34,18 @@ export const userDeltaSchema = z.object({
     .object({
       id: z.string(),
       tokens: z.number().optional(),
+      structures: z
+        .object({
+          update: z.array(
+            z.object({ id: z.string(), longitude: z.number(), latitude: z.number() }),
+          ),
+        })
+        .optional(),
+    })
+    .optional(),
+  userQuests: z
+    .object({
+      remove: z.array(z.object({ id: z.string(), startedAt: z.number() })),
     })
     .optional(),
   offence: z.number().optional(),
@@ -320,12 +333,29 @@ export const userExpectedSchema = userPatchSchema.pick({
   activeDungeonRunId: true,
   dungeonsCompleted: true,
   clanId: true,
+  dailyOverworldQuestRolls: true,
 });
 
 export const userDeltaResponseSchema = baseServerResponse.extend({
   userDelta: userDeltaSchema.optional(),
   userPatch: userPatchSchema.optional(),
   userExpected: userExpectedSchema.optional(),
+  /** Navigation changes use the same revision guard as the confirmed profile fields. */
+  userNotifications: z
+    .object({
+      globalBoost: z.object({
+        setting: changeSettingSchema.shape.setting,
+        notice: z
+          .object({
+            href: z.string(),
+            name: z.string(),
+            color: z.literal("green"),
+            group: z.literal("Active boosts"),
+          })
+          .nullable(),
+      }),
+    })
+    .optional(),
   url: z.string().nullish(),
   imageId: z.string().nullish(),
   videoId: z.string().nullish(),

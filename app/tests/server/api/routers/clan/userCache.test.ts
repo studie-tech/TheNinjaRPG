@@ -12,6 +12,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { countUserReads } from "../../../../setup/userReads";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "clan-membership-actor";
@@ -95,6 +96,55 @@ describeWithDatabase("clan village membership progression", () => {
     expect(result.userPatch?.questData).toBeUndefined();
     expect(result.userPatch?.userQuests).toBeUndefined();
     expect(result.achievementProgress).toBeUndefined();
+  });
+
+  it.each([false, true])("returns saved leadership fields when demoting a member (self=%s)", async (isSelf) => {
+    const db = await getTestDatabase();
+    const memberId = isSelf ? userId : "demoted-member";
+    if (!isSelf) await insertUsers([{ userId: memberId, username: "DemotedMember", rank: "JONIN", villageId: strongholdId, clanId, isOutlaw: true }]);
+    await db.update(clan).set({ coLeader1: memberId, coLeader2: "other-coleader", assassin1: memberId, assassin2: "other-assassin", elderNomineeId: memberId }).where(eq(clan.id, clanId));
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(clanRouter, userId, counted.client).demoteMember({ clanId, memberId });
+    expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(isSelf ? 1 : 2);
+    expect(result.userPatch).toEqual({ clan: { id: clanId, coLeader1: null, coLeader2: "other-coleader", coLeader3: null, assassin1: null } });
+    const saved = await db.query.clan.findFirst({ where: eq(clan.id, clanId) });
+    expect(saved).toMatchObject({ ...result.userPatch?.clan, leaderId: "leader", assassin2: "other-assassin", elderNomineeId: memberId, bank: HIDEOUT_COST });
+  });
+
+  it("rejects self-promotion using the actor's single opening read", async () => {
+    const db = await getTestDatabase();
+    const counted = countUserReads(db);
+    expect(await callerForDatabase(clanRouter, userId, counted.client).promoteMember({ clanId, memberId: userId })).toMatchObject({ success: false, message: "Not yourself" });
+    expect(counted.getReads()).toBe(1);
+    expect(await db.query.clan.findFirst({ where: eq(clan.id, clanId) })).toMatchObject({ leaderId: "leader", coLeader1: null });
+  });
+
+  it("reuses rich actor sources when a staff member removes their own clan membership", async () => {
+    const db = await getTestDatabase();
+    await db.update(village).set({ type: "VILLAGE" }).where(eq(village.id, strongholdId));
+    await db.update(userData).set({ isOutlaw: false }).where(eq(userData.userId, userId));
+    await db.update(clan).set({ coLeader1: userId, elderNomineeId: userId }).where(eq(clan.id, clanId));
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(clanRouter, userId, counted.client).kickMember({ clanId, memberId: userId });
+    expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(1);
+    expect(result.userPatch).toMatchObject({ clanId: null, clan: null });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ clanId: null, villageId: strongholdId });
+    expect(await db.query.clan.findFirst({ where: eq(clan.id, clanId) })).toMatchObject({ leaderId: "leader", coLeader1: null, elderNomineeId: null });
+  });
+
+  it("returns the saved successor and nominee fields after removing another leader", async () => {
+    const db = await getTestDatabase();
+    await db.update(village).set({ type: "VILLAGE" }).where(eq(village.id, strongholdId));
+    await db.update(clan).set({ coLeader1: userId, coLeader2: "other-coleader", elderNomineeId: "leader", assassin1: "leader" }).where(eq(clan.id, clanId));
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(clanRouter, userId, counted.client).kickMember({ clanId, memberId: "leader" });
+    expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(2);
+    expect(result.userPatch).toEqual({ clan: { id: clanId, leaderId: userId, coLeader1: null, coLeader2: "other-coleader", coLeader3: null, elderNomineeId: null } });
+    expect(await db.query.clan.findFirst({ where: eq(clan.id, clanId) })).toMatchObject({ ...result.userPatch?.clan, assassin1: "leader", bank: HIDEOUT_COST });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "leader") })).toMatchObject({ clanId: null });
   });
 
 

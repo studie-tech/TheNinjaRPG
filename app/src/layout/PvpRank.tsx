@@ -85,7 +85,7 @@ export const RankedArenaMain: React.FC = () => {
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          void updateUser(data.userPatch, { revision, delta: data.userDelta });
+          void updateUser(data, { revision, delta: data.userDelta });
         }
       },
     });

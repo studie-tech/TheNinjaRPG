@@ -317,7 +317,7 @@ const usePetTaskFeedback = () => {
     handlers: {
       onMutate: prepareUserUpdate,
       onSuccess: async (
-        data: UserDeltaResponse & { closedAttempt?: { id: string; startedAt: number } },
+        data: UserDeltaResponse,
         _variables: unknown,
         revision: number | undefined,
       ) => {
@@ -329,28 +329,7 @@ const usePetTaskFeedback = () => {
         await Promise.all([
           refresh(),
           data.success
-            ? updateUser(
-                data.userPatch
-                  ? (current) => ({
-                      ...data.userPatch,
-                      ...(data.closedAttempt
-                        ? {
-                            userQuests: current.userQuests.filter(
-                              (entry) =>
-                                entry.id !== data.closedAttempt?.id ||
-                                entry.startedAt?.getTime() !==
-                                  data.closedAttempt.startedAt,
-                            ),
-                          }
-                        : {}),
-                    })
-                  : undefined,
-                {
-                  revision,
-                  ...(data.userDelta ? { delta: data.userDelta } : {}),
-                  achievementProgress: data.achievementProgress,
-                },
-              )
+            ? updateUser(data, { revision })
             : utils.profile.getUser.invalidate(),
         ]);
       },

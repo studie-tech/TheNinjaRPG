@@ -202,7 +202,7 @@ export function NewOfferDialog({
         await Promise.all([
           utils.auction.getAuctionOffers.invalidate(),
           utils.item.getUserItems.invalidate(),
-          updateUser(result.userPatch, { revision, delta: result.userDelta }),
+          updateUser(result, { revision, delta: result.userDelta }),
         ]);
       } else setError(result.message);
     },
@@ -438,7 +438,7 @@ function OfferCard({
         setError("");
         await Promise.all([
           refresh(),
-          updateUser(result.userPatch, { revision, delta: result.userDelta }),
+          updateUser(result, { revision, delta: result.userDelta }),
         ]);
       } else setError(result.message);
     },
@@ -452,7 +452,7 @@ function OfferCard({
         setError("");
         await Promise.all([
           refresh(),
-          updateUser(result.userPatch, { revision, delta: result.userDelta }),
+          updateUser(result, { revision, delta: result.userDelta }),
         ]);
       } else setError(result.message);
     },

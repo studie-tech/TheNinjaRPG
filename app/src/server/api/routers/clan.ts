@@ -773,11 +773,14 @@ export const clanRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan, member] = await Promise.all([
+      const [user, fetchedClan, otherMember] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
-        fetchUser(ctx.drizzle, input.memberId),
+        input.memberId !== ctx.userId
+          ? fetchUser(ctx.drizzle, input.memberId)
+          : undefined,
       ]);
+      const member = input.memberId === ctx.userId ? user : otherMember;
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       // Derived
@@ -884,11 +887,14 @@ export const clanRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, clanData, member] = await Promise.all([
+      const [user, clanData, otherMember] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
-        fetchUser(ctx.drizzle, input.memberId),
+        input.memberId !== ctx.userId
+          ? fetchUser(ctx.drizzle, input.memberId)
+          : undefined,
       ]);
+      const member = input.memberId === ctx.userId ? user : otherMember;
       // Derived
       const isLeader = user.userId === clanData?.leaderId;
       const isColeader = checkCoLeader(user.userId, clanData);
@@ -912,14 +918,14 @@ export const clanRouter = createTRPCRouter({
       const assasinField = CLAN_ASSASSIN_SLOTS.find(
         (k) => clanData[k] === member.userId,
       );
+      const updateData = {
+        coLeader1: clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
+        coLeader2: clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
+        coLeader3: clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
+        ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
+      };
       // Mutate
-      await updateClanForDemoteMember(
-        ctx.drizzle,
-        clanData,
-        member,
-        isMemberAssassin,
-        assasinField,
-      );
+      await updateClanForDemoteMember(ctx.drizzle, updateData, clanData);
       // Create
       return {
         success: true,
@@ -929,13 +935,7 @@ export const clanRouter = createTRPCRouter({
             ? {
                 clan: {
                   id: clanData.id,
-                  coLeader1:
-                    clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
-                  coLeader2:
-                    clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
-                  coLeader3:
-                    clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
-                  ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
+                  ...updateData,
                 },
               }
             : {},
@@ -947,14 +947,17 @@ export const clanRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan, member, settings] = await Promise.all([
+      const [user, fetchedClan, otherMember, settings] = await Promise.all([
         input.memberId === ctx.userId
           ? findMembershipUserCache(ctx.drizzle, ctx.userId)
           : fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
-        fetchUser(ctx.drizzle, input.memberId),
+        input.memberId !== ctx.userId
+          ? fetchUser(ctx.drizzle, input.memberId)
+          : undefined,
         input.memberId === ctx.userId ? fetchAllGameSettings(ctx.drizzle) : undefined,
       ]);
+      const member = input.memberId === ctx.userId ? user : otherMember;
       if (!user) return errorResponse("User not found");
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
@@ -1822,7 +1825,9 @@ const undoClanBattleJoin = async (
  *
  * @param client - The DrizzleClient instance used for database operations.
  * @param clanData - The clan from which the user will be removed.
- * @param userId - The ID of the user to be removed from the clan.
+ * @param user - The user to be removed from the clan.
+ * @param reasons - The departure reasons recorded in the action log.
+ * @returns The surviving clan's saved succession fields, or undefined if it was deleted.
  */
 export const removeFromClan = async (
   client: DrizzleClient,
@@ -1843,6 +1848,19 @@ export const removeFromClan = async (
     })
     .find((m) => m.userId !== userId);
   const coLeadersToRemove = isLeader ? [userId, otherUser?.userId ?? null] : [userId];
+  const updateData = {
+    leaderId: isLeader && otherUser ? otherUser.userId : clanData.leaderId,
+    coLeader1: coLeadersToRemove.includes(clanData.coLeader1)
+      ? null
+      : clanData.coLeader1,
+    coLeader2: coLeadersToRemove.includes(clanData.coLeader2)
+      ? null
+      : clanData.coLeader2,
+    coLeader3: coLeadersToRemove.includes(clanData.coLeader3)
+      ? null
+      : clanData.coLeader3,
+    elderNomineeId: clanData.elderNomineeId === userId ? null : clanData.elderNomineeId,
+  };
   // Mutate
   await Promise.all([
     updateUserDataForRemoveFromClan(client, userId),
@@ -1868,14 +1886,7 @@ export const removeFromClan = async (
           deleteQueueById(client, clanData.id),
         ]
       : [
-          updateClanForRemoveFromClan(
-            client,
-            isLeader,
-            otherUser,
-            clanData,
-            coLeadersToRemove,
-            userId,
-          ),
+          updateClanForRemoveFromClan(client, updateData, clanData),
           updateVillageForRemoveFromClan(client, isLeader, otherUser, clanData, user),
         ]),
   ]);
@@ -1884,18 +1895,7 @@ export const removeFromClan = async (
     ? {
         clan: {
           id: clanData.id,
-          leaderId: isLeader ? otherUser.userId : clanData.leaderId,
-          coLeader1: coLeadersToRemove.includes(clanData.coLeader1)
-            ? null
-            : clanData.coLeader1,
-          coLeader2: coLeadersToRemove.includes(clanData.coLeader2)
-            ? null
-            : clanData.coLeader2,
-          coLeader3: coLeadersToRemove.includes(clanData.coLeader3)
-            ? null
-            : clanData.coLeader3,
-          elderNomineeId:
-            clanData.elderNomineeId === userId ? null : clanData.elderNomineeId,
+          ...updateData,
         },
       }
     : undefined;

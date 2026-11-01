@@ -40,12 +40,7 @@ export const JutsuLoadoutSharing = () => {
   const replace = api.jutsu.importJutsuLoadout.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: (result, _variables, revision) =>
-      result.success
-        ? updateUser(result.userPatch, {
-            revision,
-            achievementProgress: result.achievementProgress,
-          })
-        : undefined,
+      result.success ? updateUser(result, { revision }) : undefined,
   });
 
   return (

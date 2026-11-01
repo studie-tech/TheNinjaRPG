@@ -179,11 +179,7 @@ export const territoryWarRouter = createTRPCRouter({
             }),
           ),
         );
-        return {
-          ...result,
-          userPatch: result.userPatch,
-          userDelta: result.userDelta,
-        };
+        return result;
       } finally {
         // Failed launches restore the lobby; a real battle keeps its membership until settlement.
         await retryOnDeadlock(() =>

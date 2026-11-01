@@ -58,11 +58,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     api.shrine.challengeShrine.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           await utils.shrine.getShrineBattles.invalidate();
@@ -74,11 +70,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     api.shrine.joinShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           await utils.shrine.getShrineBattles.invalidate();
@@ -90,10 +82,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     api.shrine.leaveShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+        await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           await utils.shrine.getShrineBattles.invalidate();
@@ -105,11 +94,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     api.shrine.initiateShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           await utils.shrine.getShrineBattles.invalidate();

@@ -172,7 +172,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
     try {
       const revision = options.onMutate();
       const result = await callerForDatabase(overworldAiRouter, "npc-cache-actor", db).interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
-      expect(result).toMatchObject({ success: true, userDelta: { dailyOverworldQuestRolls: 1 }, dailyOverworldQuestRollsBefore: resetDay ? 0 : 1 });
+      expect(result).toMatchObject({ success: true, userDelta: { dailyOverworldQuestRolls: 1 }, userExpected: { dailyOverworldQuestRolls: resetDay ? 0 : 1 } });
       await options.onSuccess(result, undefined, revision);
       const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") });
       expect(saved?.dailyOverworldQuestRolls).toBe(resetDay ? 1 : 2);

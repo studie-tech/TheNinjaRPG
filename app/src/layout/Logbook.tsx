@@ -609,10 +609,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       setAbandonDialogIdentity(null);
       await Promise.allSettled([
         utils.quests.allianceBuilding.invalidate(),
-        updateUser(data.userPatch, {
-          revision: request.revision,
-          achievementProgress: data.achievementProgress,
-        }),
+        updateUser(data, { revision: request.revision }),
       ]);
     } catch (error) {
       // This caller owns transport recovery feedback; other tRPC failures use the global handler.
@@ -892,10 +889,9 @@ export const useCheckRewards = () => {
           showMutationToast({ success: data.success, message: data.message });
         }
         // Apply claimed progress before releasing the loader or opening the reward picker.
-        await updateUser(data.userPatch, {
+        await updateUser(data, {
           revision: context?.userRevision,
           delta: data.userDelta,
-          achievementProgress: data.achievementProgress,
         });
         // A finished "choose" quest (or one blocked by an earlier unpicked offer) opens the picker
         if (data.rewardChoicePending) {

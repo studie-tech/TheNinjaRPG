@@ -25,7 +25,6 @@ import {
   updateVillageStructureForMoveStructure,
 } from "@/queries/worldMap";
 import {
-  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -43,10 +42,10 @@ import {
   getSectorNeighborIds,
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
-
 import { canChangeContent } from "@/utils/permissions";
 // Reuse the centralized sector-id bounds instead of redefining them here
 import { sectorIdSchema as sectorSchema } from "@/validators/travel";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const sectorMapStatusSchema = z.enum(SectorMapStatuses);
 
@@ -440,18 +439,7 @@ export const worldMapRouter = createTRPCRouter({
         latitude: z.number().int().min(0),
       }),
     )
-    .output(
-      baseServerResponse.extend({
-        structure: z
-          .object({
-            id: z.string(),
-            villageId: z.string(),
-            longitude: z.number(),
-            latitude: z.number(),
-          })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query + guard (parallel: the user fetch and the structure lookup keyed
       // on input.structureId — no dependency between them)
@@ -516,12 +504,24 @@ export const worldMapRouter = createTRPCRouter({
       return {
         success: true,
         message: `${structure.name} moved to ${to}`,
-        structure: {
-          id: structure.id,
-          villageId: structure.villageId,
-          longitude: input.longitude,
-          latitude: input.latitude,
-        },
+        userPatch: {},
+        userDelta:
+          user.villageId === structure.villageId
+            ? {
+                village: {
+                  id: structure.villageId,
+                  structures: {
+                    update: [
+                      {
+                        id: structure.id,
+                        longitude: input.longitude,
+                        latitude: input.latitude,
+                      },
+                    ],
+                  },
+                },
+              }
+            : {},
       };
     }),
 });

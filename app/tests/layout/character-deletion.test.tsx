@@ -128,7 +128,7 @@ it("applies the confirmed deletion timer with its captured profile revision", as
   const deletionAt = new Date(Date.now() + 60_000);
   await act(async () => timerCallbacks.onSuccess({ success: true, message: "Started", affectedUserId: userId,
     userPatch: { deletionAt }, userDelta: {} }, undefined, revision));
-  expect(updateUser).toHaveBeenCalledWith({ deletionAt }, { revision: 7, delta: {} });
+  expect(updateUser).toHaveBeenCalledWith({ success: true, message: "Started", affectedUserId: userId, userPatch: { deletionAt }, userDelta: {} }, { revision: 7, delta: {} });
   expect(invalidate).toHaveBeenCalledTimes(1);
   expect(view.queryByRole("dialog")).toBeNull();
 });

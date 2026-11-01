@@ -276,14 +276,9 @@ export const warRouter = createTRPCRouter({
   acceptMercenary: protectedProcedure
     .input(z.object({ contractId: z.string() }))
     .output(userDeltaResponseSchema)
-    .mutation(async ({ ctx, input }) => {
-      const result = await acceptWarMercenary(
-        ctx.drizzle,
-        input.contractId,
-        ctx.userId,
-      );
-      return result;
-    }),
+    .mutation(({ ctx, input }) =>
+      acceptWarMercenary(ctx.drizzle, input.contractId, ctx.userId),
+    ),
   /**
    * Let the player or employing Kage close a contract without refunding payment.
    * Clear an unfinished mission only when it matches an accepted contract's war and

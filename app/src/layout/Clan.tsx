@@ -446,11 +446,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: join } = api.clan.joinClanBattle.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -487,11 +483,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: leave } = api.clan.leaveClanBattle.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -528,11 +520,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: kick } = api.clan.kickFromClanBattle.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -614,11 +602,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     api.clan.initiateClanBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {
           await utils.clan.getClanBattles.invalidate();
@@ -1270,11 +1254,9 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success)
-          await updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-            expected: data.userExpected,
-          }).catch(() => undefined);
+          await updateUser(data, { revision, delta: data.userDelta }).catch(
+            () => undefined,
+          );
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1286,12 +1268,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1328,11 +1305,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     api.clan.demoteMember.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
       },
       onError: (error) => {
@@ -1382,11 +1355,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success)
-          void updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-          });
+        if (data.success) void updateUser(data, { revision, delta: data.userDelta });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1429,11 +1398,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   } = api.clan.upgradeHideoutToStronghold.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -1481,10 +1446,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-          }),
+          updateUser(data, { revision, delta: data.userDelta }),
           utils.clan.get.invalidate(),
         ]);
         toBankForm.reset();
@@ -1498,12 +1460,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        if (data.success || data.userPatch) await updateUser(data, { revision });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -2618,12 +2575,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
 
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          achievementProgress: data.achievementProgress,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
     },
   });
   const { mutateAsync: promote } = api.clan.promoteMember.useMutation({
@@ -2633,11 +2585,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     },
 
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
     },
   });
   const { mutateAsync: demote } = api.clan.demoteMember.useMutation({
@@ -2647,11 +2595,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     },
 
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
     },
   });
 
@@ -3485,11 +3429,7 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   const { mutateAsync: convert, isPending } = api.clan.convertPointsToRyo.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
     },
   });
   const isValid = Number.isSafeInteger(amount) && amount > 0 && amount <= points;

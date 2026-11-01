@@ -193,10 +193,7 @@ const PityBloodlineRoll: React.FC<{
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-          }),
+          updateUser(data, { revision }),
           utils.bloodline.getItemRolls.invalidate(),
         ]);
       }

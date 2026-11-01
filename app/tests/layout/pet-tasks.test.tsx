@@ -10,6 +10,7 @@ import { PetTaskDispatch, PetTasks } from "@/layout/PetTasks";
 import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { updateUserCache } from "@/utils/userCache";
 import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
@@ -131,15 +132,20 @@ it("dispatches from the existing profession card using a ready eligible companio
 it("merges a cancelled receipt without deleting a restarted cached attempt", async () => {
   task = { ...task, task: receipt };
   cancel.mockReturnValue({ success: true, message: "Returned", userPatch: { petTask: null },
-    closedAttempt: { id: receipt.questHistoryId, startedAt: receipt.startedAt } });
+    userDelta: { userQuests: { remove: [{ id: receipt.questHistoryId, startedAt: receipt.startedAt }] } } });
+  const key = ["profile", "pet-cancellation"];
+  const successor = { id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt + 1) };
+  const unrelated = { id: "virtual-quest", startedAt: new Date(0) };
+  queryClient.setQueryData(key, { userData: { ...owner, userQuests: [
+    { id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt) }, successor, unrelated,
+  ] } });
+  updateUser.mockImplementation((response, options) => updateUserCache(queryClient, key, response, options));
   const view = mount();
   await view.findAllByRole("button", { name: "Return without rewards" });
   fireEvent.click(view.getAllByRole("button", { name: "Return without rewards" }).find((button) => button.tagName === "BUTTON")!);
   const dialog = await view.findByRole("dialog");
   fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
   await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
-  const [patch, options] = updateUser.mock.calls[0]!;
-  const successor = { id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt + 1) };
-  expect(patch({ userQuests: [{ id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt) }, successor] })).toEqual({ petTask: null, userQuests: [successor] });
-  expect(options.revision).toBe(1);
+  expect(queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(key)?.userData).toMatchObject({ petTask: null, userQuests: [successor, unrelated] });
+  expect(updateUser.mock.calls[0]![1].revision).toBe(1);
 });

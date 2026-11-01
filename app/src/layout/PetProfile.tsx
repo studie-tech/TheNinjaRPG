@@ -217,14 +217,7 @@ export function PetProfile() {
     await Promise.all([
       invalidatePetData(),
       result.success
-        ? result.userPatch &&
-          Object.keys(result.userPatch).length === 0 &&
-          !result.userDelta
-          ? undefined
-          : updateUser(result.userPatch, {
-              revision,
-              delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
-            })
+        ? updateUser(result, { revision })
         : utils.profile.getUser.invalidate(),
     ]);
   };
@@ -278,7 +271,7 @@ export function PetProfile() {
       showMutationToast(result);
       if (result.success) {
         await Promise.all([
-          updateUser(result.userPatch, { revision }),
+          updateUser(result, { revision }),
           utils.pets.getPet.invalidate(),
           utils.pets.getCollection.invalidate(),
         ]);

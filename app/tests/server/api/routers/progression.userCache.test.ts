@@ -104,19 +104,40 @@ describeWithDatabase("confirmed progression cache responses", () => {
     const db = await getTestDatabase();
     const result = await callerForDatabase(miscRouter, userId, db).setEventGameSetting({ setting: "regenGainMultiplier", multiplier: "2", days: 1 });
     expect(result).toMatchObject({ success: true, userPatch: { regeneration: 40, regenerationWithoutTimedBuffs: 40 },
-      boostNavigation: { href: "/profile", label: "regen", notice: { color: "green", group: "Active boosts" } } });
-    expect(result.boostNavigation?.notice?.name).toContain("2X regen");
+      userNotifications: { globalBoost: { setting: "regenGainMultiplier", notice: { href: "/profile", color: "green", group: "Active boosts" } } } });
+    expect(result.userNotifications?.globalBoost?.notice?.name).toContain("2X regen");
     const disabled = await callerForDatabase(miscRouter, userId, db).setEventGameSetting({ setting: "regenGainMultiplier", multiplier: "2", days: 0 });
-    expect(disabled).toMatchObject({ success: true, userPatch: { regeneration: 20 }, boostNavigation: { notice: null } });
+    expect(disabled).toMatchObject({ success: true, userPatch: { regeneration: 20 }, userNotifications: { globalBoost: { setting: "regenGainMultiplier", notice: null } } });
+  });
+
+  it.each([
+    ["trainingGainMultiplier", "/traininggrounds", "gains"],
+    ["battleExpMultiplier", "/battlearena", "battle exp"],
+    ["missionExpMultiplier", "/missionhall", "mission exp"],
+    ["jutsuExpMultiplier", "/jutsus", "jutsu exp"],
+    ["itemExpMultiplier", "/items", "item exp"],
+  ] as const)("updates %s without reading regeneration settings", async (setting, href, label) => {
+    const db = await getTestDatabase();
+    const counted = countUserReads(db);
+    const { result, statements } = await recordQueries(() => callerForDatabase(miscRouter, userId, counted.client).setEventGameSetting({ setting, multiplier: "2", days: 1 }));
+    expect(result).toMatchObject({ success: true, userPatch: {}, userNotifications: { globalBoost: { setting, notice: { href, color: "green", group: "Active boosts" } } } });
+    expect(result.userNotifications?.globalBoost?.notice?.name).toContain(`2X ${label}`);
+    expect(counted.getReads()).toBe(1);
+    const settingsReads = statements.filter((statement) => /^select\b/i.test(statement) && /\bfrom `GameSetting`/i.test(statement));
+    expect(settingsReads).toHaveLength(1);
+    expect(settingsReads[0]).toMatch(/\bwhere\b/i);
+    expect(await db.query.gameSetting.findFirst({ where: eq(gameSetting.name, setting) })).toMatchObject({ value: 2 });
   });
 
   it("publishes announcements without delivering the actor receipt inside the mutation", async () => {
     const db = await getTestDatabase();
     await insertUsers([{ userId: "other-reader", username: "OtherReader" }]);
-    const { result, statements } = await recordQueries(() => callerForDatabase(miscRouter, userId, db).submitNotification({ content: "A committed announcement", senderId: userId }));
+    const counted = countUserReads(db);
+    const { result, statements } = await recordQueries(() => callerForDatabase(miscRouter, userId, counted.client).submitNotification({ content: "A committed announcement", senderId: userId }));
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
     expect(result.announcements).toBeUndefined();
+    expect(counted.getReads()).toBe(1);
     const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
     expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
     expect(await db.query.notification.findMany()).toHaveLength(1);
@@ -125,5 +146,15 @@ describeWithDatabase("confirmed progression cache responses", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ unreadNotifications: 0 });
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "other-reader") }))?.unreadNotifications).toBe(1);
     expect((await callerForDatabase(profileRouter, userId, db).getUser()).notifications.some((entry) => entry.name === "A committed announcement")).toBe(false);
+  });
+
+  it("reads and validates a distinct announcement sender before publishing", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "announcement-ai", username: "AnnouncementAi", isAi: true }]);
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(miscRouter, userId, counted.client).submitNotification({ content: "A message from an AI", senderId: "announcement-ai" });
+    expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(2);
+    expect(await db.query.notification.findFirst()).toMatchObject({ userId: "announcement-ai", content: "A message from an AI" });
   });
 });

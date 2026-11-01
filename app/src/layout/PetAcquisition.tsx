@@ -128,14 +128,7 @@ export function PetAcquisition() {
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
       result.success
-        ? result.userPatch &&
-          Object.keys(result.userPatch).length === 0 &&
-          !result.userDelta
-          ? undefined
-          : updateUser(result.userPatch, {
-              revision,
-              delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
-            })
+        ? updateUser(result, { revision })
         : utils.profile.getUser.invalidate(),
     ]);
   };

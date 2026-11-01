@@ -130,7 +130,7 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
         closeDialog();
         sendGTMEvent({ event: "toggle_deletion", character: userData.userId });
         await Promise.all([
-          updateUser(data.userPatch, { revision, delta: data.userDelta }),
+          updateUser(data, { revision, delta: data.userDelta }),
           utils.profile.getPublicUser.invalidate(),
         ]);
       },

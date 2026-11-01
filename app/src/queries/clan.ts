@@ -40,6 +40,7 @@ import {
   actionLog,
   battle,
   battleAction,
+  type Clan,
   clan,
   conversation,
   mpvpBattleQueue,
@@ -608,28 +609,13 @@ export const setClanVillageKage = (
   villageId: string,
 ) => client.update(village).set({ kageId: userId }).where(eq(village.id, villageId));
 
-/** Build the `clan` update for `demoteMember`, using predicates on `id`. */
+/** Persist the demotion fields shared with the caller's clan cache projection. */
 export const updateClanForDemoteMember = (
   client: Pick<DrizzleClient, "update">,
-  clanData: {
-    coLeader1: null | string;
-    coLeader2: null | string;
-    coLeader3: null | string;
-    id: string;
-  },
-  member: { userId: string },
-  isMemberAssassin: false | true,
-  assasinField: CLAN_ASSASSIN_SLOT | undefined,
-) =>
-  client
-    .update(clan)
-    .set({
-      coLeader1: clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
-      coLeader2: clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
-      coLeader3: clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
-      ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
-    })
-    .where(eq(clan.id, clanData.id));
+  updateData: Pick<Clan, "coLeader1" | "coLeader2" | "coLeader3"> &
+    Partial<Pick<Clan, CLAN_ASSASSIN_SLOT>>,
+  clanData: { id: string },
+) => client.update(clan).set(updateData).where(eq(clan.id, clanData.id));
 
 /** Build the `clan` update for `kickMember`, setting `leaderId`, using predicates on `id`. */
 export const updateClanForKickMember = (
@@ -1173,49 +1159,15 @@ export const updateUserDataForRemoveFromClan2 = (
     // covers; two overlapping updates on UserData deadlock InnoDB.
     .where(and(eq(userData.clanId, clanData.id), ne(userData.userId, userId)));
 
-/** Build the `clan` update for `removeFromClan`, using predicates on `id`. */
+/** Persist the succession fields shared with the caller's clan cache projection. */
 export const updateClanForRemoveFromClan = (
   client: Pick<DrizzleClient, "update">,
-  isLeader: false | true,
-  otherUser: Pick<
-    import("@/drizzle/schema").UserData,
-    | "userId"
-    | "anbuId"
-    | "username"
-    | "rank"
-    | "isOutlaw"
-    | "level"
-    | "avatar"
-    | "pvpExperience"
+  updateData: Pick<
+    Clan,
+    "leaderId" | "coLeader1" | "coLeader2" | "coLeader3" | "elderNomineeId"
   >,
-  clanData: {
-    leaderId: string;
-    coLeader1: null | string;
-    coLeader2: null | string;
-    coLeader3: null | string;
-    elderNomineeId: null | string;
-    id: string;
-  },
-  coLeadersToRemove: (null | string)[],
-  userId: string,
-) =>
-  client
-    .update(clan)
-    .set({
-      leaderId: isLeader && otherUser ? otherUser.userId : clanData.leaderId,
-      coLeader1: coLeadersToRemove.includes(clanData.coLeader1)
-        ? null
-        : clanData.coLeader1,
-      coLeader2: coLeadersToRemove.includes(clanData.coLeader2)
-        ? null
-        : clanData.coLeader2,
-      coLeader3: coLeadersToRemove.includes(clanData.coLeader3)
-        ? null
-        : clanData.coLeader3,
-      elderNomineeId:
-        clanData.elderNomineeId === userId ? null : clanData.elderNomineeId,
-    })
-    .where(eq(clan.id, clanData.id));
+  clanData: { id: string },
+) => client.update(clan).set(updateData).where(eq(clan.id, clanData.id));
 
 /** Build the `village` update for `removeFromClan`, setting `kageId`, using predicates on `id` and `type`. */
 export const updateVillageForRemoveFromClan = (

@@ -8,13 +8,16 @@ import { callerForDatabase } from "../../../../setup/testDatabase";
 let deletionAt: Date | null;
 let role: UserRole;
 const writeTimer = vi.fn();
+const readUser = vi.fn();
 
 beforeEach(() => {
   deletionAt = null;
   role = "USER";
   writeTimer.mockReset();
   writeTimer.mockResolvedValue({ rowsAffected: 1 });
-  stubProfile("fetchUser", async (_client: unknown, userId: string) => ({ userId, role, deletionAt, anbuId: null, clanId: null }));
+  readUser.mockReset();
+  readUser.mockImplementation(async (_client: unknown, userId: string) => ({ userId, role, deletionAt, anbuId: null, clanId: null }));
+  stubProfile("fetchUser", readUser);
   stubProfile("updateUserDataForToggleDeletionTimer", writeTimer);
   vi.spyOn(staff, "deleteUser").mockResolvedValue(undefined);
 });
@@ -64,6 +67,17 @@ it("preserves staff management permissions for another character", async () => {
   expect(await caller().toggleDeletionTimer({ userId: "other-player" })).toMatchObject({ success: true });
   deletionAt = new Date(Date.now() - 1000);
   expect(await caller().confirmDeletion({ userId: "other-player" })).toMatchObject({ success: true });
+});
+
+it.each(["toggleDeletionTimer", "confirmDeletion"] as const)("%s reuses the self-service actor read and retains separate staff target reads", async (method) => {
+  deletionAt = new Date(Date.now() - 1000);
+  expect(await caller()[method]({ userId: "player", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: true });
+  expect(readUser.mock.calls.map((call) => call[1])).toEqual(["player"]);
+
+  readUser.mockClear();
+  role = "HEAD_MODERATOR";
+  expect(await caller()[method]({ userId: "other-player" })).toMatchObject({ success: true });
+  expect(readUser.mock.calls.map((call) => call[1])).toEqual(["player", "other-player"]);
 });
 
 it("rejects deletion management of another character by a player", async () => {

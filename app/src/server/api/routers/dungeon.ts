@@ -499,7 +499,7 @@ export const dungeonRouter = createTRPCRouter({
         const expiresAt = run.state.entryPaidAt
           ? (run.expiresAt ?? secondsFromNow(DUNGEON_RUN_SECONDS))
           : secondsFromNow(DUNGEON_RUN_SECONDS);
-        const result = await launchCoopEncounter({
+        return launchCoopEncounter({
           reserve: async ({ battleId }) => {
             const claimed = await updateDungeonRunForReserve(
               ctx.drizzle,
@@ -540,7 +540,6 @@ export const dungeonRouter = createTRPCRouter({
           recover: ({ battleId }) =>
             rollbackDungeonStart(ctx.drizzle, run, battleId, run.version + 1),
         });
-        return result;
       }
 
       const queueChanged = new Error("Dungeon queue claim changed");

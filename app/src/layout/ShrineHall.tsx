@@ -1364,7 +1364,7 @@ const useUpdateShrineVillage = () => {
     ) {
       return updateUser(undefined, { revision });
     }
-    return updateUser(result.userPatch, { revision, delta: result.userDelta });
+    return updateUser(result, { revision, delta: result.userDelta });
   };
   return { prepareUserUpdate, updateShrineVillage };
 };

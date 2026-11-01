@@ -38,10 +38,7 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(data.userPatch, {
-            revision,
-            achievementProgress: data.achievementProgress,
-          }),
+          updateUser(data, { revision }),
           utils.item.getUserItems.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);

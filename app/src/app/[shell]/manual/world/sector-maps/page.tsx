@@ -332,31 +332,7 @@ function SectorMapEditorContent() {
     api.worldMap.moveStructure.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success)
-          await updateUser(
-            (current) => {
-              const moved = data.structure;
-              if (!moved) return undefined;
-              if (current.village?.id !== moved.villageId) return {};
-              const structures = current.village.structures;
-              if (!structures?.some((entry) => entry.id === moved.id)) return undefined;
-              return {
-                village: {
-                  id: moved.villageId,
-                  structures: structures.map((entry) =>
-                    entry.id === moved.id
-                      ? {
-                          ...entry,
-                          longitude: moved.longitude,
-                          latitude: moved.latitude,
-                        }
-                      : entry,
-                  ),
-                },
-              };
-            },
-            { revision },
-          );
+        if (data.success) await updateUser(data, { revision });
         showMutationToast(data);
         setPendingMove(null);
         await Promise.all([

@@ -71,12 +71,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-            achievementProgress: data.achievementProgress,
-          });
+        if (data.success) await updateUser(data, { revision });
         else await utils.profile.getUser.invalidate();
       },
     });

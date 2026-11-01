@@ -930,3 +930,124 @@ describe("notification effects during cache updates", () => {
     client.clear();
   });
 });
+
+describe("standard mutation response updates", () => {
+  it.each(["patch", "delta", "both"] as const)("preserves revisions for a confirmed empty %s response", async (kind) => {
+    const test = setup();
+    const revision = prepareUserUpdate(test.client, key);
+    const response = userDeltaResponseSchema.parse({ success: true, message: "Saved",
+      ...(kind !== "delta" ? { userPatch: {} } : {}),
+      ...(kind !== "patch" ? { userDelta: {} } : {}),
+    });
+    await updateUserCache(test.client, key, response, { revision: undefined });
+    expect(prepareUserUpdate(test.client, key)).toBe(revision);
+    await updateUserCache(test.client, key, { success: true, userPatch: { money: 90 } }, { revision });
+    expect(test.reads()).toBe(0);
+    expect(test.value()?.userData.money).toBe(90);
+    test.close();
+  });
+
+  it("keeps explicit unsafe delta recovery even when options supply an empty delta", async () => {
+    const test = setup();
+    test.setDatabase(80);
+    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
+      success: true, message: "Saved", userPatch: { money: 80 }, userDelta: undefined,
+    }), { revision: prepareUserUpdate(test.client, key), delta: {} });
+    expect(test.reads()).toBe(1);
+    expect(test.value()?.userData.money).toBe(80);
+    test.close();
+  });
+
+  it("reconciles a response without any confirmed projection", async () => {
+    const test = setup();
+    await updateUserCache(test.client, key, { success: true }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.reads()).toBe(1);
+    test.close();
+  });
+
+  it("applies confirmed changes returned with a rejected action", async () => {
+    const test = setup();
+    await updateUserCache(test.client, key, { success: false, userPatch: { money: 90 } }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.money).toBe(90);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("clears achievement metadata without treating an empty patch as a no-op", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), achievementProgress: [{ questId: "old" }] });
+    const revision = prepareUserUpdate(test.client, key);
+    await updateUserCache(test.client, key, { success: true, userPatch: {}, achievementProgress: [] }, { revision });
+    expect(test.client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([]);
+    expect(prepareUserUpdate(test.client, key)).toBe(revision! + 1);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it.each([true, false])("checks a server daily-counter prerequisite, matching=%s", async (matching) => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, dailyOverworldQuestRolls: matching ? 1 : 9 } });
+    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
+      success: true, message: "Rolled", userPatch: {},
+      userExpected: { dailyOverworldQuestRolls: 1 }, userDelta: { dailyOverworldQuestRolls: 1 },
+    }), { revision: prepareUserUpdate(test.client, key), expected: {} });
+    expect(test.reads()).toBe(matching ? 0 : 1);
+    if (matching) expect(test.value()?.userData.dailyOverworldQuestRolls).toBe(2);
+    test.close();
+  });
+
+  it("checks final-state prerequisites before accepting an empty response", async () => {
+    const test = setup();
+    await updateUserCache(test.client, key, { success: true, userPatch: {} }, {
+      revision: prepareUserUpdate(test.client, key), expectedAfter: { status: "QUEUED" },
+    });
+    expect(test.reads()).toBe(1);
+    test.close();
+  });
+
+  it("removes only the named attempt while preserving its successor and virtual entries", async () => {
+    const test = setup();
+    const successor = { id: "attempt", startedAt: new Date(2) };
+    const virtual = { id: "virtual", startedAt: new Date(1) };
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
+      petTask: { questHistoryId: "attempt" }, userQuests: [{ id: "attempt", startedAt: new Date(1) }, successor, virtual],
+    } });
+    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
+      success: true, message: "Returned", userPatch: { petTask: null },
+      userDelta: { userQuests: { remove: [{ id: "attempt", startedAt: 1 }] } },
+    }), { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData).toMatchObject({ petTask: null, userQuests: [successor, virtual] });
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it.each(["unknown-list", "missing-structure", "other-village"] as const)("withholds the whole update for %s collection state", async (state) => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
+      village: { id: state === "other-village" ? "other" : "home", ...(state === "unknown-list" ? {} : { structures: [] }) },
+    } });
+    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
+      success: true, message: "Moved", userDelta: { money: -10, village: { id: "home", structures: { update: [{ id: "hall", longitude: 1, latitude: 2 }] } } },
+    }), { revision: prepareUserUpdate(test.client, key) });
+    expect(test.reads()).toBe(1);
+    expect(test.value()?.userData.money).toBe(100);
+    test.close();
+  });
+});
+
+it.each([true, false])("applies a confirmed global boost notice, active=%s", async (active) => {
+  const test = setup();
+  const otherBoost = { href: "/profile", name: "Global: 2X regen | 2 days", color: "green", group: "Active boosts" };
+  test.client.setQueryData(key, { ...profile(100), notifications: [otherBoost,
+    { href: "/traininggrounds", name: "Global: 2X gains | 2 days", color: "green", group: "Active boosts" },
+    { href: "/profile", name: "Already delivered", color: "toast" },
+  ] });
+  const notice = { href: "/traininggrounds", name: "Global: 3X gains | 1 days", color: "green", group: "Active boosts" } as const;
+  await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
+    success: true, message: "Saved", userPatch: {},
+    userNotifications: { globalBoost: { setting: "trainingGainMultiplier", notice: active ? notice : null } },
+  }), { revision: prepareUserUpdate(test.client, key) });
+  expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual(active ? [otherBoost, notice] : [otherBoost]);
+  expect(test.reads()).toBe(0);
+  test.close();
+});

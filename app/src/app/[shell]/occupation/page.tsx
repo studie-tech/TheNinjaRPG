@@ -88,7 +88,7 @@ export default function Occupations() {
         if (data?.success) {
           setSelectedOccupation(null);
           setChangeDialogOpen(false);
-          await updateUser(data.userPatch, { revision });
+          await updateUser(data, { revision });
         }
       },
     });

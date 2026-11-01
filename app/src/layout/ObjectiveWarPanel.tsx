@@ -58,11 +58,7 @@ export const ObjectiveWarPanel = ({
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    if (result.success || result.userPatch)
-      await updateUser(result.userPatch, {
-        revision,
-        ...(result.userDelta ? { delta: result.userDelta } : {}),
-      });
+    if (result.success || result.userPatch) await updateUser(result, { revision });
     setFeedback(result);
     void utils.war.getObjectiveWarInfo.invalidate({ warId });
     void utils.war.getActiveWars.invalidate();

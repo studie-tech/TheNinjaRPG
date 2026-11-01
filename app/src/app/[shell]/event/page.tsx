@@ -14,7 +14,6 @@ import Post from "@/layout/Post";
 import RichInput from "@/layout/RichInput";
 import SliderField from "@/layout/SliderField";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import type { NavBarDropdownLink } from "@/libs/menus";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -99,26 +98,7 @@ export const EventGainMultiplierPanel: React.FC<{
         if (data.success) {
           await Promise.all([
             utils.misc.getSetting.invalidate(),
-            updateUser(data.userPatch, {
-              revision,
-              notifications: (current: NavBarDropdownLink[] | undefined) => {
-                const nav = data.boostNavigation;
-                if (!nav || !current) return current;
-                return [
-                  ...current.filter(
-                    (entry) =>
-                      entry.color !== "toast" &&
-                      !(
-                        entry.href === nav.href &&
-                        entry.group === "Active boosts" &&
-                        entry.name.startsWith("Global: ") &&
-                        entry.name.includes(`X ${nav.label} | `)
-                      ),
-                  ),
-                  ...(nav.notice ? [nav.notice] : []),
-                ];
-              },
-            }),
+            updateUser(data, { revision }),
           ]);
         }
       },
@@ -267,7 +247,7 @@ const NotificationSystem: React.FC = () => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         await Promise.all([
-          ...(data.success ? [updateUser(data.userPatch, { revision })] : []),
+          ...(data.success ? [updateUser(data, { revision })] : []),
           utils.misc.getPreviousNotifications.invalidate(),
         ]);
       },

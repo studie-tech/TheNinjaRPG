@@ -196,11 +196,7 @@ const ElderHall: React.FC<{
   const nominate = api.kage.nominateKage.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success || data.userPatch) await updateUser(data, { revision });
       showMutationToast(data);
       setGovernanceMessage(data.message);
       if (data.success) {

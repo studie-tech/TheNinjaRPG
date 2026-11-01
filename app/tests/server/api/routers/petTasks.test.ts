@@ -222,7 +222,7 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     const restartedAt = new Date(task.startedAt + 1);
     await database.update(questHistory).set({ startedAt: restartedAt }).where(eq(questHistory.id, task.questHistoryId));
     expect(await callerForDatabase(questsRouter, ownerId, database).cancelPetTask(task)).toMatchObject({ success: true,
-      userPatch: { petTask: null }, closedAttempt: { id: task.questHistoryId, startedAt: task.startedAt } });
+      userPatch: { petTask: null }, userDelta: { userQuests: { remove: [{ id: task.questHistoryId, startedAt: task.startedAt }] } } });
     expect(await readHistory(database)).toMatchObject({ startedAt: restartedAt, completed: 0, endAt: null });
   });
 

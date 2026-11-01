@@ -58,11 +58,7 @@ export function StoreCheckout({
       }
       if (result.success)
         await Promise.all([
-          updateUser(result.userPatch, {
-            revision,
-            delta: result.userDelta,
-            achievementProgress: result.achievementProgress,
-          }),
+          updateUser(result, { revision, delta: result.userDelta }),
           utils.paypal.getRecentRepsCount.invalidate(),
           utils.paypal.getPaypalTransactions.invalidate(),
           utils.paypal.getStoreBundles.invalidate(),

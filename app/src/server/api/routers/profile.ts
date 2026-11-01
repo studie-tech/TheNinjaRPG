@@ -57,7 +57,10 @@ import {
 import { getWorldCyclePosition } from "@/libs/dayNight";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
-import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  getGameSettingBoost,
+  getGlobalGameSettingNotifications,
+} from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
@@ -955,60 +958,7 @@ export const profileRouter = createTRPCRouter({
         });
       }
       // Settings
-      const trainingBoost = getGameSettingBoost("trainingGainMultiplier", settings);
-      if (trainingBoost) {
-        notifications.push({
-          href: "/traininggrounds",
-          name: `Global: ${trainingBoost.value}X gains | ${trainingBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const regenBoost = getGameSettingBoost("regenGainMultiplier", settings);
-      if (regenBoost) {
-        notifications.push({
-          href: "/profile",
-          name: `Global: ${regenBoost.value}X regen | ${regenBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const battleExpBoost = getGameSettingBoost("battleExpMultiplier", settings);
-      if (battleExpBoost) {
-        notifications.push({
-          href: "/battlearena",
-          name: `Global: ${battleExpBoost.value}X battle exp | ${battleExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const missionExpBoost = getGameSettingBoost("missionExpMultiplier", settings);
-      if (missionExpBoost) {
-        notifications.push({
-          href: "/missionhall",
-          name: `Global: ${missionExpBoost.value}X mission exp | ${missionExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const jutsuExpBoost = getGameSettingBoost("jutsuExpMultiplier", settings);
-      if (jutsuExpBoost) {
-        notifications.push({
-          href: "/jutsus",
-          name: `Global: ${jutsuExpBoost.value}X jutsu exp | ${jutsuExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const itemExpBoost = getGameSettingBoost("itemExpMultiplier", settings);
-      if (itemExpBoost) {
-        notifications.push({
-          href: "/items",
-          name: `Global: ${itemExpBoost.value}X item exp | ${itemExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
+      notifications.push(...getGlobalGameSettingNotifications(settings));
       // User specific
       if (user) {
         // War-time regen boost
@@ -2161,10 +2111,11 @@ export const profileRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target] = await Promise.all([
+      const [user, otherTarget] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        input.userId !== ctx.userId ? fetchUser(ctx.drizzle, input.userId) : undefined,
       ]);
+      const target = otherTarget ?? user;
       // Guard. A running ban or silence does not block deletion: deleteUser leaves a
       // sanction tombstone that a new account inherits.
       if (ctx.userId !== input.userId && !canDeleteUsers(user.role)) {
@@ -2201,10 +2152,11 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target] = await Promise.all([
+      const [user, otherTarget] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        input.userId !== ctx.userId ? fetchUser(ctx.drizzle, input.userId) : undefined,
       ]);
+      const target = otherTarget ?? user;
       // Guard
       if (!target.deletionAt || target.deletionAt > new Date()) {
         return errorResponse("Deletion timer not passed yet");

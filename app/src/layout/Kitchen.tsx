@@ -70,13 +70,7 @@ export default function Kitchen({ image }: { image?: string }) {
       if (result.success) {
         setSelectedId("");
         setBatches(1);
-        await Promise.all([
-          refresh(),
-          updateUser(result.userPatch, {
-            revision,
-            achievementProgress: result.achievementProgress,
-          }),
-        ]);
+        await Promise.all([refresh(), updateUser(result, { revision })]);
       }
     },
     onError: (error) => setMessage(error.message),
@@ -92,7 +86,7 @@ export default function Kitchen({ image }: { image?: string }) {
       await Promise.all([
         refresh(),
         result.success
-          ? updateUser(result.userPatch, { revision })
+          ? updateUser(result, { revision })
           : utils.profile.getUser.invalidate(),
       ]);
     },

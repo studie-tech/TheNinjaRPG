@@ -812,9 +812,7 @@ export const raidsRouter = createTRPCRouter({
           return errorResponse("Team not found or battle already started");
         }
         if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
-          return {
-            ...errorResponse("Team is full"),
-          };
+          return errorResponse("Team is full");
         }
       } else {
         // Mutation - create new team with atomic count guard
@@ -863,9 +861,7 @@ export const raidsRouter = createTRPCRouter({
         // Guard - team still exists
         if (!freshTeam) {
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
-          return {
-            ...errorResponse("Team is no longer available"),
-          };
+          return errorResponse("Team is no longer available");
         }
 
         const usedSlots = freshTeam.queue.map((u) => u.slot);
@@ -874,9 +870,7 @@ export const raidsRouter = createTRPCRouter({
         // Guard - slot available
         if (availableSlot === undefined) {
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
-          return {
-            ...errorResponse("Team is full"),
-          };
+          return errorResponse("Team is full");
         }
       }
 
@@ -898,9 +892,7 @@ export const raidsRouter = createTRPCRouter({
           deleteTeam: createdNewTeam,
           deleteUserRow: userInsertResult.status === "fulfilled",
         });
-        return {
-          ...errorResponse("Failed to join raid - please try again"),
-        };
+        return errorResponse("Failed to join raid - please try again");
       }
 
       // Pusher - notify sector about team changes
@@ -1152,7 +1144,7 @@ export const raidsRouter = createTRPCRouter({
             success: true,
             message: "Raid battle started",
             battleId: result.battleId,
-            ...(await confirmRaidBattleUpdate(initialUpdate, result)),
+            ...confirmRaidBattleUpdate(initialUpdate, result),
           };
         } else {
           await rollbackStartRaidBattle({
@@ -1165,7 +1157,7 @@ export const raidsRouter = createTRPCRouter({
 
           return {
             ...errorResponse(result.message ?? "Failed to start battle"),
-            ...(await confirmRaidBattleUpdate(initialUpdate, {})),
+            ...confirmRaidBattleUpdate(initialUpdate, {}),
           };
         }
       } catch (err) {
@@ -1279,7 +1271,8 @@ export const raidsRouter = createTRPCRouter({
           rewards: processedRewards,
           requiresRelations:
             snapshot.requiresProgressionRefresh || (threshold.effects?.length ?? 0) > 0,
-          progression: getUserProgressionUpdate(user, snapshot.publishedAchievementIds),
+          progression: () =>
+            getUserProgressionUpdate(user, snapshot.publishedAchievementIds),
         }),
       };
     }),

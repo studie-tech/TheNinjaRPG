@@ -41,7 +41,7 @@ export default function TerritoryWarPage() {
     revision: number | undefined,
   ) => {
     // Admission can settle timed work before returning an expected rejection.
-    await updateUser(result.userPatch, { revision });
+    await updateUser(result, { revision });
     showMutationToast({ ...result, message: result.message ?? "Updated team" });
     await utils.territoryWar.invalidate();
   };
@@ -61,7 +61,7 @@ export default function TerritoryWarPage() {
     onMutate: prepareUserUpdate,
     onSuccess: async (result, variables, revision) => {
       if (result.success && result.battleId) {
-        await updateUser(result.userPatch, { revision, delta: result.userDelta });
+        await updateUser(result, { revision, delta: result.userDelta });
         pushToCombat(router, result.battleId);
       } else await onSuccess(result, variables, revision);
     },

@@ -553,10 +553,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getAll.invalidate(),
             utils.skillTree.getFolderStats.invalidate(),
-            updateUser(data.userPatch, {
-              revision,
-              achievementProgress: data.achievementProgress,
-            }),
+            updateUser(data, { revision }),
           ]);
         }
       },

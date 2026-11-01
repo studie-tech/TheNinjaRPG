@@ -357,7 +357,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision }),
+            updateUser(data, { revision }),
             utils.sensei.getRequests.invalidate(),
             utils.sensei.getStudents.invalidate(),
           ]);
@@ -391,7 +391,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data.userPatch, { revision });
+          await updateUser(data, { revision });
         }
       },
     });

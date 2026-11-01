@@ -29,11 +29,7 @@ export function UnclaimedSeasonRewards() {
           );
           await Promise.all([
             utils.pvpRank.getUnclaimedUserSeasonRewards.invalidate(),
-            updateUser(data.userPatch, {
-              revision,
-              delta: data.userDelta,
-              achievementProgress: data.achievementProgress,
-            }),
+            updateUser(data, { revision, delta: data.userDelta }),
           ]);
         }
       }

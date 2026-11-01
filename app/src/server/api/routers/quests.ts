@@ -1409,11 +1409,7 @@ export const questsRouter = createTRPCRouter({
   /** Return safely without rewards, including deleted content and a missing/restarted attempt. */
   cancelPetTask: protectedProcedure
     .input(petTaskActionSchema)
-    .output(
-      userDeltaResponseSchema.extend({
-        closedAttempt: z.object({ id: z.string(), startedAt: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const owner = await findUserById(ctx.drizzle, ctx.userId);
       const task = owner?.petTask;
@@ -1439,7 +1435,11 @@ export const questsRouter = createTRPCRouter({
               petTask: null,
               updatedAt: getNextUserSnapshotAt(owner.updatedAt, now),
             },
-            closedAttempt: { id: task.questHistoryId, startedAt: task.startedAt },
+            userDelta: {
+              userQuests: {
+                remove: [{ id: task.questHistoryId, startedAt: task.startedAt }],
+              },
+            },
           }
         : errorResponse(
             "Task state changed. Refresh and try returning your companion again.",
@@ -1996,7 +1996,7 @@ export const questsRouter = createTRPCRouter({
           ? {
               ...projection,
               userPatch: { ...projection.userPatch, ...committedBattlePatch },
-              userDelta: battleUserUpdate?.userDelta,
+              userDelta: battleAttempted ? battleUserUpdate?.userDelta : {},
             }
           : {}),
       };
