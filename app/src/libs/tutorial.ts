@@ -1,4 +1,4 @@
-import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import { TUTORIAL_STARTER_QUEST_ID, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 
 /**
@@ -25,6 +25,18 @@ export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
  * zoomed out far enough to see where the marker actually is.
  */
 export const TUTORIAL_CAPTURE_STEP_ID = "eRw6ObsRONhzY7AUMO3vm";
+
+/** Step that sends the player across the globe to the puppy's sector. */
+export const TUTORIAL_CAPTURE_TRAVEL_STEP_ID = "qPx_xVsMAZY0t05thYgZj";
+
+/** Step after the puppy fight: travel back to Horizon. */
+export const TUTORIAL_RETURN_HOME_STEP_ID = "UD2jVibug6Y0yKLYGzA_N";
+
+/** Step that has the player answer the starter quest's closing dialog at the academy. */
+export const TUTORIAL_STARTER_DEBRIEF_STEP_ID = "blL789mkRIKtjsWk";
+
+/** First step after the starter quest: the village tour. */
+export const TUTORIAL_VILLAGE_TOUR_STEP_ID = "fdalgdwlcigydvs";
 
 /** Step that asks the player to buy the starter shuriken. */
 export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
@@ -125,3 +137,75 @@ export const canPositionTutorialHighlight = (
 ) =>
   targetHeight < viewportHeight * 0.55 ||
   targetHeight + 80 < (assistantTop ?? viewportHeight);
+
+type StarterQuestTutorialUser = {
+  sector?: number | null;
+  questData?: { id: string; goals: { id: string; done?: boolean }[] }[] | null;
+  userQuests?:
+    | {
+        questId: string;
+        completed?: number | null;
+        endAt?: Date | string | null;
+        quest?: { content: { objectives: { id: string; task: string }[] } } | null;
+      }[]
+    | null;
+};
+
+/** The starter quest attempt that is still running, if any. */
+const getActiveStarterQuest = (user: StarterQuestTutorialUser) =>
+  user.userQuests?.find(
+    (entry) =>
+      entry.questId === TUTORIAL_STARTER_QUEST_ID && !entry.endAt && !entry.completed,
+  );
+
+/**
+ * The puppy objective of the starter quest: the `defeat_opponents` objective
+ * the capture step sends the player after. Looked up by task, not id, so it
+ * follows the quest content rather than a hard-coded objective id.
+ */
+export const getStarterQuestCaptureObjectiveId = (
+  objectives?: { id: string; task: string }[] | null,
+) => objectives?.find((objective) => objective.task === "defeat_opponents")?.id;
+
+/**
+ * Where the tutorial should jump to when the player reaches the puppy mission
+ * having already done part of it, or undefined to stay put.
+ *
+ * The capture steps only make sense while the puppy is still out there: they
+ * point at a marker that the active `defeat_opponents` objective draws. A
+ * player who already beat the puppy, or finished the starter quest outright
+ * (an account that came back after the tutorial grew new steps, or whose
+ * stored step index shifted), would otherwise be stood in an empty sector with
+ * nothing to fight and no way forward.
+ *
+ * - Quest no longer running: skip the whole mission to the village tour.
+ * - Quest running, puppy already beaten: go to the trip home, or straight to
+ *   the academy debrief when the player is already in Horizon (the travel step
+ *   cannot advance for someone already in the destination sector).
+ *
+ * The debrief step itself is left alone: answering its dialog completes the
+ * quest and the dialog handler advances the step, so acting on "quest gone"
+ * there would race it and skip the village tour.
+ */
+export const getStarterQuestCatchUpStepId = (
+  step?: { id?: string } | null,
+  user?: StarterQuestTutorialUser | null,
+) => {
+  if (!step?.id || !user?.userQuests) return undefined;
+  const isBeforeFight =
+    step.id === TUTORIAL_CAPTURE_TRAVEL_STEP_ID || step.id === TUTORIAL_CAPTURE_STEP_ID;
+  if (!isBeforeFight && step.id !== TUTORIAL_RETURN_HOME_STEP_ID) return undefined;
+  const active = getActiveStarterQuest(user);
+  if (!active) return TUTORIAL_VILLAGE_TOUR_STEP_ID;
+  if (!isBeforeFight) return undefined;
+  const tracker = user.questData?.find(
+    (entry) => entry.id === TUTORIAL_STARTER_QUEST_ID,
+  );
+  const captureId = getStarterQuestCaptureObjectiveId(active.quest?.content.objectives);
+  if (!tracker || !captureId) return undefined;
+  const captured = tracker.goals.some((goal) => goal.id === captureId && goal.done);
+  if (!captured) return undefined;
+  return user.sector === TUTORIAL_HOME_SECTOR
+    ? TUTORIAL_STARTER_DEBRIEF_STEP_ID
+    : TUTORIAL_RETURN_HOME_STEP_ID;
+};

@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "bun:test";
-import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import { TUTORIAL_STARTER_QUEST_ID, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
   canPositionTutorialHighlight,
+  getStarterQuestCatchUpStepId,
   getTutorialBattleReturnPage,
   getTutorialHighlightedQuestId,
   getTutorialStepPath,
@@ -15,9 +16,14 @@ import {
   isTutorialPageMatch,
   isTutorialActive,
   isUsableHighlightRect,
+  TUTORIAL_CAPTURE_STEP_ID,
+  TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
   TUTORIAL_HOME_SECTOR,
   TUTORIAL_ITEM_BUY_STEP_ID,
   TUTORIAL_JUTSU_PICK_STEP_ID,
+  TUTORIAL_RETURN_HOME_STEP_ID,
+  TUTORIAL_STARTER_DEBRIEF_STEP_ID,
+  TUTORIAL_VILLAGE_TOUR_STEP_ID,
 } from "@/libs/tutorial";
 
 /**
@@ -226,6 +232,21 @@ describe("TUTORIAL_STEPS", () => {
     expect(ids).toContain(TUTORIAL_ITEM_BUY_STEP_ID);
   });
 
+  it("keeps the starter-quest mission steps in order", () => {
+    const ids = stepIds();
+    const mission = [
+      TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
+      TUTORIAL_CAPTURE_STEP_ID,
+      TUTORIAL_RETURN_HOME_STEP_ID,
+      TUTORIAL_STARTER_DEBRIEF_STEP_ID,
+      TUTORIAL_VILLAGE_TOUR_STEP_ID,
+    ].map((id) => ids.indexOf(id));
+    expect(mission[0]).toBeGreaterThan(-1);
+    mission.forEach((index, i) => {
+      if (i > 0) expect(index).toBe((mission[i - 1] ?? 0) + 1);
+    });
+  });
+
   it("gives every single-action step a Next button so it cannot dead-end", () => {
     // Enter/ArrowRight only advance when a step declares showNextButton or
     // proceedOnHighlightClick, so a step whose only other exit is one specific
@@ -242,5 +263,103 @@ describe("TUTORIAL_STEPS", () => {
       const block = source.slice(start, source.indexOf("\n  },", start));
       expect(block).toContain("showNextButton: true");
     }
+  });
+});
+
+describe("getStarterQuestCatchUpStepId", () => {
+  // Mirrors the live "Getting Started" quest: opening dialog, puppy fight,
+  // closing dialog, win.
+  const objectives = [
+    { id: "eHayd", task: "dialog" },
+    { id: "_nY7o", task: "defeat_opponents" },
+    { id: "tuQde", task: "dialog" },
+    { id: "fsyYJ", task: "win_quest" },
+  ];
+  const activeQuest = {
+    questId: TUTORIAL_STARTER_QUEST_ID,
+    completed: 0,
+    endAt: null,
+    quest: { content: { objectives } },
+  };
+  const tracker = (puppyDone: boolean) => ({
+    id: TUTORIAL_STARTER_QUEST_ID,
+    goals: [
+      { id: "eHayd", done: true },
+      { id: "_nY7o", done: puppyDone },
+      { id: "tuQde", done: false },
+      { id: "fsyYJ", done: false },
+    ],
+  });
+  const capture = { id: TUTORIAL_CAPTURE_STEP_ID };
+
+  it("stays put while the puppy is still to be fought", () => {
+    const user = { sector: 227, userQuests: [activeQuest], questData: [tracker(false)] };
+    expect(getStarterQuestCatchUpStepId(capture, user)).toBeUndefined();
+    expect(
+      getStarterQuestCatchUpStepId({ id: TUTORIAL_CAPTURE_TRAVEL_STEP_ID }, user),
+    ).toBeUndefined();
+  });
+
+  it("skips the mission once the starter quest is finished", () => {
+    // A completed attempt is not loaded into userQuests, and its tracker is gone.
+    const user = { sector: 301, userQuests: [], questData: [] };
+    for (const id of [
+      TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
+      TUTORIAL_CAPTURE_STEP_ID,
+      TUTORIAL_RETURN_HOME_STEP_ID,
+    ]) {
+      expect(getStarterQuestCatchUpStepId({ id }, user)).toBe(
+        TUTORIAL_VILLAGE_TOUR_STEP_ID,
+      );
+    }
+  });
+
+  it("sends a player who already beat the puppy on to the trip home", () => {
+    const user = { sector: 227, userQuests: [activeQuest], questData: [tracker(true)] };
+    expect(getStarterQuestCatchUpStepId(capture, user)).toBe(
+      TUTORIAL_RETURN_HOME_STEP_ID,
+    );
+  });
+
+  it("goes straight to the academy when that player is already home", () => {
+    const user = {
+      sector: TUTORIAL_HOME_SECTOR,
+      userQuests: [activeQuest],
+      questData: [tracker(true)],
+    };
+    expect(getStarterQuestCatchUpStepId(capture, user)).toBe(
+      TUTORIAL_STARTER_DEBRIEF_STEP_ID,
+    );
+  });
+
+  it("leaves the trip home and debrief alone while the quest is running", () => {
+    const user = { sector: 227, userQuests: [activeQuest], questData: [tracker(true)] };
+    expect(
+      getStarterQuestCatchUpStepId({ id: TUTORIAL_RETURN_HOME_STEP_ID }, user),
+    ).toBeUndefined();
+    // The debrief dialog completes the quest and advances the step itself.
+    expect(
+      getStarterQuestCatchUpStepId(
+        { id: TUTORIAL_STARTER_DEBRIEF_STEP_ID },
+        { sector: 301, userQuests: [], questData: [] },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("waits for the tracker and ignores steps outside the mission", () => {
+    expect(
+      getStarterQuestCatchUpStepId(capture, {
+        sector: 227,
+        userQuests: [activeQuest],
+        questData: [],
+      }),
+    ).toBeUndefined();
+    expect(getStarterQuestCatchUpStepId(capture, { sector: 227 })).toBeUndefined();
+    expect(
+      getStarterQuestCatchUpStepId(
+        { id: TUTORIAL_ITEM_BUY_STEP_ID },
+        { sector: 301, userQuests: [], questData: [] },
+      ),
+    ).toBeUndefined();
   });
 });
