@@ -20,6 +20,7 @@ import Link from "@/layout/Link";
 import StatusBar from "@/layout/StatusBar";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { isFactionVillage } from "@/libs/war";
 import { canAdministrateWars } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -261,6 +262,9 @@ const UpgradeButton = ({
   clanId: string | null;
 }) => {
   const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
+  // Faction villages spend their clan's points, like kage.upgradeStructure
+  const usesClanPoints = isFactionVillage(village);
 
   const { data } = api.village.get.useQuery({ id: structure.villageId }, {});
 
@@ -269,12 +273,18 @@ const UpgradeButton = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.village.get.invalidate();
+          await Promise.all([
+            utils.village.get.invalidate(),
+            ...(usesClanPoints ? [utils.profile.getUser.invalidate()] : []),
+          ]);
         }
       },
     });
 
-  const currentFunds = data?.villageData.tokens ?? 0;
+  const fundsLabel = usesClanPoints ? "clan points" : "village tokens";
+  const currentFunds = usesClanPoints
+    ? (userData?.clan?.points ?? 0)
+    : (data?.villageData.tokens ?? 0);
   const { cost, tax, discount, total } = calcStructureUpgrade(structure, {
     ...village,
     structures: data?.villageData.structures || [],
@@ -331,11 +341,13 @@ const UpgradeButton = ({
           }
         >
           <p>
-            Upgrading this structure will cost a total of {total} village tokens (base
+            Upgrading this structure will cost a total of {total} {fundsLabel} (base
             cost of {cost} + {tax} population tax - {discount} discounted from town hall
             level).
           </p>
-          <p>You currently have {currentFunds} village tokens.</p>
+          <p>
+            You currently have {currentFunds} {fundsLabel}.
+          </p>
           {(() => {
             const bonuses = STRUCTURE_BONUSES.filter(
               (b) => ((structure[b.key] as number) ?? 0) > 0,
