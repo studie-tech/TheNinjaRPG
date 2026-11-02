@@ -112,7 +112,17 @@ export const listActionLogForSendKagePrestige = (
     ),
   });
 
-/** Build the `userData` update for `sendKagePrestige`, setting `villagePrestige`, using predicates on `userId`. */
+/** Build the `village` lookup for `sendKagePrestige`: the village the recipient leads, if any. */
+export const findVillageForSendKagePrestige = (
+  client: Pick<DrizzleClient, "query">,
+  input: { kageId: string },
+) =>
+  client.query.village.findFirst({
+    columns: { id: true },
+    where: eq(village.kageId, input.kageId),
+  });
+
+/** Build the `userData` debit for `sendKagePrestige`, guarded by the sender's prestige balance. */
 export const updateUserDataForSendKagePrestige = (
   client: Pick<DrizzleClient, "update">,
   input: { amount: number },
@@ -123,7 +133,9 @@ export const updateUserDataForSendKagePrestige = (
     .set({
       villagePrestige: sql`${userData.villagePrestige} - ${input.amount}`,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(eq(userData.userId, ctx.userId), gte(userData.villagePrestige, input.amount)),
+    );
 
 /** Build the `actionLog` insert for `sendKagePrestige`. */
 export const insertActionLogForSendKagePrestige = (
