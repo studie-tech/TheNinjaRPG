@@ -37,6 +37,7 @@ import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
+import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useVisualEffects } from "@/hooks/visual-effects";
@@ -114,7 +115,7 @@ import {
   useUserDataRef,
 } from "@/utils/UserContext";
 import { shareUserCache } from "@/utils/userCacheSharing";
-import { MAP_LOCATION_REFRESH_MS, type MapLocation } from "@/validators/mapLocation";
+import type { MapLocation } from "@/validators/mapLocation";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
 type SectorWindowEntry =
@@ -514,23 +515,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     { enabled: dialogSceneAssetIds.length > 0 },
   );
 
-  // Carry the edit timestamp to bypass stale public caches on other server workers.
-  const [publicLocationRevision, setPublicLocationRevision] = useState(0);
-  const { data: publicLocations = [] } = api.quests.getPublicLocations.useQuery(
-    { revision: publicLocationRevision },
-    {
-      placeholderData: (previous) => previous,
-      staleTime: MAP_LOCATION_REFRESH_MS,
-      refetchInterval: MAP_LOCATION_REFRESH_MS,
-      refetchIntervalInBackground: false,
-    },
-  );
+  const {
+    data: publicLocations = [],
+    updatePublicLocations,
+    recoverPublicLocations,
+  } = usePublicQuestLocations(timeDiff);
   useEffect(() => {
     if (!pusher) return;
     const channel = pusher.subscribe("map-content");
     const update = (event: { revision: number }) => {
       if (!Number.isSafeInteger(event.revision) || event.revision < 0) return;
-      setPublicLocationRevision((previous) => Math.max(previous, event.revision));
+      updatePublicLocations(event.revision);
       void utils.mapAsset.getAll.invalidate();
       void utils.coop.dungeon.getAvailable.invalidate();
       // Active runs carry their private presentation in the profile snapshot.
@@ -538,11 +533,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         void utils.profile.getUser.invalidate();
     };
     channel.bind("updated", update);
+    channel.bind("pusher:subscription_succeeded", recoverPublicLocations);
     return () => {
       channel.unbind("updated", update);
+      channel.unbind("pusher:subscription_succeeded", recoverPublicLocations);
       pusher.unsubscribe("map-content");
     };
-  }, [pusher, utils]);
+  }, [pusher, utils, updatePublicLocations, recoverPublicLocations]);
   const questLocations = useMemo<MapLocation[]>(
     () => [
       ...(userData
