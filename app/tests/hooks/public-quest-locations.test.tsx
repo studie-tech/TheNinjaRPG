@@ -77,6 +77,18 @@ it("uses37 reads across three quiet hours in each independent map tab", async ()
   tabs.forEach((tab) => { expect(tab.read).toHaveBeenCalledTimes(37); expect(tab.view.result.current.data?.[0]?.questId).toBe("ending"); });
 });
 
+it("resumes five-minute polling after the UTC publication recovery window", async () => {
+  now = Date.UTC(2026, 10, 3);
+  const t = setup();
+  await settle();
+  for (let index = 0; index < 30; index++) await advance(10_000);
+  expect(t.read).toHaveBeenCalledTimes(31);
+  await advance(10_000);
+  expect(t.read).toHaveBeenCalledTimes(31);
+  await advance(290_000);
+  expect(t.read).toHaveBeenCalledTimes(32);
+});
+
 it.each([-120_000, 0, 120_000])("publishes and expires scenery at UTC midnight with clock offset %s", async (offset) => {
   now = Date.UTC(2026, 10, 2, 23, 59, 58) + offset;
   const t = setup(offset);
@@ -152,6 +164,28 @@ it("replaces pending pre-midnight reads after a calibrated clock correction", as
   await settle();
   expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
   await act(async () => { t.pending[1]!(); t.pending[0]!(); });
+  await settle();
+  expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
+});
+
+it.each([false, true])("recovers a pre-midnight snapshot received after publication, correcting clock %s", async (correctClock) => {
+  const offset = 120_000;
+  now = Date.UTC(2026, 10, 2, 23, 59, 59, 500) + offset;
+  const t = setup(offset, true, offset - 1000);
+  await settle();
+  await act(async () => t.view.result.current.recoverPublicLocations());
+  await settle();
+  // The next-day key already exists; receipt time alone cannot date the server's projection.
+  await act(async () => { now += 700; t.pending[1]!(); });
+  await settle();
+  expect(t.view.result.current.data?.[0]?.questId).toBe("ending");
+  if (correctClock) {
+    await act(async () => t.view.rerender({ timeDiff: offset }));
+    await settle();
+  }
+  await advance(10_000);
+  expect(t.read).toHaveBeenCalledTimes(3);
+  await act(async () => t.pending[2]!());
   await settle();
   expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
 });
