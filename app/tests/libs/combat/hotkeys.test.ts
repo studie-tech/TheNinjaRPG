@@ -5,10 +5,64 @@ import {
   findLoadoutHotkeyConflict,
   type HotkeyMap,
   hotkeyMapSchema,
+  isBattleHotkeyBlocked,
   MAX_LOADOUT_HOTKEYS,
   resolveHotkeys,
   toHotkey,
 } from "@/libs/combat/hotkeys";
+import { ensureDom } from "../../setup/dom.mjs";
+
+ensureDom();
+
+describe("battle hotkey focus", () => {
+  it("leaves fields and Radix control typeahead to the focused control", () => {
+    const controls = [
+      "<input>",
+      "<textarea></textarea>",
+      "<select></select>",
+      "<div contenteditable='true'><span></span></div>",
+      "<button role='combobox'><span></span></button>",
+      "<div role='listbox'><span></span></div>",
+      "<div role='option'><span></span></div>",
+      "<div role='menuitem'><span></span></div>",
+    ];
+    for (const markup of controls) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = markup;
+      const target = wrapper.querySelector("span") ?? wrapper.firstElementChild!;
+      const event = new window.KeyboardEvent("keydown", { key: "o", cancelable: true });
+      target.dispatchEvent(event);
+      expect(isBattleHotkeyBlocked(event)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    }
+  });
+
+  it("suspends battle keys for open dialogs, popovers and portalled select menus", () => {
+    for (const role of ["dialog", "alertdialog", "listbox", "menu"]) {
+      const overlay = document.createElement("div");
+      overlay.setAttribute("role", role);
+      overlay.dataset.state = "open";
+      document.body.append(overlay);
+      try {
+        const event = new window.KeyboardEvent("keydown", { key: "o" });
+        document.body.dispatchEvent(event);
+        expect(isBattleHotkeyBlocked(event)).toBe(true);
+        overlay.dataset.state = "closed";
+        expect(isBattleHotkeyBlocked(event)).toBe(false);
+      } finally {
+        overlay.remove();
+      }
+    }
+  });
+
+  it("accepts ordinary battlefield keys and respects keys consumed by another handler", () => {
+    const event = new window.KeyboardEvent("keydown", { key: "a", cancelable: true });
+    document.body.dispatchEvent(event);
+    expect(isBattleHotkeyBlocked(event)).toBe(false);
+    event.preventDefault();
+    expect(isBattleHotkeyBlocked(event)).toBe(true);
+  });
+});
 
 describe("battle hotkeys", () => {
   it("accepts letters, digits and the listed punctuation only", () => {

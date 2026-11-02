@@ -63,6 +63,23 @@ export const toHotkey = (key: string): string | undefined => {
   return (HOTKEY_KEYS as readonly string[]).includes(lower) ? lower : undefined;
 };
 
+/** Leave typing, Radix controls and open overlays to their own keyboard handling. */
+export const isBattleHotkeyBlocked = (event: KeyboardEvent): boolean => {
+  if (event.defaultPrevented) return true;
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    target.closest(
+      "input, textarea, select, [contenteditable='true'], [role='combobox'], [role='listbox'], [role='option'], [role='menu'], [role='menuitem']",
+    )
+  )
+    return true;
+  // Radix popovers use role=dialog; select options are portalled outside them.
+  return !!document.querySelector(
+    "[role='dialog']:not([data-state='closed']), [role='alertdialog']:not([data-state='closed']), [role='listbox']:not([data-state='closed']), [role='menu']:not([data-state='closed'])",
+  );
+};
+
 /**
  * Bind `key` to `actionId` within one loadout's map; "" removes the binding.
  * Any other action in the same map that held the key loses it.

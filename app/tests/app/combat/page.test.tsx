@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
+import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
@@ -32,6 +33,7 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  getDefaultStore().set(userContext.combatActionIdAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   vi.restoreAllMocks();
@@ -278,4 +280,30 @@ it("reads battle hotkeys from the loadouts chosen for this battle", async () => 
     jutsuLoadoutId: "battle-jutsu",
     itemLoadoutId: "battle-item",
   });
+});
+
+it("preserves the selected action while settings controls handle battle keys", async () => {
+  const battle = makeCompleteBattle({
+    id: "keyboard-focus",
+    usersState: [makeUser({ userId: "player" })],
+  });
+  const { view } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+  for (const role of ["dialog", "combobox", "listbox", "option"]) {
+    const control = document.createElement("div");
+    control.setAttribute("role", role);
+    document.body.append(control);
+    try {
+      fireEvent.keyDown(control, { key: "a" });
+      fireEvent.keyDown(control, { key: "Escape" });
+      expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+    } finally {
+      control.remove();
+    }
+  }
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
 });

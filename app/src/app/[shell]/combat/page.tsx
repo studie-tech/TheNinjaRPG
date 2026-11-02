@@ -23,7 +23,7 @@ import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { availableUserActions, getActionPointCost } from "@/libs/combat/actions";
-import { toHotkey } from "@/libs/combat/hotkeys";
+import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
 import {
   getBattlefieldHeightRatio,
@@ -270,12 +270,7 @@ export default function CombatPage() {
         hotkeyTarget
       )
         return;
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest("input, textarea, select, [contenteditable='true']")
-      )
-        return;
+      if (isBattleHotkeyBlocked(event)) return;
       if (event.key === "Escape" && actionId) {
         setActionId(undefined);
         return;

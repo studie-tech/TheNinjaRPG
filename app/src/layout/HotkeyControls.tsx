@@ -65,7 +65,7 @@ export function HotkeyCaptureDialog({
 
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm text-center">
+      <DialogContent className="max-w-sm text-center md:max-w-sm">
         <DialogTitle className="flex items-center justify-center gap-2">
           <Keyboard className="h-5 w-5" aria-hidden /> Hotkey for {target?.name}
         </DialogTitle>

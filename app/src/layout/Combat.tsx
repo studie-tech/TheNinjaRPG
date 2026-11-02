@@ -49,6 +49,7 @@ import {
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import {
@@ -737,6 +738,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (isBattleHotkeyBlocked(event)) return;
     if (event.key === "Escape") {
       setAggroTarget(null);
       return;
@@ -752,13 +754,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         precomputedUserId: userIdRef.current,
         precomputedActions: precomputedActionsRef.current,
       });
-      // Typing in a field never triggers battle keys.
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest("input, textarea, select, [contenteditable='true']")
-      )
-        return;
       // Modifier chords belong to the browser or OS, not to battle keys.
       // A held key repeats keydown; one press ends one turn.
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
