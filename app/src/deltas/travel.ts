@@ -34,8 +34,8 @@ export const getFinishGlobalMoveUserUpdate = ({
 
 /**
  * Refresh only the loaded caller's public map row from an accepted profile update.
- * Fixed NPC rows and unbound quest landmarks do not depend on the caller's tile.
- * Bound quest placements, changed identities/sectors/factions need a server snapshot.
+ * Unbound quest landmarks do not depend on the caller's tile. NPCs need an authoritative
+ * refresh because movement patches postpone polling; bound placements and identity changes do too.
  */
 export const getSectorUserUpdate = (
   current: RouterOutputs["travel"]["getSectorData"],
@@ -46,6 +46,7 @@ export const getSectorUserUpdate = (
     !user ||
     user.status !== "AWAKE" ||
     (current.sectorData && current.sectorData.sector !== user.sector) ||
+    current.overworldAis?.length ||
     current.questPlacements?.length ||
     user.userQuests.some((entry) =>
       entry.quest.content.objectives.some(

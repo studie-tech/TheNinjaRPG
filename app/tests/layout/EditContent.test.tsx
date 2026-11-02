@@ -39,7 +39,7 @@ const update: { useMutation: () => { mutateAsync: (...args: Parameters<typeof sa
 vi.mock("@/app/_trpc/client", () => ({
   api: {
     useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
-    profile: { getAllAiNames: names },
+    profile: { getAllAiNames: names, getUser: { useQuery: () => ({ data: undefined }) } },
     item: { getVariantNames: names, getAllNames: names, update },
     jutsu: { getAllNames: names, update },
     bloodline: { getAllNames: names, update },

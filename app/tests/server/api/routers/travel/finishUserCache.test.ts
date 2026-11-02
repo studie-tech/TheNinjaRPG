@@ -10,6 +10,7 @@ import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/
 import { DecreaseGatheringTime, IncreaseGatheringYield } from "@/validators/combat";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
@@ -30,7 +31,7 @@ describeWithDatabase("confirmed arrival profile updates", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); setSystemTime(); });
 
-  it.each(["ordinary", "NPC", "quest", "NPC and quest"])("matches the canonical public sector snapshot after confirmed caller movement with %s scenery", async (scenery) => {
+  it.each(["ordinary", "NPC", "quest", "NPC and quest"])("reconciles the canonical public sector snapshot after confirmed caller movement with %s scenery", async (scenery) => {
     // NPC public rows use the query clock for updatedAt, independent of movement.
     setSystemTime(new Date());
     const db = await getTestDatabase();
@@ -46,9 +47,28 @@ describeWithDatabase("confirmed arrival profile updates", () => {
     expect(before.overworldAis).toHaveLength(scenery.includes("NPC") ? 1 : 0);
     expect(before.questPlacements).toEqual([]);
     await db.update(userData).set({ longitude: 6, latitude: 7, location: "Moved" }).where(eq(userData.userId, userId));
+    if (scenery.includes("NPC")) {
+      await db.update(overworldAiPlacement).set({ longitude: 8, latitude: 9, positionVersion: 1 }).where(eq(overworldAiPlacement.id, "scenery-placement"));
+      await db.update(userData).set({ curHealth: 55 }).where(eq(userData.userId, "scenery-npc"));
+    }
     const user = (await profile.getUser()).userData;
     if (scenery.includes("quest")) expect(user?.userQuests.length).toBeGreaterThan(0);
-    expect(getSectorUserUpdate(before, user ?? undefined)).toEqual(await travel.getSectorData({ sector: 1 }));
+    const canonical = await travel.getSectorData({ sector: 1 });
+    if (scenery.includes("NPC")) {
+      expect(getSectorUserUpdate(before, user ?? undefined)).toBeUndefined();
+      expect(canonical.overworldAis?.[0]).toMatchObject({ longitude: 8, latitude: 9, npcPositionVersion: 1, curHealth: 55 });
+    } else expect(getSectorUserUpdate(before, user ?? undefined)).toEqual(canonical);
+    const sectorKey = [["travel", "getSectorData"], { input: { sector: 1 }, type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(sectorKey, before);
+    const read = vi.fn(() => travel.getSectorData({ sector: 1 }));
+    const stop = new QueryObserver(client, { queryKey: sectorKey, staleTime: Infinity, queryFn: read }).subscribe(() => undefined);
+    try {
+      const revision = prepareQueryUpdate(client, sectorKey);
+      expect(await updateQueryCache<typeof before>(client, sectorKey, (current) => getSectorUserUpdate(current, user ?? undefined), { revision })).toBe(!scenery.includes("NPC"));
+      expect(read).toHaveBeenCalledTimes(scenery.includes("NPC") ? 1 : 0);
+      expect(client.getQueryData(sectorKey)).toEqual(canonical);
+    } finally { stop(); client.clear(); }
     expect(getSectorUserUpdate({ users: [], village: null, sectorData: null, warData: null }, user ?? undefined)).toBeUndefined();
   });
 
