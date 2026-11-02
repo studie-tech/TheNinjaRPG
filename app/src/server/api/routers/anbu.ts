@@ -261,7 +261,7 @@ export const anbuRouter = createTRPCRouter({
         user.village &&
         secondsFromDate(ANBU_DELAY_SECS, user.village.leaderUpdatedAt) > new Date()
       ) {
-        return errorResponse("Must have been kage for 5 days");
+        return errorResponse(`Must have been kage for ${ANBU_DELAY_SECS / 86400} days`);
       }
       // Mutate
       await Promise.all([

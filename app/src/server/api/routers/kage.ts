@@ -207,16 +207,14 @@ export const kageRouter = createTRPCRouter({
         userId: ctx.userId,
       });
       const village = user?.village;
-      // Apply 24-hour lockout to all kages (villages, hideouts, and strongholds)
-      const lockout = KAGE_DELAY_SECS;
       // Guards
       if (!user) return errorResponse("User not found");
       if (!village) return errorResponse("Village not found");
       if (user.isBanned) return errorResponse("User is banned");
       if (user.isSilenced) return errorResponse("User is silenced");
       if (village.kageId !== ctx.userId) return errorResponse("Not kage");
-      if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been kage for 5 days");
+      if (secondsFromDate(KAGE_DELAY_SECS, village.leaderUpdatedAt) > new Date()) {
+        return errorResponse(`Must have been kage for ${KAGE_DELAY_SECS / 86400} days`);
       }
       // Update
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");
@@ -268,7 +266,9 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("Not in faction");
       }
       if (secondsFromDate(lockout, userVillage.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been in charge for 24 hours");
+        return errorResponse(
+          `Must have been in charge for ${KAGE_DELAY_SECS / 86400} days`,
+        );
       }
       // Guard on cost & mutate
       const { total } = calcStructureUpgrade(structure, userVillage);
