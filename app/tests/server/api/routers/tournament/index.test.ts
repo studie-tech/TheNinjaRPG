@@ -1,7 +1,7 @@
 import { Pusher } from "@/libs/pusher";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
-import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
+import { resetServerModuleStubs } from "../../../../setup/serverModules";
 import { archivedTournamentRecordName, syncTournamentState } from "@/routers/tournament";
 
 const FINALIZATION_INCOMPLETE =
@@ -60,11 +60,14 @@ const createClient = ({
   recordResponses = [null],
   tournamentResponses = [createTournamentData()],
   updateRowsAffected = [1, 1],
+  winner = { userId: "winner-1", username: "Winner" },
 }: {
   recordResponses?: Array<unknown>;
   tournamentResponses?: Array<unknown>;
   updateRowsAffected?: number[];
+  winner?: unknown;
 } = {}) => {
+  const userFindFirst = vi.fn().mockResolvedValue(winner);
   const tournamentFindFirst = vi.fn();
   for (const response of tournamentResponses) {
     tournamentFindFirst.mockResolvedValueOnce(response);
@@ -92,6 +95,9 @@ const createClient = ({
         tournamentRecord: {
           findFirst: tournamentRecordFindFirst,
         },
+        userData: {
+          findFirst: userFindFirst,
+        },
       },
       update: vi.fn().mockReturnValue({ set: updateSet }),
       delete: vi.fn().mockReturnValue({ where: deleteWhere }),
@@ -107,7 +113,6 @@ const createClient = ({
 
 describe("syncTournamentState", () => {
   const pusherTrigger = vi.fn();
-  const fetchUserMock = vi.fn();
   const updateRewardsMock = vi.fn();
 
   afterEach(() => {
@@ -121,14 +126,8 @@ describe("syncTournamentState", () => {
 
   beforeEach(() => {
     pusherTrigger.mockClear();
-    fetchUserMock.mockClear();
     updateRewardsMock.mockClear();
     vi.spyOn(Pusher.prototype, "trigger").mockImplementation(pusherTrigger);
-    stubProfile("fetchUser", fetchUserMock);
-    fetchUserMock.mockResolvedValue({
-      userId: "winner-1",
-      username: "Winner",
-    });
     updateRewardsMock.mockResolvedValue(undefined);
   });
 
@@ -154,8 +153,8 @@ describe("syncTournamentState", () => {
   });
 
   it("does not mark the tournament completed when the winner user is missing", async () => {
-    const { client } = createClient();
-    fetchUserMock.mockResolvedValue(null);
+    // A deleted character leaves its match rows behind; the lookup finds no user
+    const { client } = createClient({ winner: null });
 
     const result = await syncTournament(client);
 

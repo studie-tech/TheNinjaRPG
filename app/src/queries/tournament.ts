@@ -74,16 +74,21 @@ export const fetchMatch = async (client: DrizzleClient, matchId: string) => {
   });
 };
 
-import { inArray, isNull, or, sql } from "drizzle-orm";
+import { gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 import { clan, userData } from "@/drizzle/schema";
 
-/** Build the `clan` update for `createTournament`, setting `bank`, using predicates on `id`. */
+/** Build the `clan` bank debit for `createTournament`, guarded by the bank covering the prize. */
 export const updateClanForCreateTournament = (
   client: Pick<DrizzleClient, "update">,
   clanData: { id: string },
-) => client.update(clan).set({ bank: 0 }).where(eq(clan.id, clanData.id));
+  prize: number,
+) =>
+  client
+    .update(clan)
+    .set({ bank: sql`${clan.bank} - ${prize}` })
+    .where(and(eq(clan.id, clanData.id), gte(clan.bank, prize)));
 
 /** Build the `tournament` insert for `createTournament`. */
 export const insertTournamentForCreateTournament = (
