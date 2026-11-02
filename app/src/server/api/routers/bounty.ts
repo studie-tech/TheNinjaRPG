@@ -7,7 +7,7 @@ import {
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
-  deleteBountyContributions,
+  deleteBountyContribution,
   deleteBountySignupForResign,
   deleteBountySignups,
   findBountyById,
@@ -27,7 +27,6 @@ import {
   updateBountyForAddMoney,
   updateBountyForCollect,
   updateBountyForRetract,
-  updateUserDataForAddMoney,
 } from "@/queries/bounty";
 import { debitUserMoney, fetchUser, incrementUserMoney } from "@/queries/profile";
 import {
@@ -36,6 +35,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import {
   addBountyMoneySchema,
@@ -84,19 +84,24 @@ export const bountyRouter = createTRPCRouter({
           return isCreator || targetVillageId !== userVillageId;
         })
         .map((bountyItem) => ({
-          ...bountyItem,
-          huntersCount: bountyItem.hunters?.length ?? 0,
-          youSignedUp:
-            bountyItem.hunters?.some((h) => h.hunterUserId === userId) ?? false,
+          id: bountyItem.id,
+          amountRyo: bountyItem.amountRyo,
+          createdAt: bountyItem.createdAt,
+          status: bountyItem.status,
+          collectedAt: bountyItem.collectedAt,
+          claimedAt: bountyItem.claimedAt,
+          targetUserId: bountyItem.targetUserId,
+          claimedByUserId: bountyItem.claimedByUserId,
+          huntersCount: bountyItem.hunters.length,
+          youSignedUp: bountyItem.hunters.some((h) => h.hunterUserId === userId),
+          isCreator: bountyItem.creatorUserId === userId,
           targetUser: bountyItem.target,
-          creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
-          creatorUserId: bountyItem.creatorUserId,
-          huntingUsers: canSeeHiddenInfo
-            ? bountyItem.hunters
-                ?.map((h) => ("hunter" in h ? h.hunter : null))
-                .filter(Boolean)
-            : undefined,
           claimedByUser: bountyItem.claimedBy,
+          // Creator and hunter identities are staff-only
+          creatorUser: canSeeHiddenInfo ? bountyItem.creator : undefined,
+          huntingUsers: canSeeHiddenInfo
+            ? bountyItem.hunters.map((h) => h.hunter)
+            : undefined,
         }));
 
       const nextCursor = results.length < limit ? null : (input.cursor ?? 0) + 1;
@@ -246,13 +251,11 @@ export const bountyRouter = createTRPCRouter({
       if (curBounty.collectedAt) return errorResponse("Bounty already collected");
       if (!hunterSignup) return errorResponse("Not signed up for this bounty");
 
-      // Execute all mutations in parallel
+      // Claim the payout once; concurrent collects lose this compare-and-swap
+      const claim = await updateBountyForCollect(ctx.drizzle, bountyId, ctx.userId);
+      if (claim.rowsAffected !== 1) return errorResponse("Bounty already collected");
       await Promise.all([
-        // Update bounty as claimed
-        updateBountyForCollect(ctx.drizzle, bountyId),
-        // Update hunter signup as fulfilled
         deleteBountySignups(ctx.drizzle, bountyId),
-        // Award the bounty money to the hunter
         incrementUserMoney(ctx.drizzle, curBounty.amountRyo, ctx.userId),
       ]);
 
@@ -272,23 +275,29 @@ export const bountyRouter = createTRPCRouter({
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
       if (curBounty.status !== "OPEN") return errorResponse("Bounty not open");
-      if (input.amountRyo < 1) return errorResponse("Amount must be at least 1 Ryo");
       if (user.money < input.amountRyo) return errorResponse("Not enough ryo");
 
-      // Execute mutations in parallel
-      await Promise.all([
-        // Add money to the bounty
-        updateBountyForAddMoney(ctx.drizzle, input),
-        // Deduct money from the user
-        updateUserDataForAddMoney(ctx.drizzle, input, ctx),
-        // Track the contribution
-        insertBountyContribution(
-          ctx.drizzle,
-          input.bountyId,
-          ctx.userId,
-          input.amountRyo,
-        ),
-      ]);
+      // Debit first, then record the contribution before raising the bounty, so a
+      // retract or expiry that cancels the bounty in between refunds it
+      const debit = await debitUserMoney(ctx.drizzle, input.amountRyo, ctx);
+      if (debit.rowsAffected === 0) return errorResponse("Not enough ryo");
+      const contributionId = nanoid();
+      await insertBountyContribution(
+        ctx.drizzle,
+        input.bountyId,
+        ctx.userId,
+        input.amountRyo,
+        contributionId,
+      );
+      const raise = await updateBountyForAddMoney(ctx.drizzle, input);
+      if (raise.rowsAffected === 0) {
+        // Whoever deletes the contribution row owns its refund
+        const removal = await deleteBountyContribution(ctx.drizzle, contributionId);
+        if (removal.rowsAffected === 1) {
+          await incrementUserMoney(ctx.drizzle, input.amountRyo, ctx.userId);
+        }
+        return errorResponse("Bounty not open");
+      }
 
       return {
         success: true,
@@ -302,10 +311,7 @@ export const bountyRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [curBounty, contributions] = await Promise.all([
-        findBountyById(ctx.drizzle, input.bountyId),
-        listBountyContributions(ctx.drizzle, input.bountyId),
-      ]);
+      const curBounty = await findBountyById(ctx.drizzle, input.bountyId);
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
       if (curBounty.creatorUserId !== ctx.userId)
@@ -314,20 +320,9 @@ export const bountyRouter = createTRPCRouter({
       // First disable the bounty and check the result
       const result = await updateBountyForRetract(ctx.drizzle, input, ctx);
       if (result?.rowsAffected === 0) return errorResponse("Bounty not found");
-      // Execute mutations in parallel
       await Promise.all([
-        // Remove all hunter signups for this bounty
         deleteBountySignups(ctx.drizzle, input.bountyId),
-        // Remove all contributions for this bounty
-        deleteBountyContributions(ctx.drizzle, input.bountyId),
-        // Refund all contributors their money
-        ...contributions.map((contribution) =>
-          incrementUserMoney(
-            ctx.drizzle,
-            contribution.amountRyo,
-            contribution.contributorUserId,
-          ),
-        ),
+        refundBountyContributions(ctx.drizzle, input.bountyId),
       ]);
       return { success: true, message: "Bounty retracted successfully" };
     }),
@@ -398,3 +393,26 @@ export const bountyRouter = createTRPCRouter({
       return bountyHighlights;
     }),
 });
+
+/**
+ * Refund every contribution of a bounty that has already left the OPEN state. Contributions
+ * are read after that transition so late ones are included, and each is refunded only by the
+ * caller whose delete removed it, so concurrent refunders never pay the same row twice.
+ */
+export const refundBountyContributions = async (
+  client: DrizzleClient,
+  bountyId: string,
+) => {
+  const contributions = await listBountyContributions(client, bountyId);
+  await Promise.all(
+    contributions.map(async (contribution) => {
+      const removal = await deleteBountyContribution(client, contribution.id);
+      if (removal.rowsAffected !== 1) return;
+      await incrementUserMoney(
+        client,
+        contribution.amountRyo,
+        contribution.contributorUserId,
+      );
+    }),
+  );
+};

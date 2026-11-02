@@ -475,11 +475,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               );
             }
             // User can retract if they created the bounty and it's still open
-            if (
-              "creatorUserId" in b &&
-              b.creatorUserId === userData?.userId &&
-              b.status === "OPEN"
-            ) {
+            if (b.isCreator && b.status === "OPEN") {
               buttons.push(
                 <Button
                   key="retract"
@@ -512,7 +508,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               !b.youSignedUp &&
               b.huntersCount < 3 &&
               b.status === "OPEN" &&
-              b.creatorUserId !== userData?.userId
+              !b.isCreator
             ) {
               buttons.push(
                 <Button
