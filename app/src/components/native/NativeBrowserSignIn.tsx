@@ -92,28 +92,37 @@ export default function NativeBrowserSignIn() {
             </strong>
             ?
           </p>
-          <Button
-            className="min-h-[48px]"
-            disabled={approve.isPending}
-            onClick={() => void returnToApp()}
+          <div
+            className={`grid items-stretch gap-3 ${callback ? "grid-cols-1" : "grid-cols-2"}`}
           >
-            {approve.isPending ? "Returning…" : "Continue to the app"}
-          </Button>
-          {callback && (
-            <p>
-              <a href={callback}>Open the app</a>
-            </p>
-          )}
-          {!callback && (
-            <Button
-              variant="outline"
-              className="min-h-[48px]"
-              disabled={approve.isPending}
-              onClick={() => void switchAccount()}
-            >
-              Use another account
-            </Button>
-          )}
+            {!callback && (
+              <Button
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+                disabled={approve.isPending}
+                onClick={() => void returnToApp()}
+              >
+                {approve.isPending ? "Returning…" : "Continue to the app"}
+              </Button>
+            )}
+            {callback ? (
+              <Button
+                asChild
+                variant="outline"
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+              >
+                <a href={callback}>Open the app</a>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+                disabled={approve.isPending}
+                onClick={() => void switchAccount()}
+              >
+                Use another account
+              </Button>
+            )}
+          </div>
         </div>
       ) : step === "callback" ? (
         <AuthenticateWithRedirectCallback

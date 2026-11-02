@@ -9,6 +9,7 @@ import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserPatch } from "@/deltas/profile";
+import * as routing from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
 import * as UserContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
@@ -134,6 +135,16 @@ const observe = (queryFn: () => Promise<ReturnType<typeof profile>>) => {
 };
 
 describe("TutorialAssistant account boundary", () => {
+  it.each(["/native-sign-in", "/native-sign-in/"])("keeps tutorial and reward actions out of %s", (pathname) => {
+    const route = vi.spyOn(routing, "usePublicPathname").mockReturnValue(pathname);
+    const view = renderAssistant();
+    expect(view.container.innerHTML).toBe("");
+    expect(mocks.rewardHook).not.toHaveBeenCalled();
+    route.mockRestore();
+    view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
+    expect(mocks.rewardHook).toHaveBeenCalled();
+  });
   it("does not mount login-required reward hooks for signed-out visitors", () => {
     mocks.client.removeQueries({ queryKey: key });
     const view = renderAssistant();

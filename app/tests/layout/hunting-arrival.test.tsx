@@ -17,6 +17,7 @@ import { actualDialog, actualModal } from "../setup/preload";
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
 let canClaimToday: boolean;
+const streakQuery = vi.fn();
 const cachedEncounter = { session: { id: "session", sector: 1, battleId: null }, contract: huntingContract() };
 let encounterData: typeof cachedEncounter | null | undefined;
 let encounterError: Error | null;
@@ -43,12 +44,16 @@ beforeEach(() => {
   encounterData = cachedEncounter;
   encounterError = null;
   refetch.mockReset();
+  streakQuery.mockReset();
   Object.assign(vi.spyOn(client, "api" as never), {
     hunting: {
       getSession: { useQuery: () => ({ data: encounterData, error: encounterError, refetch }) },
     },
     activityStreak: {
-      getUserStreaks: { useQuery: () => ({ isLoading, data: isLoading ? undefined : { streaks: [{ canClaimToday, lastClaimDate: null }] } }) },
+      getUserStreaks: { useQuery: (...args: unknown[]) => {
+        streakQuery(...args);
+        return { isLoading, data: isLoading ? undefined : { streaks: [{ canClaimToday, lastClaimDate: null }] } };
+      } },
     },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
@@ -83,6 +88,28 @@ const shell = (blocked = false) => (
     <ActivityStreakPopup />
   </Provider>
 );
+
+it.each(["/native-sign-in", "/native-sign-in/"])("clears an open reward blocker on %s without dismissing eligibility", async (pathname) => {
+  const route = vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+  const popup = () => <Provider store={store}><ActivityStreakPopup /><button type="button">Continue to the app</button></Provider>;
+  const view = render(popup());
+  await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+  expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true);
+  const dismissedDate = window.localStorage.getItem("streakPopupDismissedDateX");
+
+  route.mockReturnValue(pathname);
+  view.rerender(popup());
+  await waitFor(() => expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false));
+  expect(view.queryByRole("dialog")).toBeNull();
+  expect(view.getByRole("button", { name: "Continue to the app" })).toBeTruthy();
+  expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: false });
+  expect(window.localStorage.getItem("streakPopupDismissedDateX")).toBe(dismissedDate);
+
+  route.mockReturnValue("/travel");
+  view.rerender(popup());
+  await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+  expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: true });
+});
 
 it.each([false, true])("opens hunting after daily rewards close (initial loading: %s)", async (loading) => {
   isLoading = loading;

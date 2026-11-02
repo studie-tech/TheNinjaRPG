@@ -4,9 +4,13 @@ import { Download, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
+import { isBrowserAuthPath } from "@/libs/native/deepLink";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector } from "@/utils/UserContext";
 
+/** Offers web installation without interrupting browser-to-app authentication. */
 export default function InstallPrompt() {
+  const pathname = usePublicPathname();
   const {
     isVisible,
     hidePrompt,
@@ -43,7 +47,13 @@ export default function InstallPrompt() {
   };
 
   // Don't show if already installed, if user recently dismissed, or if not on mobile
-  if (isStandalone || isInstalled || !isMobile || !isVisible) {
+  if (
+    isBrowserAuthPath(pathname) ||
+    isStandalone ||
+    isInstalled ||
+    !isMobile ||
+    !isVisible
+  ) {
     return null;
   }
 
