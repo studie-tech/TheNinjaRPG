@@ -57,6 +57,7 @@ import {
   userItemImbuement,
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
+import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
 import {
   deletedReason,
   editedReason,
@@ -225,6 +226,7 @@ import {
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
   updateItemLoadoutForRenameLoadout,
+  updateItemLoadoutForSetLoadoutHotkeys,
   updateItemLoadoutForToggleEquip,
   updateItemLoadoutForUnequipAllItems,
   updateItemPurchaseCounterForBuy,
@@ -251,6 +253,7 @@ import {
   updateUserItemForUnequipAllItems,
   updateUserItemForUpdate,
 } from "@/queries/item";
+import { fetchJutsuLoadouts } from "@/queries/jutsu";
 import { findActionLogById } from "@/queries/logs";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
@@ -339,7 +342,7 @@ import {
   UserUnlockedVariantResponseSchema,
   upsertItemVariantInputSchema,
 } from "@/validators/item";
-import { renameLoadoutSchema } from "@/validators/loadout";
+import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
@@ -3455,7 +3458,7 @@ export const itemRouter = createTRPCRouter({
         "item",
         loadouts.length,
         maxLoadouts,
-        { itemData: [] as ItemLoadout["itemData"] },
+        { itemData: [] as ItemLoadout["itemData"], hotkeys: {} },
         new Date(),
       );
       return backfillLoadouts<ItemLoadout>({
@@ -3528,6 +3531,37 @@ export const itemRouter = createTRPCRouter({
         : result;
     }),
 
+  setLoadoutHotkeys: protectedProcedure
+    .meta({ mcp: { description: "Set the battle hotkeys of a item loadout" } })
+    .input(setLoadoutHotkeysSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [loadout, jutsuLoadouts] = await Promise.all([
+        findItemLoadoutForRenameLoadout(ctx.drizzle, input, ctx),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+      ]);
+      if (!loadout) return errorResponse("Loadout not found");
+      const conflict = findLoadoutHotkeyConflict("item", input.hotkeys, jutsuLoadouts);
+      if (conflict) {
+        return errorResponse(
+          `${conflict.key.toUpperCase()} is used in ${conflict.loadoutName}. Change it there first.`,
+        );
+      }
+      // Concurrent edits on this account can leave a reversible binding conflict;
+      // resolveHotkeys still gives each key one action without requiring a transaction.
+      const result = await updateItemLoadoutForSetLoadoutHotkeys(
+        ctx.drizzle,
+        input,
+        ctx,
+      );
+      // MySQL reports no affected row when the keys did not change, so confirm
+      // ownership before calling an unchanged save a failure.
+      if (result.rowsAffected === 0) {
+        const exists = await findItemLoadoutForRenameLoadout(ctx.drizzle, input, ctx);
+        if (!exists) return errorResponse("Loadout not found");
+      }
+      return { success: true, message: "Hotkeys saved" };
+    }),
   renameLoadout: protectedProcedure
     .meta({ mcp: { description: "Rename an item loadout" } })
     .input(renameLoadoutSchema)

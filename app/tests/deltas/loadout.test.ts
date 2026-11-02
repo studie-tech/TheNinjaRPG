@@ -1,5 +1,5 @@
-import { expect, it } from "bun:test";
-import { getEquippedJutsuLoadouts, getOrderedJutsuLoadouts } from "@/deltas/loadout";
+import { describe, expect, it } from "bun:test";
+import { getEquippedJutsuLoadouts, getOrderedJutsuLoadouts, getLoadoutsWithHotkeys } from "@/deltas/loadout";
 import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 
 it("applies confirmed equip membership against its server baseline without replacing other loadouts", () => {
@@ -27,4 +27,24 @@ it("keeps the saved order bound to its requested loadout and recovers missing de
   expect(getOrderedJutsuLoadouts(rows, "one", ["b", "a"])).toEqual([{ ...rows[0]!, jutsuIds: ["b", "a"] }]);
   expect(getOrderedJutsuLoadouts(rows, "missing", [])).toBeUndefined();
   expect(getOrderedJutsuLoadouts(rows, "one", undefined)).toBeUndefined();
+});
+
+type Loadout = { id: string; name: string; hotkeys: Record<string, string> };
+
+const rows: Loadout[] = [
+  { id: "one", name: "One", hotkeys: { q: "jutsu-a" } },
+  { id: "two", name: "Two", hotkeys: {} },
+];
+
+describe("loadout hotkeys", () => {
+  it("replaces only the saved loadout's keys and keeps other rows", () => {
+    const updated = getLoadoutsWithHotkeys(rows, "two", { e: "item-b" });
+    expect(updated?.map((row) => row.hotkeys)).toEqual([{ q: "jutsu-a" }, { e: "item-b" }]);
+    expect(updated?.[0]).toBe(rows[0]!);
+    expect(rows[1]?.hotkeys).toEqual({});
+  });
+
+  it("patches nothing when the loadout is not loaded", () => {
+    expect(getLoadoutsWithHotkeys(rows, "missing", { e: "item-b" })).toBeUndefined();
+  });
 });

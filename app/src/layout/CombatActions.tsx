@@ -72,6 +72,10 @@ interface ActionSelectorSettingsProps {
   userActionPoints?: number;
   battle?: ReturnedBattle | null;
   userId?: string;
+  /** Battle key per action id, shown as a badge on the tile. */
+  hotkeys?: Record<string, string>;
+  /** Right-click or long-press on a tile opens key assignment for it. */
+  onAssignHotkey?: (item: ActionItemProps) => void;
 }
 
 interface ActionSelectorProps extends ActionSelectorSettingsProps {
@@ -192,13 +196,30 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
           const isHighlight = item.highlight ?? false;
 
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: right-click is a shortcut; keys can also be set on the jutsu and items pages.
             <div
               id={`tutorial-combat-action-${item.id}`}
               key={item.id}
               ref={i === filtered.length - 1 ? props.setLastElement : null}
               className="relative flex items-start justify-center"
+              onContextMenu={
+                props.onAssignHotkey
+                  ? (event) => {
+                      event.preventDefault();
+                      props.onAssignHotkey?.(item);
+                    }
+                  : undefined
+              }
             >
               <div className="relative h-full w-full">
+                {props.hotkeys?.[item.id] && (
+                  <kbd
+                    title={`Hotkey ${(props.hotkeys[item.id] ?? "").toUpperCase()}`}
+                    className="pointer-events-none absolute top-[2px] left-[2px] z-10 min-w-[16px] rounded-[3px] border border-black/40 bg-white/90 px-[3px] text-center font-bold font-mono text-[10px] text-black leading-[14px] shadow-sm"
+                  >
+                    {(props.hotkeys[item.id] ?? "").toUpperCase()}
+                  </kbd>
+                )}
                 {renderItem ? (
                   renderItem(item)
                 ) : (

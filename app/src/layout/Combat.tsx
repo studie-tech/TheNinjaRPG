@@ -49,6 +49,7 @@ import {
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import {
@@ -85,6 +86,8 @@ interface CombatProps {
   userId: string;
   setBattleState: React.Dispatch<React.SetStateAction<BattleState | undefined>>;
   config: CombatPreferences;
+  /** Key that ends the turn; follows the player's hotkey for End Turn. */
+  endTurnKey?: string;
 }
 
 /** Coordinate battle controls and snapshots with the owned battlefield renderer. */
@@ -140,6 +143,11 @@ const Combat: React.FC<CombatProps> = (props) => {
   const precomputedActionsRef = useRef<CombatAction[]>([]);
   const resultRef = useRef(result);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // Read by the document key listener, which only re-registers on [suid, timeDiff].
+  const endTurnKeyRef = useRef(props.endTurnKey ?? "");
+  useEffect(() => {
+    endTurnKeyRef.current = props.endTurnKey ?? "";
+  }, [props.endTurnKey]);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const battleId = battleRef.current?.id;
   const battleType = battleRef.current?.battleType;
@@ -730,6 +738,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (isBattleHotkeyBlocked(event)) return;
     if (event.key === "Escape") {
       setAggroTarget(null);
       return;
@@ -745,25 +754,27 @@ const Combat: React.FC<CombatProps> = (props) => {
         precomputedUserId: userIdRef.current,
         precomputedActions: precomputedActionsRef.current,
       });
-      switch (event.key) {
-        case "w":
-          // Same predicate the server authorizes with, so "w" fires on my own
-          // turn and on my piloted summon's turn, but not on my AI summon's
-          // (that one is auto-driven). actor.userId is the acting entity.
-          if (getTurnControl(actor, suid).isUserTurn) {
-            document.body.style.cursor = "wait";
-            if (canPerformAction()) {
-              performAction({
-                battleId: battleRef.current.id,
-                userId: actor.userId,
-                actionId: "wait",
-                longitude: actor.longitude,
-                latitude: actor.latitude,
-                version: battleRef.current.version,
-              });
-            }
+      // Modifier chords belong to the browser or OS, not to battle keys.
+      // A held key repeats keydown; one press ends one turn.
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+      // An `if`, not a `switch`: React Compiler cannot compile a ref read as a `case` label.
+      if (event.key.toLowerCase() === endTurnKeyRef.current) {
+        // Same predicate the server authorizes with, so "w" fires on my own
+        // turn and on my piloted summon's turn, but not on my AI summon's
+        // (that one is auto-driven). actor.userId is the acting entity.
+        if (getTurnControl(actor, suid).isUserTurn) {
+          document.body.style.cursor = "wait";
+          if (canPerformAction()) {
+            performAction({
+              battleId: battleRef.current.id,
+              userId: actor.userId,
+              actionId: "wait",
+              longitude: actor.longitude,
+              latitude: actor.latitude,
+              version: battleRef.current.version,
+            });
           }
-          break;
+        }
       }
     }
   };

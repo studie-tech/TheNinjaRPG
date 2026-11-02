@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
+import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
@@ -12,6 +13,8 @@ import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../../setup/dom.mjs";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState } from "../../setup/dungeon";
+import * as battleHotkeys from "@/hooks/useBattleHotkeys";
+import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
@@ -30,6 +33,7 @@ const clients: QueryClient[] = [];
 
 afterEach(() => {
   cleanup();
+  getDefaultStore().set(userContext.combatActionIdAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   vi.restoreAllMocks();
@@ -57,6 +61,10 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
   } as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
+  vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({
+    ...resolveHotkeys(null, null), hasJutsuLoadout: false, hasItemLoadout: false,
+    setHotkey: vi.fn(), isSaving: false,
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
     combat: {
@@ -259,4 +267,43 @@ it("selects the visible history during auto combat and marks its actions read", 
   await act(async () => queryClient.setQueryData(["combat", battle.id], { battle: { ...battle, version: 8 }, result: null }));
   await waitFor(() => expect(history.textContent).toBe("History"));
   expect(view.queryByRole("tab", { name: "Actions" })).toBeNull();
+});
+
+it("reads battle hotkeys from the loadouts chosen for this battle", async () => {
+  const battle = makeCompleteBattle({
+    id: "lobby",
+    usersState: [makeUser({ userId: "player", jutsuLoadout: "battle-jutsu", itemLoadout: "battle-item" })],
+  });
+  const { view } = mount("lobby", async () => ({ battle, result: null }) as unknown as Response);
+  await waitFor(() => expect(view.getByText("Active battle lobby")).toBeDefined());
+  expect(battleHotkeys.useBattleHotkeys).toHaveBeenLastCalledWith({
+    jutsuLoadoutId: "battle-jutsu",
+    itemLoadoutId: "battle-item",
+  });
+});
+
+it("preserves the selected action while settings controls handle battle keys", async () => {
+  const battle = makeCompleteBattle({
+    id: "keyboard-focus",
+    usersState: [makeUser({ userId: "player" })],
+  });
+  const { view } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+  for (const role of ["dialog", "combobox", "listbox", "option"]) {
+    const control = document.createElement("div");
+    control.setAttribute("role", role);
+    document.body.append(control);
+    try {
+      fireEvent.keyDown(control, { key: "a" });
+      fireEvent.keyDown(control, { key: "Escape" });
+      expect(store.get(userContext.combatActionIdAtom)).toBe("basicAttack");
+    } finally {
+      control.remove();
+    }
+  }
+  fireEvent.keyDown(document, { key: "a" });
+  expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
 });
