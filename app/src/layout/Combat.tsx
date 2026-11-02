@@ -26,7 +26,6 @@ import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
-import { useVisualEffects } from "@/hooks/visual-effects";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatRewards } from "@/layout/CombatRewards";
@@ -119,8 +118,6 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
-  const { visualEffects } = useVisualEffects();
-  const showDayNightMapOverlays = visualEffects.lighting;
   const [lightingPreviewDate, setLightingPreviewDate] = useState<Date | null>(null);
   const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
@@ -1039,7 +1036,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         viewer: userData,
         aggro: config.showAggro ? aggro : undefined,
         timeDiff,
-        cycleEnabled: showDayNightMapOverlays,
+        cycleEnabled: true,
         // Staff previews affect only rendering; turn deadlines use the server clock.
         lightDate: isStaffRole(userData?.role) ? lightingPreviewDate : null,
         weather: isStaffRole(userData?.role) ? weatherPreview : null,
@@ -1123,7 +1120,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     combat.isReady,
     lightingPreviewDate,
     weatherPreview,
-    showDayNightMapOverlays,
   ]);
   useEffect(
     () => () => {

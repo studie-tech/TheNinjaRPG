@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { lpcCatalog } from "../../setup/lpc";
 import * as pixi from "pixi.js";
@@ -73,7 +74,7 @@ const rendererFixture = () => {
   let disposed = false;
   const game = {
     lpcCatalog,
-    visualEffects: { lighting: true, shadows: true, animations: true },
+    visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     stage, canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
     renderer: { width: 800, height: 600, render: vi.fn() },

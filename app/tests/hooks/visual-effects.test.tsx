@@ -5,7 +5,7 @@ import { useVisualEffects } from "@/hooks/visual-effects";
 import { VISUAL_EFFECT_KEYS, subscribeVisualEffects } from "@/libs/visualEffects";
 
 const OverlayProbe = () => {
-  const { visualEffects: { lighting: showDayNightMapOverlays } } = useVisualEffects();
+  const { visualEffects: { dayNight: showDayNightMapOverlays } } = useVisualEffects();
   return <div data-enabled={showDayNightMapOverlays}>{String(showDayNightMapOverlays)}</div>;
 };
 
@@ -15,8 +15,14 @@ describe("useVisualEffects", () => {
     window.localStorage.clear();
   });
 
+  it("enables all seven independent effects by default", () => {
+    const { result } = renderHook(() => useVisualEffects());
+    expect(Object.keys(result.current.visualEffects)).toHaveLength(7);
+    expect(Object.values(result.current.visualEffects).every(Boolean)).toBe(true);
+  });
+
   it("keeps server markup stable when the stored client preference is false", () => {
-    window.localStorage.setItem(VISUAL_EFFECT_KEYS.lighting, "false");
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.dayNight, "false");
 
     expect(renderToString(<OverlayProbe />)).toBe(
       '<div data-enabled="true">true</div>',
@@ -24,11 +30,11 @@ describe("useVisualEffects", () => {
   });
 
   it("applies the persisted preference after hydration", async () => {
-    window.localStorage.setItem(VISUAL_EFFECT_KEYS.lighting, "false");
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.dayNight, "false");
     const { result } = renderHook(() => useVisualEffects());
 
     await waitFor(() => {
-      expect(result.current.visualEffects.lighting).toBe(false);
+      expect(result.current.visualEffects.dayNight).toBe(false);
     });
   });
 
@@ -36,10 +42,10 @@ describe("useVisualEffects", () => {
     const first = renderHook(() => useVisualEffects());
     const second = renderHook(() => useVisualEffects());
 
-    act(() => first.result.current.setVisualEffect("lighting", false));
+    act(() => first.result.current.setVisualEffect("dayNight", false));
 
-    expect(second.result.current.visualEffects.lighting).toBe(false);
-    expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS.lighting)).toBe(
+    expect(second.result.current.visualEffects.dayNight).toBe(false);
+    expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS.dayNight)).toBe(
       "false",
     );
   });
@@ -48,16 +54,16 @@ describe("useVisualEffects", () => {
     const hook = renderHook(() => useVisualEffects());
     const changes: unknown[] = [];
     const unsubscribe = subscribeVisualEffects((...change) => changes.push(change));
-    for (const effect of ["shadows", "animations"] as const) {
+    for (const effect of ["shadows", "weather", "wind", "spriteAnimations", "sunlight", "localLights"] as const) {
       act(() => hook.result.current.setVisualEffect(effect, false));
       expect(hook.result.current.visualEffects[effect]).toBe(false);
       expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS[effect])).toBe("false");
     }
-    expect(hook.result.current.visualEffects.lighting).toBe(true);
-    expect(changes).toEqual([["shadows", false], ["animations", false]]);
+    expect(hook.result.current.visualEffects.dayNight).toBe(true);
+    expect(changes).toHaveLength(6);
     unsubscribe();
     act(() => hook.result.current.setVisualEffect("shadows", true));
-    expect(changes).toHaveLength(2);
+    expect(changes).toHaveLength(6);
   });
 
   it("handles other-tab changes, removed preferences and malformed values", () => {

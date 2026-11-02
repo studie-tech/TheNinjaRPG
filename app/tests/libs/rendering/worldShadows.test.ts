@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, RenderLayer, Shader, Sprite, Texture } from "pixi.js";
@@ -26,7 +27,7 @@ const fixture = (instanced = false, resolution = 1) => {
   const world = new Container(), parent = new Container();
   const render = vi.fn();
   const canvas = document.createElement("canvas");
-  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, resolution, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
+  const game = { visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, resolution, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
@@ -107,6 +108,38 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("separates sunlight, ambient cycling and local lamps without changing the world clock", () => {
+    const f = fixture(), light = { ...worldSunlight(), day: .25 };
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      const filter = f.shadows.container.filters![0]!;
+      const look = filter.resources.look.uniforms;
+      f.shadows.update(light, viewport);
+      expect(look.uDay).toBe(.25);
+      expect(look.uSunlight).toBe(1);
+      expect(look.uLocalLights).toBe(1);
+      expect(look.uAmbient[0]).toBeCloseTo(.1775);
+      f.game.visualEffects.dayNight = false;
+      f.shadows.update(light, viewport);
+      expect(look.uAmbient[0]).toBeCloseTo(.32);
+      expect(look.uDay).toBe(.25);
+      expect(look.uSunlight).toBe(1);
+      f.game.visualEffects.sunlight = false;
+      f.shadows.update(light, viewport);
+      expect(look.uSunlight).toBe(0);
+      expect(look.uLocalLights).toBe(1);
+      expect(Array.from(look.uAmbient)).toEqual([1, 1, 1]);
+      f.game.visualEffects.localLights = false;
+      f.shadows.update(light, viewport);
+      expect(filter.enabled).toBe(false);
+      f.game.visualEffects.dayNight = true;
+      f.shadows.update(light, viewport);
+      expect(filter.enabled).toBe(true);
+      expect(look.uLocalLights).toBe(0);
+      expect(look.uSunlight).toBe(0);
+      expect(look.uAmbient[0]).toBeCloseTo(.3475);
+    } finally { f.dispose(); }
+  });
   it("stops queued occlusion on preference events without waiting for an offscreen frame", async () => {
     const createField = worldFields.createWorldOcclusion;
     const fields: ReturnType<typeof createField>[] = [];
@@ -121,10 +154,10 @@ describe("physical world lighting", () => {
     const f = fixture();
     try {
       f.shadows.update(worldSunlight(), viewport);
-      change("lighting", false);
+      change("localLights", false);
       await new Promise(r => setTimeout(r, 10));
       expect(fields[0]!.revision).toBe(0);
-      change("lighting", true);
+      change("localLights", true);
       for (let i = 0; i < 100 && !fields[0]!.revision; i++) await new Promise(r => setTimeout(r, 1));
       expect(fields[0]!.revision).toBeGreaterThan(0);
     } finally { f.dispose(); fieldSpy.mockRestore(); preferenceSpy.mockRestore(); }
@@ -148,7 +181,7 @@ describe("physical world lighting", () => {
     } finally { standard.dispose(); dense.dispose(); }
   });
 
-  it.each(["lighting", "shadows"] as const)("pauses queued occlusion when %s is disabled and resumes it on enable", async (effect) => {
+  it.each(["localLights", "shadows"] as const)("pauses queued occlusion when %s is disabled and resumes it on enable", async (effect) => {
     const createField = worldFields.createWorldOcclusion;
     const fields: ReturnType<typeof createField>[] = [];
     const spy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation(options => {
@@ -176,12 +209,12 @@ describe("physical world lighting", () => {
       f.shadows.update(worldSunlight(), viewport);
       const filter = f.shadows.container.filters![0]!;
       const before = f.render.mock.calls.length;
-      f.game.visualEffects.lighting = false;
+      f.game.visualEffects.sunlight = f.game.visualEffects.dayNight = f.game.visualEffects.localLights = false;
       f.shadows.update(worldSunlight(), viewport);
       f.shadows.update(worldSunlight(), { ...viewport, minX: 5, maxX: 105 });
       expect(filter.enabled).toBe(false);
       expect(f.render).toHaveBeenCalledTimes(before);
-      f.game.visualEffects.lighting = true;
+      f.game.visualEffects.localLights = true;
       f.shadows.update(worldSunlight(), viewport);
       expect(filter.enabled).toBe(true);
       expect(f.render.mock.calls.length).toBeGreaterThan(before);

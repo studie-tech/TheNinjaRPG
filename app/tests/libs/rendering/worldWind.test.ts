@@ -2,6 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND, sampleWorldWind, STILL_WORLD_WIND, worldWindGroup } from "@/libs/rendering/worldWind";
 
 describe("shared world wind", () => {
+  it("can stop and resume gusts independently of the animation clock", () => {
+    const frame = { now: 1700, delta: .016, reducedMotion: false };
+    expect(sampleWorldWind(frame, 1, false)).toBe(STILL_WORLD_WIND);
+    expect(Array.from(sampleWorldWind(frame, 1, true).large).some(Boolean)).toBe(true);
+  });
   it("keeps every phase inside the occlusion broadphase sweep", () => {
     for (const scale of [0.2, 0.8, 1, 1.6, 3.2]) {
       for (let now = 0; now < 30000; now += 137) {

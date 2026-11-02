@@ -31,7 +31,7 @@ const FarmCanvasInner = ({
 }: FarmCanvasProps) => {
   const { timeDiff } = useUserData();
   const { visualEffects } = useVisualEffects();
-  const showDayNightMapOverlays = visualEffects.lighting;
+  const showDayNightMapOverlays = visualEffects.dayNight;
   const mountRef = useRef<HTMLDivElement | null>(null);
   const current = useRef({
     timeDiff,
