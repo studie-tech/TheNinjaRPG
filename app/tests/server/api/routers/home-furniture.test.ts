@@ -268,12 +268,12 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(request.type).toBe("HOME");
     expect(request.status).toBe("PENDING");
     expect((await visitor.getVisitedHome({ userId })).home).toBeNull();
-    expect((await visitor.acceptHomeInvitation({ id: request.id })).success).toBe(true);
+    expect(await visitor.acceptHomeInvitation({ id: request.id })).toMatchObject({ success: true, message: "Invitation accepted" });
     const visit = await visitor.getVisitedHome({ userId });
     expect(visit.success).toBe(true);
     expect(visit.home?.furniture.some(({ id }) => id === "rug-row")).toBe(false);
     expect(visit.home && Object.keys(visit.home).sort()).toEqual(["biome", "furniture", "homeType", "layout", "styles", "username"]);
-    expect((await api.cancelHomeInvitation({ id: request.id })).success).toBe(true);
+    expect(await api.cancelHomeInvitation({ id: request.id })).toMatchObject({ success: true, message: "Invitation revoked" });
     expect((await visitor.getVisitedHome({ userId })).home).toBeNull();
     expect((await api.setHomeSharing({ revision: 0, isPublic: true })).success).toBe(true);
     expect((await visitor.getVisitedHome({ userId })).success).toBe(true);
