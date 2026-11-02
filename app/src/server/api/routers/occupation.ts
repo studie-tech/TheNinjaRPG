@@ -748,7 +748,8 @@ export const occupationRouter = createTRPCRouter({
             userCraftingRank,
             targetUserItem.item?.maxImbueNumber || 1,
             targetUserItem.imbuements.length,
-          ) ?? `This item already has its maximum of ${maxImbuedItems} crystals`,
+          ) ??
+            `This item already has its maximum of ${targetUserItem.item?.maxImbueNumber || 1} crystals`,
         );
       }
       if (

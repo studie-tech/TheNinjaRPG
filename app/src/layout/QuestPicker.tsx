@@ -85,8 +85,11 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         setStartError({
           message: data.message,
           questId: variables.questId,
+          // Only when the server refused for the concurrency slot, not e.g. for status
           concurrent:
-            !!quest && !!userData && !!questTypeConcurrentBlockMessage(quest, userData),
+            !!quest &&
+            !!userData &&
+            data.message === questTypeConcurrentBlockMessage(quest, userData),
         });
       }
       await updateUser(data, { revision: context?.userRevision });
