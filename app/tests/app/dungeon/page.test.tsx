@@ -1,9 +1,13 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { createTRPCReact, getQueryKey } from "@trpc/react-query";
+import { observable } from "@trpc/server/observable";
 import { afterEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
+import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
+import type { useDungeonAvailabilityCache } from "@/hooks/useDungeonAvailability";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import DungeonPage from "@/app/[shell]/dungeon/page";
 import * as ContentBox from "@/layout/ContentBox";
@@ -17,7 +21,10 @@ import { dungeonContent } from "../../setup/dungeon";
 type PartyState = RouterOutputs["coop"]["dungeon"]["getState"];
 type RunStatus = PartyState["runs"][number]["status"];
 type Available = RouterOutputs["coop"]["dungeon"]["getAvailable"];
-type ClaimCallbacks = { onSuccess: (response: UserDeltaResponse, input: { id: string }, revision: number | undefined) => Promise<void> };
+type MutationSnapshot = { userRevision: number | undefined; availability: ReturnType<ReturnType<typeof useDungeonAvailabilityCache>["prepareAvailabilityUpdate"]> };
+type ClaimCallbacks = { onMutate: () => MutationSnapshot; onSuccess: (response: UserDeltaResponse, input: { id: string }, snapshot: MutationSnapshot) => Promise<void> };
+const api = createTRPCReact<AppRouter>();
+const availableKey = getQueryKey(api.coop.dungeon.getAvailable, { sector: 1 }, "query");
 const clients: QueryClient[] = [];
 
 afterEach(() => {
@@ -45,7 +52,7 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
   ensureDom();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
-  if (seed) queryClient.setQueryData(["available"], seed);
+  if (seed) queryClient.setQueryData(availableKey, seed);
   const actCall = vi.fn();
   const createCall = vi.fn();
   const claimCall = vi.fn();
@@ -56,7 +63,7 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
     useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => undefined) } } }),
     pets: { getCollection: { useQuery: () => ({ data: { pets: [] }, isPending: false }) } },
     coop: { dungeon: {
-      getAvailable: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["available"], queryFn: availableFn }) },
+      getAvailable: api.coop.dungeon.getAvailable,
       getState: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["state"], queryFn: stateQuery }) },
       create: { useMutation: () => ({ isPending: false, mutate: createCall }) },
       act: { useMutation: () => ({ isPending: false, mutate: actCall }) },
@@ -68,9 +75,14 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
   vi.spyOn(Loader, "default").mockImplementation(({ explanation }: { explanation?: string }) => <div>{explanation}</div>);
   const countdown = vi.spyOn(Countdown, "default").mockImplementation(() => <span>30 minutes</span>);
-  const view = render(<QueryClientProvider client={queryClient}><DungeonPage /></QueryClientProvider>);
+  const trpc = api.createClient({ links: [() => () => observable((observer) => {
+    void Promise.resolve().then(availableFn).then((data) => {
+      observer.next({ result: { data } }); observer.complete();
+    }, (error) => observer.error(error));
+  })] });
+  const view = render(<api.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}><DungeonPage /></QueryClientProvider></api.Provider>);
   return { view, queryClient, stateQuery, actCall, createCall, claimCall, countdown, updateUser,
-    respondToClaim: (response: UserDeltaResponse) => claimCallbacks.onSuccess(response, { id: "run" }, 42) };
+    respondToClaim: (response: UserDeltaResponse) => claimCallbacks.onSuccess(response, { id: "run" }, claimCallbacks.onMutate()) };
 };
 
 const scenarios = [
@@ -107,7 +119,7 @@ it("uses the shared account clock across dungeon response updates", async () => 
 for (const scenario of scenarios) {
   it(`keeps ${scenario.status} controls usable when entrance lookup fails`, async () => {
     const { view, queryClient, actCall } = mount(scenario.status, async () => { throw new Error("Entrance lookup failed"); });
-    await waitFor(() => expect(queryClient.getQueryState(["available"])?.status).toBe("error"));
+    await waitFor(() => expect(queryClient.getQueryState(availableKey)?.status).toBe("error"));
     await waitFor(() => expect(view.getByRole("button", { name: scenario.label })).toBeDefined());
     expect(view.queryByRole("alert")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: scenario.label }));
@@ -118,12 +130,12 @@ for (const scenario of scenarios) {
     let resolveEntrance!: (value: Available) => void;
     const { view, queryClient, actCall } = mount(scenario.status, () => new Promise((resolve) => { resolveEntrance = resolve; }));
     await waitFor(() => expect(view.getByRole("button", { name: scenario.label })).toBeDefined());
-    expect(queryClient.getQueryState(["available"])?.status).toBe("pending");
+    expect(queryClient.getQueryState(availableKey)?.status).toBe("pending");
     expect(view.queryByText("Loading dungeon parties")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: scenario.label }));
     expect(actCall).toHaveBeenCalledWith({ id: "run", action: scenario.command, userId: undefined });
     await act(async () => resolveEntrance([]));
-    await waitFor(() => expect(queryClient.getQueryState(["available"])?.status).toBe("success"));
+    await waitFor(() => expect(queryClient.getQueryState(availableKey)?.status).toBe("success"));
     expect(view.getByRole("button", { name: scenario.label })).toBeDefined();
   });
 }
@@ -132,9 +144,9 @@ it("keeps the party usable after a failed entrance refresh with retained cached 
   const cached: Available = [{ id: "definition", content: dungeonContent(), admission: { requirements: dungeonContent().requirements, error: null, attempts: [], completions: [] }, updatedAt: new Date() }];
   const { view, queryClient, actCall } = mount("PAUSED", async () => { throw new Error("Entrance refetch failed"); }, undefined, cached);
   await waitFor(() => expect(view.getByRole("button", { name: "Resume and ready up" })).toBeDefined());
-  await act(async () => { await queryClient.refetchQueries({ queryKey: ["available"] }); });
-  await waitFor(() => expect(queryClient.getQueryState(["available"])?.status).toBe("error"));
-  expect(queryClient.getQueryData<Available>(["available"])).toEqual(cached);
+  await act(async () => { await queryClient.refetchQueries({ queryKey: availableKey }); });
+  await waitFor(() => expect(queryClient.getQueryState(availableKey)?.status).toBe("error"));
+  expect(queryClient.getQueryData<Available>(availableKey)).toEqual(cached);
   fireEvent.click(view.getByRole("button", { name: "Resume and ready up" }));
   expect(actCall).toHaveBeenCalledWith({ id: "run", action: "resume", userId: undefined });
 });

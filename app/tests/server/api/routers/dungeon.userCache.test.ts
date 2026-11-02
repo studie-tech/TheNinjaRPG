@@ -30,17 +30,19 @@ const goal = (profile: Profile, id: string) => profile.userData?.questData?.find
 const clients: QueryClient[] = [];
 const subscriptions: (() => void)[] = [];
 
+type MutationSnapshot = { userRevision: number | undefined; availability: undefined };
 type ClaimCallbacks = {
-  onMutate: () => number | undefined;
-  onSuccess: (response: UserDeltaResponse, input: unknown, revision: number | undefined) => Promise<void>;
+  onMutate: () => MutationSnapshot;
+  onSuccess: (response: UserDeltaResponse, input: unknown, snapshot: MutationSnapshot) => Promise<void>;
 };
 
 const page = readFileSync(join(import.meta.dirname, "../../../../src/app/[shell]/dungeon/page.tsx"), "utf8");
+const prepareSource = page.slice(page.indexOf("  const prepareUpdate ="), page.indexOf("  const state ="));
 const refreshSource = page.slice(page.indexOf("  const refresh ="), page.indexOf("  const create ="));
 const claimSource = page.slice(page.indexOf("  const claim ="), page.indexOf("  const runs ="));
 // Exercise the page's shared refresh and actual claim callback with the production cache merger.
 const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
-const claimFactory = transpiler.transformSync(`function createCallbacks() { ${refreshSource} ${claimSource} return { ...claim, refresh }; }`);
+const claimFactory = transpiler.transformSync(`function createCallbacks() { ${prepareSource} ${refreshSource} ${claimSource} return { ...claim, refresh }; }`);
 
 /** Use the production merge against a warmed profile and count any fallback profile read. */
 const cachedProfile = (initial: Profile, read: () => Promise<Profile>, priorState?: DungeonState) => {
@@ -65,8 +67,8 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>, priorStat
     () => prepareUserUpdate(client, key),
     (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options),
     { coop: { dungeon: { claim: { useMutation: (options: ClaimCallbacks) => options } } } },
-    { data: priorState, refetch: refetchState }, { refetch: refetchAvailable }, setMessage, setAbandonId, showMutationToast, vi.fn(), activeDungeonNotification, initial.userData,
-  ) as ClaimCallbacks & { refresh: (response: UserDeltaResponse, revision: number | undefined) => Promise<void> };
+    { data: priorState, refetch: refetchState }, { prepareAvailabilityUpdate: () => undefined, refreshAvailability: refetchAvailable }, setMessage, setAbandonId, showMutationToast, vi.fn(), activeDungeonNotification, initial.userData,
+  ) as ClaimCallbacks & { refresh: (response: UserDeltaResponse, snapshot: MutationSnapshot) => Promise<void> };
   return { client, key, refetch, refetchState, refetchAvailable, showMutationToast, setMessage, setAbandonId, callbacks, current: () => client.getQueryData<Profile>(key)! };
 };
 
@@ -268,7 +270,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     for (const money of [100, 109]) {
       const priorHydrations = hydration.mock.calls.length;
       if (money === 109) await db.update(userData).set({ money }).where(eq(userData.userId, userId));
-      const revision = prepareUserUpdate(cache.client, cache.key);
+      const revision = cache.callbacks.onMutate();
       const response = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
       expect(response.success).toBe(true);
       expect(response.userPatch).toBeUndefined();
@@ -393,7 +395,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       if (snapshot === "invalidated-revision")
         await cache.client.invalidateQueries({ queryKey: cache.key, exact: true, refetchType: "none" });
       const revision = cache.callbacks.onMutate();
-      expect(revision === undefined).toBe(snapshot === "invalidated-revision");
+      expect(revision.userRevision === undefined).toBe(snapshot === "invalidated-revision");
       const response = userDeltaResponseSchema.parse(await actor.claim({ id: "completed-run" }));
       expect(response).toMatchObject({ success: true, userPatch: { dungeonsCompleted: 1 }, userExpected: { dungeonsCompleted: 1 }, userDelta: { money: 100 } });
       const readState = cache.refetchState.getMockImplementation()!;

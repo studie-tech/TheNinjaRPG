@@ -36,6 +36,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
@@ -449,15 +450,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     return [...data.users, ...(data.overworldAis ?? []), ...viewer];
   }, [data?.users, data?.viewer, data?.overworldAis, profile, sector]);
   const warData = data?.warData;
-  // Poll authored entrances so publication and expiration update the current sector without reloads.
-  const { data: sectorDungeons } = api.coop.dungeon.getAvailable.useQuery(
-    { sector },
-    {
-      enabled: userData?.sector === sector,
-      refetchInterval: 10_000,
-      refetchIntervalInBackground: false,
-    },
-  );
+  const {
+    data: sectorDungeons,
+    onContentUpdated: refreshDungeonEntrances,
+    onContentSubscribed: recoverDungeonEntrances,
+  } = useDungeonAvailability(sector, userData?.sector === sector, timeDiff);
   const dungeonStructures = useMemo(
     () =>
       (sectorDungeons ?? [])
@@ -527,19 +524,28 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       if (!Number.isSafeInteger(event.revision) || event.revision < 0) return;
       updatePublicLocations(event.revision);
       void utils.mapAsset.getAll.invalidate();
-      void utils.coop.dungeon.getAvailable.invalidate();
+      refreshDungeonEntrances();
       // Active runs carry their private presentation in the profile snapshot.
       if (userRef.current?.userQuests.some((entry) => !entry.completed && !entry.endAt))
         void utils.profile.getUser.invalidate();
     };
     channel.bind("updated", update);
     channel.bind("pusher:subscription_succeeded", recoverPublicLocations);
+    channel.bind("pusher:subscription_succeeded", recoverDungeonEntrances);
     return () => {
       channel.unbind("updated", update);
       channel.unbind("pusher:subscription_succeeded", recoverPublicLocations);
+      channel.unbind("pusher:subscription_succeeded", recoverDungeonEntrances);
       pusher.unsubscribe("map-content");
     };
-  }, [pusher, utils, updatePublicLocations, recoverPublicLocations]);
+  }, [
+    pusher,
+    utils,
+    updatePublicLocations,
+    recoverPublicLocations,
+    refreshDungeonEntrances,
+    recoverDungeonEntrances,
+  ]);
   const questLocations = useMemo<MapLocation[]>(
     () => [
       ...(userData

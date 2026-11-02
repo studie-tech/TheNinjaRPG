@@ -27,6 +27,7 @@ import {
   DUNGEON_SOLO_PETS,
 } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
@@ -61,39 +62,42 @@ export default function DungeonPage() {
     defaultValues: { username: "", users: [] },
   });
   const selected = useWatch({ control: form.control, name: "users" });
-  const available = api.coop.dungeon.getAvailable.useQuery(
-    { sector: user?.sector ?? 1 },
-    {
-      enabled: !!user,
-      refetchInterval: 10_000,
-      refetchIntervalInBackground: false,
-    },
-  );
+  const available = useDungeonAvailability(user?.sector ?? 1, !!user, timeDiff, true);
+  const prepareUpdate = () => ({
+    userRevision: prepareUserUpdate(),
+    availability: available.prepareAvailabilityUpdate(),
+  });
   const state = api.coop.dungeon.getState.useQuery(undefined, {
     enabled: !!user,
     refetchInterval: 3000,
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
-  const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
+  const refresh = async (
+    response: UserDeltaResponse,
+    snapshot: ReturnType<typeof prepareUpdate>,
+  ) => {
     showMutationToast(response);
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
-    const [refreshed] = await Promise.all([state.refetch(), available.refetch()]);
+    const [refreshed] = await Promise.all([
+      state.refetch(),
+      available.refreshAvailability(snapshot.availability),
+    ]);
     // Canonical recovery must include any expiry or interrupted-start effects from the state read.
     const canApplyUserUpdate =
       !refreshed.isError && refreshed.data?.userPatch !== undefined;
     await updateUser(canApplyUserUpdate ? response : undefined, {
-      revision,
+      revision: snapshot.userRevision,
       expectedAfter: refreshed.data?.userExpected,
     });
   };
   const create = api.coop.dungeon.create.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: prepareUpdate,
     onSuccess: (response, _variables, revision) => refresh(response, revision),
     onError: (e) => setMessage(e.message),
   });
   const act = api.coop.dungeon.act.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: prepareUpdate,
     onSuccess: async (response, input, revision) => {
       if (response.success && input.action === "invite") form.reset();
       await refresh(response, revision);
@@ -101,7 +105,7 @@ export default function DungeonPage() {
     onError: (e) => setMessage(e.message),
   });
   const claim = api.coop.dungeon.claim.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: prepareUpdate,
     onSuccess: async (response, _variables, revision) => {
       if (response.success) setIsHistoryOpen(true);
       await refresh(response, revision);
