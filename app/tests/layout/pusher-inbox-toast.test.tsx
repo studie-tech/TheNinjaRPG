@@ -22,7 +22,7 @@ const router = {
 beforeEach(() => {
   ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
-  Object.assign(vi.spyOn(client, "api" as never), { useUtils: testApi.useUtils });
+  Object.assign(vi.spyOn(client, "api" as never), { tournament: testApi.tournament, useUtils: testApi.useUtils });
 });
 afterEach(() => {
   cleanup();

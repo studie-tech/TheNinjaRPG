@@ -13,6 +13,7 @@ import {
   EVENT_TOURNAMENT_READY_SECONDS,
   EVENT_TOURNAMENT_RETENTION_DAYS,
 } from "@/drizzle/constants";
+import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
@@ -61,7 +62,7 @@ export const EventTournaments = ({
     await Promise.all([
       utils.tournament.getEvent.invalidate(),
       utils.tournament.listEvents.invalidate(),
-      utils.tournament.getEventNotices.invalidate(),
+      reconcile.refreshNotices(),
     ]);
   };
   const [message, setMessage] = useState("");
@@ -626,7 +627,7 @@ const StaffTournamentControls = ({
       await Promise.all([
         utils.tournament.getEvent.invalidate(),
         utils.tournament.listEvents.invalidate(),
-        utils.tournament.getEventNotices.invalidate(),
+        reconcile.refreshNotices(),
         reconcile.apply(),
       ]);
     },
@@ -811,8 +812,10 @@ const date = (value: number) => new Date(value).toLocaleString();
 const useEventActionCache = () => {
   const { pusher } = useUserData();
   const utils = api.useUtils();
+  const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
   return {
     originSocketId: () => pusher?.connection.socket_id,
+    refreshNotices: refreshEventTournamentNotices,
     // Preserve the global error toast while recovering an action whose response was lost.
     settle: (_result: unknown, error: unknown) => {
       if (error)
@@ -820,7 +823,7 @@ const useEventActionCache = () => {
           utils.profile.getUser.invalidate(),
           utils.tournament.getEvent.invalidate(),
           utils.tournament.listEvents.invalidate(),
-          utils.tournament.getEventNotices.invalidate(),
+          refreshEventTournamentNotices(),
         ]);
     },
     apply: () => utils.profile.getUser.invalidate(),

@@ -1,18 +1,25 @@
 "use client";
 
-import { api } from "@/app/_trpc/client";
+import { useEventTournamentNotices } from "@/hooks/useEventTournamentNotices";
+import { usePageActive } from "@/hooks/usePageActive";
 import Link from "@/layout/Link";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Persistent ready-check prompt also reaches participants away from the tournament page. */
 export const EventTournamentNotice = () => {
-  const { data: user, isEventParticipant } = useUserDataSelector((user) => user.userId);
-  const { data } = api.tournament.getEventNotices.useQuery(undefined, {
+  const {
+    data: user,
+    timeDiff,
+    pusher,
+    userId,
+  } = useUserDataSelector((user) => user.userId);
+  const isPageActive = usePageActive();
+  const data = useEventTournamentNotices({
     enabled: !!user,
-    // Keep discovery alive for remote invitations or substitutions if a push is missed.
-    // Reserved participants still receive ready checks every 15 seconds between rounds.
-    refetchInterval: (query) =>
-      isEventParticipant || query.state.data?.length ? 15000 : 60000,
+    isPageActive,
+    timeDiff,
+    pusher,
+    userId,
   });
   if (!data?.length) return null;
   return (

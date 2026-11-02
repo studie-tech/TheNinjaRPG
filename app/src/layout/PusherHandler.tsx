@@ -7,6 +7,7 @@ import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
@@ -42,6 +43,7 @@ export const usePusherHandler = (
 
   // tRPC utility
   const utils = api.useUtils();
+  const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
 
   // Pusher connection
   const [pusher, setPusher] = useState<Pusher | undefined>(undefined);
@@ -142,7 +144,7 @@ export const usePusherHandler = (
           // Invitations and substitutions can make an idle tab a ready-check participant.
           await Promise.all([
             utils.profile.getUser.invalidate(),
-            utils.tournament.getEventNotices.invalidate(),
+            refreshEventTournamentNotices(),
             utils.tournament.getEvent.invalidate(),
             utils.tournament.listEvents.invalidate(),
           ]);
@@ -256,7 +258,7 @@ export const usePusherHandler = (
         pusher.disconnect();
       };
     }
-  }, [userId, clanId, villageId, router, utils]);
+  }, [userId, clanId, villageId, router, utils, refreshEventTournamentNotices]);
 
   return pusher;
 };
