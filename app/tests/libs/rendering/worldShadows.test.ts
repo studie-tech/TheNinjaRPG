@@ -45,6 +45,8 @@ const materialSourceFixture = (failedImage?: string) => {
     if (failedImage && String(src).startsWith(failedImage)) throw new Error("Missing movement sheet");
     return texture;
   });
+  // Cache eviction must use the same synthetic asset lifecycle as fixture loads.
+  const unload = vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
   const canvasContext = {
     drawImage() {},
     getImageData: () => ({ data: pixels }),
@@ -52,7 +54,7 @@ const materialSourceFixture = (failedImage?: string) => {
   const context = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
     ((kind: string) => kind === "2d" ? canvasContext : null) as HTMLCanvasElement["getContext"],
   );
-  return { texture, dispose: () => { context.mockRestore(); load.mockRestore(); texture.destroy(true); } };
+  return { texture, dispose: () => { context.mockRestore(); load.mockRestore(); unload.mockRestore(); texture.destroy(true); } };
 };
 
 describe("world sunlight", () => {
