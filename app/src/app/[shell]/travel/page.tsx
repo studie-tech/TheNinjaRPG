@@ -62,22 +62,6 @@ import {
   VILLAGE_REDUCED_GAINS_DAYS,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
-import {
-  finishItemConsumeRequest,
-  getItemConsumeErrorMessage,
-  getItemConsumeInput,
-} from "@/libs/itemConsumption";
-import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
-
-type RevealedPlayer = {
-  userId: string;
-  username: string;
-  longitude: number;
-  latitude: number;
-  villageId: string | null;
-  level: number;
-};
-
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -99,6 +83,11 @@ import NavTabs from "@/layout/NavTabs";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { nonCombatConsume } from "@/libs/item";
 import {
+  finishItemConsumeRequest,
+  getItemConsumeErrorMessage,
+  getItemConsumeInput,
+} from "@/libs/itemConsumption";
+import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
   isWalkableCoordinate,
@@ -117,6 +106,7 @@ import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 import {
   type FindSectorSchema,
   type FindSectorSchemaInput,
@@ -1913,3 +1903,13 @@ const RevealedPlayerCard = ({
 
 // Alias the procedure so its action name is not interpreted as a React hook.
 const activateSensory = api.stealth.useSensory;
+
+/** Public player fields shown by sensory reveals and their map markers. */
+type RevealedPlayer = {
+  userId: string;
+  username: string;
+  longitude: number;
+  latitude: number;
+  villageId: string | null;
+  level: number;
+};

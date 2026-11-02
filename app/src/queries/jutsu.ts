@@ -1395,8 +1395,8 @@ export const selectUserJutsuEquipped = (
     .limit(1);
 
 /**
- * Build the `jutsuLoadout` update for `appendJutsuIdToLoadoutAtomically`, setting
- * `jutsuIds`, using predicates on `id`, `userId`, `jutsuIds`.
+ * Append an absent jutsu to the user's active loadout without replacing concurrent additions.
+ * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
   client: Pick<DrizzleClient, "update">,
@@ -1423,8 +1423,8 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
     );
 
 /**
- * Build the `jutsuLoadout` update for `removeJutsuIdFromLoadoutAtomically`, setting
- * `jutsuIds`, using predicates on `id`, `userId`, `jutsuIds`.
+ * Remove a jutsu from the user's active loadout without replacing concurrent membership changes.
+ * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
   client: Pick<DrizzleClient, "update">,

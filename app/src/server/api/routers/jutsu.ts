@@ -2878,7 +2878,9 @@ export const tryEquipUserJutsuAtomically = async (args: {
  * concurrent equips cannot drop each other's IDs. Idempotent via NOT JSON_CONTAINS.
  * Only mutates the loadout if it is still the user's active pointer — otherwise a
  * concurrent selectJutsuLoadout would desynchronize the old loadout from equipped
- * rows. A snapshot result confirms the loaded order; concurrent edits retry without projecting.
+ * rows. Concurrent edits retry without projecting.
+ * @returns "snapshot" when the expected order matched, "confirmed" for success without that
+ * baseline proof, or false when synchronization cannot be confirmed.
  */
 const appendJutsuIdToLoadoutAtomically = async (args: {
   client: DrizzleClient;
@@ -2929,7 +2931,9 @@ const escapeJsonSearchPattern = (value: string) =>
  * Remove a jutsuId from a loadout's JSON array without rewriting the whole array, so
  * concurrent unequips cannot restore each other's IDs from stale snapshots.
  * Only mutates the loadout if it is still the user's active pointer.
- * A snapshot result confirms the loaded order; concurrent edits retry without projecting.
+ * Concurrent edits retry without projecting.
+ * @returns "snapshot" when the expected order matched, "confirmed" for success without that
+ * baseline proof, or false when synchronization cannot be confirmed.
  */
 const removeJutsuIdFromLoadoutAtomically = async (args: {
   client: DrizzleClient;
