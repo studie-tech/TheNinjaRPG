@@ -238,7 +238,6 @@ jobs:
           PUSH_TOKEN: ${{ secrets.PAT_TOKEN }}
           PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
           PREVIEW_BRANCH: tnr-preview/pr-${{ needs.command_gate.outputs.pr_number }}
-          PREVIEW_ENVIRONMENT_PATTERN: ${{ vars.TNR_MAIN_PREVIEW_ENV_PATTERN || '' }}
 
       - name: Post preview result
         uses: actions/github-script@v9

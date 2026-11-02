@@ -9,7 +9,7 @@
 #
 # Modes:
 #   • pr-review: smoke-test the PR's own Vercel preview
-#   • issue-repro: try to reproduce the issue on a Preview – tnr deploy of
+#   • issue-repro: try to reproduce the issue on a Vercel Preview deploy of
 #     latest main. We never use production (broker is preview-only) and never
 #     grab "whatever preview is newest" (that is almost always a PR head).
 #     If main has no reusable preview, we create an empty snapshot commit of
@@ -299,7 +299,7 @@ jobs:
                 `Mode: \`${mode}\``,
                 `Command: \`${command}\``,
                 isIssueRepro
-                  ? `Target: latest \`main\` (\`${headSha.slice(0, 7)}\`) — will reuse or create a Preview – tnr deploy of that SHA (not production, not a random PR preview).`
+                  ? `Target: latest \`main\` (\`${headSha.slice(0, 7)}\`) — will reuse or create a Vercel Preview deploy of that SHA (not production, not a random PR preview).`
                   : null,
                 `Run: [View workflow run](${runUrl})`,
                 '',
@@ -349,7 +349,6 @@ jobs:
           MAIN_SHA: ${{ needs.command_gate.outputs.head_sha }}
           TNR_MAIN_PREVIEW_URL: ${{ vars.TNR_MAIN_PREVIEW_URL }}
           PREVIEW_BRANCH: ${{ vars.TNR_MAIN_PREVIEW_BRANCH || 'tnr-preview/main' }}
-          PREVIEW_ENVIRONMENT_PATTERN: ${{ vars.TNR_MAIN_PREVIEW_ENV_PATTERN || '' }}
           VERCEL_CHECK_NAME_PATTERN: ${{ vars.TNR_VERCEL_CHECK_PATTERN || 'vercel' }}
 
       # If the preview isn't ready, update the comment with the reason

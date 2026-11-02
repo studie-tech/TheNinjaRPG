@@ -3,12 +3,12 @@
  *
  * Looks for a preview in this order:
  *   1. Successful Vercel check runs on the PR head SHA (legacy auto-deploys)
- *   2. A reusable "Preview – tnr" GitHub deployment of the PR head SHA
+ *   2. A reusable Vercel Preview GitHub deployment of the PR head SHA
  *   3. A snapshot commit on `tnr-preview/pr-{N}` whose parent is the PR head
  *
  * Env vars consumed:
  *   GITHUB_TOKEN, PR_NUMBER, VERCEL_CHECK_NAME_PATTERN,
- *   PREVIEW_BRANCH (optional), PREVIEW_ENVIRONMENT_PATTERN
+ *   PREVIEW_BRANCH (optional)
  *
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready    — "true" | "false"
@@ -26,8 +26,6 @@ const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 const prNumber = Number(process.env.PR_NUMBER);
 const checkNamePatternRaw = process.env.VERCEL_CHECK_NAME_PATTERN ?? "vercel";
-const environmentPatternRaw =
-  process.env.PREVIEW_ENVIRONMENT_PATTERN || "^Preview\\s+[–-]\\s+tnr$";
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -54,7 +52,6 @@ const preview = createPreviewDeploymentClient({
   githubRequest,
   owner,
   repo,
-  environmentRegex: new RegExp(environmentPatternRaw, "i"),
 });
 
 /** Parse the deployment URL out of a Vercel check run's output summary. */
