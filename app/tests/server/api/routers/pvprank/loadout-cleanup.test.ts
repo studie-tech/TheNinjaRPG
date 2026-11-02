@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, setSystemTime } from "bun:test";
+import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { RANKED_LOADOUT_MAX_HEAL_JUTSUS } from "@/drizzle/constants";
 import {
@@ -9,6 +9,7 @@ import {
   rankedSeason,
   userData,
 } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { HealTag, PoisonTag } from "@/validators/combat";
@@ -35,7 +36,9 @@ const loadout = (jutsuIds: string[], weaponIds: string[] = []) => ({
 });
 
 describeWithDatabase("ranked prohibited loadout cleanup", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       rankedPvpQueue,
       rankedLoadout,

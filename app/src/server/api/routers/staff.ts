@@ -281,6 +281,7 @@ import {
   migrateStorePurchaseTransfers,
   retireStoreUserId,
 } from "@/server/utils/purchases/grant";
+import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
 import {
   canClearSectors,
@@ -538,7 +539,9 @@ export const staffRouter = createTRPCRouter({
         // Clean up raid/clan/shrine battle queue
         deleteBattleQueueMembersForUser(ctx.drizzle, input.userId),
         // Clean up ranked PVP queue
-        deleteRankedQueueForUser(ctx.drizzle, input.userId),
+        deleteRankedQueueForUser(ctx.drizzle, input.userId).then(async (result) => {
+          await notifyRankedQueueChanged(result.rowsAffected);
+        }),
       ]);
       // Clean up empty teams or stuck claiming states if user was in a team
       if (queueEntry) {
@@ -1222,7 +1225,9 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   // Batch 10: Battle, war & ranked PVP
   await Promise.all([
     deleteBattleQueueMembersForUser(client, userId),
-    deleteRankedQueueForUser(client, userId),
+    deleteRankedQueueForUser(client, userId).then(async (result) => {
+      await notifyRankedQueueChanged(result.rowsAffected);
+    }),
     deleteUserRankedRewards(client, userId),
     deleteKageDefendedChallengesForDeleteUserInternal(client, userId),
     deleteKageDefendedChallengesForDeleteUserInternal2(client, userId),

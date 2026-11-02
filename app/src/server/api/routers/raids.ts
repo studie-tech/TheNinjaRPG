@@ -107,6 +107,7 @@ import type { DrizzleClient } from "@/server/db";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
+import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
@@ -668,7 +669,9 @@ export const raidsRouter = createTRPCRouter({
             ]
           : []),
         // Clear ranked PVP queue — being in it sets status to QUEUED which blocks raid joining
-        deleteRankedQueueForUser(ctx.drizzle, userId),
+        deleteRankedQueueForUser(ctx.drizzle, userId).then(async (result) => {
+          await notifyRankedQueueChanged(result.rowsAffected);
+        }),
         // Cancel spar requests the user sent
         updateUserRequestForReadyToQueue(ctx.drizzle, userId),
         // Reject spar requests the user received

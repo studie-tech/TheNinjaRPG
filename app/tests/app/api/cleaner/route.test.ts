@@ -15,6 +15,7 @@ import {
   war,
   warAlly,
 } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import type { DrizzleClient } from "@/server/db";
 import { acceptWarAllyOffer } from "@/server/utils/warAlly";
 import * as cleanerUtils from "@/server/utils/cleaner";
@@ -45,9 +46,9 @@ const request = (secret = "test-cron") => new Request("https://example.com/api/c
 const dialect = new MySqlDialect();
 const queryBuilder = new QueryBuilder();
 const skipDelete = () => ({
-  where: vi.fn(() => Object.assign(Promise.resolve(undefined), {
+  where: vi.fn(() => Object.assign(Promise.resolve({ rowsAffected: 0 }), {
     orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(undefined),
+    limit: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
   })),
 });
 const offer = {
@@ -241,6 +242,29 @@ describe("account deletion in the existing cleaner", () => {
     expect(mocks.reset).toHaveBeenCalledWith();
   });
   describeWithDatabase("ranked queue status repair", () => {
+    it("signals an expired ranked queue deletion but skips empty cleanup", async () => {
+      const db = await getTestDatabase();
+      await resetTables(rankedPvpQueue);
+      await db.insert(rankedPvpQueue).values([
+        { id: "expired", userId: "expired", rankedLp: 1000, createdAt: new Date(Date.now() - 25 * 3_600_000) },
+        { id: "current", userId: "current", rankedLp: 1000 },
+      ]);
+      const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      stubDatabase({
+        execute: mocks.execute,
+        select: queryBuilder.select.bind(queryBuilder),
+        delete: (table: object) => table === rankedPvpQueue ? db.delete(rankedPvpQueue) : skipDelete(),
+        update: () => ({ set: () => ({ where: vi.fn().mockResolvedValue(undefined) }) }),
+      });
+      mocks.lock.mockResolvedValue({ release: mocks.reset, isNewHour: true, prevTime: new Date(0) });
+      expect((await GET(request())).status).toBe(200);
+      expect((await db.query.rankedPvpQueue.findMany()).map(row => row.id)).toEqual(["current"]);
+      expect(trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
+      trigger.mockClear();
+      expect((await GET(request())).status).toBe(200);
+      expect(trigger).not.toHaveBeenCalled();
+    });
+
     it("releases an orphan with a provisional ranked row while preserving a claimed queue", async () => {
       const db = await getTestDatabase();
       await resetTables(mpvpBattleUser, rankedPvpQueue, userData);

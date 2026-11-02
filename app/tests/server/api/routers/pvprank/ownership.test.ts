@@ -215,6 +215,20 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
     expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(1);
   });
 
+  it("signals the aggregate after a successful match removes both queue entries", async () => {
+    const db = await getTestDatabase();
+    const member = callerForDatabase(pvpRankRouter, "member", db);
+    const leader = callerForDatabase(pvpRankRouter, "leader", db);
+    expect((await member.queueForRankedPvp()).success).toBe(true);
+    expect((await leader.queueForRankedPvp()).success).toBe(true);
+    expect(await member.getRankedQueueCount()).toBe(2);
+    vi.clearAllMocks();
+    expect(await member.checkRankedPvpMatches()).toMatchObject({ success: true, message: "Match found!" });
+    expect(await queueRows()).toHaveLength(0);
+    expect(await member.getRankedQueueCount()).toBe(0);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
+  });
+
   it("requires claimed ranked ownership at the final combat claim and rollback", async () => {
     const db = await getTestDatabase();
     await claimClanQueue();
