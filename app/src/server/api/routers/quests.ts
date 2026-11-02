@@ -550,19 +550,6 @@ export const questsRouter = createTRPCRouter({
     .output(
       userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
-        questStartUpdate: z
-          .object({
-            questId: z.string(),
-            beforePreviousAttempts: z.number(),
-            after: z.object({
-              previousAttempts: z.number(),
-              previousCompletes: z.number(),
-              periodCompletes: z.number(),
-              periodStartAt: z.date().nullable(),
-              completed: z.number(),
-            }),
-          })
-          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -680,7 +667,6 @@ export const questsRouter = createTRPCRouter({
               user,
               updatedUser.publishedAchievementIds,
               await consumeUserAnnouncements(ctx.drizzle, user),
-              result.id,
               [],
             )
           : {}),
@@ -698,19 +684,6 @@ export const questsRouter = createTRPCRouter({
     .output(
       userDeltaResponseSchema.extend({
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
-        questStartUpdate: z
-          .object({
-            questId: z.string(),
-            beforePreviousAttempts: z.number(),
-            after: z.object({
-              previousAttempts: z.number(),
-              previousCompletes: z.number(),
-              periodCompletes: z.number(),
-              periodStartAt: z.date().nullable(),
-              completed: z.number(),
-            }),
-          })
-          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -758,7 +731,6 @@ export const questsRouter = createTRPCRouter({
               user,
               updatedUser.publishedAchievementIds,
               await consumeUserAnnouncements(ctx.drizzle, user),
-              input.questId,
               inventoryChanges,
             )
           : {}),

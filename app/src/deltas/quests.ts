@@ -2,7 +2,6 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import { getInventoryQuantityChanges } from "@/deltas/item";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
-import { UserStatNames, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import type { Quest, QuestHistory, UserItem } from "@/drizzle/schema";
 import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
 import {
@@ -46,7 +45,6 @@ export const getQuestStartUserUpdate = (
   user: Parameters<typeof getUserProgressionUpdate>[0],
   publishedAchievementIds: readonly string[],
   receipt: { announcements: { name: string }[]; claimedAt?: Date } | undefined,
-  questId: string,
   inventoryChanges: InventoryQuantityChange[] | undefined,
 ) => {
   if (!receipt) return {};
@@ -61,27 +59,6 @@ export const getQuestStartUserUpdate = (
     },
     announcements: receipt.announcements.map((entry) => entry.name),
     inventoryChanges,
-    questStartUpdate: getQuestStartCacheUpdate(user, questId),
-  };
-};
-
-/** Publish the history fields already written by this supported assignment. */
-export const getQuestStartCacheUpdate = (
-  user: Parameters<typeof getUserProgressionUpdate>[0],
-  questId: string,
-) => {
-  const entry = user.userQuests.find((entry) => entry.questId === questId);
-  if (!entry) return;
-  return {
-    questId,
-    beforePreviousAttempts: entry.previousAttempts - 1,
-    after: {
-      previousAttempts: entry.previousAttempts,
-      previousCompletes: entry.previousCompletes,
-      periodCompletes: entry.periodCompletes,
-      periodStartAt: entry.periodStartAt,
-      completed: entry.completed,
-    },
   };
 };
 
@@ -95,84 +72,6 @@ export const getQuestEntryInventoryChanges = (
     beforeQuantity: charge.expectedQuantity,
     quantity: charge.expectedQuantity - charge.quantity,
   }));
-
-/** Refilter confirmed starts; eligibility changes, day rollover, ticket totals and stale inputs retain reads. */
-export const getStartedQuestDiscovery = <
-  T extends RouterOutputs["quests"]["missionHall"][number],
->(
-  rows: T[],
-  user: Parameters<typeof getUserProgressionUpdate>[0] | undefined,
-  update: NonNullable<ReturnType<typeof getQuestStartCacheUpdate>>,
-  inventoryChanges: InventoryQuantityChange[] | undefined,
-  input: { level?: number; villageId?: string },
-  baseline: { user: typeof user; queriedAt: number },
-  now: Date,
-): T[] | undefined => {
-  if (
-    !user ||
-    !baseline.user ||
-    periodStart("daily", new Date(baseline.queriedAt)).getTime() !==
-      periodStart("daily", now).getTime() ||
-    // Discovery is already filtered: changed eligibility can add rows that are absent locally.
-    (
-      [
-        ...UserStatNames,
-        "level",
-        "rank",
-        "role",
-        "villageId",
-        "isOutlaw",
-        "bloodlineId",
-        "sageModeId",
-        "sageMasteryExperience",
-        "medicalExperience",
-        "huntingExperience",
-        "gatheringExperience",
-        "farmingExperience",
-      ] as const
-    ).some((field) => baseline.user![field] !== user[field]) ||
-    user.completedQuests.some(
-      (entry) =>
-        entry.questId !== update.questId &&
-        !baseline.user!.completedQuests.some(
-          (before) =>
-            before.questId === entry.questId && before.completed === entry.completed,
-        ),
-    ) ||
-    input.level !== user.level ||
-    !inventoryChanges ||
-    (input.villageId !== undefined &&
-      input.villageId !==
-        (user.isOutlaw
-          ? VILLAGE_SYNDICATE_ID
-          : (user.villageId ?? VILLAGE_SYNDICATE_ID)))
-  )
-    return;
-  const started = rows.find((row) => row.id === update.questId);
-  if (
-    started &&
-    ((started.previousAttempts ?? 0) !== update.beforePreviousAttempts ||
-      (started.previousCompletes ?? 0) !== update.after.previousCompletes ||
-      (started.periodCompletes ?? 0) !== update.after.periodCompletes ||
-      (started.periodStartAt?.getTime() ?? null) !==
-        (update.after.periodStartAt?.getTime() ?? null))
-  )
-    return;
-  // Discovery stores item totals, not stack identities; ticket-bearing lists recover those totals.
-  if (
-    inventoryChanges.length &&
-    rows.some(
-      (row) =>
-        "entryRequirements" in row &&
-        Array.isArray(row.entryRequirements) &&
-        row.entryRequirements.length,
-    )
-  )
-    return;
-  return rows
-    .map((row) => (row.id === update.questId ? { ...row, ...update.after } : row))
-    .filter((row) => isAvailableUserQuests(row, user, true).check);
-};
 
 /**
  * Scalar rewards compose with accepted cache updates; derived state needs reconciliation.

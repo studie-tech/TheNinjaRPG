@@ -900,7 +900,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         snapshot,
       );
     },
-    onError: invalidateInventory,
+    onError: async (error) => {
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await invalidateInventory();
+    },
     onSettled,
   });
 
