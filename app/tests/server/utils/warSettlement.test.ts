@@ -642,7 +642,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     stubProfile("fetchUpdatedUser", async () => ({
       user: await db.query.userData.findFirst({
         where: eq(userData.userId, "attacker-kage"),
-        with: { village: true },
+        with: { village: { with: { sectors: true } } },
       }),
       requiresUserRefresh: false,
     }));
@@ -683,7 +683,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       stubProfile("fetchUpdatedUser", async () => ({
         user: await db.query.userData.findFirst({
           where: eq(userData.userId, "other-kage"),
-          with: { village: true },
+          with: { village: { with: { sectors: true } } },
         }),
         requiresUserRefresh: false,
       }));

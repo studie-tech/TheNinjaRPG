@@ -59,7 +59,6 @@ import { fetchUser } from "@/queries/profile";
 import { fetchQuest, listVisibleRaidQuests } from "@/queries/quests";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import {
-  countVillageSectors,
   fetchAlliances,
   fetchSector,
   fetchStructures,
@@ -877,7 +876,7 @@ export const warRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, activeWars, villages, relationships, targetSector, sectorCount] =
+      const [{ user }, activeWars, villages, relationships, targetSector] =
         await Promise.all([
           fetchUpdatedUser({
             client: ctx.drizzle,
@@ -887,7 +886,6 @@ export const warRouter = createTRPCRouter({
           fetchVillages(ctx.drizzle),
           fetchAlliances(ctx.drizzle),
           fetchSector(ctx.drizzle, input.sectorId),
-          countVillageSectors(ctx.drizzle, input.userVillageId),
         ]);
       // Derived
       const now = new Date();
@@ -975,6 +973,7 @@ export const warRouter = createTRPCRouter({
           `You can only own ${SHRINE_MAX_PER_VILLAGE} sectors at a time`,
         );
       }
+      const sectorCount = user.village.sectors.length;
       if (user.isOutlaw && sectorCount >= WAR_FACTION_MAX_SECTORS) {
         return errorResponse(
           `Your faction has too many sectors. Can max own ${WAR_FACTION_MAX_SECTORS} sectors`,

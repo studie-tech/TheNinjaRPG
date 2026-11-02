@@ -4,6 +4,7 @@ import {
   WAR_DECLARATION_COST,
   WAR_MINIMUM_MEMBERS_REQUIRED,
   WAR_PURCHASE_SHRINE_TOKEN_COST,
+  WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
 import {
   clan,
@@ -160,6 +161,29 @@ describeWithDatabase("faction sector purchases", () => {
       });
       expect(await db.select().from(notification)).toHaveLength(0);
       await assertOwnershipAndBalance();
+    },
+  );
+
+  it.each([ATTACKER, null])(
+    "applies the sector cap to the leader's village (input village %p)",
+    async (userVillageId) => {
+      await seedWorld("VILLAGE");
+      const db = await getTestDatabase();
+      await db.insert(sector).values(
+        Array.from({ length: WAR_VILLAGE_MAX_SECTORS - 1 }, (_, index) => ({
+          sector: 200 + index,
+          villageId: ATTACKER,
+        })),
+      );
+      const result = await (await callerFor(warRouter, LEADER)).declareSectorWar({
+        sectorId: TARGET_SECTOR,
+        userVillageId,
+      });
+      expect(result).toMatchObject({
+        success: false,
+        message: `Your village has too many sectors. Can max own ${WAR_VILLAGE_MAX_SECTORS} sectors`,
+      });
+      expect(await db.select().from(war)).toHaveLength(0);
     },
   );
 
