@@ -21,7 +21,7 @@ const frame = (now = 1000, reducedMotion = true): runtime.GameFrame => ({ now, d
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const appearance = resolveSpriteAppearance({});
 const player = (patch: Partial<SectorUser> = {}) => ({ userId: "self", longitude: 4, latitude: 4, status: "AWAKE", rank: "JONIN", allianceStatus: "NEUTRAL", experience: 0, spriteAppearance: appearance, curHealth: 1, maxHealth: 100, ...patch }) as SectorUser;
-const viewer = { userId: "self", sector: 724, rank: "JONIN", userQuests: [], questData: [] } as unknown as UserWithRelations;
+const viewer = { userId: "self", sector: 724, rank: "JONIN", userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>;
 const windowEntry = (sector = 724, dy = 0): TravelWindowEntry => ({
   sector, dx: 0, dy, villageType: null, globalTileType: 1,
   map: { formatVersion: 1, sector, name: "Depth test", width: 12, height: 12, tiles: [], anchors: [], exits: [], metadata: { importedAt: "", source: "tiled" }, objects: [{ id: "tree", type: "decoration", assetKey: "tree", x: 4, y: 5 }] },
@@ -47,7 +47,7 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, invalidate: () => {},
+    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(),
     listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
     dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
@@ -86,6 +86,30 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it("prepares destination scenery during travel and resumes the same scene on arrival", async () => {
+    const state = snapshotFixture();
+    state.viewer = { ...viewer, status: "TRAVEL" };
+    state.enabled = false;
+    const { scene, game, advance, event, onTap, world } = await sceneFixture(state);
+    const sector = scene.sectors.get(state.sector)!;
+    expect(sector.art.entries.length).toBeGreaterThan(0);
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    const actors = world.children.at(-1)!;
+    expect(actors.children).toHaveLength(0);
+    event("pointerdown", 400, 300); event("pointerup", 400, 300);
+    expect(onTap).not.toHaveBeenCalled();
+    const builds = (runtime.createGameRenderer as ReturnType<typeof vi.fn>).mock.calls.length;
+    state.viewer = { ...viewer, status: "AWAKE" };
+    state.enabled = true;
+    scene.recenter();
+    expect(game.invalidate).toHaveBeenCalled();
+    advance(); await settle();
+    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    expect(scene.sectors.get(state.sector)).toBe(sector);
+    expect((runtime.createGameRenderer as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(builds);
+    expect(actors.children.length).toBeGreaterThan(0);
+  });
+
   it.each([false, true])("allows walking and live actors during scenery loading and owns cancellation (%s)", async (cancel) => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = `pending-building-${cancel}.png`;

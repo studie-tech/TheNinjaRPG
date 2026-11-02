@@ -2277,7 +2277,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     friendlyAttack: allyAttack,
     structureObjectiveIds: structureObjectiveIdsRef.current,
     nav: windowNavRef.current,
-    enabled: !props.showSorrounding,
+    enabled: !props.showSorrounding && userData?.status === "AWAKE",
     brightness: 1,
     lightDate: null,
     decorations: mergedDecorations,
@@ -2322,6 +2322,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
+              userRef.current?.status === "AWAKE" &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,
@@ -2360,14 +2361,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   }, [travel.isReady, travel.error]);
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.recenter();
-  }, [travel.isReady, props.cameraFocusRevision]);
+  }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady) return;
+    if (!travel.isReady || profile?.status !== "AWAKE") return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [travel.isReady]);
+  }, [travel.isReady, profile?.status]);
   useEffect(() => {
     sectorWindowRef.current = sectorWindow;
     if (!travel.isReady) return;

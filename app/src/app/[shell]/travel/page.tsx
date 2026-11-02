@@ -575,6 +575,7 @@ function Travel() {
         // Sector writes arrival coordinates only from UserContext, and a
         // leftover target could overwrite them once the start mutation lands.
         setTargetPosition(null);
+        setWorldExpanded(false);
         if (!userData) return;
         const previous = {
           status: userData.status,
@@ -633,6 +634,8 @@ function Travel() {
       onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
         if (!result.success) return;
+        // Keep the prepared destination mounted while profile and presence reconcile.
+        setActiveTab(sectorLink);
         const patch = result.userPatch;
         const profileApplied = await updateUser(
           patch
@@ -643,7 +646,6 @@ function Travel() {
         );
         await updateSector(profileApplied, context.sector);
         if (currentStep?.title === "Travel") await handleNextStepAsync();
-        setActiveTab(sectorLink);
       },
     });
 
@@ -809,8 +811,9 @@ function Travel() {
 
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
-  // World travel chooses a new landing position. Remount the local scene on
-  // arrival so its movement origin cannot retain the departure coordinates.
+  // Admission supplies the destination coordinates. Prepare its scene during the
+  // countdown, after admission settles, and keep that instance for arrival.
+  const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
   const showSector =
     villages &&
     hasCurrentSector &&
@@ -892,7 +895,7 @@ function Travel() {
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
-          isWorldExpanded={isWorldExpanded}
+          isWorldExpanded={isWorldExpanded && !isPreparingSector}
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
@@ -912,6 +915,7 @@ function Travel() {
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
+    isPreparingSector,
     cameraFocusRevision,
     villages,
   ]);
@@ -1332,7 +1336,7 @@ function Travel() {
                 type="button"
                 aria-label="Expand world"
                 aria-expanded={isWorldExpanded}
-                disabled={!SectorComponent}
+                disabled={!showSector || !SectorComponent}
                 className="mr-2 hover:text-orange-500 disabled:opacity-50"
                 onClick={() => setWorldExpanded(true)}
               >
@@ -1403,7 +1407,15 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
-          {showSector && SectorComponent}
+          {(showSector || isPreparingSector) && (
+            <div
+              aria-hidden={!showSector}
+              inert={!showSector}
+              className={!showSector ? "invisible absolute inset-0" : undefined}
+            >
+              {SectorComponent}
+            </div>
+          )}
           {!villages && <Loader explanation="Loading data" />}
           {showModal && globe && userData && targetSector !== null && (
             <Modal

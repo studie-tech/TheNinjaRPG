@@ -581,6 +581,10 @@ export const createTravelScene = async (options: {
     game.setUpdate((frame) => {
       const snapshot = options.getSnapshot(),
         entry = sectors.get(snapshot.sector);
+      const isPreparing = snapshot.viewer?.status === "TRAVEL";
+      // Compile destination scenery during the countdown without animating a hidden world.
+      game.setAnimating(!isPreparing);
+      if (isPreparing) return;
       if (!entry) return;
       movements.clear();
       for (const [userId, step] of snapshot.motionSteps ?? []) {
