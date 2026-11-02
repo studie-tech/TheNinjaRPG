@@ -28,9 +28,7 @@ import alea from "alea";
 import { createNoise2D } from "simplex-noise";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
-  MAP_RESERVED_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   SECTOR_HEIGHT,
   SECTOR_MAP_MAX_DIMENSION,
   SECTOR_WIDTH,
@@ -57,7 +55,7 @@ import {
   WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
   type Vec3,
 } from "@/libs/sector-map/worldgen";
-import { WORLD_PROTECTED_LAND_SECTORS } from "@/libs/sector-map/landmarks";
+import { getWorldProtectedLandSectors } from "@/libs/sector-map/landmarks";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import type { SectorMapZone } from "@/libs/sector-map/types";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
@@ -109,13 +107,7 @@ const centerVec = (sector: number): Vec3 => {
 };
 
 const protectedLandSectors =
-  globalMap.protectedLandSectors ??
-  [
-    ...MAP_RESERVED_SECTORS,
-    ...WORLD_PROTECTED_LAND_SECTORS,
-    MAP_WAKE_ISLAND_SECTOR,
-    MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-  ];
+  globalMap.protectedLandSectors ?? getWorldProtectedLandSectors();
 const wakeIslandCenter = centerVec(MAP_WAKE_ISLAND_SECTOR);
 const wakeIslandNeighborSectors = new Set(
   (globalMap.tiles[MAP_WAKE_ISLAND_SECTOR]?.n ?? []).filter((sector) => sector >= 0),

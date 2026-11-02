@@ -1,3 +1,9 @@
+import {
+  MAP_RESERVED_SECTORS,
+  MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+} from "@/drizzle/constants";
+
 /**
  * Canonical settlement placement for the cylindrical world.
  *
@@ -79,6 +85,21 @@ export const WORLD_PROTECTED_LAND_SECTORS = WORLD_LANDMARKS.filter(
   (landmark) =>
     landmark.expectedTerrain !== "coast" && landmark.expectedTerrain !== "island",
 ).map((landmark) => landmark.sector);
+
+/**
+ * Sectors worldgen forces onto land, in the order stored as the globe's
+ * `protectedLandSectors`. Changing any source list requires regenerating
+ * `src/data/hexasphere.json` with `scripts/generate-globe.ts`.
+ */
+export const getWorldProtectedLandSectors = (extraSectors: readonly number[] = []) => [
+  ...new Set([
+    ...MAP_RESERVED_SECTORS,
+    ...WORLD_PROTECTED_LAND_SECTORS,
+    ...extraSectors,
+    MAP_WAKE_ISLAND_SECTOR,
+    MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  ]),
+];
 
 export const WAKE_ISLAND_STRUCTURE_POSITIONS = [
   { name: "Administration Building", x: 13, y: 8 },
