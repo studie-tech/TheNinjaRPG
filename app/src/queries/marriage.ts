@@ -7,20 +7,18 @@ import { userAssociation } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /**
- * Load associations with both participant records present, ordered by creation.
- * Optional filters match either participant ID and any supplied association types.
+ * Load a user's associations of the given types with both participant records present,
+ * ordered by creation.
  */
 export const fetchAssociations = async (
   client: DrizzleClient,
-  idOne?: string,
-  types?: UserAssociation[],
+  userId: string,
+  types: UserAssociation[],
 ) => {
   const results = await client.query.userAssociation.findMany({
     where: and(
-      ...(idOne
-        ? [or(eq(userAssociation.userOne, idOne), eq(userAssociation.userTwo, idOne))]
-        : []),
-      ...(types ? [inArray(userAssociation.associationType, types)] : []),
+      or(eq(userAssociation.userOne, userId), eq(userAssociation.userTwo, userId)),
+      inArray(userAssociation.associationType, types),
     ),
     with: {
       userOne: { columns: { username: true, userId: true, avatar: true } },
