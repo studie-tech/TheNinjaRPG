@@ -49,6 +49,31 @@ export const createTravelActors = (
   const container = new Container();
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
+  const appearanceParts = new Map<
+    string,
+    { key: string; parts: WorldSpriteDescription[] }
+  >();
+  const signatures = new WeakMap<WorldSpriteDescription[], string>();
+  const partsFor = (user: SectorUser, tile: TerrainHex) => {
+    const id = userActorKey(user);
+    // Position and health updates retain artwork; every input used by userParts belongs in this key.
+    const key = JSON.stringify([
+      user.spriteAppearance,
+      user.avatar,
+      user.avatarLight,
+      user.isNpc,
+      user.rank,
+      user.allianceStatus,
+      user.npcInteractionType,
+      tile.width,
+      tile.height,
+    ]);
+    const previous = appearanceParts.get(id);
+    if (previous?.key === key) return previous.parts;
+    const parts = userParts(user, tile);
+    appearanceParts.set(id, { key, parts });
+    return parts;
+  };
   let viewer: UserWithRelations;
   let users: SectorUser[] = [];
   let friendlyAttack = false;
@@ -101,8 +126,10 @@ export const createTravelActors = (
     viewer = snapshot.viewer;
     users = snapshot.users;
     friendlyAttack = snapshot.friendlyAttack;
-    const recipes = travelActorRecipes(snapshot);
+    const recipes = travelActorRecipes(snapshot, partsFor);
     const wanted = new Set(recipes.map((recipe) => recipe.key));
+    for (const key of appearanceParts.keys())
+      if (!wanted.has(key)) appearanceParts.delete(key);
     for (const [key, record] of records) {
       if (!wanted.has(key)) {
         record.scope.dispose();
@@ -111,17 +138,22 @@ export const createTravelActors = (
       }
     }
     for (const recipe of recipes) {
-      const signature = JSON.stringify([
-        recipe.parts,
-        recipe.counter,
-        recipe.user?.allianceStatus,
-      ]);
+      let signature = signatures.get(recipe.parts);
+      if (signature === undefined) {
+        signature = JSON.stringify([recipe.parts, recipe.user?.allianceStatus]);
+        signatures.set(recipe.parts, signature);
+      }
       const previous = records.get(recipe.key);
       if (previous?.signature === signature) {
-        if (previous.recipe.tile !== recipe.tile) {
+        if (
+          previous.recipe.tile !== recipe.tile &&
+          !snapshot.motionSteps?.has(recipe.user?.userId ?? "")
+        ) {
           const path = paths?.getShortestPath(previous.tile, recipe.tile) ?? [];
           previous.path = path[0] === previous.tile ? path.slice(1) : path;
         }
+        if (previous.counterLabel && previous.recipe.counter !== recipe.counter)
+          previous.counterLabel.text = String(recipe.counter);
         previous.recipe = recipe;
         continue;
       }
@@ -162,6 +194,7 @@ export const createTravelActors = (
         root,
         art: null,
         fallback: null,
+        counterLabel: null,
         tile: previous?.tile ?? recipe.tile,
         path: previous?.path ?? [],
         x: previous?.x ?? -recipe.tile.center.x,
@@ -213,6 +246,7 @@ export const createTravelActors = (
           .fill("firebrick")
           .stroke({ color: "maroon", width: 5 });
         label.anchor.set(0.5);
+        record.counterLabel = label;
         badge.addChild(background, label);
         badge.position.set(recipe.tile.width * 0.8, recipe.tile.height * 1.3);
         badge.scale.set(
@@ -502,7 +536,13 @@ export const createTravelActors = (
 };
 
 /** Viewer-filtered user/NPC/battle groups; stable recipe keys preserve actor identity between syncs. */
-export const travelActorRecipes = (snapshot: TravelActorsSnapshot): ActorRecipe[] => {
+export const travelActorRecipes = (
+  snapshot: TravelActorsSnapshot,
+  partsFor: (
+    user: SectorUser,
+    tile: TerrainHex,
+  ) => WorldSpriteDescription[] = userParts,
+): ActorRecipe[] => {
   const recipes: ActorRecipe[] = [];
   const grouped = new Map<string, SectorUser[]>();
   for (const user of snapshot.users) {
@@ -530,12 +570,10 @@ export const travelActorRecipes = (snapshot: TravelActorsSnapshot): ActorRecipe[
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
-        key: user.isNpc
-          ? `npc:${user.npcPlacementId ?? user.userId}`
-          : `user:${user.userId}`,
+        key: userActorKey(user),
         user: appearanceUser,
         tile,
-        parts: userParts(appearanceUser, tile),
+        parts: partsFor(appearanceUser, tile),
         orbit: (index / tileUsers.length) * Math.PI * 2,
         spread: awake.length > 1,
       });
@@ -654,6 +692,8 @@ const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
+const userActorKey = (user: SectorUser) =>
+  user.isNpc ? `npc:${user.npcPlacementId ?? user.userId}` : `user:${user.userId}`;
 
 const part = (
   tile: TerrainHex,
@@ -772,6 +812,8 @@ export type TravelActorsSnapshot = {
   showUsers: boolean;
   friendlyAttack: boolean;
   structureObjectiveIds: ReadonlySet<string | undefined>;
+  /** Published movement edges already supply interpolation; they need no second path search. */
+  motionSteps?: ReadonlyMap<string, TravelMotionStep>;
 };
 export type TravelActorHit = {
   key: string;
@@ -806,6 +848,7 @@ type ActorRecord = {
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
   fallback: Graphics | null;
+  counterLabel: Text | null;
 };
 
 /** Interpolated sector-local feet use the same path clock as the camera. */

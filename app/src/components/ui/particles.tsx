@@ -1,9 +1,11 @@
 "use client";
 
 import type { Container, ISourceOptions } from "@tsparticles/engine";
+import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { expandedWorldAtom } from "@/libs/expandedWorld";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import {
@@ -122,6 +124,7 @@ const ParticleProvider = () => {
   const adaptiveParticleCountRef = useRef(PARTICLE_COUNT_MAX);
   const scrollResumeTimerRef = useRef<number | null>(null);
   const activeLayout = useActiveLayout();
+  const isWorldExpanded = useAtomValue(expandedWorldAtom);
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
@@ -129,7 +132,8 @@ const ParticleProvider = () => {
     getGameLayout(activeLayout).frame !== "panel" &&
     isDesktop &&
     !lightLayout &&
-    !reducedMotion;
+    !reducedMotion &&
+    !isWorldExpanded;
   const pauseWhileScrolling = activeLayout === "pixel";
 
   useEffect(() => {

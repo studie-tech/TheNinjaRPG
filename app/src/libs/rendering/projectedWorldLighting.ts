@@ -1,4 +1,5 @@
 import {
+  Color,
   Container,
   Filter,
   GlProgram,
@@ -8,6 +9,8 @@ import {
   type Texture,
   UniformGroup,
 } from "pixi.js";
+import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
+import { worldLighting } from "@/libs/rendering/color";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
@@ -15,13 +18,16 @@ import type { WorldBounds } from "@/libs/rendering/visibility";
 import type { worldSunlight } from "@/libs/rendering/worldSunlight";
 import type { WorldWind } from "@/libs/rendering/worldWind";
 
-/** Ground silhouettes share the artwork textures; light pools and ambient tint belong to the primitives. */
+/** Ground silhouettes share artwork textures; one color pass supplies ambient light to the lit world. */
 export const createProjectedWorldLighting = (game: GameRenderer, world: Container) => {
   const container = new Container({ label: "projected-world" });
   const ground = new Container({ label: "projected-shadows", isRenderGroup: true });
   container.addChild(ground);
   const night = new UniformGroup(
-    { uNight: { value: 0, type: "f32" } },
+    {
+      uNight: { value: 0, type: "f32" },
+      uAmbient: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" },
+    },
     { isStatic: true },
   );
   const filter = new Filter({
@@ -89,6 +95,12 @@ export const createProjectedWorldLighting = (game: GameRenderer, world: Containe
       filter.enabled = shade > 0;
       if (night.uniforms.uNight !== shade) {
         night.uniforms.uNight = shade;
+        const brightness =
+          WORLD_DAY_BRIGHTNESS -
+          shade * (WORLD_DAY_BRIGHTNESS - WORLD_NIGHT_BRIGHTNESS);
+        night.uniforms.uAmbient.set(
+          new Color(worldLighting(brightness).tint).toArray().slice(0, 3),
+        );
         night.update();
       }
       container.filterArea = new Rectangle(
@@ -157,9 +169,10 @@ const fragment = `precision mediump float;
 varying vec2 vTextureCoord;
 uniform sampler2D uTexture;
 uniform float uNight;
+uniform vec3 uAmbient;
 void main() {
   vec4 source = texture2D(uTexture, vTextureCoord);
-  vec3 color = source.rgb / max(source.a, 0.0001);
+  vec3 color = source.rgb / max(source.a, 0.0001) * uAmbient;
   float warm = smoothstep(0.18, 0.5, color.r - color.b) * smoothstep(0.1, 0.4, color.g - color.b) * smoothstep(0.02, 0.18, color.r - color.g);
   vec3 moon = color * vec3(0.62, 0.68, 0.76);
   gl_FragColor = vec4(mix(color, mix(moon, min(vec3(1.0), color * 1.6), warm), uNight) * source.a, source.a);

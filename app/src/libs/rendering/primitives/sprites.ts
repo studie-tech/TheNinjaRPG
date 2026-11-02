@@ -306,7 +306,9 @@ export const createWorldSprites = async (
         !(worldShadows?.kind === "physical" && description.shadowCaster)
       ) {
         if (!shadows) {
-          shadows = new Container();
+          shadows = new Container({
+            isRenderGroup: staticScenery && worldShadows?.kind === "projected",
+          });
           shadows.label = "scenery-shadows";
           container.addChildAt(shadows, 0);
         }
@@ -326,7 +328,9 @@ export const createWorldSprites = async (
       let light: Sprite | undefined;
       if (description.light && worldShadows?.kind !== "physical") {
         if (!lights) {
-          lights = new Container();
+          lights = new Container({
+            isRenderGroup: staticScenery && worldShadows?.kind === "projected",
+          });
           lights.label = "scenery-lights";
           lights.alpha = 0;
           container.addChildAt(lights, shadows ? 1 : 0);
@@ -430,6 +434,17 @@ export const createWorldSprites = async (
     entries,
     missing,
     dispose,
+    /** Offscreen sectors retain their art while leaving the renderer's per-frame group traversal. */
+    setRenderable: (value: boolean) => {
+      if (container.renderable === value) return;
+      container.renderable = value;
+      if (!staticScenery || worldShadows?.kind !== "projected") return;
+      for (const group of [shadows, lights, flatGround]) {
+        if (!group) continue;
+        if (value) group.enableRenderGroup();
+        else group.disableRenderGroup();
+      }
+    },
     /** Render layers preserve scope ownership/transforms while keeping identity pins outside physical lighting. */
     attachLayers: (
       layers: { ground?: RenderLayer; world: RenderLayer; ui: RenderLayer },
@@ -446,10 +461,17 @@ export const createWorldSprites = async (
       attached = { ...layers, offsetY };
       worldShadows?.invalidate();
       if (flatGround) flatGround.zIndex = -offsetY;
+      const retainGround = staticScenery && worldShadows?.kind === "projected";
+      if (retainGround) {
+        if (shadows) layers.ground?.attach(shadows);
+        if (lights) layers.ground?.attach(lights);
+      }
       for (const entry of entries) {
         // Contact masks and emitter pools must draw after terrain, before upright artwork.
-        if (entry.shadow) layers.ground?.attach(entry.shadow);
-        if (entry.light) layers.ground?.attach(entry.light);
+        if (!retainGround) {
+          if (entry.shadow) layers.ground?.attach(entry.shadow);
+          if (entry.light) layers.ground?.attach(entry.light);
+        }
         entry.sprite.zIndex = -(entry.description.groundY + offsetY);
         if (flatGround && entry.sprite.parent === flatGround) {
           if (layers.ground) {
@@ -474,6 +496,11 @@ export const createWorldSprites = async (
       const { night, tint } = worldLighting(brightness);
       if (lights)
         lights.alpha = night * (worldShadows?.kind === "projected" ? 0.8 : 0.3);
+      if (worldShadows?.kind === "projected") {
+        // Shared ambient uniforms keep fades independent of the number of loaded sprites.
+        if (shadows) shadows.alpha = 1 - night * 0.75;
+        return;
+      }
       for (const entry of entries) {
         if (!entry.description.mask && !entry.description.unlit)
           entry.sprite.tint = Color.shared
@@ -578,7 +605,7 @@ export const createWorldSprites = async (
             ) {
               // Retained ground instructions keep actor motion from repacking flat cover.
               flatGround ??= new Container({
-                isRenderGroup: true,
+                isRenderGroup: container.renderable,
                 label: "flat-ground",
               });
               if (!flatGround.parent) container.addChild(flatGround);

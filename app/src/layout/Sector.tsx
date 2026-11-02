@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getMutationKey } from "@trpc/react-query";
 import type { Grid } from "honeycomb-grid";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
@@ -56,6 +56,7 @@ import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
+import { expandedWorldAtom } from "@/libs/expandedWorld";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
@@ -201,10 +202,22 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const sectorMap = centerEntry.map;
   const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
+  const setExpandedWorld = useSetAtom(expandedWorldAtom);
+  useEffect(() => {
+    setExpandedWorld(isWorldExpanded);
+    return () => setExpandedWorld(false);
+  }, [isWorldExpanded, setExpandedWorld]);
   useEffect(() => {
     if (!isWorldExpanded) return;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const page = document.querySelector<HTMLElement>("body > [data-world-page]");
+    const height = page?.style.height ?? "";
+    if (page) {
+      // The world is portalled to body. Preserve the covered page's scroll extent while suspending its paint.
+      page.style.height = `${page.offsetHeight}px`;
+      page.setAttribute("data-world-covered", "true");
+    }
     const onEscape = (event: KeyboardEvent) => {
       if (
         event.key === "Escape" &&
@@ -216,6 +229,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     document.addEventListener("keydown", onEscape);
     return () => {
       document.body.style.overflow = overflow;
+      if (page) {
+        page.removeAttribute("data-world-covered");
+        page.style.height = height;
+      }
       document.removeEventListener("keydown", onEscape);
     };
   }, [isWorldExpanded, setWorldExpanded]);

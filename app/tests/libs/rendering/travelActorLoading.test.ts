@@ -1,6 +1,6 @@
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Text, Texture } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
 import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
@@ -58,6 +58,26 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("retains a crowd badge and loaded actors when its count changes", async () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const users = Array.from({ length: 4 }, (_, i) => player(i, { longitude: 4, latitude: 4 }));
+    actors.sync(snapshot(users));
+    const badge = actors.container.getChildByLabel("count:4,4")!;
+    const labels: Text[] = [];
+    const visit = (root: Container) => { if (root instanceof Text) labels.push(root); for (const child of root.children) visit(child); };
+    visit(badge);
+    const label = labels[0]!;
+    expect(label.text).toBe("4");
+    const bodies = actors.container.children.filter(root => root.label?.startsWith("user:"));
+    actors.sync(snapshot(users.slice(0, 3)));
+    expect(actors.container.getChildByLabel("count:4,4")).toBe(badge);
+    expect(label.destroyed).toBe(false);
+    expect(label.text).toBe("3");
+    expect(actors.container.children.filter(root => root.label?.startsWith("user:"))).toEqual(bodies.slice(0, 3));
+    actors.sync(snapshot(users.slice(0, 2)));
+    expect(badge.destroyed).toBe(true);
+  });
   it("holds keys across disjoint planes and checks nonadjacent artwork when moving sideways into overlap", () => {
     holdCharacters(); const bounds = new WeakMap<Container, WorldBounds>();
     const { actors, grid, stage, depth, snapshot } = fixture(bounds);

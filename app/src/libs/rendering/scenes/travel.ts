@@ -88,6 +88,7 @@ export const createTravelScene = async (options: {
         : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
   });
   const resolution = game.renderer.resolution ?? options.resolution ?? 1;
+  game.canvas.style.filter = "none";
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
     const world = new Container({ isRenderGroup: true }),
@@ -669,7 +670,7 @@ export const createTravelScene = async (options: {
           maxY: rendered.position.y + rendered.height,
         };
         const visible = !viewport || boundsOverlap(bounds, viewport, rendered.margin);
-        rendered.art.container.renderable = visible;
+        rendered.art.setRenderable(visible);
         // Terrain needs only one tile of edge clearance; tall scenery retains its wider margin.
         rendered.terrain.container.renderable =
           !viewport || boundsOverlap(bounds, viewport, rendered.margin / 3);
@@ -697,7 +698,8 @@ export const createTravelScene = async (options: {
           hover = "";
           options.onHover(null, null);
         }
-        game.canvas.style.cursor = controls.dragging() ? "grabbing" : "default";
+        const cursor = controls.dragging() ? "grabbing" : "default";
+        if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
       } else {
         const hit = pick(pointer.x, pointer.y);
         hoverTile = hit.tile;
@@ -707,9 +709,11 @@ export const createTravelScene = async (options: {
           hover = hoverKey;
           options.onHover(hit.structureId, hit.locationId);
         }
-        if (document.body.style.cursor !== "wait")
-          game.canvas.style.cursor =
+        if (document.body.style.cursor !== "wait") {
+          const cursor =
             hit.actor || hit.locationId || hit.structureId ? "pointer" : "default";
+          if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
+        }
       }
       const selected = snapshot.routeTarget;
       const selectedTile =
@@ -788,11 +792,9 @@ export const createTravelScene = async (options: {
         snapshot.brightness,
       );
       // World lighting excludes the canvas UI and the actors' identity markers.
-      game.canvas.style.filter = "none";
       if (viewport)
         shadows.update(worldSunlight(snapshot.lightDate, 60_000), viewport, breeze);
       for (const rendered of sectors.values()) {
-        rendered.terrain.setLighting(snapshot.brightness);
         rendered.art.setLighting(snapshot.brightness);
       }
       actors.setLighting(snapshot.brightness);

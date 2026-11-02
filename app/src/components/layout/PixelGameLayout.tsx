@@ -58,6 +58,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   const isAnonymousLayout = !isSignedInLayout;
   return (
     <div
+      data-world-page
       className="tnr-pixel-game absolute top-0 bottom-0 w-full md:relative"
       data-layout-variant="pixel"
     >

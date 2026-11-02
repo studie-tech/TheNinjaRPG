@@ -240,9 +240,14 @@ describe("world lighting precision fallback", () => {
     expect(terrainAmbient(sector.terrain.container)).toEqual([1, 1, 1]);
     expect(actor.tint).toBe(0xffffff);
     snapshot.brightness = WORLD_NIGHT_BRIGHTNESS;
+    snapshot.lightDate = new Date((WORLD_DAY_SECONDS + 10) * 1000);
     fixture.tick();
-    expect(terrainAmbient(sector.terrain.container)[0]).toBeLessThan(1);
-    expect(body.tint).not.toBe(0xffffff);
+    const projected = fixture.game.stage.getChildByLabel("projected-world", true)!;
+    const filter = (projected.filters as pixi.Filter[])[0]!;
+    expect(filter.resources.night.uniforms.uAmbient[0]).toBeLessThan(1);
+    expect(filter.resources.night.uniforms.uNight).toBe(1);
+    expect(terrainAmbient(sector.terrain.container)).toEqual([1, 1, 1]);
+    expect(body.tint).toBe(0xffffff);
     expect(actor.tint).toBe(body.tint);
     expect(pin.tint).toBe(0xffcc77);
     expect(actorPin.tint).toBe(pinTint);
@@ -255,7 +260,10 @@ describe("world lighting precision fallback", () => {
     expect(characters).toHaveLength(2);
     expect(characters.every((character) => character.tint === body.tint)).toBe(true);
     snapshot.brightness = WORLD_DAY_BRIGHTNESS;
+    snapshot.lightDate = null;
     fixture.tick();
+    expect(filter.enabled).toBe(false);
+    expect(filter.resources.night.uniforms.uAmbient[0]).toBe(1);
     expect(terrainAmbient(sector.terrain.container)).toEqual([1, 1, 1]);
     expect(body.tint).toBe(0xffffff);
     expect(characters.every((character) => character.tint === 0xffffff)).toBe(true);
@@ -339,6 +347,26 @@ describe("world lighting precision fallback", () => {
     expectAmbientOnly();
   });
 
+  it("parks offscreen scenery groups without releasing artwork or light pools", async () => {
+    const fixture = rendererFixture(), snapshot = travelSnapshot();
+    snapshot.brightness = WORLD_NIGHT_BRIGHTNESS;
+    snapshot.lightDate = new Date((WORLD_DAY_SECONDS + 10) * 1000);
+    const scene = await startTravel(snapshot);
+    fixture.tick(); await flushArtwork(); fixture.tick();
+    const sector = scene.sectors.get(map.sector)!;
+    const body = sector.art.entries[0]!.sprite;
+    const groups = sector.art.container.children.filter(child => child.label === "scenery-shadows" || child.label === "scenery-lights");
+    expect(groups).toHaveLength(2);
+    expect(groups.every(group => group.isRenderGroup)).toBe(true);
+    sector.art.setRenderable(false);
+    expect(groups.every(group => !group.isRenderGroup)).toBe(true);
+    expect(body.destroyed).toBe(false);
+    sector.art.setRenderable(true);
+    expect(groups.every(group => group.isRenderGroup)).toBe(true);
+    expect(sector.art.entries[0]!.sprite).toBe(body);
+    expectGroundOrder(fixture.game.stage, body as Sprite);
+  });
+
   it("uses projected travel lighting without physical targets when highp is supported", async () => {
     vi.spyOn(pixi, "getMaxFragmentPrecision").mockReturnValue("highp");
     vi.spyOn(sectorSprites, "sectorSpriteDescriptions").mockReturnValue([]);
@@ -354,6 +382,7 @@ describe("world lighting precision fallback", () => {
     const filter = (projected.filters as pixi.Filter[])[0]!;
     expect(filter.enabled).toBe(true);
     expect(filter.resources.night.uniforms.uNight).toBe(1);
-    expect(terrainAmbient(scene.sectors.get(map.sector)!.terrain.container)[0]).toBeLessThan(1);
+    expect(terrainAmbient(scene.sectors.get(map.sector)!.terrain.container)).toEqual([1, 1, 1]);
+    expect(filter.resources.night.uniforms.uAmbient[0]).toBeLessThan(1);
   });
 });
