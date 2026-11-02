@@ -276,7 +276,10 @@ export const createFarmScene = async (options: {
       const plot = state.plots.find((candidate) => candidate.slotIndex === slot);
       options.onPlotClick(slot, plot ? livePlot(plot, clock()) : undefined);
     });
-    game.setUpdate((frame) => {
+    game.setUpdate((sourceFrame) => {
+      const frame = game.visualEffects.spriteAnimations
+        ? sourceFrame
+        : { ...sourceFrame, reducedMotion: true };
       if (reducedMotion !== frame.reducedMotion) {
         reducedMotion = frame.reducedMotion;
         refresh();

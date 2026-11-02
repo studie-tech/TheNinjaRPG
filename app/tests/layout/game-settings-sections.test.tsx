@@ -29,7 +29,7 @@ const browserDescriptors = browserGlobals.map((key) =>
 
 const MUSIC = "Music";
 const SFX = "Combat sounds";
-const LIGHTING = "Lighting";
+const LIGHTING = "Day/night colors";
 const SIDEBARS = "Swap sidebars";
 
 let preferenceCallbacks: Parameters<typeof client.api.profile.updatePreferences.useMutation>[0];
@@ -167,11 +167,11 @@ describe("game settings sections", () => {
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
     expect(screen.queryByText("Adjust graphics for your device.")).toBeNull();
     expect(screen.getByText("Shared across the game; saved on this device.")).toBeTruthy();
-    for (const label of [LIGHTING, "Shadows", "Animations"]) {
+    for (const label of ["Sunlight", LIGHTING, "Local lights", "Shadows", "Weather", "Wind", "Sprite animations"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
     fireEvent.click(screen.getByLabelText(LIGHTING));
-    expect((screen.getByLabelText("Shadows") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Shadows") as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByLabelText(MUSIC)).toBeNull();
     expect(screen.queryByLabelText(SIDEBARS)).toBeNull();
   });
@@ -185,7 +185,7 @@ describe("game settings sections", () => {
     expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), { button: 0 });
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
-    for (const label of [LIGHTING, "Shadows", "Animations"]) {
+    for (const label of ["Sunlight", LIGHTING, "Local lights", "Shadows", "Weather", "Wind", "Sprite animations"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
   });

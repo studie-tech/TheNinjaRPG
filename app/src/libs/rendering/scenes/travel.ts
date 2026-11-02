@@ -595,11 +595,20 @@ export const createTravelScene = async (options: {
       clearInterval(snapshotTimer);
       if (zoomTimer !== null) clearTimeout(zoomTimer);
     });
-    game.setUpdate((frame) => {
+    game.setUpdate((sourceFrame) => {
+      const frame = game.visualEffects.spriteAnimations
+        ? sourceFrame
+        : { ...sourceFrame, reducedMotion: true };
       const snapshot = options.getSnapshot(),
         entry = sectors.get(snapshot.sector);
       const isPreparing = snapshot.viewer?.status === "TRAVEL";
-      isStill = frame.reducedMotion && !game.visualEffects.lighting;
+      isStill =
+        frame.reducedMotion &&
+        (sourceFrame.reducedMotion ||
+          (!game.visualEffects.weather && !game.visualEffects.wind)) &&
+        !game.visualEffects.sunlight &&
+        !game.visualEffects.dayNight &&
+        !game.visualEffects.localLights;
       // Compile destination scenery during the countdown without animating a hidden world.
       game.setAnimating(!isPreparing && !isStill);
       lastFrameInputs = travelFrameInputs(snapshot);
@@ -672,7 +681,7 @@ export const createTravelScene = async (options: {
         lastActorSnapshot = snapshot;
         actors.sync(actorSnapshot);
       }
-      const breeze = sampleWorldWind(frame, scale());
+      const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
       const viewport = camera
         ? {
             minX: camera.x - halfWidth,
@@ -798,7 +807,7 @@ export const createTravelScene = async (options: {
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
       weather.update(
-        frame,
+        sourceFrame,
         snapshot.weather ??
           getWorldWeather(
             getBiomeFromTileType(

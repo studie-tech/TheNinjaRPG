@@ -527,12 +527,10 @@ export const createWorldSprites = async (
       for (const entry of softEffects) {
         if (entry.shadow)
           entry.shadow.visible =
-            entry.sprite.visible &&
-            game.visualEffects?.shadows !== false &&
-            game.visualEffects?.lighting !== false;
+            entry.sprite.visible && game.visualEffects?.shadows !== false;
         if (entry.light)
           entry.light.visible =
-            entry.sprite.visible && game.visualEffects?.lighting !== false;
+            entry.sprite.visible && game.visualEffects?.localLights !== false;
       }
       if (zoom !== detailZoom && groundDetails.length) {
         detailZoom = zoom;
@@ -582,7 +580,10 @@ export const createWorldSprites = async (
         // Fixed scenery owns retained material poses; a zoom-driven fade changes that snapshot.
         worldShadows?.invalidate();
       }
-      const direction = frame.reducedMotion ? null : movement;
+      const direction =
+        frame.reducedMotion || game.visualEffects?.spriteAnimations === false
+          ? null
+          : movement;
       motionElapsed = direction ? motionElapsed + frame.delta * 1000 : 0;
       for (const entry of animated) {
         const motion = entry.description.motion;
@@ -606,7 +607,8 @@ export const createWorldSprites = async (
         entry.sprite.scale.x = Math.abs(entry.sprite.scale.x) * facing;
       }
       if (!wind.length && !hasGpuWind) return;
-      const breeze = sampledWind ?? sampleWorldWind(frame, zoom);
+      const breeze =
+        sampledWind ?? sampleWorldWind(frame, zoom, game.visualEffects?.wind);
       if (hasGpuWind) updateWindSprites(game.renderer, breeze);
       for (const entry of wind) {
         const { sprite, description } = entry;

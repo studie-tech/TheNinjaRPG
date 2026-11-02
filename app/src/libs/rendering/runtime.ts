@@ -92,8 +92,9 @@ export const createGameRenderer = async (options: {
     if (disposed) return;
     dirty = false;
     try {
-      const reducedMotion = motion.matches || !visualEffects.animations;
-      animation.uniforms.uTime = reducedMotion ? 0 : now / 1000;
+      const reducedMotion = motion.matches;
+      animation.uniforms.uTime =
+        reducedMotion || !visualEffects.spriteAnimations ? 0 : now / 1000;
       animation.update();
       update({
         now,
@@ -239,6 +240,7 @@ export const createGameRenderer = async (options: {
 export type GameRenderer = Awaited<ReturnType<typeof createGameRenderer>>;
 /**
  * now is frame-clock milliseconds (RAF live, scene time in captures). Live delta
- * is seconds, capped at 0.1 and reset on resume.
+ * is seconds, capped at 0.1 and reset on resume. reducedMotion reflects the OS
+ * preference; each scene applies the independent sprite, wind and weather settings.
  */
 export type GameFrame = { now: number; delta: number; reducedMotion: boolean };

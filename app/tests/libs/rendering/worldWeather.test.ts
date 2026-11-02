@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it } from "bun:test";
 import { Container, type Mesh } from "pixi.js";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -7,13 +8,30 @@ import { createWorldWeather, getWorldWeather } from "@/libs/rendering/worldWeath
 const fixture = (light = false) => {
   const cleanups: (() => void)[] = [];
   const renderer = { width: 800, height: 600 };
-  const game = { renderer, own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;
+  const game = { visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, renderer, own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;
   const weather = createWorldWeather(game, light), stage = new Container();
   stage.addChild(weather.container);
-  return { weather, renderer, dispose: () => { stage.destroy({ children: true }); cleanups.forEach((cleanup) => cleanup()); } };
+  return { weather, renderer, game, dispose: () => { stage.destroy({ children: true }); cleanups.forEach((cleanup) => cleanup()); } };
 };
 
 describe("regional world weather", () => {
+  it("toggles precipitation independently of sprite motion and reuses its mesh", () => {
+    const { weather, game, dispose } = fixture();
+    const frame = { now: 1000, delta: .016, reducedMotion: false };
+    try {
+      game.visualEffects.spriteAnimations = false;
+      weather.update(frame, { kind: "rain", intensity: 1 }, { x: 0, y: 0 });
+      expect(weather.container.visible).toBe(true);
+      const mesh = weather.container.children[0];
+      game.visualEffects.weather = false;
+      weather.update(frame, { kind: "rain", intensity: 1 }, { x: 0, y: 0 });
+      expect(weather.container.visible).toBe(false);
+      game.visualEffects.weather = true;
+      weather.update(frame, { kind: "rain", intensity: 1 }, { x: 0, y: 0 });
+      expect(weather.container.visible).toBe(true);
+      expect(weather.container.children[0]).toBe(mesh);
+    } finally { dispose(); }
+  });
   it("shares a smooth live front across rain, snowy regions and desert sandstorms", () => {
     for (const [biome, kind] of [["ground", "rain"], ["ocean", "rain"], ["snow", "snow"], ["ice", "snow"], ["dessert", "sandstorm"]] as const) {
       expect(getWorldWeather(biome, 180_000)).toEqual({ kind, intensity: 0.7 });

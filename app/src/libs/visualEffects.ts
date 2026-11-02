@@ -1,21 +1,37 @@
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 
-/** Device preferences shared by settings and renderers; lighting retains the saved map preference. */
+/** Independent device preferences shared by settings and renderers. */
 export const VISUAL_EFFECT_KEYS = {
-  lighting: "showDayNightMapOverlays",
+  sunlight: "showWorldSunlight",
+  dayNight: "showDayNightMapOverlays",
+  localLights: "showWorldLocalLights",
   shadows: "showWorldShadows",
-  animations: "showGameAnimations",
+  weather: "showWorldWeather",
+  wind: "showWorldWind",
+  spriteAnimations: "showGameAnimations",
 } as const;
 
 export type VisualEffect = keyof typeof VISUAL_EFFECT_KEYS;
 export type VisualEffects = Record<VisualEffect, boolean>;
 
+export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
+  sunlight: true,
+  dayNight: true,
+  localLights: true,
+  shadows: true,
+  weather: true,
+  wind: true,
+  spriteAnimations: true,
+};
+
 /** Missing or malformed preferences keep the full visual presentation enabled. */
-export const readVisualEffects = (): VisualEffects => ({
-  lighting: safeLocalStorageGetItem(VISUAL_EFFECT_KEYS.lighting) !== "false",
-  shadows: safeLocalStorageGetItem(VISUAL_EFFECT_KEYS.shadows) !== "false",
-  animations: safeLocalStorageGetItem(VISUAL_EFFECT_KEYS.animations) !== "false",
-});
+export const readVisualEffects = (): VisualEffects =>
+  Object.fromEntries(
+    Object.entries(VISUAL_EFFECT_KEYS).map(([effect, key]) => [
+      effect,
+      safeLocalStorageGetItem(key) !== "false",
+    ]),
+  ) as VisualEffects;
 
 /** Publishes immediately to active scenes, including when browser storage is unavailable. */
 export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {

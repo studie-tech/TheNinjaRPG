@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
@@ -26,6 +27,7 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
   const listeners = new window.AbortController(), owned = new Set<() => void>();
   let update = (_frame: GameFrame) => {}, resize = (_width: number, _height: number) => {}, disposed = false;
   const game = {
+    visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     stage: new Container(), canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
     renderer: { width: 390, height }, assets: { texture: async () => Texture.WHITE },

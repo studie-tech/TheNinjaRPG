@@ -365,7 +365,10 @@ export const createCombatScene = async (options: {
         document.body.style.cursor,
       );
     };
-    const updateFrame = (frame: GameFrame, capture = false) => {
+    const updateFrame = (sourceFrame: GameFrame, capture = false) => {
+      const frame = game.visualEffects.spriteAnimations
+        ? sourceFrame
+        : { ...sourceFrame, reducedMotion: true };
       if (!initialized) return;
       const snapshot = options.getSnapshot();
       clock =
@@ -433,13 +436,13 @@ export const createCombatScene = async (options: {
         }
       }
       transform();
-      const breeze = sampleWorldWind(frame, scale());
+      const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
       art.animate(frame, scale(), null, breeze);
       const lightDate =
         snapshot.lightDate ??
         (snapshot.cycleEnabled ? new Date(Date.now() - snapshot.timeDiff) : null);
       weather.update(
-        frame,
+        sourceFrame,
         snapshot.weather ??
           getWorldWeather(
             snapshot.battle.background,
@@ -460,9 +463,10 @@ export const createCombatScene = async (options: {
           breeze,
         );
       else {
-        const brightness = lightDate
-          ? getWorldCycleBrightness(lightDate)
-          : WORLD_DAY_BRIGHTNESS;
+        const brightness =
+          game.visualEffects.dayNight && lightDate
+            ? getWorldCycleBrightness(lightDate)
+            : WORLD_DAY_BRIGHTNESS;
         terrain.setLighting(brightness);
         art.setLighting(brightness);
         actors.setLighting(brightness);

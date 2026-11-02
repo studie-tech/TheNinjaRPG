@@ -233,29 +233,29 @@ describe("game settings categories", () => {
     expect(localStorage.getItem(SWAP_SIDEBARS_STORAGE_KEY)).toBe("true");
   });
 
-  it("keeps graphics in their own category and retains the shadow preference while lighting is off", () => {
+  it("keeps graphics in their own category and keeps the graphics preferences independent", () => {
     const view = renderSettings();
-    expect(view.queryByRole("switch", { name: "Lighting" })).toBeNull();
+    expect(view.queryByRole("switch", { name: "Day/night colors" })).toBeNull();
     fireEvent.mouseDown(view.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
-    const lighting = view.getByRole("switch", { name: "Lighting" });
+    const lighting = view.getByRole("switch", { name: "Day/night colors" });
     const shadows = view.getByRole("switch", { name: "Shadows" });
-    const animations = view.getByRole("switch", { name: "Animations" });
+    const animations = view.getByRole("switch", { name: "Sprite animations" });
     fireEvent.click(shadows);
     fireEvent.click(animations);
     fireEvent.click(lighting);
-    expect(shadows.hasAttribute("disabled")).toBe(true);
+    expect(shadows.hasAttribute("disabled")).toBe(false);
     expect(shadows.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(lighting);
     expect(shadows.hasAttribute("disabled")).toBe(false);
     expect(shadows.getAttribute("aria-checked")).toBe("false");
     expect(localStorage.getItem(VISUAL_EFFECT_KEYS.shadows)).toBe("false");
-    expect(localStorage.getItem(VISUAL_EFFECT_KEYS.animations)).toBe("false");
+    expect(localStorage.getItem(VISUAL_EFFECT_KEYS.spriteAnimations)).toBe("false");
     expect(view.queryByRole("switch", { name: "Swap sidebars" })).toBeNull();
     expect(localStorage.getItem("gameSettingsTab")).toBe('"effects"');
     view.unmount();
     const reopened = renderSettings();
     expect(reopened.getByRole("tab", { name: "Visual effects" }).getAttribute("aria-selected")).toBe("true");
-    expect(reopened.getByRole("switch", { name: "Lighting" })).toBeTruthy();
+    expect(reopened.getByRole("switch", { name: "Day/night colors" })).toBeTruthy();
   });
 
   it("shares graphics between game and combat, remembers the combat category and keeps hidden panels out of ordering", () => {
@@ -263,16 +263,16 @@ describe("game settings categories", () => {
     fireEvent.mouseDown(view.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
     const sharedShadows = view.getByRole("switch", { name: "Shadows" });
     fireEvent.click(sharedShadows);
-    fireEvent.click(view.getByRole("switch", { name: "Animations" }));
+    fireEvent.click(view.getByRole("switch", { name: "Sprite animations" }));
     fireEvent.click(view.getByRole("button", { name: "Open combat settings" }));
     let dialog = within(view.getByRole("dialog", { name: "Combat settings" }));
     expect(dialog.getByRole("tab", { name: "Battle" }).getAttribute("aria-selected")).toBe("true");
     expect(dialog.getByRole("combobox", { name: "Resource bars" })).toBeTruthy();
     fireEvent.mouseDown(dialog.getByRole("tab", { name: "Visual effects" }), { button: 0, ctrlKey: false });
     expect(dialog.getByRole("switch", { name: "Shadows" }).getAttribute("aria-checked")).toBe("false");
-    expect(dialog.getByRole("switch", { name: "Animations" }).getAttribute("aria-checked")).toBe("false");
-    fireEvent.click(dialog.getByRole("switch", { name: "Lighting" }));
-    expect(sharedShadows.hasAttribute("disabled")).toBe(true);
+    expect(dialog.getByRole("switch", { name: "Sprite animations" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(dialog.getByRole("switch", { name: "Day/night colors" }));
+    expect(sharedShadows.hasAttribute("disabled")).toBe(false);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(view.queryByRole("dialog", { name: "Combat settings" })).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Open combat settings" }));

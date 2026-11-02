@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
@@ -43,7 +44,7 @@ const gameFixture = () => {
   let disposed = false;
   const game = {
     lpcCatalog,
-    visualEffects: { lighting: true, shadows: true, animations: true },
+    visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     stage, canvas, signal: controller.signal, renderer: { width: 1024, height: 600 },
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
@@ -87,6 +88,22 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("still travel rendering", () => {
+  it("keeps rain moving without sprite animation and sleeps only when every active category is off", async () => {
+    const { game, world, state, advance } = await sceneFixture();
+    state.weather = { kind: "rain", intensity: 1 };
+    Object.assign(game.visualEffects, Object.fromEntries(Object.keys(DEFAULT_VISUAL_EFFECTS).map(key => [key, false])));
+    advance(frame(1000, false));
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    for (const effect of ["weather", "wind", "sunlight", "dayNight", "localLights", "spriteAnimations"] as const) {
+      game.visualEffects[effect] = true;
+      advance(frame(1100, false));
+      expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+      if (effect === "weather") expect(world.getChildByLabel("world-weather")!.visible).toBe(true);
+      game.visualEffects[effect] = false;
+      advance(frame(1200, false));
+      expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    }
+  });
   it("sleeps after effects are disabled, wakes for ref updates and resumes after toggling", async () => {
     let poll = () => {};
     vi.spyOn(globalThis, "setInterval").mockImplementation(((callback: Parameters<typeof setInterval>[0]) => {
@@ -96,7 +113,7 @@ describe("still travel rendering", () => {
     const clear = vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
     const { game, scene, state, advance } = await sceneFixture();
     const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
-    game.visualEffects.lighting = game.visualEffects.animations = false;
+    Object.assign(game.visualEffects, Object.fromEntries(Object.keys(DEFAULT_VISUAL_EFFECTS).map(key => [key, false])));
     advance(frame());
     expect(game.setAnimating).toHaveBeenLastCalledWith(false);
     invalidate.mockClear(); poll();
@@ -111,10 +128,10 @@ describe("still travel rendering", () => {
     state.col = 5;
     poll(); expect(invalidate).toHaveBeenCalledTimes(1);
     advance(frame());
-    game.visualEffects.lighting = game.visualEffects.animations = true;
+    Object.assign(game.visualEffects, DEFAULT_VISUAL_EFFECTS);
     advance(frame(1100, false));
     expect(game.setAnimating).toHaveBeenLastCalledWith(true);
-    game.visualEffects.lighting = game.visualEffects.animations = false;
+    Object.assign(game.visualEffects, Object.fromEntries(Object.keys(DEFAULT_VISUAL_EFFECTS).map(key => [key, false])));
     advance(frame(1200));
     expect(game.setAnimating).toHaveBeenLastCalledWith(false);
     invalidate.mockClear(); poll();

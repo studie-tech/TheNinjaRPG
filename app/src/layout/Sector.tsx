@@ -226,7 +226,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Day/night map shading preference — ref so the long-running render loop
   // reacts without rebuilding the map
   const { visualEffects } = useVisualEffects();
-  const showDayNightMapOverlays = visualEffects.lighting;
+  const showDayNightMapOverlays = visualEffects.dayNight;
   const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
   showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
 
@@ -2291,10 +2291,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
           const lightDate =
-            lightingPreviewRef.current ??
-            (showDayNightMapOverlaysRef.current
-              ? new Date(Date.now() - timeDiffRef.current)
-              : null);
+            lightingPreviewRef.current ?? new Date(Date.now() - timeDiffRef.current);
           return {
             ...snapshot,
             actorRevision: actorRevisionRef.current,
@@ -2313,7 +2310,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             lightDate,
             weather: weatherPreviewRef.current,
             weatherTime: Date.now() - timeDiffRef.current,
-            brightness: lightDate ? getWorldCycleBrightness(lightDate) : 1,
+            brightness: showDayNightMapOverlaysRef.current
+              ? getWorldCycleBrightness(lightDate)
+              : 1,
           };
         },
         onTap: (hit) => travelCallbacks.current.onTap(hit),

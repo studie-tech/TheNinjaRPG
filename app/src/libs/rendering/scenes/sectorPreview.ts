@@ -188,7 +188,7 @@ export const createSectorPreview = async (options: {
       if (!dragging) game.canvas.style.cursor = "default";
     });
     game.setUpdate((frame) => {
-      const breeze = sampleWorldWind(frame, scale);
+      const breeze = sampleWorldWind(frame, scale, game.visualEffects.wind);
       art.animate(frame, scale, null, breeze);
       if (dragging) shadows?.invalidate();
       shadows?.update(
