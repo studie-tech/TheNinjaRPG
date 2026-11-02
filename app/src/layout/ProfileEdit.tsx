@@ -665,16 +665,20 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const { mutateAsync: updatePreferences, isPending: isUpdatingPreferences } =
     api.profile.updatePreferences.useMutation();
 
-  // Update form when preferences are loaded
+  // Update form when the stored preferences change, keeping unsaved edits otherwise
+  const storedGeneral1 = userData?.preferredGeneral1;
+  const storedGeneral2 = userData?.preferredGeneral2;
+  const storedDamageElement = userData?.preferredDamageElement;
+  const hasUserData = !!userData;
   useEffect(() => {
-    if (userData) {
+    if (hasUserData) {
       form.reset({
-        preferredGeneral1: userData.preferredGeneral1,
-        preferredGeneral2: userData.preferredGeneral2,
-        preferredDamageElement: userData.preferredDamageElement,
+        preferredGeneral1: storedGeneral1,
+        preferredGeneral2: storedGeneral2,
+        preferredDamageElement: storedDamageElement,
       });
     }
-  }, [userData, form]);
+  }, [hasUserData, storedGeneral1, storedGeneral2, storedDamageElement, form]);
 
   // Form submission
   const onSubmit = async (values: z.infer<typeof updateUserPreferencesSchema>) => {
@@ -2548,12 +2552,13 @@ const ChangeGender: React.FC = () => {
   });
   const watchGender = useWatch({ control: form.control, name: "gender" });
 
-  // Set current user gender
+  // Set current user gender when the stored gender changes
+  const storedGender = userData?.gender;
   useEffect(() => {
-    if (userData?.gender) {
-      form.setValue("gender", userData.gender as Gender);
+    if (storedGender) {
+      form.setValue("gender", storedGender as Gender);
     }
-  }, [userData]);
+  }, [storedGender, form]);
 
   // Form handlers
   const onSubmit = form.handleSubmit(() => {
