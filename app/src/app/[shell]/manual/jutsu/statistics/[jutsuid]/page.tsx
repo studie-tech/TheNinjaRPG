@@ -14,7 +14,7 @@ import { jutsuText } from "@/layout/seoTexts";
 import { LevelStats, UsageStats } from "@/layout/UsageStatistics";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData, useUserData } from "@/utils/UserContext";
+import { useUserData } from "@/utils/UserContext";
 
 export default function JutsuStatistics(props: {
   params: Promise<{ jutsuid: string }>;
@@ -27,7 +27,6 @@ export default function JutsuStatistics(props: {
   const filterParams = getStatisticsFilter(statsFilter);
 
   const { data: userData } = useUserData();
-  const { data: currentUserData } = useRequiredUserData();
   const { data, isPending } = api.data.getStatistics.useQuery(
     { id: jutsuId, type: "jutsu", ...filterParams },
     { enabled: !!jutsuId },
@@ -54,7 +53,7 @@ export default function JutsuStatistics(props: {
   const utils = api.useUtils();
 
   // Check if user can change content
-  const canDelete = canChangeContent(currentUserData?.role ?? "USER");
+  const canDelete = canChangeContent(userData?.role ?? "USER");
 
   // Prevent unauthorized access
   if (isPending) return <Loader explanation="Loading data" />;
