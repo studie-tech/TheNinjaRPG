@@ -28,7 +28,7 @@ const setup = () => {
   const sector = { users: [{ ...user, isMasked: false, longitude: 1 }], sectorData: { sector: 1 }, village: null, warData: [], overworldAis: [], questPlacements: [] };
   client.setQueryData(getQueryKey(api.profile.getUser, undefined, "query"), { userData: user });
   const keys = [getQueryKey(api.jutsu.getLoadouts, undefined, "query"), getQueryKey(api.jutsu.getUserJutsus, {}, "query"), getQueryKey(api.jutsu.getTrainingQueue, undefined, "query"), getQueryKey(api.profile.getSidebarTimers, undefined, "query"), getQueryKey(api.travel.getSectorData, { sector: 1 }, "query")];
-  const values = [[{ id: "loadout", name: "Main", jutsuIds: ["a"] }], [{ id: "owned", jutsuId: "jutsu", level: 3, trainingStartedAt: null, finishTraining: null }], { capacity: 3, waiting: [] }, { jutsuTraining: null, jutsuQueue: { count: 0, next: null }, crafting: { itemId: "craft" }, imbuement: null }, sector];
+  const values: unknown[] = [[{ id: "loadout", name: "Main", jutsuIds: ["a"] }], [{ id: "owned", jutsuId: "jutsu", level: 3, trainingStartedAt: null, finishTraining: null }], { capacity: 3, waiting: [] }, { jutsuTraining: null, jutsuQueue: { count: 0, next: null }, crafting: { itemId: "craft" }, imbuement: null }, sector];
   const events: number[] = [];
   const reads = keys.map((queryKey, i) => {
     client.setQueryData(queryKey, values[i]);
@@ -92,10 +92,30 @@ it("keeps sector updates bound to the captured sector when selection changes", a
   expect(t.reads[4]).not.toHaveBeenCalled();
 });
 
-it.each(["profile recovery", "missing identity", "NPC visibility", "faction change", "revision"])("retains authoritative sector recovery after %s", async reason => {
+it("updates the caller with unbound quest landmarks without a sector read", async () => {
+  const t = setup(), hook = t.view.result.current.sector;
+  const userQuests = [{ quest: { content: { objectives: [{ task: "move_to_location", sector: 1, longitude: 8, latitude: 9 }] } } }];
+  t.client.setQueryData(getQueryKey(api.profile.getUser, undefined, "query"), { userData: { ...t.user, userQuests } });
+  await act(async () => hook.updateSector(true, hook.prepareSectorUpdate()));
+  expect(t.client.getQueryData<{ users: { longitude: number }[] }>(t.keys[4]!)).toMatchObject({ users: [{ longitude: 4 }], overworldAis: [], questPlacements: [] });
+  expect(t.reads[4]).not.toHaveBeenCalled();
+});
+
+it("refreshes NPC positions and health from the server after caller movement", async () => {
+  const t = setup(), hook = t.view.result.current.sector;
+  t.client.setQueryData(t.keys[4]!, { ...t.sector, overworldAis: [{ userId: "npc", longitude: 4, latitude: 5, npcPositionVersion: 0, curHealth: 100 }] });
+  const authoritative = { ...t.sector, users: [{ ...t.sector.users[0], longitude: 4 }], overworldAis: [{ userId: "npc", longitude: 8, latitude: 9, npcPositionVersion: 1, curHealth: 55 }] };
+  t.values[4] = authoritative;
+  await act(async () => expect(await hook.updateSector(true, hook.prepareSectorUpdate())).toBe(false));
+  expect(t.reads[4]).toHaveBeenCalledTimes(1);
+  expect(t.client.getQueryData(t.keys[4]!)).toEqual(authoritative);
+});
+
+it.each(["profile recovery", "missing identity", "visible quest placement", "concealed quest placement", "faction change", "revision"])("retains authoritative sector recovery after %s", async reason => {
   const t = setup(), hook = t.view.result.current.sector;
   if (reason === "missing identity") t.client.setQueryData(t.keys[4]!, { ...t.sector, users: [] });
-  if (reason === "NPC visibility") t.client.setQueryData(t.keys[4]!, { ...t.sector, overworldAis: [{ userId: "npc" }] });
+  if (reason === "visible quest placement") t.client.setQueryData(t.keys[4]!, { ...t.sector, questPlacements: [{ npcPlacementId: "npc" }] });
+  if (reason === "concealed quest placement") t.client.setQueryData(getQueryKey(api.profile.getUser, undefined, "query"), { userData: { ...t.user, userQuests: [{ quest: { content: { objectives: [{ overworldPlacementId: "npc", hideLocation: true }] } } }] } });
   if (reason === "faction change") t.client.setQueryData(t.keys[4]!, { ...t.sector, users: [{ ...t.sector.users[0], villageId: "changed" }] });
   const snapshot = hook.prepareSectorUpdate();
   if (reason === "revision") t.client.setQueryData(t.keys[4]!, t.sector);

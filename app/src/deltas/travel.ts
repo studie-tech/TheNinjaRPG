@@ -1,7 +1,7 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserData } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { getPublicQuestUser, questHasOverworldObjectives } from "@/libs/quest";
+import { getPublicQuestUser } from "@/libs/quest";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 /**
@@ -34,7 +34,8 @@ export const getFinishGlobalMoveUserUpdate = ({
 
 /**
  * Refresh only the loaded caller's public map row from an accepted profile update.
- * Missing identities, changed sectors/factions and quest NPC visibility need a server snapshot.
+ * Unbound quest landmarks do not depend on the caller's tile. NPCs need an authoritative
+ * refresh because movement patches postpone polling; bound placements and identity changes do too.
  */
 export const getSectorUserUpdate = (
   current: RouterOutputs["travel"]["getSectorData"],
@@ -47,7 +48,11 @@ export const getSectorUserUpdate = (
     (current.sectorData && current.sectorData.sector !== user.sector) ||
     current.overworldAis?.length ||
     current.questPlacements?.length ||
-    user.userQuests.some((entry) => questHasOverworldObjectives(entry.quest))
+    user.userQuests.some((entry) =>
+      entry.quest.content.objectives.some(
+        (objective) => objective.overworldPlacementId,
+      ),
+    )
   )
     return;
   const previous = current.users.find((row) => row.userId === user.userId);
