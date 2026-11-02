@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutationState, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import { getLoadoutsWithHotkeys } from "@/deltas/loadout";
@@ -14,6 +14,7 @@ import {
 } from "@/libs/combat/hotkeys";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
+import type { SetLoadoutHotkeysSchema } from "@/validators/loadout";
 
 /** Which loadout a key is stored in: jutsu and basics, or items. */
 export type { HotkeyKind } from "@/libs/combat/hotkeys";
@@ -40,13 +41,37 @@ export const useBattleHotkeys = (
     options.itemLoadoutId !== undefined ? options.itemLoadoutId : userData?.itemLoadout;
   const utils = api.useUtils();
   const queryClient = useQueryClient();
+  // Whole-map saves share a scope so neither kind can overtake an earlier save.
+  const scope = { id: "loadoutHotkeys" };
   const enabled = !!userData && (options.enabled ?? true);
-  const { data: jutsuLoadouts } = api.jutsu.getLoadouts.useQuery(undefined, {
+  const { data: savedJutsuLoadouts } = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled,
   });
-  const { data: itemLoadouts } = api.item.getItemLoadouts.useQuery(undefined, {
+  const { data: savedItemLoadouts } = api.item.getItemLoadouts.useQuery(undefined, {
     enabled,
   });
+  const pendingHotkeys = useMutationState({
+    filters: {
+      status: "pending",
+      predicate: (mutation) => mutation.options.scope?.id === scope.id,
+    },
+    select: (mutation) => ({
+      kind: mutation.options.meta?.hotkeyKind,
+      input: mutation.state.variables as SetLoadoutHotkeysSchema,
+    }),
+  });
+  // Equipment changes can refetch these rows while whole-map saves are queued.
+  let jutsuLoadouts = savedJutsuLoadouts;
+  let itemLoadouts = savedItemLoadouts;
+  for (const { kind, input } of pendingHotkeys) {
+    if (kind === "jutsu" && jutsuLoadouts) {
+      jutsuLoadouts =
+        getLoadoutsWithHotkeys(jutsuLoadouts, input.id, input.hotkeys) ?? jutsuLoadouts;
+    } else if (kind === "item" && itemLoadouts) {
+      itemLoadouts =
+        getLoadoutsWithHotkeys(itemLoadouts, input.id, input.hotkeys) ?? itemLoadouts;
+    }
+  }
   const jutsuLoadout = jutsuLoadouts?.find((l) => l.id === jutsuLoadoutId);
   const itemLoadout = itemLoadouts?.find((l) => l.id === itemLoadoutId);
   const jutsuMap = jutsuLoadout?.hotkeys;
@@ -56,12 +81,7 @@ export const useBattleHotkeys = (
     [jutsuMap, itemMap],
   );
 
-  // Each save sends a whole map, so saves run one at a time: an older map can
-  // never land after a newer one. Both kinds share the scope because a save is
-  // checked against the other kind's keys.
-  const scope = { id: "loadoutHotkeys" };
-  // Refetch only after the last queued save: an earlier refetch would replace
-  // the newer keys shown for a save still waiting in the queue.
+  // Reconcile both kinds only after every queued whole-map save has finished.
   const onSettled = () => {
     const pending = queryClient.isMutating({
       predicate: (mutation) => mutation.options.scope?.id === scope.id,
@@ -74,15 +94,33 @@ export const useBattleHotkeys = (
   };
   const saveJutsu = api.jutsu.setLoadoutHotkeys.useMutation({
     scope,
-    onSuccess: (result) => {
-      if (!result.success) showMutationToast(result);
+    meta: { hotkeyKind: "jutsu" },
+    onSuccess: async (result, input) => {
+      if (!result.success) {
+        showMutationToast(result);
+        return;
+      }
+      await utils.jutsu.getLoadouts.cancel();
+      utils.jutsu.getLoadouts.setData(
+        undefined,
+        (rows) => rows && getLoadoutsWithHotkeys(rows, input.id, input.hotkeys),
+      );
     },
     onSettled,
   });
   const saveItem = api.item.setLoadoutHotkeys.useMutation({
     scope,
-    onSuccess: (result) => {
-      if (!result.success) showMutationToast(result);
+    meta: { hotkeyKind: "item" },
+    onSuccess: async (result, input) => {
+      if (!result.success) {
+        showMutationToast(result);
+        return;
+      }
+      await utils.item.getItemLoadouts.cancel();
+      utils.item.getItemLoadouts.setData(
+        undefined,
+        (rows) => rows && getLoadoutsWithHotkeys(rows, input.id, input.hotkeys),
+      );
     },
     onSettled,
   });
@@ -125,11 +163,8 @@ export const useBattleHotkeys = (
       });
       return false;
     }
-    // Show the new keys at once (the next change builds on these rows); the save
-    // confirms them or the refetch restores them. Cancelling first drops a
-    // refetch already in flight, which would otherwise overwrite them.
-    // Shared cache helpers immediately reconcile dirty or changed revisions,
-    // which would overwrite maps still queued for saving.
+    // Patch directly: shared revision helpers can start reconciliation reads
+    // before the queued whole-map writes finish.
     if (kind === "jutsu") {
       void utils.jutsu.getLoadouts.cancel();
       utils.jutsu.getLoadouts.setData(

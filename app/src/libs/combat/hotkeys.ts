@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 /**
  * Battle hotkeys bind a key to an action id, never to a slot: the action list
  * changes mid-fight (stealth, disarm, summon prevention), so a slot-based key
@@ -49,13 +47,6 @@ export const DEFAULT_BASIC_HOTKEYS: HotkeyMap = {
 };
 
 export const MAX_LOADOUT_HOTKEYS = 60;
-
-/** A stored map: action id → key, or "" to clear a default. */
-export const hotkeyMapSchema = z
-  .record(z.string().min(1).max(191), z.union([z.enum(HOTKEY_KEYS), z.literal("")]))
-  .refine((map) => Object.keys(map).length <= MAX_LOADOUT_HOTKEYS, {
-    message: `At most ${MAX_LOADOUT_HOTKEYS} hotkeys per loadout`,
-  });
 
 /** Normalize a keyboard event key, or undefined when it cannot be bound. */
 export const toHotkey = (key: string): string | undefined => {

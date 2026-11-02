@@ -4,12 +4,12 @@ import {
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
   type HotkeyMap,
-  hotkeyMapSchema,
   isBattleHotkeyBlocked,
   MAX_LOADOUT_HOTKEYS,
   resolveHotkeys,
   toHotkey,
 } from "@/libs/combat/hotkeys";
+import { hotkeyMapSchema } from "@/validators/loadout";
 import { ensureDom } from "../../setup/dom.mjs";
 
 ensureDom();
