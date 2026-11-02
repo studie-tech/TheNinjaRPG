@@ -1413,117 +1413,122 @@ export const sortEffects = (
   a: UserEffect | GroundEffect,
   b: UserEffect | GroundEffect,
 ) => {
-  const ordered: ZodAllTags["type"][] = [
-    // Prevents
-    "stealth",
-    "buffprevent",
-    "cleanseprevent",
-    "clearprevent",
-    "debuffprevent",
-    "fleeprevent",
-    "healprevent",
-    "moveprevent",
-    "onehitkillprevent",
-    "robprevent",
-    "sealprevent",
-    "stunprevent",
-    "summonprevent",
-    "disarm",
-    "weakness",
-    // Pre-modifiers
-    "elementalseal",
-    "injectjutsus",
-    "activatesagemode",
-    "cleanse",
-    "clear",
-    "increaseaggro",
-    "decreaseaggro",
-    "increasepotency",
-    "decreasepotency",
-    "decreasepoolcost",
-    "decreasestat",
-    "decreasemastery",
-    "increasepoolcost",
-    "increasestat",
-    "increasemastery",
-    // Mid-modifiers
-    "barrier",
-    "shield",
-    "finalstand",
-    "diffuse",
-    "clone",
-    "redirection",
-    "damage",
-    "flee",
-    "heal",
-    "onehitkill",
-    "rob",
-    "seal",
-    "stun",
-    "summon",
-    // Post-moodifiers before pierce
-    "decreasedamagegiven",
-    "decreasedamagetaken",
-    "increasedamagegiven",
-    "increasedamagetaken",
-    // Piercing damage
-    "pierce",
-    // Post-modifiers after pierce (uses shared constant from constants.ts)
-    ...(POST_PIERCE_TAGS as ZodAllTags["type"][]),
-    "copy",
-    "mirror",
-    // Time effects
-    "timecompression",
-    "timedilation",
-    // End-modifiers
-    "move",
-    "visual",
-  ];
-  if (ordered.includes(a.type) && ordered.includes(b.type)) {
-    const aIndex = ordered.indexOf(a.type);
-    const bIndex = ordered.indexOf(b.type);
-
-    // If they're the same type, handle special ordering
-    if (aIndex === bIndex) {
-      // For damage reduction effects, sort static before percentage
-      if (a.type === "decreasedamagetaken" && b.type === "decreasedamagetaken") {
-        if (a.calculation === "static" && b.calculation === "percentage") return -1;
-        if (a.calculation === "percentage" && b.calculation === "static") return 1;
-      }
-      if (a.type === "decreasedamagegiven" && b.type === "decreasedamagegiven") {
-        if (a.calculation === "static" && b.calculation === "percentage") return -1;
-        if (a.calculation === "percentage" && b.calculation === "static") return 1;
-      }
-      return 0; // Same type, same calculation, maintain original order
-    }
-
-    // Special handling for damage reduction effects to ensure proper ordering
-    // We want: decreasedamagetaken(static) -> decreasedamagegiven(static) -> decreasedamagegiven(percentage) -> decreasedamagetaken(percentage)
-    if (
-      (a.type === "decreasedamagetaken" && b.type === "decreasedamagegiven") ||
-      (a.type === "decreasedamagegiven" && b.type === "decreasedamagetaken")
-    ) {
-      // If both are static, decreasedamagetaken comes first
-      if (a.calculation === "static" && b.calculation === "static") {
-        if (a.type === "decreasedamagetaken") return -1;
-        if (b.type === "decreasedamagetaken") return 1;
-      }
-
-      // If both are percentage, decreasedamagegiven comes first
-      if (a.calculation === "percentage" && b.calculation === "percentage") {
-        if (a.type === "decreasedamagegiven") return -1;
-        if (b.type === "decreasedamagegiven") return 1;
-      }
-
-      // If one is static and one is percentage, static comes first
+  const aIndex = EFFECT_SORT_RANK.get(a.type) ?? Number.POSITIVE_INFINITY;
+  const bIndex = EFFECT_SORT_RANK.get(b.type) ?? Number.POSITIVE_INFINITY;
+  // If they're the same type, handle special ordering
+  if (aIndex === bIndex) {
+    // For damage reduction effects, sort static before percentage
+    if (a.type === "decreasedamagetaken" && b.type === "decreasedamagetaken") {
       if (a.calculation === "static" && b.calculation === "percentage") return -1;
       if (a.calculation === "percentage" && b.calculation === "static") return 1;
     }
-
-    return aIndex > bIndex ? 1 : -1;
+    if (a.type === "decreasedamagegiven" && b.type === "decreasedamagegiven") {
+      if (a.calculation === "static" && b.calculation === "percentage") return -1;
+      if (a.calculation === "percentage" && b.calculation === "static") return 1;
+    }
+    return 0; // Same type, same calculation, maintain original order
   }
-  return 0;
+
+  // Special handling for damage reduction effects to ensure proper ordering
+  // We want: decreasedamagetaken(static) -> decreasedamagegiven(static) -> decreasedamagegiven(percentage) -> decreasedamagetaken(percentage)
+  if (
+    (a.type === "decreasedamagetaken" && b.type === "decreasedamagegiven") ||
+    (a.type === "decreasedamagegiven" && b.type === "decreasedamagetaken")
+  ) {
+    // If both are static, decreasedamagetaken comes first
+    if (a.calculation === "static" && b.calculation === "static") {
+      if (a.type === "decreasedamagetaken") return -1;
+      if (b.type === "decreasedamagetaken") return 1;
+    }
+
+    // If both are percentage, decreasedamagegiven comes first
+    if (a.calculation === "percentage" && b.calculation === "percentage") {
+      if (a.type === "decreasedamagegiven") return -1;
+      if (b.type === "decreasedamagegiven") return 1;
+    }
+
+    // If one is static and one is percentage, static comes first
+    if (a.calculation === "static" && b.calculation === "percentage") return -1;
+    if (a.calculation === "percentage" && b.calculation === "static") return 1;
+  }
+
+  return aIndex > bIndex ? 1 : -1;
 };
+
+/**
+ * Application stage of each effect type. Unlisted types share a final rank, which
+ * keeps the comparator consistent so listed types always follow this order.
+ */
+const EFFECT_SORT_RANK = new Map<string, number>(
+  (
+    [
+      // Prevents
+      "stealth",
+      "buffprevent",
+      "cleanseprevent",
+      "clearprevent",
+      "debuffprevent",
+      "fleeprevent",
+      "healprevent",
+      "moveprevent",
+      "onehitkillprevent",
+      "robprevent",
+      "sealprevent",
+      "stunprevent",
+      "summonprevent",
+      "disarm",
+      "weakness",
+      // Pre-modifiers
+      "elementalseal",
+      "injectjutsus",
+      "activatesagemode",
+      "cleanse",
+      "clear",
+      "increaseaggro",
+      "decreaseaggro",
+      "increasepotency",
+      "decreasepotency",
+      "decreasepoolcost",
+      "decreasestat",
+      "decreasemastery",
+      "increasepoolcost",
+      "increasestat",
+      "increasemastery",
+      // Mid-modifiers
+      "barrier",
+      "shield",
+      "finalstand",
+      "diffuse",
+      "clone",
+      "redirection",
+      "damage",
+      "flee",
+      "heal",
+      "onehitkill",
+      "rob",
+      "seal",
+      "stun",
+      "summon",
+      // Post-moodifiers before pierce
+      "decreasedamagegiven",
+      "decreasedamagetaken",
+      "increasedamagegiven",
+      "increasedamagetaken",
+      // Piercing damage
+      "pierce",
+      // Post-modifiers after pierce (uses shared constant from constants.ts)
+      ...(POST_PIERCE_TAGS as ZodAllTags["type"][]),
+      "copy",
+      "mirror",
+      // Time effects
+      "timecompression",
+      "timedilation",
+      // End-modifiers
+      "move",
+      "visual",
+    ] as ZodAllTags["type"][]
+  ).map((type, index) => [type, index]),
+);
 
 /**
  * Given an action, list of user effects, and a target, calculate pool cost for the action
