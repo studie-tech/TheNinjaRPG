@@ -109,6 +109,7 @@ export const createTravelScene = async (options: {
         shadows,
         sceneryBounds,
       );
+    game.own(route.dispose);
     // Sector scopes own artwork while terrain, scenery and actors share one lit world.
     lightingLayer.addChild(
       terrainDrawLayer,

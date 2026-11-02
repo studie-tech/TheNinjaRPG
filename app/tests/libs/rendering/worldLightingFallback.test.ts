@@ -138,7 +138,7 @@ const expectGroundOrder = (stage: Container, sprite: Container) => {
   const contact = owner!.getChildByLabel("scenery-shadows")!.children[0]!;
   const glow = owner!.getChildByLabel("scenery-lights")!.children[0]!;
   const drawn = drawOrder(stage);
-  const lastTerrain = Math.max(...drawn.flatMap((view, index) => view instanceof Mesh && view.label !== "weather-particles" ? [index] : []));
+  const lastTerrain = Math.max(...drawn.flatMap((view, index) => view instanceof Mesh && view.label !== "weather-particles" && view.label !== "travel-path-ribbon" ? [index] : []));
   expect(drawn.indexOf(contact)).toBeGreaterThan(lastTerrain);
   expect(drawn.indexOf(glow)).toBeGreaterThan(lastTerrain);
   const leaves = drawn.filter((view) => { let node: Container | null = view; while (node) { if (node === sprite) return true; node = node.parent; } return false; });
@@ -217,7 +217,7 @@ describe("world lighting precision fallback", () => {
     const actor = (fixture.game.stage.getChildByLabel("user:self", true) ?? fixture.game.stage.getChildByLabel("self", true))!.getChildByLabel("avatar", true)!;
     const drawn = drawOrder(fixture.game.stage);
     expect(route.visible).toBe(true);
-    expect(drawn.indexOf(ribbon)).toBeGreaterThan(Math.max(...drawn.flatMap((view, index) => view instanceof Mesh ? [index] : [])));
+    expect(drawn.indexOf(ribbon)).toBeGreaterThan(Math.max(...drawn.flatMap((view, index) => view instanceof Mesh && view !== ribbon ? [index] : [])));
     expect(drawn.indexOf(ribbon)).toBeLessThan(drawn.findIndex((view) => view.parent === actor));
     scene.clearHighlights();
     expect(route.visible).toBe(false);
