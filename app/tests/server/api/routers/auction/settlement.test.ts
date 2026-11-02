@@ -148,7 +148,7 @@ describeWithDatabase("auction settlement", () => {
       expect(await balances(balance)).toEqual({ seller: 1100, winner: 900, loser: 1000 });
     });
 
-    it(`rolls back the buyout debit, bid, log and notification if ${currency} delivery fails`, async () => {
+    it(`rolls back the buyout debit, bid and log if ${currency} delivery fails`, async () => {
       await seedAuction(currency, true, false);
       const db = await getTestDatabase();
       const failed = wrapTransactions(db, (tx) => failStatements(tx, userItem));

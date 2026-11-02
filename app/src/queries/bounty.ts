@@ -3,13 +3,7 @@
  */
 import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import {
-  actionLog,
-  bounty,
-  bountyContribution,
-  bountySignup,
-  userData,
-} from "@/drizzle/schema";
+import { actionLog, bounty, bountyContribution, bountySignup } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `bounty` listing for `board`, using predicates on `status` and `collectedAt`. */
@@ -131,9 +125,10 @@ export const insertBountyContribution = (
   bountyId: string,
   userId: string,
   amountRyo: number,
+  id = nanoid(),
 ) =>
   client.insert(bountyContribution).values({
-    id: nanoid(),
+    id,
     bountyId,
     contributorUserId: userId,
     amountRyo,
@@ -208,12 +203,23 @@ export const findBountySignup = (
     ),
   });
 
-/** Build the `bounty` update for `collect`, setting `collectedAt`, using predicates on `id`. */
+/** Build the `bounty` collection claim, guarded on the claiming hunter and an uncollected payout. */
 export const updateBountyForCollect = (
   client: Pick<DrizzleClient, "update">,
   bountyId: string,
+  userId: string,
 ) =>
-  client.update(bounty).set({ collectedAt: new Date() }).where(eq(bounty.id, bountyId));
+  client
+    .update(bounty)
+    .set({ collectedAt: new Date() })
+    .where(
+      and(
+        eq(bounty.id, bountyId),
+        eq(bounty.claimedByUserId, userId),
+        eq(bounty.status, "CLAIMED"),
+        isNull(bounty.collectedAt),
+      ),
+    );
 
 /** Build deletion of all hunter signups for a bounty. */
 export const deleteBountySignups = (
@@ -221,7 +227,7 @@ export const deleteBountySignups = (
   bountyId: string,
 ) => client.delete(bountySignup).where(eq(bountySignup.bountyId, bountyId));
 
-/** Build the `bounty` update for `addMoney`, setting `amountRyo`, using predicates on `id`. */
+/** Build the `bounty` update for `addMoney`, raising `amountRyo` only while the bounty is OPEN. */
 export const updateBountyForAddMoney = (
   client: Pick<DrizzleClient, "update">,
   input: { amountRyo: number; bountyId: string },
@@ -229,18 +235,7 @@ export const updateBountyForAddMoney = (
   client
     .update(bounty)
     .set({ amountRyo: sql`${bounty.amountRyo} + ${input.amountRyo}` })
-    .where(eq(bounty.id, input.bountyId));
-
-/** Build the `userData` update for `addMoney`, setting `money`, using predicates on `userId`. */
-export const updateUserDataForAddMoney = (
-  client: Pick<DrizzleClient, "update">,
-  input: { amountRyo: number },
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({ money: sql`${userData.money} - ${input.amountRyo}` })
-    .where(eq(userData.userId, ctx.userId));
+    .where(and(eq(bounty.id, input.bountyId), eq(bounty.status, "OPEN")));
 
 /** Build the contribution listing for a bounty. */
 export const listBountyContributions = (
@@ -268,11 +263,11 @@ export const updateBountyForRetract = (
       ),
     );
 
-/** Build deletion of all contributions to a bounty. */
-export const deleteBountyContributions = (
+/** Build deletion of one bounty contribution by ID. */
+export const deleteBountyContribution = (
   client: Pick<DrizzleClient, "delete">,
-  bountyId: string,
-) => client.delete(bountyContribution).where(eq(bountyContribution.bountyId, bountyId));
+  contributionId: string,
+) => client.delete(bountyContribution).where(eq(bountyContribution.id, contributionId));
 
 /** Build the `bounty` lookup for `removeAllTrackers`, using predicates on `id`. */
 export const findBountyForRemoveAllTrackers = (
@@ -356,7 +351,7 @@ export const listBountyForBountyExpire = (
     },
   });
 
-/** Build the `bounty` update for `bountyExpire`, setting `status`, using predicates on `id`. */
+/** Build the `bounty` update for `bountyExpire`, setting `status`, guarded on the bounty still being OPEN. */
 export const updateBountyForBountyExpire = (
   client: Pick<DrizzleClient, "update">,
   expiredBounty: { id: string },
@@ -364,4 +359,4 @@ export const updateBountyForBountyExpire = (
   client
     .update(bounty)
     .set({ status: "EXPIRED" })
-    .where(eq(bounty.id, expiredBounty.id));
+    .where(and(eq(bounty.id, expiredBounty.id), eq(bounty.status, "OPEN")));

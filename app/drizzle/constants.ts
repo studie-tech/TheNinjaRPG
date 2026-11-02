@@ -1,6 +1,8 @@
 /** Original images shared through posts and conversations. */
 export const TAVERN_IMAGE_MAX_SIZE_MB = 4;
 export const TAVERN_IMAGE_UPLOAD_DAILY_LIMIT = 50;
+/** Avatar and concept-art image uploads allowed per rolling day. */
+export const AVATAR_UPLOAD_DAILY_LIMIT = 50;
 
 export const OCCUPATIONS = ["GATHERING", "HUNTER", "CRAFTING"] as const;
 export type OccupationType = (typeof OCCUPATIONS)[number];
@@ -167,6 +169,8 @@ export const GUIDE_SYSTEM_COVERS: Record<string, string> = {
   "item-variants": "https://ui0arpl8sm.ufs.sh/f/guide-item-variants-v3.webp",
 };
 
+// Worldgen also keeps reserved sectors on land, so changing this list requires
+// regenerating src/data/hexasphere.json (see getWorldProtectedLandSectors).
 export const MAP_RESERVED_SECTORS = [
   73, 72, 75, 78, 275, 279, 201, 183, 272, 264, 270, 308, 289, 259, 260, 253, 304, 307,
   283, 284, 340, 334, 330, 331, 332, 337, 342, 336, 341, 335, 113, 109, 443,
@@ -779,6 +783,9 @@ export const BanStates = [
   "TRADE_BAN_ACTIVATED",
 ] as const;
 export type BanState = (typeof BanStates)[number];
+
+/** Report states that enforce a ban; an escalated ban stays in force until an admin decides. */
+export const ActiveBanStates: BanState[] = ["BAN_ACTIVATED", "BAN_ESCALATED"];
 
 /** Sanctions that outlive a deleted account; timeouts count as silences. */
 export const SanctionTombstoneTypes = ["BAN", "SILENCE"] as const;
@@ -1713,6 +1720,7 @@ export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training exp
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
 export const SENSEI_STUDENT_MISSION_EXP_BOOST_PERC = 3; // % extra mission experience for Chunin (<= lvl 40)
 export const SENSEI_MAX_STUDENT_LEVEL = 40;
+export const SENSEI_MAX_ACTIVE_STUDENTS = 3; // Active (Genin) students per sensei
 export const SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC = 5; // % reduced jutsu training cost for Chunin (<= lvl 40) and their senseis
 
 // Medical Ninja config

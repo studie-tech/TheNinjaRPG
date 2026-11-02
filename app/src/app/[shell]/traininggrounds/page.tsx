@@ -68,6 +68,7 @@ import {
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryNames,
   SENSEI_RANKS,
+  SENSEI_STUDENT_RYO_PER_MISSION,
   STATS_PER_ENERGY,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
@@ -136,6 +137,7 @@ import {
   masteryTrainingBlockMessage,
   masteryTrainingGainRoom,
   queuedMasteryStartBlockMessage,
+  SENSEI_JUTSU_TRAINING_BOOST_PERC,
   statTrainingBlockMessage,
   trainEfficiency,
   trainingEnergyMessage,
@@ -411,8 +413,8 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
     ? "Search for Genin to take in as students."
     : "Search for Jonin to be your sensei. ";
   const reward = canSensei
-    ? "You receive 1000 ryo every time a student completes a mission."
-    : "Jutsu training will be sped up by 5%.";
+    ? `You receive ${SENSEI_STUDENT_RYO_PER_MISSION} ryo (more with PvP boosts) every time a student completes a mission.`
+    : `Jutsu training will be sped up by ${SENSEI_JUTSU_TRAINING_BOOST_PERC}%.`;
   const showRequestSystem = canSensei || !userData.senseiId;
   const showSensei = userData.rank === "GENIN" && userData.senseiId;
   const showStudents = canSensei && students && students.length > 0;

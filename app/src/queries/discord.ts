@@ -20,7 +20,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
-import { DISCORD_INDEFINITE_SANCTION_DAYS } from "@/drizzle/constants";
+import { ActiveBanStates, DISCORD_INDEFINITE_SANCTION_DAYS } from "@/drizzle/constants";
 import {
   actionLog,
   type DiscordLink,
@@ -357,7 +357,7 @@ export const selectUserReportForLoadLinkCandidate = (
       or(
         and(
           eq(userReport.reportedUserId, input.userId),
-          eq(userReport.status, "BAN_ACTIVATED"),
+          inArray(userReport.status, ActiveBanStates),
           gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
         ),
         indefiniteSanctionWhere(input.userId),
@@ -604,7 +604,7 @@ export const indefiniteSanctionWhere = (userId: string | AnyColumn | SQL) =>
     userId instanceof SQL
       ? inArray(userReport.reportedUserId, userId)
       : eq(userReport.reportedUserId, userId),
-    inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED"]),
+    inArray(userReport.status, [...ActiveBanStates, "SILENCE_ACTIVATED"]),
     gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
     gte(
       userReport.banEnd,

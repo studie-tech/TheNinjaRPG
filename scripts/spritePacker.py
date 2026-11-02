@@ -20,15 +20,11 @@ def positive_int(value):
 
 # Command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("-image_directory", help="Directory with image files to use", default="../assets/animations/ice1")
+parser.add_argument("-image_directory", help="Directory with image files to use", default="../assets/animations/hit")
 parser.add_argument("-sprite_size", help="Positive size of each sprite in pixels", type=positive_int, default=64)
 
-# python spritePacker.py -image_directory ../app/public/animations/smoke
-# python spritePacker.py -image_directory ../app/public/animations/rising_smoke
-# python spritePacker.py -image_directory ../app/public/animations/hit
-# python spritePacker.py -image_directory ../app/public/animations/explosion
-# python spritePacker.py -image_directory ../app/public/animations/fire
-# python spritePacker.py -image_directory ../app/public/animations/heal
+# python spritePacker.py -image_directory ../assets/animations/hit
+# python spritePacker.py -image_directory ../assets/animations/rising_smoke
 
 if __name__ == '__main__':
 
@@ -74,18 +70,15 @@ if __name__ == '__main__':
     # Upload the file to S3
     s3_client = boto3.client('s3')
     try:
-        response = s3_client.upload_file(webp_path, "theninja-user-uploads", basename + ".webp")        
+        s3_client.upload_file(webp_path, "theninja-user-uploads", basename + ".webp")
     except ClientError as e:
         logging.error(e)
+        raise SystemExit(1) from e
 
     # Once uploaded, add the required SQL entry to .sql file
     s3_location = f"https://theninja-user-uploads.s3.us-west-2.amazonaws.com/{basename}.webp"
 
     with open("spritePacker.sql", "a") as f:
         print("Adding: ", basename)
-        f.write(f"\nINSERT INTO GameAsset (id, name, type, image, frames, speed, licenseDetails, createdByUserId) VALUES ('{generate()}', '{basename}', 'ANIMATION', '{s3_location}', '{len(images)}', '50', 'TNR', '1');");
+        f.write(f"\nINSERT INTO GameAsset (id, name, type, image, url, frames, speed, licenseDetails, createdByUserId) VALUES ('{generate()}', '{basename}', 'ANIMATION', '{s3_location}', '{s3_location}', '{len(images)}', '50', 'TNR', '1');")
 
-    # Save gif file as well
-    #gif_path = os.path.join(args.image_directory, '..', basename + '.gif')
-    #empty_start = Image.new('RGBA', (args.sprite_size, args.sprite_size))
-    #empty_start.save(gif_path, save_all=True, append_images=scaled, duration=100, loop=0)

@@ -9,6 +9,7 @@ import * as tabs from "@/components/ui/tabs";
 import * as Avatar from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
 import * as RichInput from "@/layout/RichInput";
+import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
@@ -33,7 +34,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ poll: { getPolls: { invalidate } } }),
     poll: {
-      getPolls: { useQuery: () => ({ data: { data: [] }, isLoading: false }) },
+      getPolls: { useInfiniteQuery: () => ({ data: { pages: [{ data: [], nextCursor: null }] }, isLoading: false, fetchNextPage: async () => undefined, hasNextPage: false }) },
       createPoll: { useMutation: (options: { onSuccess: typeof onSuccess }) => {
         onSuccess = options.onSuccess;
         return { mutate: createPoll, isPending: false };
@@ -41,6 +42,7 @@ beforeEach(() => {
     },
     profile: { searchUsers: { useQuery: () => ({ data: players }) } },
   });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "OWNER" } } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(Avatar, "default").mockImplementation(() => null);

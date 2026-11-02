@@ -13,6 +13,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { BloodlineCollection, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
+import { comparableTrackers } from "../../../setup/quest";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { countUserReads } from "../../../setup/userReads";
 
@@ -181,7 +182,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       expect(cached?.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
       expect(cached?.userData?.questData).toEqual(initial.userData?.questData);
       const canonical = await profile.getUser();
-      expect(cached?.userData?.questData).toEqual(canonical.userData?.questData);
+      expect(comparableTrackers(cached?.userData?.questData)).toEqual(comparableTrackers(canonical.userData?.questData));
       expect(canonical.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
       expect((await api.purchaseBloodline({ bloodlineId: lineId })).success).toBe(false);
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
@@ -220,7 +221,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       expect(cached.userData?.userQuests.map((entry) => entry.questId)).toEqual(["new-mission"]);
       expect(cached.userData?.questData?.map((tracker) => tracker.id).sort()).toEqual(["new-achievement", "new-mission"]);
       expect(getUser).toHaveBeenCalledTimes(1);
-      expect(cached.userData?.questData).toEqual((await profile.getUser()).userData?.questData);
+      expect(comparableTrackers(cached.userData?.questData)).toEqual(comparableTrackers((await profile.getUser()).userData?.questData));
     } finally { unsubscribe(); client.clear(); }
   });
 

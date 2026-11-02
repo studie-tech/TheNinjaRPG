@@ -1,6 +1,5 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
@@ -110,6 +109,8 @@ export default function SeasonForm({
         await utils.pvpRank.getSeasons.invalidate();
         onSuccess?.();
       }
+    } catch {
+      // The shared tRPC handler presents the mutation error.
     } finally {
       submitInFlightRef.current = false;
       setIsSubmitting(false);
@@ -251,7 +252,7 @@ export default function SeasonForm({
                   <FormControl>
                     <Input
                       type="date"
-                      value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                      value={field.value ? field.value.toISOString().slice(0, 10) : ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         field.onChange(val ? new Date(val) : undefined);
@@ -272,7 +273,7 @@ export default function SeasonForm({
                   <FormControl>
                     <Input
                       type="date"
-                      value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+                      value={field.value ? field.value.toISOString().slice(0, 10) : ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         field.onChange(val ? new Date(val) : undefined);

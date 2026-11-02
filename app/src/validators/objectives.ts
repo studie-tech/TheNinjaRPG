@@ -876,7 +876,7 @@ export type QuestContentType = {
 
 export const QuestTracker = z.object({
   id: z.string(),
-  startAt: z.iso.datetime().prefault(new Date().toISOString()),
+  startAt: z.iso.datetime().prefault(() => new Date().toISOString()),
   goals: z.array(ObjectiveTracker).prefault([]),
   /** Shared reset epoch; contributions from older generations cannot advance the team. */
   generation: z.number().int().min(0).optional(),

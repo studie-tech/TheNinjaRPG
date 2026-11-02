@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { UserStatus } from "@/drizzle/constants";
+import type { UserRequestState, UserStatus } from "@/drizzle/constants";
 import {
   HOME_FURNITURE_STORAGE_CAPACITY,
   HOME_INVITATION_EXPIRY_SECONDS,
@@ -186,13 +186,12 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("This invitation is no longer pending");
       if (request.createdAt < secondsFromNow(-HOME_INVITATION_EXPIRY_SECONDS))
         return errorResponse("This invitation has expired");
-      return updateRequestState(
+      return transitionHomeInvitation(
         ctx.drizzle,
         request.id,
         "ACCEPTED",
-        "HOME",
-        undefined,
         "PENDING",
+        "Invitation accepted",
       );
     }),
 
@@ -212,13 +211,12 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("Not your invitation to reject");
       if (request.status !== "PENDING")
         return errorResponse("This invitation is no longer pending");
-      return updateRequestState(
+      return transitionHomeInvitation(
         ctx.drizzle,
         request.id,
         "REJECTED",
-        "HOME",
-        undefined,
         "PENDING",
+        "Invitation declined",
       );
     }),
 
@@ -238,13 +236,12 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("Only the host can revoke this invitation");
       if (!["PENDING", "ACCEPTED"].includes(request.status))
         return errorResponse("This invitation is no longer active");
-      return updateRequestState(
+      return transitionHomeInvitation(
         ctx.drizzle,
         request.id,
         "CANCELLED",
-        "HOME",
-        undefined,
         request.status,
+        request.status === "ACCEPTED" ? "Invitation revoked" : "Invitation cancelled",
       );
     }),
 
@@ -649,6 +646,25 @@ export const homeRouter = createTRPCRouter({
 type HomeFurnitureUser = NonNullable<
   Awaited<ReturnType<typeof fetchHomeFurnitureUser>>
 >;
+
+/** Guarded home invitation transition answered with home-specific wording. */
+const transitionHomeInvitation = async (
+  client: DrizzleClient,
+  requestId: string,
+  status: UserRequestState,
+  expectedStatus: UserRequestState,
+  message: string,
+) => {
+  const result = await updateRequestState(
+    client,
+    requestId,
+    status,
+    "HOME",
+    undefined,
+    expectedStatus,
+  );
+  return result.success ? { success: true, message } : result;
+};
 
 /** Home scenery follows the owner's village even while the owner or visitor travels. */
 const getHomeBiome = (user: HomeFurnitureUser) =>

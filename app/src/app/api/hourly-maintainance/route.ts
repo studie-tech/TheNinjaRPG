@@ -1,11 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import type { BountyContribution } from "@/drizzle/schema";
 import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
 import {
-  deleteBountyContributions,
   deleteBountySignups,
-  listBountyContributions,
   listBountyForBountyExpire,
   updateBountyForBountyExpire,
 } from "@/queries/bounty";
@@ -13,7 +10,8 @@ import {
   deleteAbEventForDeleteExpiredVisitorAnalytics,
   deleteVisitorLogForDeleteExpiredVisitorAnalytics,
 } from "@/queries/data";
-import { countUsersActiveInLastDay, incrementUserMoney } from "@/queries/profile";
+import { countUsersActiveInLastDay } from "@/queries/profile";
+import { refundBountyContributions } from "@/server/api/routers/bounty";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { accrueVillageStructureMaintenance } from "@/server/utils/villageMaintenance";
@@ -72,31 +70,15 @@ const bountyExpire = async () => {
     return expiredBounties;
   }
 
-  // Process all expired bounties in parallel
+  // Process all expired bounties in parallel; a bounty claimed or retracted since the
+  // listing loses the OPEN compare-and-swap and is left to that flow
   await Promise.all(
-    expiredBounties.map(async (expiredBounty: (typeof expiredBounties)[number]) => {
-      // Get all contributions for this bounty
-      const contributions = await listBountyContributions(drizzleDB, expiredBounty.id);
-
-      // Execute all mutations in parallel for each bounty
+    expiredBounties.map(async (expiredBounty) => {
+      const result = await updateBountyForBountyExpire(drizzleDB, expiredBounty);
+      if (result.rowsAffected === 0) return;
       await Promise.all([
-        // Update bounty status to EXPIRED
-        updateBountyForBountyExpire(drizzleDB, expiredBounty),
-
-        // Remove all hunter signups for this bounty
         deleteBountySignups(drizzleDB, expiredBounty.id),
-
-        // Remove all contributions for this bounty
-        deleteBountyContributions(drizzleDB, expiredBounty.id),
-
-        // Refund all contributors their money
-        ...contributions.map((contribution: BountyContribution) =>
-          incrementUserMoney(
-            drizzleDB,
-            contribution.amountRyo,
-            contribution.contributorUserId,
-          ),
-        ),
+        refundBountyContributions(drizzleDB, expiredBounty.id),
       ]);
     }),
   );

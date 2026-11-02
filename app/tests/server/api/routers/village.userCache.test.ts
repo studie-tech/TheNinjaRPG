@@ -9,6 +9,7 @@ import * as profileApi from "@/server/api/routers/profile";
 import { InstantNewQuestObjective, MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
+import { comparableTrackers } from "../../../setup/quest";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "membership-quest-actor";
@@ -62,7 +63,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
       expect(cached.userData?.questData?.map((tracker) => tracker.id)).toEqual(["new-achievement"]);
       expect(await db.query.questHistory.findMany({ where: eq(questHistory.userId, userId) })).toEqual([]);
       const canonical = await profile.getUser();
-      expect(cached.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id))).toEqual(canonical.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id)));
+      expect(comparableTrackers(cached.userData?.questData)).toEqual(comparableTrackers(canonical.userData?.questData));
       expect(cached.userData?.userQuests.slice().sort((a, b) => a.questId.localeCompare(b.questId))).toEqual(canonical.userData?.userQuests.slice().sort((a, b) => a.questId.localeCompare(b.questId)));
       expect(cached.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry)).toEqual(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
       expect(cached.userData?.regeneration).toBe(canonical.userData?.regeneration);

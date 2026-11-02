@@ -1669,8 +1669,8 @@ export const applySingleEffect = (
     newUsersEffects.push(effect);
   } else if (
     (effect.disappearAnimation || effect.disappearSfx) &&
-    longitude &&
-    latitude
+    longitude !== undefined &&
+    latitude !== undefined
   ) {
     newGroundEffects.push(
       getVisualOrSound(
@@ -2285,7 +2285,8 @@ export const computeDamagePacket = (
     if (sealCheck(effect, sealEffects)) continue;
     const ratio = getEfficiencyRatio(damageEffect, effect);
     if (ratio === 0) continue;
-    const { power } = getPower(effect);
+    const power = getSignedDrModifierPower(effect);
+    if (!allowBloodlineDamageModifier(damageEffect, effect, power)) continue;
     totalStaticReduction += Math.abs(power) * ratio;
   }
   damage = Math.max(minDamage, damage - totalStaticReduction);

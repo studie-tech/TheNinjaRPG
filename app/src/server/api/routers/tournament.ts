@@ -6,7 +6,7 @@ import type { TournamentMatch } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchClan } from "@/queries/clan";
-import { fetchUser } from "@/queries/profile";
+import { fetchUser, findUserById } from "@/queries/profile";
 import {
   deleteTournamentForCleanupCompletedTournament,
   deleteTournamentMatches,
@@ -97,8 +97,19 @@ export const tournamentRouter = createTRPCRouter({
         const isLeader = user.userId === clanData?.leaderId;
         const isColeader = checkCoLeader(user.userId, clanData);
         if (!isLeader && !isColeader) return errorResponse("Must be leader");
-        input.rewards = ObjectiveReward.parse({ reward_money: clanData.bank });
-        await updateClanForCreateTournament(ctx.drizzle, clanData);
+        const prize = clanData.bank;
+        input.rewards = ObjectiveReward.parse({ reward_money: prize });
+        // Take only the prize read above; deposits made since stay in the bank
+        if (prize > 0) {
+          const debit = await updateClanForCreateTournament(
+            ctx.drizzle,
+            clanData,
+            prize,
+          );
+          if (debit.rowsAffected === 0) {
+            return errorResponse("Clan treasury changed, try again");
+          }
+        }
       }
       // Insert tournament
       await insertTournamentForCreateTournament(ctx.drizzle, input);
@@ -441,7 +452,8 @@ const finalizeTournamentAndPayWinner = async (
     return errorResponse(TOURNAMENT_FINALIZATION_INCOMPLETE);
   }
 
-  const winner = await fetchUser(client, winnerId);
+  // A deleted winner leaves the tournament IN_PROGRESS for staff recovery
+  const winner = await findUserById(client, winnerId);
   if (!winner) {
     return errorResponse("Tournament winner not found.");
   }

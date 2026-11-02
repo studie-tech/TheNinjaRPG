@@ -30,6 +30,7 @@ import {
 import { findGameSettingByName } from "@/queries/gamesettings";
 import {
   countCaptchaForRefreshCaptcha,
+  countSupportReviewForReviewSupportWithAI,
   fetchGameAssets,
   findCaptchaForGenerateCaptcha,
   findCaptchaForSolvedCaptchaRecently,
@@ -41,7 +42,6 @@ import {
   insertUserRewardsForAwardReputation,
   insertVisitorLogForTrackVisitor,
   listNotificationForGetPreviousNotifications,
-  listSupportReviewForReviewSupportWithAI,
   listUserDataForAwardReputation,
   listUserIdsMatchingUsername,
   listUserRewardsForGetAllAwards,
@@ -496,9 +496,12 @@ export const miscRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const reviewsToday = await listSupportReviewForReviewSupportWithAI(ctx.drizzle);
+      const reviewsToday = await countSupportReviewForReviewSupportWithAI(
+        ctx.drizzle,
+        ctx.userId,
+      );
       // Guard
-      if (reviewsToday.length >= 5) {
+      if (reviewsToday >= 5) {
         return errorResponse(
           "You have reached the maximum number of reviews for today",
         );

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { CLAN_BATTLE_REWARD_POINTS, CLAN_BATTLE_REWARD_RYO } from "@/drizzle/constants";
 import {
   actionLog,
@@ -99,6 +99,19 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     (await getTestDatabase()).query.userData.findFirst({
       where: eq(userData.userId, id),
     });
+
+  it.each([
+    ["an opposing member", "leader", "enemy", "a", "Not in your clan"],
+    ["a member of a battle the clan is not part of", "outsider", "leader", "c", "Not your clan battle"],
+  ])("rejects kicking %s from a clan battle", async (_, actorId, targetId, clanId, message) => {
+    const db = await getTestDatabase();
+    await db.insert(mpvpBattleUser).values({ id: "e", clanBattleId: "q", userId: "enemy", side: "DEFENDER", slot: 0 });
+    await db.update(userData).set({ status: "QUEUED" }).where(inArray(userData.userId, ["leader", "enemy"]));
+    const caller = await callerFor(clanRouter, actorId);
+    expect(await caller.kickFromClanBattle({ clanBattleId: "q", targetId, clanId })).toMatchObject({ success: false, message });
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(2);
+    expect((await storedUser(targetId))?.status).toBe("QUEUED");
+  });
 
   it("credits only the clan bank and preserves activity points", async () => {
     const caller = await callerFor(clanRouter, "co");

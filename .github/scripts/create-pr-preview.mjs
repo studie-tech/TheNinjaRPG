@@ -7,7 +7,7 @@
  *
  * Env vars consumed:
  *   GITHUB_TOKEN, GITHUB_REPOSITORY, PUSH_TOKEN (PAT, contents:write),
- *   PR_NUMBER, PREVIEW_BRANCH (optional), PREVIEW_ENVIRONMENT_PATTERN,
+ *   PR_NUMBER, PREVIEW_BRANCH (optional),
  *   POLL_INTERVAL_MS, POLL_TIMEOUT_MS
  *
  * Outputs (via GITHUB_OUTPUT):
@@ -24,8 +24,6 @@ const githubToken = process.env.GITHUB_TOKEN;
 const pushToken = process.env.PUSH_TOKEN || "";
 const repository = process.env.GITHUB_REPOSITORY;
 const prNumber = Number(process.env.PR_NUMBER);
-const environmentPatternRaw =
-  process.env.PREVIEW_ENVIRONMENT_PATTERN || "^Preview\\s+[–-]\\s+tnr$";
 const pollIntervalMs = Number(process.env.POLL_INTERVAL_MS ?? 15_000);
 const pollTimeoutMs = Number(process.env.POLL_TIMEOUT_MS ?? 25 * 60 * 1000);
 const waitBudgetDeadline = Date.now() + pollTimeoutMs;
@@ -57,7 +55,6 @@ const preview = createPreviewDeploymentClient({
   pushRequest,
   owner,
   repo,
-  environmentRegex: new RegExp(environmentPatternRaw, "i"),
 });
 
 const waitOptions = { pollIntervalMs, deadline: waitBudgetDeadline };
@@ -184,7 +181,7 @@ const main = async () => {
   );
   ready({
     previewUrl: successful.url,
-    reason: `Created Preview – tnr snapshot of PR #${prNumber} via ${previewBranch}`,
+    reason: `Created Vercel Preview snapshot of PR #${prNumber} via ${previewBranch}`,
     checkName: successful.environment,
     detailsUrl: successful.detailsUrl,
     headSha,

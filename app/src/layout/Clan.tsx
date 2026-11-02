@@ -3380,6 +3380,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
         <Confirm
           title={`Purchase ${label}`}
           proceed_label={!isMaxed && canAfford ? "Purchase" : "Cannot purchase"}
+          confirmDisabled={isMaxed || !canAfford}
           button={
             <>
               <span className="sr-only">Purchase {label}</span>

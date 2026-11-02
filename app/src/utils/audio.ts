@@ -528,6 +528,8 @@ export const setIframeMuteState = (muted: boolean): void => {
 export class IframeMuteObserver {
   private observer: MutationObserver | null = null;
   private isMuted = false;
+  // Every mounted consumer holds one start; the DOM is observed until the last one stops
+  private activeStarts = 0;
 
   constructor() {
     if (typeof window === "undefined") return;
@@ -563,11 +565,16 @@ export class IframeMuteObserver {
   start(muted = false): void {
     if (!this.observer) return;
     this.isMuted = muted;
-    this.observer.observe(document.body, { childList: true, subtree: true });
+    this.activeStarts += 1;
+    if (this.activeStarts === 1) {
+      this.observer.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   stop(): void {
-    if (this.observer) {
+    if (!this.observer || this.activeStarts === 0) return;
+    this.activeStarts -= 1;
+    if (this.activeStarts === 0) {
       this.observer.disconnect();
     }
   }

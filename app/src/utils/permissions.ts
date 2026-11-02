@@ -504,6 +504,7 @@ export const canReplyToStaffConversationWhileRestricted = (
 
 export const canEscalateBan = (user: UserData, report: UserReport) => {
   return (
+    report.reportedUserId === user.userId &&
     !report.adminResolved &&
     !canModerateReports(user, report) &&
     report.status === "BAN_ACTIVATED" &&

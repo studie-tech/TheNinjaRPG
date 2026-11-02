@@ -122,6 +122,14 @@ export const tradeUpdate = (id: string): PushMessage => ({
   collapseId: `trade-${id}`,
 });
 
+export const auctionOutbid = (auctionId: string): PushMessage => ({
+  title: "You were outbid",
+  body: "Another player placed a higher bid on an auction you were leading.",
+  category: "trade",
+  url: "/auctionhouse",
+  collapseId: `outbid-${auctionId}`,
+});
+
 export const timerElapsed = (
   kind: "hospital" | "jutsu" | "mastery" | "element" | "covert",
   id: string,

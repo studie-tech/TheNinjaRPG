@@ -240,13 +240,18 @@ export const listUserRewardsForGetAllAwards = (
     orderBy: [desc(userRewards.createdAt)],
   });
 
-/** Build the `supportReview` listing for `reviewSupportWithAI`, using predicates on `createdAt`. */
-export const listSupportReviewForReviewSupportWithAI = (
-  client: Pick<DrizzleClient, "query">,
+/** Build the caller's `supportReview` count over the last day for `reviewSupportWithAI`. */
+export const countSupportReviewForReviewSupportWithAI = (
+  client: Pick<DrizzleClient, "$count">,
+  userId: string,
 ) =>
-  client.query.supportReview.findMany({
-    where: gte(supportReview.createdAt, secondsFromNow(-DAY_S)),
-  });
+  client.$count(
+    supportReview,
+    and(
+      eq(supportReview.userId, userId),
+      gte(supportReview.createdAt, secondsFromNow(-DAY_S)),
+    ),
+  );
 
 /** Build the `supportReview` insert for `reviewSupportWithAI`. */
 export const insertSupportReviewForReviewSupportWithAI = (

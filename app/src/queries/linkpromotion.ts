@@ -1,7 +1,7 @@
 /**
  * Database access for linkpromotion; authorization and transaction scopes stay in callers.
  */
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { UserRole } from "@/drizzle/constants";
 import { linkPromotion, userData } from "@/drizzle/schema";
@@ -66,7 +66,7 @@ export const findLinkPromotionForReviewLinkPromotion = (
     where: eq(linkPromotion.id, input.id),
   });
 
-/** Build the `linkPromotion` update for `reviewLinkPromotion`, using predicates on `id`. */
+/** Build the `linkPromotion` review claim, guarded on the link not being reviewed yet. */
 export const updateLinkPromotionForReviewLinkPromotion = (
   client: Pick<DrizzleClient, "update">,
   input: { points: number; id: string },
@@ -80,7 +80,7 @@ export const updateLinkPromotionForReviewLinkPromotion = (
       reviewedBy: ctx.userId,
       reviewedAt: new Date(),
     })
-    .where(eq(linkPromotion.id, input.id));
+    .where(and(eq(linkPromotion.id, input.id), eq(linkPromotion.reviewed, false)));
 
 /**
  * Build the `userData` update for `reviewLinkPromotion`, setting `reputationPoints`
@@ -94,7 +94,7 @@ export const updateUserDataForReviewLinkPromotion = (
   client
     .update(userData)
     .set({
-      reputationPoints: sql`reputationPoints + ${input.points || 0}`,
-      reputationPointsTotal: sql`reputationPointsTotal + ${input.points || 0}`,
+      reputationPoints: sql`${userData.reputationPoints} + ${input.points}`,
+      reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${input.points}`,
     })
     .where(eq(userData.userId, promotion.userId));

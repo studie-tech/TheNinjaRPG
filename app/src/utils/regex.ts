@@ -12,7 +12,8 @@ export const DateTimeRegExp =
  * @returns The extracted value, or `undefined` if the key is not found.
  */
 export const extractValueFromJson = (data: string, key: string) => {
-  const rx = new RegExp(`${key}"s?:s?"(.+)"`);
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rx = new RegExp(`"${escapedKey}"\\s*:\\s*"([^"]*)"`);
   const values = rx.exec(data);
   return values?.[1];
 };

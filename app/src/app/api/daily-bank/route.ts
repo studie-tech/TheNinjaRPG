@@ -1,12 +1,7 @@
 import { and, eq, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
-import {
-  FED_GOLD_BANK_INTEREST,
-  FED_NORMAL_BANK_INTEREST,
-  FED_SILVER_BANK_INTEREST,
-} from "@/drizzle/constants";
-import { userData } from "@/drizzle/schema";
+import { type FederalStatus, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer } from "@/libs/gamesettings";
 import { insertDailyBankInterestForGET, selectUserDataForGET } from "@/queries/bank";
 import { listVillagesWithStructures } from "@/queries/village";
@@ -42,10 +37,12 @@ export async function GET(request: Request) {
     const promises = villages.map(async (village: (typeof villages)[number]) => {
       // Calculations
       const boost = getStrucBoost("bankInterestPerLvl", village.structures);
-      const baseFactor = calcBankInterest(boost) / 100;
-      const factorNormal = baseFactor + FED_NORMAL_BANK_INTEREST / 100;
-      const factorSilver = baseFactor + FED_SILVER_BANK_INTEREST / 100;
-      const factorGold = baseFactor + FED_GOLD_BANK_INTEREST / 100;
+      const factorFor = (federalStatus: FederalStatus) =>
+        calcBankInterest(boost, { federalStatus, staffAccount: false }) / 100;
+      const baseFactor = factorFor("NONE");
+      const factorNormal = factorFor("NORMAL");
+      const factorSilver = factorFor("SILVER");
+      const factorGold = factorFor("GOLD");
 
       // Config for different user types
       const config = [

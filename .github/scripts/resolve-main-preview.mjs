@@ -4,13 +4,13 @@
  * Why this exists (and why we do not just grab "the latest preview"):
  *   • Production deploys of `main` have VERCEL_ENV=production. The AI
  *     test-user broker is preview-only, so production cannot host a repro.
- *   • The newest GitHub "Preview – tnr" deployment is almost always a PR
+ *   • The newest Vercel Preview GitHub deployment is almost always a PR
  *     head, i.e. unmerged code. Reproducing an issue there tests the wrong
  *     tree.
  *
  * Strategy:
  *   1. Optional override: TNR_MAIN_PREVIEW_URL (must be https://*.vercel.app)
- *   2. Reuse a successful "Preview – tnr" GitHub deployment of the main SHA,
+ *   2. Reuse a successful Vercel Preview GitHub deployment of the main SHA,
  *      or of a snapshot commit of it left on `tnr-preview/main` by a prior run
  *   3. Otherwise create an empty snapshot commit (same tree as main) and point
  *      `tnr-preview/main` at it. The snapshot SHA is unique, so Vercel's
@@ -21,7 +21,7 @@
  * Env vars consumed:
  *   GITHUB_TOKEN, GITHUB_REPOSITORY, PUSH_TOKEN (PAT, contents:write),
  *   MAIN_SHA (optional), TNR_MAIN_PREVIEW_URL (optional),
- *   PREVIEW_BRANCH, PREVIEW_ENVIRONMENT_PATTERN,
+ *   PREVIEW_BRANCH,
  *   POLL_INTERVAL_MS, POLL_TIMEOUT_MS
  *
  * Outputs (via GITHUB_OUTPUT):
@@ -39,8 +39,6 @@ const pushToken = process.env.PUSH_TOKEN || "";
 const repository = process.env.GITHUB_REPOSITORY;
 const overrideUrl = (process.env.TNR_MAIN_PREVIEW_URL ?? "").trim();
 const previewBranch = process.env.PREVIEW_BRANCH || "tnr-preview/main";
-const environmentPatternRaw =
-  process.env.PREVIEW_ENVIRONMENT_PATTERN || "^Preview\\s+[–-]\\s+tnr$";
 const pollIntervalMs = Number(process.env.POLL_INTERVAL_MS ?? 15_000);
 const pollTimeoutMs = Number(process.env.POLL_TIMEOUT_MS ?? 25 * 60 * 1000);
 // One shared budget for ALL waiting in this run: chained fallbacks (waiting on
@@ -63,13 +61,11 @@ if (!owner || !repo) {
 
 const githubRequest = createGithubClient(githubToken);
 const pushRequest = pushToken ? createGithubClient(pushToken) : null;
-const environmentRegex = new RegExp(environmentPatternRaw, "i");
 const preview = createPreviewDeploymentClient({
   githubRequest,
   pushRequest,
   owner,
   repo,
-  environmentRegex,
 });
 
 const waitOptions = { pollIntervalMs, deadline: waitBudgetDeadline };
@@ -230,7 +226,7 @@ const main = async () => {
   );
   ready({
     previewUrl: successful.url,
-    reason: `Created Preview – tnr snapshot of main via ${previewBranch}`,
+    reason: `Created Vercel Preview snapshot of main via ${previewBranch}`,
     checkName: successful.environment,
     detailsUrl: successful.detailsUrl,
     headSha: resolvedSha,

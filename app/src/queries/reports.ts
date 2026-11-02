@@ -23,6 +23,7 @@ import {
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
+  ActiveBanStates,
   type AutomoderationCategory,
   type BanState,
   MODERATION_PROMPT_VERSION,
@@ -59,7 +60,7 @@ export const listUserReportForGET = (client: Pick<DrizzleClient, "query">) =>
   client.query.userReport.findMany({
     where: and(
       inArray(userReport.status, [
-        "BAN_ACTIVATED",
+        ...ActiveBanStates,
         "SILENCE_ACTIVATED",
         "TIMEOUT_ACTIVATED",
         "TRADE_BAN_ACTIVATED",
@@ -93,7 +94,7 @@ export const listUserReportForGET2 = (
         ...tradeBannedUsers.keys(),
       ]),
       inArray(userReport.status, [
-        "BAN_ACTIVATED",
+        ...ActiveBanStates,
         "SILENCE_ACTIVATED",
         "TIMEOUT_ACTIVATED",
         "TRADE_BAN_ACTIVATED",
@@ -610,7 +611,7 @@ export const selectUserReportForGetAll = (
               and(
                 eq(userReport.reportedUserId, ctx.userId),
                 inArray(userReport.status, [
-                  "BAN_ACTIVATED",
+                  ...ActiveBanStates,
                   "OFFICIAL_WARNING",
                   "SILENCE_ACTIVATED",
                   "TIMEOUT_ACTIVATED",
@@ -620,6 +621,10 @@ export const selectUserReportForGetAll = (
           : timeoutOnlyStaff
             ? [inArray(userReport.status, ["UNVIEWED", "TIMEOUT_ACTIVATED"])] // Aligned with canSeeReport: no reporter/reported exception
             : [input.status ? eq(userReport.status, input.status) : undefined]),
+        // Reporters are hidden from players, so only staff may filter by them
+        ...(staffUser && input.reporterUser !== undefined
+          ? [like(reporterUser.username, `%${input.reporterUser}%`)]
+          : []),
       ),
     )
     .innerJoin(
@@ -631,15 +636,7 @@ export const selectUserReportForGetAll = (
           : []),
       ),
     )
-    .leftJoin(
-      reporterUser,
-      and(
-        eq(reporterUser.userId, userReport.reporterUserId),
-        ...(input.reporterUser !== undefined
-          ? [like(reporterUser.username, `%${input.reporterUser}%`)]
-          : []),
-      ),
-    )
+    .leftJoin(reporterUser, eq(reporterUser.userId, userReport.reporterUserId))
     .limit(input.limit)
     .orderBy(desc(userReport.updatedAt))
     .offset(skip);
@@ -653,7 +650,7 @@ export const listUserReportForLoadReports = (
   client.query.userReport.findMany({
     where: and(
       inArray(userReport.status, [
-        "BAN_ACTIVATED",
+        ...ActiveBanStates,
         "SILENCE_ACTIVATED",
         "TIMEOUT_ACTIVATED",
         "OFFICIAL_WARNING",
@@ -717,7 +714,7 @@ export const updateUserDataForGetBan = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        noActiveReport(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", "BAN_ACTIVATED"]),
+        noActiveReport(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", ...ActiveBanStates]),
       ),
     );
 
@@ -857,15 +854,24 @@ export const insertUserReportCommentForWarn = (
     decision: "OFFICIAL_WARNING",
   });
 
-/** Build the `userReport` update for `escalate`, setting `status` and `updatedAt`, using predicates on `id`. */
+/** Build the `userReport` escalation, applied only to the caller's own active, unresolved ban. */
 export const updateUserReportForEscalate = (
   client: Pick<DrizzleClient, "update">,
-  input: { object_id: string },
+  report: { id: string },
+  ctx: { userId: string },
 ) =>
   client
     .update(userReport)
     .set({ status: "BAN_ESCALATED", updatedAt: new Date() })
-    .where(eq(userReport.id, input.object_id));
+    .where(
+      and(
+        eq(userReport.id, report.id),
+        eq(userReport.reportedUserId, ctx.userId),
+        eq(userReport.status, "BAN_ACTIVATED"),
+        eq(userReport.adminResolved, false),
+        gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
+      ),
+    );
 
 /** Build the `userReportComment` insert for `escalate`. */
 export const insertUserReportCommentForEscalate = (
@@ -890,7 +896,7 @@ export const listUserReportForClear = (
   client.query.userReport.findMany({
     where: and(
       eq(userReport.reportedUserId, reportedUserId),
-      eq(userReport.status, "BAN_ACTIVATED"),
+      inArray(userReport.status, ActiveBanStates),
       gte(userReport.banEnd, new Date()),
       ne(userReport.id, report.id),
     ),
@@ -952,7 +958,7 @@ export const clearUserBanWithoutActiveReport = (
   client
     .update(userData)
     .set({ isBanned: false })
-    .where(and(eq(userData.userId, userId), noActiveReport(["BAN_ACTIVATED"])));
+    .where(and(eq(userData.userId, userId), noActiveReport(ActiveBanStates)));
 
 /** Build the `userData` update for `clear`, setting `isSilenced`, using predicates on `userId`. */
 export const updateUserDataForClear2 = (
@@ -1498,7 +1504,7 @@ export const executeRowsForRemoveExpiredSanctionTombstones = (
       UPDATE ${userReport}
       INNER JOIN ${sanctionTombstone} ON ${and(eq(userReport.id, sanctionTombstone.sourceId), eq(userReport.reportedUserId, sanctionTombstone.userId))}
       SET ${userReport.status} = 'REPORT_CLEARED', ${userReport.adminResolved} = TRUE, ${userReport.updatedAt} = CURRENT_TIMESTAMP(3)
-      WHERE ${and(expired, inArray(userReport.status, ["BAN_ACTIVATED", "SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
+      WHERE ${and(expired, inArray(userReport.status, [...ActiveBanStates, "SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]), gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`))}
     `);
 
 /** Build the `sanctionTombstone` deletion for `removeExpiredSanctionTombstones`, using the configured predicates. */
@@ -1512,7 +1518,7 @@ const activeSanctionReportsWhere = (userId: string) =>
   and(
     eq(userReport.reportedUserId, userId),
     inArray(userReport.status, [
-      "BAN_ACTIVATED",
+      ...ActiveBanStates,
       "SILENCE_ACTIVATED",
       "TIMEOUT_ACTIVATED",
     ]),

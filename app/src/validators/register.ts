@@ -40,7 +40,7 @@ export const colors = [
 ] as const;
 export type Color = (typeof colors)[number];
 
-export const skin_colors = ["Light", "Dark", "Olive", "Alibino"] as const;
+export const skin_colors = ["Light", "Dark", "Olive", "Albino"] as const;
 export type SkinColor = (typeof skin_colors)[number];
 export const genders = ["Male", "Female", "Other"] as const;
 export type Gender = (typeof genders)[number];
@@ -48,7 +48,8 @@ export type Gender = (typeof genders)[number];
 const characterColorGroups: Record<"Hair" | "Eyes" | "Skin", readonly string[]> = {
   Hair: [...colors, "Green", "Yellow"].map((color) => `${color} Hair`),
   Eyes: [...colors, "Green", "Yellow"].map((color) => `${color} Eyes`),
-  Skin: [...skin_colors, "Albino"].map((color) => `${color} Skin`),
+  // "Alibino" is a misspelling still saved on older accounts.
+  Skin: [...skin_colors, "Alibino"].map((color) => `${color} Skin`),
 };
 
 // Group order defines the visible choice when older accounts contain conflicting traits.

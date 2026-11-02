@@ -233,6 +233,7 @@ const MenuBoxProfile: React.FC = () => {
     userData && Math.max(0, userData.experience - (expRequired ?? 0));
   const expNeededForNextLevel =
     userData && Math.max(1, (expForNextLevel ?? 0) - (expRequired ?? 0));
+  const canLevelUp = !!userData && userData.experience >= (expForNextLevel ?? 0);
 
   return (
     <>
@@ -328,11 +329,7 @@ const MenuBoxProfile: React.FC = () => {
                 Milestones: {Math.max(0, userData.level - MAX_EXPERIENCE_LEVEL)}/
                 {MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL}
               </Link>
-            ) : expRequired &&
-              expForNextLevel &&
-              expTowardsNextLevel &&
-              expNeededForNextLevel &&
-              expTowardsNextLevel >= expNeededForNextLevel ? (
+            ) : canLevelUp ? (
               <LevelUpBtn />
             ) : (
               <StatusBar

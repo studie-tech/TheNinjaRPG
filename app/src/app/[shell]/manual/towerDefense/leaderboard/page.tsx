@@ -10,17 +10,12 @@ import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { getFirstOfNextMonth } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
 
 export default function TowerDefenseLeaderboard() {
-  const { data: userData } = useUserData();
-
   // Fetch leaderboard data
   const { data: runs, isPending } = api.towerDefense.getLeaderboard.useQuery({
     limit: 50,
   });
-
-  if (!userData) return <Loader explanation="Loading user data..." />;
 
   // Process data for the table
   const tableData = runs?.map((run, index) => ({

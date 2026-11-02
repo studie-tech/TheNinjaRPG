@@ -480,15 +480,15 @@ export const updateUserDataForSwapVillage = (
     type: "VILLAGE" | "OUTLAW" | "SAFEZONE" | "HIDEOUT" | "STRONGHOLD";
     sector: number;
   },
-  user: { reputationPoints: number; rank: import("@/drizzle/schema").UserRank },
-  cost: 0,
+  user: { rank: import("@/drizzle/schema").UserRank },
+  cost: number,
   ctx: { userId: string },
 ) =>
   client
     .update(userData)
     .set({
       villageId: village.id,
-      reputationPoints: user.reputationPoints - cost,
+      reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
       isOutlaw: village.type === "OUTLAW",
       sector: village.sector,
       longitude: ALLIANCEHALL_LONG,
@@ -579,7 +579,7 @@ export const updateUserDataForDeclareEnemy = (
       ),
     );
 
-/** Build the `village` update for `declareEnemy`, setting `tokens`, using predicates on `id`. */
+/** Build the `village` token debit for `declareEnemy`, guarded by the village's balance. */
 export const updateVillageForDeclareEnemy = (
   client: Pick<DrizzleClient, "update">,
   villageId: string,
@@ -587,7 +587,7 @@ export const updateVillageForDeclareEnemy = (
   client
     .update(village)
     .set({ tokens: sql`${village.tokens} - ${WAR_FUNDS_COST}` })
-    .where(eq(village.id, villageId));
+    .where(and(eq(village.id, villageId), gte(village.tokens, WAR_FUNDS_COST)));
 
 /**
  * Build the `userData` update for `declareEnemy`, setting `villagePrestige` and

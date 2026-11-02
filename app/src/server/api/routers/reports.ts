@@ -1,7 +1,7 @@
 import { notExists } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { BanState } from "@/drizzle/constants";
+import { ActiveBanStates, type BanState } from "@/drizzle/constants";
 import { getForumContext, resolveForumPost } from "@/libs/forum";
 import { buildModerationEvidence } from "@/libs/moderation/evidence";
 import { getRelatedReports } from "@/libs/moderation/reportSearch";
@@ -188,23 +188,23 @@ export const reportsRouter = createTRPCRouter({
       loadReports(),
     ]);
     let allReports = initialReports;
-    const activeReport = (status: BanState) =>
+    const activeReport = (...statuses: BanState[]) =>
       allReports.find(
         (report) =>
-          report.status === status && report.banEnd && report.banEnd > new Date(),
+          statuses.includes(report.status) &&
+          report.banEnd &&
+          report.banEnd > new Date(),
       );
     // Parallel reads can straddle registration or moderation. Recheck in the write;
     // a rejected reset reloads the cases so the sanction screen has a current report.
     const noActiveReport = (statuses: BanState[]) =>
       notExists(selectUserReportForNoActiveReport(ctx.drizzle, ctx, statuses));
     const resets = await Promise.all([
-      ...(!activeReport("SILENCE_ACTIVATED") &&
-      !activeReport("TIMEOUT_ACTIVATED") &&
-      !activeReport("BAN_ACTIVATED") &&
+      ...(!activeReport("SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", ...ActiveBanStates) &&
       user.isSilenced
         ? [updateUserDataForGetBan(ctx.drizzle, ctx, noActiveReport)]
         : []),
-      ...(!activeReport("BAN_ACTIVATED") && user.isBanned
+      ...(!activeReport(...ActiveBanStates) && user.isBanned
         ? [clearUserBanWithoutActiveReport(ctx.drizzle, ctx.userId, noActiveReport)]
         : []),
     ]);
@@ -218,7 +218,7 @@ export const reportsRouter = createTRPCRouter({
       : null;
     const report =
       warningReport ??
-      activeReport("BAN_ACTIVATED") ??
+      activeReport(...ActiveBanStates) ??
       activeReport("SILENCE_ACTIVATED") ??
       activeReport("TIMEOUT_ACTIVATED") ??
       null;
@@ -323,7 +323,7 @@ export const reportsRouter = createTRPCRouter({
           case "battle_log": {
             return {
               infraction: {
-                content: `<br /><a href="/battlelog/${input.system_id}"><b>Link to Battle Log (available for 72h)<b></a>`,
+                content: `<br /><a href="/battlelog/${input.system_id}"><b>Link to Battle Log (available for 72h)</b></a>`,
               },
               context: [],
             };
@@ -571,16 +571,16 @@ export const reportsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
-      // Guard
+      // Guard. Only the banned user can escalate their own ban, so the banned-moderator
+      // guard of the other procedures does not apply here.
       if (!report) return errorResponse("Report not found");
-      if (user.isBanned)
-        return errorResponse("You are banned and cannot perform moderation actions");
-      if (canEscalateBan(user, report)) return errorResponse("You cannot escalate");
+      if (!canEscalateBan(user, report)) return errorResponse("You cannot escalate");
       // Update
-      await Promise.all([
-        updateUserReportForEscalate(ctx.drizzle, input),
-        insertUserReportCommentForEscalate(ctx.drizzle, ctx, input),
-      ]);
+      const escalated = await updateUserReportForEscalate(ctx.drizzle, report, ctx);
+      if (escalated.rowsAffected === 0) {
+        return errorResponse("Report changed. Refresh and try again");
+      }
+      await insertUserReportCommentForEscalate(ctx.drizzle, ctx, input);
       return { success: true, message: "Report escalated" };
     }),
   clear: protectedProcedure

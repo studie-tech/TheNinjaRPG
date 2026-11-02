@@ -2,11 +2,14 @@
  * Shared GitHub Deployment helpers for TNR Vercel preview snapshots.
  *
  * Vercel previews for this repo are discovered via GitHub Deployments whose
- * environment matches `Preview – tnr`. On-demand previews are created by
+ * environment matches PREVIEW_ENVIRONMENT_REGEX. On-demand previews are created by
  * pointing a `tnr-preview/*` branch at an empty snapshot commit (same tree as
  * the source SHA) so the GitHub integration builds a unique preview SHA.
  */
 import { toTrustedPreviewUrl } from "./ci-helpers.mjs";
+
+/** Vercel names the preview environment `Preview` or `Preview – tnr`. */
+export const PREVIEW_ENVIRONMENT_REGEX = /^Preview(\s+[–-]\s+tnr)?$/i;
 
 export const REUSABLE_STATES = ["success", "inactive"];
 export const TERMINAL_STATES = ["failure", "error", "inactive"];
@@ -45,14 +48,12 @@ export const encodeHeadsRef = (branch) =>
  * @param {((path: string, options?: RequestInit) => Promise<any>) | null} [options.pushRequest]
  * @param {string} options.owner
  * @param {string} options.repo
- * @param {RegExp} options.environmentRegex
  */
 export const createPreviewDeploymentClient = ({
   githubRequest,
   pushRequest = null,
   owner,
   repo,
-  environmentRegex,
 }) => {
   const listDeploymentsForSha = async (sha) => {
     const deployments = await githubRequest(
@@ -70,7 +71,7 @@ export const createPreviewDeploymentClient = ({
 
   const matchingDeployments = (deployments) =>
     deployments.filter((deployment) =>
-      environmentRegex.test(deployment?.environment ?? ""),
+      PREVIEW_ENVIRONMENT_REGEX.test(deployment?.environment ?? ""),
     );
 
   const inspectPreview = async (sha) => {
@@ -158,7 +159,7 @@ export const createPreviewDeploymentClient = ({
     const waitDeadline =
       deadline ?? (timeoutMs ? Date.now() + timeoutMs : Date.now() + 25 * 60 * 1000);
     const maxConsecutiveErrors = 5;
-    let lastNote = "waiting for Vercel to create a Preview – tnr deployment";
+    let lastNote = "waiting for Vercel to create a Preview deployment";
     let consecutiveErrors = 0;
 
     while (Date.now() < waitDeadline) {
@@ -197,7 +198,7 @@ export const createPreviewDeploymentClient = ({
           ? `Preview deployments exist but none are successful yet: ${inspected
               .map((item) => `${item.environment}=${item.state}`)
               .join(", ")}`
-          : "No Preview – tnr deployment yet for this SHA";
+          : "No Vercel Preview deployment yet for this SHA";
       console.log(lastNote);
       await sleep(interval);
     }
@@ -258,6 +259,6 @@ export const requirePreview = (result, sha) => {
     );
   }
   throw new Error(
-    `Timed out waiting for a Preview – tnr deployment of ${sha.slice(0, 7)}. Last status: ${result.lastNote}`,
+    `Timed out waiting for a Vercel Preview deployment of ${sha.slice(0, 7)}. Last status: ${result.lastNote}`,
   );
 };

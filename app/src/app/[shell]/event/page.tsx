@@ -166,8 +166,8 @@ export const EventGainMultiplierPanel: React.FC<{
 };
 
 const TestErrorMonitoring: React.FC = () => {
-  // Invalid state
-  const [state, setState] = useState<string | null>("test");
+  // Set to throw during the next render
+  const [shouldThrow, setShouldThrow] = useState(false);
 
   // Query data
   const { data: userData } = useRequiredUserData();
@@ -179,6 +179,7 @@ const TestErrorMonitoring: React.FC = () => {
   // Guard
   if (!userData) return null;
   if (!canUseMonitoringTests(userData.role)) return null;
+  if (shouldThrow) throw new Error("Test render error");
 
   return (
     <ContentBox
@@ -187,7 +188,6 @@ const TestErrorMonitoring: React.FC = () => {
       initialBreak={true}
     >
       <div className="flex flex-col gap-2">
-        <span className="hidden">{state?.toString()}</span>
         <div className="flex flex-row gap-2">
           <Button
             className="basis-1/2"
@@ -197,7 +197,7 @@ const TestErrorMonitoring: React.FC = () => {
           >
             Throw Error on Frontend
           </Button>
-          <Button className="basis-1/2" onClick={() => setState(null)}>
+          <Button className="basis-1/2" onClick={() => setShouldThrow(true)}>
             Render Error on Frontend
           </Button>
         </div>

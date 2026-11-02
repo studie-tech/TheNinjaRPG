@@ -212,7 +212,7 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
             proceed_label={
               canAfford
                 ? `Remove for ${REMOVAL_COST} reps`
-                : `Need ${userData.reputationPoints - REMOVAL_COST} more reps`
+                : `Need ${REMOVAL_COST - userData.reputationPoints} more reps`
             }
             isValid={!isFetching}
             button={

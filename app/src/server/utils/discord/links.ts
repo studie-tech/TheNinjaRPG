@@ -1,4 +1,5 @@
 import {
+  ActiveBanStates,
   DISCORD_UNLINK_COOLDOWN_DAYS,
   type DiscordUnlinkReason,
 } from "@/drizzle/constants";
@@ -45,7 +46,9 @@ export const fetchIndefiniteSanction = async (
 ) => {
   const reports = await selectUserReportForFetchIndefiniteSanction(client, userId);
   return (
-    reports.find((report) => report.status === "BAN_ACTIVATED") ?? reports[0] ?? null
+    reports.find((report) => ActiveBanStates.includes(report.status)) ??
+    reports[0] ??
+    null
   );
 };
 

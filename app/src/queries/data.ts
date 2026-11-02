@@ -5,6 +5,7 @@
 import {
   and,
   asc,
+  countDistinct,
   eq,
   gt,
   gte,
@@ -898,7 +899,7 @@ export const selectUserItemForGetItemBalanceStatistics = (
     .select({
       itemId: userItem.itemId,
       equippedCount:
-        sql<number>`COUNT(CASE WHEN ${userItem.equipped} = 1 THEN 1 END)`.mapWith(
+        sql<number>`COUNT(CASE WHEN ${ne(userItem.equipped, "NONE")} THEN 1 END)`.mapWith(
           Number,
         ),
     })
@@ -1244,15 +1245,25 @@ export const selectUserDataForGetStatistics2 = (
     .from(userData)
     .where(eq(userData.bloodlineId, input.id));
 
-/** Build the `userItem` selection for `getStatistics`, using predicates on `id`. */
+/** Build the distinct owner count of an item for `getStatistics`. */
 export const selectUserItemForGetStatistics = (
   client: Pick<DrizzleClient, "select">,
   input: { id: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: countDistinct(userItem.userId) })
     .from(userItem)
-    .where(eq(userItem.id, input.id));
+    .where(eq(userItem.itemId, input.id));
+
+/** Build the public AI profile lookup for `getStatistics`; player ids yield undefined. */
+export const findUserDataForGetStatistics = (
+  client: Pick<DrizzleClient, "query">,
+  input: { id: string },
+) =>
+  client.query.userData.findFirst({
+    where: and(eq(userData.userId, input.id), eq(userData.isAi, true)),
+    columns: { userId: true, username: true },
+  });
 
 /** Build the `visitorLog` deletion for `deleteExpiredVisitorAnalytics`, using predicates on `createdAt`. */
 export const deleteVisitorLogForDeleteExpiredVisitorAnalytics = (

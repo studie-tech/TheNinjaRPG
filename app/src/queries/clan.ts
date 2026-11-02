@@ -471,7 +471,7 @@ export const listClanForSearchClans = (
     limit: 5,
   });
 
-/** Build the `userData` update for `acceptRequest`, setting `clanId`, using predicates on `userId`. */
+/** Build the `userData` update for `acceptRequest`, setting `clanId` only while the requester is clanless. */
 export const updateUserDataForAcceptRequest = (
   client: Pick<DrizzleClient, "update">,
   fetchedClan: { id: string; hasHideout: false | true; villageId: string },
@@ -483,7 +483,7 @@ export const updateUserDataForAcceptRequest = (
       clanId: fetchedClan.id,
       ...(fetchedClan.hasHideout ? { villageId: fetchedClan.villageId } : {}),
     })
-    .where(eq(userData.userId, requester.userId));
+    .where(and(eq(userData.userId, requester.userId), isNull(userData.clanId)));
 
 /** Build the `village` lookup for `createClan`, using predicates on `name`. */
 export const findVillageForCreateClan = (
@@ -494,7 +494,7 @@ export const findVillageForCreateClan = (
     where: eq(village.name, input.name),
   });
 
-/** Build the `userData` update for `createClan`, setting `clanId` and `money`, using predicates on `userId`. */
+/** Build the `userData` update for `createClan`: assigns the clan and debits ryo only while clanless with enough ryo. */
 export const updateUserDataForCreateClan = (
   client: Pick<DrizzleClient, "update">,
   clanId: string,
@@ -506,7 +506,13 @@ export const updateUserDataForCreateClan = (
       clanId: clanId,
       money: sql`${userData.money} - ${CLAN_CREATE_RYO_COST}`,
     })
-    .where(eq(userData.userId, user.userId));
+    .where(
+      and(
+        eq(userData.userId, user.userId),
+        isNull(userData.clanId),
+        gte(userData.money, CLAN_CREATE_RYO_COST),
+      ),
+    );
 
 /** Build the `clan` insert for `createClan`. */
 export const insertClanForCreateClan = (

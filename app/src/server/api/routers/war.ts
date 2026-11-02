@@ -59,7 +59,6 @@ import { fetchUser } from "@/queries/profile";
 import { fetchQuest, listVisibleRaidQuests } from "@/queries/quests";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import {
-  countVillageSectors,
   fetchAlliances,
   fetchSector,
   fetchStructures,
@@ -123,9 +122,11 @@ import {
   updateUserDataForCancelWarMission,
   updateUserDataForClaim,
   updateUserDataForDeclareSectorWar,
+  updateUserDataForFinishWarSettlement,
   updateUserDataForStartWarMission,
   updateVillageElderVoteForCancelWarDeclaration,
   updateVillageElderVoteForVoteOnWarDeclaration2,
+  updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
@@ -773,11 +774,14 @@ export const warRouter = createTRPCRouter({
       if (!canAdministrateWars(user.role)) {
         return errorResponse("You are not authorized to end wars");
       }
-      // End war
+      // End war; close its contracts and missions as settlement does, since nothing
+      // can reach them once the war row is gone.
       await Promise.all([
         deleteWarForAdminEndWar(ctx.drizzle, input),
         deleteWarKillForAdminEndWar(ctx.drizzle, input),
         deleteWarAllyForAdminEndWar(ctx.drizzle, input),
+        updateWarMercenaryForFinishWarSettlement(ctx.drizzle, new Date(), activeWar),
+        updateUserDataForFinishWarSettlement(ctx.drizzle, activeWar),
         insertActionLogForAdminEndWar(ctx.drizzle, ctx, activeWar, input),
       ]);
       return { success: true, message: "War ended successfully" };
@@ -872,7 +876,7 @@ export const warRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, activeWars, villages, relationships, targetSector, sectorCount] =
+      const [{ user }, activeWars, villages, relationships, targetSector] =
         await Promise.all([
           fetchUpdatedUser({
             client: ctx.drizzle,
@@ -882,7 +886,6 @@ export const warRouter = createTRPCRouter({
           fetchVillages(ctx.drizzle),
           fetchAlliances(ctx.drizzle),
           fetchSector(ctx.drizzle, input.sectorId),
-          countVillageSectors(ctx.drizzle, input.userVillageId),
         ]);
       // Derived
       const now = new Date();
@@ -970,6 +973,7 @@ export const warRouter = createTRPCRouter({
           `You can only own ${SHRINE_MAX_PER_VILLAGE} sectors at a time`,
         );
       }
+      const sectorCount = user.village.sectors.length;
       if (user.isOutlaw && sectorCount >= WAR_FACTION_MAX_SECTORS) {
         return errorResponse(
           `Your faction has too many sectors. Can max own ${WAR_FACTION_MAX_SECTORS} sectors`,
@@ -1315,18 +1319,10 @@ export const warRouter = createTRPCRouter({
         structure,
         endsAt,
       );
-      const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const kageContent = `Your war declaration against ${defenderVillage.name} has been submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const elderUserIds = eligibleElders.map((e) => e.userId);
-      const allNotifyIds = [user.userId, ...elderUserIds];
+      const content = `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
+      const allNotifyIds = [user.userId, ...eligibleElders.map((e) => e.userId)];
       await Promise.all([
-        insertNotificationForDeclareVillageWarOrRaid(
-          ctx.drizzle,
-          user,
-          kageContent,
-          elderUserIds,
-          elderContent,
-        ),
+        insertNotificationForDeclareVillageWarOrRaid(ctx.drizzle, user, content),
         incrementNotificationCounters(ctx.drizzle, allNotifyIds),
       ]);
       return {
@@ -1835,7 +1831,7 @@ export const warRouter = createTRPCRouter({
       if (elders.length > 0) {
         const notifyIds = elders.map((e) => e.userId);
         await Promise.all([
-          insertNotificationForCancelWarDeclaration(ctx.drizzle, notifyIds, user),
+          insertNotificationForCancelWarDeclaration(ctx.drizzle, user),
           incrementNotificationCounters(ctx.drizzle, notifyIds),
         ]);
       }

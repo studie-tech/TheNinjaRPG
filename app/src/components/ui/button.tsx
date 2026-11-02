@@ -20,7 +20,7 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/70",
         destructive:
           "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90",
-        info: "bg-blue-600 text-destructive-foreground shadow-xs hover:bg-destructive/90",
+        info: "bg-blue-600 text-destructive-foreground shadow-xs hover:bg-blue-600/90",
         outline:
           "border border-input bg-white text-black shadow-xs hover:bg-slate-100 hover:text-accent-foreground",
         secondary:
@@ -64,15 +64,15 @@ const Button = ({
   children,
   asChild = false,
   decoration = "none",
+  animation,
   loading = false,
   count = undefined,
   ref,
   ...props
 }: ButtonProps) => {
   const Comp = asChild ? Slot : "button";
-  const isPulse = props.animation === "pulse";
-  const isGlow = props.animation === "glow";
-  const animation = isPulse ? "animate-pulse hover:animate-none" : "";
+  const isPulse = animation === "pulse";
+  const isGlow = animation === "glow";
   const widthClassesFromUser = React.useMemo(() => {
     if (typeof className !== "string") return undefined;
     const tokens = className.split(/\s+/).filter(Boolean);
@@ -87,10 +87,6 @@ const Button = ({
         return "var(--color-secondary)";
       case "info":
         return "rgb(37 99 235)"; // tailwind blue-600
-      case "outline":
-      case "ghost":
-      case "link":
-        return "var(--color-primary)";
       default:
         return "var(--color-primary)";
     }
@@ -102,7 +98,7 @@ const Button = ({
     <Comp
       className={cn(
         buttonVariants({ variant, size, className }),
-        animation,
+        isPulse && "animate-pulse hover:animate-none",
         isGlow && "relative z-10",
       )}
       ref={ref}

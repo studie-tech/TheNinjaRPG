@@ -1,7 +1,9 @@
 import sgMail from "@sendgrid/mail";
+import * as Sentry from "@sentry/nextjs";
 import { cookies } from "next/headers";
 import { env } from "@/env/server.mjs";
 import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
+import { SITE_URL } from "@/libs/seo";
 import {
   listEmailReminderForGET,
   updateEmailReminderForGET,
@@ -34,6 +36,9 @@ export async function GET(request: Request) {
     // Send email for each reminder
     await Promise.all(
       reminders.map(async (reminder: (typeof reminders)[number]) => {
+        const unsubscribeUrl = new URL("/emailsettings", SITE_URL);
+        unsubscribeUrl.searchParams.set("email", reminder.email);
+        unsubscribeUrl.searchParams.set("secret", reminder.secret);
         const msg = {
           to: reminder.email,
           from: "contact@theninja-rpg.com",
@@ -41,24 +46,25 @@ export async function GET(request: Request) {
           templateId: "d-95b2000ec19f47b1bedc331cf5cd19dd",
           dynamicTemplateData: {
             first_name: reminder.callName,
-            unsubscribeUrl: `https://www.theninja-rpg.com/emailsettings?email=${reminder.email}&secret=${reminder.secret}`,
+            unsubscribeUrl: unsubscribeUrl.toString(),
           },
         };
-        await sgMail
-          .send(msg)
-          .then(async (response: any) => {
-            console.log("RESPONSE: ", response);
-            await Promise.all([
-              updateEmailReminderForGET(drizzleDB, reminder),
-              ...(reminder.userId
-                ? [updateUserDataForGET(drizzleDB, { userId: reminder.userId })]
-                : []),
-            ]);
-          })
-          .catch(async (error: any) => {
-            console.log("ERROR: ", error);
-            await updateEmailReminderForGET2(drizzleDB, reminder);
-          });
+        // A rejected send marks the address invalid; write failures after a send do not.
+        try {
+          await sgMail.send(msg);
+        } catch (error) {
+          console.error("[hourly-emails-reminder] send failed:", error);
+          await updateEmailReminderForGET2(drizzleDB, reminder);
+          return;
+        }
+        try {
+          const claimed = await updateEmailReminderForGET(drizzleDB, reminder);
+          if (claimed.rowsAffected > 0 && reminder.userId) {
+            await updateUserDataForGET(drizzleDB, { userId: reminder.userId });
+          }
+        } catch (error) {
+          Sentry.captureException(error, { tags: { source: ENDPOINT_NAME } });
+        }
       }),
     );
 

@@ -810,7 +810,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </span>
                 </Button>
               }
-              isValid={renameForm.formState.isValid}
               onAccept={disbandSquad}
             >
               Confirm that you want to disband this entire squad. Everyone will be

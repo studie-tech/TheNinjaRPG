@@ -50,7 +50,7 @@ export default function ApplicationDetailPage() {
       <ContentBox
         title={`Application: ${app.targetRole}`}
         subtitle={`Status: ${app.state.toLowerCase()}`}
-        defaultBackHref={isStaff ? "/applications" : "/manual/staff"}
+        defaultBackHref={isStaff ? "/manual/staff/applications" : "/manual/staff"}
         topRightContent={
           canApprove && app.state !== "APPROVED" ? (
             <div className="flex gap-2">

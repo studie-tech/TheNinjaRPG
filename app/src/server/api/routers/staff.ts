@@ -10,7 +10,19 @@ import {
   getUpdateUserIdUserUpdate,
 } from "@/deltas/staff";
 import type { UserStatus } from "@/drizzle/constants";
-import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
+import {
+  farmCollectionLog,
+  farmExtraction,
+  farmPlot,
+  huntingProgress,
+  huntingReceipt,
+  huntingSession,
+  raidParticipation,
+  rankedPvpQueue,
+  rankedUserRewards,
+  userQuestAttempt,
+  userSkill,
+} from "@/drizzle/schema";
 
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 
@@ -177,11 +189,16 @@ import {
   updatePollOptionForUpdateUserId,
   updatePollOptionForUpdateUserId2,
   updateQuestHistoryForUpdateUserId,
+  updateRecruitRankMilestoneForUpdateUserId,
+  updateRecruitRankMilestoneForUpdateUserId2,
+  updateRecruitReferralForUpdateUserId,
+  updateRecruitReferralForUpdateUserId2,
   updateReportLogForUpdateUserId,
   updateReportLogForUpdateUserId2,
   updateRyoTradeForUpdateUserId,
   updateRyoTradeForUpdateUserId2,
   updateRyoTradeForUpdateUserId3,
+  updateStaffApplicationForUpdateUserId,
   updateStorePurchaseForUpdateUserId,
   updateStorePurchaseForUpdateUserId2,
   updateStoreUserIdAliasForUpdateUserId,
@@ -205,6 +222,8 @@ import {
   updateUserDataForDeleteReferral2,
   updateUserDataForDeleteUserInternal,
   updateUserDataForUpdateUserId,
+  updateUserDataRecruiterForUpdateUserId,
+  updateUserDataSenseiForUpdateUserId,
   updateUserDeviceForUpdateUserId,
   updateUserHomeForUpdateUserId,
   updateUserItemForUnequipAllGear,
@@ -232,6 +251,8 @@ import {
   updateUserUploadForUpdateUserId,
   updateUserVoteForUpdateUserId,
   updateVillageForUpdateUserId,
+  updateWarKillForUpdateUserId,
+  updateWarKillForUpdateUserId2,
   updateWebStoreOrderForDeleteUserInternal,
   updateWebStoreOrderForUpdateUserId,
   updateWebStoreOrderForUpdateUserId2,
@@ -934,6 +955,25 @@ export const staffRouter = createTRPCRouter({
         updateUserQueueForUpdateUserId(ctx.drizzle, input),
         updateUserCookingJobForUpdateUserId(ctx.drizzle, input),
         updateUserRaidBuffForUpdateUserId(ctx.drizzle, input),
+        ...[
+          userSkill,
+          farmPlot,
+          farmExtraction,
+          farmCollectionLog,
+          userQuestAttempt,
+          rankedUserRewards,
+          rankedPvpQueue,
+          raidParticipation,
+        ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
+        updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
+        updateWarKillForUpdateUserId(ctx.drizzle, input),
+        updateWarKillForUpdateUserId2(ctx.drizzle, input),
+        updateRecruitReferralForUpdateUserId(ctx.drizzle, input),
+        updateRecruitReferralForUpdateUserId2(ctx.drizzle, input),
+        updateRecruitRankMilestoneForUpdateUserId(ctx.drizzle, input),
+        updateRecruitRankMilestoneForUpdateUserId2(ctx.drizzle, input),
+        updateUserDataSenseiForUpdateUserId(ctx.drizzle, input),
+        updateUserDataRecruiterForUpdateUserId(ctx.drizzle, input),
       ]);
       // Answer only once every move has settled, so the retry a failure invites never
       // races moves still in flight.

@@ -1,9 +1,10 @@
 /**
  * Database access for simulator; authorization and transaction scopes stay in callers.
  */
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, lte, notInArray } from "drizzle-orm";
 import { damageSimulation } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { DamageSimulationState } from "@/validators/combat";
 
 /** Build the `damageSimulation` lookup, using predicates on `id`. */
 export const findDamageSimulationById = (client: DrizzleClient, id: string) =>
@@ -11,9 +12,6 @@ export const findDamageSimulationById = (client: DrizzleClient, id: string) =>
     where: eq(damageSimulation.id, id),
     orderBy: [desc(damageSimulation.createdAt)],
   });
-
-import { and, gt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 
 /** Build the `damageSimulation` listing for `getDamageSimulations`, using predicates on `userId`. */
 export const listDamageSimulationForGetDamageSimulations = (
@@ -38,33 +36,39 @@ export const listDamageSimulationForCreateDamageSimulation = (
     columns: { id: true, createdAt: true },
     where: eq(damageSimulation.userId, ctx.userId),
     orderBy: [desc(damageSimulation.createdAt)],
-    limit: maxEntries + 1,
+    limit: maxEntries,
   });
 
 /** Build the `damageSimulation` insert for `createDamageSimulation`. */
 export const insertDamageSimulationForCreateDamageSimulation = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: import("@/validators/combat").DamageSimulationState,
+  id: string,
+  input: DamageSimulationState,
 ) =>
   client.insert(damageSimulation).values({
-    id: nanoid(),
+    id,
     userId: ctx.userId,
     state: input,
   });
 
-/** Build the `damageSimulation` deletion for `createDamageSimulation`, using predicates on `userId` and `createdAt`. */
+/**
+ * Build the `damageSimulation` pruning for `createDamageSimulation`: deletes the user's
+ * entries no newer than `oldestEntry`, except those in `keepIds`.
+ */
 export const deleteDamageSimulationForCreateDamageSimulation = (
   client: Pick<DrizzleClient, "delete">,
   ctx: { userId: string },
-  lastEntry: { createdAt: Date },
+  oldestEntry: { createdAt: Date },
+  keepIds: string[],
 ) =>
   client
     .delete(damageSimulation)
     .where(
       and(
         eq(damageSimulation.userId, ctx.userId),
-        gt(damageSimulation.createdAt, lastEntry.createdAt),
+        lte(damageSimulation.createdAt, oldestEntry.createdAt),
+        notInArray(damageSimulation.id, keepIds),
       ),
     );
 

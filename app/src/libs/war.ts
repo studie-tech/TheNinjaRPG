@@ -160,12 +160,8 @@ export const canJoinWar = (
  * @param level - The level of the shrine
  * @returns The shrine hp
  */
-export const getShrineHpByLevel = (level?: number | null) => {
-  const idx = (
-    [1, 2, 3].includes(level || 1) ? level : 1
-  ) as keyof typeof SHRINE_HP_BY_LEVEL;
-  return SHRINE_HP_BY_LEVEL[idx];
-};
+export const getShrineHpByLevel = (level?: number | null): number =>
+  SHRINE_HP_BY_LEVEL[level as keyof typeof SHRINE_HP_BY_LEVEL] ?? SHRINE_HP_BY_LEVEL[1];
 
 /**
  * Checks if a village is involved in any active war (as attacker, defender, or ally)

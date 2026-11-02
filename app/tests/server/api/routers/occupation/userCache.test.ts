@@ -8,6 +8,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { comparableTrackers } from "../../../../setup/quest";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
 describeWithDatabase("crafting user cache quest progress", () => {
@@ -63,7 +64,7 @@ describeWithDatabase("crafting user cache quest progress", () => {
       expect(cached.userData?.queue).toEqual([]);
       expect(cached.userData?.craftingExperience).toBe(10);
       expect(cached.userData?.cookingJobs).toEqual([]);
-      expect(cached.userData?.questData).toEqual(authoritative.userData?.questData);
+      expect(comparableTrackers(cached.userData?.questData)).toEqual(comparableTrackers(authoritative.userData?.questData));
       expect(cached.achievementProgress).toMatchObject(authoritative.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
       if (questType !== "none") expect(cached.userData?.questData?.find((entry) => entry.id === "craft-total")?.goals[0]).toMatchObject({ value: 10, done: true });
       expect(reads).toBe(1);
@@ -290,7 +291,7 @@ describeWithDatabase("crafting user cache quest progress", () => {
       expect(authoritative.notifications.some((entry) => entry.href === "/questteams")).toBe(false);
       const cached = client.getQueryData<typeof initial>(key)!;
       expect(cached.notifications).toEqual(authoritative.notifications);
-      expect(cached.userData?.questData).toEqual(authoritative.userData?.questData);
+      expect(comparableTrackers(cached.userData?.questData)).toEqual(comparableTrackers(authoritative.userData?.questData));
       expect(reads).toBe(1);
       expect(result.userPatch).toBeUndefined();
     } finally { stop(); client.clear(); }

@@ -54,7 +54,7 @@ const EmailReminderContent: React.FC = () => {
   // Get email reminder data
   const {
     data: reminderData,
-    isPending: isReminderLoading,
+    isLoading: isReminderLoading,
     refetch,
   } = api.misc.getEmailReminder.useQuery(
     { email: email || "", secret: secret || "" },

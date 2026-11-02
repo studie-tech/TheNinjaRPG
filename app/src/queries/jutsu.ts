@@ -925,7 +925,7 @@ export const insertJutsuReskinForCreateReskin = (
     updatedAt: new Date(),
   });
 
-/** Build the `userData` update for `createReskin`, setting `reputationPoints`, using predicates on `userId`. */
+/** Build the `userData` debit for `createReskin`, guarded by the user's reputation balance. */
 export const updateUserDataForCreateReskin = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
@@ -935,7 +935,12 @@ export const updateUserDataForCreateReskin = (
     .set({
       reputationPoints: sql`${userData.reputationPoints} - ${COST_RESKIN_JUTSU}`,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        gte(userData.reputationPoints, COST_RESKIN_JUTSU),
+      ),
+    );
 
 /** Build the `userData` selection for `updateReskin`, using predicates on `username`. */
 export const selectUserDataForUpdateReskin = (

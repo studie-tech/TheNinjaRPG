@@ -1,4 +1,5 @@
 import Link from "@/layout/Link";
+import { isFarmMarketSeed } from "@/libs/farming";
 import type { fetchBloodlineCatalog, fetchFarmCatalog } from "@/queries/guide";
 
 import { formatSecondsToTimeDisplay } from "@/utils/time";
@@ -23,7 +24,7 @@ export const FarmCatalog: React.FC<{ rows: FarmRow[] }> = ({ rows }) => {
       <h2 className="font-bold text-xl">Every seed and what it grows</h2>
       <p className="mt-1 text-muted-foreground text-sm">
         From live item data. Level is the farming level needed to plant; cost is the
-        shop price of one seed.
+        price of one seed in the item shop or the farm market.
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className={TABLE}>
@@ -58,7 +59,11 @@ export const FarmCatalog: React.FC<{ rows: FarmRow[] }> = ({ rows }) => {
                 <td className={TD}>
                   {formatSecondsToTimeDisplay(row.farmGrowTimeSeconds)}
                 </td>
-                <td className={TD}>{row.cost.toLocaleString("en-US")} ryo</td>
+                <td className={TD}>
+                  {isFarmMarketSeed(row)
+                    ? `${row.farmSellValue.toLocaleString("en-US")} farm coins`
+                    : `${row.cost.toLocaleString("en-US")} ryo`}
+                </td>
                 <td className={TD}>{row.rarity.toLowerCase()}</td>
               </tr>
             ))}

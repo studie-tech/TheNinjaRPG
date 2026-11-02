@@ -1,6 +1,6 @@
 import { fetchActiveWar, warRaidCombatGuard } from "@/queries/war";
 
-import { and, eq, getTableName, sql } from "drizzle-orm";
+import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
 import { beforeEach, expect, it, vi } from "bun:test";
 import mysql from "mysql2/promise";
 import { setTimeout } from "node:timers/promises";
@@ -140,8 +140,14 @@ describeWithDatabase("faction war declarations", () => {
     });
     expect((await readFaction())?.tokens).toBe(TOKENS - FACTION_RAID_COST);
     expect(await database.select().from(villageElderVote)).toHaveLength(0);
-    const notified = (await database.select().from(notification)).map((n) => n.userId);
-    expect(notified.sort()).toEqual([LEADER, TARGET_KAGE].sort());
+    // One global feed row authored by the declaring leader; both leaders get an unread count.
+    const announcements = await database.select().from(notification);
+    expect(announcements.map((n) => n.userId)).toEqual([LEADER]);
+    const leaders = await database
+      .select({ userId: userData.userId, unread: userData.unreadNotifications })
+      .from(userData)
+      .where(inArray(userData.userId, [LEADER, TARGET_KAGE]));
+    expect(leaders.map((l) => l.unread)).toEqual([1, 1]);
   });
 
   it("reports success when leader notifications fail after the war commits", async () => {
@@ -288,6 +294,13 @@ describeWithDatabase("faction war declarations", () => {
       targetStructureRoute: "/townhall",
       warType: "VILLAGE_WAR",
     });
+    const announcements = await database.select().from(notification);
+    expect(announcements.map((n) => n.userId)).toEqual([LEADER]);
+    const notified = await database
+      .select({ unread: userData.unreadNotifications })
+      .from(userData)
+      .where(inArray(userData.userId, [LEADER, ...elders.map((e) => e.userId)]));
+    expect(notified.every((row) => row.unread === 1)).toBe(true);
     for (const elder of elders.slice(0, Math.floor(elders.length / 2) + 1)) {
       const voted = await (await callerFor(warRouter, elder.userId)).voteOnWarDeclaration({
         voteId: vote!.id,

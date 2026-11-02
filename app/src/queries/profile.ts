@@ -307,6 +307,8 @@ export const listPublicUserRows = (
         return [desc(userData.updatedAt)];
       case "Strongest":
         return [desc(userData.level), desc(userData.experience)];
+      case "Weakest":
+        return [asc(userData.level), asc(userData.experience)];
       case "Crafting":
         return [desc(userData.craftingExperience), desc(userData.experience)];
       case "Farming":
@@ -929,11 +931,15 @@ export const insertUserItemForCloneAi = (
     })),
   );
 
-/** Build the `userNindo` insert for `cloneAi`. */
+/** Build the `userNindo` insert for `cloneAi`, copying the content onto the clone. */
 export const insertUserNindoForCloneAi = (
   client: Pick<DrizzleClient, "insert">,
-  nindoData: import("@/drizzle/schema").UserNindo,
-) => client.insert(userNindo).values(nindoData);
+  nindoData: { content: string },
+  aiData: { userId: string },
+) =>
+  client
+    .insert(userNindo)
+    .values({ id: nanoid(), userId: aiData.userId, content: nindoData.content });
 
 /** Build the `userData` lookup for `updateUser`, using predicates on `userId`. */
 export const findUserDataForUpdateUser = (

@@ -88,11 +88,12 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
     setSelectedSkill(skill);
   };
 
-  // Handle purchase
+  // Handle purchase; accepting closes the modal without onClose, so reset its navigation here
   const handlePurchase = () => {
     if (selectedSkill) {
       onPurchaseSkill(selectedSkill.id);
       setSelectedSkill(null);
+      setNavigationHistory([]);
     }
   };
 

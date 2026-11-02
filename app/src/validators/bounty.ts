@@ -42,6 +42,6 @@ export type CollectBountySchema = z.infer<typeof collectBountySchema>;
 
 export const addBountyMoneySchema = z.object({
   bountyId: z.string().min(1),
-  amountRyo: z.number().min(1),
+  amountRyo: z.number().int().min(1),
 });
 export type AddBountyMoneySchema = z.infer<typeof addBountyMoneySchema>;

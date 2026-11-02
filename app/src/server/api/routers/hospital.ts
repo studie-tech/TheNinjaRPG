@@ -275,7 +275,12 @@ export const hospitalRouter = createTRPCRouter({
           routeText: "To profile",
         });
       }
-      void updateUserOnMap(pusher, t.sector, t);
+      const healedHealth = isSelfHeal
+        ? healer.curHealth
+        : pools.includes("Health")
+          ? Math.min(t.curHealth + toHeal, t.maxHealth)
+          : t.curHealth;
+      after(() => updateUserOnMap(pusher, t.sector, { ...t, curHealth: healedHealth }));
       return {
         success: true,
         message: `You have healed ${isSelfHeal ? "yourself" : "the target user"}${expGain > 0 ? ` and gained ${expGain} medical experience` : ""}`,
@@ -330,9 +335,15 @@ export const hospitalRouter = createTRPCRouter({
           healedAt,
           ctx,
         );
-        void updateUserOnMap(pusher, user.sector, user);
       }
       if (result.rowsAffected === 1) {
+        after(() =>
+          updateUserOnMap(pusher, user.sector, {
+            ...user,
+            status: "AWAKE",
+            curHealth: user.maxHealth,
+          }),
+        );
         // The Lock Screen countdown is driven from here once it has started, so leaving
         // hospital early has to close it; otherwise it keeps counting down to a recovery
         // that already happened.

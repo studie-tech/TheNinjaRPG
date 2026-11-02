@@ -99,12 +99,16 @@ export const updateWarForGET = (
     })
     .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
-/** Build a village token update from its settled war balance. */
+/** Build a village token decrement for war decay, floored at zero. */
 export const updateWarVillageTokens = (
   client: Pick<DrizzleClient, "update">,
-  tokens: number,
+  decay: number,
   villageId: string,
-) => client.update(village).set({ tokens: tokens }).where(eq(village.id, villageId));
+) =>
+  client
+    .update(village)
+    .set({ tokens: sql`GREATEST(${village.tokens} - ${decay}, 0)` })
+    .where(eq(village.id, villageId));
 
 /** Build the `war` update for `GET`, using predicates on `id` and `endedAt`. */
 export const updateWarForGET2 = (
@@ -540,8 +544,8 @@ export const insertGameSettingForFinishWarSettlement = (
     .values(missing.map((name) => ({ id: name, name, value: 0, time: new Date(0) })));
 
 /**
- * Build the `warMercenary` update for `finishWarSettlement`, setting `endedAt`, using
- * predicates on `warId` and `endedAt`.
+ * Build the `warMercenary` update for `finishWarSettlement` and `adminEndWar`, setting
+ * `endedAt`, using predicates on `warId` and `endedAt`.
  */
 export const updateWarMercenaryForFinishWarSettlement = (
   client: Pick<DrizzleClient, "update">,
@@ -553,7 +557,7 @@ export const updateWarMercenaryForFinishWarSettlement = (
     .set({ endedAt })
     .where(and(eq(warMercenary.warId, endedWar.id), isNull(warMercenary.endedAt)));
 
-/** Build the `userData` update for `finishWarSettlement`, setting `warMission`, using predicates on `warMission`. */
+/** Build the `userData` update for `finishWarSettlement` and `adminEndWar`, clearing `warMission` for the war. */
 export const updateUserDataForFinishWarSettlement = (
   client: Pick<DrizzleClient, "update">,
   endedWar: { id: string },
@@ -901,15 +905,12 @@ export const insertWarForStartDeclaredWar = (
     defenderShrineStatus: "ACTIVE",
   });
 
-/** Build the `notification` insert for `startDeclaredWar`. */
+/** Build the `notification` insert for `startDeclaredWar`: one feed row authored by the declaring Kage. */
 export const insertNotificationForStartDeclaredWar = (
   client: Pick<DrizzleClient, "insert">,
-  notifyKageIds: string[],
+  authorId: string,
   warContent: string,
-) =>
-  client
-    .insert(notification)
-    .values(notifyKageIds.map((userId) => ({ userId, content: warContent })));
+) => client.insert(notification).values({ userId: authorId, content: warContent });
 
 /**
  * Build the `villageElderVote` update for `startApprovedVoteWar`, setting `status`,
@@ -1804,21 +1805,12 @@ export const insertVillageElderVoteForDeclareVillageWarOrRaid = (
     endsAt,
   });
 
-/** Build the `notification` insert for `declareVillageWarOrRaid`. */
+/** Build the `notification` insert for `declareVillageWarOrRaid`: one feed row authored by the Kage. */
 export const insertNotificationForDeclareVillageWarOrRaid = (
   client: Pick<DrizzleClient, "insert">,
   user: { userId: string },
-  kageContent: string,
-  elderUserIds: string[],
-  elderContent: string,
-) =>
-  client.insert(notification).values([
-    { userId: user.userId, content: kageContent },
-    ...elderUserIds.map((userId) => ({
-      userId,
-      content: elderContent,
-    })),
-  ]);
+  content: string,
+) => client.insert(notification).values({ userId: user.userId, content });
 
 /** Build the `warKill` listing for `getWarKills`, using predicates on `warId`. */
 export const listWarKillForGetWarKills = (
@@ -1888,18 +1880,15 @@ export const updateVillageElderVoteForCancelWarDeclaration = (
       ),
     );
 
-/** Build the `notification` insert for `cancelWarDeclaration`. */
+/** Build the `notification` insert for `cancelWarDeclaration`: one feed row authored by the Kage. */
 export const insertNotificationForCancelWarDeclaration = (
   client: Pick<DrizzleClient, "insert">,
-  notifyIds: string[],
-  user: { username: string },
+  user: { userId: string; username: string },
 ) =>
-  client.insert(notification).values(
-    notifyIds.map((userId) => ({
-      userId,
-      content: `${user.username} has cancelled the war declaration. No war will be started.`,
-    })),
-  );
+  client.insert(notification).values({
+    userId: user.userId,
+    content: `${user.username} has cancelled the war declaration. No war will be started.`,
+  });
 
 /** Build the `userData` selection for `voteOnWarDeclaration`, using predicates on `villageId`, `rank`, `isAi`. */
 export const selectUserDataForVoteOnWarDeclaration = (

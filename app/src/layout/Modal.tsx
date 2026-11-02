@@ -67,7 +67,7 @@ interface ModalProps {
   /**
    * Footer Close button (default true). Content dialogs without a confirmation or
    * `onClose` can drop it; the header close button, Escape and an outside click still
-   * close the dialog. The header button does not run `onClose`.
+   * close the dialog.
    */
   closeButton?: boolean;
 }
@@ -144,6 +144,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
     handleAccept,
   ]);
 
+  // Every dismissal (header close, Escape, outside click, footer Close) runs onClose
   const handleDialogClose = () => {
     if (props.isLoading) return;
     if (props.onClose) props.onClose();
@@ -154,8 +155,8 @@ export const Modal: React.FC<ModalProps> = (props) => {
     <Dialog
       open={props.isOpen}
       onOpenChange={(open) => {
-        if (!open && props.isLoading) return;
-        props.setIsOpen(open);
+        if (open) props.setIsOpen(true);
+        else handleDialogClose();
       }}
     >
       <DialogContent
@@ -178,18 +179,12 @@ export const Modal: React.FC<ModalProps> = (props) => {
           }
         }}
         onEscapeKeyDown={(event) => {
-          if (props.isLoading) {
-            event.preventDefault();
-            return;
-          }
-          handleDialogClose();
+          if (props.isLoading) event.preventDefault();
         }}
         onInteractOutside={(event) => {
           if (props.isLoading || props.dismissOnInteractOutside === false) {
             event.preventDefault();
-            return;
           }
-          handleDialogClose();
         }}
       >
         <DialogHeader

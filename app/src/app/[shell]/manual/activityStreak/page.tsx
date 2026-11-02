@@ -42,12 +42,14 @@ export default function ActivityStreakListPage() {
   const router = useRouter();
 
   const {
-    data: configs,
+    data: allConfigs,
     isFetching,
     refetch,
-  } = api.activityStreak.getConfigs.useQuery(
-    typeFilter === "all" ? {} : { streakType: typeFilter },
-  );
+  } = api.activityStreak.getConfigs.useQuery();
+  const configs =
+    typeFilter === "all"
+      ? allConfigs
+      : allConfigs?.filter((c) => c.streakType === typeFilter);
 
   const { mutate: create, isPending: createPending } =
     api.activityStreak.createConfig.useMutation({
@@ -74,8 +76,8 @@ export default function ActivityStreakListPage() {
 
   const isPending = isFetching || createPending || deletePending;
 
-  // Check if a RECURRING config already exists
-  const hasRecurring = configs?.some((c) => c.streakType === "RECURRING");
+  // Check if a RECURRING config already exists, regardless of the active tab
+  const hasRecurring = allConfigs?.some((c) => c.streakType === "RECURRING");
 
   const handleCreate = () => {
     // Default to EVENT_PASS if RECURRING already exists
@@ -186,7 +188,7 @@ export default function ActivityStreakListPage() {
         </TabsContent>
       </Tabs>
 
-      {isOpen && userData && selectedConfig && (
+      {isOpen && selectedConfig && (
         <Modal
           title="Configuration Details"
           isOpen={isOpen}
@@ -289,7 +291,7 @@ export default function ActivityStreakListPage() {
                 </div>
               </div>
 
-              {canChangeContent(userData.role) && (
+              {userData && canChangeContent(userData.role) && (
                 <div className="flex gap-2 border-t pt-4">
                   <Button
                     onClick={() =>

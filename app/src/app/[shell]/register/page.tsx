@@ -143,8 +143,8 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
   // tRPC utility
   const utils = api.useUtils();
 
-  // User data (for GTM event)
-  const { data: userData } = useUserData();
+  // Clerk user id, stored as the new character's userId (for GTM event)
+  const { userId } = useUserData();
 
   // Create avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation();
@@ -156,7 +156,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
         if (data.success) {
           await utils.profile.getUser.invalidate();
           createAvatar.mutate();
-          sendGTMEvent({ event: "register", userId: userData?.userId ?? "" });
+          sendGTMEvent({ event: "register", userId: userId ?? "" });
         } else {
           showMutationToast(data);
         }

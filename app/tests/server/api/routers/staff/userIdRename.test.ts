@@ -8,6 +8,11 @@ import { beforeEach, expect, it } from "bun:test";
 import {
   auctionOffer,
   bloodline,
+  farmPlot,
+  rankedUserRewards,
+  recruitReferral,
+  userSkill,
+  warKill,
   notification,
   paypalSubscription,
   storeEntitlementRevocation,
@@ -58,6 +63,11 @@ const NEW_USER_ID = "rename-new-user";
 describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
+      userSkill,
+      farmPlot,
+      rankedUserRewards,
+      warKill,
+      recruitReferral,
       petSpecies,
       huntingSession, huntingProgress, huntingReceipt,
       auctionOffer,
@@ -129,6 +139,46 @@ describeWithDatabase("staff user-id rename", () => {
     expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
     expect(await database.query.userHome.findFirst({ where: eq(userHome.userId, NEW_USER_ID) })).toMatchObject({ isPublic: true, roomStyles: [...roomStyles] });
     expect(await database.query.userHome.findFirst({ where: eq(userHome.userId, OLD_USER_ID) })).toBeUndefined();
+  });
+
+  it("moves skills, farms, ranked rewards, war records, referrals and student links to the new id", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([
+      { userId: "student", senseiId: OLD_USER_ID, recruiterId: OLD_USER_ID },
+      { userId: "recruiter" },
+    ]);
+    await database.insert(userSkill).values({ id: "skill", userId: OLD_USER_ID, skillId: "tree" });
+    await database.insert(farmPlot).values({ id: "plot", userId: OLD_USER_ID, slotIndex: 0 });
+    await database.insert(rankedUserRewards).values({ id: "reward", userId: OLD_USER_ID, seasonId: "s", division: "Wood" });
+    await database.insert(warKill).values([
+      { id: "kill", warId: "w", killerId: OLD_USER_ID, victimId: "student", killerVillageId: "a", victimVillageId: "b" },
+      { id: "death", warId: "w", killerId: "student", victimId: OLD_USER_ID, killerVillageId: "b", victimVillageId: "a" },
+    ]);
+    await database.insert(recruitReferral).values([
+      { recruitUserId: OLD_USER_ID, recruiterId: "recruiter", isEligible: true, eligibilityReason: "IP_NOT_SHARED" },
+      { recruitUserId: "student", recruiterId: OLD_USER_ID, isEligible: true, eligibilityReason: "IP_NOT_SHARED" },
+    ]);
+    const caller = await callerFor(staffRouter, STAFF);
+    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
+    for (const table of [userSkill, farmPlot, rankedUserRewards]) {
+      expect(await database.select().from(table)).toEqual([expect.objectContaining({ userId: NEW_USER_ID })]);
+    }
+    expect(await database.select().from(warKill)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "kill", killerId: NEW_USER_ID }),
+        expect.objectContaining({ id: "death", victimId: NEW_USER_ID }),
+      ]),
+    );
+    expect(await database.select().from(recruitReferral)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recruitUserId: NEW_USER_ID, recruiterId: "recruiter" }),
+        expect.objectContaining({ recruitUserId: "student", recruiterId: NEW_USER_ID }),
+      ]),
+    );
+    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "student") })).toMatchObject({
+      senseiId: NEW_USER_ID,
+      recruiterId: NEW_USER_ID,
+    });
   });
 
   it("preserves a ready companion and its owner's progression across relinking and retry", async () => {

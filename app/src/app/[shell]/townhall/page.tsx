@@ -894,7 +894,7 @@ const KageHall: React.FC<{
           subtitle="Kage Challenges & Outcomes"
           initialBreak={true}
         >
-          <div className="lggrid-cols-5 grid grid-cols-4">
+          <div className="grid grid-cols-4 lg:grid-cols-5">
             {village.defendedChallenges.map((challenge) => (
               <div key={challenge.id} className="p-2 text-center">
                 <Link href={`/userid/${challenge.userId}`}>

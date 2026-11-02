@@ -345,7 +345,10 @@ export default function MyJutsu() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.jutsu.getUserJutsus.invalidate();
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getUserReskins.invalidate(),
+          ]);
           setIsReskinOpen(false);
           setUserJutsu(undefined);
         }
@@ -439,7 +442,9 @@ export default function MyJutsu() {
     curEquip && maxEquip
       ? `Equipped ${curEquip}/${maxEquip}`
       : "Jutsus you want to use in combat";
-  const activeReskins = userJutsus?.filter((uj) => uj.activeReskin);
+  // A kept reskin row makes the next reskin of that jutsu a free update
+  const hasReskinRecord =
+    !!userjutsu && !!userReskins?.some((r) => r.jutsuId === userjutsu.jutsuId);
 
   // Ryo from forgetting
   const forgetRyo = 0;
@@ -495,7 +500,7 @@ export default function MyJutsu() {
                   proceed_label={
                     canUpgrade
                       ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
-                      : `Need ${userData.reputationPoints - COST_EXTRA_JUTSU_SLOT} more reps`
+                      : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
                   }
                   isValid={!isPending}
                   button={
@@ -678,17 +683,15 @@ export default function MyJutsu() {
                   showStatistic="jutsu"
                   showEvolutions
                 />
-                {userReskins?.find((r) => r.jutsuId === userjutsu.jutsuId) &&
-                  !userjutsu.activeReskin &&
-                  !userjutsu.activeReskin && (
-                    <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2">
-                      <p className="text-blue-700 text-sm">
-                        <Palette className="mr-1 inline h-4 w-4" />
-                        This jutsu has been previously reskinned. You can create a new
-                        reskin for free.
-                      </p>
-                    </div>
-                  )}
+                {hasReskinRecord && !userjutsu.activeReskin && (
+                  <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2">
+                    <p className="text-blue-700 text-sm">
+                      <Palette className="mr-1 inline h-4 w-4" />
+                      This jutsu has been previously reskinned. You can create a new
+                      reskin for free.
+                    </p>
+                  </div>
+                )}
                 <div className="flex flex-row items-center gap-3">
                   {userData.loadout?.jutsuIds.includes(userjutsu.jutsuId) && (
                     <>
@@ -965,16 +968,11 @@ export default function MyJutsu() {
                       id="reskin"
                       variant="outline"
                       onClick={() => {
-                        // Pre-fill with current reskin data if it exists
                         reskinForm.reset({
                           jutsuId: userjutsu.jutsuId,
-                          name: userjutsu.activeReskin?.name ?? userjutsu.jutsu.name,
-                          description:
-                            userjutsu.activeReskin?.description ??
-                            userjutsu.jutsu.description,
-                          battleDescription:
-                            userjutsu.activeReskin?.battleDescription ??
-                            userjutsu.jutsu.battleDescription,
+                          name: userjutsu.jutsu.name,
+                          description: userjutsu.jutsu.description,
+                          battleDescription: userjutsu.jutsu.battleDescription,
                           image: undefined,
                         });
                         setIsOpen(false);
@@ -1014,13 +1012,11 @@ export default function MyJutsu() {
         )}
         {modalType === "reskin" && userjutsu && isReskinOpen && (
           <Modal
-            title={
-              userjutsu.activeReskin ? "Update Jutsu Reskin" : "Create Jutsu Reskin"
-            }
+            title={hasReskinRecord ? "Update Jutsu Reskin" : "Create Jutsu Reskin"}
             isOpen={isReskinOpen}
             isLoading={isFetching}
             setIsOpen={setIsReskinOpen}
-            proceed_label={userjutsu.activeReskin ? "Update Reskin" : "Create Reskin"}
+            proceed_label={hasReskinRecord ? "Update Reskin" : "Create Reskin"}
             isValid={reskinForm.formState.isValid}
             className="max-h-[99%] w-[800px] max-w-[99%]"
             onAccept={() => {
@@ -1115,7 +1111,7 @@ export default function MyJutsu() {
               <div>
                 <div>
                   <strong className="text-red-500">
-                    {userjutsu.activeReskin
+                    {hasReskinRecord
                       ? "Updating a reskin is free."
                       : `Creating a reskin costs ${reskinCost} reputation points!`}
                   </strong>
@@ -1123,7 +1119,7 @@ export default function MyJutsu() {
                   <br />
                   <strong>Reskin Usage:</strong>
                   <br />
-                  You have used {activeReskins?.length || 0}/
+                  You have used {userReskins?.length ?? 0}/
                   {userData.extraReskinSlots + RESKIN_LIMIT} available reskins.
                   <br />
                   <br />
@@ -1217,9 +1213,7 @@ export default function MyJutsu() {
             isLoading={isFetching}
             setIsOpen={setIsConfirmOpen}
             title={
-              userjutsu.activeReskin
-                ? "Confirm Jutsu Reskin Update"
-                : "Confirm Jutsu Reskin"
+              hasReskinRecord ? "Confirm Jutsu Reskin Update" : "Confirm Jutsu Reskin"
             }
             proceed_label={"Confirm"}
             onAccept={() => {
@@ -1232,10 +1226,8 @@ export default function MyJutsu() {
             <div className="space-y-4">
               <p className="text-muted-foreground text-sm">
                 By clicking &quot;Confirm&quot;, you acknowledge that you are{" "}
-                {userjutsu.activeReskin ? "updating" : "creating"} a reskin{" "}
-                {userjutsu.activeReskin
-                  ? ""
-                  : `that costs ${reskinCost} reputation points`}{" "}
+                {hasReskinRecord ? "updating" : "creating"} a reskin{" "}
+                {hasReskinRecord ? "" : `that costs ${reskinCost} reputation points`}{" "}
                 and that your reskin follows all the outlined rules.
                 <br />
                 <br />

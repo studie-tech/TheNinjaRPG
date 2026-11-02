@@ -16,11 +16,9 @@
 import { writeFileSync } from "node:fs";
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,
-  MAP_RESERVED_SECTORS,
   MAP_SECTOR_ID_MAX,
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
-  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAP_WORLD_COLUMNS,
   MAP_WORLD_ROWS,
 } from "@/drizzle/constants";
@@ -39,7 +37,7 @@ import {
   WORLDGEN_LAND_THRESHOLD,
   WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
 } from "@/libs/sector-map/worldgen";
-import { WORLD_PROTECTED_LAND_SECTORS } from "@/libs/sector-map/landmarks";
+import { getWorldProtectedLandSectors } from "@/libs/sector-map/landmarks";
 import { getFlagValue, parseIntList } from "./cli";
 
 const RADIUS = 30;
@@ -228,15 +226,7 @@ const main = () => {
   }
 
   const tiles = buildTiles();
-  const protectedSectors = [
-    ...new Set([
-      ...MAP_RESERVED_SECTORS,
-      ...WORLD_PROTECTED_LAND_SECTORS,
-      ...villageSectors,
-      MAP_WAKE_ISLAND_SECTOR,
-      MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-    ]),
-  ];
+  const protectedSectors = getWorldProtectedLandSectors(villageSectors);
   const landScore = createLandScore(tiles, protectedSectors);
   const land = tiles.map((tile) => landScore(tile.center) > 0);
 

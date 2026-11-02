@@ -1,7 +1,9 @@
 import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { UploadThingError } from "uploadthing/server";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
+import { AVATAR_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import * as tavernUploads from "@/server/utils/tavernUploads";
 import * as moderator from "@/libs/moderator";
@@ -93,7 +95,10 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
     expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
     expect(claim).toHaveBeenCalledWith(userId);
-    await expect(ourFileRouter.avatarNormalUploader.middleware(args)).rejects.toThrow("Can only upload 50 files per day");
+    const rejection = ourFileRouter.avatarNormalUploader.middleware(args);
+    await expect(rejection).rejects.toThrow(`Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`);
+    // UploadThing replaces any other middleware error with a generic message.
+    await expect(rejection).rejects.toBeInstanceOf(UploadThingError);
   });
 
   it.each([

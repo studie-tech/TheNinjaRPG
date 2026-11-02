@@ -1,5 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { verifyToken as clerkVerifyToken } from "@clerk/backend";
+import {
+  TokenVerificationError,
+  TokenVerificationErrorReason,
+} from "@clerk/backend/errors";
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import * as Sentry from "@sentry/nextjs";
 import { Ratelimit } from "@upstash/ratelimit";
@@ -231,65 +235,35 @@ const verifyJwtToken = async (bearerToken: string): Promise<AuthInfo | undefined
 };
 
 /**
- * Handle token verification errors with proper filtering and logging.
+ * Token rejections caused by the token the client sent. withMcpAuth answers them with
+ * 401 and WWW-Authenticate, so the client re-authenticates; there is nothing to report.
+ */
+const CLIENT_TOKEN_REASONS = new Set<string>([
+  TokenVerificationErrorReason.TokenExpired,
+  TokenVerificationErrorReason.TokenNotActiveYet,
+  TokenVerificationErrorReason.TokenIatInTheFuture,
+  TokenVerificationErrorReason.TokenInvalid,
+  TokenVerificationErrorReason.TokenInvalidSignature,
+  TokenVerificationErrorReason.TokenInvalidAlgorithm,
+  TokenVerificationErrorReason.TokenInvalidIssuer,
+  TokenVerificationErrorReason.TokenInvalidAuthorizedParties,
+  TokenVerificationErrorReason.JWKKidMismatch,
+]);
+
+/**
+ * Log client token rejections and aborted verification requests; report every other
+ * failure (JWK loading, secret key, unknown errors) to Sentry.
  */
 const handleTokenVerificationError = (error: unknown): undefined => {
-  if (error instanceof Error) {
-    const stack = error.stack || "";
-    const errorMessage = error.message || "";
-
-    // First verify origin to prevent spoofing - check stack trace BEFORE error names
-    const isClerkError =
-      stack.includes("@clerk/") ||
-      stack.includes("clerk-sdk-node") ||
-      stack.includes("/clerk/");
-    const isFetchAbortError = error.name === "AbortError" && isFetchOriginError(error);
-
-    // Additional validation: Check error message contains Clerk-specific patterns
-    // Require explicit Clerk references to avoid false matches with other JWT libraries
-    const hasClerkReference =
-      errorMessage.includes("Clerk") || errorMessage.includes("clerk.com");
-    const hasClerkJWKPattern = errorMessage.includes("JWK") && hasClerkReference;
-    const hasClerkJWTPattern =
-      /JWT (expired|invalid|malformed)/i.test(errorMessage) && hasClerkReference;
-    const hasClerkSessionPattern =
-      /session.+token/i.test(errorMessage) && hasClerkReference;
-
-    const hasClerkContent =
-      hasClerkReference ||
-      hasClerkJWKPattern ||
-      hasClerkJWTPattern ||
-      hasClerkSessionPattern;
-
-    // Only check error types if from expected sources AND contains expected content
-    if (isClerkError && hasClerkContent) {
-      if (
-        error.name === "JWTExpired" ||
-        error.name === "JWTInvalid" ||
-        error.name === "ClerkAPIResponseError"
-      ) {
-        console.error("[MCP] Token verification failed:", error);
-        return undefined;
-      }
-    }
-
-    if (isFetchAbortError) {
-      console.error("[MCP] Token verification failed:", error);
-      return undefined;
-    }
-
-    // For any other errors, even if they contain token-related messages,
-    // capture to Sentry to ensure no unexpected errors are masked.
-    // This helps identify if Clerk throws new error types we should handle.
-    console.error("[MCP] Unexpected token verification error:", error);
-    Sentry.captureException(error, {
-      tags: { source: "mcp-token-verification" },
-    });
+  const isClientTokenError =
+    error instanceof TokenVerificationError && CLIENT_TOKEN_REASONS.has(error.reason);
+  const isFetchAbortError =
+    error instanceof Error && error.name === "AbortError" && isFetchOriginError(error);
+  if (isClientTokenError || isFetchAbortError) {
+    console.error("[MCP] Token verification failed:", error);
     return undefined;
   }
-
-  // Non-Error objects
-  console.error("[MCP] Unexpected non-Error thrown during token verification:", error);
+  console.error("[MCP] Unexpected token verification error:", error);
   Sentry.captureException(error, {
     tags: { source: "mcp-token-verification" },
   });

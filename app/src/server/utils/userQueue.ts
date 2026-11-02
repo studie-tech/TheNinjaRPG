@@ -387,7 +387,7 @@ export const planJutsuLevels = ({
 }: {
   info: Jutsu;
   user: UserData;
-  students: UserData[];
+  students: readonly unknown[];
   fromLevel: number;
   count: number;
   previousFinish: Date | null | undefined;

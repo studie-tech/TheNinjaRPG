@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { LogType } from "@/drizzle/constants";
 import { LOG_TYPES } from "@/drizzle/constants";
 import {
@@ -13,14 +14,14 @@ interface ActionLogFilteringProps {
   state: ActionLogFilteringState;
 }
 
-const makeActionLogSchema = () =>
+const makeActionLogSchema = (logType: LogType = "user") =>
   defineFilteringSchema({
     fields: [
       {
         id: "logtype",
         label: "Type",
         type: "single-select",
-        defaultValue: "user",
+        defaultValue: logType,
         includeNone: false,
         emptyValues: [],
         options: toOptions(LOG_TYPES),
@@ -75,10 +76,8 @@ export const getFilter = (state: ActionLogFilteringState): ActionLogFilter => {
 };
 
 export const useFiltering = (logType: LogType = "user") => {
-  const cf = useContentFiltering(makeActionLogSchema());
-  if (!cf.values.logtype) {
-    cf.setters.logtype(logType);
-  }
+  const schema = useMemo(() => makeActionLogSchema(logType), [logType]);
+  const cf = useContentFiltering(schema);
   return {
     ...cf.values,
     cf,

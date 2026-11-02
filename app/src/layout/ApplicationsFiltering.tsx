@@ -47,7 +47,7 @@ const makeApplicationsFilteringSchema = () =>
         defaultValue: "None",
         includeNone: true,
         emptyValues: ["None"],
-        options: toOptions(["None", ...StaffApplicationTargetRoles] as const),
+        options: toOptions(StaffApplicationTargetRoles),
         filterKey: "targetRole",
         normalizeForFilter: (v: string) => (v === "None" ? undefined : v),
       },

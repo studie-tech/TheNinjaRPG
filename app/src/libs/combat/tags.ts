@@ -53,10 +53,7 @@ import type {
   WeaknessTagType,
 } from "@/validators/combat";
 import {
-  DecreaseCooldownTag,
   HealTag,
-  IncreaseCooldownTag,
-  IncreaseRangeTag,
   isNegativeUserEffect,
   isPositiveUserEffect,
 } from "@/validators/combat";
@@ -729,7 +726,6 @@ export const increaseStats = (
 // Helper to adjust basic action attributes
 // ---------------------------------------------
 const adjustBasicAction = (
-  parsed: { actionsAffected?: string[] },
   effect: UserEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
@@ -749,7 +745,9 @@ const adjustBasicAction = (
   }
 
   const { adverb, qualifier } = getPower(effect);
-  const affected = parsed.actionsAffected?.map((a) => noCase(a)).join(", ");
+  const actionsAffected =
+    "actionsAffected" in effect ? effect.actionsAffected : undefined;
+  const affected = actionsAffected?.map((a) => noCase(a)).join(", ");
 
   // Compose description
   let verb: string;
@@ -764,7 +762,7 @@ const adjustBasicAction = (
   return getInfo(
     target,
     effect,
-    `basic action${affected && "s"} [${affected}] ${verb}`,
+    `basic action${affected ? `s [${affected}]` : ""} ${verb}`,
   );
 };
 
@@ -801,8 +799,7 @@ export const increaseRange = (
   usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  const parsed = IncreaseRangeTag.parse(effect);
-  return adjustBasicAction(parsed, effect, usersEffects, target, {
+  return adjustBasicAction(effect, usersEffects, target, {
     attr: "range",
     isBuff: true,
   });
@@ -814,8 +811,7 @@ export const increaseCooldown = (
   usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  const parsed = IncreaseCooldownTag.parse(effect);
-  return adjustBasicAction(parsed, effect, usersEffects, target, {
+  return adjustBasicAction(effect, usersEffects, target, {
     attr: "cooldown",
     isBuff: false,
   });
@@ -827,8 +823,7 @@ export const decreaseCooldown = (
   usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  const parsed = DecreaseCooldownTag.parse(effect);
-  return adjustBasicAction(parsed, effect, usersEffects, target, {
+  return adjustBasicAction(effect, usersEffects, target, {
     attr: "cooldown",
     isBuff: true,
   });

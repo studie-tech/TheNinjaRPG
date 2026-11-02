@@ -276,15 +276,15 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      const [saved] = await Promise.all([
-        updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx),
+      const saved = await updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx);
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
+      await Promise.all([
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
         // Remove the user as sensei for any active students
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
-      if (!saved.rowsAffected)
-        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
@@ -324,16 +324,21 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      const [saved] = await Promise.all([
-        updateUserDataForSwapVillage(ctx.drizzle, village, user, cost, ctx),
+      const saved = await updateUserDataForSwapVillage(
+        ctx.drizzle,
+        village,
+        user,
+        cost,
+        ctx,
+      );
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
+      await Promise.all([
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
         // Remove the user as sensei for any active students
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
-
-      if (!saved.rowsAffected)
-        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
@@ -624,7 +629,9 @@ export const villageRouter = createTRPCRouter({
       const check = canEnemy(relationships, villages, villageId, targetId);
       if (!check.success) return check;
 
-      // Mutate
+      // Mutate: pay the war funds first; relationships change only once paid
+      const funded = await updateVillageForDeclareEnemy(ctx.drizzle, villageId);
+      if (funded.rowsAffected === 0) return errorResponse("Insufficient funds");
       await Promise.all([
         upsertAllianceStatus(ctx.drizzle, relationships, villageId, targetId, "ENEMY"),
         ...check.newEnemies.map((id) =>
@@ -635,7 +642,6 @@ export const villageRouter = createTRPCRouter({
         ),
         insertNotificationForDeclareEnemy(ctx.drizzle, ctx, userVillage, target),
         updateUserDataForDeclareEnemy(ctx.drizzle, villageId, targetId, user),
-        updateVillageForDeclareEnemy(ctx.drizzle, villageId),
         updateUserDataForDeclareEnemy2(ctx.drizzle, user),
       ]);
       // Return

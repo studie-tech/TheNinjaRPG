@@ -102,7 +102,7 @@ describeWithDatabase("auction bid atomicity", () => {
     expect(state.bids.find((bid) => bid.id === "existing")?.amount).toBe(raised.success ? 100 : 50);
     expect(state.bids.find((bid) => bid.id === "rival-bid")?.amount).toBe(rivalRaised.success ? 150 : 75);
     expect(state.logs).toHaveLength(1);
-    expect(state.notifications).toHaveLength(raised.success ? 1 : 0);
+    expect(state.notifications).toHaveLength(0);
   });
 
   it("serializes a standalone raise against a new bidder's transaction", async () => {
@@ -202,22 +202,25 @@ describeWithDatabase("auction bid atomicity", () => {
     expect(state.logs).toHaveLength(1);
   });
 
-  it.each([actionLog, notification])("keeps a committed raise successful when activity recording fails", async (table) => {
+  it("keeps a committed raise successful when activity recording fails", async () => {
     await seedBid();
     const db = await getTestDatabase();
     await db.insert(auctionBid).values({ id: "rival-bid", auctionId: "auction", bidderId: "rival", amount: 75 });
     await db.update(auctionListing).set({ currentPrice: 75 }).where(eq(auctionListing.id, "auction"));
     const report = vi.spyOn(Sentry, "captureException").mockReturnValue("auction-activity-error");
-    const api = callerForDatabase(auctionRouter, "bidder", failStatements(db, table));
+    const api = callerForDatabase(auctionRouter, "bidder", failStatements(db, actionLog));
     expect(await api.placeBid({ auctionId: "auction", amount: 100 })).toMatchObject({ success: true, amountToDeduct: 50 });
     const state = await saved();
     expect(state.users.bidder?.bank).toBe(950);
     expect(state.listing.currentPrice).toBe(100);
     expect(state.bids.find((bid) => bid.id === "existing")?.amount).toBe(100);
     expect(report).toHaveBeenCalledTimes(1);
-    expect(state.logs).toHaveLength(table === actionLog ? 0 : 1);
-    expect(state.notifications).toHaveLength(table === notification ? 0 : 1);
-    expect(state.users.rival?.unreadNotifications).toBe(table === notification ? 0 : 1);
+    expect(state.logs).toHaveLength(0);
+    expect(nativePush.deferPushToUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      ["rival"],
+      expect.objectContaining({ collapseId: "outbid-auction" }),
+    );
     expect((await api.placeBid({ auctionId: "auction", amount: 100 })).success).toBe(false);
     expect((await saved()).users.bidder?.bank).toBe(950);
   });
@@ -256,7 +259,7 @@ describeWithDatabase("auction bid atomicity", () => {
     expect(state.bids[0]?.amount).toBe(150);
   });
 
-  it.each([auctionBid, actionLog, notification])("rolls back the debit and listing if a later write fails", async (table) => {
+  it.each([auctionBid, actionLog])("rolls back the debit and listing if a later write fails", async (table) => {
     await seedBid();
     const db = await getTestDatabase();
     const failing = wrapTransactions(db, (tx) => failStatements(tx, table));
@@ -377,15 +380,20 @@ describeWithDatabase("auction bid atomicity", () => {
     expect(state.users.bidder?.bank).toBe(0);
   });
 
-  it("atomically logs a successful outbid and increments the previous bidder's unread count", async () => {
+  it("logs a successful outbid and pushes the notice only to the previous bidder", async () => {
     await seedBid();
     const api = await callerFor(auctionRouter, "rival");
     expect((await api.placeBid({ auctionId: "auction", amount: 100 })).success).toBe(true);
     const state = await saved();
     expect(state.users.rival?.bank).toBe(900);
-    expect(state.users.bidder?.unreadNotifications).toBe(1);
-    expect(state.notifications).toHaveLength(1);
-    expect(state.notifications[0]?.content).toContain("outbid");
+    // Notification is the global announcement feed, so the notice is not posted there.
+    expect(state.users.bidder?.unreadNotifications).toBe(0);
+    expect(state.notifications).toHaveLength(0);
+    expect(nativePush.deferPushToUsers).toHaveBeenCalledWith(
+      expect.anything(),
+      ["bidder"],
+      expect.objectContaining({ collapseId: "outbid-auction" }),
+    );
     expect(state.logs).toHaveLength(1);
   });
 

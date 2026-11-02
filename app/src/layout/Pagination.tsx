@@ -9,12 +9,14 @@ interface PaginationProps {
 const Pagination: React.FC<PaginationProps> = (props) => {
   return (
     <div className="my-4 flex flex-row justify-center">
-      <nav aria-label="Page navigation example">
+      <nav aria-label="Pages">
         <ul className="inline-flex -space-x-px">
           <li>
             <button
               type="button"
-              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
+              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={props.current <= 0}
+              onClick={() => props.setPage(props.current - 1)}
             >
               Previous
             </button>
@@ -41,7 +43,9 @@ const Pagination: React.FC<PaginationProps> = (props) => {
           <li>
             <button
               type="button"
-              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={props.current >= props.total - 1}
+              onClick={() => props.setPage(props.current + 1)}
             >
               Next
             </button>

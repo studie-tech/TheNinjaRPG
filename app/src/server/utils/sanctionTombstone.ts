@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 import { clerkClient } from "@clerk/nextjs/server";
 import { and, eq, gt, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 import {
+  ActiveBanStates,
   type BanState,
   type SanctionTombstoneType,
   TERR_BOT_ID,
@@ -229,7 +230,7 @@ export const recordSanctionTombstone = async (
         ],
       }),
     };
-    const sanction = sql<SanctionTombstoneType>`CASE WHEN ${userReport.status} = 'BAN_ACTIVATED' THEN 'BAN' ELSE 'SILENCE' END`;
+    const sanction = sql<SanctionTombstoneType>`CASE WHEN ${inArray(userReport.status, ActiveBanStates)} THEN 'BAN' ELSE 'SILENCE' END`;
     // Select eligibility and the decision in the same write, so a completed staff revision
     // cannot be replaced by a snapshot from before the Clerk lookup.
     await retryOnDeadlock(() =>

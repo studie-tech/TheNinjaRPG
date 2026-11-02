@@ -1279,21 +1279,10 @@ export const insertAction = (info: {
         action.battleDescription = `%user uses ${action.name}`;
       }
       action.battleDescription = `${action.name}: ${action.battleDescription} ${targetTile?.name ? `on <b>${targetTile.name}</b>` : ""}`;
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%user_subject",
-        user.gender === "Male" ? "he" : "she",
-      );
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%user_object",
-        user.gender === "Male" ? "him" : "her",
-      );
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%user_posessive",
-        user.gender === "Male" ? "his" : "hers",
-      );
-      action.battleDescription = action.battleDescription.replaceAll(
-        "%user_reflexive",
-        user.gender === "Male" ? "himself" : "herself",
+      action.battleDescription = replacePronouns(
+        action.battleDescription,
+        "%user",
+        user.gender,
       );
       action.battleDescription = action.battleDescription.replaceAll(
         "%user",
@@ -1306,37 +1295,10 @@ export const insertAction = (info: {
       );
       // Update target descriptions
       if (targetGenders.length > 0) {
-        action.battleDescription = action.battleDescription.replaceAll(
-          "%target_subject",
-          targetGenders.length === 1 && targetGenders[0]
-            ? targetGenders[0] === "Male"
-              ? "himself"
-              : "herself"
-            : "they",
-        );
-        action.battleDescription = action.battleDescription.replaceAll(
-          "%target_object",
-          targetGenders.length === 1 && targetGenders[0]
-            ? targetGenders[0] === "Male"
-              ? "him"
-              : "her"
-            : "them",
-        );
-        action.battleDescription = action.battleDescription.replaceAll(
-          "%target_posessive",
-          targetGenders.length === 1 && targetGenders[0]
-            ? targetGenders[0] === "Male"
-              ? "his"
-              : "hers"
-            : "theirs",
-        );
-        action.battleDescription = action.battleDescription.replaceAll(
-          "%target_reflexive",
-          targetGenders.length === 1 && targetGenders[0]
-            ? targetGenders[0] === "Male"
-              ? "himself"
-              : "herself"
-            : "themselves",
+        action.battleDescription = replacePronouns(
+          action.battleDescription,
+          "%target",
+          targetGenders.length === 1 ? targetGenders[0] : undefined,
         );
       }
       if (targetUsernames.length > 0) {
@@ -1350,6 +1312,30 @@ export const insertAction = (info: {
     }
   }
   return false;
+};
+
+const PRONOUNS = {
+  subject: { Male: "he", Female: "she", it: "it", plural: "they" },
+  object: { Male: "him", Female: "her", it: "it", plural: "them" },
+  posessive: { Male: "his", Female: "hers", it: "its", plural: "theirs" },
+  reflexive: { Male: "himself", Female: "herself", it: "itself", plural: "themselves" },
+} as const;
+
+/**
+ * Replace `${prefix}_subject|object|posessive|reflexive` placeholders.
+ * A missing gender selects the plural forms; any gender other than "Male" or the
+ * barrier's "it" uses the female forms.
+ */
+const replacePronouns = (text: string, prefix: string, gender: string | undefined) => {
+  const form = !gender
+    ? "plural"
+    : gender === "Male" || gender === "it"
+      ? gender
+      : "Female";
+  return Object.entries(PRONOUNS).reduce(
+    (result, [kind, words]) => result.replaceAll(`${prefix}_${kind}`, words[form]),
+    text,
+  );
 };
 
 /**

@@ -186,11 +186,11 @@ export default function SupportPage() {
                             <Badge className={getStatusColor(ticket.status)}>
                               {getStatusIcon(ticket.status)}
                               <span className="ml-1">
-                                {ticket.status.replace("_", " ")}
+                                {ticket.status.replaceAll("_", " ")}
                               </span>
                             </Badge>
                             <Badge className={getCategoryColor(ticket.category)}>
-                              {ticket.category.replace("_", " ")}
+                              {ticket.category.replaceAll("_", " ")}
                             </Badge>
                             <Badge className={getPriorityColor(ticket.priority)}>
                               {ticket.priority}

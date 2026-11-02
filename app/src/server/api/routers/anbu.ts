@@ -26,6 +26,7 @@ import {
   countAnbuSquads,
   countVillageClans,
   deleteAnbuSquadForDisbandSquad,
+  executeChargeForPerformEspionage,
   fetchAnbuActor,
   fetchAnbuMember,
   fetchAnbuRequestNotificationTarget,
@@ -46,7 +47,6 @@ import {
   updateAnbuSquadForAcceptAnbuRequest,
   updateAnbuSquadForAcceptAnbuRequest2,
   updateAnbuSquadForEditSquad,
-  updateAnbuSquadForPerformEspionage,
   updateAnbuSquadForPromoteAnbuLeader,
   updateAnbuSquadForPurchaseEspionageUpgrade,
   updateAnbuSquadForPurchaseStealthUpgrade,
@@ -54,7 +54,6 @@ import {
   updateAnbuSquadForRemoveFromSquad3,
   updateUserDataForDisbandSquad,
   updateUserDataForDisbandSquad2,
-  updateUserDataForPerformEspionage,
   updateUserRequestForCreateAnbuRequest,
   updateUserRequestForTransitionAnbuRequestState,
 } from "@/queries/anbu";
@@ -261,7 +260,7 @@ export const anbuRouter = createTRPCRouter({
         user.village &&
         secondsFromDate(ANBU_DELAY_SECS, user.village.leaderUpdatedAt) > new Date()
       ) {
-        return errorResponse("Must have been kage for 5 days");
+        return errorResponse(`Must have been kage for ${ANBU_DELAY_SECS / 86400} days`);
       }
       // Mutate
       await Promise.all([
@@ -591,10 +590,14 @@ export const anbuRouter = createTRPCRouter({
       const success = rollResult < successChance;
 
       // Deduct costs regardless of success
-      await Promise.all([
-        updateUserDataForPerformEspionage(ctx.drizzle, user),
-        updateAnbuSquadForPerformEspionage(ctx.drizzle, userSquad),
-      ]);
+      const charge = await executeChargeForPerformEspionage(
+        ctx.drizzle,
+        user,
+        userSquad,
+      );
+      if (charge.rowsAffected === 0) {
+        return errorResponse("Not enough village prestige or squad points");
+      }
 
       if (!success) {
         return { success: false, message: "Espionage mission failed" };

@@ -4,6 +4,7 @@ import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import {
+  getWorldProtectedLandSectors,
   WAKE_ISLAND_STRUCTURE_POSITIONS,
   WORLD_LANDMARKS,
 } from "@/libs/sector-map/landmarks";
@@ -144,6 +145,11 @@ describe("canonical world landmarks", () => {
     expect(new Set(WORLD_LANDMARKS.map(({ sector }) => sector)).size).toBe(
       WORLD_LANDMARKS.length,
     );
+  });
+
+  it("keeps the committed globe's protected land in sync with worldgen inputs", () => {
+    // Regenerate with `bun run scripts/generate-globe.ts` when this fails.
+    expect(globe.protectedLandSectors).toEqual(getWorldProtectedLandSectors());
   });
 
   it("places every landmark in the biome implied by its setting", () => {

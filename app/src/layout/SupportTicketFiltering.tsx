@@ -56,7 +56,6 @@ const makeSupportSchema = (
         includeNone: true,
         emptyValues: ["None"],
         options: [
-          { value: "None", label: "None" },
           { value: "unassigned", label: "Unassigned" },
           ...staff.map((s) => ({ value: s.userId, label: s.username })),
         ],
@@ -69,10 +68,7 @@ const makeSupportSchema = (
         defaultValue: "None",
         includeNone: true,
         emptyValues: ["None"],
-        options: [
-          { value: "None", label: "None" },
-          { value: "me", label: "Me" },
-        ],
+        options: [{ value: "me", label: "Me" }],
         visibleIf: () => isStaff,
       },
       {

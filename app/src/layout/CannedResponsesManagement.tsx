@@ -235,7 +235,8 @@ export default function CannedResponsesManagement({
                         <Badge variant="outline">
                           Created: {new Date(response.createdAt).toLocaleDateString()}
                         </Badge>
-                        {response.updatedAt !== response.createdAt && (
+                        {response.updatedAt.getTime() !==
+                          response.createdAt.getTime() && (
                           <Badge variant="outline">
                             Updated: {new Date(response.updatedAt).toLocaleDateString()}
                           </Badge>

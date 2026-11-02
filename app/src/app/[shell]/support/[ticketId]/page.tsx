@@ -289,7 +289,9 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                     ) : (
                       <>
                         {getStatusIcon(ticket.status)}
-                        <span className="ml-1">{ticket.status.replace("_", " ")}</span>
+                        <span className="ml-1">
+                          {ticket.status.replaceAll("_", " ")}
+                        </span>
                         {canUpdateTicket && <Edit className="ml-1 h-3 w-3" />}
                       </>
                     )}
@@ -315,7 +317,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                         className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${status === ticket.status ? "font-semibold" : ""}`}
                       >
                         <span className="flex items-center gap-2 whitespace-nowrap">
-                          {getStatusIcon(status)} {status.replace("_", " ")}
+                          {getStatusIcon(status)} {status.replaceAll("_", " ")}
                         </span>
                         {status === ticket.status && (
                           <Check className="h-4 w-4 opacity-70" />
@@ -421,7 +423,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                         }}
                         className={`flex w-full items-center justify-between rounded px-2 py-1 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 ${c === ticket.category ? "font-semibold" : ""}`}
                       >
-                        <span>{c.replace("_", " ")}</span>
+                        <span>{c.replaceAll("_", " ")}</span>
                         {c === ticket.category && (
                           <Check className="h-4 w-4 opacity-70" />
                         )}

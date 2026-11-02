@@ -91,12 +91,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
             utils.comments.getForumComments.invalidate(),
           ]);
         },
-        onError: (error) => {
-          showMutationToast({
-            success: false,
-            message: error.message || "Could not submit report",
-          });
-        },
+        // Failures are presented by the shared tRPC mutation error handler.
         onSettled: () => {
           if (pendingRequestRef.current !== requestId) return;
           pendingRequestRef.current = null;

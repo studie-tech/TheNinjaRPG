@@ -4,6 +4,7 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError, UTApi, UTFiles } from "uploadthing/server";
 import { z } from "zod";
 import {
+  AVATAR_UPLOAD_DAILY_LIMIT,
   type FederalStatuses,
   TAVERN_IMAGE_MAX_SIZE_MB,
   TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
@@ -292,7 +293,11 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
   // Limit
   const avatars = await selectHistoricalAvatarForAvatarMiddleware(drizzleDB, user);
   const nRecentAvatars = avatars?.[0]?.count || 0;
-  if (nRecentAvatars > 50) throw new Error("Can only upload 50 files per day");
+  if (nRecentAvatars > AVATAR_UPLOAD_DAILY_LIMIT) {
+    throw new UploadThingError(
+      `Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`,
+    );
+  }
   // Federal check
   if (fedRequirement) {
     const userstatus = getUserFederalStatus(user);

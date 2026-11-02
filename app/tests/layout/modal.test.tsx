@@ -206,6 +206,37 @@ describe("Modal", () => {
     });
   }
 
+  it("runs onClose when the dialog's own close control dismisses it", () => {
+    const dialogSpy = vi.spyOn(dialogComponents, "Dialog").mockImplementation((({
+      open,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+      children: ReactNode;
+    }) =>
+      open ? (
+        <>
+          <button type="button" onClick={() => onOpenChange?.(false)}>
+            Dismiss
+          </button>
+          {children}
+        </>
+      ) : null) as never);
+    dialogSpies.push(dialogSpy);
+    const onClose = vi.fn();
+    const setIsOpen = vi.fn();
+    const { getByRole } = render(
+      <Modal isOpen setIsOpen={setIsOpen} onClose={onClose} title="Award">
+        Body
+      </Modal>,
+    );
+    fireEvent.click(getByRole("button", { name: "Dismiss" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(setIsOpen).toHaveBeenCalledWith(false);
+  });
+
   it("keeps invalid auto-attack drafts out of storage and commits before enabling", () => {
     const originalCustomEvent = globalThis.CustomEvent;
     globalThis.CustomEvent = window.CustomEvent;

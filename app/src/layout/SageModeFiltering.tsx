@@ -35,10 +35,7 @@ const makeSageModeFilteringSchema = () =>
         emptyValues: ["None"],
         includeNone: true,
         dataSource: "villages",
-        filterOptions: (opts) => [
-          { value: "None", label: "None" },
-          ...opts.sort((a, b) => a.label.localeCompare(b.label)),
-        ],
+        filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
       },
       {
         id: "hidden",

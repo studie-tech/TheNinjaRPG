@@ -20,6 +20,7 @@ import {
   fetchKageReplacement,
   findKageRemovalVoteById,
   findVillageElderVoteForNominateKage,
+  findVillageForSendKagePrestige,
   insertActionLogForSendKagePrestige,
   insertActionLogForTakeKage,
   insertNotificationForInitiateKageRemovalVote,
@@ -113,9 +114,10 @@ export const kageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, kage, records] = await Promise.all([
+      const [user, kage, kageVillage, records] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.kageId),
+        findVillageForSendKagePrestige(ctx.drizzle, input),
         listActionLogForSendKagePrestige(ctx.drizzle, ctx, input),
       ]);
       // Derived
@@ -123,7 +125,12 @@ export const kageRouter = createTRPCRouter({
       // Guards
       if (user.rank !== "ELDER") return errorResponse("Must be an elder");
       if (user.villageId !== kage.villageId) return errorResponse("Wrong village");
+      if (!kageVillage || kageVillage.id !== user.villageId) {
+        return errorResponse("Can only send prestige to your kage");
+      }
       if (input.amount <= 0) return errorResponse("Invalid amount");
+      // The weekly cap is a snapshot check: concurrent sends can exceed it, but only
+      // up to the sender's real balance, which the guarded debit enforces
       if (previousSent + input.amount > KAGE_MAX_WEEKLY_PRESTIGE_SEND) {
         return errorResponse(
           `You have already sent ${previousSent} prestige this week. You can only send ${KAGE_MAX_WEEKLY_PRESTIGE_SEND - previousSent} more.`,
@@ -132,9 +139,10 @@ export const kageRouter = createTRPCRouter({
       if (user.villagePrestige < input.amount) {
         return errorResponse("Not enough prestige");
       }
-      // Create transfer request
+      // Debit first; credit the kage only with prestige actually taken
+      const debit = await updateUserDataForSendKagePrestige(ctx.drizzle, input, ctx);
+      if (debit.rowsAffected === 0) return errorResponse("Not enough prestige");
       await Promise.all([
-        updateUserDataForSendKagePrestige(ctx.drizzle, input, ctx),
         incrementUserVillagePrestige(ctx.drizzle, input.amount, input.kageId),
         insertActionLogForSendKagePrestige(ctx.drizzle, ctx, input, kage, user),
       ]);
@@ -199,16 +207,14 @@ export const kageRouter = createTRPCRouter({
         userId: ctx.userId,
       });
       const village = user?.village;
-      // Apply 24-hour lockout to all kages (villages, hideouts, and strongholds)
-      const lockout = KAGE_DELAY_SECS;
       // Guards
       if (!user) return errorResponse("User not found");
       if (!village) return errorResponse("Village not found");
       if (user.isBanned) return errorResponse("User is banned");
       if (user.isSilenced) return errorResponse("User is silenced");
       if (village.kageId !== ctx.userId) return errorResponse("Not kage");
-      if (secondsFromDate(lockout, village.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been kage for 5 days");
+      if (secondsFromDate(KAGE_DELAY_SECS, village.leaderUpdatedAt) > new Date()) {
+        return errorResponse(`Must have been kage for ${KAGE_DELAY_SECS / 86400} days`);
       }
       // Update
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");
@@ -260,7 +266,9 @@ export const kageRouter = createTRPCRouter({
         return errorResponse("Not in faction");
       }
       if (secondsFromDate(lockout, userVillage.leaderUpdatedAt) > new Date()) {
-        return errorResponse("Must have been in charge for 24 hours");
+        return errorResponse(
+          `Must have been in charge for ${KAGE_DELAY_SECS / 86400} days`,
+        );
       }
       // Guard on cost & mutate
       const { total } = calcStructureUpgrade(structure, userVillage);

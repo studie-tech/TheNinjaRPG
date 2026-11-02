@@ -8,7 +8,6 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -16,8 +15,6 @@ export default function TowerDefenseManual() {
   const { data: userData } = useUserData();
   const role = userData?.role ?? "USER";
   const canEditContent = canChangeContent(role);
-
-  if (!userData) return <Loader explanation="Loading user data..." />;
 
   const entries = [
     { name: "leaderboard", img: IMG_MANUAL_TOWER_LEADERBOARD, public: true },

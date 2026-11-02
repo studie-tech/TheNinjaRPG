@@ -106,6 +106,9 @@ export const marriageRouter = createTRPCRouter({
         ]);
       // Guards
       if (ctx.userId !== request.receiverId) return errorResponse("Not your request");
+      if (request.status !== "PENDING") {
+        return errorResponse("You can only accept pending requests");
+      }
       if (sender.marriageSlots <= senderAssociations.length)
         return errorResponse("Sender does not have enough marriage slots");
       if (receiver.marriageSlots <= receiverAssociations.length)
@@ -117,16 +120,22 @@ export const marriageRouter = createTRPCRouter({
         ).length > 0
       )
         return errorResponse("You are already married to this user");
-      // Mutate
-      await Promise.all([
-        updateRequestState(ctx.drizzle, input.id, "ACCEPTED", "MARRIAGE"),
-        insertAssociation(
-          ctx.drizzle,
-          request.senderId,
-          request.receiverId,
-          "MARRIAGE",
-        ),
-      ]);
+      // Mutate: only the accept that moves the request out of PENDING marries
+      const accepted = await updateRequestState(
+        ctx.drizzle,
+        input.id,
+        "ACCEPTED",
+        "MARRIAGE",
+        undefined,
+        "PENDING",
+      );
+      if (!accepted.success) return accepted;
+      await insertAssociation(
+        ctx.drizzle,
+        request.senderId,
+        request.receiverId,
+        "MARRIAGE",
+      );
       void pusher.trigger(request.senderId, "event", { type: "MARRIAGE" });
       // Create
       return { success: true, message: "Proposal Accepted" };
@@ -135,13 +144,11 @@ export const marriageRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get list of married users" } })
     .input(z.object({ id: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const associations = await fetchAssociations(
-        ctx.drizzle,
-        input.id ?? ctx?.userId ?? "",
-        ["MARRIAGE"],
-      );
+      const targetId = input.id ?? ctx.userId;
+      if (!targetId) return [];
+      const associations = await fetchAssociations(ctx.drizzle, targetId, ["MARRIAGE"]);
       const marriedUsers = associations.map((x) =>
-        x.userOne.userId !== (input.id ?? ctx?.userId) ? x.userOne : x.userTwo,
+        x.userOne.userId !== targetId ? x.userOne : x.userTwo,
       );
 
       return marriedUsers;

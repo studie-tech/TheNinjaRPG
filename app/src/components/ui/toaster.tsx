@@ -2,26 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { Toaster as SonnerToaster, type ToasterProps } from "sonner";
-import { getEffectiveColorTheme } from "@/libs/themePreference";
+import { type ColorTheme, getEffectiveColorTheme } from "@/libs/themePreference";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  // Get the current theme
-  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
-    return getEffectiveColorTheme();
-  });
+  // Follow the document's dark class, which every layout keeps current
+  const [theme, setTheme] = useState<ColorTheme>(() => getEffectiveColorTheme());
 
   useEffect(() => {
-    const syncTheme = () => setTheme(getEffectiveColorTheme());
-    const observer = new MutationObserver(syncTheme);
+    const observer = new MutationObserver(() => setTheme(getEffectiveColorTheme()));
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"],
     });
-    window.addEventListener("storage", syncTheme);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("storage", syncTheme);
-    };
+    return () => observer.disconnect();
   }, []);
 
   // Feel free to tweak default props globally here.

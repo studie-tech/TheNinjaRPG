@@ -42,6 +42,7 @@ import {
   deleteDataBattleActionForDeleteSingleDataBattleAction,
   deleteLogBattleLengthsForClearAllBattleLengths,
   deleteLogQueueLengthsForClearAllQueueLengths,
+  findUserDataForGetStatistics,
   insertActionLogForClearAllBattleLengths,
   insertActionLogForClearAllQueueLengths,
   insertActionLogForDeleteAllDataBattleAction,
@@ -1720,7 +1721,7 @@ export const dataRouter = createTRPCRouter({
         return { info, usage, totalUsers, levelDistribution: null };
       } else if (input.type === "ai") {
         // AI Statistics
-        const info = await fetchUser(ctx.drizzle, input.id);
+        const info = await findUserDataForGetStatistics(ctx.drizzle, input);
         return { info, usage, totalUsers: null, levelDistribution: null };
       } else {
         throw serverError("BAD_REQUEST", `Invalid input type: ${input.type}`);

@@ -52,3 +52,20 @@ describe("resuming a cached tower defense session", () => {
     expect(resumed).toHaveLength(6);
   });
 });
+
+describe("switching users on a live connection", () => {
+  it("replaces the global subscription without registering row listeners again", async () => {
+    let listeners = 0, subscriptions = 0, unsubscriptions = 0;
+    const table = { iter: () => [].values(), onInsert: () => { listeners++; }, onUpdate: () => { listeners++; }, onDelete: () => { listeners++; } };
+    const builder = { onApplied: () => builder, onError: () => builder, subscribe: () => { subscriptions++; return { unsubscribe: () => { unsubscriptions++; } }; } };
+    const client = new SpacetimeDBConnection({ host: "ws://localhost", moduleName: "test" });
+    Object.assign(client, {
+      connectionState: "connected", currentUserId: "guest",
+      connection: { db: { gameSession: table, sessionUpgrade: table, enemySpawn: table, enemy: table, projectile: table, sessionState: table, completedRun: table }, subscriptionBuilder: () => builder },
+    });
+    await client.connect("user-a");
+    await client.connect("user-b");
+    expect(listeners).toBe(0);
+    expect([subscriptions, unsubscriptions]).toEqual([2, 1]);
+  });
+});
