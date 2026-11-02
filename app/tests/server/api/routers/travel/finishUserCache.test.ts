@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { bloodline, item, quest, questHistory, skillTree, userCookingJob, userData, userItem, userQueue, userSkill, userTitle, userVote, village, war, warAlly, warMercenary } from "@/drizzle/schema";
+import { bloodline, item, overworldAiPlacement, quest, questHistory, skillTree, userCookingJob, userData, userItem, userQueue, userSkill, userTitle, userVote, village, war, warAlly, warMercenary } from "@/drizzle/schema";
 import { globalTravelFinishPatch } from "@/libs/travel";
 import { getSectorUserUpdate } from "@/deltas/travel";
 import { Pusher } from "@/libs/pusher";
@@ -20,7 +20,7 @@ const key = [["profile", "getUser"], { type: "query" }];
 describeWithDatabase("confirmed arrival profile updates", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(userCookingJob, warAlly, warMercenary, war, village, userQueue, userVote, questHistory, quest, userData, bloodline, userSkill, skillTree, userTitle, item, userItem);
+    await resetTables(userCookingJob, warAlly, warMercenary, war, village, userQueue, userVote, overworldAiPlacement, questHistory, quest, userData, bloodline, userSkill, skillTree, userTitle, item, userItem);
     await insertUsers([{ userId, username: "ArrivalCache", rank: "JONIN", primaryElement: "Fire", secondaryElement: "Water", level: 50, isOutlaw: true, status: "TRAVEL", sector: 1, longitude: 4, latitude: 5, regeneration: 0, travelFinishAt: new Date(Date.now() + 60000) }]);
     await insertQuests([2, 3].map((sector) => ({ id: `hidden-${sector}`, name: `Hidden ${sector}`, questType: "story", maxCompletes: 10, content: {
       objectives: [AllObjectives.parse({ id: "target", task: "move_to_location", sector, longitude: 4, latitude: 5, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: true })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
@@ -30,15 +30,24 @@ describeWithDatabase("confirmed arrival profile updates", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); setSystemTime(); });
 
-  it("matches the canonical public sector snapshot after confirmed caller movement", async () => {
+  it.each(["ordinary", "NPC", "quest", "NPC and quest"])("matches the canonical public sector snapshot after confirmed caller movement with %s scenery", async (scenery) => {
+    // NPC public rows use the query clock for updatedAt, independent of movement.
+    setSystemTime(new Date());
     const db = await getTestDatabase();
-    await db.delete(questHistory).where(eq(questHistory.userId, userId));
+    if (!scenery.includes("quest")) await db.delete(questHistory).where(eq(questHistory.userId, userId));
+    if (scenery.includes("NPC")) {
+      await insertUsers([{ userId: "scenery-npc", username: "Keeper", isAi: true }]);
+      await db.insert(overworldAiPlacement).values({ id: "scenery-placement", aiTemplateUserId: "scenery-npc", interactionType: "FRIENDLY", sectorList: [], sector: 1, longitude: 4, latitude: 5 });
+    }
     await db.update(userData).set({ status: "AWAKE", travelFinishAt: null }).where(eq(userData.userId, userId));
     const profile = await callerFor(profileRouter, userId), travel = await callerFor(travelRouter, userId);
     await profile.getUser();
     const before = await travel.getSectorData({ sector: 1 });
+    expect(before.overworldAis).toHaveLength(scenery.includes("NPC") ? 1 : 0);
+    expect(before.questPlacements).toEqual([]);
     await db.update(userData).set({ longitude: 6, latitude: 7, location: "Moved" }).where(eq(userData.userId, userId));
     const user = (await profile.getUser()).userData;
+    if (scenery.includes("quest")) expect(user?.userQuests.length).toBeGreaterThan(0);
     expect(getSectorUserUpdate(before, user ?? undefined)).toEqual(await travel.getSectorData({ sector: 1 }));
     expect(getSectorUserUpdate({ users: [], village: null, sectorData: null, warData: null }, user ?? undefined)).toBeUndefined();
   });

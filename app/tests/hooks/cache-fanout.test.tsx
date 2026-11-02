@@ -92,10 +92,20 @@ it("keeps sector updates bound to the captured sector when selection changes", a
   expect(t.reads[4]).not.toHaveBeenCalled();
 });
 
-it.each(["profile recovery", "missing identity", "NPC visibility", "faction change", "revision"])("retains authoritative sector recovery after %s", async reason => {
+it("preserves ordinary NPC scenery while updating the caller without a sector read", async () => {
+  const t = setup(), hook = t.view.result.current.sector;
+  const overworldAis = [{ userId: "npc", longitude: 8, latitude: 9 }];
+  t.client.setQueryData(t.keys[4]!, { ...t.sector, overworldAis });
+  await act(async () => hook.updateSector(true, hook.prepareSectorUpdate()));
+  expect(t.client.getQueryData<{ users: { longitude: number }[]; overworldAis: unknown[] }>(t.keys[4]!)).toMatchObject({ users: [{ longitude: 4 }], overworldAis });
+  expect(t.reads[4]).not.toHaveBeenCalled();
+});
+
+it.each(["profile recovery", "missing identity", "visible quest placement", "concealed quest placement", "faction change", "revision"])("retains authoritative sector recovery after %s", async reason => {
   const t = setup(), hook = t.view.result.current.sector;
   if (reason === "missing identity") t.client.setQueryData(t.keys[4]!, { ...t.sector, users: [] });
-  if (reason === "NPC visibility") t.client.setQueryData(t.keys[4]!, { ...t.sector, overworldAis: [{ userId: "npc" }] });
+  if (reason === "visible quest placement") t.client.setQueryData(t.keys[4]!, { ...t.sector, questPlacements: [{ npcPlacementId: "npc" }] });
+  if (reason === "concealed quest placement") t.client.setQueryData(getQueryKey(api.profile.getUser, undefined, "query"), { userData: { ...t.user, userQuests: [{ quest: { content: { objectives: [{ overworldPlacementId: "npc", hideLocation: true }] } } }] } });
   if (reason === "faction change") t.client.setQueryData(t.keys[4]!, { ...t.sector, users: [{ ...t.sector.users[0], villageId: "changed" }] });
   const snapshot = hook.prepareSectorUpdate();
   if (reason === "revision") t.client.setQueryData(t.keys[4]!, t.sector);
