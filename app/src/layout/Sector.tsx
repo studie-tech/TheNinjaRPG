@@ -367,7 +367,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // tRPC utility
   const utils = api.useUtils();
-  const loadLpcCatalog = useLpcCatalogLoader();
+  const loadLpcCatalog = useLpcCatalogLoader({ revalidateInBackground: true });
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db
@@ -2277,7 +2277,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     friendlyAttack: allyAttack,
     structureObjectiveIds: structureObjectiveIdsRef.current,
     nav: windowNavRef.current,
-    enabled: !props.showSorrounding,
+    enabled: !props.showSorrounding && userData?.status === "AWAKE",
     brightness: 1,
     lightDate: null,
     decorations: mergedDecorations,
@@ -2322,6 +2322,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
+              userRef.current?.status === "AWAKE" &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,
@@ -2348,16 +2349,27 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }),
     `${lightLayout}:${isWorldExpanded}`,
   );
+  const [showWorldLoader, setShowWorldLoader] = useState(false);
+  useEffect(() => {
+    if (travel.isReady || travel.error) {
+      setShowWorldLoader(false);
+      return;
+    }
+    // Cached terrain normally renders before loading feedback needs to appear.
+    const timer = setTimeout(() => setShowWorldLoader(true), 200);
+    return () => clearTimeout(timer);
+  }, [travel.isReady, travel.error]);
+  // Invalidate the paused destination on arrival so character tracking can resume.
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.recenter();
-  }, [travel.isReady, props.cameraFocusRevision]);
+  }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady) return;
+    if (!travel.isReady || profile?.status !== "AWAKE") return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [travel.isReady]);
+  }, [travel.isReady, profile?.status]);
   useEffect(() => {
     sectorWindowRef.current = sectorWindow;
     if (!travel.isReady) return;
@@ -2406,7 +2418,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           aria-busy={!travel.isReady && !travel.error}
           className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
         ></div>
-        {!travel.isReady && !travel.error && (
+        {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div
               role="status"
@@ -2844,7 +2856,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
 
   return (
     <Modal
-      isOpen={true}
+      isOpen={userData.status === "AWAKE"}
       title={`Scouting. Your position: [${props.hex.col}, ${props.hex.row}]`}
       setIsOpen={props.setIsOpen}
       isValid={false}

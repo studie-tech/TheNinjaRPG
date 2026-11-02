@@ -5,6 +5,7 @@ import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as terrainData from "@/libs/rendering/terrainData";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import * as navigation from "@/libs/sector-map/navigation";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import * as terrain from "@/libs/rendering/primitives/terrain";
@@ -20,7 +21,7 @@ const frame = (now = 1000, reducedMotion = true): runtime.GameFrame => ({ now, d
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const appearance = resolveSpriteAppearance({});
 const player = (patch: Partial<SectorUser> = {}) => ({ userId: "self", longitude: 4, latitude: 4, status: "AWAKE", rank: "JONIN", allianceStatus: "NEUTRAL", experience: 0, spriteAppearance: appearance, curHealth: 1, maxHealth: 100, ...patch }) as SectorUser;
-const viewer = { userId: "self", sector: 724, rank: "JONIN", userQuests: [], questData: [] } as unknown as UserWithRelations;
+const viewer = { userId: "self", sector: 724, rank: "JONIN", userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>;
 const windowEntry = (sector = 724, dy = 0): TravelWindowEntry => ({
   sector, dx: 0, dy, villageType: null, globalTileType: 1,
   map: { formatVersion: 1, sector, name: "Depth test", width: 12, height: 12, tiles: [], anchors: [], exits: [], metadata: { importedAt: "", source: "tiled" }, objects: [{ id: "tree", type: "decoration", assetKey: "tree", x: 4, y: 5 }] },
@@ -46,7 +47,7 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, invalidate: () => {},
+    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(),
     listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
     dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
@@ -85,7 +86,31 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
-  it.each([false, true])("shows terrain during scenery loading, gates interaction and owns cancellation (%s)", async (cancel) => {
+  it("prepares destination scenery during travel and resumes the same scene on arrival", async () => {
+    const state = snapshotFixture();
+    state.viewer = { ...viewer, status: "TRAVEL" };
+    state.enabled = false;
+    const { scene, game, advance, event, onTap, world } = await sceneFixture(state);
+    const sector = scene.sectors.get(state.sector)!;
+    expect(sector.art.entries.length).toBeGreaterThan(0);
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    const actors = world.children.at(-1)!;
+    expect(actors.children).toHaveLength(0);
+    event("pointerdown", 400, 300); event("pointerup", 400, 300);
+    expect(onTap).not.toHaveBeenCalled();
+    const builds = (runtime.createGameRenderer as ReturnType<typeof vi.fn>).mock.calls.length;
+    state.viewer = { ...viewer, status: "AWAKE" };
+    state.enabled = true;
+    scene.recenter();
+    expect(game.invalidate).toHaveBeenCalled();
+    advance(); await settle();
+    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    expect(scene.sectors.get(state.sector)).toBe(sector);
+    expect((runtime.createGameRenderer as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(builds);
+    expect(actors.children.length).toBeGreaterThan(0);
+  });
+
+  it.each([false, true])("allows walking and live actors during scenery loading and owns cancellation (%s)", async (cancel) => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = `pending-building-${cancel}.png`;
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
@@ -93,27 +118,28 @@ describe("travel scene ground depth", () => {
     const pending = new Promise<Texture>((resolve) => { release = resolve; });
     vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes(`pending-building-${cancel}`) ? pending : texture);
     const fixture = gameFixture(), onReady = vi.fn(), onTap = vi.fn();
-    let ready = false;
-    const creating = createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 }).then((scene) => { ready = true; return scene; });
+    const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
+    fixture.advance();
     await settle();
     const world = fixture.stage.children[0]!, ground = world.children[0]!.children[0]!;
     expect(ground).toBeDefined();
-    expect(world.children[1]!.children).toHaveLength(0);
-    expect(ready).toBe(false);
-    expect(onReady).not.toHaveBeenCalled();
+    expect(scene.sectors.get(724)!.art.entries).toHaveLength(0);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(world.children.at(-1)!.children.some((child) => child.label === "user:self")).toBe(true);
     const camera = { x: world.x, y: world.y };
     fixture.event("pointerdown", 400, 300); fixture.event("pointerup", 400, 300);
-    expect(onTap).not.toHaveBeenCalled();
+    expect(onTap).toHaveBeenCalledTimes(1);
     if (cancel) fixture.game.dispose();
     release(texture);
-    const scene = await creating;
+    await settle();
     if (cancel) {
       expect(ground.destroyed).toBe(true);
-      expect(onReady).not.toHaveBeenCalled();
       expect(fixture.game.isDisposed()).toBe(true);
+      expect(world.destroyed).toBe(true);
     } else {
       expect(scene.sectors.get(724)!.terrain.container).toBe(ground);
       expect(world.children[1]!.children).toHaveLength(1);
+      expect(scene.sectors.get(724)!.art.entries.some((entry) => entry.description.id === "building")).toBe(true);
       expect(onReady).toHaveBeenCalledTimes(1);
       fixture.advance();
       expect({ x: world.x, y: world.y }).toEqual(camera);
@@ -378,6 +404,81 @@ describe("travel scene ground depth", () => {
 });
 
 describe("travel scene window updates", () => {
+  it.each(["worldArt", "route"] as const)("rebuilds cached terrain and scenery after a structure %s edit", async (field) => {
+    const state = snapshotFixture();
+    state.libraryVersion = `structure-edit-${field}`;
+    const structure = state.window[0]!.structures[0]!;
+    structure.route = "/bank";
+    structure.worldArt = { ...Object.values(WORLD_STRUCTURE_ART)[0]!, route: structure.route, sourceImage: structure.image, height: 4 };
+    const first = await sceneFixture(state);
+    const original = first.scene.sectors.get(724)!;
+    const originalBuilding = original.art.entries.find((entry) => entry.description.id === structure.id)!.description;
+    first.scene.dispose();
+    if (field === "worldArt") structure.worldArt = { ...structure.worldArt, height: 5 };
+    else structure.route = "/hospital";
+    const second = await sceneFixture(state);
+    const revised = second.scene.sectors.get(724)!;
+    expect(revised.data).not.toBe(original.data);
+    const revisedBuilding = revised.art.entries.find((entry) => entry.description.id === structure.id)!.description;
+    expect(revisedBuilding.size).not.toBe(originalBuilding.size);
+    if (field === "route") expect(revisedBuilding.frame).toBeUndefined();
+  });
+
+  it("ignores late scenery after a sector replacement", async () => {
+    const state = snapshotFixture();
+    state.window[0]!.structures[0]!.image = "replaced-pending-building.png";
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>((resolve) => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes("replaced-pending-building") ? pending : Texture.WHITE);
+    const { scene } = await sceneFixture(state);
+    const previous = scene.sectors.get(724)!;
+    expect(previous.art.entries).toHaveLength(0);
+    state.window[0]!.structures = [{ ...state.window[0]!.structures[0]!, image: "replacement-building.png" }];
+    await scene.updateWindow(); await settle();
+    const replacement = scene.sectors.get(724)!;
+    expect(previous.scope.isDisposed()).toBe(true);
+    release(Texture.WHITE); await settle();
+    expect(scene.sectors.get(724)).toBe(replacement);
+    expect(replacement.art.entries.find((entry) => entry.description.id === "building")!.description.image).toBe("replacement-building.png");
+  });
+
+  it("reuses terrain across navigation while creating fresh scenery and actors", async () => {
+    const state = snapshotFixture();
+    state.libraryVersion = "navigation-cache";
+    const first = await sceneFixture(state);
+    const original = first.scene.sectors.get(724)!;
+    first.scene.dispose();
+    state.users = [player({ userId: "new-arrival" })];
+    const second = await sceneFixture(state);
+    const restored = second.scene.sectors.get(724)!;
+    expect(restored.grid).toBe(original.grid);
+    expect(restored.data).toBe(original.data);
+    expect(original.terrain.container.destroyed).toBe(true);
+    expect(restored.terrain).not.toBe(original.terrain);
+    expect(restored.art).not.toBe(original.art);
+    expect(second.depth.renderLayerChildren.some((child) => child.label === "user:new-arrival")).toBe(true);
+    expect(second.depth.renderLayerChildren.some((child) => child.label === "user:self")).toBe(false);
+    second.scene.dispose();
+    state.libraryVersion = "edited-navigation-cache";
+    const edited = await sceneFixture(state);
+    expect(edited.scene.sectors.get(724)!.data).not.toBe(original.data);
+  });
+
+  it("evicts terrain outside the bounded nine-sector cache", async () => {
+    const state = snapshotFixture();
+    state.libraryVersion = "bounded-navigation-cache";
+    const first = await sceneFixture(state);
+    const data = first.scene.sectors.get(724)!.data;
+    first.scene.dispose();
+    for (let sector = 1000; sector < 1009; sector++) {
+      const next = { ...state, sector, window: [windowEntry(sector)] };
+      const loaded = await sceneFixture(next);
+      loaded.scene.dispose();
+    }
+    const restored = await sceneFixture(state);
+    expect(restored.scene.sectors.get(724)!.data).not.toBe(data);
+  });
+
   it("keeps a sector installed just before a newer window update interrupts it", async () => {
     const fixture = gameFixture();
     const state = snapshotFixture();

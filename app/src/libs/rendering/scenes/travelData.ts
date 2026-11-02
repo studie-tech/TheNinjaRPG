@@ -17,6 +17,8 @@ export const travelSectorKey = (
     entry.structures.map((structure) => [
       structure.id,
       structure.image,
+      structure.route,
+      structure.worldArt,
       structure.longitude,
       structure.latitude,
       structure.hasPage,

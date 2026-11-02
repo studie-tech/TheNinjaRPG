@@ -45,6 +45,7 @@ describe("sector attack controls", () => {
           userId: "viewer",
           villageId: "home",
           rank: "JONIN",
+          status: "AWAKE",
           village: {
             id: "home",
             relationshipA: permanentAlly
@@ -104,4 +105,33 @@ describe("sector attack controls", () => {
         }
       },
     );
+});
+
+it("closes scouting during travel and restores it after arrival", () => {
+  const scoutingModal = vi.spyOn(modal, "default").mockImplementation(({ children, isOpen, title }) => isOpen ? (
+    <div role="dialog" aria-label={title}>{children}</div>
+  ) : null);
+  const props = {
+    userData: { userId: "viewer", status: "AWAKE" } as NonNullable<UserWithRelations>,
+    users: [],
+    hex: { col: 13, row: 13 } as TerrainHex,
+    allyAttack: false,
+    storedBracket: -1,
+    timeDiff: 0,
+    setIsOpen: vi.fn(),
+    setAllyAttack: vi.fn(),
+    setStoredBracket: vi.fn(),
+    attackUser: vi.fn(),
+    robUser: vi.fn(),
+    move: vi.fn(),
+  };
+  const view = render(<SorroundingUsers {...props} />);
+  expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
+  view.rerender(<SorroundingUsers {...props} userData={{ ...props.userData, status: "TRAVEL" }} />);
+  expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(false);
+  expect(view.queryByRole("dialog")).toBeNull();
+  view.rerender(<SorroundingUsers {...props} />);
+  expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
+  expect(view.getByRole("dialog", { name: "Scouting. Your position: [13, 13]" })).toBeDefined();
+  expect(props.setIsOpen).not.toHaveBeenCalled();
 });

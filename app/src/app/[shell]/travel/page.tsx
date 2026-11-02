@@ -129,12 +129,13 @@ import {
 } from "@/validators/travel";
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
-// Travel needs the globe immediately, so start its chunk alongside hydration.
+const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+// Start both renderers alongside hydration while the map queries load.
 if (typeof window !== "undefined") {
   // The dynamic component reports a failed chunk load when it renders.
   void import("@/layout/Map").catch(() => undefined);
+  void import("@/layout/Sector").catch(() => undefined);
 }
-const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
 /** A stored per-sector window entry (position within a window comes from the layout) */
 type StoredSectorEntry =
@@ -574,6 +575,7 @@ function Travel() {
         // Sector writes arrival coordinates only from UserContext, and a
         // leftover target could overwrite them once the start mutation lands.
         setTargetPosition(null);
+        setWorldExpanded(false);
         if (!userData) return;
         const previous = {
           status: userData.status,
@@ -632,6 +634,8 @@ function Travel() {
       onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
         if (!result.success) return;
+        // Keep the prepared destination mounted while profile and presence reconcile.
+        setActiveTab(sectorLink);
         const patch = result.userPatch;
         const profileApplied = await updateUser(
           patch
@@ -642,7 +646,6 @@ function Travel() {
         );
         await updateSector(profileApplied, context.sector);
         if (currentStep?.title === "Travel") await handleNextStepAsync();
-        setActiveTab(sectorLink);
       },
     });
 
@@ -808,8 +811,9 @@ function Travel() {
 
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
-  // World travel chooses a new landing position. Remount the local scene on
-  // arrival so its movement origin cannot retain the departure coordinates.
+  // Admission supplies the destination coordinates. Prepare its scene during the
+  // countdown, after admission settles, and keep that instance for arrival.
+  const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
   const showSector =
     villages &&
     hasCurrentSector &&
@@ -891,7 +895,7 @@ function Travel() {
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
-          isWorldExpanded={isWorldExpanded}
+          isWorldExpanded={isWorldExpanded && !isPreparingSector}
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
@@ -911,6 +915,7 @@ function Travel() {
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
+    isPreparingSector,
     cameraFocusRevision,
     villages,
   ]);
@@ -1095,10 +1100,12 @@ function Travel() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <UserRoundSearch
-                  className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
-                  onClick={() => setShowSorrounding((prev) => !prev)}
-                />
+                {userData.status === "AWAKE" && (
+                  <UserRoundSearch
+                    className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                    onClick={() => setShowSorrounding((prev) => !prev)}
+                  />
+                )}
               </>
             )}
             {activeTab === globalLink && (
@@ -1331,7 +1338,7 @@ function Travel() {
                 type="button"
                 aria-label="Expand world"
                 aria-expanded={isWorldExpanded}
-                disabled={!SectorComponent}
+                disabled={!showSector || !SectorComponent}
                 className="mr-2 hover:text-orange-500 disabled:opacity-50"
                 onClick={() => setWorldExpanded(true)}
               >
@@ -1402,7 +1409,16 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
-          {showSector && SectorComponent}
+          {/* Invisible preparation preserves viewport measurements and the arrival canvas. */}
+          {(showSector || isPreparingSector) && (
+            <div
+              aria-hidden={!showSector}
+              inert={!showSector}
+              className={!showSector ? "invisible absolute inset-0" : undefined}
+            >
+              {SectorComponent}
+            </div>
+          )}
           {!villages && <Loader explanation="Loading data" />}
           {showModal && globe && userData && targetSector !== null && (
             <Modal
