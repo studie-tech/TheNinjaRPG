@@ -207,7 +207,7 @@ export default function CreateSupportTicket() {
                     <SelectItem key={`${category}-${i}`} value={category}>
                       <div className="flex items-center gap-2">
                         <Badge className={SUPPORT_TICKET_COLORS.CATEGORY[category]}>
-                          {category.replace("_", " ")}
+                          {category.replaceAll("_", " ")}
                         </Badge>
                         <span className="text-gray-600 text-sm">
                           {SUPPORT_TICKET_CATEGORY_DESCRIPTIONS[category]}
