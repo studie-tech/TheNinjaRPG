@@ -132,6 +132,30 @@ it("keeps midnight publication independent of a recovered revision after clock c
   expect(t.revisions.at(-1)).toBe(revision);
 });
 
+it("replaces pending pre-midnight reads after a calibrated clock correction", async () => {
+  const offset = 120_000;
+  now = Date.UTC(2026, 10, 2, 23, 59, 59, 500) + offset;
+  // Worker skew can put an already-calibrated client into the next day's cache early.
+  const t = setup(offset, true, offset - 1000);
+  await settle();
+  await act(async () => t.view.result.current.recoverPublicLocations());
+  await settle();
+  await act(async () => t.view.rerender({ timeDiff: offset }));
+  await settle();
+  await act(async () => t.pending[2]!());
+  await settle();
+  expect(t.view.result.current.data?.[0]?.questId).toBe("ending");
+  expect(t.read).toHaveBeenCalledTimes(3);
+  await advance(1_501);
+  expect(t.read).toHaveBeenCalledTimes(4);
+  await act(async () => t.pending[3]!());
+  await settle();
+  expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
+  await act(async () => { t.pending[1]!(); t.pending[0]!(); });
+  await settle();
+  expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
+});
+
 it("does not reuse a fresh preceding-day cache after navigation across midnight", async () => {
   now = Date.UTC(2026, 10, 2, 23, 59, 58);
   const t = setup();

@@ -22,6 +22,7 @@ export const usePublicQuestLocations = (timeDiff: number) => {
   const cache = useQueryCacheUpdate<RouterOutputs["quests"]["getPublicLocations"]>(key);
   const query = api.quests.getPublicLocations.useQuery(input, {
     placeholderData: (previous) => previous,
+    trpc: { abortOnUnmount: true },
     // A corrected clock offset may revisit a day key that was populated before its boundary.
     staleTime: (query) => (query.state.dataUpdatedAt < day + timeDiff ? 0 : 5 * 60_000),
     refetchInterval: (query) =>
