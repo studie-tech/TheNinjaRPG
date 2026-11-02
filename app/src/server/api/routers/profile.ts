@@ -1254,7 +1254,9 @@ export const profileRouter = createTRPCRouter({
         ...(itemData.length > 0
           ? [insertUserItemForCloneAi(ctx.drizzle, itemData, aiData)]
           : []),
-        ...(nindoData ? [insertUserNindoForCloneAi(ctx.drizzle, nindoData)] : []),
+        ...(nindoData
+          ? [insertUserNindoForCloneAi(ctx.drizzle, nindoData, aiData)]
+          : []),
       ]);
 
       return { success: true, message: aiData.userId };
@@ -2155,7 +2157,7 @@ export const profileRouter = createTRPCRouter({
       if (!target.deletionAt || target.deletionAt > new Date()) {
         return errorResponse("Deletion timer not passed yet");
       }
-      if (ctx.userId !== input.userId && !canSeeSecretData(user.role)) {
+      if (ctx.userId !== input.userId && !canDeleteUsers(user.role)) {
         return errorResponse("You can't delete other users");
       }
       if (

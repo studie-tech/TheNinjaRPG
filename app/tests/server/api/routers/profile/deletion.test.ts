@@ -87,3 +87,10 @@ it("rejects deletion management of another character by a player", async () => {
   expect(writeTimer).not.toHaveBeenCalled();
   expect(staff.deleteUser).not.toHaveBeenCalled();
 });
+
+it.each(["CONTENT", "BALANCE", "EVENT-ADMIN", "JR_MODERATOR"] as const)("rejects deleting another character for %s staff without deletion rights", async (staffRole) => {
+  role = staffRole;
+  deletionAt = new Date(Date.now() - 1000);
+  expect(await caller().confirmDeletion({ userId: "other-player" })).toMatchObject({ success: false, message: "You can't delete other users" });
+  expect(staff.deleteUser).not.toHaveBeenCalled();
+});
