@@ -68,6 +68,7 @@ import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
+import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -114,7 +115,6 @@ import {
   useRequiredUserDataSelector,
   useUserDataRef,
 } from "@/utils/UserContext";
-import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 import {
   type FindSectorSchema,
   type FindSectorSchemaInput,
@@ -266,17 +266,7 @@ function Travel() {
       notifyOnChangeProps: ["data"],
     },
   );
-  // Keep libraries across navigation; refresh artwork so content edits reach existing maps.
-  const { data: mapAssets } = api.mapAsset.getAll.useQuery(undefined, {
-    enabled: !!userData,
-    // Dates prevent structural sharing; the scene only needs the asset content.
-    select: (rows) => rows.map(({ createdAt, updatedAt, ...rest }) => rest),
-    notifyOnChangeProps: ["data"],
-    staleTime: MAP_LOCATION_REFRESH_MS,
-    refetchInterval: MAP_LOCATION_REFRESH_MS,
-    refetchIntervalInBackground: false,
-    gcTime: Infinity,
-  });
+  const { data: mapAssets } = useMapAssetLibrary(!!userData);
   // Terrain definitions remain cached for the session.
   const { data: mapTerrains } = api.mapTerrain.getAll.useQuery(undefined, {
     enabled: !!userData,
