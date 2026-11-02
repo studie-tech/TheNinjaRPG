@@ -193,6 +193,7 @@ import {
   findUserDataForGetUsername,
   findUserRoleById,
   incrementUserMoney,
+  refundUserReputationPoints,
 } from "@/queries/profile";
 import { updateUserQuestData } from "@/queries/quests";
 import { fetchStudents } from "@/queries/sensei";
@@ -206,7 +207,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   cancelQueuedJutsuTraining,
   enqueueJutsuLevels,
@@ -2021,21 +2022,38 @@ export const jutsuRouter = createTRPCRouter({
         ]);
         return { success: true, message: "Jutsu reskin updated successfully" };
       } else {
+        const isPaid = !canReskinFreely(user.role);
+        if (isPaid) {
+          const charge = await updateUserDataForCreateReskin(ctx.drizzle, ctx);
+          if (charge.rowsAffected === 0) {
+            return errorResponse(
+              `Not enough reputation points. Required: ${COST_RESKIN_JUTSU}`,
+            );
+          }
+        }
         const reskinId = nanoid();
-        await Promise.all([
-          setUserJutsuReskin(ctx.drizzle, reskinId, jutsuData.id, ctx.userId),
-          insertJutsuReskinForCreateReskin(
+        try {
+          await insertJutsuReskinForCreateReskin(
             ctx.drizzle,
             reskinId,
             ctx,
             jutsuData,
             input,
             resolvedImage,
-          ),
-          ...(canReskinFreely(user.role)
-            ? []
-            : [updateUserDataForCreateReskin(ctx.drizzle, ctx)]),
-        ]);
+          );
+        } catch (error) {
+          if (!isMysqlDuplicateKeyError(error)) throw error;
+          // A concurrent request created this jutsu's reskin; return this charge
+          if (isPaid) {
+            await refundUserReputationPoints(
+              ctx.drizzle,
+              COST_RESKIN_JUTSU,
+              ctx.userId,
+            );
+          }
+          return errorResponse("This jutsu already has a reskin");
+        }
+        await setUserJutsuReskin(ctx.drizzle, reskinId, jutsuData.id, ctx.userId);
 
         return { success: true, message: "Jutsu reskin created successfully" };
       }
