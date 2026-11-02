@@ -69,7 +69,7 @@ export const conceptartRouter = createTRPCRouter({
       if (!result) return errorResponse("Image not found");
       // Mutate
       const hasLike = result?.likes.find((like) => like.type === input.type);
-      await updateConceptImageForToggleEmotion(ctx.drizzle, input, result, hasLike);
+      await updateConceptImageForToggleEmotion(ctx.drizzle, input, hasLike);
       if (hasLike) {
         await deleteUserLikesForToggleEmotion(ctx.drizzle, ctx, input);
       } else {

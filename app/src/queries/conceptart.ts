@@ -39,27 +39,28 @@ import { and, gte, isNotNull, sql } from "drizzle-orm";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { userData, userLikes } from "@/drizzle/schema";
 
-/** Build the `conceptImage` update for `toggleEmotion`, using predicates on `id`. */
+/** Build the `conceptImage` reaction counter increment for `toggleEmotion`, using predicates on `id`. */
 export const updateConceptImageForToggleEmotion = (
   client: Pick<DrizzleClient, "update">,
   input: { type: "like" | "love" | "laugh"; imageId: string },
-  result: { n_likes: number; n_loves: number; n_laugh: number },
   hasLike: undefined | typeof userLikes.$inferSelect,
-) =>
-  client
+) => {
+  const delta = hasLike ? -1 : 1;
+  return client
     .update(conceptImage)
     .set({
       ...(input.type === "like"
-        ? { n_likes: result.n_likes + (hasLike ? -1 : 1) }
+        ? { n_likes: sql`${conceptImage.n_likes} + ${delta}` }
         : {}),
       ...(input.type === "love"
-        ? { n_loves: result.n_loves + (hasLike ? -1 : 1) }
+        ? { n_loves: sql`${conceptImage.n_loves} + ${delta}` }
         : {}),
       ...(input.type === "laugh"
-        ? { n_laugh: result.n_laugh + (hasLike ? -1 : 1) }
+        ? { n_laugh: sql`${conceptImage.n_laugh} + ${delta}` }
         : {}),
     })
     .where(eq(conceptImage.id, input.imageId));
+};
 
 /** Build the `userLikes` deletion for `toggleEmotion`, using predicates on `userId`, `imageId`, `type`. */
 export const deleteUserLikesForToggleEmotion = (
