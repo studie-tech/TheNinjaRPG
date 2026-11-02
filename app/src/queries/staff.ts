@@ -46,6 +46,7 @@ import {
   questHistory,
   raidParticipation,
   rankedUserRewards,
+  recruitRankMilestone,
   recruitReferral,
   reportLog,
   ryoTrade,
@@ -1471,6 +1472,96 @@ export const updateUserRaidBuffForUpdateUserId = (
       id: sql`CASE WHEN ${userRaidBuff.itemId} IS NOT NULL THEN ${`meal-${input.newUserId}`} ELSE ${userRaidBuff.id} END`,
     })
     .where(eq(userRaidBuff.userId, input.userId));
+
+/** Build the `staffApplication` update for `updateUserId`, moving the applicant. */
+export const updateStaffApplicationForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(staffApplication)
+    .set({ applicantUserId: input.newUserId })
+    .where(eq(staffApplication.applicantUserId, input.userId));
+
+/** Build the `warKill` update for `updateUserId`, moving kills credited to the user. */
+export const updateWarKillForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(warKill)
+    .set({ killerId: input.newUserId })
+    .where(eq(warKill.killerId, input.userId));
+
+/** Build the `warKill` update for `updateUserId`, moving deaths of the user. */
+export const updateWarKillForUpdateUserId2 = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(warKill)
+    .set({ victimId: input.newUserId })
+    .where(eq(warKill.victimId, input.userId));
+
+/** Build the `recruitReferral` update for `updateUserId`, moving the user's own referral. */
+export const updateRecruitReferralForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(recruitReferral)
+    .set({ recruitUserId: input.newUserId })
+    .where(eq(recruitReferral.recruitUserId, input.userId));
+
+/** Build the `recruitReferral` update for `updateUserId`, moving the user's recruits. */
+export const updateRecruitReferralForUpdateUserId2 = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(recruitReferral)
+    .set({ recruiterId: input.newUserId })
+    .where(eq(recruitReferral.recruiterId, input.userId));
+
+/** Build the `recruitRankMilestone` update for `updateUserId`, moving the user's reached milestones. */
+export const updateRecruitRankMilestoneForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(recruitRankMilestone)
+    .set({ recruitUserId: input.newUserId })
+    .where(eq(recruitRankMilestone.recruitUserId, input.userId));
+
+/** Build the `recruitRankMilestone` update for `updateUserId`, moving milestones of the user's recruits. */
+export const updateRecruitRankMilestoneForUpdateUserId2 = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(recruitRankMilestone)
+    .set({ recruiterId: input.newUserId })
+    .where(eq(recruitRankMilestone.recruiterId, input.userId));
+
+/** Build the `userData` update for `updateUserId`, repointing other players' sensei. */
+export const updateUserDataSenseiForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(userData)
+    .set({ senseiId: input.newUserId })
+    .where(eq(userData.senseiId, input.userId));
+
+/** Build the `userData` update for `updateUserId`, repointing other players' recruiter. */
+export const updateUserDataRecruiterForUpdateUserId = (
+  client: Pick<DrizzleClient, "update">,
+  input: { newUserId: string; userId: string },
+) =>
+  client
+    .update(userData)
+    .set({ recruiterId: input.newUserId })
+    .where(eq(userData.recruiterId, input.userId));
 
 /** Build the `userData` update for `deleteReferral`, setting `recruiterId`, using predicates on `userId`. */
 export const updateUserDataForDeleteReferral = (
