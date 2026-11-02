@@ -110,6 +110,8 @@ export default function SeasonForm({
         await utils.pvpRank.getSeasons.invalidate();
         onSuccess?.();
       }
+    } catch {
+      // The shared tRPC handler presents the mutation error.
     } finally {
       submitInFlightRef.current = false;
       setIsSubmitting(false);
