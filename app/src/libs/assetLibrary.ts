@@ -8,6 +8,7 @@ export const assetTypeLabels: Record<GameAssetType, string> = {
   SCENE_CHARACTER: "Characters",
   SFX: "Sound effects",
   MUSIC: "Music",
+  LPC: "LPC characters",
 };
 
 /** Library sort choices using the getAll endpoint's accepted values. */

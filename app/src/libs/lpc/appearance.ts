@@ -1,5 +1,70 @@
 import type { LpcColor, SpriteAppearance, SpriteLayer } from "@/validators/lpc";
+import type { LpcConfig } from "@/validators/lpcAsset";
 import { getCharacterAttributes } from "@/validators/register";
+
+/** Preview a design in its visual role, matching base skin while preserving unrelated outfit layers. */
+export const previewSpriteDesign = (
+  base: SpriteAppearance,
+  id: string,
+  config: LpcConfig,
+  color: string,
+  eyes: string,
+  solo: boolean,
+): SpriteAppearance => {
+  const layer: SpriteLayer = {
+    profile: id,
+    color,
+    eyes,
+    slot: config.replacementSlot === "none" ? "preview" : config.replacementSlot,
+  };
+  if (solo) return { ...base, layers: [layer] };
+  const baseRole = ["body", "head", "hair", "beard"].includes(config.category)
+    ? config.category
+    : null;
+  return {
+    ...base,
+    layers: [
+      ...base.layers
+        .filter(
+          (entry) =>
+            entry.profile !== id &&
+            (!baseRole || entry.slot !== baseRole) &&
+            (config.replacementSlot === "none" ||
+              entry.slot !== config.replacementSlot),
+        )
+        .map((entry) =>
+          (config.category === "body" || config.category === "head") &&
+          (entry.slot === "body" || entry.slot === "head")
+            ? { ...entry, color }
+            : entry,
+        ),
+      layer,
+    ],
+  };
+};
+
+/** Validate new staff assignments while permitting an existing hidden design to remain assigned. */
+export const lpcSelectionError = (
+  profile: string | null | undefined,
+  previous: string | null | undefined,
+  asset:
+    | { id: string; type: string; hidden: boolean; lpcConfig: LpcConfig | null }
+    | null
+    | undefined,
+) => {
+  if (!profile || profile === "AUTO" || profile === "NONE") return null;
+  // MySQL lookup is case-insensitive, but the renderer indexes exact design IDs.
+  if (
+    !asset ||
+    asset.id !== profile ||
+    asset.type !== "LPC" ||
+    !asset.lpcConfig ||
+    !["equipment", "headgear"].includes(asset.lpcConfig.category)
+  )
+    return "Choose an existing LPC equipment design.";
+  if (asset.hidden && profile !== previous) return "Choose a visible LPC design.";
+  return null;
+};
 
 /** Saved variant fields inherit the item independently; names and IDs never select artwork. */
 export const resolveItemSprite = (item: SpriteItem, variant?: SpriteVariant | null) => {
@@ -116,29 +181,8 @@ export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
       owned.item.variants?.find((v) => v.id === owned.activeVariantId);
     const visual = resolveItemSprite(owned.item, variant);
     if (visual.profile === "NONE") continue;
-    // Replace base clothing only for garments that cover it; accessories remain additive.
-    const slot =
-      (
-        {
-          shirt: "shirt",
-          robe: "shirt",
-          leather: "shirt",
-          plate: "shirt",
-          chainmail: "shirt",
-          pants: "legs",
-          leggings: "legs",
-          boots: "feet",
-          tabi: "feet",
-          sandals: "feet",
-          footarmour: "feet",
-          bandana: "bandana",
-          headband: "bandana",
-          hood: "bandana",
-          helmet: "bandana",
-          "wide-hat": "bandana",
-          crown: "bandana",
-        } as Record<string, string>
-      )[visual.profile] ?? owned.equipped;
+    // Recipes retain physical equipment slots; the saved design controls clothing replacement at render time.
+    const slot = owned.equipped;
     result[owned.id ?? owned.item.id ?? owned.equipped] = {
       slot,
       profile: visual.profile,
@@ -149,7 +193,7 @@ export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
   return result;
 };
 
-/** Replace logical clothing slots without mutating the captured base used after gear is removed. */
+/** Compose equipment slots without mutating the captured base used after gear is removed. */
 export const withSpriteEquipment = (
   base: SpriteAppearance,
   equipment: SpriteLayer[],

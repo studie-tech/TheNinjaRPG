@@ -16,6 +16,7 @@ import {
 } from "@/layout/GameAssetPreview";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { LpcAssetEditor } from "@/layout/LpcAssetEditor";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { assetTypeLabels, getAssetLibraryReturnTo } from "@/libs/assetLibrary";
 import { canChangeContent, canSuggestContent } from "@/utils/permissions";
@@ -100,6 +101,7 @@ function SingleEditAsset({
     asset,
     refetch,
   );
+  const [isPreparing, setIsPreparing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [background, setBackground] = useState<"light" | "dark" | "checkerboard">(
     "dark",
@@ -123,7 +125,7 @@ function SingleEditAsset({
       subtitle={asset.name}
       defaultBackHref={returnTo}
       onBack={returnToLibrary}
-      backDisabled={isUpdating}
+      backDisabled={isUpdating || isPreparing}
       noBorder
       padding={false}
     >
@@ -134,7 +136,7 @@ function SingleEditAsset({
           </span>
           <Button
             variant="ghost"
-            disabled={isUpdating}
+            disabled={isUpdating || isPreparing}
             onClick={returnToLibrary}
             className="text-primary gap-1.5"
           >
@@ -142,61 +144,72 @@ function SingleEditAsset({
             Back to library
           </Button>
         </div>
-        <section
-          className="border-border bg-background/70 rounded-xl border p-4 sm:p-5"
-          aria-labelledby="asset-media-heading"
-        >
-          <h3 id="asset-media-heading" className="text-lg font-semibold">
-            Media
-          </h3>
-          <p className="text-muted-foreground mt-1 mb-4 text-sm">
-            {type === "ANIMATION"
-              ? "Upload a vertical sprite sheet, then set its frame count and speed below."
-              : type === "SFX" || type === "MUSIC"
-                ? "Choose or generate audio. You can listen before saving."
-                : "Upload, replace or generate the artwork for this asset."}
-          </p>
-          <EditContent
-            schema={gameAssetValidator}
-            form={sharedForm}
-            formData={mediaFields}
-            showSubmit={false}
-            submitLoading={isUpdating}
-            fieldsOnly
-            type="asset"
-            relationId={asset.id}
-            allowImageUpload={canSave}
+        {type === "LPC" && (
+          <LpcAssetEditor
+            id={asset.id}
+            name={name}
+            form={form}
+            disabled={isUpdating || !canSave}
+            onBusyChange={setIsPreparing}
           />
-          {type === "ANIMATION" && (
-            <div className="mx-auto mt-4 max-w-xs space-y-2">
-              <GameAssetPreview
-                asset={{
-                  name,
-                  image,
-                  type,
-                  frames: Number(frames),
-                  speed: Number(speed),
-                }}
-                play={playing}
-                background={background}
-                className="rounded-lg"
-              />
-              <AssetPreviewBackgroundControls
-                value={background}
-                onChange={setBackground}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => setPlaying(!playing)}
-              >
-                {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
-                {playing ? "Pause preview" : "Play animation"}
-              </Button>
-            </div>
-          )}
-        </section>
+        )}
+        {type !== "LPC" && (
+          <section
+            className="border-border bg-background/70 rounded-xl border p-4 sm:p-5"
+            aria-labelledby="asset-media-heading"
+          >
+            <h3 id="asset-media-heading" className="text-lg font-semibold">
+              Media
+            </h3>
+            <p className="text-muted-foreground mt-1 mb-4 text-sm">
+              {type === "ANIMATION"
+                ? "Upload a vertical sprite sheet, then set its frame count and speed below."
+                : type === "SFX" || type === "MUSIC"
+                  ? "Choose or generate audio. You can listen before saving."
+                  : "Upload, replace or generate the artwork for this asset."}
+            </p>
+            <EditContent
+              schema={gameAssetValidator}
+              form={sharedForm}
+              formData={mediaFields}
+              showSubmit={false}
+              submitLoading={isUpdating || isPreparing}
+              fieldsOnly
+              type="asset"
+              relationId={asset.id}
+              allowImageUpload={canSave}
+            />
+            {type === "ANIMATION" && (
+              <div className="mx-auto mt-4 max-w-xs space-y-2">
+                <GameAssetPreview
+                  asset={{
+                    name,
+                    image,
+                    type,
+                    frames: Number(frames),
+                    speed: Number(speed),
+                  }}
+                  play={playing}
+                  background={background}
+                  className="rounded-lg"
+                />
+                <AssetPreviewBackgroundControls
+                  value={background}
+                  onChange={setBackground}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setPlaying(!playing)}
+                >
+                  {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
+                  {playing ? "Pause preview" : "Play animation"}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
         <section
           className="border-border bg-background/70 rounded-xl border p-4 sm:p-5"
           aria-labelledby="asset-details-heading"
@@ -214,7 +227,7 @@ function SingleEditAsset({
             formData={detailFields}
             showSubmit={canSave}
             buttonTxt="Save changes"
-            submitLoading={isUpdating}
+            submitLoading={isUpdating || isPreparing}
             submitLoadingText="Saving changes…"
             type="asset"
             relationId={asset.id}

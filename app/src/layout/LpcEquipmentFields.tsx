@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useLpcDesigns } from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import {
   resolveItemSprite,
@@ -25,7 +26,7 @@ import {
 } from "@/libs/lpc/appearance";
 import { cn } from "@/libs/shadui";
 import type { LpcBody } from "@/validators/lpc";
-import { lpcColors, lpcEquipmentProfiles } from "@/validators/lpc";
+import { lpcColors } from "@/validators/lpc";
 
 /**
  * Preview nullable item/variant overrides through the same worn-item resolver as gameplay.
@@ -47,6 +48,7 @@ export const LpcEquipmentFields = <
   className?: string;
 }) => {
   const id = useId();
+  const { data: designs, error: designError } = useLpcDesigns();
   const [body, setBody] = useState<LpcBody>("male");
   const [profile, color] = useWatch({
     control,
@@ -60,6 +62,22 @@ export const LpcEquipmentFields = <
   const previewItem = variant ? item : { ...item, ...overrides };
   const previewVariant = variant ? { ...variant, ...overrides } : undefined;
   const visual = resolveItemSprite(previewItem, previewVariant);
+  const lpcEquipmentProfiles = [
+    { id: "AUTO", name: variant ? "Inherit item appearance" : "Not configured" },
+    { id: "NONE", name: "Hidden on character" },
+    ...(designs ?? [])
+      .filter(
+        (asset) =>
+          (!asset.hidden || asset.id === visual.profile) &&
+          asset.lpcConfig &&
+          ["equipment", "headgear"].includes(asset.lpcConfig.category),
+      )
+      .map((asset) => ({
+        id: asset.id,
+        name: `${asset.name}${asset.hidden ? " (hidden)" : ""}`,
+      })),
+  ];
+
   return (
     <div className={cn("grid grid-cols-2 gap-3", className)}>
       <div className="min-w-0 space-y-3">
@@ -82,18 +100,17 @@ export const LpcEquipmentFields = <
                 </SelectTrigger>
                 <SelectContent>
                   {lpcEquipmentProfiles.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value === "AUTO"
-                        ? variant
-                          ? "Inherit item appearance"
-                          : "Not configured"
-                        : value === "NONE"
-                          ? "Hidden on character"
-                          : value}
+                    <SelectItem key={value.id} value={value.id}>
+                      {value.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {designError && (
+                <p role="alert" className="text-destructive text-sm">
+                  Could not load designs. Refresh to try again.
+                </p>
+              )}
               {fieldState.error && (
                 <p role="alert" className="text-destructive text-sm">
                   {fieldState.error.message}

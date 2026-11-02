@@ -1,3 +1,4 @@
+import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -34,6 +35,7 @@ const gameFixture = () => {
   let update = (_frame: runtime.GameFrame) => {};
   let disposed = false;
   const game = {
+    lpcCatalog,
     stage, canvas, signal: controller.signal, renderer: { width: 1024, height: 600 },
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },

@@ -2,10 +2,31 @@
  * Asset database access; callers own authorization and mutation orchestration.
  */
 import type { SQL } from "drizzle-orm";
-import { eq } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  like,
+  ne,
+  notExists,
+  sql,
+} from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type { GameAssetType } from "@/drizzle/constants";
-import { gameAsset } from "@/drizzle/schema";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import {
+  actionLog,
+  contentTag,
+  gameAsset,
+  gameAssetTag,
+  item,
+  itemVariant,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { ZodGameAssetType } from "@/validators/asset";
 
 /** Load a game asset by ID; no match yields undefined. */
 export const fetchGameAsset = async (client: DrizzleClient, id: string) => {
@@ -14,10 +35,44 @@ export const fetchGameAsset = async (client: DrizzleClient, id: string) => {
   });
 };
 
-import { and, asc, desc, getTableColumns, inArray, like, ne, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { actionLog, contentTag, gameAssetTag } from "@/drizzle/schema";
+/** Load complete LPC designs once for a scene; hidden designs still resolve saved references. */
+export const listLpcAssets = (client: Pick<DrizzleClient, "query">) =>
+  client.query.gameAsset.findMany({
+    columns: { id: true, name: true, hidden: true, lpcConfig: true },
+    where: eq(gameAsset.type, "LPC"),
+  });
+
+/** Insert immutable catalog seeds without overwriting staff-authored changes. */
+export const insertLpcSeedAsset = (
+  client: Pick<DrizzleClient, "insert">,
+  asset: typeof gameAsset.$inferInsert,
+) =>
+  client
+    .insert(gameAsset)
+    .values(asset)
+    .onDuplicateKeyUpdate({ set: { id: sql`${gameAsset.id}` } });
+
+/**
+ * Check item and variant assignments within the deletion statement.
+ * Callers require rowsAffected before recording a successful deletion.
+ */
+export const deleteUnreferencedLpcAsset = (client: DrizzleClient, id: string) =>
+  client
+    .delete(gameAsset)
+    .where(
+      and(
+        eq(gameAsset.id, id),
+        notExists(
+          client.select({ id: item.id }).from(item).where(eq(item.lpcProfile, id)),
+        ),
+        notExists(
+          client
+            .select({ id: itemVariant.id })
+            .from(itemVariant)
+            .where(eq(itemVariant.lpcProfile, id)),
+        ),
+      ),
+    );
 
 /** Build the `gameAsset` listing for `getNameTags`, selecting only `name`, using the configured predicates. */
 export const listGameAssetForGetNameTags = (
@@ -38,7 +93,7 @@ export const listGameAssetForGetAllNames = (
 ) =>
   client.query.gameAsset.findMany({
     columns: { id: true, name: true, image: true, folder: true },
-    where: input.type ? eq(gameAsset.type, input.type) : undefined,
+    where: input.type ? eq(gameAsset.type, input.type) : ne(gameAsset.type, "LPC"),
   });
 
 /** Build the `gameAssetTag` distinct selection for `getAllGameAssetContentTagNames`. */
@@ -102,7 +157,7 @@ export const selectGameAssetForGetAll = (
           ? [eq(gameAsset.type, input.type)]
           : input.includeAnimations
             ? []
-            : [ne(gameAsset.type, "ANIMATION")]),
+            : [ne(gameAsset.type, "ANIMATION"), ne(gameAsset.type, "LPC")]),
         ...(input.tags ? [inArray(contentTag.name, input.tags)] : []),
         ...(input.nameTokens
           ? input.nameTokens.map((t) => like(gameAsset.name, `%${t}%`))
@@ -139,9 +194,13 @@ export const listGameAssetForGetSceneAssets = (
 /** Build the `gameAsset` update for `update`, using predicates on `id`. */
 export const updateGameAssetForUpdate = (
   client: Pick<DrizzleClient, "update">,
-  input: { data: import("@/validators/asset").ZodGameAssetType },
+  input: { data: ZodGameAssetType },
   entry: { id: string },
-) => client.update(gameAsset).set(input.data).where(eq(gameAsset.id, entry.id));
+) =>
+  client
+    .update(gameAsset)
+    .set({ ...input.data, updatedAt: new Date() })
+    .where(eq(gameAsset.id, entry.id));
 
 /** Build the `actionLog` insert for `update`. */
 export const insertActionLogForUpdate = (

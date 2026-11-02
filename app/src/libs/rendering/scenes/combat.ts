@@ -8,6 +8,7 @@ import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getBattlefieldHeightRatio } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { combatHighlightPlan } from "@/libs/rendering/combatHighlights";
 import {
@@ -32,6 +33,7 @@ import { clamp } from "@/utils/math";
  * Construction inputs (battle geometry, seed, viewport) require a new scene.
  */
 export const createCombatScene = async (options: {
+  lpcCatalog?: LpcCatalog;
   mount: HTMLElement;
   signal: AbortSignal;
   onError: (error: unknown) => void;

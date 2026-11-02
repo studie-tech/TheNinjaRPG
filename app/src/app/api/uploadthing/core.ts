@@ -92,6 +92,10 @@ const adminMiddleware = async () => {
 };
 
 export const ourFileRouter = {
+  lpcSheetUploader: f({ image: { maxFileSize: "8MB" } })
+    .middleware(async () => adminMiddleware())
+    // Raw keys preserve image pixels and coordinates when the file passes through the CDN.
+    .onUploadComplete(({ file }) => ({ fileUrl: file.ufsUrl })),
   imageUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async ({ files }) => ({
       ...(await avatarMiddleware()),

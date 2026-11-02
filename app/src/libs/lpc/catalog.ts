@@ -1,10 +1,10 @@
-import source from "@/libs/lpc/catalog.json";
 import type {
   LpcAnimation,
   LpcDirection,
   SpriteAppearance,
   SpriteLayer,
 } from "@/validators/lpc";
+import type { LpcConfig, LpcLayout } from "@/validators/lpcAsset";
 
 /** Authored attack columns share one clock across weapons, bodies and clothing. */
 export const LPC_ATTACK_FRAME_MS = 80;
@@ -12,40 +12,78 @@ export const LPC_ATTACK_FRAME_MS = 80;
 /** Authored idle holds are sampled together across every visible layer of an actor. */
 export const LPC_IDLE_FRAME_MS = 200;
 
-/** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
-export type LpcLayout = {
-  cell: number;
-  columns: number;
-  /** Shared logical crop; movement atlases keep one extruded pixel outside each frame. */
-  trim?: { x: number; y: number; width: number; height: number };
-  /** Custom weapon columns can reference a different authored body/clothing timeline. */
-  bodyPoses?: Partial<
-    Record<LpcAnimation, { animation: LpcAnimation; frames: number[][] }>
-  >;
-  clips: Partial<Record<LpcAnimation, number[][]>>;
-};
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
 export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
-/** Published UploadThing atlas URLs and authored layouts, pinned to an upstream revision. */
-export const lpcCatalog = source as unknown as {
-  revision: string;
-  creditsUrl: string;
+/** A scene owns one resolved database snapshot, keeping all its actors on the same artwork. */
+export type LpcCatalog = {
   entries: Record<string, LpcSheet[]>;
   layouts: LpcLayout[];
+  designs: Record<
+    string,
+    Pick<LpcConfig, "category" | "replacementSlot" | "defaultColor" | "defaultEyes">
+  >;
 };
 
-/** Exact selections are bundled; missing legacy colours resolve to a valid authored palette. */
+/** Compile saved design variants into the renderer's compact shared-layout lookup. */
+export const buildLpcCatalog = (
+  assets: { id: string; lpcConfig: LpcConfig | null }[],
+): LpcCatalog => {
+  const catalog: LpcCatalog = { entries: {}, layouts: [], designs: {} };
+  const layouts = new Map<string, number>();
+  /** Reuse frame-layout indices across the snapshot's body, colour and eye variants. */
+  const layoutId = (layout: LpcLayout) => {
+    const key = JSON.stringify(layout);
+    let id = layouts.get(key);
+    if (id === undefined) {
+      id = catalog.layouts.length;
+      layouts.set(key, id);
+      catalog.layouts.push(layout);
+    }
+    return id;
+  };
+  for (const asset of assets) {
+    const config = asset.lpcConfig;
+    // Newly created LPC assets can remain unfinished drafts until their first valid save.
+    if (!config) continue;
+    catalog.designs[asset.id] = {
+      category: config.category,
+      replacementSlot: config.replacementSlot,
+      defaultColor: config.defaultColor,
+      defaultEyes: config.defaultEyes,
+    };
+    for (const [key, sheets] of Object.entries(config.variants))
+      catalog.entries[`${asset.id}/${key}`] = sheets.map((sheet) => ({
+        image: sheet.image,
+        z: sheet.z,
+        layout: layoutId(sheet.layout),
+        ...(sheet.travel
+          ? {
+              travel: {
+                image: sheet.travel.image,
+                z: sheet.travel.z,
+                layout: layoutId(sheet.travel.layout),
+              },
+            }
+          : {}),
+      }));
+  }
+  return catalog;
+};
+
+/** Missing colours resolve to the design's authored default palette. */
 export const spriteLayerSheets = (
+  lpcCatalog: LpcCatalog,
   appearance: SpriteAppearance,
   layer: SpriteLayer,
   mode: "all" | "travel" = "all",
 ): LpcSheet[] => {
-  const head = layer.profile.startsWith("head-");
+  const design = lpcCatalog.designs[layer.profile];
   const color = layer.color === "blonde" ? "yellow" : layer.color;
-  const key = `${layer.profile}/${appearance.body}/${color}/${head ? (layer.eyes ?? "blue") : "blue"}`;
-  const fallback = `${layer.profile}/${appearance.body}/${head || layer.profile === "body" ? "light" : "gray"}/blue`;
+  const eyes = layer.eyes ?? design?.defaultEyes ?? "blue";
+  const key = `${layer.profile}/${appearance.body}/${color}/${eyes}`;
+  const fallback = `${layer.profile}/${appearance.body}/${design?.defaultColor ?? "gray"}/${design?.defaultEyes ?? "blue"}`;
   const sheets = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
-  if (!sheets) throw new Error(`Sprite selection is not bundled: ${key}`);
+  if (!sheets) throw new Error(`Sprite selection is unavailable: ${key}`);
   return mode === "travel"
     ? sheets.flatMap((sheet) => (sheet.travel ? [sheet.travel] : []))
     : sheets;
@@ -56,6 +94,7 @@ export const spriteLayerSheets = (
  * Missing clips use the neutral held pose; scene code owns cue expiry.
  */
 export const lpcFrame = (
+  lpcCatalog: LpcCatalog,
   sheet: LpcSheet,
   state: LpcAnimation,
   direction: LpcDirection,

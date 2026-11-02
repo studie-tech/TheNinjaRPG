@@ -227,6 +227,7 @@ export function GameAssetLibrary() {
     await Promise.all([
       utils.gameAsset.getAll.invalidate(),
       utils.gameAsset.getAllFolders.invalidate(),
+      utils.gameAsset.getLpcCatalog.invalidate(),
       utils.gameAsset.getAllNames.invalidate(),
       utils.misc.getAllGameAssetNames.invalidate(),
       utils.gameAsset.getNameTags.invalidate(),

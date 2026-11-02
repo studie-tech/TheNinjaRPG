@@ -1,3 +1,4 @@
+import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, type Sprite, Texture } from "pixi.js";
 import type { ReturnedBattle } from "@/libs/combat/types";
@@ -21,7 +22,8 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
   const owned = new Set<() => void>(), stage = new Container();
-  const game = { own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup), isDisposed: () => false, signal: new AbortController().signal } as unknown as GameRenderer;
+  const game = {
+    lpcCatalog, own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup), isDisposed: () => false, signal: new AbortController().signal } as unknown as GameRenderer;
   cleanups.push(() => { stage.destroy({ children: true, texture: false, textureSource: false }); for (const cleanup of owned) cleanup(); });
   const user = makeBattleUser("actor", { longitude: 3, latitude: 1, avatar: `https://example.com/actor-${sequence++}.png`, isAi, isOriginal: true, spriteAppearance });
   const battle = makeCompleteBattle({ usersState: [user], usersEffects: [], width: 12, height: 10 }) as unknown as ReturnedBattle;

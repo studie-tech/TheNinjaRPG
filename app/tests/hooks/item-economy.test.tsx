@@ -79,7 +79,7 @@ const catalogueInvalidations = {
   getVariantNames: vi.fn(async () => undefined),
   getItemVariants: vi.fn(async (_input: { itemId: string }) => undefined),
 };
-const itemUtils = Object.fromEntries(Object.entries(catalogueInvalidations).map(([name, invalidate]) => [name, { invalidate }]));
+const itemUtils = { item: Object.fromEntries(Object.entries(catalogueInvalidations).map(([name, invalidate]) => [name, { invalidate }])) };
 const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 const ActualFurnitureViewsEditor = furnitureEditor.FurnitureViewsEditor;
@@ -92,7 +92,7 @@ beforeEach(() => {
   updateItem.mockReset();
   for (const invalidate of Object.values(catalogueInvalidations)) invalidate.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ item: itemUtils }),
+    useUtils: () => itemUtils,
     item: {
       getAllNames: { useQuery: () => ({ data: [] }) },
       update: { useMutation: () => ({ mutateAsync: updateItem, isPending: false }) },
@@ -100,6 +100,7 @@ beforeEach(() => {
     skillTree: { getAllNames: { useQuery: () => ({ data: [] }) } },
     bloodline: { getAllNames: { useQuery: () => ({ data: [] }) } },
     gameAsset: {
+      getLpcCatalog: { useQuery: () => ({ data: [], error: null }) },
       getNameTags: { useQuery: () => ({ data: undefined }) },
       getSceneAssets: { useQuery: () => ({ data: [] }) },
       getAll: { useInfiniteQuery: () => ({ data: { pages: [] } }) },

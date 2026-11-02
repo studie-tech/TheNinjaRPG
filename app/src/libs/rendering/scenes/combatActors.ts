@@ -19,7 +19,6 @@ import {
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
-import lpcProfiles from "@/libs/lpc/profiles.json";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -209,18 +208,8 @@ export const createCombatActors = (
                 for (const entry of art.entries) {
                   if (entry.description.kind === "tombstone") continue;
                   if (entry.character) {
-                    const hasHeadgear = entry.description.character?.layers.some(
-                      ({ profile }) => {
-                        const definition = (lpcProfiles as Record<string, unknown>)[
-                          profile
-                        ];
-                        return (
-                          typeof definition === "string" &&
-                          /^headwear\/(?:coverings|hats|helmets)\//.test(definition)
-                        );
-                      },
-                    );
-                    if (hasHeadgear) top = Math.max(top, entry.bounds.maxY);
+                    if (entry.character.hasHeadgear)
+                      top = Math.max(top, entry.bounds.maxY);
                     // Transparent frame padding does not constrain the ground markers.
                     continue;
                   }

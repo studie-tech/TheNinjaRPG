@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import type { GameAsset } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
+import { buildLpcCatalog, lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import { cn } from "@/libs/shadui";
-import { bunnyImageUrl } from "@/utils/image";
+import { bunnyImageUrl, textureImageUrl } from "@/utils/image";
 
 /** Show still artwork, opt-in animation playback, or a silent audio placeholder. */
 export function GameAssetPreview({
@@ -17,7 +18,8 @@ export function GameAssetPreview({
   background,
   renditionWidth = 320,
 }: {
-  asset: Pick<GameAsset, "name" | "image" | "type" | "frames" | "speed">;
+  asset: Pick<GameAsset, "name" | "image" | "type" | "frames" | "speed"> &
+    Partial<Pick<GameAsset, "id" | "lpcConfig">>;
   className?: string;
   play?: boolean;
   background?: PreviewBackground;
@@ -43,7 +45,9 @@ export function GameAssetPreview({
         className,
       )}
     >
-      {isAudio ? (
+      {asset.type === "LPC" && asset.lpcConfig ? (
+        <LpcThumbnail name={asset.name} config={asset.lpcConfig} />
+      ) : isAudio ? (
         <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
           <Icon className="size-8" strokeWidth={1.5} />
           <div className="flex h-10 items-center gap-1" aria-hidden="true">
@@ -85,6 +89,61 @@ export function GameAssetPreview({
         />
       )}
     </div>
+  );
+}
+
+/** Fit layered neutral poses to each card while preserving native atlas crops and logical offsets. */
+function LpcThumbnail({
+  name,
+  config,
+}: {
+  name: string;
+  config: NonNullable<GameAsset["lpcConfig"]>;
+}) {
+  const catalog = buildLpcCatalog([{ id: "preview", lpcConfig: config }]);
+  const appearance = { version: 1 as const, body: "male" as const, layers: [] };
+  const sheets = spriteLayerSheets(catalog, appearance, {
+    profile: "preview",
+    color: config.defaultColor,
+    eyes: config.defaultEyes,
+  });
+  const hasStand = sheets.some((sheet) => catalog.layouts[sheet.layout]?.clips.stand);
+  const layers = sheets.flatMap((sheet, index) => {
+    if (hasStand && !catalog.layouts[sheet.layout]?.clips.stand) return [];
+    const sample = lpcFrame(catalog, sheet, "stand", 2, 0);
+    return sample ? [{ sheet, sample, index }] : [];
+  });
+  const size = Math.max(1, ...layers.map(({ sample }) => sample.size));
+  return (
+    <svg
+      role="img"
+      aria-label={name}
+      viewBox={`0 0 ${size} ${size}`}
+      className="pointer-events-none absolute inset-0 m-auto h-full w-full"
+      style={{ maxWidth: size * 1.5, maxHeight: size * 1.5 }}
+    >
+      {/* A shared viewBox fits 64–192px cells into compact cards without scaling atlas coordinates. */}
+      <foreignObject width={size} height={size}>
+        <div className="relative isolate h-full w-full">
+          {layers.map(({ sheet, sample, index }) => (
+            <div
+              key={`${sheet.image}-${index}`}
+              className="absolute"
+              style={{
+                width: sample.width,
+                height: sample.height,
+                left: (size - sample.size) / 2 + (sample.trim?.x ?? 0),
+                top: (size - sample.size) / 2 + (sample.trim?.y ?? 0),
+                zIndex: sheet.z + 1000,
+                backgroundImage: `url("${textureImageUrl(sheet.image, 0)}")`,
+                backgroundPosition: `-${sample.x}px -${sample.y}px`,
+                imageRendering: "pixelated",
+              }}
+            />
+          ))}
+        </div>
+      </foreignObject>
+    </svg>
   );
 }
 

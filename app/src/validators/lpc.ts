@@ -1,62 +1,5 @@
 import { z } from "zod";
 
-/** AUTO inherits the base item; NONE explicitly hides a worn item's visual layer. */
-export const lpcEquipmentProfiles = [
-  "AUTO",
-  "NONE",
-  "bandana",
-  "headband",
-  "wide-hat",
-  "glasses",
-  "hood",
-  "mask",
-  "crown",
-  "helmet",
-  "horns",
-  "shirt",
-  "robe",
-  "leather",
-  "plate",
-  "chainmail",
-  "cloak",
-  "pants",
-  "leggings",
-  "legarmour",
-  "skirt",
-  "boots",
-  "tabi",
-  "sandals",
-  "footarmour",
-  "gloves",
-  "armarmour",
-  "belt",
-  "sash",
-  "necklace",
-  "beads",
-  "scarf",
-  "sword",
-  "katana",
-  "dagger",
-  "spear",
-  "staff",
-  "sickle",
-  "axe",
-  "hammer",
-  "flail",
-  "bow",
-  "crossbow",
-  "club",
-  "trident",
-  "whip",
-  "boomerang",
-  "shield",
-  "gem",
-  "fan",
-  "shuriken",
-  "bracelet",
-  "ring",
-  "piercing",
-] as const;
 /** Equipment palettes supported by the bundled atlas selections and staff editors. */
 export const lpcColors = [
   "black",
@@ -76,22 +19,31 @@ export const lpcColors = [
 export const lpcBodyStyles = ["male", "female"] as const;
 /** Nullable variant fields inherit the item; unconfigured items have no equipment layer. */
 export const lpcItemFields = z.object({
-  lpcProfile: z.enum(lpcEquipmentProfiles).nullable().default(null),
+  lpcProfile: z
+    .string()
+    .min(1)
+    .max(32)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .nullable()
+    .default(null),
   lpcColor: z.enum(lpcColors).nullable().default(null),
 });
-export type LpcEquipmentProfile = (typeof lpcEquipmentProfiles)[number];
+export type LpcEquipmentProfile = string;
 export type LpcColor = (typeof lpcColors)[number];
 export type LpcBody = (typeof lpcBodyStyles)[number];
-export type LpcAnimation =
-  | "stand"
-  | "idle"
-  | "combat"
-  | "walk"
-  | "slash"
-  | "thrust"
-  | "spellcast"
-  | "shoot"
-  | "hurt";
+/** Shared clip names for authored layouts, renderer playback and editor choices. */
+export const lpcAnimations = [
+  "stand",
+  "idle",
+  "combat",
+  "walk",
+  "slash",
+  "thrust",
+  "spellcast",
+  "shoot",
+  "hurt",
+] as const;
+export type LpcAnimation = (typeof lpcAnimations)[number];
 /** Authored row order: north, west, south, east. */
 export type LpcDirection = 0 | 1 | 2 | 3;
 /** A visual layer; slot replaces base clothing and mirror flips off-hand equipment. */

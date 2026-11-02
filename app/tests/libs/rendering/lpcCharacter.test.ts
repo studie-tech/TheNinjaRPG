@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { lpcCatalog } from "../../setup/lpc";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from "pixi.js";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { lpcCatalog, lpcFrame, spriteLayerSheets, type LpcLayout } from "@/libs/lpc/catalog";
+import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -11,6 +12,7 @@ import { createTravelActors, type TravelActorsSnapshot } from "@/libs/rendering/
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 import type { SpriteAppearance } from "@/validators/lpc";
+import type { LpcLayout } from "@/validators/lpcAsset";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
 
 const cleanups: (() => void)[] = [];
@@ -23,6 +25,7 @@ const gameFixture = () => {
   const controller = new AbortController();
   const source = texture();
   const game = {
+    lpcCatalog,
     own: (cleanup: () => void) => owned.add(cleanup),
     disown: (cleanup: () => void) => owned.delete(cleanup),
     assets: { texture: vi.fn(async () => source) },
@@ -45,6 +48,22 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("uses saved replacement settings for new designs and retains clothing when replacement is disabled", async () => {
+    const { game } = gameFixture();
+    const catalog = structuredClone(lpcCatalog);
+    catalog.designs["custom-coat"] = { ...catalog.designs.plate!, replacementSlot: "shirt" };
+    for (const [key, sheets] of Object.entries(catalog.entries)) if (key.startsWith("plate/")) catalog.entries[key.replace("plate/", "custom-coat/")] = sheets;
+    game.lpcCatalog = catalog;
+    const appearance = resolveSpriteAppearance({ items: [{ equipped: "CHEST", item: { lpcProfile: "custom-coat", lpcColor: "red" } }] });
+    const shirt = spriteLayerSheets(catalog, appearance, { profile: "shirt", color: "black" }).map((sheet) => sheet.image);
+    const texture = game.assets.texture as Mock<typeof game.assets.texture>;
+    await characters.createLpcCharacter(game, appearance);
+    expect(texture.mock.calls.some(([url]) => shirt.includes(url))).toBe(false);
+    texture.mockClear();
+    catalog.designs["custom-coat"]!.replacementSlot = "none";
+    await characters.createLpcCharacter(game, appearance);
+    expect(texture.mock.calls.some(([url]) => shirt.includes(url))).toBe(true);
+  });
   it("gives identical characters independent idle phases while sharing their textures", async () => {
     const { game } = gameFixture();
     vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0).mockReturnValueOnce(0.9).mockReturnValueOnce(0.5);
@@ -57,9 +76,9 @@ describe("layered LPC actors", () => {
     expect(a.texture.source).toBe(b.texture.source);
     expect(a.texture.frame).not.toEqual(b.texture.frame);
     for (const actor of [first, second]) {
-      const pieces = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer, "travel"));
+      const pieces = appearance.layers.flatMap((layer) => spriteLayerSheets(lpcCatalog, appearance, layer, "travel"));
       const elapsed = actor === first ? 60 : 540;
-      for (const [index, piece] of pieces.entries()) expect((actor.sprite.children[index] as Sprite).texture.frame).toMatchObject(frameRectangle(lpcFrame(piece, "idle", 2, elapsed)!));
+      for (const [index, piece] of pieces.entries()) expect((actor.sprite.children[index] as Sprite).texture.frame).toMatchObject(frameRectangle(lpcFrame(lpcCatalog, piece, "idle", 2, elapsed)!));
     }
   });
   it("varies each idle cycle's speed and leaves walking and attacks on their authored clock", async () => {
@@ -67,19 +86,19 @@ describe("layered LPC actors", () => {
     const random = vi.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(0.9);
     const appearance = resolveSpriteAppearance({});
     const actor = await characters.createLpcCharacter(game, appearance);
-    const sheet = spriteLayerSheets(appearance, appearance.layers[0]!)[0]!;
+    const sheet = spriteLayerSheets(lpcCatalog, appearance, appearance.layers[0]!)[0]!;
     actor.render({ now: 2000, delta: 2, reducedMotion: false }, "idle", 2);
     expect(random).toHaveBeenCalledTimes(3);
     actor.render({ now: 3000, delta: 1, reducedMotion: false }, "idle", 2);
     const body = actor.sprite.children[0] as Sprite;
-    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 0)!));
-    expect(body.texture.frame).not.toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 400)!));
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(lpcCatalog, sheet, "idle", 2, 0)!));
+    expect(body.texture.frame).not.toMatchObject(frameRectangle(lpcFrame(lpcCatalog, sheet, "idle", 2, 400)!));
     actor.render(frame(4000), "walk", 2);
     actor.render(frame(4090), "walk", 2);
-    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "walk", 2, 90)!));
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(lpcCatalog, sheet, "walk", 2, 90)!));
     actor.render(frame(5000), "slash", 2);
     actor.render(frame(5160), "slash", 2);
-    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "slash", 2, 160)!));
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(lpcCatalog, sheet, "slash", 2, 160)!));
     expect(random).toHaveBeenCalledTimes(3);
   });
   it("samples idle consistently across frame rates and freezes it for reduced motion", async () => {
@@ -108,10 +127,10 @@ describe("layered LPC actors", () => {
       const appearance: SpriteAppearance = { version: 1, body: "male", layers: [{ profile: "body", color: "light" }, { profile, color: "brown" }] };
       const actor = await characters.createLpcCharacter(game, appearance);
       actor.render({ now: 1000, delta: 0, reducedMotion: false }, "combat", 2);
-      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer));
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(lpcCatalog, appearance, layer));
       for (const [index, part] of parts.entries()) {
         const child = actor.sprite.children[index] as Sprite;
-        const expected = lpcFrame(part, state, 2, 540);
+        const expected = lpcFrame(lpcCatalog, part, state, 2, 540);
         const ownsPose = lpcCatalog.layouts[part.layout]!.clips[state];
         expect(child.visible).toBe(!!ownsPose);
         if (ownsPose) expect(child.texture.frame).toMatchObject(frameRectangle(expected!));
@@ -152,7 +171,7 @@ describe("layered LPC actors", () => {
     for (const body of ["male", "female"] as const) for (const reducedMotion of [false, true]) for (const mirror of [false, true]) {
       const appearance: SpriteAppearance = { version: 1, body, layers: [{ profile: "body", color: "light" }, { profile: "shirt", color: "black" }, { profile, color: "brown", mirror }] };
       const actor = await characters.createLpcCharacter(game, appearance);
-      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer).map((sheet) => ({ layer, sheet })));
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(lpcCatalog, appearance, layer).map((sheet) => ({ layer, sheet })));
       for (const direction of [0, 1, 2, 3] as const) {
         actor.render(frame(1000, reducedMotion), animation, direction, true);
         for (let step = 0; step <= frames[direction].length; step++) {
@@ -163,7 +182,7 @@ describe("layered LPC actors", () => {
             const weapon = part.layer.profile === profile;
             const state = weapon ? animation : bodyAnimation;
             const facing = weapon && mirror && (direction === 1 || direction === 3) ? direction === 1 ? 3 : 1 : direction;
-            const expected = lpcFrame(part.sheet, state, facing, weapon ? step * 80 : pose * 80, weapon && reducedMotion);
+            const expected = lpcFrame(lpcCatalog, part.sheet, state, facing, weapon ? step * 80 : pose * 80, weapon && reducedMotion);
             const child = actor.sprite.children[index] as Sprite;
             expect(child.visible).toBe(!!expected);
             if (expected) expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
@@ -188,7 +207,7 @@ describe("layered LPC actors", () => {
         { profile: secondary, color: "brown", mirror: !primaryMirror },
       ] };
       const actor = await characters.createLpcCharacter(game, appearance);
-      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer).map((sheet) => ({ layer, sheet })));
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(lpcCatalog, appearance, layer).map((sheet) => ({ layer, sheet })));
       const owner = parts.find((part) => part.layer === appearance.layers[2])!;
       const ownerPose = lpcCatalog.layouts[owner.sheet.layout]!.bodyPoses![animation]!;
       for (const direction of [0, 1, 2, 3] as const) {
@@ -204,19 +223,19 @@ describe("layered LPC actors", () => {
             const facing = part.layer.mirror ? reflected : direction;
             const pose = lpcCatalog.layouts[part.sheet.layout]!.bodyPoses?.[animation];
             if (!pose) {
-              const expected = lpcFrame(part.sheet, ownerPose.animation, facing, bodyStep * 80)!;
+              const expected = lpcFrame(lpcCatalog, part.sheet, ownerPose.animation, facing, bodyStep * 80)!;
               expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
               continue;
             }
             // Decode the selected native rectangle back to its authored body reference.
             const selected = pose.frames[facing]!.flatMap((bodyFrame, column) => {
-              const expected = lpcFrame(part.sheet, animation, facing, column * 80)!;
+              const expected = lpcFrame(lpcCatalog, part.sheet, animation, facing, column * 80)!;
               return child.texture.frame.x === expected.x && child.texture.frame.y === expected.y ? [bodyFrame] : [];
             });
             expect(child.visible).toBe(true);
             expect(selected).toContain(bodyStep);
             if (primary === secondary || part.layer === owner.layer) {
-              const expected = lpcFrame(part.sheet, animation, facing, step * 80, reducedMotion)!;
+              const expected = lpcFrame(lpcCatalog, part.sheet, animation, facing, step * 80, reducedMotion)!;
               expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
             }
           }
@@ -277,7 +296,7 @@ describe("layered LPC actors", () => {
     const layoutCount = lpcCatalog.layouts.length;
     cleanups.push(() => { lpcCatalog.entries[key] = original; lpcCatalog.layouts.splice(layoutCount); });
     const base: LpcLayout = { cell: 64, columns: 1, trim: { x: 12, y: 6, width: 20, height: 40 }, clips: { idle: [[0], [0], [0], [0]], walk: [[0], [0], [0], [0]] } };
-    const layouts = [
+    const layouts: LpcLayout[] = [
       base,
       { ...base, cell: 128 },
       { ...base, trim: { ...base.trim!, width: 21 } },
@@ -317,7 +336,7 @@ describe("layered LPC actors", () => {
       const sprites = actor.sprite.children as Sprite[];
       for (const [index, child] of sprites.entries()) {
         if (!child.visible) continue;
-        const expected = lpcFrame(sheets[index]!, "thrust", direction === 1 ? 3 : 1, 0)!;
+        const expected = lpcFrame(lpcCatalog, sheets[index]!, "thrust", direction === 1 ? 3 : 1, 0)!;
         expect(child.texture.frame.x).toBe(expected.x);
         expect(child.texture.frame.y).toBe(expected.y);
         expect(child.scale.x).toBeLessThan(0);
