@@ -39,12 +39,13 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
       }
     },
     onError: async (error) => {
-      await invalidateInventory();
+      // Report the failure before recovery reads so slow requests cannot delay feedback.
       showMutationToast({
         success: false,
         message: error.message,
         variant: "destructive",
       });
+      await invalidateInventory();
     },
   });
 
