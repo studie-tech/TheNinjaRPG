@@ -83,3 +83,14 @@ export const trackerGoalValue = (
   questId: string,
   objectiveId: string,
 ) => trackerGoal(result, questId, objectiveId)?.value;
+
+/**
+ * Trackers sorted by id without startAt. Trackers that are not persisted yet are built
+ * on every read, so two reads stamp different start times.
+ */
+export const comparableTrackers = <T extends { id: string; startAt?: string }>(
+  trackers: T[] | null | undefined,
+) =>
+  trackers
+    ?.map(({ startAt: _startAt, ...tracker }) => tracker)
+    .sort((a, b) => a.id.localeCompare(b.id));

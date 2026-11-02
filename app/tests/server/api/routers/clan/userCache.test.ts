@@ -12,6 +12,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { comparableTrackers } from "../../../../setup/quest";
 import { countUserReads } from "../../../../setup/userReads";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -78,7 +79,7 @@ describeWithDatabase("clan village membership progression", () => {
       const canonical = await profile.getUser();
       expect(cached.userData?.villageId).toBe(destination ?? canonical.userData?.villageId);
       expect(cached.userData?.villageId).not.toBe(source);
-      expect(cached.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id))).toEqual(canonical.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id)));
+      expect(comparableTrackers(cached.userData?.questData)).toEqual(comparableTrackers(canonical.userData?.questData));
       expect(cached.userData?.userQuests).toEqual(canonical.userData?.userQuests);
       expect(cached.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry)).toEqual(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
       expect(cached.userData?.regeneration).toBe(canonical.userData?.regeneration);

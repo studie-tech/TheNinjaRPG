@@ -19,6 +19,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import { comparableTrackers } from "../../setup/quest";
 import { failStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 import { countUserReads } from "../../setup/userReads";
@@ -232,7 +233,7 @@ describeWithDatabase("purchase reputation progression", () => {
       expect(cached?.userData).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
       if (questType !== "none") expect(goal(cached)).toMatchObject({ value: upgradeCost * 2, done: false });
       const canonical = await profile.getUser();
-      expect(cached?.userData?.questData).toEqual(canonical.userData?.questData);
+      expect(comparableTrackers(cached?.userData?.questData)).toEqual(comparableTrackers(canonical.userData?.questData));
       expect(cached?.achievementProgress).toMatchObject(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
       const replay = await caller.upgradeSubscription({ userId, plan: "GOLD" });
       expect(replay.success).toBe(false);
