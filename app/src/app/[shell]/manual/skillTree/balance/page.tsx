@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, InfoIcon, Pencil } from "lucide-react";
+import { InfoIcon, Pencil } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -83,9 +83,6 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
           name: skill.name,
           links: (
             <div className="flex items-center gap-2">
-              <Link href={`/manual/skillTree/statistics/${skill.id}`}>
-                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
               {canEdit && (
                 <Link href={`/manual/skillTree/edit/${skill.id}`}>
                   <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
@@ -213,9 +210,6 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
       name: skill.name,
       links: (
         <div className="flex items-center gap-2">
-          <Link href={`/manual/skillTree/statistics/${skill.skillId}`}>
-            <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-          </Link>
           {canEdit && (
             <Link href={`/manual/skillTree/edit/${skill.skillId}`}>
               <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
