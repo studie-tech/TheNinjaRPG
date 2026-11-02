@@ -18,30 +18,35 @@ export const shareUserCache = (
       Object.keys(next).length !== next.length
     )
       return next;
-    const shared = next.map((value, index) =>
-      shareUserCache(previous[index], value, depth + 1),
-    );
-    return previous.length === next.length &&
-      shared.every((value, index) => value === previous[index])
-      ? previous
-      : shared;
+    let equal = previous.length === next.length;
+    let shared: unknown[] | undefined;
+    for (let index = 0; index < next.length; index++) {
+      const value = shareUserCache(previous[index], next[index], depth + 1);
+      if (value !== previous[index]) equal = false;
+      if (value !== next[index]) {
+        shared ??= [...next];
+        shared[index] = value;
+      }
+    }
+    return equal ? previous : (shared ?? next);
   }
 
   if (isShareableRecord(previous) && isShareableRecord(next)) {
-    const entries = Object.entries(next).map(([key, value]): [string, unknown] => [
-      key,
-      shareUserCache(
-        Object.hasOwn(previous, key) ? previous[key] : undefined,
-        value,
-        depth + 1,
-      ),
-    ]);
-    return Object.keys(previous).length === entries.length &&
-      entries.every(
-        ([key, value]) => Object.hasOwn(previous, key) && value === previous[key],
-      )
-      ? previous
-      : Object.fromEntries(entries);
+    const keys = Object.keys(next);
+    let equal = Object.keys(previous).length === keys.length;
+    let shared: Record<string, unknown> | undefined;
+    for (const key of keys) {
+      const own = Object.hasOwn(previous, key),
+        before = own ? previous[key] : undefined;
+      const nextValue = next[key];
+      const value = shareUserCache(before, nextValue, depth + 1);
+      if (!own || value !== before) equal = false;
+      if (value !== nextValue) {
+        shared ??= { ...next };
+        shared[key] = value;
+      }
+    }
+    return equal ? previous : (shared ?? next);
   }
   return next;
 };

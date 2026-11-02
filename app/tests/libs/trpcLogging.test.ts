@@ -3,7 +3,7 @@ import { createTRPCUntypedClient, loggerLink, TRPCClientError } from "@trpc/clie
 import { observable } from "@trpc/server/observable";
 import { shouldLogTrpcOperation } from "@/libs/trpcLogging";
 
-const request = async (path: string, development: boolean, failure: boolean) => {
+const request = async (path: string, development: boolean, failure: boolean, data: unknown = { ticket: "synthetic-ticket" }) => {
   const logs: unknown[][] = [];
   const log = (...args: unknown[]) => { logs.push(args); };
   const client = createTRPCUntypedClient({ links: [
@@ -15,7 +15,7 @@ const request = async (path: string, development: boolean, failure: boolean) => 
     () => () => observable((observer) => {
       if (failure) observer.error(new TRPCClientError("Synthetic network failure"));
       else {
-        observer.next({ result: { data: { ticket: "synthetic-ticket" } } });
+        observer.next({ result: { data } });
         observer.complete();
       }
     }),
@@ -35,6 +35,11 @@ describe("credential-safe client logging", () => {
       expect(await request(path, development, true)).toEqual([]);
     });
   }
+  it("omits routine movement logs while retaining rejections and transport failures", async () => {
+    expect(await request("travel.moveInSector", true, false, { success: true })).toHaveLength(0);
+    expect(await request("travel.moveInSector", true, false, { success: false, message: "Blocked tile" })).toHaveLength(1);
+    expect(await request("travel.moveInSector", true, true)).toHaveLength(1);
+  });
   it("retains ordinary development logs and production failures", async () => {
     expect(await request("profile.updatePreferences", true, false)).toHaveLength(2);
     expect(await request("profile.updatePreferences", false, false)).toHaveLength(0);

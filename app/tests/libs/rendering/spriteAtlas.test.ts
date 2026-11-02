@@ -14,6 +14,32 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("removes daylight emitter batches and applies independent effect switches without animation", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const visualEffects = { shadows: true, localLights: true };
+    const game = { visualEffects, own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const art = await createWorldSprites(game, [{ id: "emitter", kind: "avatar", image: "actor-emitter.png", size: 20, x: 0, y: 0, groundY: 0, shadow: .2, light: .6 }]);
+    cleanups.push(art.dispose);
+    const light = art.entries[0]!.light!.parent!;
+    const shadow = art.entries[0]!.shadow!.parent!;
+    art.setLighting(WORLD_DAY_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true);
+    expect(light.alpha).toBeGreaterThan(0);
+    visualEffects.localLights = false;
+    visualEffects.shadows = false;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+    expect(shadow.visible).toBe(false);
+    visualEffects.localLights = true;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true);
+    expect(shadow.visible).toBe(false);
+    art.setLighting(WORLD_DAY_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+  });
   it("keeps boundary scenery visible while panning and removes scenery beyond the retained view", async () => {
     const game = { own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
     vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);

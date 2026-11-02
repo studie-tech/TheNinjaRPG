@@ -21,8 +21,8 @@ import {
 } from "@/libs/rendering/primitives/shadow";
 import {
   createWindSprite,
+  isWindSprite,
   updateWindSprites,
-  WindSprite,
 } from "@/libs/rendering/primitives/windSprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type {
@@ -77,7 +77,7 @@ export const createWorldSprites = async (
     motionFrame: number;
   }[] = [];
   let disposed = false;
-  let lastBrightness = 1;
+  let lastBrightness = Number.NaN;
   let motionElapsed = 0;
   const dispose = () => {
     if (disposed) return;
@@ -392,8 +392,7 @@ export const createWorldSprites = async (
         entry.description.wind !== null && entry.description.wind !== undefined,
     )
     .flatMap((entry) => {
-      if (!(entry.sprite instanceof Sprite) || entry.sprite instanceof WindSprite)
-        return [];
+      if (!(entry.sprite instanceof Sprite) || isWindSprite(entry.sprite)) return [];
       const sprite = entry.sprite;
       entry.sprite.updateLocalTransform();
       return [
@@ -414,7 +413,7 @@ export const createWorldSprites = async (
       : [],
   );
   const hasGpuWind = entries.some(
-    (entry) => entry.sprite instanceof WindSprite && entry.description.wind != null,
+    (entry) => isWindSprite(entry.sprite) && entry.description.wind != null,
   );
   const groundDetails = entries.filter((entry) => entry.description.small);
   let flatGround: Container | null = null;
@@ -444,6 +443,18 @@ export const createWorldSprites = async (
         if (value) group.enableRenderGroup();
         else group.disableRenderGroup();
       }
+    },
+    /** Moving effects retain their actor transforms while sharing the terrain's draw order. */
+    attachGroundEffects: (layer: RenderLayer) => {
+      if (shadows) {
+        shadows.zIndex = 0;
+        layer.attach(shadows);
+      }
+      if (lights) {
+        lights.zIndex = 1;
+        layer.attach(lights);
+      }
+      layer.sortRenderLayerChildren();
     },
     /** Render layers preserve scope ownership/transforms while keeping identity pins outside physical lighting. */
     attachLayers: (
@@ -490,12 +501,18 @@ export const createWorldSprites = async (
     },
     setLighting: (brightness: number) => {
       if (worldShadows?.kind === "physical") return;
+      if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
+      if (lights)
+        lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
       brightness = Math.round(brightness * 256) / 256;
       if (lastBrightness === brightness) return;
       lastBrightness = brightness;
       const { night, tint } = worldLighting(brightness);
-      if (lights)
+      if (lights) {
         lights.alpha = night * (worldShadows?.kind === "projected" ? 0.8 : 0.3);
+        // Zero-opacity emitters must leave the draw list, including actor scopes without scenery animation.
+        lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
+      }
       if (worldShadows?.kind === "projected") {
         // Shared ambient uniforms keep fades independent of the number of loaded sprites.
         if (shadows) shadows.alpha = 1 - night * 0.75;
@@ -580,13 +597,23 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
-      for (const entry of softEffects) {
-        if (entry.shadow)
-          entry.shadow.visible =
-            entry.sprite.visible && game.visualEffects?.shadows !== false;
-        if (entry.light)
-          entry.light.visible =
-            entry.sprite.visible && game.visualEffects?.localLights !== false;
+      if (staticScenery && worldShadows?.kind === "projected") {
+        // Fixed scenery owns retained effect groups; viewport culling already mirrors each child's renderability.
+        if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
+        if (lights)
+          lights.visible =
+            lights.alpha > 0 && game.visualEffects?.localLights !== false;
+      } else {
+        for (const entry of softEffects) {
+          if (entry.shadow)
+            entry.shadow.visible =
+              entry.sprite.visible && game.visualEffects?.shadows !== false;
+          if (entry.light)
+            entry.light.visible =
+              entry.sprite.visible &&
+              (lights?.alpha ?? 0) > 0 &&
+              game.visualEffects?.localLights !== false;
+        }
       }
       if (zoom !== detailZoom && groundDetails.length) {
         detailZoom = zoom;

@@ -42,7 +42,7 @@ export const updateQueryCache = async <T>(
       before?.status === "error" ||
       !!before?.isInvalidated ||
       before?.fetchStatus !== "idle";
-    await client.cancelQueries(filter);
+    if (before?.fetchStatus !== "idle") await client.cancelQueries(filter);
     client.setQueryData<T>(key, (old) => {
       const state = client.getQueryState(key);
       needsRefresh ||=
@@ -66,7 +66,8 @@ export const updateQueryCache = async <T>(
     return false;
   }
   const wasFetching = client.getQueryState(key)?.fetchStatus !== "idle";
-  await client.cancelQueries(filter);
+  // An idle query can be patched in this turn; cancellation is only needed for an unfinished read.
+  if (wasFetching) await client.cancelQueries(filter);
   // Another action may depend on this unfinished read for reconciliation.
   if (wasFetching) {
     await client.invalidateQueries(filter);

@@ -96,8 +96,14 @@ export const createTravelScene = async (options: {
       terrainDrawLayer = new RenderLayer(),
       artLayer = new Container(),
       groundArtLayer = new RenderLayer(),
+      actorGroundLayer = new RenderLayer(),
       depthLayer = new RenderLayer(),
       uiLayer = new RenderLayer();
+    terrainDrawLayer.label = "travel-terrain";
+    groundArtLayer.label = "travel-ground-art";
+    actorGroundLayer.label = "travel-actor-ground";
+    depthLayer.label = "travel-depth";
+    uiLayer.label = "travel-overlay";
     const shadows = createProjectedWorldLighting(game, world);
     const lightingLayer = shadows.container;
     const weather = createWorldWeather(game, options.lightLayout);
@@ -105,7 +111,7 @@ export const createTravelScene = async (options: {
     const route = createTravelPath(),
       actors = createTravelActors(
         game,
-        { ground: groundArtLayer, depth: depthLayer, overlay: uiLayer },
+        { ground: actorGroundLayer, depth: depthLayer, overlay: uiLayer },
         shadows,
         sceneryBounds,
       );
@@ -114,6 +120,7 @@ export const createTravelScene = async (options: {
     lightingLayer.addChild(
       terrainDrawLayer,
       groundArtLayer,
+      actorGroundLayer,
       route.container,
       depthLayer,
     );

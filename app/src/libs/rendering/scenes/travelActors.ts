@@ -261,6 +261,7 @@ export const createTravelActors = (
           record.art = art;
           art.setLighting(brightness);
           root.addChild(art.container);
+          if (layers?.ground) art.attachGroundEffects(layers.ground);
           if (art.entries.some((entry) => entry.description.kind === "avatar")) {
             record.fallback?.destroy();
             record.fallback = null;
@@ -365,6 +366,7 @@ export const createTravelActors = (
   };
   /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
   const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
+  const depthIndices = new WeakMap<Container, number>();
   const hasDepthCrossing = (siblings: readonly Container[], spatial = false) => {
     if (!spatial || !sceneryBounds)
       return siblings.some((root, index) => {
@@ -375,17 +377,30 @@ export const createTravelActors = (
         );
       });
     const actors: [number, ActorRecord][] = [];
-    let previousDepth = -Infinity;
-    for (let i = 0; i < siblings.length; i++) {
-      const root = siblings[i];
-      if (!root) continue;
-      const before = siblings[i - 1];
-      if (before && before.zIndex > root.zIndex) return true;
-      const actor = byRoot.get(root);
-      if (!actor) continue;
-      if (previousDepth > actor.depth) return true;
-      previousDepth = actor.depth;
-      actors.push([i, actor]);
+    // Scenery publishes sorted fixed planes when membership changes. Retained actor indices
+    // locate only moving contacts; an insertion or sort invalidates an index by identity.
+    for (const actor of records.values()) {
+      const root = actor.root;
+      let index = depthIndices.get(root) ?? -1;
+      if (siblings[index] !== root) {
+        index = siblings.indexOf(root);
+        depthIndices.set(root, index);
+      }
+      if (index < 0) continue;
+      const before = siblings[index - 1],
+        after = siblings[index + 1];
+      if (
+        (before && before.zIndex > root.zIndex) ||
+        (after && after.zIndex < root.zIndex)
+      )
+        return true;
+      actors.push([index, actor]);
+    }
+    actors.sort((a, b) => a[0] - b[0]);
+    for (let index = 1; index < actors.length; index++) {
+      const before = actors[index - 1],
+        actor = actors[index];
+      if (before && actor && before[1].depth > actor[1].depth) return true;
     }
     let comparisons = 0;
     for (const [i, actor] of actors) {

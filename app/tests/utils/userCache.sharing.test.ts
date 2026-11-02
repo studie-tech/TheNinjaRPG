@@ -2,6 +2,16 @@ import { describe, expect, it } from "bun:test";
 import { shareUserCache } from "@/utils/userCacheSharing";
 
 describe("profile cache structural sharing", () => {
+  it("shares equal nested Dates and arrays while replacing a changed sibling without mutating snapshots", () => {
+    const previous = Object.freeze({ position: 1, data: Object.freeze([{ at: new Date(1000) }]) });
+    const next = Object.freeze({ position: 2, data: Object.freeze([{ at: new Date(1000) }]) });
+    const shared = shareUserCache(previous, next) as typeof next;
+    expect(shared).not.toBe(previous);
+    expect(shared.position).toBe(2);
+    expect(shared.data).toBe(previous.data);
+    expect(next.data).not.toBe(previous.data);
+    expect(previous.position).toBe(1);
+  });
   it("reuses equal Dates throughout arrays and records without mutating either snapshot", () => {
     const previous = Object.freeze({
       users: Object.freeze([Object.freeze({ at: new Date(1000), value: 1 })]),

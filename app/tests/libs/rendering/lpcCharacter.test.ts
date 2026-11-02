@@ -5,6 +5,7 @@ import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import * as lpc from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -49,6 +50,29 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("retains a pose between authored frame boundaries while responding immediately to facing and reduced motion", async () => {
+    const { game } = gameFixture();
+    const character = await characters.createLpcCharacter(game, resolveSpriteAppearance({}), "travel");
+    const samples = vi.spyOn(lpc, "lpcFrame");
+    character.render(frame(0), "walk", 2);
+    const first = samples.mock.calls.length;
+    expect(first).toBeGreaterThan(0);
+    const textures = character.layers.map(layer => layer.sprite.texture);
+    character.render(frame(179), "walk", 2);
+    expect(samples.mock.calls).toHaveLength(first);
+    expect(character.layers.map(layer => layer.sprite.texture)).toEqual(textures);
+    character.render(frame(180), "walk", 2);
+    expect(samples.mock.calls.length).toBeGreaterThan(first);
+    const walking = samples.mock.calls.length;
+    character.render(frame(180), "walk", 1);
+    expect(samples.mock.calls.length).toBeGreaterThan(walking);
+    const facing = samples.mock.calls.length;
+    character.render(frame(180, true), "walk", 1);
+    expect(samples.mock.calls.length).toBeGreaterThan(facing);
+    const still = samples.mock.calls.length;
+    character.render(frame(1000, true), "walk", 1);
+    expect(samples.mock.calls).toHaveLength(still);
+  });
   it("uses saved replacement settings for new designs and retains clothing when replacement is disabled", async () => {
     const { game } = gameFixture();
     const catalog = structuredClone(lpcCatalog);

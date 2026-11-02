@@ -25,20 +25,20 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   const controller = new AbortController();
   const owned = new Set<() => void>();
   const stage = new Container({ isRenderGroup: true });
-  const depth = new RenderLayer(), overlay = new RenderLayer();
+  const depth = new RenderLayer(), overlay = new RenderLayer(), ground = new RenderLayer();
   const game = {
     lpcCatalog,
     invalidate: vi.fn(),
     signal: controller.signal, isDisposed: () => controller.signal.aborted,
     own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup),
   } as unknown as GameRenderer;
-  const actors = createTravelActors(game, { depth, overlay }, undefined, sceneryBounds);
-  stage.addChild(actors.container, depth, overlay);
+  const actors = createTravelActors(game, { depth, overlay, ground }, undefined, sceneryBounds);
+  stage.addChild(actors.container, ground, depth, overlay);
   const grid = getBattleGrid(40, { width: 12, height: 12, biome: "ground" } as never, { x: 0, y: 0 });
   const snapshot = (users: SectorUser[]): TravelActorsSnapshot => ({ grid, users, viewer, sector: 724, minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set() });
   const dispose = () => { if (controller.signal.aborted) return; controller.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); };
   cleanups.push(dispose);
-  return { game, actors, grid, stage, depth, overlay, snapshot, dispose };
+  return { game, actors, grid, stage, depth, overlay, ground, snapshot, dispose };
 };
 const holdCharacters = () => {
   let release = () => {};
@@ -59,6 +59,21 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("keeps moving contact effects on the ground and batches emitter pools together", async () => {
+    const { actors, snapshot, ground } = fixture();
+    actors.sync(snapshot([player(0), player(1)]));
+    await settle();
+    const effects = ground.renderLayerChildren;
+    expect(effects.map(effect => effect.label)).toEqual(["scenery-shadows", "scenery-shadows", "scenery-lights", "scenery-lights"]);
+    const light = effects[2]!;
+    const root = light.parent!.parent!;
+    const before = light.toGlobal({ x: 0, y: 0 });
+    root.x += 12;
+    expect(light.toGlobal({ x: 0, y: 0 }).x - before.x).toBeCloseTo(12);
+    actors.sync(snapshot([player(0)]));
+    expect(ground.renderLayerChildren).toHaveLength(2);
+    expect(ground.renderLayerChildren.every(effect => !effect.destroyed)).toBe(true);
+  });
   it("retains a crowd badge and loaded actors when its count changes", async () => {
     holdCharacters();
     const { actors, snapshot } = fixture();

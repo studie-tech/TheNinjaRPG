@@ -76,7 +76,7 @@ const sceneFixture = async (state = snapshotFixture(), initialZoom = 1) => {
   const world = fixture.stage.children[0]!;
   const collect = (node: Container): RenderLayer[] => node.children.flatMap((child) => child instanceof RenderLayer ? [child] : collect(child));
   const layers = collect(world);
-  return { ...fixture, scene, state, world, onTap, depth: layers[2]!, overlay: layers[3]! };
+  return { ...fixture, scene, state, world, onTap, depth: layers.find(layer => layer.label === "travel-depth")!, overlay: layers.find(layer => layer.label === "travel-overlay")! };
 };
 beforeEach(() => {
   const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
