@@ -139,6 +139,6 @@ it("waits for the player and recovers failed reads without losing the library", 
   expect(t.view.result.current.data?.[0]?.imageUrl).toBe("/old.png");
   t.fail(false);
   t.setImage("/recovered.png");
-  await advance(5 * 60_000);
+  await advance(10_000);
   expect(t.view.result.current.data?.[0]?.imageUrl).toBe("/recovered.png");
 });
