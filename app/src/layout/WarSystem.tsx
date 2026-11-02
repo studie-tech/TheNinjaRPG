@@ -913,6 +913,7 @@ export const SectorWar: React.FC<{
               <p className="font-medium text-sm">Shrine - Sector {war.sector}</p>
               {war.defenderShrineHp > 0 && (
                 <StatusBar
+                  key={`shrine-${war.defenderShrineHp}-${war.defenderShrineMaxHp}`}
                   title="HP"
                   tooltip="Shrine Health"
                   color="bg-red-500"
@@ -1328,6 +1329,7 @@ const WarSideShrine: React.FC<{
       </div>
       <div className="mb-2 w-full">
         <StatusBar
+          key={`shrine-${shrineHp}-${shrineMaxHp}`}
           title="HP"
           tooltip="Shrine Health"
           color={isCaptured ? "bg-red-500" : "bg-blue-500"}

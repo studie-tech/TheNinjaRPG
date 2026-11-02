@@ -222,7 +222,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
           <div className="space-y-1">
             {sectorWars.map((war) => (
               <StatusBar
-                key={war.id}
+                key={`${war.id}-${war.defenderShrineHp}-${war.defenderShrineMaxHp}`}
                 title="HP"
                 tooltip={`Shrine Health – ${war.attackerVillage.name} vs ${war.defenderVillage.name}`}
                 color="bg-red-500"
