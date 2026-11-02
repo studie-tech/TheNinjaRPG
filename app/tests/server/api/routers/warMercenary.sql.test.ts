@@ -73,6 +73,17 @@ describeWithDatabase("war mercenary contracts", () => {
     expect((await db.query.warMercenary.findFirst())?.activeUserId).toBeNull();
     expect(await merc.getObjectiveWarInfo({ warId: "w" })).toBeNull();
   });
+  it("closes contracts and missions when staff end the war", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "staff", username: "Staff", role: "OWNER" }]);
+    await db.insert(warMercenary).values({ id: "contract", warId: "w", sideVillageId: "a", userId: "merc", invitedById: "kage", tokens: 0, slot: 0, acceptedAt: new Date() });
+    await db.update(userData).set({ warMission: { id: "mission", warId: "w", questId: "q", objectiveId: "o", villageId: "c", sideVillageId: "a", sector: 1, task: "espionage", value: 1, endsAt: new Date().toISOString() } }).where(eq(userData.userId, "merc"));
+    expect((await callerForDatabase(warRouter, "staff", db).adminEndWar({ warId: "w" })).success).toBe(true);
+    const contract = await db.query.warMercenary.findFirst();
+    expect(contract?.endedAt).not.toBeNull();
+    expect(contract?.activeUserId).toBeNull();
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "merc") }))?.warMission).toBeNull();
+  });
   it.each(["kage", "merc"])("preserves an ally mission when %s closes an unaccepted invitation", async (actor) => {
     const db = await getTestDatabase();
     await db.insert(warAlly).values({ id: "ally", warId: "w", villageId: "c", supportVillageId: "a", tokensPaid: 1, acceptedAt: new Date() });

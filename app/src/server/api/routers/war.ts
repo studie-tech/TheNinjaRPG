@@ -123,9 +123,11 @@ import {
   updateUserDataForCancelWarMission,
   updateUserDataForClaim,
   updateUserDataForDeclareSectorWar,
+  updateUserDataForFinishWarSettlement,
   updateUserDataForStartWarMission,
   updateVillageElderVoteForCancelWarDeclaration,
   updateVillageElderVoteForVoteOnWarDeclaration2,
+  updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
@@ -773,11 +775,14 @@ export const warRouter = createTRPCRouter({
       if (!canAdministrateWars(user.role)) {
         return errorResponse("You are not authorized to end wars");
       }
-      // End war
+      // End war; close its contracts and missions as settlement does, since nothing
+      // can reach them once the war row is gone.
       await Promise.all([
         deleteWarForAdminEndWar(ctx.drizzle, input),
         deleteWarKillForAdminEndWar(ctx.drizzle, input),
         deleteWarAllyForAdminEndWar(ctx.drizzle, input),
+        updateWarMercenaryForFinishWarSettlement(ctx.drizzle, new Date(), activeWar),
+        updateUserDataForFinishWarSettlement(ctx.drizzle, activeWar),
         insertActionLogForAdminEndWar(ctx.drizzle, ctx, activeWar, input),
       ]);
       return { success: true, message: "War ended successfully" };

@@ -544,8 +544,8 @@ export const insertGameSettingForFinishWarSettlement = (
     .values(missing.map((name) => ({ id: name, name, value: 0, time: new Date(0) })));
 
 /**
- * Build the `warMercenary` update for `finishWarSettlement`, setting `endedAt`, using
- * predicates on `warId` and `endedAt`.
+ * Build the `warMercenary` update for `finishWarSettlement` and `adminEndWar`, setting
+ * `endedAt`, using predicates on `warId` and `endedAt`.
  */
 export const updateWarMercenaryForFinishWarSettlement = (
   client: Pick<DrizzleClient, "update">,
@@ -557,7 +557,7 @@ export const updateWarMercenaryForFinishWarSettlement = (
     .set({ endedAt })
     .where(and(eq(warMercenary.warId, endedWar.id), isNull(warMercenary.endedAt)));
 
-/** Build the `userData` update for `finishWarSettlement`, setting `warMission`, using predicates on `warMission`. */
+/** Build the `userData` update for `finishWarSettlement` and `adminEndWar`, clearing `warMission` for the war. */
 export const updateUserDataForFinishWarSettlement = (
   client: Pick<DrizzleClient, "update">,
   endedWar: { id: string },
