@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT, type UserRole } from "@/drizzle/constants";
 import {
   type Conversation,
   conversationComment,
@@ -118,7 +118,9 @@ export const commentsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.id, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
-      if (!report) throw serverError("NOT_FOUND", "Report not found");
+      if (!report || !canSeeReport(user, report)) {
+        throw serverError("NOT_FOUND", "Report not found");
+      }
       // Get comments
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
@@ -216,14 +218,10 @@ export const commentsRouter = createTRPCRouter({
                 .filter((sender) => sender.conversationId === c.conversation.id)
                 .map((sender) => sender.userId),
             ) &&
-            !c.conversation.users
-              .filter((u) => u.userData)
-              .every((u) =>
-                data.creatorBlacklist.some(
-                  (b) =>
-                    b.targetUserId === u.userId && !canSeeSecretData(u.userData.role),
-                ),
-              ),
+            !onlyBlacklistedOthers(
+              c.conversation.users.filter((u) => u.userData && u.userId !== ctx.userId),
+              data.creatorBlacklist,
+            ),
         )
         .map((c) => ({
           ...c.conversation,
@@ -1108,6 +1106,22 @@ export const fetchUsersToNotify = async (
 
   return notifiedUserIds;
 };
+
+/**
+ * Whether every other conversation member is on the caller's blacklist; staff never count
+ * as blacklisted, and conversations without other members stay visible.
+ */
+const onlyBlacklistedOthers = (
+  others: { userId: string; userData: { role: UserRole } | null }[],
+  blacklist: { targetUserId: string }[],
+) =>
+  others.length > 0 &&
+  others.every(
+    (u) =>
+      !!u.userData &&
+      !canSeeSecretData(u.userData.role) &&
+      blacklist.some((b) => b.targetUserId === u.userId),
+  );
 
 /**
  * Interface for users to be notified in comments

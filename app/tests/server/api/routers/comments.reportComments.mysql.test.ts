@@ -18,6 +18,7 @@ describeWithDatabase("report comments by authors without a user row", () => {
     await insertUsers([
       { userId: "player", level: 50 },
       { userId: "staff", level: 50, role: "MODERATOR" },
+      { userId: "bystander", level: 50 },
     ]);
     const db = await getTestDatabase();
     await db.insert(userReport).values({
@@ -63,5 +64,12 @@ describeWithDatabase("report comments by authors without a user row", () => {
       role: "MODERATOR",
       level: 0,
     });
+  });
+
+  it("hides the moderation discussion from players unrelated to the report", async () => {
+    const api = await callerFor(commentsRouter, "bystander");
+    await expect(api.getReportComments({ id: "report", limit: 10 })).rejects.toThrow(
+      "Report not found",
+    );
   });
 });
