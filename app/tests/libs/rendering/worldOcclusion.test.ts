@@ -4,7 +4,7 @@ import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterialFrame, type WorldMaterial } from "@/libs/rendering/worldMaterials";
 import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
-import { createWorldOcclusion, MAX_CELL_INSTANCES, MAX_DIRECT_INSTANCES, type Occluder } from "@/libs/rendering/worldOcclusion";
+import { createWorldOcclusion, MAX_CELL_INSTANCES, MAX_DIRECT_INSTANCES, SHARED_POSE_FLAG, type Occluder } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 
@@ -60,8 +60,11 @@ const instance = (field: Field, id: number, wind: readonly number[] = []) => {
   const data = bytes(field.prisms), view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const geometry = uint24(data, id * 4);
   const values = Array.from({ length: 5 }, (_, i) => view.getFloat32((geometry + i) * 4));
-  const matrix = Array.from({ length: 7 }, (_, i) => view.getFloat32((id + 1 + i) * 4));
-  const flags = data[id * 4 + 3] ?? 0, group = (flags >> 1) - 1, dx = wind[group] ?? 0;
+  const flags = data[id * 4 + 3] ?? 0;
+  const sharedPose = flags & SHARED_POSE_FLAG ? uint24(data, (id + 1) * 4) : undefined;
+  const pose = sharedPose ?? id + 1;
+  const matrix = Array.from({ length: 7 }, (_, i) => view.getFloat32((pose + i) * 4));
+  const group = ((flags & (SHARED_POSE_FLAG - 1)) >> 1) - 1, dx = wind[group] ?? 0;
   const local = (point: Point): Point => {
     if (!(flags & 1)) return group < 0 ? point : [(point[0] - dx * (matrix[1]! * (point[1] * 0.5 + point[2]) + matrix[2]!)) / (1 + dx * matrix[0]!), point[1], point[2]];
     const [a, b, baseC, d, baseTx, ty, h] = matrix as [number, number, number, number, number, number, number];
@@ -70,7 +73,7 @@ const instance = (field: Field, id: number, wind: readonly number[] = []) => {
     const u = (d * x - c * y) / det, v = (a * y - b * x) / det, z = point[2] / h;
     return [u, -2 * (v + z), z];
   };
-  return { data, values, local, matrix, flags, root: geometry + 5 };
+  return { data, values, local, matrix, flags, sharedPose, root: geometry + 5 };
 };
 const decodedTriangle = (mesh: ReturnType<typeof instance>, address: number): Vertex[] => {
   const [x, y, width, height, range] = mesh.values as [number, number, number, number, number];
@@ -100,6 +103,12 @@ const boundsIntersect = (origin: Point, end: Point, lower: Point, upper: Point) 
 };
 const instanceIntersects = (field: Field, id: number, origin: Point, end: Point, wind: readonly number[] = []) => {
   const mesh = instance(field, id, wind), localOrigin = mesh.local(origin), localEnd = mesh.local(end);
+  if (mesh.sharedPose !== undefined) {
+    const view = new DataView(mesh.data.buffer, mesh.data.byteOffset, mesh.data.byteLength);
+    const lower = [7, 8, 9].map(i => view.getFloat32((mesh.sharedPose! + i) * 4)) as Point;
+    const upper = [10, 11, 12].map(i => view.getFloat32((mesh.sharedPose! + i) * 4)) as Point;
+    if (!boundsIntersect(origin, end, lower, upper)) return false;
+  }
   const [x, y, width, height, range] = mesh.values as [number, number, number, number, number];
   const endNode = uint24(mesh.data, mesh.root * 4 + 12);
   let node = mesh.root, visited = 0;
@@ -192,6 +201,59 @@ const shrine = () => record("shrine-pedestal", [], { volumes: [volume([
 ].map((value, index) => value + (index % 4 === 0 ? 512 : index % 4 === 1 ? 1024 : 0)), [0, 1, 2, 0, 2, 3, 3, 2, 4])] });
 
 describe("direct moving occluder references", () => {
+  it.each([
+    [20, 0, 0, -20, 40, 100],
+    [-20, 0, 0, -20, 80, 100],
+    [20, 5, 6, -22, 40, 100],
+    [60, 0, 0, -60, 20, 120],
+  ])("shares repeated poses while preserving layer geometry, projection, wind and contacts (%j)", (a, b, c, d, tx, ty) => {
+    const direct = createWorldOcclusion({ direct: true }), grid = createWorldOcclusion();
+    const matrix = [a, b, c, d, tx, ty];
+    const transform = new Float32Array(matrix), height = Math.hypot(matrix[2]!, matrix[3]!);
+    const layers = [box(0.2, 0.2, 0.45, 0.95, 0, 0.25), box(0.55, 0.05, 0.8, 0.4, 0.25, 0.75)];
+    const records = layers.map((layer, i) => record(`layer:${i}`, [], { volumes: [layer], transform, height, wind: 0, dynamic: true }));
+    try {
+      direct.update(records, viewport); grid.update(records, viewport);
+      const ids = [0, 1].map(i => uint24(bytes(direct.references), i * 8));
+      const meshes = ids.map(id => instance(direct, id));
+      expect(meshes.every(mesh => mesh.flags & SHARED_POSE_FLAG)).toBe(true);
+      expect(meshes[0]!.sharedPose).toBe(meshes[1]!.sharedPose);
+      expect(meshes[0]!.root).not.toBe(meshes[1]!.root);
+      expect(meshes[0]!.matrix).toEqual([...transform, height].map(Math.fround));
+      for (const dx of [-MAX_WORLD_WIND, 0, MAX_WORLD_WIND])
+        for (let x = 10; x <= 110; x += 10)
+          for (let y = 10; y <= 210; y += 20) {
+            const start: Point = [x, y, 0], end: Point = [130 - x, 220 - y, 80];
+            expect(blocked(direct, start, end, false, [dx])).toBe(blocked(grid, start, end, false, [dx]));
+            expect(cell(direct, x, y).contact).toBe(cell(grid, x, y).contact);
+          }
+    } finally { direct.dispose(); grid.dispose(); }
+  });
+
+  it("separates wind groups, mirrored layers and height scales while sharing identical poses", () => {
+    const direct = createWorldOcclusion({ direct: true }), grid = createWorldOcclusion();
+    const transform = new Float32Array([20, 2, 3, -20, 50, 100]);
+    const records = [0, 0, 1, 1, undefined, undefined].map((wind, i) => record(`mixed:${i}`, [], {
+      volumes: [box(0.1 + (i % 2) * 0.4, 0.1, 0.4 + (i % 2) * 0.4, 0.9, 0, 0.5)],
+      transform: i === 4 ? new Float32Array([-20, 2, 3, -20, 50, 100]) : transform,
+      height: i === 5 ? 40 : 20, wind, dynamic: true,
+    }));
+    try {
+      direct.update(records, viewport); grid.update(records, viewport);
+      const meshes = records.map((_, i) => instance(direct, uint24(bytes(direct.references), i * 8)));
+      expect(meshes[0]!.sharedPose).toBe(meshes[1]!.sharedPose);
+      expect(meshes[2]!.sharedPose).toBe(meshes[3]!.sharedPose);
+      expect(meshes[0]!.sharedPose).not.toBe(meshes[2]!.sharedPose);
+      expect(meshes[4]!.sharedPose).toBeUndefined(); expect(meshes[5]!.sharedPose).toBeUndefined();
+      for (const wind of [[-5, 5], [5, -5]])
+        for (let x = 10; x <= 110; x += 10)
+          for (let y = 20; y <= 180; y += 20) {
+            const start: Point = [x, y, 0], end: Point = [120 - x, 200 - y, 60];
+            expect(blocked(direct, start, end, false, wind)).toBe(blocked(grid, start, end, false, wind));
+          }
+    } finally { direct.dispose(); grid.dispose(); }
+  });
+
   it("matches grid ray intersections and ground contacts for transformed and global prisms", () => {
     const grid = createWorldOcclusion(), direct = createWorldOcclusion({ direct: true });
     const shapes = [record("global", [], { volumes: [box(10, 12, 25, 30, 0, 15)] }),

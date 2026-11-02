@@ -2,6 +2,7 @@ import {
   MAX_BVH_NODES,
   MAX_CELL_INSTANCES,
   MAX_DIRECT_INSTANCES,
+  SHARED_POSE_FLAG,
 } from "@/libs/rendering/worldOcclusion";
 import { worldWindShader } from "@/libs/rendering/worldWind";
 
@@ -135,37 +136,25 @@ bool intersectsBounds(vec3 origin, vec3 ray, vec3 lower, vec3 upper) {
     constrain(interval, origin.z - lower.z, ray.z) &&
     constrain(interval, upper.z - origin.z, -ray.z);
 }
-float casterHit(sampler2D source, vec2 size, float instance, vec2 worldOffset,
-  vec3 origin, vec3 ray) {
-  vec4 entry = tableTexel(source, size, instance);
-  float geometry = unsigned24(entry.rgb);
-  float flags = floor(entry.a * 255.0 + 0.5);
-  float code = floor(flags / 2.0);
-  float dx = worldWind(code);
-  origin.xy -= worldOffset;
-  if (mod(flags, 2.0) > 0.5) {
-    float a = tableFloat(source, size, instance + 1.0);
-    float b = tableFloat(source, size, instance + 2.0);
-    float c = tableFloat(source, size, instance + 3.0) - dx;
-    float d = tableFloat(source, size, instance + 4.0);
-    vec2 translation = vec2(tableFloat(source, size, instance + 5.0), tableFloat(source, size, instance + 6.0));
-    translation.x += dx;
-    float height = tableFloat(source, size, instance + 7.0);
-    // Invert the source-camera projection before entering the shared physical mesh.
-    vec2 projected = vec2(origin.x, origin.y * 0.5 + origin.z) - translation;
-    vec2 velocity = vec2(ray.x, ray.y * 0.5 + ray.z);
-    float determinant = a * d - b * c;
-    vec2 uv = vec2(d * projected.x - c * projected.y, a * projected.y - b * projected.x) / determinant;
-    vec2 duv = vec2(d * velocity.x - c * velocity.y, a * velocity.y - b * velocity.x) / determinant;
-    origin = vec3(uv.x, -2.0 * (uv.y + origin.z / height), origin.z / height);
-    ray = vec3(duv.x, -2.0 * (duv.y + ray.z / height), ray.z / height);
-  } else if (code > 0.5) {
-    // Global custom geometry uses the source-V affine weight, including rotation and mirroring.
-    vec3 weight = vec3(tableFloat(source, size, instance + 1.0), tableFloat(source, size, instance + 2.0), tableFloat(source, size, instance + 3.0));
-    float stretch = 1.0 + dx * weight.x;
-    origin.x = (origin.x - dx * (weight.y * (origin.y * 0.5 + origin.z) + weight.z)) / stretch;
-    ray.x = (ray.x - dx * weight.y * (ray.y * 0.5 + ray.z)) / stretch;
-  }
+void transformCasterRay(sampler2D source, vec2 size, float address, float dx,
+  inout vec3 origin, inout vec3 ray) {
+  float a = tableFloat(source, size, address);
+  float b = tableFloat(source, size, address + 1.0);
+  float c = tableFloat(source, size, address + 2.0) - dx;
+  float d = tableFloat(source, size, address + 3.0);
+  vec2 translation = vec2(tableFloat(source, size, address + 4.0), tableFloat(source, size, address + 5.0));
+  translation.x += dx;
+  float height = tableFloat(source, size, address + 6.0);
+  // Invert the source-camera projection before entering the shared physical mesh.
+  vec2 projected = vec2(origin.x, origin.y * 0.5 + origin.z) - translation;
+  vec2 velocity = vec2(ray.x, ray.y * 0.5 + ray.z);
+  float determinant = a * d - b * c;
+  vec2 uv = vec2(d * projected.x - c * projected.y, a * projected.y - b * projected.x) / determinant;
+  vec2 duv = vec2(d * velocity.x - c * velocity.y, a * velocity.y - b * velocity.x) / determinant;
+  origin = vec3(uv.x, -2.0 * (uv.y + origin.z / height), origin.z / height);
+  ray = vec3(duv.x, -2.0 * (duv.y + ray.z / height), ray.z / height);
+}
+float geometryHit(sampler2D source, vec2 size, float geometry, vec3 origin, vec3 ray) {
   vec2 minimum = vec2(tableFloat(source, size, geometry), tableFloat(source, size, geometry + 1.0));
   vec2 span = vec2(tableFloat(source, size, geometry + 2.0), tableFloat(source, size, geometry + 3.0));
   float heightRange = tableFloat(source, size, geometry + 4.0);
@@ -200,6 +189,54 @@ float casterHit(sampler2D source, vec2 size, float instance, vec2 worldOffset,
   }
   return 0.0;
 }
+float casterEntryHit(sampler2D source, vec2 size, float instance, vec2 worldOffset,
+  vec4 entry, vec3 origin, vec3 ray) {
+  float geometry = unsigned24(entry.rgb);
+  float flags = floor(entry.a * 255.0 + 0.5);
+  float code = floor(flags / 2.0);
+  float dx = worldWind(code);
+  origin.xy -= worldOffset;
+  if (mod(flags, 2.0) > 0.5) {
+    transformCasterRay(source, size, instance + 1.0, dx, origin, ray);
+  } else if (code > 0.5) {
+    // Global custom geometry uses the source-V affine weight, including rotation and mirroring.
+    vec3 weight = vec3(tableFloat(source, size, instance + 1.0), tableFloat(source, size, instance + 2.0), tableFloat(source, size, instance + 3.0));
+    float stretch = 1.0 + dx * weight.x;
+    origin.x = (origin.x - dx * (weight.y * (origin.y * 0.5 + origin.z) + weight.z)) / stretch;
+    ray.x = (ray.x - dx * weight.y * (ray.y * 0.5 + ray.z)) / stretch;
+  }
+  return geometryHit(source, size, geometry, origin, ray);
+}
+float casterHit(sampler2D source, vec2 size, float instance, vec2 worldOffset,
+  vec3 origin, vec3 ray) {
+  return casterEntryHit(source, size, instance, worldOffset, tableTexel(source, size, instance), origin, ray);
+}
+
+// Direct layers retain separate meshes while sharing one conservative miss and normalized ray.
+struct DirectPose { float id; bool hit; vec3 origin; vec3 ray; };
+float directCasterHit(sampler2D source, vec2 size, float instance, vec2 worldOffset,
+  vec3 origin, vec3 ray, inout DirectPose cached) {
+  vec4 entry = tableTexel(source, size, instance);
+  float flags = floor(entry.a * 255.0 + 0.5);
+  if (flags < ${SHARED_POSE_FLAG}.0) return casterEntryHit(source, size, instance, worldOffset, entry, origin, ray);
+  float pose = unsigned24(tableTexel(source, size, instance + 1.0).rgb);
+  if (cached.id != pose) {
+    cached.id = pose;
+    origin.xy -= worldOffset;
+    vec3 lower = vec3(tableFloat(source, size, pose + 7.0), tableFloat(source, size, pose + 8.0), tableFloat(source, size, pose + 9.0));
+    vec3 upper = vec3(tableFloat(source, size, pose + 10.0), tableFloat(source, size, pose + 11.0), tableFloat(source, size, pose + 12.0));
+    cached.hit = intersectsBounds(origin, ray, lower, upper);
+    if (cached.hit) {
+      float code = floor((flags - ${SHARED_POSE_FLAG}.0) / 2.0);
+      transformCasterRay(source, size, pose, worldWind(code), origin, ray);
+      cached.origin = origin;
+      cached.ray = ray;
+    }
+  }
+  if (!cached.hit) return 0.0;
+  return geometryHit(source, size, unsigned24(entry.rgb), cached.origin, cached.ray);
+}
+
 float blocked(sampler2D header, sampler2D references, sampler2D prisms,
   vec4 bounds, vec4 geometry, vec4 tables, float heightRange,
   vec2 samplePosition, vec3 first, vec3 last, vec3 origin, vec3 ray, inout float previousInstance) {
@@ -291,10 +328,11 @@ void main() {
       t = endT;
     }
     // Small moving sets avoid rebuilding cell references; exact retained BVHs reject whole-ray misses.
+    DirectPose directPose = DirectPose(-1.0, false, vec3(0.0), vec3(0.0));
     for (int i = 0; i < ${MAX_DIRECT_INSTANCES}; i++) {
       if (distanceToLight <= guard + uFieldHeights.w || visibility < 0.5 || float(i) >= uDynamicDirect) break;
       float instance = unsigned24(tableTexel(uDynamicReferences, uDynamicTables.xy, float(i) * 2.0).rgb);
-      visibility *= 1.0 - casterHit(uDynamicPrisms, uDynamicTables.zw, instance, uDynamicGeometry.xy, origin, ray);
+      visibility *= 1.0 - directCasterHit(uDynamicPrisms, uDynamicTables.zw, instance, uDynamicGeometry.xy, origin, ray, directPose);
     }
   }
   float falloff = max(0.0, 1.0 - distanceToLight / vLight.w);

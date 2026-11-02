@@ -13,13 +13,15 @@ const normalizedVolumeKeys = new WeakMap<NonNullable<Occluder["volumes"]>, objec
 export const MAX_CELL_INSTANCES = 1024;
 export const MAX_BVH_NODES = 8192;
 export const MAX_DIRECT_INSTANCES = 16;
+export const SHARED_POSE_FLAG = 32;
 
 /**
  * Cells or bounded direct lists reference instances; identical frames share one exact local mesh and stackless BVH.
  * Header tiles store offset24/countLow8 and countHigh8/0/contact8/0. Each reference contains
  * instanceTexel24/lowerZ8, then upperZ8/minXY4/maxXY4/0. The geometry table retains IEEE Float32
  * transforms and sixteen-bit closed prisms, so baseline RGBA8 textures preserve every air gap.
- * Instance alpha stores the normalized-transform bit and a one-based wind code in the upper bits.
+ * Instance alpha stores the normalized-transform bit, a one-based wind code in bits 1–4 and a shared-pose bit.
+ * Repeated direct poses use two-texel instances pointing to seven Float32 transform values and six conservative bounds.
  */
 export const createWorldOcclusion = (
   options: {
@@ -99,6 +101,7 @@ export const createWorldOcclusion = (
       geometry: CasterGeometry;
       stamp: InstanceStamp;
       address: number;
+      pose?: SharedPose;
     }[] = [];
     const geometryAddresses = new Map<CasterGeometry, number>();
     let texels = 0,
@@ -140,19 +143,58 @@ export const createWorldOcclusion = (
       [...geometryAddresses].every(
         ([geometry, address]) => packedGeometries.get(geometry) === address,
       );
-    for (const entry of entries)
-      if (entry.geometry.order.length && overlaps(entry.stamp.bounds, domain)) {
-        entry.address = texels;
-        texels += 8;
+    const instances = entries.filter(
+      (entry) => entry.geometry.order.length && overlaps(entry.stamp.bounds, domain),
+    );
+    const instanceCount = instances.length;
+    const direct = options.direct && instanceCount <= MAX_DIRECT_INSTANCES;
+    const poses: SharedPose[] = [];
+    if (direct)
+      for (const entry of instances) {
+        const transform = entry.record.transform;
+        if (!transform) continue;
+        // Direct sets are capped, so exact numeric pose matching has bounded work and needs no serialized key.
+        let pose = poses.find(
+          (candidate) =>
+            candidate.height === entry.record.height &&
+            candidate.wind === entry.record.wind &&
+            candidate.transform.every((value, index) => value === transform[index]),
+        );
+        if (!pose) {
+          pose = {
+            address: -1,
+            count: 0,
+            transform,
+            height: entry.record.height,
+            wind: entry.record.wind,
+            bounds: { ...entry.stamp.bounds },
+            minZ: entry.stamp.minZ,
+            maxZ: entry.stamp.maxZ,
+          };
+          poses.push(pose);
+        }
+        pose.count++;
+        pose.bounds.minX = Math.min(pose.bounds.minX, entry.stamp.bounds.minX);
+        pose.bounds.minY = Math.min(pose.bounds.minY, entry.stamp.bounds.minY);
+        pose.bounds.maxX = Math.max(pose.bounds.maxX, entry.stamp.bounds.maxX);
+        pose.bounds.maxY = Math.max(pose.bounds.maxY, entry.stamp.bounds.maxY);
+        pose.minZ = Math.min(pose.minZ, entry.stamp.minZ);
+        pose.maxZ = Math.max(pose.maxZ, entry.stamp.maxZ);
+        entry.pose = pose;
+      }
+    for (const entry of instances) {
+      if (entry.pose?.count === 1) entry.pose = undefined;
+      entry.address = texels;
+      texels += entry.pose ? 2 : 8;
+    }
+    for (const pose of poses)
+      if (pose.count > 1) {
+        pose.address = texels;
+        texels += 13;
       }
     if (texels > MAX_TEXELS)
       throw new RangeError(`World occlusion geometry exceeds ${MAX_TEXELS} texels`);
-    const instanceCount = entries.reduce(
-      (count, entry) => count + Number(entry.address >= 0),
-      0,
-    );
-    const direct = options.direct && instanceCount <= MAX_DIRECT_INSTANCES;
-    const directEntries = direct ? entries.filter((entry) => entry.address >= 0) : [];
+    const directEntries = direct ? instances : [];
     const cells = new Map<
       number,
       { contact: number; refs: { id: number; meta: number }[] }
@@ -311,7 +353,13 @@ export const createWorldOcclusion = (
           transform = entry.record.transform;
         write24(prisms.scratch, offset, geometryAddresses.get(entry.geometry) ?? 0);
         prisms.scratch[offset + 3] =
-          (transform ? 1 : 0) | (((entry.record.wind ?? -1) + 1) << 1);
+          (transform ? 1 : 0) |
+          (((entry.record.wind ?? -1) + 1) << 1) |
+          (entry.pose ? SHARED_POSE_FLAG : 0);
+        if (entry.pose) {
+          write24(prisms.scratch, offset + 4, entry.pose.address);
+          continue;
+        }
         // Raw geometry stores the affine source-height weight in the existing identity slots.
         const parameters = transform
           ? [...transform, entry.record.height]
@@ -322,6 +370,21 @@ export const createWorldOcclusion = (
           floats.setFloat32(offset + 4 + i * 4, parameters[i] ?? 0);
         if (++work % 128 === 0) yield;
       }
+    for (const pose of poses) {
+      if (pose.count < 2) continue;
+      const values = [
+        ...pose.transform,
+        pose.height,
+        pose.bounds.minX,
+        pose.bounds.minY,
+        pose.minZ,
+        pose.bounds.maxX,
+        pose.bounds.maxY,
+        pose.maxZ,
+      ];
+      for (const [index, value] of values.entries())
+        floats.setFloat32((pose.address + index) * 4, value);
+    }
     for (const plan of plans) yield* compareBuffer(plan);
     return {
       plans,
@@ -1527,6 +1590,17 @@ type InstanceStamp = {
   maxZ: number;
   contacts: Int32Array;
   precision: number;
+};
+/** Shared direct poses preserve each layer's own geometry and the union of their conservative world bounds. */
+type SharedPose = {
+  address: number;
+  count: number;
+  transform: Float32Array;
+  height: number;
+  wind?: number;
+  bounds: WorldBounds;
+  minZ: number;
+  maxZ: number;
 };
 type HeightInterval = [number, number];
 type IntervalCell = { solid: number; contact: number; intervals: HeightInterval[] };
