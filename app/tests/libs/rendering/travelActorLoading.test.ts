@@ -28,6 +28,7 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   const depth = new RenderLayer(), overlay = new RenderLayer();
   const game = {
     lpcCatalog,
+    invalidate: vi.fn(),
     signal: controller.signal, isDisposed: () => controller.signal.aborted,
     own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup),
   } as unknown as GameRenderer;
@@ -37,7 +38,7 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   const snapshot = (users: SectorUser[]): TravelActorsSnapshot => ({ grid, users, viewer, sector: 724, minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set() });
   const dispose = () => { if (controller.signal.aborted) return; controller.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); };
   cleanups.push(dispose);
-  return { actors, grid, stage, depth, overlay, snapshot, dispose };
+  return { game, actors, grid, stage, depth, overlay, snapshot, dispose };
 };
 const holdCharacters = () => {
   let release = () => {};
@@ -175,6 +176,19 @@ describe("travel actor artwork loading", () => {
     expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
     expect(figure.width / figure.height).toBeCloseTo(0.5);
   });
+  it("reaches a multi-tile presence update in one still frame without replaying its path", async () => {
+    const { actors, grid, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 });
+    actors.sync(snapshot([user])); await settle();
+    const root = actors.container.children[0]!;
+    actors.sync(snapshot([{ ...user, latitude: 8 }]));
+    actors.animate({ ...frame, reducedMotion: true });
+    const tile = grid.getHex({ col: 4, row: 8 })!;
+    expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+    actors.animate({ ...frame, now: 1200, reducedMotion: false });
+    expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+  });
+
   it("does not replay queued network waypoints after a timed walk finishes", async () => {
     const { actors, grid, snapshot } = fixture();
     const user = player(0, { longitude: 4, latitude: 4 });
@@ -227,7 +241,7 @@ describe("travel actor artwork loading", () => {
 
   it("atomically replaces the placeholder at the retained foot, scale and current position", async () => {
     const pending = holdCharacters();
-    const { actors, grid, snapshot, stage, depth } = fixture();
+    const { game, actors, grid, snapshot, stage, depth } = fixture();
     actors.container.position.set(90, -70);
     actors.sync(snapshot([player(0)]));
     const root = actors.container.children[0]!;
@@ -245,6 +259,7 @@ describe("travel actor artwork loading", () => {
     const expectedBounds = fallback.getBounds();
     const expectedPosition = root.position.clone();
     pending.release(); await settle();
+    expect(game.invalidate).toHaveBeenCalled();
     const body = root.children.at(-1)!.children.find((child) => child.label === "avatar")!;
     expect(actors.container.children[0]).toBe(root);
     expect(root.position).toMatchObject(expectedPosition);

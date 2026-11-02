@@ -86,6 +86,48 @@ beforeEach(() => {
 });
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
+describe("still travel rendering", () => {
+  it("sleeps after effects are disabled, wakes for ref updates and resumes after toggling", async () => {
+    let poll = () => {};
+    vi.spyOn(globalThis, "setInterval").mockImplementation(((callback: Parameters<typeof setInterval>[0]) => {
+      poll = callback as () => void;
+      return 1;
+    }) as unknown as typeof setInterval);
+    const clear = vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
+    const { game, scene, state, advance } = await sceneFixture();
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    game.visualEffects.lighting = game.visualEffects.animations = false;
+    advance(frame());
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    state.users = [...state.users, player({ userId: "arrival", longitude: 5 })];
+    state.actorRevision++;
+    poll();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(frame()); await settle();
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    state.col = 5;
+    poll(); expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(frame());
+    game.visualEffects.lighting = game.visualEffects.animations = true;
+    advance(frame(1100, false));
+    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    game.visualEffects.lighting = game.visualEffects.animations = false;
+    advance(frame(1200));
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    scene.clearHighlights();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    scene.dispose();
+    expect(clear).toHaveBeenCalledWith(1);
+    invalidate.mockClear(); state.actorRevision++; poll();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
 describe("travel scene ground depth", () => {
   it("prepares destination scenery during travel and resumes the same scene on arrival", async () => {
     const state = snapshotFixture();
@@ -478,6 +520,25 @@ describe("travel scene window updates", () => {
     }
     const restored = await sceneFixture(state);
     expect(restored.scene.sectors.get(724)!.data).not.toBe(data);
+  });
+
+  it("invalidates each installed neighbor while later scenery is still loading", async () => {
+    const state = snapshotFixture(); state.users = [];
+    const { scene, game } = await sceneFixture(state);
+    const ready = windowEntry(725, 1), held = windowEntry(726, 2);
+    ready.structures[0]!.image = "ready-still-neighbor.png";
+    held.structures[0]!.image = "held-still-neighbor.png";
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes("held-still-neighbor") ? pending : Texture.WHITE);
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    invalidate.mockClear(); state.window.push(ready, held);
+    const updating = scene.updateWindow();
+    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
+    expect(scene.sectors.has(725)).toBe(true);
+    expect(scene.sectors.has(726)).toBe(false);
+    expect(invalidate).toHaveBeenCalled();
+    release(Texture.WHITE); await updating;
   });
 
   it("keeps a sector installed just before a newer window update interrupts it", async () => {

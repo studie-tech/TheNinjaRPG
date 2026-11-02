@@ -164,6 +164,8 @@ export const createTravelScene = async (options: {
       lastPath: string | null = null,
       hover = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
+    let isStill = false;
+    let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / logicalWidth) * zoom;
     const transform = (constrain = false) => {
@@ -558,6 +560,7 @@ export const createTravelScene = async (options: {
           pending.delete(scope);
           actorsDirty = true;
           lastPath = null;
+          game.invalidate();
           options.onReady();
           // Yield between sectors so input and already-loaded scenery can render.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -573,17 +576,32 @@ export const createTravelScene = async (options: {
         .window.find((entry) => entry.sector === options.getSnapshot().sector)?.map;
       if (activeMap) setBackground(activeMap);
     };
+    // Presence and movement arrive through refs; poll their identities without redrawing an idle unlit map.
+    const snapshotTimer = setInterval(() => {
+      if (disposed || !isStill) return;
+      try {
+        const inputs = travelFrameInputs(options.getSnapshot());
+        if (inputs.some((input, index) => input !== lastFrameInputs?.[index]))
+          game.invalidate();
+      } catch (error) {
+        game.dispose();
+        options.onError(error);
+      }
+    }, 100);
     game.own(() => {
       disposed = true;
       generation++;
+      clearInterval(snapshotTimer);
       if (zoomTimer !== null) clearTimeout(zoomTimer);
     });
     game.setUpdate((frame) => {
       const snapshot = options.getSnapshot(),
         entry = sectors.get(snapshot.sector);
       const isPreparing = snapshot.viewer?.status === "TRAVEL";
+      isStill = frame.reducedMotion && !game.visualEffects.lighting;
+      game.setAnimating(!isPreparing && !isStill);
+      lastFrameInputs = travelFrameInputs(snapshot);
       // Compile destination scenery during the countdown without animating a hidden world.
-      game.setAnimating(!isPreparing);
       if (isPreparing) return;
       if (!entry) return;
       movements.clear();
@@ -814,6 +832,7 @@ export const createTravelScene = async (options: {
       clearHighlights: () => {
         lastPath = null;
         route.set([], 0);
+        game.invalidate();
       },
     };
   } catch (error) {
@@ -891,3 +910,25 @@ const cachedSectorData = new Map<
     descriptions: WorldSpriteDescription[];
   }
 >();
+
+/** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */
+const travelFrameInputs = (snapshot: TravelSnapshot) =>
+  [
+    snapshot.actorRevision,
+    snapshot.sector,
+    snapshot.viewer,
+    snapshot.users,
+    snapshot.col,
+    snapshot.row,
+    snapshot.window,
+    snapshot.showUsers,
+    snapshot.minBracket,
+    snapshot.friendlyAttack,
+    snapshot.structureObjectiveIds,
+    snapshot.nav,
+    snapshot.enabled,
+    snapshot.brightness,
+    snapshot.routeTarget?.sector,
+    snapshot.routeTarget?.x,
+    snapshot.routeTarget?.y,
+  ] as const;

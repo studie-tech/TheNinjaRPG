@@ -18,6 +18,7 @@ import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { ensureDom } from "../../setup/dom.mjs";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import * as visualEffects from "@/libs/visualEffects";
 
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 const fixture = (instanced = false, resolution = 1) => {
@@ -106,6 +107,30 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("stops queued occlusion on preference events without waiting for an offscreen frame", async () => {
+    const createField = worldFields.createWorldOcclusion;
+    const fields: ReturnType<typeof createField>[] = [];
+    const fieldSpy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation(options => {
+      const field = createField(options); fields.push(field); return field;
+    });
+    let change: Parameters<typeof visualEffects.subscribeVisualEffects>[0] = () => {};
+    const unsubscribe = vi.fn();
+    const preferenceSpy = vi.spyOn(visualEffects, "subscribeVisualEffects").mockImplementation(callback => {
+      change = callback; return unsubscribe;
+    });
+    const f = fixture();
+    try {
+      f.shadows.update(worldSunlight(), viewport);
+      change("lighting", false);
+      await new Promise(r => setTimeout(r, 10));
+      expect(fields[0]!.revision).toBe(0);
+      change("lighting", true);
+      for (let i = 0; i < 100 && !fields[0]!.revision; i++) await new Promise(r => setTimeout(r, 1));
+      expect(fields[0]!.revision).toBeGreaterThan(0);
+    } finally { f.dispose(); fieldSpy.mockRestore(); preferenceSpy.mockRestore(); }
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves artwork density without scaling retained lighting targets", () => {
     const standard = fixture(), dense = fixture(false, 2);
     try {
@@ -121,6 +146,27 @@ describe("physical world lighting", () => {
       expect(targets(dense)).toEqual(targets(standard));
       expect(targets(dense).length).toBeGreaterThan(0);
     } finally { standard.dispose(); dense.dispose(); }
+  });
+
+  it.each(["lighting", "shadows"] as const)("pauses queued occlusion when %s is disabled and resumes it on enable", async (effect) => {
+    const createField = worldFields.createWorldOcclusion;
+    const fields: ReturnType<typeof createField>[] = [];
+    const spy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation(options => {
+      const field = createField(options); fields.push(field); return field;
+    });
+    const f = fixture();
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      f.shadows.update(worldSunlight(), viewport);
+      f.game.visualEffects[effect] = false;
+      f.shadows.update(worldSunlight(), viewport);
+      await new Promise(r => setTimeout(r, 10));
+      expect(fields[0]!.revision).toBe(0);
+      f.game.visualEffects[effect] = true;
+      f.shadows.update(worldSunlight(), viewport);
+      for (let i = 0; i < 100 && !fields[0]!.revision; i++) await new Promise(r => setTimeout(r, 1));
+      expect(fields[0]!.revision).toBeGreaterThan(0);
+    } finally { f.dispose(); spy.mockRestore(); }
   });
 
   it("bypasses lighting targets while disabled and restores them on the next frame", () => {
