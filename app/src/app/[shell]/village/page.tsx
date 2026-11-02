@@ -107,8 +107,9 @@ export default function VillageOverview() {
     control,
     formState: { errors },
   } = useForm<MutateContentSchema>({
-    defaultValues: { content: notice },
+    values: { content: villageData?.notice?.content ?? "" },
     resolver: zodResolver(mutateContentSchema),
+    resetOptions: { keepDirtyValues: true },
   });
 
   // Handling submit
@@ -119,7 +120,7 @@ export default function VillageOverview() {
 
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (!villageData) return <Loader explanation="Loading userdata" />;
+  if (!villageData) return <Loader explanation="Loading village" />;
   if (isLeaving) return <Loader explanation="Leaving village" />;
 
   const canLeave = hasRequiredRank(userData.rank, VILLAGE_LEAVE_REQUIRED_RANK);
@@ -220,12 +221,11 @@ export default function VillageOverview() {
                 }
                 onAccept={() => leaveVillage()}
               >
-                Do you confirm that you wish to leave your{" "}
-                {userData?.isOutlaw ? "faction" : "village"}? Your prestige will be
-                reset to 0. Please be aware that if you join another{" "}
-                {userData?.isOutlaw ? "faction" : "village"} your training benefits &
-                regen will be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days, and your
-                village loyalty bonuses will restart from day 0.
+                Do you confirm that you wish to leave your village? Your prestige will
+                be reset to 0. Please be aware that if you join another village your
+                training benefits & regen will be reduced for{" "}
+                {VILLAGE_REDUCED_GAINS_DAYS} days, and your village loyalty bonuses will
+                restart from day 0.
               </Confirm>
             )}
           </div>
