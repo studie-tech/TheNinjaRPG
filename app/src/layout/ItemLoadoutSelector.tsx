@@ -23,6 +23,7 @@ interface ItemLoadoutSelectorProps {
   selectedOverrideId?: string | null;
 }
 
+/** Select or rename an item loadout and reconcile its profile, equipment and inventory caches. */
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
   const {

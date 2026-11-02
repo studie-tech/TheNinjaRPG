@@ -37,6 +37,7 @@ interface QuestPickerProps {
   setActiveQuestId?: React.Dispatch<React.SetStateAction<string>>;
 }
 
+/** Start a selected quest and reconcile its profile, entry costs and discovery lists. */
 const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   // Utils
   const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();

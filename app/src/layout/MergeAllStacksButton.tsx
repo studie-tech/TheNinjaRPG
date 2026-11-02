@@ -15,6 +15,7 @@ interface MergeAllStacksButtonProps {
   onMerged?: () => void;
 }
 
+/** Confirm stack consolidation and reconcile both inventory views, including partial failures. */
 export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   storedAtHome,
   compact = false,

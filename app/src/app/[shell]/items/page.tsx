@@ -858,6 +858,7 @@ interface BackpackProps {
   userData: NonNullable<UserWithRelations>;
 }
 
+/** Render inventory actions with access to carried items across tabs and equipped slots. */
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
   const { useritems, allUserItems, userData } = props;

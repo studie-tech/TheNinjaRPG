@@ -3,10 +3,11 @@ import type { UserQueueState } from "@/deltas/profile";
 import { getRewardUserDelta } from "@/deltas/quests";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import type { UserStreakProgress } from "@/drizzle/schema";
+import { isStreakContinuous } from "@/libs/activityStreak";
 import type { postProcessRewards } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { findActivityStreakConfigForClaimStreakDay } from "@/queries/activityStreak";
-import { DAY_S, periodStart } from "@/utils/time";
+import { DAY_S, isSameDay } from "@/utils/time";
 
 /** Debit the configured event-pass currencies; withhold the delta while energy work is queued. */
 export const getPurchaseEventPassUserUpdate = ({
@@ -103,25 +104,13 @@ export const getClaimedStreakUpdate = (
   };
 };
 
-/** Apply a confirmed day to its loaded progress baseline; new or changed progress retains a read. */
+/** Apply a confirmed claim to its loaded baseline; reconcile when any streak's timed eligibility changed. */
 export const getClaimedStreaks = (
   current: RouterOutputs["activityStreak"]["getUserStreaks"],
   update: ReturnType<typeof getClaimedStreakUpdate>,
   now: Date,
 ): RouterOutputs["activityStreak"]["getUserStreaks"] | undefined => {
-  // Crossing the UTC claim day or an elapsed cycle day changes eligibility beyond this claim.
-  if (
-    periodStart("daily", now).getTime() !==
-      periodStart("daily", update.claimedAt).getTime() ||
-    (update.after &&
-      Math.min(
-        Math.floor(
-          (now.getTime() - update.after.startedAt.getTime()) / (DAY_S * 1000),
-        ) + 1,
-        update.totalDays,
-      ) !== update.after.theoreticalMaxDay)
-  )
-    return;
+  if (!isSameDay(now, update.claimedAt)) return;
   const row = current.streaks.find(
     (row) => row.configId === update.configId && row.progressId === update.progressId,
   );
@@ -134,14 +123,33 @@ export const getClaimedStreaks = (
     row.startedAt.getTime() !== update.before.startedAt.getTime()
   )
     return;
-  return {
-    ...current,
-    streaks: current.streaks.flatMap((row) =>
-      row.progressId !== update.progressId
-        ? [row]
-        : update.after
-          ? [{ ...row, ...update.after }]
-          : [],
-    ),
-  };
+  const streaks = current.streaks.flatMap((row) =>
+    row.progressId !== update.progressId
+      ? [row]
+      : update.after
+        ? [{ ...row, ...update.after }]
+        : [],
+  );
+  // Other rows can expire during a claim; refresh before showing stale claim or catch-up controls.
+  if (
+    streaks.some((streak) => {
+      const alreadyClaimedToday =
+        streak.lastClaimDate !== null && isSameDay(streak.lastClaimDate, now);
+      const canClaimToday =
+        !alreadyClaimedToday &&
+        (streak.currentDay === 0 || isStreakContinuous(streak.lastClaimDate, now));
+      return (
+        streak.alreadyClaimedToday !== alreadyClaimedToday ||
+        streak.canClaimToday !== canClaimToday ||
+        streak.theoreticalMaxDay !==
+          Math.min(
+            Math.floor((now.getTime() - streak.startedAt.getTime()) / (DAY_S * 1000)) +
+              1,
+            streak.totalDays,
+          )
+      );
+    })
+  )
+    return;
+  return { ...current, streaks };
 };

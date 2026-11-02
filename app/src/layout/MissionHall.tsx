@@ -49,6 +49,7 @@ interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
 }
 
+/** Start mission and crime runs while reconciling entry costs, discovery lists and announcements. */
 export default function MissionHall({ userData }: MissionHallProps) {
   const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
   const { prepareUserUpdate, updateUser } = useUserData();

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { getClaimedStreaks } from "@/deltas/activityStreak";
+import { STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
 import { actionLog, activityStreakConfig, activityStreakReward, userData, userStreakProgress } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
+import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
@@ -43,6 +46,50 @@ describeWithDatabase("confirmed streak progress cache", () => {
         expect(getClaimedStreaks(before, result.streakUpdate!, new Date(now.getTime() + 86400000))).toBeUndefined();
         expect(getClaimedStreaks({ ...before, streaks: before.streaks.map(row => ({ ...row, currentDay: 99 })) }, result.streakUpdate!, now)).toBeUndefined();
       }
+    },
+  );
+
+  it.each(["continuity", "elapsed day", "UTC rollover"] as const)(
+    "refetches when another streak crosses its %s boundary", async boundary => {
+      const db = await getTestDatabase();
+      const loadedAt = boundary === "UTC rollover" ? new Date("2026-11-02T23:59:59Z") : now;
+      const boundaryAt = new Date(loadedAt.getTime() + 1000);
+      setSystemTime(loadedAt);
+      await db.insert(activityStreakConfig).values([
+        { id: "claimed", name: "Claimed", totalDays: 4, streakType: "RECURRING" },
+        { id: "other", name: "Other", totalDays: 4, streakType: "EVENT_PASS" },
+      ]);
+      await db.insert(userStreakProgress).values([
+        { id: "claimed-progress", configId: "claimed", userId: "cache-streak", currentDay: 1,
+          startedAt: new Date(loadedAt.getTime() - 86400000), lastClaimDate: new Date(loadedAt.getTime() - 86400000) },
+        { id: "other-progress", configId: "other", userId: "cache-streak", currentDay: 1,
+          startedAt: boundary === "elapsed day" ? new Date(boundaryAt.getTime() - 86400000) : daysAgo(5),
+          lastClaimDate: boundary === "continuity" ? new Date(boundaryAt.getTime() - STREAK_CONTINUITY_HOURS * 3600000) : loadedAt },
+      ]);
+      const api = await callerFor(activityStreakRouter, "cache-streak");
+      const before = await api.getUserStreaks();
+      // Midnight can pass before the server handles the claim; other deadlines can pass in flight.
+      if (boundary === "UTC rollover") setSystemTime(boundaryAt);
+      const result = await api.claimStreakDay({ configId: "claimed" });
+      expect(result.success, result.message).toBe(true);
+      if (boundary !== "UTC rollover") {
+        expect(getClaimedStreaks(before, result.streakUpdate!, new Date(boundaryAt.getTime() - 1))).toEqual(await api.getUserStreaks());
+      }
+      setSystemTime(boundaryAt);
+      const canonical = await api.getUserStreaks();
+      expect(canonical.streaks.find(row => row.configId === "other")).toMatchObject(
+        boundary === "UTC rollover" ? { canClaimToday: true, alreadyClaimedToday: false } : { canClaimToday: false, needsCatchUp: true },
+      );
+      const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+      const key = [["activityStreak", "getUserStreaks"], { type: "query" }];
+      client.setQueryData(key, before);
+      let reads = 0;
+      const stop = new QueryObserver(client, { queryKey: key, queryFn: () => { reads++; return api.getUserStreaks(); } }).subscribe(() => {});
+      try {
+        expect(await updateQueryCache<typeof before>(client, key, current => getClaimedStreaks(current, result.streakUpdate!, boundaryAt), { revision: prepareQueryUpdate(client, key) })).toBe(false);
+        expect(reads).toBe(1);
+        expect(client.getQueryData(key)).toEqual(canonical);
+      } finally { stop(); client.clear(); }
     },
   );
 });
