@@ -39,6 +39,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getSessionErrorToastId } from "@/libs/trpcSession";
 import { parseHtml } from "@/utils/parse";
@@ -91,11 +92,19 @@ export default function PollsPage() {
   const userCanCreatePolls = userData?.role ? canCreatePolls(userData.role) : false;
   const userCanClosePolls = userData?.role ? canClosePolls(userData.role) : false;
 
-  // Get polls data
-  const { data: pollsData, isLoading } = api.poll.getPolls.useQuery({
-    includeInactive: userCanClosePolls,
-  });
-  const polls = pollsData?.data || [];
+  // Get polls data; the sentinel below the tabs loads further pages
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+  const {
+    data: pollsData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+  } = api.poll.getPolls.useInfiniteQuery(
+    { limit: 20, includeInactive: true },
+    { getNextPageParam: (lastPage) => lastPage.nextCursor },
+  );
+  const polls = pollsData?.pages.flatMap((page) => page.data) ?? [];
+  useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Separate active and closed polls
   const activePolls = polls.filter((poll) => poll.isActive);
@@ -213,6 +222,7 @@ export default function PollsPage() {
             </TabsContent>
           )}
         </Tabs>
+        <div ref={setLastElement} />
       </ContentBox>
     </>
   );
