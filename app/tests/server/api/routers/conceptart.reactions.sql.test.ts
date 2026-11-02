@@ -23,4 +23,21 @@ describeWithDatabase("concept art reactions", () => {
     expect(result.success).toBe(true);
     expect((await db.query.conceptImage.findFirst())?.n_likes).toBe(2);
   });
+
+  for (const [type, counter] of [["like", "n_likes"], ["love", "n_loves"], ["laugh", "n_laugh"]] as const) {
+    it(`counts one removal when two requests remove the same ${type} reaction`, async () => {
+      const db = await getTestDatabase();
+      const caller = await callerFor(conceptartRouter, "fan-a");
+      expect((await caller.toggleEmotion({ imageId: "image", type })).success).toBe(true);
+      expect((await db.query.conceptImage.findFirst())?.[counter]).toBe(1);
+      // Both requests read the reaction before either deletion completes.
+      const raced = beforeStatements(db, userLikes, [async () => {
+        expect((await caller.toggleEmotion({ imageId: "image", type })).success).toBe(true);
+      }]);
+      const result = await callerForDatabase(conceptartRouter, "fan-a", raced).toggleEmotion({ imageId: "image", type });
+      expect(result.success).toBe(true);
+      expect(await db.query.userLikes.findMany()).toEqual([]);
+      expect((await db.query.conceptImage.findFirst())?.[counter]).toBe(0);
+    });
+  }
 });

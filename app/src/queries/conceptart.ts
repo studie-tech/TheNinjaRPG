@@ -39,13 +39,12 @@ import { and, gte, isNotNull, sql } from "drizzle-orm";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { userData, userLikes } from "@/drizzle/schema";
 
-/** Build the `conceptImage` reaction counter increment for `toggleEmotion`, using predicates on `id`. */
+/** Build the `conceptImage` reaction counter change for `toggleEmotion`, using predicates on `id`. */
 export const updateConceptImageForToggleEmotion = (
   client: Pick<DrizzleClient, "update">,
   input: { type: "like" | "love" | "laugh"; imageId: string },
-  hasLike: undefined | typeof userLikes.$inferSelect,
+  delta: number,
 ) => {
-  const delta = hasLike ? -1 : 1;
   return client
     .update(conceptImage)
     .set({

@@ -69,10 +69,14 @@ export const conceptartRouter = createTRPCRouter({
       if (!result) return errorResponse("Image not found");
       // Mutate
       const hasLike = result?.likes.find((like) => like.type === input.type);
-      await updateConceptImageForToggleEmotion(ctx.drizzle, input, hasLike);
-      if (hasLike) {
-        await deleteUserLikesForToggleEmotion(ctx.drizzle, ctx, input);
-      } else {
+      // Concurrent removals decrement only the reactions this request deletes.
+      const delta = hasLike
+        ? -(await deleteUserLikesForToggleEmotion(ctx.drizzle, ctx, input)).rowsAffected
+        : 1;
+      if (delta !== 0) {
+        await updateConceptImageForToggleEmotion(ctx.drizzle, input, delta);
+      }
+      if (!hasLike) {
         await insertUserLikesForToggleEmotion(ctx.drizzle, ctx, input);
       }
       return { success: true, message: "Emotion toggled" };
