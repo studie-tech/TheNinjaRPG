@@ -28,7 +28,7 @@ import {
   hexTerrainAt,
 } from "@/libs/rendering/terrainData";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
-import { boundsOverlap } from "@/libs/rendering/visibility";
+import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
 import {
@@ -36,7 +36,11 @@ import {
   getWorldWeather,
   type WorldWeather,
 } from "@/libs/rendering/worldWeather";
-import { sampleWorldWind } from "@/libs/rendering/worldWind";
+import {
+  MAX_SMALL_WORLD_WIND,
+  MAX_WORLD_WIND,
+  sampleWorldWind,
+} from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
@@ -96,11 +100,13 @@ export const createTravelScene = async (options: {
         : undefined;
     const lightingLayer = shadows?.container ?? new Container();
     const weather = createWorldWeather(game, options.lightLayout);
+    const sceneryBounds = new WeakMap<Container, WorldBounds>();
     const route = createTravelPath(),
       actors = createTravelActors(
         game,
         { ground: groundArtLayer, depth: depthLayer, overlay: uiLayer },
         shadows,
+        sceneryBounds,
       );
     // Ownership stays with sector scopes; their physical draw layers share one lighting pass.
     lightingLayer.addChild(
@@ -128,6 +134,23 @@ export const createTravelScene = async (options: {
         { ground: groundArtLayer, world: depthLayer, ui: uiLayer },
         position.y,
       );
+      for (const { sprite, bounds, description, character } of art.entries) {
+        if (description.motion || character || description.shadowCaster === "character")
+          continue;
+        const wind =
+          description.wind == null
+            ? 0
+            : description.small
+              ? MAX_SMALL_WORLD_WIND
+              : MAX_WORLD_WIND;
+        // Fixed poses share the culling envelope, translated with their sector and swept by every gust.
+        sceneryBounds.set(sprite, {
+          minX: bounds.minX + position.x - wind,
+          maxX: bounds.maxX + position.x + wind,
+          minY: bounds.minY + position.y,
+          maxY: bounds.maxY + position.y,
+        });
+      }
     };
     const pending = new Set<GameRenderer>();
     let generation = 0,

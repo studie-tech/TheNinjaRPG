@@ -27,7 +27,11 @@ import type {
   WorldMotionDirection,
   WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
-import { isObjectChainVisible, type WorldBounds } from "@/libs/rendering/visibility";
+import {
+  boundsOverlap,
+  isObjectChainVisible,
+  type WorldBounds,
+} from "@/libs/rendering/visibility";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
@@ -39,6 +43,8 @@ export const createTravelActors = (
   game: GameRenderer,
   layers?: { depth: RenderLayer; overlay: RenderLayer; ground?: RenderLayer },
   shadows?: WorldShadows,
+  /** Fixed artwork supplies conservative world-space bounds; unknown poses retain global contact ordering. */
+  sceneryBounds?: WeakMap<Container, WorldBounds>,
 ) => {
   const container = new Container();
   const records = new Map<string, ActorRecord>();
@@ -54,6 +60,7 @@ export const createTravelActors = (
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
   let visibleKey = "";
+  let paintedOriginY = container.y;
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -323,14 +330,59 @@ export const createTravelActors = (
   };
   /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
   const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
-  const hasDepthCrossing = (siblings: readonly Container[]) =>
-    siblings.some((root, index) => {
-      const before = siblings[index - 1];
-      return (
-        !!before &&
-        (before.zIndex > root.zIndex || contactDepth(before) > contactDepth(root))
-      );
-    });
+  const hasDepthCrossing = (siblings: readonly Container[], spatial = false) => {
+    if (!spatial || !sceneryBounds)
+      return siblings.some((root, index) => {
+        const before = siblings[index - 1];
+        return (
+          !!before &&
+          (before.zIndex > root.zIndex || contactDepth(before) > contactDepth(root))
+        );
+      });
+    const actors: [number, ActorRecord][] = [];
+    let previousDepth = -Infinity;
+    for (let i = 0; i < siblings.length; i++) {
+      const root = siblings[i];
+      if (!root) continue;
+      const before = siblings[i - 1];
+      if (before && before.zIndex > root.zIndex) return true;
+      const actor = byRoot.get(root);
+      if (!actor) continue;
+      if (previousDepth > actor.depth) return true;
+      previousDepth = actor.depth;
+      actors.push([i, actor]);
+    }
+    let comparisons = 0;
+    for (const [i, actor] of actors) {
+      const root = actor.root;
+      let actorBounds: WorldBounds | undefined;
+      // A held key can cross several unrelated planes; check every newly overlapping constraint.
+      for (const direction of [-1, 1])
+        for (let j = i + direction; j >= 0 && j < siblings.length; j += direction) {
+          const other = siblings[j];
+          if (!other) continue;
+          if (direction < 0 ? other.zIndex <= actor.depth : other.zIndex >= actor.depth)
+            break;
+          // Crowded motion can refresh exact keys instead of repeatedly scanning remote planes.
+          if (++comparisons > siblings.length) return true;
+          if (byRoot.has(other)) continue;
+          const otherBounds = sceneryBounds.get(other);
+          if (!otherBounds) return true;
+          if (!actorBounds) {
+            // Live child bounds include oversized/trimmed LPC frames and fallback replacement.
+            const local = root.getLocalBounds();
+            actorBounds = {
+              minX: local.minX + root.x + container.x,
+              maxX: local.maxX + root.x + container.x,
+              minY: local.minY + root.y + container.y,
+              maxY: local.maxY + root.y + container.y,
+            };
+          }
+          if (boundsOverlap(actorBounds, otherBounds, 1)) return true;
+        }
+    }
+    return false;
+  };
   const animate = (
     frame: GameFrame,
     movements?: ReadonlyMap<string, TravelActorMovement>,
@@ -391,7 +443,8 @@ export const createTravelActors = (
       );
     }
     if (
-      hasDepthCrossing(layers?.depth.renderLayerChildren ?? container.children) ||
+      paintedOriginY !== container.y ||
+      hasDepthCrossing(layers?.depth.renderLayerChildren ?? container.children, true) ||
       (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))
     ) {
       // Publish moving keys together so actor crossings and new scenery share one coherent order.
@@ -399,6 +452,7 @@ export const createTravelActors = (
       layers?.depth.sortRenderLayerChildren();
       layers?.overlay.sortRenderLayerChildren();
     }
+    paintedOriginY = container.y;
     container.sortChildren();
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
