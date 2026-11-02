@@ -361,6 +361,7 @@ export const worldMapRouter = createTRPCRouter({
       const result = normalizeTiledSectorMap({
         sector: candidate.sector,
         name: candidate.name,
+        sourceHash: candidate.sourceHash ?? undefined,
         tiledJson: candidate.rawTiledJson,
         terrainRegistry,
       });
@@ -531,9 +532,9 @@ const buildWindowLayoutBundle = (sector: number) => {
 };
 
 /**
- * sha256 hex digest of the JSON.stringify'd upload, used as the default
- * sourceHash when the client supplies none. Not canonicalized, so the same
- * logical document with different key ordering hashes differently.
+ * sha256 hex digest of the JSON.stringify'd upload, stored as the row's
+ * sourceHash. Not canonicalized, so the same logical document with different
+ * key ordering hashes differently.
  */
 const hashTiledJson = (json: unknown) => {
   return createHash("sha256").update(JSON.stringify(json)).digest("hex");

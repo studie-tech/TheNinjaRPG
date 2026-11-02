@@ -217,7 +217,7 @@ export const findSectorMapForPublishSectorMap = (
   input: { id: string },
 ) =>
   client.query.sectorMap.findFirst({
-    columns: { sector: true, name: true, rawTiledJson: true },
+    columns: { sector: true, name: true, sourceHash: true, rawTiledJson: true },
     where: eq(sectorMap.id, input.id),
   });
 
