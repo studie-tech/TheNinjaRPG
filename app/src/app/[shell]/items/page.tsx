@@ -847,8 +847,8 @@ function ItemDurabilityRepairActions({
  */
 interface BackpackProps {
   useritems: UserItemWithRelations[] | undefined;
-  // Full carried inventory (all tabs + equipped slots). Used for variant-token
-  // lookups so a token held in another tab or an equipped slot is still found.
+  // Full carried inventory (all tabs + equipped slots). Used for variant-token and
+  // repair-kit lookups so items held in another tab or an equipped slot are found.
   allUserItems: UserItemWithRelations[] | undefined;
   userData: NonNullable<UserWithRelations>;
 }
@@ -1091,7 +1091,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     .sort(byItemName);
   const itemBadges = userItemActionBadges(useritems);
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
-  const repairItems = getRepairKits(useritems, userData).map(
+  const repairItems = getRepairKits(allUserItems, userData).map(
     ({ userItem }) => userItem,
   );
 
