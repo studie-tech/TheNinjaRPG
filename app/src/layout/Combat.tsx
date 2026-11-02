@@ -26,9 +26,11 @@ import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useVisualEffects } from "@/hooks/visual-effects";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatRewards } from "@/layout/CombatRewards";
+import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -59,12 +61,15 @@ import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { haptics } from "@/libs/native";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
+  type CombatHover,
   type CombatSceneSnapshot,
   createCombatScene,
 } from "@/libs/rendering/scenes/combat";
+import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
+import { isStaffRole } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
   combatActionIdAtom,
@@ -105,15 +110,16 @@ const Combat: React.FC<CombatProps> = (props) => {
   } | null>(null);
 
   // Hover tooltip state for effects (can include both user and ground effects)
-  const [hoveredEffect, setHoveredEffect] = useState<{
-    tileKey: string;
-    userId?: string;
-    position: { x: number; y: number };
-  } | null>(null);
+  const [hoveredEffect, setHoveredEffect] = useState<CombatHover | null>(null);
+  const [aggroTarget, setAggroTarget] = useState<CombatHover | null>(null);
   const hoverTooltipRef = useRef<HTMLDivElement | null>(null);
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
+  const { visualEffects } = useVisualEffects();
+  const showDayNightMapOverlays = visualEffects.lighting;
+  const [lightingPreviewDate, setLightingPreviewDate] = useState<Date | null>(null);
+  const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
   // References which shouldn't update
@@ -211,24 +217,30 @@ const Combat: React.FC<CombatProps> = (props) => {
     [battleState.battle],
   );
 
-  // Get effects for hovered element (can include both user and ground effects)
-  const hoveredEffects = useMemo(() => {
-    if (!hoveredEffect) return null;
+  // Clicking a character pins its aggro; hover and long-press still inspect effects.
+  const showAggro = !!(
+    config.showAggro &&
+    aggroTarget?.userId &&
+    aggro.has(aggroTarget.userId)
+  );
+  const detailsTarget = showAggro ? aggroTarget : hoveredEffect;
+  const detailsEffects = useMemo(() => {
+    if (!detailsTarget) return null;
 
     const groundEffects =
-      battleMaps.groundEffectsByTile.get(hoveredEffect.tileKey) || [];
-    const userEffects = hoveredEffect.userId
-      ? battleMaps.userEffectsByUserId.get(hoveredEffect.userId) || []
+      battleMaps.groundEffectsByTile.get(detailsTarget.tileKey) || [];
+    const userEffects = detailsTarget.userId
+      ? battleMaps.userEffectsByUserId.get(detailsTarget.userId) || []
       : [];
 
     const diffuseDamage = battleState.battle?.usersState.find(
-      (user) => user.userId === hoveredEffect.userId,
+      (user) => user.userId === detailsTarget.userId,
     )?.diffuseDamage;
     if (
       groundEffects.length === 0 &&
       userEffects.length === 0 &&
       !diffuseDamage?.length &&
-      !(config.showAggro && hoveredEffect.userId && aggro.has(hoveredEffect.userId))
+      !showAggro
     )
       return null;
 
@@ -236,26 +248,25 @@ const Combat: React.FC<CombatProps> = (props) => {
       groundEffects,
       userEffects,
       diffuseDamage,
-      userId: hoveredEffect.userId,
+      userId: detailsTarget.userId,
     };
-  }, [hoveredEffect, battleMaps, battleState.battle, config.showAggro, aggro]);
+  }, [detailsTarget, battleMaps, battleState.battle, showAggro]);
 
   useLayoutEffect(() => {
     const tooltip = hoverTooltipRef.current;
-    if (!tooltip || !hoveredEffect) return;
+    if (!tooltip || !detailsTarget) return;
     const { width, height } = tooltip.getBoundingClientRect();
-    const { x, y } = hoveredEffect.position;
+    const { x, y } = detailsTarget.position;
     const above = y - height - 10;
     tooltip.style.left = `${Math.max(8, Math.min(x + 15, window.innerWidth - width - 8))}px`;
     tooltip.style.top = `${Math.max(8, Math.min(above >= 8 ? above : y + 15, window.innerHeight - height - 8))}px`;
-  }, [hoveredEffect, hoveredEffects]);
+  }, [detailsTarget, detailsEffects]);
 
   // Store precomputed maps in refs for use in render loop
   const setHoveredEffectRef = useRef(setHoveredEffect);
   const lastHoverKeyRef = useRef<string | null>(null);
-  // Touch input has no hover: a quick tap is an action, so details only open on
-  // long-press and close on release. Inserting the box during a tap made iOS
-  // treat the tap as a hover and drop its click, and nothing ever closed it.
+  // Touch effects use a held gesture so their tooltip cannot intercept a quick
+  // action tap. Aggro inspection is selected independently on pointer release.
   const isTouchInputRef = useRef(false);
   const touchDetailsOpenRef = useRef(false);
   const touchDetailsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -719,6 +730,10 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      setAggroTarget(null);
+      return;
+    }
     // A finished battle takes no actions; the result screen stays until the player leaves.
     if (battleRef.current && suid && !resultRef.current) {
       // Read the refs rather than render-scope state: this listener only
@@ -974,14 +989,21 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   }, [battleRef.current?.version, timeDiff, isInLobby]);
 
-  const combatCallbacks = useRef({ onTap: (_tile: TerrainHex) => {} });
-  combatCallbacks.current.onTap = (target) => {
+  const combatCallbacks = useRef({
+    onTap: (_tile: TerrainHex, _character?: CombatHover) => {},
+  });
+  combatCallbacks.current.onTap = (target, character) => {
     if (
       touchDetailsOpenRef.current ||
       Date.now() < suppressClickUntilRef.current ||
       document.body.style.cursor === "wait"
     )
       return;
+    setAggroTarget(
+      config.showAggro && character?.userId && aggro.has(character.userId)
+        ? character
+        : null,
+    );
     const battle = battleRef.current,
       action = actionRef.current,
       grid = gridRef.current;
@@ -1019,6 +1041,10 @@ const Combat: React.FC<CombatProps> = (props) => {
         viewer: userData,
         aggro: config.showAggro ? aggro : undefined,
         timeDiff,
+        cycleEnabled: showDayNightMapOverlays,
+        // Staff previews affect only rendering; turn deadlines use the server clock.
+        lightDate: isStaffRole(userData?.role) ? lightingPreviewDate : null,
+        weather: isStaffRole(userData?.role) ? weatherPreview : null,
         assets: gameAssetsRef.current.assets,
         requestedIds: gameAssetsRef.current.requestedIds,
         active: isPageActive && !result,
@@ -1045,12 +1071,13 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (!snapshot) throw new Error("Battlefield snapshot unavailable");
           return {
             ...snapshot,
+            weatherTime: Date.now() - snapshot.timeDiff,
             assets: gameAssetsRef.current.assets,
             requestedIds: gameAssetsRef.current.requestedIds,
             inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
           };
         },
-        onTap: (tile) => combatCallbacks.current.onTap(tile),
+        onTap: (tile, character) => combatCallbacks.current.onTap(tile, character),
         play: (url, volume) => {
           void playPreloadedAudio(url, volume);
         },
@@ -1070,12 +1097,15 @@ const Combat: React.FC<CombatProps> = (props) => {
     gridRef.current = combat.scene.current?.grid ?? null;
     const mount = mountRef.current;
     if (!combat.isReady || !mount) return;
+    const dismissAggro = () => setAggroTarget(null);
+    mount.addEventListener("pointerdown", dismissAggro, { passive: true });
     mount.addEventListener("touchstart", onDocumentTouchStart, { passive: true });
     mount.addEventListener("touchend", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("touchcancel", onDocumentTouchEnd, { passive: true });
     mount.addEventListener("pointermove", onDocumentPointerMove, { passive: true });
     return () => {
       clearTouchDetailsTimer();
+      mount.removeEventListener("pointerdown", dismissAggro);
       mount.removeEventListener("touchstart", onDocumentTouchStart);
       mount.removeEventListener("touchend", onDocumentTouchEnd);
       mount.removeEventListener("touchcancel", onDocumentTouchEnd);
@@ -1093,6 +1123,9 @@ const Combat: React.FC<CombatProps> = (props) => {
     isPageActive,
     config,
     combat.isReady,
+    lightingPreviewDate,
+    weatherPreview,
+    showDayNightMapOverlays,
   ]);
   useEffect(
     () => () => {
@@ -1104,7 +1137,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   useEffect(() => {
     lastHoverKeyRef.current = null;
     setHoveredEffect(null);
-  }, [battleId, result]);
+    setAggroTarget(null);
+  }, [battleId, result, config.showAggro]);
 
   // Clear hover state on mouse leave from combat area
   useEffect(() => {
@@ -1113,6 +1147,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
     const handleMouseLeave = () => {
       setHoveredEffect(null);
+      setAggroTarget(null);
     };
 
     sceneRef.addEventListener("mouseleave", handleMouseLeave);
@@ -1186,6 +1221,17 @@ const Combat: React.FC<CombatProps> = (props) => {
     <>
       <div id="tutorial-combat-field" ref={mountRef} hidden={!!result}></div>
 
+      {!result && !isInLobby && !webglError && combat.isReady && battleState.battle && (
+        <div className="absolute top-2 right-2 z-10">
+          <DayNightIndicator
+            previewDate={lightingPreviewDate}
+            onPreviewDateChange={setLightingPreviewDate}
+            previewWeather={weatherPreview}
+            onPreviewWeatherChange={setWeatherPreview}
+          />
+        </div>
+      )}
+
       {!result &&
         (!hasGameAssets || !combat.isReady) &&
         !webglError &&
@@ -1211,25 +1257,25 @@ const Combat: React.FC<CombatProps> = (props) => {
         />
       )}
 
-      {/* Character aggro and effects share the same hover/touch details. */}
-      {!result && hoveredEffect && hoveredEffects && (
+      {/* Character clicks reveal aggro; hover and long-press reveal effects. */}
+      {!result && detailsTarget && detailsEffects && (
         <div
           role="tooltip"
           ref={hoverTooltipRef}
           className="pointer-events-none fixed z-50 flex max-h-[calc(100dvh-1rem)] w-64 max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-y-auto rounded-lg bg-black/90 p-3 text-white shadow-xl"
         >
-          {config.showAggro && hoveredEffects.userId && (
-            <CombatAggro aggro={aggro} userId={hoveredEffects.userId} />
+          {showAggro && detailsEffects.userId && (
+            <CombatAggro aggro={aggro} userId={detailsEffects.userId} />
           )}
-          {hoveredEffects.userId && (
+          {detailsEffects.userId && (
             <VisualizeEffects
-              effects={hoveredEffects.userEffects}
-              userId={hoveredEffects.userId}
-              diffuseDamage={hoveredEffects.diffuseDamage}
+              effects={detailsEffects.userEffects}
+              userId={detailsEffects.userId}
+              diffuseDamage={detailsEffects.diffuseDamage}
             />
           )}
-          {hoveredEffects.groundEffects.length > 0 && (
-            <VisualizeGroundEffects effects={hoveredEffects.groundEffects} />
+          {detailsEffects.groundEffects.length > 0 && (
+            <VisualizeGroundEffects effects={detailsEffects.groundEffects} />
           )}
         </div>
       )}

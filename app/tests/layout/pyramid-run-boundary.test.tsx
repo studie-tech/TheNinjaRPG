@@ -9,6 +9,13 @@ import { ensureDom } from "../setup/dom.mjs";
 
 const replace = vi.fn();
 beforeEach(() => {
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const info = userContext.useUserData();
+    return { ...info, data: info.data ? select(info.data) : undefined } as never;
+  });
+});
+
+beforeEach(() => {
   ensureDom();
   vi.clearAllMocks();
   vi.spyOn(navigation, "useRouter").mockReturnValue({

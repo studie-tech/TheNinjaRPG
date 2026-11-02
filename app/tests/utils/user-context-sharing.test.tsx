@@ -12,7 +12,7 @@ import { type ContextType, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
-import { UserContext, UserContextProvider } from "@/utils/UserContext";
+import { UserContextProvider, useUserDataRef, selectUserWithoutPosition, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";
 
@@ -59,7 +59,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const mount = (initial = snapshot(), children: ReactNode = null) => {
+const mount = (initial = snapshot(), children: ReactNode = null, observeFull = true) => {
+  let providerRenders = 0;
   let response = initial;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -73,20 +74,23 @@ const mount = (initial = snapshot(), children: ReactNode = null) => {
     profile: {
       getUser: {
         // Exercise the provider's query options with a real TanStack cache and observer.
-        useQuery: (_input: undefined, options: UseQueryOptions<Snapshot>) =>
-          useQuery({ ...options, queryKey: key, queryFn: async () => response }),
+        useQuery: (_input: undefined, options: UseQueryOptions<Snapshot>) => {
+          if (options.enabled !== false) providerRenders++;
+          // Compiled consumers can enumerate metadata while memoizing a query result.
+          return { ...useQuery({ ...options, queryKey: key, queryFn: async () => response }) };
+        },
       },
     },
   });
-  const seen: ContextType<typeof UserContext>[] = [];
+  const seen: ReturnType<typeof useUserData>[] = [];
   const Consumer = () => {
-    seen.push(useContext(UserContext));
+    seen.push(useUserDataSelector((user) => user));
     return children;
   };
   render(
     <QueryClientProvider client={queryClient}>
       <UserContextProvider initialIsSignedIn>
-        <Consumer />
+        {observeFull ? <Consumer /> : children}
       </UserContextProvider>
     </QueryClientProvider>,
   );
@@ -99,6 +103,7 @@ const mount = (initial = snapshot(), children: ReactNode = null) => {
   };
   return {
     queryClient,
+    providerRenders: () => providerRenders,
     seen,
     current: () => seen.at(-1)!,
     read: () => queryClient.getQueryData<Snapshot>(key)!,
@@ -111,6 +116,50 @@ const mount = (initial = snapshot(), children: ReactNode = null) => {
 };
 
 describe("profile context structural sharing", () => {
+  it("keeps session services and selected UI idle while imperative position readers stay current", async () => {
+    let renders = 0;
+    let latest: ReturnType<typeof useUserDataRef> | undefined;
+    const changed = vi.fn();
+    const Scene = () => {
+      useUserDataSelector(selectUserWithoutPosition);
+      latest = useUserDataRef(changed);
+      renders++;
+      return null;
+    };
+    const test = mount(snapshot(), <Scene />, false);
+    const initialRenders = renders, providerRenders = test.providerRenders();
+    for (const longitude of [8, 9, 10]) {
+      await test.settle(() => updateUserCache(test.queryClient, key, { longitude, latitude: 9, location: "Village", updatedAt: new Date(BASE + longitude) }));
+      expect(latest?.current?.longitude).toBe(longitude);
+    }
+    expect(renders).toBe(initialRenders);
+    expect(test.providerRenders()).toBe(providerRenders);
+    expect(changed).toHaveBeenCalledTimes(3);
+    await test.settle(() => updateUserCache(test.queryClient, key, { status: "BATTLE", battleId: "fight" }));
+    expect(latest?.current?.status).toBe("BATTLE");
+    expect(renders).toBeGreaterThan(initialRenders);
+    await test.settle(async () => { test.queryClient.setQueryData(key, { ...test.read(), userData: undefined }); });
+    expect(latest?.current).toBeUndefined();
+  });
+
+  it("keeps selected UI stable during movement and publishes relevant changes and profile removal", async () => {
+    const seen: unknown[] = [];
+    const SelectedProfile = () => {
+      const { data } = useUserDataSelector((user) => ({ username: user.username }));
+      seen.push(data);
+      return null;
+    };
+    const test = mount(snapshot(), <SelectedProfile />);
+    const selected = seen.at(-1), renders = seen.length;
+    await test.settle(() => updateUserCache(test.queryClient, key, { longitude: 8, latitude: 9, updatedAt: new Date(BASE) }));
+    expect(seen).toHaveLength(renders);
+    expect(seen.at(-1)).toBe(selected);
+    expect(test.current().data?.longitude).toBe(8);
+    await test.settle(() => updateUserCache(test.queryClient, key, { username: "Renamed" }));
+    expect(seen.at(-1)).toEqual({ username: "Renamed" });
+    await test.settle(async () => { test.queryClient.setQueryData(key, { ...test.read(), userData: undefined }); });
+    expect(seen.at(-1)).toBeUndefined();
+  });
   it.each([100, 800, -800, 0])("does not fan out unchanged refetches after a first %i ms calibration", async (offset) => {
     const test = mount(snapshot(BASE - offset));
     const before = test.current();
@@ -133,7 +182,7 @@ describe("profile context structural sharing", () => {
     // Eligibility uses the server's clock, as quests.getPetTask does on refetch.
     const onFinish = vi.fn(() => finishesAt <= now - offset);
     const ServerCountdown = () => {
-      const { timeDiff } = useContext(UserContext);
+      const { timeDiff } = useUserInfo();
       return <Countdown targetDate={new Date(finishesAt)} timeDiff={timeDiff} onFinish={onFinish} />;
     };
     mount(snapshot(BASE - offset), <ServerCountdown />);
@@ -198,12 +247,14 @@ describe("profile context structural sharing", () => {
     expect(test.read().userData.village).toBe(before.userData.village);
     expect<unknown>(test.current().achievementProgress).toBe(before.achievementProgress);
 
+    const afterNested = test.current().data;
     const achievement = structuredClone(changed);
     achievement.achievementProgress[0]!.updatedAt = new Date(BASE);
     await test.refresh(achievement);
     const afterAchievement = test.current();
     expect(afterAchievement.achievementProgress).not.toBe(before.achievementProgress);
-    expect<unknown>(afterAchievement.data).toBe(test.read().userData);
+    expect(afterAchievement.data).toBe(afterNested);
+    expect<unknown>(afterAchievement.data).toEqual(test.read().userData);
 
     await test.refresh({ ...achievement, notifications: [] });
     expect(test.current()).not.toBe(afterAchievement);

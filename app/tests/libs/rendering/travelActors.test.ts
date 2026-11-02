@@ -11,7 +11,7 @@ const recipes = (users: SectorUser[], patch: Partial<TravelActorsSnapshot> = {})
 
 describe("travel actor snapshots", () => {
   it.each([-1, 2])("keeps the own marker at bracket %s while filtering other players", (minBracket) => {
-    const result = recipes([player({ userId: "self" }), player(), player({ userId: "matching", experience: 600_000 })], { minBracket });
+    const result = recipes([player({ userId: "self" }), player(), player({ userId: "matching", longitude: 6, experience: 600_000 })], { minBracket });
     expect(result.some((recipe) => recipe.key === "user:self")).toBe(true);
     expect(result.some((recipe) => recipe.key === "user:other")).toBe(minBracket === -1);
     expect(result.some((recipe) => recipe.key === "user:matching")).toBe(true);
@@ -35,9 +35,10 @@ describe("travel actor snapshots", () => {
     expect(solo[0]?.parts.some((part) => part.image === IMG_SECTOR_VS_ICON)).toBe(true);
     expect(pair[0]?.parts.length).toBe((solo[0]?.parts.length ?? 0) + 1);
   });
-  it("shows one population badge and spreads awake markers on a crowded tile", () => {
-    const result = recipes([player(), player({ userId: "two" }), player({ userId: "three" })]);
-    expect(result.filter((recipe) => recipe.counter).map((recipe) => recipe.counter)).toEqual([3]);
+  it("keeps the viewer and NPC placements while representing crowded players with a count", () => {
+    const result = recipes([player(), player({ userId: "two" }), player({ userId: "self" }), player({ isNpc: true, npcPlacementId: "guide" })]);
+    expect(result.filter((recipe) => recipe.counter).map((recipe) => recipe.counter)).toEqual([4]);
+    expect(result.filter((recipe) => recipe.user).map((recipe) => recipe.key)).toEqual(["user:other", "user:two", "user:self", "npc:guide"]);
     expect(result.filter((recipe) => recipe.user).every((recipe) => recipe.spread)).toBe(true);
   });
   it("never exposes self actions or a masked profile", () => {

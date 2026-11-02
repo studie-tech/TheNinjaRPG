@@ -3,6 +3,7 @@ import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
+import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
 const frames = createFrameLoop(
   (callback) => requestAnimationFrame(callback),
@@ -21,6 +22,8 @@ export const createGameRenderer = async (options: {
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
   height: (width: number) => number;
   width?: number;
+  /** Defaults to display density capped at 2×; logical coordinates stay in CSS pixels. */
+  resolution?: number;
   background?: number;
   backgroundAlpha?: number;
   touchAction?: "none" | "auto";
@@ -36,7 +39,8 @@ export const createGameRenderer = async (options: {
       width,
       height: options.height(width),
       preferWebGLVersion: 1,
-      resolution: 1,
+      // Bound color-buffer cost while preserving artwork detail on dense mobile displays.
+      resolution: options.resolution ?? Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
       antialias: false,
       background: premultipliedClearColor(
@@ -57,14 +61,20 @@ export const createGameRenderer = async (options: {
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
   const stage = new Container();
-  const animation = new UniformGroup({ uTime: { value: 0, type: "f32" } });
+  // This group is shared by every animated terrain batch; publish it once per frame.
+  const animation = new UniformGroup(
+    { uTime: { value: 0, type: "f32" } },
+    { isStatic: true },
+  );
   stage.eventMode = "none";
   const assets = createSceneAssets();
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
+  if (options.resolution !== undefined) canvas.style.imageRendering = "pixelated";
   canvas.style.touchAction = options.touchAction ?? "none";
   mount.appendChild(canvas);
+  const visualEffects = readVisualEffects();
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   let visible = true;
   let contextLost = false;
@@ -82,12 +92,13 @@ export const createGameRenderer = async (options: {
     if (disposed) return;
     dirty = false;
     try {
-      animation.uniforms.uTime = motion.matches ? 0 : now / 1000;
+      const reducedMotion = motion.matches || !visualEffects.animations;
+      animation.uniforms.uTime = reducedMotion ? 0 : now / 1000;
       animation.update();
       update({
         now,
         delta: previousTime === null ? 0 : Math.min(0.1, (now - previousTime) / 1000),
-        reducedMotion: motion.matches,
+        reducedMotion,
       });
       previousTime = now;
       renderer.render({ container: stage });
@@ -138,6 +149,12 @@ export const createGameRenderer = async (options: {
     dirty = true;
     updateSubscription();
   };
+  cleanups.add(
+    subscribeVisualEffects((effect, enabled) => {
+      visualEffects[effect] = enabled;
+      invalidate();
+    }),
+  );
   motion.addEventListener("change", invalidate, { signal: listeners.signal });
   document.addEventListener("visibilitychange", updateSubscription, {
     signal: listeners.signal,
@@ -180,6 +197,7 @@ export const createGameRenderer = async (options: {
     lpcCatalog: options.lpcCatalog,
     stage,
     animation,
+    visualEffects,
     renderer,
     canvas,
     assets,

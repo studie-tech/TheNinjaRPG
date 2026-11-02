@@ -1,0 +1,3082 @@
+{
+  "akikaze/academy": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-academy-c5bc2de727c4d6043bae3801.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 329,
+      "height": 268
+    },
+    "stair": {
+      "x": 109,
+      "y": 256
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2112
+  },
+  "akikaze/missionhall": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-missionhall-562f4820c3c1c8feb97182ac.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 268,
+      "width": 311,
+      "height": 227
+    },
+    "stair": {
+      "x": 103,
+      "y": 214
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1892
+  },
+  "akikaze/hospital": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-hospital-747de8d63cbdd7b9309b5855.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 651,
+      "y": 0,
+      "width": 305,
+      "height": 237
+    },
+    "stair": {
+      "x": 101,
+      "y": 219
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.2015
+  },
+  "akikaze/ramenshop": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-ramenshop-cf6deb1a068cd5ab3837e52b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 719,
+      "width": 257,
+      "height": 211
+    },
+    "stair": {
+      "x": 85,
+      "y": 197
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2129
+  },
+  "akikaze/anbu": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-anbu-0109de7f135ace195571b3b8.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 329,
+      "y": 0,
+      "width": 322,
+      "height": 266
+    },
+    "stair": {
+      "x": 106,
+      "y": 260
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2142
+  },
+  "akikaze/battlearena": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-battlearena-792ea43be789c5c473f4aa8c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 311,
+      "y": 268,
+      "width": 307,
+      "height": 224
+    },
+    "stair": {
+      "x": 101,
+      "y": 207
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1892
+  },
+  "akikaze/itemshop": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-itemshop-f9fcdd4cf0477b1a3155d5b4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhxJWksMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrtwAP4huJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2dDKbKnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 288,
+      "height": 201
+    },
+    "stair": {
+      "x": 95,
+      "y": 188
+    },
+    "height": 3.14,
+    "shadow": 0.2,
+    "courtSlope": 0.1809
+  },
+  "akikaze/blackmarket": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-blackmarket-802795aafe1982f27a66b4fa.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhxJWksMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrtwAP4huJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2dDKbKnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+    "frame": {
+      "x": 513,
+      "y": 0,
+      "width": 245,
+      "height": 179
+    },
+    "stair": {
+      "x": 81,
+      "y": 168
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.1894
+  },
+  "akikaze/science": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-science-0bdf2e51f69ab8619f4e99f4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 594,
+      "y": 495,
+      "width": 269,
+      "height": 211
+    },
+    "stair": {
+      "x": 89,
+      "y": 206
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2034
+  },
+  "akikaze/townhall": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-townhall-329a15fe1f944ab148f2d0f2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 492,
+      "y": 719,
+      "width": 400,
+      "height": 205
+    },
+    "stair": {
+      "x": 116,
+      "y": 186
+    },
+    "height": 3.2,
+    "shadow": 0.2,
+    "courtSlope": 0.1329
+  },
+  "akikaze/traininggrounds": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-traininggrounds-b9e4388e442d1ec07b5ad424.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 257,
+      "y": 719,
+      "width": 235,
+      "height": 211
+    },
+    "stair": {
+      "x": 78,
+      "y": 199
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2328
+  },
+  "akikaze/home": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-home-1c8ca7f46112add6f610f1b6.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhxJWksMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrtwAP4huJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2dDKbKnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+    "frame": {
+      "x": 288,
+      "y": 0,
+      "width": 225,
+      "height": 198
+    },
+    "stair": {
+      "x": 74,
+      "y": 188
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2281
+  },
+  "akikaze/clanhall": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-clanhall-7db23a45d7276e8218d0b38e.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 495,
+      "width": 298,
+      "height": 224
+    },
+    "stair": {
+      "x": 98,
+      "y": 208
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1949
+  },
+  "akikaze/bank": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-bank-5d4bbfeeccb8a3532a53b8fa.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 618,
+      "y": 268,
+      "width": 300,
+      "height": 224
+    },
+    "stair": {
+      "x": 99,
+      "y": 208
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1936
+  },
+  "akikaze/auctionhouse": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-auctionhouse-c2277aae7aa41ff01c074681.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCla9Ld26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDl51rrzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNeysO5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 298,
+      "y": 495,
+      "width": 296,
+      "height": 218
+    },
+    "stair": {
+      "x": 98,
+      "y": 195
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.1909
+  },
+  "akikaze/shrine": {
+    "village": "Akikaze",
+    "sector": 724,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-akikaze-c1602b7764686d7d1bdf028f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHg26YNQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUAPy9aILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMFZzTftsO4cexqW2RDgkE3zZbNXSFGitmnar",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 220
+    },
+    "stair": {
+      "x": 84,
+      "y": 216
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "tsukimori/academy": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-academy-6df80c32857bf8f789ee2060.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 298,
+      "y": 0,
+      "width": 314,
+      "height": 264
+    },
+    "stair": {
+      "x": 104,
+      "y": 258
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.218
+  },
+  "tsukimori/missionhall": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-missionhall-29c71e22e2da3442c3ae3699.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 276,
+      "y": 267,
+      "width": 275,
+      "height": 230
+    },
+    "stair": {
+      "x": 91,
+      "y": 218
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.2168
+  },
+  "tsukimori/hospital": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-hospital-e46bcbb67a99a8d97b6253a5.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 267,
+      "width": 276,
+      "height": 237
+    },
+    "stair": {
+      "x": 91,
+      "y": 229
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.2226
+  },
+  "tsukimori/ramenshop": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-ramenshop-ea97cf2fda6f60e13130ac29.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 728,
+      "width": 250,
+      "height": 211
+    },
+    "stair": {
+      "x": 82,
+      "y": 202
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2188
+  },
+  "tsukimori/anbu": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-anbu-0054ca35f905b09814a85f63.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 298,
+      "height": 267
+    },
+    "stair": {
+      "x": 98,
+      "y": 251
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2323
+  },
+  "tsukimori/battlearena": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-battlearena-14b598c15c42cfda10b63b8a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 0,
+      "y": 504,
+      "width": 287,
+      "height": 224
+    },
+    "stair": {
+      "x": 95,
+      "y": 211
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2023
+  },
+  "tsukimori/itemshop": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-itemshop-1f4b36e143cef3dc6d28c23b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SyGl0EgrYldRWJcD6vE10SjNsXHeA9pVMfQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4hrU293lYIif5CL8BKvMsOh2ZnmS7yHt0jTD",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQiJlvHjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "frame": {
+      "x": 458,
+      "y": 0,
+      "width": 255,
+      "height": 205
+    },
+    "stair": {
+      "x": 84,
+      "y": 201
+    },
+    "height": 3.2,
+    "shadow": 0.2,
+    "courtSlope": 0.2084
+  },
+  "tsukimori/blackmarket": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-blackmarket-c51e9a10c42b8914627dae25.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 250,
+      "y": 728,
+      "width": 220,
+      "height": 179
+    },
+    "stair": {
+      "x": 73,
+      "y": 170
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.2109
+  },
+  "tsukimori/science": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-science-a9b06d829d5789413b0bb197.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SyGl0EgrYldRWJcD6vE10SjNsXHeA9pVMfQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4hrU293lYIif5CL8BKvMsOh2ZnmS7yHt0jTD",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQiJlvHjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 239,
+      "height": 211
+    },
+    "stair": {
+      "x": 79,
+      "y": 198
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2289
+  },
+  "tsukimori/townhall": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-townhall-0da028ef78a34fca2585b880.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 612,
+      "y": 0,
+      "width": 399,
+      "height": 261
+    },
+    "stair": {
+      "x": 116,
+      "y": 254
+    },
+    "height": 4.08,
+    "shadow": 0.2,
+    "courtSlope": 0.1696
+  },
+  "tsukimori/traininggrounds": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-traininggrounds-1c96ad886161fad72ca18e2c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SyGl0EgrYldRWJcD6vE10SjNsXHeA9pVMfQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4hrU293lYIif5CL8BKvMsOh2ZnmS7yHt0jTD",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQiJlvHjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "frame": {
+      "x": 239,
+      "y": 0,
+      "width": 219,
+      "height": 211
+    },
+    "stair": {
+      "x": 72,
+      "y": 205
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2498
+  },
+  "tsukimori/home": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-home-ab3b014e71b2f7547456edc2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SyGl0EgrYldRWJcD6vE10SjNsXHeA9pVMfQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4hrU293lYIif5CL8BKvMsOh2ZnmS7yHt0jTD",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQiJlvHjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "frame": {
+      "x": 713,
+      "y": 0,
+      "width": 237,
+      "height": 198
+    },
+    "stair": {
+      "x": 78,
+      "y": 189
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2166
+  },
+  "tsukimori/clanhall": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-clanhall-2af4450bd2afba90062776b3.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 551,
+      "y": 267,
+      "width": 291,
+      "height": 224
+    },
+    "stair": {
+      "x": 96,
+      "y": 209
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1996
+  },
+  "tsukimori/bank": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-bank-5ff7c48a547af9c17ac27ad9.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 287,
+      "y": 504,
+      "width": 269,
+      "height": 224
+    },
+    "stair": {
+      "x": 89,
+      "y": 212
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2159
+  },
+  "tsukimori/auctionhouse": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-auctionhouse-2c228f3ae7124fe34deb4829.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJm9ipIOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjBWWKy4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTNKTfQ5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "frame": {
+      "x": 556,
+      "y": 504,
+      "width": 305,
+      "height": 215
+    },
+    "stair": {
+      "x": 101,
+      "y": 195
+    },
+    "height": 3.36,
+    "shadow": 0.2,
+    "courtSlope": 0.1828
+  },
+  "tsukimori/shrine": {
+    "village": "Tsukimori",
+    "sector": 1490,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-tsukimori-2457265182d1cb44b94a4da0.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJoyqoH9Z9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5e0MCX797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ73h1dQXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 239
+    },
+    "stair": {
+      "x": 84,
+      "y": 231
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "akasumi/academy": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-academy-c6531beeb397b2d6bb4b346a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 330,
+      "height": 275
+    },
+    "stair": {
+      "x": 109,
+      "y": 263
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.216
+  },
+  "akasumi/missionhall": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-missionhall-fa03388369efdb39392245f1.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 0,
+      "y": 275,
+      "width": 317,
+      "height": 230
+    },
+    "stair": {
+      "x": 105,
+      "y": 217
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1881
+  },
+  "akasumi/hospital": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-hospital-dd0fbe8c8bf35eab60db4de9.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 657,
+      "y": 0,
+      "width": 310,
+      "height": 237
+    },
+    "stair": {
+      "x": 102,
+      "y": 221
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.1982
+  },
+  "akasumi/ramenshop": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-ramenshop-547e7febb06abd12a769f95f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 268,
+      "y": 729,
+      "width": 258,
+      "height": 211
+    },
+    "stair": {
+      "x": 85,
+      "y": 197
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.212
+  },
+  "akasumi/anbu": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-anbu-026a4eef2042df2bc3de23b1.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 330,
+      "y": 0,
+      "width": 327,
+      "height": 270
+    },
+    "stair": {
+      "x": 108,
+      "y": 264
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2141
+  },
+  "akasumi/battlearena": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-battlearena-1f79dcda9d4bafbb5b3904be.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 317,
+      "y": 275,
+      "width": 305,
+      "height": 224
+    },
+    "stair": {
+      "x": 101,
+      "y": 209
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1904
+  },
+  "akasumi/itemshop": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-itemshop-de5f49bec119acc6b42e940b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5PLa8B797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJOGzKvkMVHevxIThUauQkGJEBY3D2cPqy8f5s",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFANqIDG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 288,
+      "height": 202
+    },
+    "stair": {
+      "x": 95,
+      "y": 191
+    },
+    "height": 3.16,
+    "shadow": 0.2,
+    "courtSlope": 0.1818
+  },
+  "akasumi/blackmarket": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-blackmarket-737651a782a7750da891f4a1.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5PLa8B797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJOGzKvkMVHevxIThUauQkGJEBY3D2cPqy8f5s",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFANqIDG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
+    "frame": {
+      "x": 288,
+      "y": 0,
+      "width": 243,
+      "height": 179
+    },
+    "stair": {
+      "x": 80,
+      "y": 168
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.191
+  },
+  "akasumi/science": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-science-64c52eeed7454eef35781c2d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 0,
+      "y": 729,
+      "width": 268,
+      "height": 211
+    },
+    "stair": {
+      "x": 88,
+      "y": 205
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2041
+  },
+  "akasumi/townhall": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-townhall-18415ea9b6cb30453601c2c6.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 586,
+      "y": 505,
+      "width": 401,
+      "height": 217
+    },
+    "stair": {
+      "x": 116,
+      "y": 199
+    },
+    "height": 3.39,
+    "shadow": 0.2,
+    "courtSlope": 0.1403
+  },
+  "akasumi/traininggrounds": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-traininggrounds-006d852efc2eafecdfb5bd92.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 526,
+      "y": 729,
+      "width": 241,
+      "height": 211
+    },
+    "stair": {
+      "x": 80,
+      "y": 200
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.227
+  },
+  "akasumi/home": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-home-e6a0609c8e8b2e2a0283718a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 767,
+      "y": 729,
+      "width": 222,
+      "height": 198
+    },
+    "stair": {
+      "x": 73,
+      "y": 191
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2312
+  },
+  "akasumi/clanhall": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-clanhall-8d71fff9faa77429b52e64f5.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 622,
+      "y": 275,
+      "width": 299,
+      "height": 224
+    },
+    "stair": {
+      "x": 99,
+      "y": 208
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1942
+  },
+  "akasumi/bank": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-bank-dae389aa8940b633a86e4d98.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 0,
+      "y": 505,
+      "width": 294,
+      "height": 224
+    },
+    "stair": {
+      "x": 97,
+      "y": 209
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1975
+  },
+  "akasumi/auctionhouse": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-auctionhouse-a20cd2c471d3962a15d11fed.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3ycvxZ8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCd3g8k26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhVhwO5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
+    "frame": {
+      "x": 294,
+      "y": 505,
+      "width": 292,
+      "height": 218
+    },
+    "stair": {
+      "x": 96,
+      "y": 198
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.1936
+  },
+  "akasumi/shrine": {
+    "village": "Akasumi",
+    "sector": 1335,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-akasumi-46d4975e78e30a47e01e1eb2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRhGq7T0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtfcJloUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ47637ClYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 219
+    },
+    "stair": {
+      "x": 84,
+      "y": 215
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "hyorin/academy": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-academy-b635ea644ab19d2aab017b24.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 325,
+      "height": 274
+    },
+    "stair": {
+      "x": 107,
+      "y": 263
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2186
+  },
+  "hyorin/missionhall": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-missionhall-8c560be3b65119b57bb00bc4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 397,
+      "y": 274,
+      "width": 310,
+      "height": 230
+    },
+    "stair": {
+      "x": 102,
+      "y": 216
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1924
+  },
+  "hyorin/hospital": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-hospital-c541eb12976712371b3778e2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 653,
+      "y": 0,
+      "width": 301,
+      "height": 237
+    },
+    "stair": {
+      "x": 99,
+      "y": 221
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.2041
+  },
+  "hyorin/ramenshop": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-ramenshop-6aa8dd220e0cfb346606ba6c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdbcl9moP62PI3ciLaYzgVX8FopBADxSrGmvQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4vSO3plYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYC8uWLOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "frame": {
+      "x": 257,
+      "y": 0,
+      "width": 256,
+      "height": 211
+    },
+    "stair": {
+      "x": 84,
+      "y": 200
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2137
+  },
+  "hyorin/anbu": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-anbu-163b9526bf20e450aae96e0a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 325,
+      "y": 0,
+      "width": 328,
+      "height": 269
+    },
+    "stair": {
+      "x": 108,
+      "y": 262
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2126
+  },
+  "hyorin/battlearena": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-battlearena-56d76f05ca78a0c650de45f1.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 707,
+      "y": 274,
+      "width": 309,
+      "height": 224
+    },
+    "stair": {
+      "x": 102,
+      "y": 209
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1879
+  },
+  "hyorin/itemshop": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-itemshop-d470caa238095dee184088b4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdbcl9moP62PI3ciLaYzgVX8FopBADxSrGmvQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4vSO3plYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYC8uWLOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "frame": {
+      "x": 513,
+      "y": 0,
+      "width": 288,
+      "height": 199
+    },
+    "stair": {
+      "x": 95,
+      "y": 188
+    },
+    "height": 3.11,
+    "shadow": 0.2,
+    "courtSlope": 0.1791
+  },
+  "hyorin/blackmarket": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-blackmarket-b0553f396d2361bc3187afa9.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdbcl9moP62PI3ciLaYzgVX8FopBADxSrGmvQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4vSO3plYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYC8uWLOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "frame": {
+      "x": 232,
+      "y": 211,
+      "width": 246,
+      "height": 179
+    },
+    "stair": {
+      "x": 81,
+      "y": 167
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.1886
+  },
+  "hyorin/science": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-science-44a81db28aa3dd9a557624fe.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 0,
+      "y": 739,
+      "width": 268,
+      "height": 211
+    },
+    "stair": {
+      "x": 88,
+      "y": 206
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2041
+  },
+  "hyorin/townhall": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-townhall-c896f2c039ded41dcae36469.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 0,
+      "y": 274,
+      "width": 397,
+      "height": 241
+    },
+    "stair": {
+      "x": 115,
+      "y": 216
+    },
+    "height": 3.77,
+    "shadow": 0.2,
+    "courtSlope": 0.1574
+  },
+  "hyorin/traininggrounds": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-traininggrounds-ff7c56710dce4feb7a59b946.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdbcl9moP62PI3ciLaYzgVX8FopBADxSrGmvQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4vSO3plYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYC8uWLOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 257,
+      "height": 211
+    },
+    "stair": {
+      "x": 85,
+      "y": 201
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2129
+  },
+  "hyorin/home": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-home-b255a3e914a28fd72bb3a03a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdbcl9moP62PI3ciLaYzgVX8FopBADxSrGmvQ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ4vSO3plYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYC8uWLOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "frame": {
+      "x": 0,
+      "y": 211,
+      "width": 232,
+      "height": 198
+    },
+    "stair": {
+      "x": 77,
+      "y": 190
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2213
+  },
+  "hyorin/clanhall": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-clanhall-bbf35008f40615ec1ce20dfe.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 0,
+      "y": 515,
+      "width": 303,
+      "height": 224
+    },
+    "stair": {
+      "x": 100,
+      "y": 211
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1917
+  },
+  "hyorin/bank": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-bank-dccc51ff5f8e119be2464e48.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 303,
+      "y": 515,
+      "width": 291,
+      "height": 224
+    },
+    "stair": {
+      "x": 96,
+      "y": 211
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1996
+  },
+  "hyorin/auctionhouse": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-auctionhouse-5a11a97ca39ad3727461dc86.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ39B3NFQ8pYHJX5rdkUTfOKtvu2eGIELmSWqB",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmVhOTGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUiXb7RMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "frame": {
+      "x": 594,
+      "y": 515,
+      "width": 298,
+      "height": 218
+    },
+    "stair": {
+      "x": 98,
+      "y": 196
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.1897
+  },
+  "hyorin/shrine": {
+    "village": "Hyorin",
+    "sector": 177,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJZGLY86aYQrBIUTu69nkMxWmS4ah0O7LVCp8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEswBh2WZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCUtDpH26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 226
+    },
+    "stair": {
+      "x": 84,
+      "y": 221
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "horizon/academy": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-academy-eee9b2954338400d3d234e2a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 335,
+      "height": 275
+    },
+    "stair": {
+      "x": 111,
+      "y": 264
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2128
+  },
+  "horizon/missionhall": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-missionhall-2dbd1e4088c3d4d977dc275e.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 0,
+      "y": 275,
+      "width": 319,
+      "height": 230
+    },
+    "stair": {
+      "x": 105,
+      "y": 216
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1869
+  },
+  "horizon/hospital": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-hospital-6231b27ead116a420f97a468.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 669,
+      "y": 0,
+      "width": 312,
+      "height": 237
+    },
+    "stair": {
+      "x": 103,
+      "y": 224
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.1969
+  },
+  "horizon/ramenshop": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-ramenshop-abbf0bbf2a03e203833c4de2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 274,
+      "y": 729,
+      "width": 256,
+      "height": 211
+    },
+    "stair": {
+      "x": 84,
+      "y": 201
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2137
+  },
+  "horizon/anbu": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-anbu-6077cc94d917f80614226faa.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 335,
+      "y": 0,
+      "width": 334,
+      "height": 270
+    },
+    "stair": {
+      "x": 110,
+      "y": 263
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2096
+  },
+  "horizon/battlearena": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-battlearena-7321bd88807ea7597dad377f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 319,
+      "y": 275,
+      "width": 313,
+      "height": 224
+    },
+    "stair": {
+      "x": 103,
+      "y": 211
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1855
+  },
+  "horizon/itemshop": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-itemshop-987144159e0058448ad30250.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw94ausT2j854CWbaITZyegfXimvd7s16cO0h",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYR5GuxOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHxn02XQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 288,
+      "height": 199
+    },
+    "stair": {
+      "x": 95,
+      "y": 187
+    },
+    "height": 3.11,
+    "shadow": 0.2,
+    "courtSlope": 0.1791
+  },
+  "horizon/blackmarket": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-blackmarket-24cfdd5a182fe4d9b515f2df.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw94ausT2j854CWbaITZyegfXimvd7s16cO0h",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYR5GuxOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHxn02XQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "frame": {
+      "x": 516,
+      "y": 0,
+      "width": 244,
+      "height": 179
+    },
+    "stair": {
+      "x": 81,
+      "y": 169
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.1902
+  },
+  "horizon/science": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-science-e2aac91f2e67e665505517ff.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 0,
+      "y": 729,
+      "width": 274,
+      "height": 211
+    },
+    "stair": {
+      "x": 90,
+      "y": 208
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.1996
+  },
+  "horizon/townhall": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-townhall-0aaa807c3e294b126a6e51fa.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 586,
+      "y": 505,
+      "width": 401,
+      "height": 214
+    },
+    "stair": {
+      "x": 116,
+      "y": 189
+    },
+    "height": 3.35,
+    "shadow": 0.2,
+    "courtSlope": 0.1384
+  },
+  "horizon/traininggrounds": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-traininggrounds-5f9743add604d7ef38eb74d7.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 530,
+      "y": 729,
+      "width": 252,
+      "height": 211
+    },
+    "stair": {
+      "x": 83,
+      "y": 205
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2171
+  },
+  "horizon/home": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-home-b79c8cb7f1c90ca551f45150.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJw94ausT2j854CWbaITZyegfXimvd7s16cO0h",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJYR5GuxOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHxn02XQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "frame": {
+      "x": 288,
+      "y": 0,
+      "width": 228,
+      "height": 198
+    },
+    "stair": {
+      "x": 75,
+      "y": 191
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2251
+  },
+  "horizon/clanhall": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-clanhall-4ad7ec9904cd51b35b488038.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 632,
+      "y": 275,
+      "width": 304,
+      "height": 224
+    },
+    "stair": {
+      "x": 100,
+      "y": 209
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.191
+  },
+  "horizon/bank": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-bank-9ca20a2cbdf86cd97dd2302f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 0,
+      "y": 505,
+      "width": 292,
+      "height": 224
+    },
+    "stair": {
+      "x": 96,
+      "y": 207
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1989
+  },
+  "horizon/auctionhouse": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-horizon-auctionhouse-8b6461d05a337fb012d2692a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCm1hfb26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSAWexV3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSC9tRn3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
+    "frame": {
+      "x": 292,
+      "y": 505,
+      "width": 294,
+      "height": 218
+    },
+    "stair": {
+      "x": 97,
+      "y": 194
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.1922
+  },
+  "horizon/shrine": {
+    "village": "Horizon",
+    "sector": 301,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-horizon-e0f90ae3ed79479bc27838e4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ399Yfp8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEf4wdbWZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUHaYAvILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 211
+    },
+    "stair": {
+      "x": 84,
+      "y": 206
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "shirohana/academy": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-academy-5cd2ba5da3c85724be30ba5a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 338,
+      "height": 273
+    },
+    "stair": {
+      "x": 112,
+      "y": 262
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2094
+  },
+  "shirohana/missionhall": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-missionhall-fe2d4b36020abf16fa564523.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 0,
+      "y": 273,
+      "width": 321,
+      "height": 230
+    },
+    "stair": {
+      "x": 106,
+      "y": 217
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1858
+  },
+  "shirohana/hospital": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-hospital-405a49f46984e13f19002715.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 659,
+      "y": 0,
+      "width": 297,
+      "height": 237
+    },
+    "stair": {
+      "x": 98,
+      "y": 221
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.2069
+  },
+  "shirohana/ramenshop": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-ramenshop-42fbbc08f9f6a92c3b820842.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDrRlBKzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyyriRwukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJO1cWr5VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "frame": {
+      "x": 275,
+      "y": 0,
+      "width": 250,
+      "height": 211
+    },
+    "stair": {
+      "x": 82,
+      "y": 199
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2188
+  },
+  "shirohana/anbu": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-anbu-e857953ef5a24aae25f2d386.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 338,
+      "y": 0,
+      "width": 321,
+      "height": 270
+    },
+    "stair": {
+      "x": 106,
+      "y": 264
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2181
+  },
+  "shirohana/battlearena": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-battlearena-86b81b67a864ff7d87004358.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 0,
+      "y": 503,
+      "width": 315,
+      "height": 220
+    },
+    "stair": {
+      "x": 104,
+      "y": 211
+    },
+    "height": 3.43,
+    "shadow": 0.2,
+    "courtSlope": 0.1811
+  },
+  "shirohana/itemshop": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-itemshop-6de2d5b1a842f5c1108bc0b3.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDrRlBKzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyyriRwukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJO1cWr5VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "frame": {
+      "x": 0,
+      "y": 211,
+      "width": 285,
+      "height": 205
+    },
+    "stair": {
+      "x": 94,
+      "y": 193
+    },
+    "height": 3.2,
+    "shadow": 0.2,
+    "courtSlope": 0.1865
+  },
+  "shirohana/blackmarket": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-blackmarket-b3a66b2e5e103379ec163d37.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDrRlBKzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyyriRwukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJO1cWr5VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "frame": {
+      "x": 772,
+      "y": 0,
+      "width": 238,
+      "height": 179
+    },
+    "stair": {
+      "x": 79,
+      "y": 168
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.195
+  },
+  "shirohana/science": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-science-e52eec44b466fb132b5d975a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDrRlBKzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyyriRwukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJO1cWr5VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 275,
+      "height": 211
+    },
+    "stair": {
+      "x": 91,
+      "y": 207
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.1989
+  },
+  "shirohana/townhall": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-townhall-51659009eca1a0d0f61867c5.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 614,
+      "y": 503,
+      "width": 397,
+      "height": 214
+    },
+    "stair": {
+      "x": 115,
+      "y": 194
+    },
+    "height": 3.35,
+    "shadow": 0.2,
+    "courtSlope": 0.1398
+  },
+  "shirohana/traininggrounds": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-traininggrounds-82beafff86dab27c72591338.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDrRlBKzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJyyriRwukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJO1cWr5VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "frame": {
+      "x": 525,
+      "y": 0,
+      "width": 247,
+      "height": 211
+    },
+    "stair": {
+      "x": 82,
+      "y": 201
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2215
+  },
+  "shirohana/home": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-home-df550096679691fc140832d2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 0,
+      "y": 723,
+      "width": 208,
+      "height": 198
+    },
+    "stair": {
+      "x": 69,
+      "y": 187
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2468
+  },
+  "shirohana/clanhall": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-clanhall-e9093f4fe2e5bc0aaa0e91a2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 321,
+      "y": 273,
+      "width": 306,
+      "height": 224
+    },
+    "stair": {
+      "x": 101,
+      "y": 207
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1898
+  },
+  "shirohana/bank": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-bank-ac826331aeb1cab8cc96e974.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 627,
+      "y": 273,
+      "width": 283,
+      "height": 224
+    },
+    "stair": {
+      "x": 93,
+      "y": 211
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2052
+  },
+  "shirohana/auctionhouse": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-auctionhouse-56e10dab2800ed88e46c9e47.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQ3KgHVjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRHzeKR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJIQkagmxfOewksxBoS1HQCihpL7c42Ky9uUFv",
+    "frame": {
+      "x": 315,
+      "y": 503,
+      "width": 299,
+      "height": 218
+    },
+    "stair": {
+      "x": 99,
+      "y": 195
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.189
+  },
+  "shirohana/shrine": {
+    "village": "Shirohana",
+    "sector": 1538,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-shirohana-6f2547d00c466af2aa8d400c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgBXmgBRfoVrha0LP4mAS5KM7wtiZbUNXJxd",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQliwoMZjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ19UjzH6bo95WClq4K0wxZUmJcvThgdVenO3P",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 218
+    },
+    "stair": {
+      "x": 84,
+      "y": 214
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "syndicate/academy": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-academy-259dad3784b30367dc4a971f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 337,
+      "height": 275
+    },
+    "stair": {
+      "x": 111,
+      "y": 262
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2116
+  },
+  "syndicate/missionhall": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-missionhall-d9d87ff0b6ddb733effb4ef0.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 0,
+      "y": 275,
+      "width": 310,
+      "height": 230
+    },
+    "stair": {
+      "x": 102,
+      "y": 217
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1924
+  },
+  "syndicate/hospital": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-hospital-9989f699d188da54fbd6cc89.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 666,
+      "y": 0,
+      "width": 310,
+      "height": 237
+    },
+    "stair": {
+      "x": 102,
+      "y": 221
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.1982
+  },
+  "syndicate/ramenshop": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-ramenshop-c221c843608442133cbf277d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 265,
+      "y": 222,
+      "width": 260,
+      "height": 211
+    },
+    "stair": {
+      "x": 86,
+      "y": 198
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2104
+  },
+  "syndicate/anbu": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-anbu-bc7999706dc7fe7a2405e503.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 337,
+      "y": 0,
+      "width": 329,
+      "height": 264
+    },
+    "stair": {
+      "x": 109,
+      "y": 261
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.208
+  },
+  "syndicate/battlearena": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-battlearena-64414c962cb362b3c563311e.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 310,
+      "y": 275,
+      "width": 311,
+      "height": 224
+    },
+    "stair": {
+      "x": 103,
+      "y": 212
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1867
+  },
+  "syndicate/itemshop": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-itemshop-0f0121a9ff67635a291c9aaa.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 525,
+      "y": 222,
+      "width": 286,
+      "height": 202
+    },
+    "stair": {
+      "x": 94,
+      "y": 187
+    },
+    "height": 3.16,
+    "shadow": 0.2,
+    "courtSlope": 0.1831
+  },
+  "syndicate/blackmarket": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-blackmarket-7ca086e9d8f40baeb75253f1.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHn6u2EQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJbTiYBbAtYUndMi56GkX19q0A4PzyeIloBrEa",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ3iLO4x8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 239,
+      "height": 179
+    },
+    "stair": {
+      "x": 79,
+      "y": 169
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.1942
+  },
+  "syndicate/science": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-science-40514f1fea3119fdde8269ad.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 0,
+      "y": 222,
+      "width": 265,
+      "height": 211
+    },
+    "stair": {
+      "x": 87,
+      "y": 206
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2064
+  },
+  "syndicate/townhall": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-townhall-079365b74c60fec2b6b3960f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 401,
+      "height": 222
+    },
+    "stair": {
+      "x": 116,
+      "y": 199
+    },
+    "height": 3.47,
+    "shadow": 0.2,
+    "courtSlope": 0.1435
+  },
+  "syndicate/traininggrounds": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-traininggrounds-280406d4373c06d5f0211339.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 0,
+      "y": 505,
+      "width": 237,
+      "height": 211
+    },
+    "stair": {
+      "x": 78,
+      "y": 203
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2308
+  },
+  "syndicate/home": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-home-e359d623ee5ad908bb79162b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 0,
+      "y": 433,
+      "width": 227,
+      "height": 198
+    },
+    "stair": {
+      "x": 75,
+      "y": 191
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2261
+  },
+  "syndicate/clanhall": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-clanhall-0bbe1b11e0dc973488754b5c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 401,
+      "y": 0,
+      "width": 314,
+      "height": 221
+    },
+    "stair": {
+      "x": 104,
+      "y": 206
+    },
+    "height": 3.46,
+    "shadow": 0.2,
+    "courtSlope": 0.1825
+  },
+  "syndicate/bank": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-bank-91d919b96d87056a5826372d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "frame": {
+      "x": 621,
+      "y": 275,
+      "width": 304,
+      "height": 224
+    },
+    "stair": {
+      "x": 100,
+      "y": 207
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.191
+  },
+  "syndicate/auctionhouse": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-auctionhouse-11d167eb7f55ca7921e421bc.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "frame": {
+      "x": 715,
+      "y": 0,
+      "width": 307,
+      "height": 213
+    },
+    "stair": {
+      "x": 101,
+      "y": 192
+    },
+    "height": 3.33,
+    "shadow": 0.2,
+    "courtSlope": 0.1799
+  },
+  "syndicate/shrine": {
+    "village": "Syndicate",
+    "sector": 1062,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-syndicate-472a9145824c8dbc74b3b280.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJWif89Nvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJlMTfaXurWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjrURJCl4XzPI8f1v96qBot0Q3wsUp2nxu7SM",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 214
+    },
+    "stair": {
+      "x": 84,
+      "y": 208
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "freedom-state/academy": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/academy",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-academy-2eefb47a89c068fe0e6d1db9.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 334,
+      "height": 275
+    },
+    "stair": {
+      "x": 110,
+      "y": 262
+    },
+    "height": 4.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2135
+  },
+  "freedom-state/missionhall": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/missionhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-missionhall-3dbbf915c6de94c20f08992d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 397,
+      "y": 275,
+      "width": 315,
+      "height": 230
+    },
+    "stair": {
+      "x": 104,
+      "y": 217
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1893
+  },
+  "freedom-state/hospital": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/hospital",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-hospital-2ded79da9f341717ed20e93a.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 665,
+      "y": 0,
+      "width": 305,
+      "height": 237
+    },
+    "stair": {
+      "x": 101,
+      "y": 221
+    },
+    "height": 3.7,
+    "shadow": 0.2,
+    "courtSlope": 0.2015
+  },
+  "freedom-state/ramenshop": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/ramenshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-ramenshop-6baacaaeae0d412c7a3f9b5f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 629,
+      "y": 531,
+      "width": 255,
+      "height": 211
+    },
+    "stair": {
+      "x": 84,
+      "y": 199
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2145
+  },
+  "freedom-state/anbu": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/anbu",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-anbu-8815b001d1683541e6214471.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 334,
+      "y": 0,
+      "width": 331,
+      "height": 263
+    },
+    "stair": {
+      "x": 109,
+      "y": 257
+    },
+    "height": 4.5,
+    "shadow": 0.2,
+    "courtSlope": 0.206
+  },
+  "freedom-state/battlearena": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/battlearena",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-battlearena-87877fbb2d84408a34d8c3fb.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 314,
+      "y": 531,
+      "width": 315,
+      "height": 223
+    },
+    "stair": {
+      "x": 104,
+      "y": 208
+    },
+    "height": 3.49,
+    "shadow": 0.2,
+    "courtSlope": 0.1835
+  },
+  "freedom-state/itemshop": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/itemshop",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-itemshop-b929c108e170c50b52f6aec0.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 253,
+      "y": 755,
+      "width": 288,
+      "height": 201
+    },
+    "stair": {
+      "x": 95,
+      "y": 188
+    },
+    "height": 3.14,
+    "shadow": 0.2,
+    "courtSlope": 0.1809
+  },
+  "freedom-state/blackmarket": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/blackmarket",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-blackmarket-fb41fc105f0698db9625aa2b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 541,
+      "y": 755,
+      "width": 246,
+      "height": 179
+    },
+    "stair": {
+      "x": 81,
+      "y": 166
+    },
+    "height": 2.8,
+    "shadow": 0.2,
+    "courtSlope": 0.1886
+  },
+  "freedom-state/science": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-extras-science-1832461fa82f6175a9750527.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCXoek726OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPFNUfXpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJznfapUemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    "frame": {
+      "x": 343,
+      "y": 0,
+      "width": 337,
+      "height": 256
+    },
+    "stair": {
+      "x": 111,
+      "y": 243
+    },
+    "height": 4,
+    "shadow": 0.2,
+    "courtSlope": 0.1969
+  },
+  "freedom-state/townhall": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/townhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-townhall-65559db540b1378702bab4c9.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 0,
+      "y": 275,
+      "width": 397,
+      "height": 256
+    },
+    "stair": {
+      "x": 115,
+      "y": 229
+    },
+    "height": 4,
+    "shadow": 0.2,
+    "courtSlope": 0.1672
+  },
+  "freedom-state/traininggrounds": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/traininggrounds",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-traininggrounds-b3a83dfa85cf77ea6b632ab2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 0,
+      "y": 755,
+      "width": 253,
+      "height": 211
+    },
+    "stair": {
+      "x": 83,
+      "y": 201
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2162
+  },
+  "freedom-state/home": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/home",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-home-de00159ba857fa65abdf2815.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFATchaG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPMfYVkpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmLXXIJHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 235,
+      "height": 198
+    },
+    "stair": {
+      "x": 78,
+      "y": 192
+    },
+    "height": 3.1,
+    "shadow": 0.2,
+    "courtSlope": 0.2184
+  },
+  "freedom-state/clanhall": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/clanhall",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-clanhall-4d50d7ea8007c32e7bcfa232.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 0,
+      "y": 531,
+      "width": 314,
+      "height": 224
+    },
+    "stair": {
+      "x": 104,
+      "y": 210
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1849
+  },
+  "freedom-state/bank": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/bank",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-bank-c71f7817fd93b4bedd62c8a5.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ08T11AgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJj1kI9d4XzPI8f1v96qBot0Q3wsUp2nxu7SMb",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6vhezRDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "frame": {
+      "x": 712,
+      "y": 275,
+      "width": 302,
+      "height": 224
+    },
+    "stair": {
+      "x": 100,
+      "y": 208
+    },
+    "height": 3.5,
+    "shadow": 0.2,
+    "courtSlope": 0.1923
+  },
+  "freedom-state/auctionhouse": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-extras-auctionhouse-a05f576dac6b3857e93c4b8b.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCXoek726OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPFNUfXpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJznfapUemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    "frame": {
+      "x": 680,
+      "y": 0,
+      "width": 318,
+      "height": 230
+    },
+    "stair": {
+      "x": 105,
+      "y": 217
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1875
+  },
+  "freedom-state/shrine": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-freedom-state-bcfa7db489fd7954df4b350c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtxqbew1UYJDfpFXWm3nrcPluEtIZqyLkaSV1",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRSw4Ds0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJROwHWK0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 219
+    },
+    "stair": {
+      "x": 84,
+      "y": 212
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "wake-island/adminbuilding": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/adminbuilding",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-adminbuilding-e783d037b31c0c9e615f5fac.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 0,
+      "y": 352,
+      "width": 354,
+      "height": 282
+    },
+    "stair": {
+      "x": 117,
+      "y": 273
+    },
+    "height": 4.4,
+    "shadow": 0.2,
+    "courtSlope": 0.2065
+  },
+  "wake-island/auctionhouse": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/auctionhouse",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-auctionhouse-c91806b5f176e1f375782d65.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 638,
+      "y": 634,
+      "width": 326,
+      "height": 226
+    },
+    "stair": {
+      "x": 108,
+      "y": 196
+    },
+    "height": 3.53,
+    "shadow": 0.2,
+    "courtSlope": 0.1797
+  },
+  "wake-island/colosseum": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/colosseum",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-colosseum-ad635da80f38b43858d76fce.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 0,
+      "y": 634,
+      "width": 335,
+      "height": 269
+    },
+    "stair": {
+      "x": 111,
+      "y": 260
+    },
+    "height": 4.2,
+    "shadow": 0.2,
+    "courtSlope": 0.2082
+  },
+  "wake-island/globalanbuhq": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/globalanbuhq",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-globalanbuhq-8c461166c5e8b7702d9f8e4f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 398,
+      "height": 352
+    },
+    "stair": {
+      "x": 131,
+      "y": 340
+    },
+    "height": 5.5,
+    "shadow": 0.2,
+    "courtSlope": 0.2293
+  },
+  "wake-island/historybuilding": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/historybuilding",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-historybuilding-5f8a5df5cc3ee71bd76dc85d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 354,
+      "y": 352,
+      "width": 386,
+      "height": 272
+    },
+    "stair": {
+      "x": 127,
+      "y": 268
+    },
+    "height": 4.25,
+    "shadow": 0.2,
+    "courtSlope": 0.1827
+  },
+  "wake-island/minigames": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/minigames",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-minigames-48e7324e0a6358a77eacc7ee.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 740,
+      "y": 352,
+      "width": 277,
+      "height": 230
+    },
+    "stair": {
+      "x": 91,
+      "y": 216
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.2153
+  },
+  "wake-island/pets": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/pets",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-pets-51f2d944ac82291ab2643a24.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 335,
+      "y": 634,
+      "width": 303,
+      "height": 230
+    },
+    "stair": {
+      "x": 100,
+      "y": 202
+    },
+    "height": 3.6,
+    "shadow": 0.2,
+    "courtSlope": 0.1968
+  },
+  "wake-island/science": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/science",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-science-c2cbb470eed7b1841449cd44.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJldV2mwrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJdqWppcP62PI3ciLaYzgVX8FopBADxSrGmvQl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJnbOLGYmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+    "frame": {
+      "x": 398,
+      "y": 0,
+      "width": 365,
+      "height": 282
+    },
+    "stair": {
+      "x": 120,
+      "y": 275
+    },
+    "height": 4.4,
+    "shadow": 0.2,
+    "courtSlope": 0.2003
+  },
+  "wake-island/souvenirs": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/souvenirs",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-souvenirs-522705053ad3f0f5ef39e8fb.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVBMVKcF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJU3hyiAILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5ddwf3797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 269,
+      "height": 211
+    },
+    "stair": {
+      "x": 89,
+      "y": 197
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.2034
+  },
+  "freedom-state/adminbuilding": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/adminbuilding",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-extras-adminbuilding-f82c48b9e67970c3cda4a3d0.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCXoek726OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPFNUfXpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJznfapUemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 343,
+      "height": 269
+    },
+    "stair": {
+      "x": 113,
+      "y": 257
+    },
+    "height": 4.2,
+    "shadow": 0.2,
+    "courtSlope": 0.2033
+  },
+  "freedom-state/souvenirs": {
+    "village": "Freedom State",
+    "sector": 555,
+    "route": "/souvenirs",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-native-freedom-extras-souvenirs-8158ad83dca4633834c7d895.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCXoek726OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPFNUfXpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJznfapUemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    "frame": {
+      "x": 0,
+      "y": 269,
+      "width": 297,
+      "height": 218
+    },
+    "stair": {
+      "x": 98,
+      "y": 203
+    },
+    "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.1903
+  },
+  "wake-island/shrine": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-wake-island-fdb5c896a41cfefde67077be.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5NyOsh797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCrCv4x26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMqbGDUtsO4cexqW2RDgkE3zZbNXSFGitmnar",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 209
+    },
+    "stair": {
+      "x": 84,
+      "y": 198
+    },
+    "height": 3.3,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  }
+}

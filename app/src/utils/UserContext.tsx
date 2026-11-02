@@ -2,7 +2,7 @@
 
 import { useUser } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { atom } from "jotai";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
@@ -85,7 +86,7 @@ type UserContextValue = {
   ) => Promise<void>;
 };
 
-export const UserContext = createContext<UserContextValue>({
+const defaultUserContext: UserContextValue = {
   data: undefined,
   achievementProgress: undefined,
   notifications: undefined,
@@ -102,7 +103,10 @@ export const UserContext = createContext<UserContextValue>({
   updateNotifications: async () => {
     // do nothing
   },
-});
+};
+
+const UserInfoContext =
+  createContext<Omit<UserContextValue, "data">>(defaultUserContext);
 
 /**
  * UserContextProvider component provides a context for managing user-related data and functionality.
@@ -139,6 +143,29 @@ export function UserContextProvider(props: {
     enabled: !!userId && isSignedIn && isLoaded,
     retry: false,
     refetchInterval: 300000,
+    notifyOnChangeProps: ["data", "status"],
+    // Session services observe their inputs, while profile consumers select their own cache data.
+    select: ({ userData: user, ...metadata }) => ({
+      ...metadata,
+      userData: user && {
+        userId: user.userId,
+        username: user.username,
+        status: user.status,
+        clanId: user.clanId,
+        villageId: user.villageId,
+        currentlyTrainingMastery: user.currentlyTrainingMastery,
+        masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+        trainingSpeed: user.trainingSpeed,
+        currentlyTrainingElement: user.currentlyTrainingElement,
+        elementalTrainingStartedAt: user.elementalTrainingStartedAt,
+        elementalTrainingSpeed: user.elementalTrainingSpeed,
+        isOutlaw: user.isOutlaw,
+        clan: user.clan,
+        village: user.village,
+        raidBuffs: user.raidBuffs,
+        cookingJobs: user.cookingJobs,
+      },
+    }),
   });
 
   // Profile reads collect completed sessions and start their queued successors.
@@ -241,14 +268,17 @@ export function UserContextProvider(props: {
       // Clear user context when logged out
       Sentry.setUser(null);
     }
-  }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
+  }, [
+    data?.userData?.userId,
+    data?.userData?.username,
+    user?.primaryEmailAddress?.emailAddress,
+  ]);
 
   // Keep identity stable for unchanged data, but include notifications: bonus expiry
   // removes a notification even when structural sharing preserves userData/timeDiff.
   // Consumers must rerender then to drop the expired bonus from activity previews.
-  const value = useMemo<UserContextValue>(
+  const info = useMemo<Omit<UserContextValue, "data">>(
     () => ({
-      data: data?.userData,
       achievementProgress: data?.achievementProgress,
       notifications: data?.notifications,
       isEventParticipant: data?.isEventParticipant ?? false,
@@ -264,7 +294,6 @@ export function UserContextProvider(props: {
       updateNotifications: updateNotifications,
     }),
     [
-      data?.userData,
       data?.achievementProgress,
       data?.notifications,
       data?.isEventParticipant,
@@ -281,33 +310,85 @@ export function UserContextProvider(props: {
     ],
   );
 
-  return <UserContext value={value}>{props.children}</UserContext>;
+  return <UserInfoContext value={info}>{props.children}</UserInfoContext>;
 }
 
-// Easy hook for getting the current user data
-export const useUserData = () => {
-  return useContext(UserContext);
+/** Observe the complete cached profile when a feature needs all its fields. */
+export const useUserData = () => useUserDataSelector((user) => user);
+
+/** Read session metadata and cache actions without subscribing to profile fields. */
+export const useUserInfo = () => useContext(UserInfoContext);
+
+/** Observe selected profile fields without subscribing unrelated UI to movement coordinates.
+ * The provider owns fetching; this disabled observer shares its authenticated tRPC cache.
+ */
+export const useUserDataSelector = <T,>(
+  select: (user: NonNullable<UserWithRelations>) => T,
+) => {
+  const info = useContext(UserInfoContext);
+  const { data } = api.profile.getUser.useQuery(undefined, {
+    enabled: false,
+    // Compiler-generated dependencies may read query metadata; only the selected data drives this consumer.
+    notifyOnChangeProps: ["data"],
+    select: (snapshot) => (snapshot.userData ? select(snapshot.userData) : undefined),
+  });
+  return { ...info, data };
 };
 
-// Require the user to be logged in
-export const useRequiredUserData = () => {
-  // Router for redirection
+/** Profile fields independent of movement and its commit timestamp. */
+export const selectUserWithoutPosition = ({
+  longitude,
+  latitude,
+  location,
+  updatedAt,
+  ...profile
+}: NonNullable<UserWithRelations>) => profile;
+
+/** Read current profile data inside scene callbacks without subscribing React to position changes. */
+export const useUserDataRef = (
+  onChange?: (user: UserWithRelations, previous: UserWithRelations) => void,
+) => {
+  const client = useQueryClient();
+  const key = getQueryKey(api.profile.getUser, undefined, "query");
+  const hash = hashKey(key);
+  const read = () =>
+    client.getQueryData<{ userData: UserWithRelations }>(key)?.userData;
+  const user = useRef(read());
+  const changed = useRef(onChange);
+  changed.current = onChange;
+  useEffect(() => {
+    const update = () => {
+      const next = read();
+      if (next === user.current) return;
+      const previous = user.current;
+      user.current = next;
+      changed.current?.(next, previous);
+    };
+    update();
+    return client.getQueryCache().subscribe((event) => {
+      if (event.query.queryHash === hash) update();
+    });
+  }, [client, hash]);
+  return user;
+};
+
+/** Require a character while subscribing only to the selected fields. */
+export const useRequiredUserDataSelector = <T,>(
+  select: (user: NonNullable<UserWithRelations>) => T,
+) => {
   const router = useRouter();
-  // Get auth information
   const { isLoaded, isSignedIn } = useUser();
-  // Get user information
-  const info = useUserData();
-  // Redirection if not logged in
+  const info = useUserDataSelector(select);
   const { data, status } = info;
   useEffect(() => {
-    if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending"))) {
+    if (isLoaded && (!isSignedIn || (data === undefined && status !== "pending")))
       router.push("/");
-    }
-  }, [status, data, isLoaded, isSignedIn]);
-
-  // Return state
+  }, [status, data, isLoaded, isSignedIn, router]);
   return info;
 };
+
+/** Require a character for consumers that render the complete profile. */
+export const useRequiredUserData = () => useRequiredUserDataSelector((user) => user);
 
 /**
  * A hook which requires the user to be in their village,

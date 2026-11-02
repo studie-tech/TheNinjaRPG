@@ -512,17 +512,28 @@ export const uploadImageFromOpenAI = async (config: {
 };
 
 /**
- * Create a thumbnail for the image
+ * Creates a 64px PNG thumbnail; contained sprites retain their complete silhouette and pixel sampling.
  */
-export const createThumbnail = async (url?: string | null) => {
+export const createThumbnail = async (
+  url?: string | null,
+  fit: "cover" | "contain" = "cover",
+) => {
   if (!url) return null;
   try {
     const res = await fetch(url);
     const blob = await res.arrayBuffer();
-    const resultBuffer = await sharp(blob).resize(64, 64).toBuffer();
+    const resultBuffer = await sharp(blob)
+      .resize(64, 64, {
+        fit,
+        background: "#00000000",
+        ...(fit === "contain" ? { kernel: "nearest" as const } : {}),
+      })
+      .png()
+      .toBuffer();
     const thumbName = `thumbnail-${nanoid()}.png`;
     const thumbnail = new UTFile([resultBuffer as BlobPart], thumbName, {
       customId: thumbName,
+      type: "image/png",
     });
     const utapi = new UTApi();
     const response = await utapi.uploadFiles(thumbnail);

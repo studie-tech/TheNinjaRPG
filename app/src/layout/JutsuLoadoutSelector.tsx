@@ -1,14 +1,14 @@
 "use client";
 
 import { getQueryKey } from "@trpc/react-query";
-import type React from "react";
+import React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 const loadoutsKey = getQueryKey(api.jutsu.getLoadouts, undefined, "query");
 
@@ -23,13 +23,17 @@ interface JutsuLoadoutSelectorProps {
 
 const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: availableSlots,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector(fedJutsuLoadouts);
 
   // tRPC utility
   const utils = api.useUtils();
 
   // How many loadouts?
-  const maxLoadouts = userData ? fedJutsuLoadouts(userData) : 0;
+  const maxLoadouts = availableSlots ?? 0;
 
   // Get loadouts
   const queryResult = api.jutsu.getLoadouts.useQuery(undefined, {
@@ -80,4 +84,4 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   );
 };
 
-export default JutsuLoadoutSelector;
+export default React.memo(JutsuLoadoutSelector);

@@ -39,7 +39,10 @@ export type SectorVillage = Village & {
  * @returns The user's village, or undefined outside its sector.
  */
 export const getOwnSectorVillage = (
-  userData?: UserWithRelations | null,
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "sector" | "isOutlaw" | "village"
+  > | null,
 ): SectorVillage | undefined => {
   const village = userData?.village;
   if (!userData || userData.isOutlaw || village?.type !== "VILLAGE") return undefined;

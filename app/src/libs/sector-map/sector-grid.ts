@@ -17,10 +17,14 @@ import {
   getVillageWallFoundationKeys,
   planVillageWalls,
   usesVillageWalls,
+  type VillageWallPlan,
 } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
 
-/** Shared terrain, structure-foundation and navigation data for a sector's renderers. */
+/**
+ * Shared terrain, structure-foundation and navigation data for a sector's renderers.
+ * A preplanned wall layout carries footing cells shared with neighboring sectors.
+ */
 export const prepareSectorGrid = (
   width: number,
   prng: () => number,
@@ -29,6 +33,7 @@ export const prepareSectorGrid = (
   sectorMap: NormalizedSectorMap,
   terrainRegistry: Map<string, TerrainSpec>,
   villageType: string | null,
+  wallPlan?: VillageWallPlan | null,
 ) => {
   const { width: sectorWidth, height: sectorHeight } = sectorMap;
   const authoredTiles = new Map(
@@ -63,9 +68,12 @@ export const prepareSectorGrid = (
       structureTileKeys.add(`${s.longitude + dCol},${s.latitude + dRow}`);
     }
   }
-  const villageWallPlan = usesVillageWalls(villageType)
-    ? planVillageWalls(sectorMap, allStructures)
-    : null;
+  const villageWallPlan =
+    wallPlan === undefined
+      ? usesVillageWalls(villageType)
+        ? planVillageWalls(sectorMap, allStructures)
+        : null
+      : wallPlan;
   const wallFoundationKeys = villageWallPlan
     ? getVillageWallFoundationKeys(villageWallPlan)
     : new Set<string>();
@@ -103,9 +111,8 @@ export const prepareSectorGrid = (
       tile.battleBiome = authoredTile?.battleBiome ?? spec.battleBiome;
 
       const hasStructureFoundation = structureTileKeys.has(tileKey);
-      // Structures and the village-facing tile below each wall segment use a
-      // flat, biome-appropriate foundation. This keeps walls from floating on
-      // recessed water/ice while leaving the exterior terrain untouched.
+      // Both sides of a wall need solid footing; authored land keeps its material,
+      // while recessed water and ice receive a flat, biome-appropriate foundation.
       if (hasStructureFoundation || wallFoundationKeys.has(tileKey)) {
         // Authored land defines foundations even when the globe biome differs.
         // Recessed water and ice use flat land and snow beneath structures.

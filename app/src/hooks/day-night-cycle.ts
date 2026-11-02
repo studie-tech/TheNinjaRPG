@@ -1,17 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getWorldCycleState } from "@/libs/dayNight";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
-export const useDayNightCycle = (tickMs = 1000) => {
-  const { timeDiff } = useUserData();
+/** Publishes server-corrected time; phase-only consumers stay stable between phase boundaries. */
+export const useDayNightCycle = (tickMs = 1000, enabled = true, phaseOnly = false) => {
+  const { timeDiff } = useUserInfo();
   const [now, setNow] = useState(() => new Date(Date.now() - timeDiff));
 
+  const sampled = useRef(now);
   useEffect(() => {
-    const updateNow = () => setNow(new Date(Date.now() - timeDiff));
+    if (!enabled) return;
+    const updateNow = () => {
+      const next = new Date(Date.now() - timeDiff);
+      if (
+        phaseOnly &&
+        getWorldCycleState(sampled.current).nextPhaseAt.getTime() ===
+          getWorldCycleState(next).nextPhaseAt.getTime()
+      )
+        return;
+      sampled.current = next;
+      setNow(next);
+    };
     updateNow();
     const intervalId = window.setInterval(updateNow, tickMs);
     return () => window.clearInterval(intervalId);
-  }, [tickMs, timeDiff]);
+  }, [tickMs, timeDiff, enabled, phaseOnly]);
 
-  return useMemo(() => getWorldCycleState(now), [now]);
+  return useMemo(() => ({ ...getWorldCycleState(now), now }), [now]);
 };

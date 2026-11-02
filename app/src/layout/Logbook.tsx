@@ -44,7 +44,7 @@ import { parseHtml } from "@/utils/parse";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 import Post from "./Post";
 
@@ -873,7 +873,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
  * @returns The checkRewards mutation.
  */
 export const useCheckRewards = () => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const openRewardChoice = useOpenRewardChoice();
   const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
 

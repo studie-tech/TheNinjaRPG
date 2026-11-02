@@ -14,6 +14,7 @@ export const worldSpriteBounds = (sprite: {
   anchorX: number;
   anchorY: number;
   rotation: number;
+  shearY?: number;
 }): WorldBounds => {
   const cosine = Math.cos(sprite.rotation),
     sine = Math.sin(sprite.rotation);
@@ -29,8 +30,9 @@ export const worldSpriteBounds = (sprite: {
       (sprite.anchorY - 1) * sprite.height,
       sprite.anchorY * sprite.height,
     ]) {
-      const px = sprite.x + x * cosine - y * sine;
-      const py = sprite.y + x * sine + y * cosine;
+      const shearedY = y + x * (sprite.shearY ?? 0);
+      const px = sprite.x + x * cosine - shearedY * sine;
+      const py = sprite.y + x * sine + shearedY * cosine;
       minX = Math.min(minX, px);
       maxX = Math.max(maxX, px);
       minY = Math.min(minY, py);

@@ -1,12 +1,13 @@
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Texture } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
 import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import { createTravelActors, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
+import type { WorldBounds } from "@/libs/rendering/visibility";
+import { createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -20,7 +21,7 @@ const player = (index = 0, patch: Partial<SectorUser> = {}) => ({
   spriteAppearance: resolveSpriteAppearance({}), avatarLight: `loading-portrait-${index}.png`, ...patch,
 }) as SectorUser;
 /** Real actor/sprite geometry and scopes; only image decoding is replaced. */
-const fixture = () => {
+const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   const controller = new AbortController();
   const owned = new Set<() => void>();
   const stage = new Container({ isRenderGroup: true });
@@ -30,7 +31,7 @@ const fixture = () => {
     signal: controller.signal, isDisposed: () => controller.signal.aborted,
     own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup),
   } as unknown as GameRenderer;
-  const actors = createTravelActors(game, { depth, overlay });
+  const actors = createTravelActors(game, { depth, overlay }, undefined, sceneryBounds);
   stage.addChild(actors.container, depth, overlay);
   const grid = getBattleGrid(40, { width: 12, height: 12, biome: "ground" } as never, { x: 0, y: 0 });
   const snapshot = (users: SectorUser[]): TravelActorsSnapshot => ({ grid, users, viewer, sector: 724, minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set() });
@@ -57,6 +58,132 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("holds keys across disjoint planes and checks nonadjacent artwork when moving sideways into overlap", () => {
+    holdCharacters(); const bounds = new WeakMap<Container, WorldBounds>();
+    const { actors, grid, stage, depth, snapshot } = fixture(bounds);
+    const user = player(0, { longitude: 4, latitude: 4 }); actors.sync(snapshot([user]));
+    const root = actors.container.children[0]!, key = root.zIndex, x = root.x, y = root.y;
+    const scenery = [-20, -10, 200].map((offset, i) => {
+      const object = new Graphics().rect(-20, -200, 40, 400).fill(0xffffff);
+      object.position.set(x + (i + 1) * 2000, y); object.zIndex = key + offset;
+      bounds.set(object, { minX: object.x - 20, maxX: object.x + 20, minY: y - 200, maxY: y + 200 });
+      stage.addChild(object); depth.attach(object); return object;
+    });
+    depth.sortRenderLayerChildren(); stage.renderGroup!.structureDidChange = false;
+    const move = (nextX: number, nextY: number) => actors.animate(frame, new Map([[user.userId, { x: nextX, y: nextY, direction: null, facing: 1 }]]));
+    move(x, y + 30);
+    expect(root.zIndex).toBe(key);
+    expect(stage.renderGroup!.structureDidChange).toBe(false);
+    expect(depth.renderLayerChildren).toEqual([scenery[0]!, scenery[1]!, root, scenery[2]!]);
+    move(x + 2000, y + 30);
+    const tile = grid.getHex({ col: 4, row: 4 })!;
+    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
+    expect(depth.renderLayerChildren[0]).toBe(root);
+  });
+  it("retains parallel actors without scanning beyond their correct depth neighbours", () => {
+    holdCharacters(); const bounds = new WeakMap<Container, WorldBounds>();
+    const { actors, stage, depth, snapshot } = fixture(bounds);
+    const users = Array.from({ length: 80 }, (_, i) => player(i, { longitude: i % 10, latitude: Math.floor(i / 10) }));
+    actors.sync(snapshot(users));
+    const roots = actors.container.children.filter(root => root.label?.startsWith("user:"));
+    expect(roots).toHaveLength(80);
+    const move = (offset: number) => actors.animate(frame, new Map(roots.map((root, i) => [users[i]!.userId, { x: i * 100, y: i * 40 + offset, direction: null, facing: 1 }])));
+    move(0); const keys = roots.map(root => root.zIndex);
+    stage.renderGroup!.structureDidChange = false;
+    move(1);
+    expect(roots.map(root => root.zIndex)).toEqual(keys);
+    expect(stage.renderGroup!.structureDidChange).toBe(false);
+  });
+  it("refreshes held ordering for expanded actor artwork and unknown scenery", () => {
+    holdCharacters(); const bounds = new WeakMap<Container, WorldBounds>();
+    const { actors, stage, depth, snapshot } = fixture(bounds);
+    const user = player(0, { longitude: 4, latitude: 4 }); actors.sync(snapshot([user]));
+    const root = actors.container.children[0]!, key = root.zIndex, x = root.x, y = root.y;
+    const object = new Graphics().rect(-10, -100, 20, 200).fill(0xffffff);
+    object.position.set(x + 150, y); object.zIndex = key - 10; stage.addChild(object); depth.attach(object);
+    bounds.set(object, { minX: object.x - 10, maxX: object.x + 10, minY: y - 100, maxY: y + 100 });
+    depth.sortRenderLayerChildren();
+    const move = (dy: number) => actors.animate(frame, new Map([[user.userId, { x, y: y + dy, direction: null, facing: 1 }]]));
+    move(20); expect(root.zIndex).toBe(key);
+    root.addChild(new Graphics().rect(0, -100, 192, 100).fill(0xffffff));
+    move(20); expect(root.zIndex).toBeCloseTo(key - 20);
+    move(0); expect(root.zIndex).toBeCloseTo(key);
+    bounds.delete(object); move(20); expect(root.zIndex).toBeCloseTo(key - 20);
+    actors.container.y += 500; move(20); expect(root.zIndex).toBeCloseTo(key - 520);
+  });
+  it("retains painter keys between contact-order crossings and updates them across scenery", () => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 }); actors.sync(snapshot([user]));
+    const root = actors.container.children[0]!, key = root.zIndex, tile = grid.getHex({ col: 4, row: 4 })!;
+    const scenery = [-20, 20].map(offset => { const sprite = new Container(); sprite.zIndex = key + offset; stage.addChild(sprite); depth.attach(sprite); return sprite; });
+    const move = (y: number) => actors.animate(frame, new Map([[user.userId, { x: root.x, y, direction: null, facing: 1 }]]));
+    move(root.y); stage.renderGroup!.structureDidChange = false;
+    const y = root.y; move(y + 1);
+    expect(root.zIndex).toBe(key); expect(root.y).toBe(y + 1);
+    expect(stage.renderGroup!.structureDidChange).toBe(false);
+    expect(depth.renderLayerChildren).toEqual([scenery[0]!, root, scenery[1]!]);
+    move(y + 30);
+    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
+    expect(depth.renderLayerChildren).toEqual([root, ...scenery]);
+  });
+  it.each([false, true])("orders crossing actors and inserted scenery by live contact planes (bounds: %s)", (spatial) => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture(spatial ? new WeakMap() : undefined);
+    let users = [player(0, { longitude: 4, latitude: 4 }), player(1, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users));
+    const offset = grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64);
+    const fixed = new Container(); fixed.zIndex = -100; stage.addChild(fixed); depth.attach(fixed);
+    const check = (a: number, b: number) => {
+      actors.animate(frame, new Map(users.map((user, index) => [user.userId, { x: 100 + index * 10, y: -(index ? b : a) - offset - actors.container.y, direction: null, facing: 1 }])));
+      const contact = (root: Container) => root === fixed ? root.zIndex : -(root.y + offset + actors.container.y);
+      for (let i = 1; i < depth.renderLayerChildren.length; i++) expect(contact(depth.renderLayerChildren[i - 1]!)).toBeLessThanOrEqual(contact(depth.renderLayerChildren[i]!));
+    };
+    for (let i = 0; i < 100; i++) check(-100 + 35 * Math.sin(i * 0.7), -100 + 35 * Math.cos(i * 0.4));
+    check(20, 25); check(28, 29);
+    fixed.zIndex = 27; check(28, 29);
+    users = [users[0]!, player(2, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users)); check(-120, -90);
+    actors.container.y += 500; check(-85, -115);
+  });
+  it("preserves a roaming NPC's rectangular artwork proportions", async () => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4 * 8 * 4), width: 4, height: 8 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const { actors, snapshot } = fixture();
+    actors.sync(snapshot([player(0, { isNpc: true, spriteAppearance: undefined, avatar: "rectangular-npc.png" })]));
+    await settle();
+    const figure = actors.container.children[0]!.getChildByLabel("avatar", true) as Sprite;
+    expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
+    expect(figure.width / figure.height).toBeCloseTo(0.5);
+  });
+  it("does not replay queued network waypoints after a timed walk finishes", async () => {
+    const { actors, grid, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 });
+    actors.sync(snapshot([user])); await settle();
+    const root = actors.container.children[0]!;
+    for (const latitude of [5, 6]) {
+      actors.sync(snapshot([{ ...user, latitude }]));
+      const tile = grid.getHex({ col: 4, row: latitude })!;
+      const movements = new Map<string, TravelActorMovement>([[user.userId, {
+        x: -tile.center.x, y: -tile.center.y, direction: null, facing: 1,
+      }]]);
+      actors.animate({ ...frame, reducedMotion: false }, movements);
+      expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+    }
+    const arrived = { x: root.x, y: root.y };
+    // The published edge is removed once its clock ends, before the server confirmation can refetch.
+    for (let tick = 0; tick < 12; tick++) {
+      actors.animate({ ...frame, now: 1200 + tick * 16, reducedMotion: false });
+      expect(root.position).toMatchObject(arrived);
+    }
+    actors.sync(snapshot([{ ...user, latitude: 6 }]));
+    actors.animate({ ...frame, reducedMotion: false });
+    expect(root.position).toMatchObject(arrived);
+    // A later authoritative update still uses ordinary remote-actor interpolation.
+    actors.sync(snapshot([{ ...user, latitude: 7 }]));
+    actors.animate({ ...frame, reducedMotion: false });
+    expect(root.y).not.toBe(arrived.y);
+  });
+
   it("keeps 100 pending actors visible and pickable at their own body positions", async () => {
     const pending = holdCharacters();
     const { actors, grid, depth, snapshot } = fixture();
@@ -70,7 +197,7 @@ describe("travel actor artwork loading", () => {
       expect(body).toBeInstanceOf(Graphics);
       expect(body?.visible).toBe(true);
       expect(root.parentRenderLayer).toBe(depth);
-      expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * 0.2));
+      expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
       const point = bodyPoint(root, tile);
       expect(actors.hit(point.x, point.y)).toMatchObject({ type: "avatar", userId: `loading-${index}` });
     }
@@ -80,19 +207,20 @@ describe("travel actor artwork loading", () => {
 
   it("atomically replaces the placeholder at the retained foot, scale and current position", async () => {
     const pending = holdCharacters();
-    const { actors, grid, snapshot } = fixture();
+    const { actors, grid, snapshot, stage, depth } = fixture();
     actors.container.position.set(90, -70);
     actors.sync(snapshot([player(0)]));
     const root = actors.container.children[0]!;
+    const scenery = new Container(); scenery.zIndex = root.zIndex - 5; stage.addChild(scenery); depth.attach(scenery);
     const fallback = root.children.find((child) => child.label === "avatar")!;
     const tile = grid.getHex({ col: 0, row: 0 })!;
     expect(fallback.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);
     expect(fallback.scale.y).toBeCloseTo(-tile.height * 1.8 * 0.7);
     expect(fallback.y - fallback.scale.x / 2).toBeCloseTo(tile.height * 0.1);
     const shadow = (root.children[0] as Graphics).getLocalBounds();
-    expect(shadow.width).toBeCloseTo(tile.height * 0.35 * 2 * 0.7);
-    expect(shadow.height).toBeCloseTo(tile.height * 0.12 * 2 * 0.7);
-    expect(shadow.y + shadow.height / 2).toBeCloseTo(tile.height * 0.2);
+    expect(shadow.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
+    expect(shadow.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
+    expect(shadow.y + shadow.height / 2).toBeCloseTo(tile.height * (0.1 + 1.8 * 0.7 * 4 / 64));
     actors.sync(snapshot([player(0, { longitude: 1 })])); actors.animate(frame);
     const expectedBounds = fallback.getBounds();
     const expectedPosition = root.position.clone();
@@ -103,7 +231,7 @@ describe("travel actor artwork loading", () => {
     expect(fallback.destroyed).toBe(true);
     const bounds = body.getBounds();
     for (const key of ["minX", "maxX", "minY", "maxY"] as const) expect(bounds[key]).toBeCloseTo(expectedBounds[key]);
-    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * 0.2 + actors.container.y));
+    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64) + actors.container.y));
     const point = body.getGlobalPosition();
     expect(actors.hit(point.x, point.y)).toMatchObject({ type: "avatar", userId: "loading-0" });
   });

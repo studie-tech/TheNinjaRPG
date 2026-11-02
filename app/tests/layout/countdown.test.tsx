@@ -1,6 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { StrictMode } from "react";
+import { Profiler, StrictMode } from "react";
 import Countdown from "@/layout/Countdown";
 import { ensureDom } from "../setup/dom.mjs";
 
@@ -26,6 +26,21 @@ afterEach(() => {
 });
 
 describe("Countdown completion", () => {
+  it("updates clock text without React renders and reconciles the completion UI once", () => {
+    const rendered = vi.fn(), finished = vi.fn();
+    const view = render(<Profiler id="countdown" onRender={rendered}><Countdown targetDate={new Date(BASE + 3000)} onFinish={finished} onEndShow="Ready" /></Profiler>);
+    const label = view.container.querySelector("span")!;
+    const initial = label.textContent;
+    rendered.mockClear();
+    advance(1000);
+    expect(label.textContent).not.toBe(initial);
+    expect(rendered).not.toHaveBeenCalled();
+    expect(finished).not.toHaveBeenCalled();
+    advance(2000);
+    expect(view.getByText("Ready")).toBeTruthy();
+    expect(rendered).toHaveBeenCalledTimes(1);
+    expect(finished).toHaveBeenCalledTimes(1);
+  });
   it("waits for the actual deadline and calls the latest callback once", () => {
     const previous = vi.fn();
     const latest = vi.fn();

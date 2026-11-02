@@ -36,7 +36,8 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { getCurrentSeason } from "@/utils/time";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type AccountMenuState,
   LayoutLeftSidebar,
@@ -70,10 +71,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     userId,
     timeDiff,
     updateUser,
-  } = useUserData();
+  } = useUserDataSelector((user) => ({
+    wallpaperOverwrite: user.village?.wallpaperOverwrite,
+  }));
   const pathname = usePublicPathname();
   const isPageActive = usePageActive();
-  const { systems, location } = useGameMenu(userData);
+  const { systems, location } = useGameMenu();
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
@@ -234,7 +237,10 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     }
   };
 
-  const navbarMenuItems = getMainNavbarLinks(notifications);
+  const navbarMenuItems = useMemo(
+    () => getMainNavbarLinks(notifications),
+    [notifications],
+  );
   // Receipt time also rejects notices that expired while their request was in flight.
   const activeTerritoryWar =
     userData &&
@@ -285,7 +291,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }
   const showMobileNotifications = pathname !== "/combat";
   const mobileNotificationCount = shownNotifications?.length ?? 0;
-  const imageset = getImageSet(userData);
+  const season = getCurrentSeason();
+  const wallpaperOverwrite = userData?.wallpaperOverwrite;
+  const imageset = useMemo(
+    () => getImageSet(wallpaperOverwrite, season),
+    [wallpaperOverwrite, season],
+  );
   const variantClasses = layoutVariantClasses[variant];
 
   const [rawMobileNavConfig] = useLocalStorage<MobileNavConfig>(
@@ -294,11 +305,28 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   );
   const mobileNavConfig = normalizeMobileNavConfig(rawMobileNavConfig);
 
+  // Only presentation values flow into the shell; position stays in the location menu.
+  const { data: layoutUser } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    username: user.username,
+    status: user.status,
+    village: user.village,
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+    musicOn: user.musicOn,
+    buttonSfxOn: user.buttonSfxOn,
+    sfxOn: user.sfxOn,
+    isOutlaw: user.isOutlaw,
+    bloodlineId: user.bloodlineId,
+    preferredGeneral1: user.preferredGeneral1,
+    preferredGeneral2: user.preferredGeneral2,
+  }));
+
   const signedInIcons = (
     <SignedInIcons
       variant={variant}
       isSignedIn={isClerkLoaded && isSignedIn}
-      userData={userData}
+      userData={layoutUser}
       updateUser={updateUser}
       onEventClick={() => setLeftSideBarOpen(false)}
       onThemeToggle={toggleTheme}
@@ -310,7 +338,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isSignedInLayout={isSignedInLayout}
       accountState={accountState}
-      userData={userData}
+      userData={layoutUser}
     />
   );
 
@@ -319,7 +347,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isSignedInLayout={isSignedInLayout}
       accountState={accountState}
-      userData={userData}
+      userData={layoutUser}
       systems={systems}
       notifications={shownNotifications}
       location={location}
@@ -344,7 +372,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const renderProps: GameLayoutRenderProps = {
     children,
     variant,
-    userData,
+    userData: layoutUser,
     isClerkLoaded,
     isSignedInLayout,
     isAnonymousLayout,
@@ -375,7 +403,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   };
 
   return (
-    <GlobalAudioProvider userData={userData}>
+    <GlobalAudioProvider userData={layoutUser}>
       <TutorialAssistant
         sidebarBreakpoint={getGameLayout(variant).sidebarBreakpoint}
         rightSideBarOpen={rightSideBarOpen}

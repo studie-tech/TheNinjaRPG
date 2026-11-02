@@ -107,7 +107,7 @@ describe("travel camp admission scheduling", () => {
     expect(test.reads).toContain("mercenary");
     expect(test.getWrites()).toBe(0);
     test.releaseUser();
-    expect((await pending).success).toBe(true);
+    expect(await pending).toMatchObject({ success: true, data: { sector: neighbors.east, longitude: SECTOR_WIDTH / 2, latitude: SECTOR_HEIGHT / 2 } });
     expect(test.campSectors).toEqual([neighbors.east]);
     expect(test.getWrites()).toBe(1);
   });

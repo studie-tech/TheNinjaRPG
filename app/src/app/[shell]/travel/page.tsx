@@ -11,6 +11,7 @@ import {
   Loader2,
   Locate,
   MapPinned,
+  Maximize2,
   Radar,
   Search,
   Swords,
@@ -80,6 +81,7 @@ import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { nonCombatConsume } from "@/libs/item";
 import {
@@ -105,7 +107,12 @@ import { isTutorialActive } from "@/libs/tutorial";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  selectUserWithoutPosition,
+  type useRequiredUserData,
+  useRequiredUserDataSelector,
+  useUserDataRef,
+} from "@/utils/UserContext";
 import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 import {
   type FindSectorSchema,
@@ -183,12 +190,15 @@ function Travel() {
 
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
+  const [isWorldExpanded, setWorldExpanded] = useState(false);
+  const [cameraFocusRevision, setCameraFocusRevision] = useState(0);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
   const [autoDestination, setAutoDestination] = useState<TravelLocation | null>(null);
   const requestedLocationRef = useRef<string | null>(null);
   const [pinLabel, setPinLabel] = useState("");
+  const [isQuickTravelOpen, setQuickTravelOpen] = useState(false);
   const [storedPins, setStoredPins] = useLocalStorage<Record<string, TravelPin[]>>(
     "travelPins",
     {},
@@ -208,12 +218,33 @@ function Travel() {
 
   // Data from database
   const {
-    data: userData,
+    data: profile,
     timeDiff,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector(selectUserWithoutPosition);
+  const positionChanged = useRef(() => {});
+  const userRef = useUserDataRef(() => positionChanged.current());
+  const userData = profile ? userRef.current : undefined;
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
+  const setScenePosition = useCallback(
+    (point: SectorPoint | null) => {
+      // A pending travel action needs arrival state; ordinary walking only updates the coordinate label.
+      if (pendingAttackTarget || autoDestination || isQuickTravelOpen) {
+        setCurrentPosition((previous) =>
+          previous?.x === point?.x && previous?.y === point?.y ? previous : point,
+        );
+      }
+    },
+    [pendingAttackTarget, autoDestination, isQuickTravelOpen],
+  );
+  positionChanged.current = () => {
+    const user = userRef.current;
+    if (user) setScenePosition({ x: user.longitude, y: user.latitude });
+  };
+  useEffect(() => {
+    positionChanged.current();
+  }, [setScenePosition]);
   const pins = parseTravelPins(storedPins?.[userData?.userId ?? ""]);
   const savePins = (next: TravelPin[]) => {
     if (userData) setStoredPins({ ...storedPins, [userData.userId]: next });
@@ -231,6 +262,7 @@ function Travel() {
     {
       enabled: !!userData && userData.sector !== undefined,
       select: (data) => data?.sectorData?.village?.name ?? null,
+      notifyOnChangeProps: ["data"],
     },
   );
   // Keep libraries across navigation; refresh artwork so content edits reach existing maps.
@@ -238,6 +270,7 @@ function Travel() {
     enabled: !!userData,
     // Dates prevent structural sharing; the scene only needs the asset content.
     select: (rows) => rows.map(({ createdAt, updatedAt, ...rest }) => rest),
+    notifyOnChangeProps: ["data"],
     staleTime: MAP_LOCATION_REFRESH_MS,
     refetchInterval: MAP_LOCATION_REFRESH_MS,
     refetchIntervalInBackground: false,
@@ -463,11 +496,7 @@ function Travel() {
   // Sector tab link
   const currentSector = userData?.sector;
   const hasCurrentSector = currentSector !== undefined && currentSector !== null;
-  const sectorLink = hasCurrentSector
-    ? currentPosition
-      ? `You (${currentPosition.x}, ${currentPosition.y})`
-      : `Sector ${currentSector}`
-    : "";
+  const sectorLink = hasCurrentSector ? "You" : "";
   const globalLink = `Global`;
 
   // Quick travel form
@@ -493,13 +522,10 @@ function Travel() {
 
   useEffect(() => {
     if (userData && globe) {
-      setCurrentPosition({ x: userData.longitude, y: userData.latitude });
       const tile = globe.tiles[userData.sector];
-      if (tile) {
-        setCurrentTile(tile);
-      }
+      if (tile) setCurrentTile(tile);
     }
-  }, [userData, currentSector, globe]);
+  }, [userData?.sector, globe]);
 
   useEffect(() => {
     // Only set initial tab, don't override user's selection
@@ -871,9 +897,11 @@ function Travel() {
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
+          isWorldExpanded={isWorldExpanded}
+          cameraFocusRevision={cameraFocusRevision}
+          setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
-          setTarget={setTargetPosition}
-          setPosition={setCurrentPosition}
+          setPosition={setScenePosition}
         />
       )
     );
@@ -883,10 +911,13 @@ function Travel() {
     currentSectorMap,
     sectorWindow,
     hasCurrentSector,
+    setScenePosition,
     targetPosition,
     showSorrounding,
     showOtherUsers,
     autoAttackMode,
+    isWorldExpanded,
+    cameraFocusRevision,
     villages,
   ]);
 
@@ -1139,7 +1170,7 @@ function Travel() {
                 </PopoverContent>
               </Popover>
             )}
-            <Popover>
+            <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
               <PopoverTrigger aria-label="Quick Travel">
                 <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
               </PopoverTrigger>
@@ -1149,7 +1180,7 @@ function Travel() {
                   Travel to a village, saved pin, or sector ID.
                 </p>
                 <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
-                  {travelDestinations.map((destination) => {
+                  {(isQuickTravelOpen ? travelDestinations : []).map((destination) => {
                     const dotColor = getReadableVillageHexColor(destination.color);
                     const description =
                       "description" in destination
@@ -1254,8 +1285,8 @@ function Travel() {
                         {
                           label: pinLabel.trim(),
                           sector: userData.sector,
-                          longitude: userData.longitude,
-                          latitude: userData.latitude,
+                          longitude: userRef.current?.longitude ?? userData.longitude,
+                          latitude: userRef.current?.latitude ?? userData.latitude,
                         },
                       ]);
                       setPinLabel("");
@@ -1301,6 +1332,18 @@ function Travel() {
                 </Form>
               </PopoverContent>
             </Popover>
+            {!isGlobal && activeTab !== "" && (
+              <button
+                type="button"
+                aria-label="Expand world"
+                aria-expanded={isWorldExpanded}
+                disabled={!SectorComponent}
+                className="mr-2 hover:text-orange-500 disabled:opacity-50"
+                onClick={() => setWorldExpanded(true)}
+              >
+                <Maximize2 className="h-7 w-7" />
+              </button>
+            )}
             {activeTab === globalLink && (
               <TooltipProvider delayDuration={50}>
                 <Tooltip>
@@ -1351,7 +1394,12 @@ function Travel() {
             <NavTabs
               current={activeTab}
               options={[sectorLink, globalLink]}
+              labels={{ [sectorLink]: <TravelPositionLabel /> }}
               setValue={setActiveTab}
+              onChange={(value) => {
+                if (value !== globalLink)
+                  setCameraFocusRevision((previous) => previous + 1);
+              }}
             />
           </div>
         }
@@ -1485,11 +1533,13 @@ function Travel() {
       )}
 
       {/* Auto Attack Configuration Modal */}
-      <AutoAttackModal
-        isOpen={showAutoAttackModal}
-        setIsOpen={setShowAutoAttackModal}
-        onEnable={() => setAutoAttackMode(true)}
-      />
+      {showAutoAttackModal && (
+        <AutoAttackModal
+          isOpen={showAutoAttackModal}
+          setIsOpen={setShowAutoAttackModal}
+          onEnable={() => setAutoAttackMode(true)}
+        />
+      )}
 
       {/* Revealed Players Modal (from Sensory Scan) */}
       {showRevealedPlayersModal && revealedPlayers.length > 0 && (
@@ -1543,7 +1593,11 @@ function Travel() {
 const StealthControls: React.FC<{
   onRevealed: (players: RevealedPlayer[]) => void;
 }> = ({ onRevealed }) => {
-  const { data: userData, timeDiff, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    timeDiff,
+    updateUser,
+  } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const utils = api.useUtils();
   const currentSector = userData?.sector;
   const activationInFlightRef = useRef(false);

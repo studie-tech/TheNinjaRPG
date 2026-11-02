@@ -21,7 +21,11 @@ import {
   TUTORIAL_HOME_SECTOR,
 } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
-import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
+import {
+  combatActionIdAtom,
+  userBattleAtom,
+  useUserDataSelector,
+} from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
   id: string;
@@ -757,7 +761,11 @@ const getDynamicCombatStep = (
  */
 export const useTutorialStep = () => {
   // State
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+  }));
   const pathname = usePublicPathname();
   const router = useRouter();
   const [currentStepNumber, setCurrentStepNumber] = useState<number>(0);

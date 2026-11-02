@@ -35,13 +35,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const mount = (battleId: string | null, read: (id: string) => Promise<Response>) => {
+const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}) => {
   ensureDom();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
   let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [] };
   const refetchProfile = vi.fn(async () => undefined);
   const push = vi.fn();
+  const toggleAutoCombat = vi.fn();
   const prefetchAssets = vi.fn(async ({ ids }: { ids: string[] }) => {
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
@@ -53,21 +54,22 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>)
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: profile }) as never);
   vi.spyOn(preferences, "useCombatPreferences").mockReturnValue({
-    useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false,
+    useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
   } as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
     combat: {
+      getBattleEntries: { useQuery: () => ({ data: [], isFetching: false }) },
       getBattle: { useQuery: (input: { battleId?: string | null }, options: object) => useQuery({
         ...options, queryKey: ["combat", input.battleId], queryFn: () => read(input.battleId!),
       }) },
-      toggleAutoCombat: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      toggleAutoCombat: { useMutation: () => ({ mutate: toggleAutoCombat, isPending: false }) },
     },
   });
   const tree = () => <QueryClientProvider client={queryClient}><CombatPage /></QueryClientProvider>;
   const view = render(tree());
-  return { view, refetchProfile, push, queryClient, prefetchAssets, changeBattle: (id: string | null) => {
+  return { view, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeBattle: (id: string | null) => {
     profile = { ...profile, battleId: id, status: id ? "BATTLE" : "AWAKE" };
     view.rerender(tree());
   } };
@@ -195,4 +197,66 @@ it("does not route a missing newer battle through a retained dungeon battle", as
   await waitFor(() => expect(view.getByRole("link", { name: "Return to Profile" })).toBeDefined());
   expect(refetchProfile).toHaveBeenCalledTimes(1);
   expect(push).not.toHaveBeenCalled();
+});
+
+
+it("offers a compact battlefield badge that disables auto combat", async () => {
+  const battle = makeCompleteBattle({
+    id: "auto-battle", battleType: "ARENA",
+    usersState: [makeUser({ userId: "player", isAutoCombat: true })],
+  });
+  const { view, toggleAutoCombat, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  const badge = await view.findByRole("button", { name: "Disable auto combat" });
+  expect(badge.parentElement?.className).toContain("top-2 left-2");
+  expect(view.queryByText("Auto combat active")).toBeNull();
+  expect(view.queryByText(/Your AI profile is fighting/)).toBeNull();
+  expect(view.queryByText(/Hotkey/)).toBeNull();
+  fireEvent.click(badge);
+  expect(toggleAutoCombat).toHaveBeenCalledWith({ battleId: battle.id, enabled: false });
+  await act(async () => queryClient.setQueryData(["combat", battle.id], {
+    battle: { ...battle, usersState: [makeUser({ userId: "player", isAutoCombat: false })] }, result: null,
+  }));
+  await waitFor(() => expect(!!view.queryByRole("button", { name: "Disable auto combat" })).toBe(false));
+});
+
+it("keeps required AI matches read-only and removes the badge from finished battles", async () => {
+  const battle = makeCompleteBattle({
+    id: "required-auto", battleType: "ARENA",
+    usersState: [makeUser({ userId: "player", isAutoCombat: true })],
+    extraState: { tournamentAiOnly: true },
+  });
+  const { view, toggleAutoCombat, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByRole("status");
+  expect(view.queryByRole("button", { name: "Disable auto combat" })).toBeNull();
+  expect(toggleAutoCombat).not.toHaveBeenCalled();
+  await act(async () => queryClient.setQueryData(["combat", battle.id], {
+    battle, result: { outcome: "Won" },
+  }));
+  await view.findByText("Finished battle result");
+  expect(view.queryByRole("status")).toBeNull();
+});
+
+
+it("omits empty action tabs during auto combat when history and timeline are hidden", async () => {
+  const battle = makeCompleteBattle({
+    id: "auto-tabs", battleType: "ARENA",
+    usersState: [makeUser({ userId: "player", isAutoCombat: true })],
+  });
+  const { view } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response, { useTabs: true });
+  await view.findByRole("button", { name: "Disable auto combat" });
+  expect(view.queryByRole("tablist")).toBeNull();
+});
+
+
+it("selects the visible history during auto combat and marks its actions read", async () => {
+  const battle = makeCompleteBattle({
+    id: "auto-history", battleType: "ARENA", version: 7,
+    usersState: [makeUser({ userId: "player", isAutoCombat: true })],
+  });
+  const { view, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response, { useTabs: true, showBattleLog: true });
+  const history = await view.findByRole("tab", { name: "History" });
+  expect(history.getAttribute("data-state")).toBe("active");
+  await act(async () => queryClient.setQueryData(["combat", battle.id], { battle: { ...battle, version: 8 }, result: null }));
+  await waitFor(() => expect(history.textContent).toBe("History"));
+  expect(view.queryByRole("tab", { name: "Actions" })).toBeNull();
 });

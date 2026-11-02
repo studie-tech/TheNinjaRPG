@@ -58,6 +58,14 @@ describe("scenery viewport bounds", () => {
     expect(bounds.maxY).toBeCloseTo(70);
     expect(boundsOverlap(bounds, { minX: -150, maxX: -140, minY: 0, maxY: 10 })).toBe(true);
   });
+  it("retains sheared wall tops and bases at the viewport edge", () => {
+    const bounds = worldSpriteBounds({ ...artwork, shearY: 0.5 });
+    expect(bounds.minX).toBe(-40);
+    expect(bounds.maxX).toBe(60);
+    expect(bounds.minY).toBeCloseTo(-35);
+    expect(bounds.maxY).toBeCloseTo(215);
+    expect(boundsOverlap(bounds, { minX: 50, maxX: 65, minY: 210, maxY: 225 })).toBe(true);
+  });
   it("retains edge pixels and wind padding while rejecting distant artwork", () => {
     const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
     expect(boundsOverlap(bounds, { minX: 10, minY: 0, maxX: 20, maxY: 10 })).toBe(true);

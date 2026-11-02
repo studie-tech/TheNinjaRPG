@@ -596,15 +596,7 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
-      // A player still in the tutorial lands within sight of whatever objective
-      // is waiting in the destination sector, rather than anywhere in it. Travel
-      // otherwise picks a uniformly random walkable tile, which on a 26x26 map
-      // can be most of a sector from the target - and the sector camera is
-      // pinned to the player with panning disabled, so the marker is simply off
-      // screen with nothing pointing at it. The tracker carrying that location
-      // is a column on the user row already fetched above, so this costs no
-      // extra query. Falls back to the random tile when the objective is not in
-      // this sector or nothing walkable sits near it.
+      // Tutorial arrivals keep the active objective in sight; other arrivals use the map center.
       const tutorialTarget = isTutorialActive(user)
         ? user.questData
             ?.flatMap((quest) => quest.goals)
@@ -624,7 +616,7 @@ export const travelRouter = createTRPCRouter({
               { x: tutorialTarget.longitude, y: tutorialTarget.latitude },
               randomInt,
             )
-          : null) ?? findGlobalTravelDestination(targetSectorMap, randomInt);
+          : null) ?? findGlobalTravelDestination(targetSectorMap);
       if (!destination) {
         return errorResponse("The destination sector has no walkable tiles");
       }

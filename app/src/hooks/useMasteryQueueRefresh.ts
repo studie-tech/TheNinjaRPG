@@ -5,7 +5,10 @@ import type { UserWithRelations } from "@/routers/profile";
 
 /** Finish mastery and elemental sessions on every page, including while asleep. */
 export const useMasteryQueueRefresh = (
-  user: UserWithRelations,
+  user:
+    | (Parameters<typeof masteryTrainingEndsAt>[0] &
+        Pick<NonNullable<UserWithRelations>, "status">)
+    | undefined,
   onRefresh: () => void,
   timeDiff: number,
   enabled = true,

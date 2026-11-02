@@ -28,7 +28,7 @@ export type UserEvent = {
 
 export const usePusherHandler = (
   userId?: string | null,
-  userData?: UserWithRelations,
+  userData?: Pick<NonNullable<UserWithRelations>, "clanId" | "villageId">,
 ) => {
   // Extra parameter
   const clanId = userData?.clanId;

@@ -40,6 +40,40 @@ const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
 };
 
 describe("combat actor reconciliation", () => {
+  it.each([[4, 8], [12, 8]])("preserves a %s by %s AI silhouette without stretching its contact plane", async (width, height) => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(width * height * 4), width, height }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const { root, selection, hover } = await setup();
+    const figure = root.getChildByLabel("combat-art")!.children[0]!.getChildByLabel("aiAvatar") as Sprite;
+    expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
+    expect(figure.width / figure.height).toBeCloseTo(width / height);
+    const footY = figure.y + figure.scale.y * height * (1 - figure.anchor.y);
+    for (const marker of [root.children[0]!, selection, hover]) expect(marker.y).toBeCloseTo(footY);
+  });
+  it("anchors padded AI contacts and selection to the visible footer when facing changes", async () => {
+    const pixels = new Uint8Array(8 * 8 * 4);
+    for (let y = 1; y < 6; y++) for (let x = 1; x < 4; x++) pixels[(y * 8 + x) * 4 + 3] = 255;
+    const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const { actors, root, selection, hover, user, battle } = await setup();
+    const enemy = makeBattleUser("enemy", { longitude: 2, latitude: 1, direction: user.direction === "left" ? "right" : "left" });
+    battle.usersState.push(enemy);
+    for (const longitude of [2, 4]) {
+      enemy.longitude = longitude;
+      actors.sync({ battle }); await actors.ready();
+      const figure = root.getChildByLabel("combat-art")!.children[0]!.getChildByLabel("aiAvatar") as Sprite;
+      const footX = figure.x + figure.scale.x * figure.texture.orig.width * (0.5 - figure.anchor.x);
+      const footY = figure.y + figure.scale.y * figure.texture.orig.height * (1 - figure.anchor.y);
+      for (const marker of [root.children[0]!, selection, hover]) {
+        expect(marker.x).toBeCloseTo(footX);
+        expect(marker.y).toBeCloseTo(footY);
+      }
+      expect(footY).toBeGreaterThan(figure.y - Math.abs(figure.scale.y) * 4);
+      expect(Math.sign(figure.scale.x)).toBe(longitude === 2 ? 1 : -1);
+    }
+  });
   it("interpolates position across snapshots without recreating the actor or mutating pools", async () => {
     const { actors, root, user, battle } = await setup();
     const pools = [user.curHealth, user.maxHealth];
@@ -106,6 +140,12 @@ describe("combat actor reconciliation", () => {
     for (const marker of [selection, hover]) {
       expect(root.getChildIndex(marker)).toBeLessThan(root.getChildIndex(art));
       expect(marker.getLocalBounds().maxY).toBeLessThan(tile.height * 0.5);
+    }
+    expect(root.children[0]!.width).toBeLessThan(tile.width * 0.5);
+    expect(root.children[0]!.height).toBeLessThanOrEqual(tile.height * 0.2);
+    if (isAi) {
+      const figure = art.children[0]!.children.find((child) => child.label === "aiAvatar")!;
+      expect(root.children[0]!.y).toBeCloseTo(figure.y - figure.height / 2);
     }
     expect(threat.y - threat.height / 2).toBeCloseTo(health.y + health.height / 2);
     for (const label of ["combat-health", "combat-stamina", "combat-chakra"]) {
@@ -190,6 +230,8 @@ describe("combat actor reconciliation", () => {
       expect((bounds.minY + bounds.maxY) / 2).toBeCloseTo(footY);
     }
     expect(root.children[0]?.position).toMatchObject({ x: tile.width / 2, y: footY });
+    expect(root.children[0]!.width).toBeLessThan(tile.width * 0.4);
+    expect(root.children[0]!.height).toBeLessThan(tile.height * 0.2);
   });
   it("pulses selection size and opacity around a fixed foot point and freezes for reduced motion", async () => {
     const { actors, selection, hover, user } = await setup(false, resolveSpriteAppearance({}));

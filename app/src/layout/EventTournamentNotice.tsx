@@ -2,11 +2,11 @@
 
 import { api } from "@/app/_trpc/client";
 import Link from "@/layout/Link";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Persistent ready-check prompt also reaches participants away from the tournament page. */
 export const EventTournamentNotice = () => {
-  const { data: user, isEventParticipant } = useUserData();
+  const { data: user, isEventParticipant } = useUserDataSelector((user) => user.userId);
   const { data } = api.tournament.getEventNotices.useQuery(undefined, {
     enabled: !!user,
     // Keep discovery alive for remote invitations or substitutions if a push is missed.

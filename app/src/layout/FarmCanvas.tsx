@@ -2,8 +2,8 @@
 
 import { memo, type Ref, useEffect, useImperativeHandle, useRef } from "react";
 import { FARM_PLOT_COLUMNS } from "@/drizzle/constants";
-import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
+import { useVisualEffects } from "@/hooks/visual-effects";
 import WebGlError from "@/layout/WebGLError";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
 import { FARM_CANVAS_MIN_HEIGHT } from "@/libs/rendering/scenes/farmLayout";
@@ -31,7 +31,8 @@ const FarmCanvasInner = ({
   ref,
 }: FarmCanvasProps) => {
   const { timeDiff } = useUserData();
-  const { showDayNightMapOverlays } = useDayNightMapOverlays();
+  const { visualEffects } = useVisualEffects();
+  const showDayNightMapOverlays = visualEffects.lighting;
   const mountRef = useRef<HTMLDivElement | null>(null);
   const current = useRef({
     timeDiff,

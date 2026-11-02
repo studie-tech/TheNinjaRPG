@@ -19,6 +19,13 @@ let boardSession: typeof session | null;
 let boardProgress: { contractId: string; used: number; cooldownUntil: Date | null }[];
 
 beforeEach(() => {
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+    const info = UserContext.useRequiredUserData();
+    return { ...info, data: info.data ? select(info.data) : undefined } as never;
+  });
+});
+
+beforeEach(() => {
   window.sessionStorage.removeItem("huntingArrival:hunter");
   window.sessionStorage.removeItem("huntingArrival:another-hunter");
   user = { userId: "hunter", occupation: "HUNTER", sector: 2, status: "AWAKE" };

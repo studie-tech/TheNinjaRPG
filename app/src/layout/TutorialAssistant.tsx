@@ -53,7 +53,7 @@ import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 /** Marks the assistant panel so the highlight logic can measure what it covers. */
@@ -358,7 +358,7 @@ interface TutorialAssistantProps {
  * @returns
  */
 const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => user.userId);
   // The game shell also wraps public pages. Reward hooks require a player and redirect
   // anonymous visitors, so keep them unmounted until the profile is available.
   if (!userData) return null;
@@ -372,7 +372,21 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
   sidebarBreakpoint = 768,
 }) => {
   // State
-  const { data: userData, userAgent, updateUser } = useUserData();
+  const {
+    data: userData,
+    userAgent,
+    updateUser,
+  } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    tutorialOn: user.tutorialOn,
+    tutorialStep: user.tutorialStep,
+    status: user.status,
+    battleId: user.battleId,
+    level: user.level,
+    earnedExperience: user.earnedExperience,
+    userQuests: user.userQuests,
+    questData: user.questData,
+  }));
   const pathname = usePublicPathname();
   const router = useRouter();
 

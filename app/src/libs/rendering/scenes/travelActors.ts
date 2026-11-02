@@ -13,6 +13,7 @@ import {
   IMG_SECTOR_VS_ICON,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
+  WORLD_DAY_BRIGHTNESS,
 } from "@/drizzle/constants";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -22,8 +23,16 @@ import { getActiveObjectives } from "@/libs/quest";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
-import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { isObjectChainVisible, type WorldBounds } from "@/libs/rendering/visibility";
+import type {
+  WorldMotionDirection,
+  WorldSpriteDescription,
+} from "@/libs/rendering/sectorSprites";
+import {
+  boundsOverlap,
+  isObjectChainVisible,
+  type WorldBounds,
+} from "@/libs/rendering/visibility";
+import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -32,7 +41,10 @@ import { findVillageUserRelationship } from "@/utils/alliance";
 /** Actor identity and art stay stable across position and presence updates. */
 export const createTravelActors = (
   game: GameRenderer,
-  layers?: { depth: RenderLayer; overlay: RenderLayer },
+  layers?: { depth: RenderLayer; overlay: RenderLayer; ground?: RenderLayer },
+  shadows?: WorldShadows,
+  /** Fixed artwork supplies conservative world-space bounds; unknown poses retain global contact ordering. */
+  sceneryBounds?: WeakMap<Container, WorldBounds>,
 ) => {
   const container = new Container();
   const records = new Map<string, ActorRecord>();
@@ -40,6 +52,7 @@ export const createTravelActors = (
   let viewer: UserWithRelations;
   let users: SectorUser[] = [];
   let friendlyAttack = false;
+  let brightness = WORLD_DAY_BRIGHTNESS;
   let hovered: string | null = null;
   let paths: PathCalculator | null = null;
   let pathGrid: Grid<TerrainHex> | null = null;
@@ -47,6 +60,7 @@ export const createTravelActors = (
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
   let visibleKey = "";
+  let paintedOriginY = container.y;
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -133,7 +147,8 @@ export const createTravelActors = (
               recipe.tile.height * 0.35 * LPC_TRAVEL_SCALE,
               recipe.tile.height * 0.12 * LPC_TRAVEL_SCALE,
             )
-            .fill({ color, alpha: 0.55 }),
+            .fill({ color: 0x081115, alpha: 0.4 })
+            .stroke({ color, alpha: 0.45, width: recipe.tile.height * 0.015 }),
         );
       }
       scope.own(() => {
@@ -152,6 +167,7 @@ export const createTravelActors = (
         x: previous?.x ?? -recipe.tile.center.x,
         y: previous?.y ?? -recipe.tile.center.y,
         facing: previous?.facing ?? 2,
+        depth: 0,
       };
       root.position.set(record.x, record.y);
       root.zIndex = -(
@@ -160,6 +176,7 @@ export const createTravelActors = (
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
         container.y
       );
+      record.depth = root.zIndex;
       const body = recipe.parts.find((entry) => entry.character);
       if (body) {
         // Texture-free anonymous art stays usable through slow or failed atlas/portrait loads.
@@ -204,10 +221,11 @@ export const createTravelActors = (
         );
         root.addChild(badge);
       }
-      void createWorldSprites(scope, recipe.parts).then(
+      void createWorldSprites(scope, recipe.parts, shadows).then(
         (art) => {
           if (scope.isDisposed()) return;
           record.art = art;
+          art.setLighting(brightness);
           root.addChild(art.container);
           if (art.entries.some((entry) => entry.description.kind === "avatar")) {
             record.fallback?.destroy();
@@ -216,7 +234,11 @@ export const createTravelActors = (
           // Controls retain actor transforms/visibility while rendering above all scenery.
           if (recipe.user)
             for (const entry of art.entries)
-              if (isActorControl(entry.description.kind))
+              if (
+                isActorControl(entry.description.kind) ||
+                entry.description.mask ||
+                entry.description.unlit
+              )
                 layers?.overlay.attach(entry.sprite);
           updateActions();
         },
@@ -306,7 +328,65 @@ export const createTravelActors = (
     }
     return null;
   };
-  const animate = (frame: GameFrame) => {
+  /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
+  const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
+  const hasDepthCrossing = (siblings: readonly Container[], spatial = false) => {
+    if (!spatial || !sceneryBounds)
+      return siblings.some((root, index) => {
+        const before = siblings[index - 1];
+        return (
+          !!before &&
+          (before.zIndex > root.zIndex || contactDepth(before) > contactDepth(root))
+        );
+      });
+    const actors: [number, ActorRecord][] = [];
+    let previousDepth = -Infinity;
+    for (let i = 0; i < siblings.length; i++) {
+      const root = siblings[i];
+      if (!root) continue;
+      const before = siblings[i - 1];
+      if (before && before.zIndex > root.zIndex) return true;
+      const actor = byRoot.get(root);
+      if (!actor) continue;
+      if (previousDepth > actor.depth) return true;
+      previousDepth = actor.depth;
+      actors.push([i, actor]);
+    }
+    let comparisons = 0;
+    for (const [i, actor] of actors) {
+      const root = actor.root;
+      let actorBounds: WorldBounds | undefined;
+      // A held key can cross several unrelated planes; check every newly overlapping constraint.
+      for (const direction of [-1, 1])
+        for (let j = i + direction; j >= 0 && j < siblings.length; j += direction) {
+          const other = siblings[j];
+          if (!other) continue;
+          if (direction < 0 ? other.zIndex <= actor.depth : other.zIndex >= actor.depth)
+            break;
+          // Crowded motion can refresh exact keys instead of repeatedly scanning remote planes.
+          if (++comparisons > siblings.length) return true;
+          if (byRoot.has(other)) continue;
+          const otherBounds = sceneryBounds.get(other);
+          if (!otherBounds) return true;
+          if (!actorBounds) {
+            // Live child bounds include oversized/trimmed LPC frames and fallback replacement.
+            const local = root.getLocalBounds();
+            actorBounds = {
+              minX: local.minX + root.x + container.x,
+              maxX: local.maxX + root.x + container.x,
+              minY: local.minY + root.y + container.y,
+              maxY: local.maxY + root.y + container.y,
+            };
+          }
+          if (boundsOverlap(actorBounds, otherBounds, 1)) return true;
+        }
+    }
+    return false;
+  };
+  const animate = (
+    frame: GameFrame,
+    movements?: ReadonlyMap<string, TravelActorMovement>,
+  ) => {
     const angle = frame.reducedMotion ? 0 : (frame.now * Math.PI) / 5000;
     const cycle = frame.reducedMotion ? 0 : (frame.now / 1000) % 2;
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
@@ -316,15 +396,27 @@ export const createTravelActors = (
       const dx = -waypoint.center.x - record.x,
         dy = -waypoint.center.y - record.y;
       const distance = Math.hypot(dx, dy);
-      const moving = distance > 0.01;
-      if (moving) {
+      const movement = movements?.get(recipe.user?.userId ?? "");
+      const moving = movement ? movement.direction !== null : distance > 0.01;
+      if (movement) {
+        // The published edge owns interpolation; its destination consumes any queued snapshot path.
+        record.path.length = 0;
+        record.tile = recipe.tile;
+        record.facing = lpcFacing(
+          movement.x - record.x,
+          movement.y - record.y,
+          record.facing,
+        );
+        record.x = movement.x;
+        record.y = movement.y;
+      } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
         // Catch up queued network waypoints without overshooting; reduced motion snaps to each one.
         const step = frame.reducedMotion
           ? distance
           : Math.min(
               distance,
-              recipe.tile.width * frame.delta * 6 * Math.max(1, record.path.length),
+              recipe.tile.width * frame.delta * 3 * Math.max(1, record.path.length),
             );
         record.x += (dx / distance) * step;
         record.y += (dy / distance) * step;
@@ -343,14 +435,24 @@ export const createTravelActors = (
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
       // Contact uses the interpolated/orbiting position and the current sector origin.
-      // zIndex also invalidates Pixi's retained render instructions when depth changes.
-      root.zIndex = -(
+      record.depth = -(
         root.y +
         recipe.tile.height *
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
         container.y
       );
     }
+    if (
+      paintedOriginY !== container.y ||
+      hasDepthCrossing(layers?.depth.renderLayerChildren ?? container.children, true) ||
+      (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))
+    ) {
+      // Publish moving keys together so actor crossings and new scenery share one coherent order.
+      for (const record of records.values()) record.root.zIndex = record.depth;
+      layers?.depth.sortRenderLayerChildren();
+      layers?.overlay.sortRenderLayerChildren();
+    }
+    paintedOriginY = container.y;
     container.sortChildren();
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
@@ -374,6 +476,22 @@ export const createTravelActors = (
     },
     hit,
     animate,
+    feet: (userId: string) => {
+      const record = records.get(`user:${userId}`);
+      if (!record) return undefined;
+      const body = record.recipe.parts.find((part) => part.character);
+      return {
+        x: record.root.x + (body?.x ?? record.recipe.tile.width / 2) + container.x,
+        y:
+          record.root.y +
+          (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2) +
+          container.y,
+      };
+    },
+    setLighting: (next: number) => {
+      brightness = next;
+      for (const record of records.values()) record.art?.setLighting(next);
+    },
     hover: (next: string | null) => {
       if (next !== hovered) {
         hovered = next;
@@ -533,7 +651,7 @@ export const travelAvatar = (
 const LPC_TRAVEL_SCALE = 0.7;
 const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
-const LPC_TRAVEL_CONTACT_Y = 0.2;
+const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 
@@ -553,6 +671,7 @@ const part = (
   x: tile.width * x,
   y: tile.height * y,
   groundY: 0,
+  unlit: kind !== "avatar",
   ...extra,
 });
 const pin = (tile: TerrainHex, tint: number) => [
@@ -587,9 +706,20 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
-        ? { character: user.spriteAppearance, characterMode: "travel" }
+        ? {
+            character: user.spriteAppearance,
+            characterMode: "travel",
+            shadowCaster: "character",
+            shadow: 0.16,
+            light: 0.65,
+          }
         : user.isNpc
-          ? { rendition: 256 }
+          ? {
+              rendition: 256,
+              preserveAspect: true,
+              nearest: true,
+              shadowCaster: "character",
+            }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
   );
@@ -664,6 +794,7 @@ type ActorRecipe = {
   spread: boolean;
 };
 type ActorRecord = {
+  depth: number;
   tile: TerrainHex;
   path: TerrainHex[];
   x: number;
@@ -675,4 +806,20 @@ type ActorRecord = {
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
   fallback: Graphics | null;
+};
+
+/** Interpolated sector-local feet use the same path clock as the camera. */
+export type TravelActorMovement = {
+  x: number;
+  y: number;
+  direction: WorldMotionDirection | null;
+  facing: number;
+};
+
+export type TravelMotionStep = {
+  from: { sector: number; x: number; y: number };
+  to: { sector: number; x: number; y: number };
+  startedAt: number;
+  direction: WorldMotionDirection;
+  facing: 1 | -1;
 };

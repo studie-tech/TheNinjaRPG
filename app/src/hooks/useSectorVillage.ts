@@ -3,7 +3,12 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 import { getOwnSectorVillage } from "@/utils/village";
 
 /** Use the profile's own village immediately and share the lookup when visiting another sector. */
-export const useSectorVillage = (userData?: UserWithRelations | null) => {
+export const useSectorVillage = (
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "sector" | "isOutlaw" | "village"
+  > | null,
+) => {
   const ownVillage = getOwnSectorVillage(userData);
   const query = api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },

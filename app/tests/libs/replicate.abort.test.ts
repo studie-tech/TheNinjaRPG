@@ -3,7 +3,7 @@ import Replicate from "replicate";
 import sharp from "sharp";
 import { UTApi } from "uploadthing/server";
 import { Images } from "openai/resources/images";
-import { fastTxt2imgReplicate, generateSpriteGPT, removeBackgroundReplicate, removeBackgroundToBuffer, txt2imgNanoBanana } from "@/libs/replicate";
+import { createThumbnail, fastTxt2imgReplicate, generateSpriteGPT, removeBackgroundReplicate, removeBackgroundToBuffer, txt2imgNanoBanana } from "@/libs/replicate";
 
 const upload = { data: { ufsUrl: "https://example.com/upload.webp" }, error: null };
 let savedWindow: PropertyDescriptor | undefined;
@@ -24,6 +24,22 @@ afterEach(() => {
 });
 
 describe("image provider abort propagation", () => {
+  it("publishes transparent AI thumbnails containing both the head and feet", async () => {
+    const source = await sharp({ create: { width: 64, height: 128, channels: 4, background: "#ff0000" } })
+      .composite([{ input: await sharp({ create: { width: 64, height: 64, channels: 4, background: "#0000ff" } }).png().toBuffer(), top: 64, left: 0 }]).png().toBuffer();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(source));
+    const uploading = vi.spyOn(UTApi.prototype, "uploadFiles").mockResolvedValue(upload as never);
+    expect(await createThumbnail("https://example.com/ai.png", "contain")).toBe(upload.data.ufsUrl);
+    const file = uploading.mock.calls[0]![0] as unknown as File;
+    expect(file.type).toBe("image/png");
+    const bytes = Buffer.from(await file.arrayBuffer());
+    expect(await sharp(bytes).metadata()).toMatchObject({ width: 64, height: 64, format: "png", hasAlpha: true });
+    const pixels = await sharp(bytes).raw().toBuffer();
+    const at = (x: number, y: number) => Array.from(pixels.subarray((y * 64 + x) * 4, (y * 64 + x) * 4 + 4));
+    expect(at(32, 0)).toEqual([255, 0, 0, 255]);
+    expect(at(32, 63)).toEqual([0, 0, 255, 255]);
+    expect(at(0, 32)).toEqual([0, 0, 0, 0]);
+  });
   it("returns an abort while the SDK remains stalled and never starts a paid fallback", async () => {
     const controller = new AbortController();
     const run = vi.spyOn(Replicate.prototype, "run").mockImplementation(async () => {

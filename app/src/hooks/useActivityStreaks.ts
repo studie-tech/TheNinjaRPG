@@ -2,7 +2,7 @@ import { api } from "@/app/_trpc/client";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextStreakRefreshAt } from "@/libs/activityStreak";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 /** Share the streak cache and refresh when daily claim or continuity eligibility changes. */
 export const useActivityStreaks = (enabled = true, timeDiff = 0) => {
@@ -24,7 +24,7 @@ export const useActivityStreaks = (enabled = true, timeDiff = 0) => {
 /** Claims reconcile progress and apply confirmed scalar rewards to the profile cache. */
 export const useClaimStreakDay = () => {
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   return api.activityStreak.claimStreakDay.useMutation({
     onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (data, _variables, context) => {

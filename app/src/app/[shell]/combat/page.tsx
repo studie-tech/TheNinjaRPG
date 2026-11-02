@@ -1,7 +1,6 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
-import { Bot } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -12,7 +11,7 @@ import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/comb
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import ActionTimer from "@/layout/ActionTimer";
-import { AutoCombatControl } from "@/layout/AutoCombatControl";
+import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
 import { ActionSelector } from "@/layout/CombatActions";
 import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
@@ -74,7 +73,8 @@ export default function CombatPage() {
         setAutoCombatError(undefined);
         return prepareUserUpdate();
       },
-      onSuccess: async (result, _input, revision) => {
+      onSuccess: async (result, input, revision) => {
+        if (result.success && !input.enabled) setActiveTab("actions");
         setAutoCombatError(result.success ? undefined : result.message);
         if (result.message) showMutationToast(result);
         await Promise.all([
@@ -82,7 +82,11 @@ export default function CombatPage() {
           ...(result.success ? [updateUser(result, { revision })] : []),
         ]);
       },
-      onError: (error) => setAutoCombatError(error.message),
+      onError: (error) => {
+        setAutoCombatError(error.message);
+        // Badge actions remain recoverable even while the settings popover is closed.
+        showMutationToast({ success: false, message: error.message });
+      },
     });
 
   // Derived variables
@@ -99,6 +103,12 @@ export default function CombatPage() {
   // player, not of whichever actor is currently controlled)
   const sessionBattleUser = battle?.usersState.find((u) => u.userId === userId);
   const isAutoCombatActive = !!sessionBattleUser?.isAutoCombat;
+  const visibleTab =
+    isAutoCombatActive && activeTab === "actions"
+      ? config.showTimeline
+        ? "timeline"
+        : "history"
+      : activeTab;
   // Scheduled title fights retain their agreed mode; automatic battle types have no manual handover.
   const canToggleAutoCombat =
     !!battle &&
@@ -127,12 +137,12 @@ export default function CombatPage() {
     ? Math.max(0, battle.version - lastViewedVersion)
     : 0;
 
-  // Update last viewed version when switching to history tab
+  // Track the history currently visible, including the auto combat tab fallback.
   useEffect(() => {
-    if (activeTab === "history" && battle?.version) {
+    if (config.showBattleLog && visibleTab === "history" && battle?.version) {
       setLastViewedVersion(battle.version);
     }
-  }, [activeTab, battle?.version]);
+  }, [visibleTab, config.showBattleLog, battle?.version]);
 
   // Force actions tab when timeline or battle log is hidden
   useEffect(() => {
@@ -286,7 +296,28 @@ export default function CombatPage() {
           }}
           battle={battle}
           isPending={battleState.isPending}
-          options={<UserCombatSettings config={config} userData={userData} />}
+          options={
+            <UserCombatSettings
+              config={config}
+              userData={userData}
+              autoCombatControl={
+                canToggleAutoCombat && !results ? (
+                  <AutoCombatControl
+                    key={battle.id}
+                    isActive={isAutoCombatActive}
+                    isPending={isTogglingAutoCombat}
+                    requiresConfirmation={ManualStartBattleTypes.includes(
+                      battle.battleType,
+                    )}
+                    error={autoCombatError}
+                    onChange={(enabled) =>
+                      toggleAutoCombat({ battleId: battle.id, enabled })
+                    }
+                  />
+                ) : undefined
+              }
+            />
+          }
         />
       </div>
     );
@@ -302,6 +333,11 @@ export default function CombatPage() {
     controlledActorId,
     config,
     userData,
+    canToggleAutoCombat,
+    isAutoCombatActive,
+    isTogglingAutoCombat,
+    autoCombatError,
+    toggleAutoCombat,
   ]);
 
   const renderBattlefield = useCallback(() => {
@@ -319,6 +355,18 @@ export default function CombatPage() {
         }
       >
         {!isBattleLoading && combat}
+        {!isBattleLoading && !results && battle && isAutoCombatActive && (
+          <div className="absolute top-2 left-2 z-20">
+            <AutoCombatBadge
+              isPending={isTogglingAutoCombat}
+              onDisable={
+                canToggleAutoCombat
+                  ? () => toggleAutoCombat({ battleId: battle.id, enabled: false })
+                  : undefined
+              }
+            />
+          </div>
+        )}
         {!userData && <Loader explanation="Loading User Data" />}
         {isBattleLoading && <Loader explanation="Loading Battle Data" />}
         {userData && !results && !userData.battleId && (
@@ -326,50 +374,42 @@ export default function CombatPage() {
         )}
       </div>
     );
-  }, [isBattleLoading, combat, userData, results, battle]);
+  }, [
+    isBattleLoading,
+    combat,
+    userData,
+    results,
+    battle,
+    isAutoCombatActive,
+    isTogglingAutoCombat,
+    canToggleAutoCombat,
+    toggleAutoCombat,
+  ]);
 
   const renderActions = useCallback(() => {
-    if (!isInBattle || !battle) return null;
+    if (!isInBattle || !battle || isAutoCombatActive) return null;
     return (
       <div
         className={cn("flex flex-col gap-1", results && "opacity-50")}
         inert={!!results}
       >
-        {isAutoCombatActive ? (
-          <AutoCombatPanel
-            aiOnly={
-              battle.extraState.tournamentAiOnly || battle.extraState.kageMatch?.ai
-            }
-          />
-        ) : (
-          <ActionSelector
-            showInfoIcon={true}
-            items={actions}
-            currentRound={battle.round}
-            className="p-1"
-            showBgColor={true}
-            eagerImages={true}
-            showLabels={showActionLabels}
-            selectedId={actionId}
-            combatMode={true}
-            userActionPoints={user?.actionPoints}
-            battle={battle}
-            userId={controlledActorId}
-            gridClassNameOverwrite={actionGridClass}
-            aspectRatioClass={actionAspect}
-            onClick={handleActionClick}
-          />
-        )}
-        {canToggleAutoCombat && !results && (
-          <AutoCombatControl
-            key={battle.id}
-            isActive={isAutoCombatActive}
-            isPending={isTogglingAutoCombat}
-            requiresConfirmation={ManualStartBattleTypes.includes(battle.battleType)}
-            error={autoCombatError}
-            onChange={(enabled) => toggleAutoCombat({ battleId: battle.id, enabled })}
-          />
-        )}
+        <ActionSelector
+          showInfoIcon={true}
+          items={actions}
+          currentRound={battle.round}
+          className="p-1"
+          showBgColor={true}
+          eagerImages={true}
+          showLabels={showActionLabels}
+          selectedId={actionId}
+          combatMode={true}
+          userActionPoints={user?.actionPoints}
+          battle={battle}
+          userId={controlledActorId}
+          gridClassNameOverwrite={actionGridClass}
+          aspectRatioClass={actionAspect}
+          onClick={handleActionClick}
+        />
       </div>
     );
   }, [
@@ -378,10 +418,6 @@ export default function CombatPage() {
     battle,
     isAutoCombatActive,
     results,
-    isTogglingAutoCombat,
-    autoCombatError,
-    toggleAutoCombat,
-    canToggleAutoCombat,
     actions,
     showActionLabels,
     actionId,
@@ -439,19 +475,25 @@ export default function CombatPage() {
 
   // Tabs content - groups actions, timeline, and battlelog
   const renderTabbedContent = useCallback(() => {
-    if (!battle) return null;
+    if (
+      !battle ||
+      (isAutoCombatActive && !config.showTimeline && !config.showBattleLog)
+    )
+      return null;
 
     return (
       <Tabs
         defaultValue="actions"
         className="w-full"
-        value={activeTab}
+        value={visibleTab}
         onValueChange={setActiveTab}
       >
         <TabsList className="w-full rounded-lg border">
-          <TabsTrigger value="actions" className="flex-1">
-            Actions
-          </TabsTrigger>
+          {!isAutoCombatActive && (
+            <TabsTrigger value="actions" className="flex-1">
+              Actions
+            </TabsTrigger>
+          )}
           {config.showTimeline && (
             <TabsTrigger value="timeline" className="flex-1">
               Timeline
@@ -460,7 +502,7 @@ export default function CombatPage() {
           {config.showBattleLog && (
             <TabsTrigger value="history" className="relative flex-1">
               History
-              {unreadActions > 0 && activeTab !== "history" && (
+              {unreadActions > 0 && visibleTab !== "history" && (
                 <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
                   {unreadActions}
                 </span>
@@ -468,9 +510,11 @@ export default function CombatPage() {
             </TabsTrigger>
           )}
         </TabsList>
-        <TabsContent value="actions" className="mt-0 p-1">
-          {renderActions()}
-        </TabsContent>
+        {!isAutoCombatActive && (
+          <TabsContent value="actions" className="mt-0 p-1">
+            {renderActions()}
+          </TabsContent>
+        )}
         {config.showTimeline && (
           <TabsContent value="timeline" className="mt-0 p-2">
             {renderTimeline()}
@@ -487,7 +531,8 @@ export default function CombatPage() {
     battle,
     config.showTimeline,
     config.showBattleLog,
-    activeTab,
+    visibleTab,
+    isAutoCombatActive,
     unreadActions,
     renderActions,
     renderTimeline,
@@ -537,40 +582,22 @@ export default function CombatPage() {
         config.layoutOrder.map((id) => <div key={id}>{renderComponent(id)}</div>)
       )}
 
-      <div className="flex flex-row">
-        {battle && !results && actionId && (
-          <div className="text-xs">
-            <p className="text-red-500">Red: tile not affected</p>
-            <p className="text-green-700">Green: tile affected by attack</p>
-            <p className="text-blue-500">Blue: move character</p>
+      {!isAutoCombatActive && (
+        <div className="flex flex-row">
+          {battle && !results && actionId && (
+            <div className="text-xs">
+              <p className="text-red-500">Red: tile not affected</p>
+              <p className="text-green-700">Green: tile affected by attack</p>
+              <p className="text-blue-500">Blue: move character</p>
+            </div>
+          )}
+          <div className="grow"></div>
+          <div className="hidden text-xs md:block">
+            <p className="text-orange-700">Hotkey &quot;W&quot;: End turn</p>
+            <p className="text-orange-700">Hotkey &quot;M&quot;: Move</p>
           </div>
-        )}
-        <div className="grow"></div>
-        <div className="hidden text-xs md:block">
-          <p className="text-orange-700">Hotkey &quot;W&quot;: End turn</p>
-          <p className="text-orange-700">Hotkey &quot;M&quot;: Move</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
-
-interface AutoCombatPanelProps {
-  aiOnly?: boolean;
-}
-
-const AutoCombatPanel: React.FC<AutoCombatPanelProps> = (props) => {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-lg border bg-popover/50 p-4 text-center">
-      <p className="flex items-center gap-2 font-semibold">
-        <Bot className="h-5 w-5 animate-pulse" />
-        Auto combat active
-      </p>
-      <p className="text-muted-foreground text-sm">
-        {props.aiOnly
-          ? "Both sides use AI control for this match. You can edit your rules before your next match."
-          : "Your AI profile is fighting this battle for you. Turn AI control off below to take control."}
-      </p>
-    </div>
-  );
-};

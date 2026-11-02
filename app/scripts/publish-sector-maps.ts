@@ -8,10 +8,11 @@
  * Usage (from the /app directory):
  *   bun run scripts/publish-sector-maps.ts            # all sectors
  *   bun run scripts/publish-sector-maps.ts --sectors 105,106
+ *   bun run scripts/publish-sector-maps.ts --missing # preserve published maps
  *   bun run scripts/publish-sector-maps.ts --seed v2  # reroll layouts
  */
 import { createHash } from "node:crypto";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getFlagValue, parseIntList } from "./cli";
 import {
@@ -20,10 +21,11 @@ import {
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
-import { sectorMap } from "@/drizzle/schema";
+import { sectorMap, userData } from "@/drizzle/schema";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import { drizzleDB } from "@/server/db";
+import { chunkArray } from "@/utils/array";
 import { buildTiledJson } from "./generate-sector-map";
 
 const CONCURRENCY = 10;
@@ -31,7 +33,8 @@ const CONCURRENCY = 10;
 /**
  * Parse CLI flags. When --sectors is omitted the default is the FULL sector id
  * range (MAP_SECTOR_ID_MIN..MAP_SECTOR_ID_MAX), i.e. republishing every
- * sector; --seed defaults to "v1".
+ * sector; --missing excludes sectors with a published map, and --seed defaults
+ * to "v1".
  */
 const parseArgs = (argv: string[]) => {
   const sectorsArg = getFlagValue(argv, "--sectors");
@@ -41,33 +44,78 @@ const parseArgs = (argv: string[]) => {
         { length: MAP_SECTOR_ID_MAX - MAP_SECTOR_ID_MIN + 1 },
         (_, i) => i + MAP_SECTOR_ID_MIN,
       );
-  return { sectors, seed: getFlagValue(argv, "--seed") ?? "v1" };
+  return {
+    sectors,
+    seed: getFlagValue(argv, "--seed") ?? "v1",
+    missing: argv.includes("--missing"),
+  };
 };
 
 /** CLI entry: regenerate and publish maps for the requested sectors against the DB */
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
+  // Aggregate history and occupied coordinates per sector, with bounded
+  // batches so the database API's result-row limit cannot truncate the globe.
+  const sectorBatches = chunkArray(args.sectors, 500);
 
   const [userTiles, villages, structures, existingMaps] = await Promise.all([
-    drizzleDB.execute(sql`SELECT DISTINCT sector, longitude, latitude FROM UserData`),
+    Promise.all(
+      sectorBatches.map((sectors) => {
+        const occupied = drizzleDB
+          .selectDistinct({
+            sector: userData.sector,
+            x: userData.longitude,
+            y: userData.latitude,
+          })
+          .from(userData)
+          .where(inArray(userData.sector, sectors))
+          .as("occupied");
+        return drizzleDB
+          .select({
+            sector: occupied.sector,
+            tiles: sql<
+              [number, number][]
+            >`JSON_ARRAYAGG(JSON_ARRAY(${occupied.x}, ${occupied.y}))`.mapWith(
+              (value: string | [number, number][]) =>
+                typeof value === "string"
+                  ? (JSON.parse(value) as [number, number][])
+                  : value,
+            ),
+          })
+          .from(occupied)
+          .groupBy(occupied.sector);
+      }),
+    ).then((batches) => batches.flat()),
     drizzleDB.query.village.findMany({
       columns: { id: true, sector: true, type: true },
     }),
     drizzleDB.query.villageStructure.findMany({
       columns: { villageId: true, longitude: true, latitude: true },
     }),
-    drizzleDB.query.sectorMap.findMany({ columns: { sector: true, version: true } }),
+    Promise.all(
+      sectorBatches.map((sectors) =>
+        drizzleDB
+          .select({
+            sector: sectorMap.sector,
+            version: sql<number>`MAX(${sectorMap.version})`.mapWith(Number),
+            isPublished:
+              sql<number>`MAX(CASE WHEN ${sectorMap.status} = 'PUBLISHED' THEN 1 ELSE 0 END)`.mapWith(
+                Number,
+              ),
+          })
+          .from(sectorMap)
+          .where(inArray(sectorMap.sector, sectors))
+          .groupBy(sectorMap.sector),
+      ),
+    ).then((batches) => batches.flat()),
   ]);
 
   const occupiedBySector = new Map<number, { x: number; y: number }[]>();
-  for (const row of userTiles.rows as {
-    sector: number;
-    longitude: number;
-    latitude: number;
-  }[]) {
-    const list = occupiedBySector.get(Number(row.sector)) ?? [];
-    list.push({ x: Number(row.longitude), y: Number(row.latitude) });
-    occupiedBySector.set(Number(row.sector), list);
+  for (const row of userTiles) {
+    occupiedBySector.set(
+      row.sector,
+      row.tiles.map(([x, y]) => ({ x, y })),
+    );
   }
   const villageBySector = new Map(villages.map((v) => [v.sector, v]));
   const structuresByVillage = new Map<string, { x: number; y: number }[]>();
@@ -77,12 +125,14 @@ const main = async () => {
     structuresByVillage.set(structure.villageId, list);
   }
   const latestVersion = new Map<number, number>();
+  const publishedSectors = new Set<number>();
   for (const map of existingMaps) {
-    latestVersion.set(
-      map.sector,
-      Math.max(latestVersion.get(map.sector) ?? 0, map.version),
-    );
+    if (map.isPublished) publishedSectors.add(map.sector);
+    latestVersion.set(map.sector, map.version);
   }
+  const sectors = args.sectors.filter(
+    (sector) => !args.missing || !publishedSectors.has(sector),
+  );
 
   let published = 0;
   const failures: string[] = [];
@@ -120,6 +170,7 @@ const main = async () => {
 
     const now = new Date();
     const id = nanoid();
+    const version = (latestVersion.get(sector) ?? 0) + 1;
     // Insert the new PUBLISHED version FIRST, then archive the sector's prior
     // published rows. If the insert fails the sector keeps its existing published
     // map instead of being left all-archived.
@@ -130,7 +181,7 @@ const main = async () => {
       width: result.map.width,
       height: result.map.height,
       status: "PUBLISHED",
-      version: (latestVersion.get(sector) ?? 0) + 1,
+      version,
       sourceHash: result.map.metadata.sourceHash,
       rawTiledJson: tiledJson,
       normalizedJson: result.map,
@@ -145,26 +196,34 @@ const main = async () => {
         and(
           eq(sectorMap.sector, sector),
           eq(sectorMap.status, "PUBLISHED"),
-          ne(sectorMap.id, id),
+          lt(sectorMap.version, version),
         ),
       );
     published++;
     if (published % 50 === 0) console.log(`Published ${published} sectors...`);
   };
 
-  for (let i = 0; i < args.sectors.length; i += CONCURRENCY) {
+  for (let i = 0; i < sectors.length; i += CONCURRENCY) {
     await Promise.all(
-      args.sectors.slice(i, i + CONCURRENCY).map((sector) =>
+      sectors.slice(i, i + CONCURRENCY).map((sector) =>
         publishSector(sector).catch((error) => {
+          // Drizzle includes both map blobs in its wrapper message; report the
+          // database cause without dumping an entire sector into the CLI log.
+          const cause =
+            error instanceof Error && error.cause instanceof Error
+              ? error.cause
+              : error;
           failures.push(
-            `${sector}: ${error instanceof Error ? error.message : String(error)}`,
+            `${sector}: ${cause instanceof Error ? cause.message.split("\n")[0] : String(cause)}`,
           );
         }),
       ),
     );
   }
 
-  console.log(`Done. Published: ${published}/${args.sectors.length}`);
+  console.log(
+    `Done. Published: ${published}/${sectors.length}. Preserved: ${args.sectors.length - sectors.length}`,
+  );
   if (failures.length > 0) {
     console.error("Failures:", failures.slice(0, 20).join(" | "));
   }

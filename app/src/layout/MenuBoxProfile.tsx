@@ -81,7 +81,7 @@ import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
-import { userBattleAtom, useUserData } from "@/utils/UserContext";
+import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
 /**
@@ -127,7 +127,9 @@ export const socials = [
 
 const MenuBoxProfile: React.FC = () => {
   // State
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector(
+    ({ longitude, latitude, updatedAt, location, ...profile }) => profile,
+  );
   const [now, setNow] = useState(Date.now);
   const refreshTime = () => setNow(Date.now());
   const battle = useAtomValue(userBattleAtom);
@@ -155,7 +157,7 @@ const MenuBoxProfile: React.FC = () => {
   const activeImbuementTimer = sidebarTimers?.imbuement;
 
   // Get location of user
-  const { location } = useGameMenu(userData);
+  const { location } = useGameMenu();
 
   const immunityData = useExpiryAnchor(userData?.immunityUntil, now);
   const immunitySecsLeft = immunityData.secsLeft;
@@ -744,18 +746,24 @@ const MenuBoxProfile: React.FC = () => {
 
 export default MenuBoxProfile;
 
-/**
- * The UTC clock owns its per-second state so a tick re-renders this leaf alone. Held one level
- * up it would re-render the whole profile menu — status rows, pools, objectives, avatars — once
- * a second on every page of the game, since the sidebar is part of the root layout.
- */
+/** A live text node keeps UTC clock ticks outside the surrounding React tree. */
 const GameClock: React.FC = () => {
-  const [gameTime, setGameTime] = useState<string>(() => getGameTime());
+  const clock = React.useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const interval = setInterval(() => setGameTime(getGameTime()), 1000);
+    const update = () => {
+      const label = clock.current,
+        time = getGameTime();
+      if (label && label.textContent !== time) label.textContent = time;
+    };
+    update();
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, []);
-  return <>{gameTime}</>;
+  return (
+    <span ref={clock} suppressHydrationWarning>
+      {getGameTime()}
+    </span>
+  );
 };
 
 /**

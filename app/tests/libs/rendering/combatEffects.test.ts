@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Sprite, Texture } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -15,13 +15,13 @@ beforeEach(() => {
   vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
 });
 afterEach(async () => { for (const cleanup of scopes.splice(0)) cleanup(); await Promise.resolve(); vi.restoreAllMocks(); });
-const setup = () => {
+const setup = (hexWidth = 40) => {
   const owned = new Set<() => void>();
   const game = { own: (cleanup: () => void) => { owned.add(cleanup); }, disown: (cleanup: () => void) => { owned.delete(cleanup); }, invalidate: () => {},
     isDisposed: () => false, signal: new AbortController().signal } as unknown as GameRenderer;
   scopes.push(() => { for (const cleanup of owned) cleanup(); });
   const battle = makeCompleteBattle({ width: 12, height: 10 }) as unknown as ReturnedBattle;
-  const grid = getBattleGrid(40, battle, { x: -20, y: -20 });
+  const grid = getBattleGrid(hexWidth, battle, { x: -hexWidth / 2, y: -hexWidth / 2 });
   const play = vi.fn();
   const effects = createCombatEffects(game, grid, play);
   const stage = new Container(); stage.addChild(effects.ground, effects.container);
@@ -34,10 +34,37 @@ const setup = () => {
   const effect = { id: "effect", type: "visual", longitude: 3, latitude: 1, power: 100, staticAnimation: "animation", appearSfx: "appear", disappearSfx: "disappear" } as GroundEffect;
   battle.groundEffects = [effect];
   const snapshot = { battle, assets, sound: true, volume: 0.4 };
-  return { effects, snapshot, effect, play, owned };
+  return { effects, snapshot, effect, play, owned, grid, stage };
 };
 
 describe("Pixi combat effects", () => {
+  it.each([24, 48])("fits ground and character animations to their hex at %s world units", async (hexWidth) => {
+    const scene = setup(hexWidth);
+    scene.effect.appearAnimation = "animation";
+    const target = makeBattleUser("target", { longitude: 4, latitude: 3 });
+    const attached = makeEffect("visual", { appearAnimation: "animation", staticAnimation: "animation" }, { id: "attached", creatorId: target.userId, targetId: target.userId, targetType: "user" });
+    scene.snapshot.battle = makeCompleteBattle({ width: 12, height: 10, usersState: [target], groundEffects: [scene.effect], usersEffects: [attached] }) as unknown as ReturnedBattle;
+    await scene.effects.sync(scene.snapshot);
+    for (const zoom of [1, 2]) {
+      scene.stage.scale.set(zoom, -zoom); scene.stage.position.set(73, 41);
+      for (const now of [0, 10, 30]) {
+        scene.effects.animate(now, false, false, null);
+        for (const [id, position] of [[scene.effect.id, scene.effect], [attached.id, target]] as const) {
+          const tile = scene.grid.getHex({ col: position.longitude, row: position.latitude })!;
+          const center = tile.corners.reduce((sum, point) => ({ x: sum.x + point.x / 6, y: sum.y + point.y / 6 }), { x: 0, y: 0 });
+          const root = scene.effects.container.getChildByLabel(id)!;
+          expect(root.children).toHaveLength(2);
+          for (const clip of root.children as Sprite[]) {
+            const bounds = clip.getBounds();
+            expect(bounds.width).toBeCloseTo(tile.height * zoom);
+            expect(bounds.height).toBeCloseTo(tile.height * zoom);
+            expect((bounds.minX + bounds.maxX) / 2).toBeCloseTo(73 + center.x * zoom);
+            expect((bounds.minY + bounds.maxY) / 2).toBeCloseTo(41 - center.y * zoom);
+          }
+        }
+      }
+    }
+  });
   it("keeps static barrier artwork below overlays with shared position, visibility and lifetime", async () => {
     const scene = setup();
     Object.assign(scene.effect, { type: "barrier", staticAssetPath: "obstacle", staticAnimation: "", appearAnimation: "animation", curHealth: 25, maxHealth: 50 });
@@ -161,6 +188,11 @@ describe("authoritative combat effect transitions", () => {
     await scene.effects.sync(scene.snapshot); scene.effects.animate(0, false, false, null);
     expect(scene.effects.container.children).toHaveLength(1);
     expect(scene.effects.container.children[0]?.visible).toBe(true);
+    const end = scene.snapshot.battle.groundEffects[0]!;
+    const tile = scene.grid.getHex({ col: end.longitude, row: end.latitude })!;
+    const clip = scene.effects.container.children[0]!.children[0] as Sprite;
+    expect(clip.width).toBeCloseTo(tile.height);
+    expect(clip.height).toBeCloseTo(tile.height);
     for (let frame = 1; frame <= 60; frame++) scene.effects.animate(frame, false, false, null);
     expect(scene.play.mock.calls).toEqual([["disappear.wav", 0.4]]);
   });

@@ -188,6 +188,7 @@ export const createLpcCharacter = async (
     hasHeadgear: appearance.layers.some(
       (layer) => lpcCatalog.designs[layer.profile]?.category === "headgear",
     ),
+    layers: layers.map(({ child, sheet }) => ({ sprite: child, image: sheet.image })),
   };
 };
 

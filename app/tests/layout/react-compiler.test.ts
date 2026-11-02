@@ -1,3 +1,4 @@
+import { selectUserWithoutPosition } from "@/utils/UserContext";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
@@ -70,7 +71,8 @@ describe("React Compiler runtime", () => {
     const utils = {};
     const scope = {
       React, _c: c, useRef: React.useRef, useState: React.useState,
-      useRequiredUserData: () => ({ data: user, timeDiff: 0, updateUser: vi.fn() }),
+      useRequiredUserDataSelector: (select: (user: never) => unknown) => ({ data: select(user as never), timeDiff: 0, updateUser: vi.fn() }),
+      selectUserWithoutPosition,
       api: { useUtils: () => utils, stealth: { activateStealth: mutation(activate), deactivateStealth: mutation(deactivate) } },
       activateSensory: mutation(), useLiveCountdown, getStealthStatus, getRemainingSensoryCooldown,
       STEALTH_SENSORY_CAP, STEALTH_TRAIN_GAIN_PER_MINUTE, showMutationToast: vi.fn(),

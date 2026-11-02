@@ -15,6 +15,13 @@ let onUrl: (url: string) => void;
 let onBack: undefined | ((canGoBack: boolean) => void);
 
 beforeEach(() => {
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const info = userContext.useUserData();
+    return { ...info, data: info.data ? select(info.data) : undefined } as never;
+  });
+});
+
+beforeEach(() => {
   ensureDom();
   vi.clearAllMocks();
   vi.spyOn(navigation, "usePathname").mockReturnValue("/login");

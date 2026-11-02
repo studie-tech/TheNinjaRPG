@@ -14,7 +14,7 @@ import {
 import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import Loader from "@/layout/Loader";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface LoadoutData {
   id: string;
@@ -54,7 +54,10 @@ const LoadoutSelector = <T extends LoadoutData>(
   props: LoadoutSelectorProps<T>,
 ): React.ReactElement | null => {
   // All hooks MUST be called before any early returns
-  const { data: userData } = useRequiredUserData();
+  const { data: selection } = useUserDataSelector((user) => ({
+    maxLoadouts: props.config.maxLoadoutsFn(user),
+    selectedId: props.config.getSelectedId(user),
+  }));
   const { data, isFetching } = props.config.getQuery();
   const { mutate: selectLoadout, isPending } = props.config.selectMutation();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,16 +66,14 @@ const LoadoutSelector = <T extends LoadoutData>(
   const variant = props.variant ?? "sheet";
 
   // Derived values (calculated after all hooks)
-  const maxLoadouts = userData ? props.config.maxLoadoutsFn(userData) : 0;
+  const maxLoadouts = selection?.maxLoadouts ?? 0;
   const selectedId =
     props.selectedOverrideId !== undefined && props.selectedOverrideId !== null
       ? props.selectedOverrideId
-      : userData
-        ? props.config.getSelectedId(userData)
-        : null;
+      : (selection?.selectedId ?? null);
 
   // Early returns AFTER all hooks
-  if (!userData) return <Loader />;
+  if (!selection) return <Loader />;
   if (!data && isFetching) return <Loader />;
 
   if (maxLoadouts <= 1) return null;

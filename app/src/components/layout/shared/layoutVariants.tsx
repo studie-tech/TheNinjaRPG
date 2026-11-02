@@ -73,14 +73,17 @@ export const layoutVariantClasses = {
 };
 
 // Note: getCurrentSeason uses UTC to ensure consistent results between server and client.
-export const getImageSet = (userData?: UserWithRelations | null) => {
+export const getImageSet = (
+  wallpaperOverwrite?: string | null,
+  season = getCurrentSeason(),
+) => {
   const base = {
     navbar: IMG_LAYOUT_NAVBAR,
     handsign: IMG_LAYOUT_HANDSIGN,
     wallpaper: IMG_WALLPAPER_SUMMER,
   };
 
-  switch (getCurrentSeason()) {
+  switch (season) {
     case "winter":
       base.wallpaper = IMG_WALLPAPER_WINTER;
       break;
@@ -100,14 +103,16 @@ export const getImageSet = (userData?: UserWithRelations | null) => {
       break;
   }
 
-  if (userData?.village?.wallpaperOverwrite) {
-    base.wallpaper = userData.village.wallpaperOverwrite;
+  if (wallpaperOverwrite) {
+    base.wallpaper = wallpaperOverwrite;
   }
 
   return base;
 };
 
-export const getPixelWallpaper = (userData?: UserWithRelations | null) => {
+export const getPixelWallpaper = (
+  userData?: Pick<NonNullable<UserWithRelations>, "village"> | null,
+) => {
   let wallpaper = IMG_WALLPAPER_SUMMER;
 
   switch (getCurrentSeason()) {

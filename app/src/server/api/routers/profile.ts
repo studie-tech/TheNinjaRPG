@@ -1530,6 +1530,15 @@ export const profileRouter = createTRPCRouter({
         return errorResponse(RESERVED_CUSTOM_TITLE_MESSAGE);
       }
 
+      if (
+        input.data.avatar &&
+        input.data.avatar !== ai.avatar &&
+        (!input.data.avatarLight || input.data.avatarLight === ai.avatarLight)
+      ) {
+        // Full editor forms retain the saved thumbnail until a replacement is explicitly supplied.
+        input.data.avatarLight = await createThumbnail(input.data.avatar, "contain");
+      }
+
       // Update jutsus & items
       // Extract new item ids from ids-with-number array
       const itemIdWithChance = (input.data.items ?? []).flatMap((o) =>

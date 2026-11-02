@@ -20,7 +20,7 @@ import {
   STRONGEST_USERS_COUNT,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
-import { GameSettingsPopover } from "@/layout/GameSettings";
+import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
@@ -30,7 +30,7 @@ import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
 import { type LayoutVariant, layoutVariantClasses } from "./layoutVariants";
 
@@ -122,7 +122,10 @@ interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
-  userData?: UserWithRelations | null;
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "userId" | "username" | "status"
+  > | null;
 }
 
 export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
@@ -199,7 +202,10 @@ interface LayoutRightSidebarContentProps {
   variant: LayoutVariant;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
-  userData?: UserWithRelations | null;
+  userData?: Pick<
+    NonNullable<UserWithRelations>,
+    "userId" | "username" | "status"
+  > | null;
   systems: NavBarDropdownLink[];
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
@@ -316,7 +322,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
 interface SignedInIconsProps {
   variant: LayoutVariant;
   isSignedIn: boolean;
-  userData?: UserWithRelations | null;
+  userData?: GameSettingsUser | null;
   updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
   onEventClick: () => void;
   onThemeToggle?: () => void;
@@ -355,7 +361,11 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
       <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
         <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
-      <GameSettingsPopover userData={userData} updateUser={updateUser} />
+      <GameSettingsPopover
+        userData={userData}
+        updateUser={updateUser}
+        trigger={isSignedIn ? "settings" : "audio"}
+      />
       {variant === "default" && (
         <Eclipse
           className="mx-1 h-6 min-h-6 w-6 min-w-6 rounded-full bg-blue-100 bg-yellow-100 bg-opacity-80 p-1 text-slate-700 hover:cursor-pointer hover:bg-blue-300 hover:text-black xl:h-7 xl:min-h-7 xl:w-7 xl:min-w-7 dark:bg-blue-100"
@@ -412,7 +422,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
 interface RightSideBarProps {
   variant: LayoutVariant;
   systems: NavBarDropdownLink[];
-  userData: UserWithRelations;
+  userData: Pick<NonNullable<UserWithRelations>, "status">;
   notifications?: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
 }
@@ -498,7 +508,7 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
 };
 
 export const StrongestUsersBanner: React.FC = () => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => ({ status: user.status }));
   const { data: users, isPending } = api.profile.getStrongestUsers.useQuery(undefined, {
     staleTime: 1000 * 60 * 5,
   });

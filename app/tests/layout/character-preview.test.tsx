@@ -43,6 +43,7 @@ beforeEach(() => {
     render: draw,
     durations: {},
     hasHeadgear: false,
+    layers: [],
   }));
 });
 

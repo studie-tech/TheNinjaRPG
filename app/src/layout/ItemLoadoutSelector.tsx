@@ -1,14 +1,14 @@
 "use client";
 
 import { getQueryKey } from "@trpc/react-query";
-import type React from "react";
+import React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedItemLoadouts } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 const loadoutsKey = getQueryKey(api.item.getItemLoadouts, undefined, "query");
 
@@ -23,13 +23,17 @@ interface ItemLoadoutSelectorProps {
 
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: availableSlots,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector(fedItemLoadouts);
 
   // tRPC utility
   const utils = api.useUtils();
 
   // How many loadouts?
-  const maxLoadouts = userData ? fedItemLoadouts(userData) : 0;
+  const maxLoadouts = availableSlots ?? 0;
 
   // Get loadouts
   const queryResult = api.item.getItemLoadouts.useQuery(undefined, {
@@ -80,4 +84,4 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   );
 };
 
-export default ItemLoadoutSelector;
+export default React.memo(ItemLoadoutSelector);
