@@ -78,10 +78,9 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     },
     onSuccess: async (data, variables, context) => {
       // Failures are shown in the notice above the list, which stays put and can point
-      // at the blocking run, so only successes get a toast.
-      if (data.success) {
-        showMutationToast(data);
-      } else {
+      // at the blocking run, so only successes get a toast. Announcements still go out.
+      showMutationToast(data.success ? data : { ...data, message: "" });
+      if (!data.success) {
         const quest = quests?.find((q) => q.id === variables.questId);
         setStartError({
           message: data.message,
