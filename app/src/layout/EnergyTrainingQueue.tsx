@@ -1,11 +1,12 @@
 "use client";
 
 import { CircleHelp, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { useEnergyQueueRefresh } from "@/hooks/useEnergyQueueRefresh";
 import ContentBox from "@/layout/ContentBox";
 import { getEnergyQueue } from "@/libs/queue";
 import { showMutationToast } from "@/libs/toast";
@@ -25,20 +26,14 @@ export const EnergyTrainingQueue = ({
   getGuess: () => string;
   refreshCaptcha: () => Promise<void>;
 }) => {
-  const utils = api.useUtils();
   const { saveQueue, isPending, error } = useEnergyTrainingQueue(refreshCaptcha);
   const entries = getEnergyQueue(user);
+  useEnergyQueueRefresh(entries.length > 0);
   const capacity = getQueueTotalCapacity(user);
   const block = statTrainingBlockMessage({
     ...user,
     status: user.status === "ASLEEP" ? "AWAKE" : user.status,
   });
-  useEffect(() => {
-    if (!entries.length) return;
-    const timer = setInterval(() => void utils.profile.getUser.invalidate(), 60_000);
-    return () => clearInterval(timer);
-  }, [entries.length, utils]);
-
   return (
     <ContentBox
       title="Energy queue"

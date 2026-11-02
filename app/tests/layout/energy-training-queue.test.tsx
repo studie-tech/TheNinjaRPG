@@ -1,10 +1,13 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
 import { EnergyTrainingQueue, useEnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 
@@ -21,10 +24,12 @@ type QueueCallbacks = {
   ) => Promise<void>;
 };
 type QueueMocks = {
-  invalidate: Mock<() => Promise<void>>;
+  invalidate: Mock<(input?: undefined, filters?: undefined, options?: { cancelRefetch?: boolean }) => Promise<void>>;
   mutate: ReturnType<typeof vi.fn>;
   updateUser: Mock<(patch: unknown, options?: unknown) => Promise<void>>;
   callbacks: QueueCallbacks | null;
+  client?: QueryClient;
+  timeDiff?: number;
 };
 function testMocks(): QueueMocks {
   const globals = globalThis as typeof globalThis & { __energyQueueMocks?: QueueMocks };
@@ -39,9 +44,16 @@ function testMocks(): QueueMocks {
   return globals.__energyQueueMocks;
 }
 const mocks = testMocks();
+const profileKey = [["profile", "getUser"], { type: "query" }];
+const utils = {
+  profile: { getUser: {
+    invalidate: (...args: Parameters<QueueMocks["invalidate"]>) => testMocks().invalidate(...args),
+    getData: () => testMocks().client?.getQueryData<{ serverTime: number }>(profileKey),
+  } },
+};
 vi.mock("@/app/_trpc/client", () => ({
   api: {
-    useUtils: () => ({ profile: { getUser: { invalidate: testMocks().invalidate } } }),
+    useUtils: () => utils,
     train: {
       updateEnergyTrainingQueue: {
         useMutation: (callbacks: QueueCallbacks) => {
@@ -52,12 +64,6 @@ vi.mock("@/app/_trpc/client", () => ({
     },
   },
 }));
-vi.mock("@/utils/UserContext", () => ({
-  useRequiredUserData: () => ({
-    prepareUserUpdate: () => 7,
-    updateUser: testMocks().updateUser,
-  }),
-}));
 vi.mock("@/layout/ContentBox", () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -66,8 +72,19 @@ vi.mock("@/libs/toast", createToastMock);
 beforeEach(() => {
   ensureDom();
   vi.clearAllMocks();
+  mocks.invalidate.mockImplementation(async () => undefined);
+  mocks.client = undefined;
+  mocks.timeDiff = 0;
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
+    prepareUserUpdate: () => 7,
+    updateUser: testMocks().updateUser,
+  }) as never);
+  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => ({ timeDiff: testMocks().timeDiff ?? 0 }) as never);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const user = {
   rank: "GENIN",
@@ -214,5 +231,145 @@ describe("Energy queue capped stats", () => {
     const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [] }));
+  });
+});
+
+describe("Energy queue profile recovery", () => {
+  const base = Date.UTC(2026, 10, 2, 12);
+  let now = base;
+  const subscriptions: (() => void)[] = [];
+
+  beforeEach(() => {
+    now = base;
+    vi.useFakeTimers();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+  });
+  afterEach(() => {
+    for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
+    mocks.client?.clear();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const advance = async (milliseconds: number) => {
+    await act(async () => {
+      now += milliseconds;
+      vi.advanceTimersByTime(milliseconds);
+    });
+  };
+  const mount = (timeDiff = 0) => {
+    mocks.timeDiff = timeDiff;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mocks.client = client;
+    const snapshot = () => ({ serverTime: now - timeDiff, userData: { ...user, queue: queuedOffence } });
+    const read = vi.fn(async () => snapshot());
+    client.setQueryData(profileKey, snapshot());
+    const observer = new QueryObserver(client, { queryKey: profileKey, queryFn: read, staleTime: Infinity });
+    subscriptions.push(observer.subscribe(() => {}));
+    mocks.invalidate.mockImplementation((_input, _filters, options) => client.invalidateQueries({ queryKey: profileKey }, options));
+    const props = { user: snapshot().userData, availableEnergy: 0, getGuess: () => "", refreshCaptcha: async () => {} };
+    const view = render(<EnergyTrainingQueue {...props} />);
+    return { client, read, snapshot, props, view };
+  };
+
+  it.each([0, 5_000, -5_000])("waits one minute after a completed canonical read with %i ms clock offset", async (timeDiff) => {
+    const test = mount(timeDiff);
+    await advance(50_000);
+    await act(async () => { await test.client.refetchQueries({ queryKey: profileKey }); });
+    await advance(10_000);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(49_999);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(test.read).toHaveBeenCalledTimes(2);
+  });
+
+  it("performs only the canonical reads when other recovery paths settle every 50 seconds", async () => {
+    const test = mount();
+    for (let count = 1; count <= 3; count++) {
+      await advance(count === 1 ? 50_000 : 40_000);
+      await act(async () => { await test.client.refetchQueries({ queryKey: profileKey }); });
+      await advance(10_000);
+      expect(test.read).toHaveBeenCalledTimes(count);
+    }
+    await advance(20_000);
+    // Three completed reads replace three canonical reads plus three minute polls.
+    expect(test.read).toHaveBeenCalledTimes(3);
+  });
+
+  it("joins a pending profile read without canceling it and keeps the next recovery scheduled", async () => {
+    const test = mount();
+    let complete!: (result: ReturnType<typeof test.snapshot>) => void;
+    test.read.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    await advance(59_000);
+    const pending = test.client.refetchQueries({ queryKey: profileKey });
+    await advance(1_000);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidate).toHaveBeenLastCalledWith(undefined, undefined, { cancelRefetch: false });
+    // A slow request does not stop attempts while it remains pending.
+    await advance(60_000);
+    expect(mocks.invalidate).toHaveBeenCalledTimes(2);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await act(async () => { complete(test.snapshot()); await pending; });
+    await advance(60_000);
+    expect(test.read).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not treat a confirmed local patch as canonical settlement", async () => {
+    const test = mount();
+    await advance(50_000);
+    const revision = prepareUserUpdate(test.client, profileKey);
+    await act(async () => {
+      expect(await updateUserCache(test.client, profileKey, { curEnergy: 25, updatedAt: new Date(now) }, { revision })).toBe(true);
+    });
+    await advance(10_000);
+    expect(test.read).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the canonical recovery required by a stale mutation revision", async () => {
+    const test = mount();
+    const revision = prepareUserUpdate(test.client, profileKey);
+    await act(async () => {
+      await updateUserCache(test.client, profileKey, { curEnergy: 25 });
+    });
+    await advance(50_000);
+    await act(async () => {
+      expect(await updateUserCache(test.client, profileKey, { curEnergy: 10 }, { revision })).toBe(false);
+    });
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(10_000);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(50_000);
+    expect(test.read).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains minute recovery when cached data has no canonical timestamp", async () => {
+    const test = mount();
+    test.client.setQueryData(profileKey, { userData: test.props.user });
+    await advance(60_000);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(60_000);
+    expect(test.read).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries failed reads once per minute without looping on a stale server timestamp", async () => {
+    const test = mount();
+    test.read.mockRejectedValueOnce(new Error("Profile unavailable"));
+    await advance(60_000);
+    expect(test.client.getQueryState(profileKey)?.status).toBe("error");
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(59_999);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(test.read).toHaveBeenCalledTimes(2);
+    expect(test.client.getQueryState(profileKey)?.status).toBe("success");
+  });
+
+  it.each(["remove", "unmount"])("stops polling when the queue is removed or the account surface unmounts: %s", async (action) => {
+    const test = mount();
+    if (action === "remove") test.view.rerender(<EnergyTrainingQueue {...test.props} user={{ ...user, queue: [] }} />);
+    else test.view.unmount();
+    await advance(180_000);
+    expect(test.read).not.toHaveBeenCalled();
   });
 });
