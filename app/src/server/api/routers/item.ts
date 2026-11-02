@@ -42,7 +42,6 @@ import {
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
 } from "@/drizzle/constants";
-
 import {
   type Item,
   type ItemLoadout,
@@ -55,7 +54,6 @@ import {
   userItem,
   userItemImbuement,
 } from "@/drizzle/schema";
-
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import {
   deletedReason,
@@ -96,6 +94,7 @@ import {
   decideRename,
   resolveSelectableLoadout,
 } from "@/libs/loadout";
+import { lpcSelectionError } from "@/libs/lpc/appearance";
 import {
   effectiveMasteries,
   gearMissingMastery,
@@ -103,7 +102,6 @@ import {
   type MasterySources,
   missingMasteryRequirement,
 } from "@/libs/mastery";
-
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getMaxPetRank, getPetCollectionCapacity } from "@/libs/pets/progression";
 import {
@@ -113,7 +111,6 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
-
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import { shopItemDiscountFactor } from "@/libs/shop";
@@ -253,6 +250,7 @@ import {
   updateUserItemForUpdate,
 } from "@/queries/item";
 import { findActionLogById } from "@/queries/logs";
+import { findLpcDesignForSelection } from "@/queries/lpc";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
 import {
   debitUserMoney,
@@ -684,6 +682,7 @@ export const itemRouter = createTRPCRouter({
         cacheItems,
         rewardSpecies,
         titleError,
+        lpcDesign,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
@@ -709,6 +708,7 @@ export const itemRouter = createTRPCRouter({
         }),
         fetchRewardPetSpecies(ctx.drizzle, input.data.effects),
         validateTitleRewardIds(ctx.drizzle, input.data),
+        findLpcDesignForSelection(ctx.drizzle, input.data.lpcProfile),
       ]);
       if (titleError) return errorResponse(titleError);
       if (input.data.requiredSkillId && requiredSkill?.pathType !== "SKILL") {
@@ -723,6 +723,12 @@ export const itemRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to edit item");
       }
+      const spriteError = lpcSelectionError(
+        input.data.lpcProfile,
+        entry.lpcProfile,
+        lpcDesign,
+      );
+      if (spriteError) return errorResponse(spriteError);
       if (entry.id === TUTORIAL_ITEM_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial item");
       if (cacheItems.missing.length > 0)
@@ -853,7 +859,7 @@ export const itemRouter = createTRPCRouter({
       );
       if (updateResult.rowsAffected === 0) {
         return errorResponse(
-          "Update failed — parent may have been deleted or evolution limits changed. Refresh and try again.",
+          "Update failed — item references, LPC design, or evolution limits changed. Refresh and try again.",
         );
       }
 
@@ -1179,7 +1185,7 @@ export const itemRouter = createTRPCRouter({
     .input(upsertItemVariantInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, existing, parentItem, requiredItem] = await Promise.all([
+      const [user, existing, parentItem, requiredItem, lpcDesign] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listItemVariantForUpsertItemVariant(ctx.drizzle, input),
         findItemForUpsertItemVariant(ctx.drizzle, input),
@@ -1188,10 +1194,17 @@ export const itemRouter = createTRPCRouter({
               itemId: input.variant.requiredItemId,
             })
           : undefined,
+        findLpcDesignForSelection(ctx.drizzle, input.variant.lpcProfile),
       ]);
       if (user.isBanned) return errorResponse("You are banned");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!parentItem) return errorResponse("Item not found");
+      const spriteError = lpcSelectionError(
+        input.variant.lpcProfile,
+        existing.find((variant) => variant.id === input.variant.id)?.lpcProfile,
+        lpcDesign,
+      );
+      if (spriteError) return errorResponse(spriteError);
       if (input.variant.requiredItemId && !requiredItem)
         return errorResponse("Required unlock item not found");
       if (input.variant.requiredItemId && input.variant.costType !== "VARIANT_TOKEN")
@@ -1252,7 +1265,7 @@ export const itemRouter = createTRPCRouter({
         );
         if (result.rowsAffected === 0)
           return errorResponse(
-            "Variant or required item changed — refresh and try again",
+            "Variant, required item, or LPC design changed — refresh and try again",
           );
       } else {
         const newVariantId = nanoid();
@@ -1265,7 +1278,7 @@ export const itemRouter = createTRPCRouter({
         );
         if (insertResult.rowsAffected === 0) {
           return errorResponse(
-            `Order ${input.variant.order} is taken or a required item changed — refresh and try again`,
+            `Order ${input.variant.order} is taken or an item or LPC design changed — refresh and try again`,
           );
         }
         // Re-count after insert to close the TOCTOU window on MAX_ITEM_VARIANTS

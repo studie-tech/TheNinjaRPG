@@ -3,9 +3,11 @@
 import { RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { cn } from "@/libs/shadui";
-import type { LpcAnimation, LpcDirection } from "@/validators/lpc";
+import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
 /**
  * Preview drafts and saved appearances with the same renderer and atlas leases as the maps.
@@ -16,17 +18,22 @@ export const CharacterPreview = ({
   animation = "idle",
   className,
   label = "Your ninja",
+  catalog,
+  appearance,
 }: {
   user: SpriteUser;
+  catalog?: LpcCatalog;
+  appearance?: SpriteAppearance;
   animation?: LpcAnimation;
   className?: string;
   label?: string;
 }) => {
+  const loadLpcCatalog = useLpcCatalogLoader();
   const mount = useRef<HTMLDivElement>(null);
   const direction = useRef<LpcDirection>(2);
   const [error, setError] = useState(false);
   const [ready, setReady] = useState(false);
-  const signature = JSON.stringify(resolveSpriteAppearance(user));
+  const signature = JSON.stringify(appearance ?? resolveSpriteAppearance(user));
   useEffect(() => {
     const element = mount.current;
     if (!element) return;
@@ -43,6 +50,7 @@ export const CharacterPreview = ({
       .then(async ([{ createGameRenderer }, { createLpcCharacter }]) => {
         if (controller.signal.aborted) return;
         const game = await createGameRenderer({
+          lpcCatalog: catalog ?? (await loadLpcCatalog()),
           mount: element,
           signal: controller.signal,
           width: 256,
@@ -81,7 +89,7 @@ export const CharacterPreview = ({
       controller.abort();
       dispose?.();
     };
-  }, [signature, animation]);
+  }, [signature, animation, catalog, loadLpcCatalog]);
   return (
     <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>
       <div className="relative">

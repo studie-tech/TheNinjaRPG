@@ -31,6 +31,7 @@ import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
@@ -167,6 +168,7 @@ const Sector = (props: SectorProps) => {
   return <SectorScene {...props} centerEntry={centerEntry} />;
 };
 
+/** Own the travel renderer while reconciling live movement with the visible sector window. */
 const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) => {
   const { sector, sectorWindow, target, showActive, autoAttackMode, centerEntry } =
     props;
@@ -298,6 +300,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // tRPC utility
   const utils = api.useUtils();
+  const loadLpcCatalog = useLpcCatalogLoader();
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db
@@ -2069,6 +2072,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mountRef,
     async (mount, signal, onError) =>
       createTravelScene({
+        // Keep one artwork snapshot for this scene; later scene loads pick up saved edits.
+        lpcCatalog: await loadLpcCatalog(),
         mount,
         signal,
         onError,

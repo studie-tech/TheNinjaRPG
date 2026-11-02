@@ -8,11 +8,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import sharp from "sharp";
 import { UTApi, UTFile } from "uploadthing/server";
-import type { LpcLayout, LpcSheet } from "../src/libs/lpc/catalog";
+import type { LpcSheet } from "../src/libs/lpc/catalog";
 import { servedUfsUrl } from "../src/libs/uploadthing";
 import { fetchWithRetry } from "../src/utils/http";
 import { textureImageUrl } from "../src/utils/image";
 import { withRetry } from "../src/utils/retry";
+import type { LpcLayout } from "../src/validators/lpcAsset";
 
 /** Content-addressed uploads can be resumed without replacing existing files. */
 const main = async () => {
@@ -165,8 +166,8 @@ const main = async () => {
     throw new Error("Uploaded attribution differs from the staged credits");
   }
   catalog.creditsUrl = uploads[id];
-  await writeFile("src/libs/lpc/credits.json", credits);
-  await writeFile("src/libs/lpc/catalog.json", `${JSON.stringify(catalog)}\n`);
+  await writeFile("drizzle/data/lpc/credits.json", credits);
+  await writeFile("drizzle/data/lpc/catalog.json", `${JSON.stringify(catalog)}\n`);
   console.log(
     JSON.stringify({
       atlases: names.length,

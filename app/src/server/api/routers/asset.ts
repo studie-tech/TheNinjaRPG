@@ -8,9 +8,11 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
+import { prepareLpcSheet, validateLpcImages } from "@/libs/lpc/import";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteGameAssetForDelete,
+  deleteUnreferencedLpcAsset,
   fetchGameAsset,
   insertActionLogForDelete,
   insertActionLogForUpdate,
@@ -18,16 +20,17 @@ import {
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
+  listLpcAssets,
   selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
   selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
   updateGameAssetForUpdate,
 } from "@/queries/asset";
 import { fetchUser } from "@/queries/profile";
-
 import {
   baseServerResponse,
   createTRPCRouter,
+  errorResponse,
   protectedProcedure,
   publicProcedure,
   serverError,
@@ -35,10 +38,44 @@ import {
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { gameAssetSchema, gameAssetValidator } from "@/validators/asset";
+import { lpcLayoutValidator, lpcSheetValidator } from "@/validators/lpcAsset";
 import { idSchema } from "@/validators/misc";
 
 /** Public asset discovery and authenticated staff mutations through asset query helpers. */
 export const gameAssetRouter = createTRPCRouter({
+  /** Publish referenceable artwork, including hidden designs still worn by existing characters. */
+  getLpcCatalog: publicProcedure
+    .meta({
+      mcp: { description: "Get LPC character designs, variants and attribution" },
+    })
+    .query(({ ctx }) => listLpcAssets(ctx.drizzle)),
+  /** Prepare immutable image files; only the separate asset save persists their design settings. */
+  prepareLpcSheet: protectedProcedure
+    .input(
+      z.object({
+        image: z.url(),
+        format: z.enum(["standard", "packed"]),
+        layout: lpcLayoutValidator.optional(),
+        z: z.number().int().min(-1000).max(1000),
+      }),
+    )
+    .output(baseServerResponse.extend({ sheet: lpcSheetValidator.optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned || !canChangeContent(user.role))
+        return errorResponse("Not allowed to upload LPC sheets.");
+      try {
+        return {
+          success: true,
+          message: "Sheet prepared. Save the design to apply it.",
+          sheet: await prepareLpcSheet(input),
+        };
+      } catch (error) {
+        return errorResponse(
+          error instanceof Error ? error.message : "Could not process this sheet.",
+        );
+      }
+    }),
   getNameTags: publicProcedure
     .meta({ mcp: { description: "Get game asset name tags" } })
     .input(
@@ -160,7 +197,33 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (entry && canChangeContent(user.role)) {
+      if (entry && canChangeContent(user.role) && !user.isBanned) {
+        if (entry.type === "LPC" && input.data.type !== "LPC")
+          return errorResponse("LPC designs must remain LPC assets.");
+        if (input.data.type === "LPC" && entry.id.length > 32)
+          return errorResponse(
+            "LPC design IDs must be at most 32 characters. Create a new LPC asset instead.",
+          );
+        if (input.data.type === "LPC" && !input.data.lpcConfig)
+          return errorResponse("Configure both body styles before saving this design.");
+        if (input.data.type !== "LPC" && input.data.lpcConfig)
+          return errorResponse("LPC settings require an LPC asset.");
+        if (input.data.lpcConfig) {
+          try {
+            await validateLpcImages(input.data.lpcConfig, entry.lpcConfig);
+          } catch (error) {
+            return errorResponse(
+              error instanceof Error
+                ? error.message
+                : "Could not validate the sprite sheets.",
+            );
+          }
+        }
+        if (input.data.lpcConfig)
+          input.data.image =
+            input.data.lpcConfig.variants[
+              `male/${input.data.lpcConfig.defaultColor}/${input.data.lpcConfig.defaultEyes}`
+            ]![0]!.image;
         // Calculate diff
         const diff = calculateContentDiff(entry, {
           id: entry.id,
@@ -192,7 +255,7 @@ export const gameAssetRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (canChangeContent(user.role)) {
+      if (canChangeContent(user.role) && !user.isBanned) {
         const id = nanoid();
         await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
         return { success: true, message: id };
@@ -208,11 +271,46 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (entry && canChangeContent(user.role)) {
-        await Promise.all([
-          deleteGameAssetForDelete(ctx.drizzle, input),
-          insertActionLogForDelete(ctx.drizzle, ctx, entry),
-        ]);
+      if (entry && canChangeContent(user.role) && !user.isBanned) {
+        if (entry.type === "LPC") {
+          if (
+            [
+              "body",
+              "head-hard",
+              "head-soft",
+              "head-sharp",
+              "hair-short",
+              "hair-long",
+              "beard-long",
+              "beard-full",
+              "beard-stubble",
+              "shirt",
+              "pants",
+              "sandals",
+              "hood",
+              "mask",
+              "glasses",
+              "piercing",
+              "bandana",
+              "tattoo",
+              "scar",
+            ].includes(entry.id)
+          )
+            return errorResponse(
+              "This design is required by character creation or masked identities and cannot be deleted.",
+            );
+          const deleted = await deleteUnreferencedLpcAsset(ctx.drizzle, entry.id);
+          if (!deleted.rowsAffected)
+            return errorResponse(
+              "This design is used by an item or variant. Reassign its appearances before deleting it.",
+            );
+          await insertActionLogForDelete(ctx.drizzle, ctx, entry);
+        } else {
+          await Promise.all([
+            deleteGameAssetForDelete(ctx.drizzle, input),
+            insertActionLogForDelete(ctx.drizzle, ctx, entry),
+          ]);
+        }
         await outdateProposalsFor(
           ctx.drizzle,
           "GAME_ASSET",

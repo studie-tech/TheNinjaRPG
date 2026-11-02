@@ -1,6 +1,26 @@
-import { and, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { userData, userItem } from "@/drizzle/schema";
+import { and, eq, exists, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { gameAsset, userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+
+/** Resolve an explicit design assignment alongside the content editor's other upfront reads. */
+export const findLpcDesignForSelection = (
+  client: DrizzleClient,
+  profile?: string | null,
+) =>
+  profile && profile !== "AUTO" && profile !== "NONE"
+    ? client.query.gameAsset.findFirst({
+        columns: { id: true, type: true, hidden: true, lpcConfig: true },
+        where: eq(gameAsset.id, profile),
+      })
+    : Promise.resolve(undefined);
+
+/** Keep explicit item and variant assignments valid if a design is deleted after selection validation. */
+export const lpcDesignAssignmentGuard = (profile?: string | null) =>
+  profile && profile !== "AUTO" && profile !== "NONE"
+    ? exists(
+        sql`(SELECT 1 FROM ${gameAsset} WHERE ${eq(gameAsset.id, profile)} AND ${eq(gameAsset.type, "LPC")})`,
+      )
+    : sql`TRUE`;
 
 /**
  * Build one atomic body-style update guarded against bans and concurrent combat entry.

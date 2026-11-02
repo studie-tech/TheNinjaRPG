@@ -58,6 +58,7 @@ import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
+import { lpcDesignAssignmentGuard } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
 import {
   completedQuestHistoryRelation,
@@ -649,7 +650,7 @@ export const selectEvoSiblingCountForUpdate = (
   evoSiblingCount: ReturnType<typeof selectItemForUpdate2>,
 ) => client.select({ cnt: evoSiblingCount.cnt }).from(evoSiblingCount);
 
-/** Build the `item` update for `update`, setting `updatedAt`, using predicates on `id`. */
+/** Update an item while its explicit LPC design and evolution guards remain valid. */
 export const updateItemForUpdate = (
   client: Pick<DrizzleClient, "update">,
   input: { data: import("@/validators/combat").ZodItemType; id: string },
@@ -658,7 +659,13 @@ export const updateItemForUpdate = (
   client
     .update(item)
     .set({ ...input.data, updatedAt: new Date() })
-    .where(and(eq(item.id, input.id), ...evolutionUpdateGuards));
+    .where(
+      and(
+        eq(item.id, input.id),
+        lpcDesignAssignmentGuard(input.data.lpcProfile),
+        ...evolutionUpdateGuards,
+      ),
+    );
 
 /** Build the `craftingRequirement` deletion for `update`, using predicates on `craftItemId`. */
 export const deleteCraftingRequirementForUpdate = (
@@ -976,7 +983,7 @@ export const findItemForUpsertItemVariant = (
     columns: { id: true, name: true, itemType: true, effects: true },
   });
 
-/** Update a variant only while its parent and optional required unlock item exist. */
+/** Update a variant only while its parent, required unlock item and explicit LPC design exist. */
 export const updateItemVariantForUpsertItemVariant = (
   client: Pick<DrizzleClient, "update">,
   input: {
@@ -1017,6 +1024,7 @@ export const updateItemVariantForUpsertItemVariant = (
       and(
         eq(itemVariant.id, input.variant.id),
         eq(itemVariant.itemId, input.itemId),
+        lpcDesignAssignmentGuard(input.variant.lpcProfile),
         exists(sql`(SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})`),
         input.variant.requiredItemId
           ? exists(
@@ -1026,7 +1034,7 @@ export const updateItemVariantForUpsertItemVariant = (
       ),
     );
 
-/** Insert with live item references; duplicate keys leave the saved variant unchanged. */
+/** Insert with live item and LPC design references; duplicate keys leave the saved variant unchanged. */
 export const insertItemVariantForUpsertItemVariant = (
   client: Pick<DrizzleClient, "execute">,
   newVariantId: string,
@@ -1064,7 +1072,7 @@ export const insertItemVariantForUpsertItemVariant = (
   };
   const columns = getTableColumns(itemVariant);
   const keys = Object.keys(values) as (keyof typeof values)[];
-  // INSERT SELECT keeps both item references valid at the moment the variant is saved.
+  // INSERT SELECT keeps item and LPC design references valid when the variant is saved.
   return client.execute(sql`
     INSERT INTO ${itemVariant} (${sql.join(
       keys.map((key) => sql.identifier(columns[key].name)),
@@ -1076,6 +1084,7 @@ export const insertItemVariantForUpsertItemVariant = (
     )}
     WHERE EXISTS (SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})
       AND ${input.variant.requiredItemId ? exists(sql`(SELECT 1 FROM ${item} WHERE ${eq(item.id, input.variant.requiredItemId)})`) : sql`TRUE`}
+      AND ${lpcDesignAssignmentGuard(input.variant.lpcProfile)}
     ON DUPLICATE KEY UPDATE id = id
   `);
 };

@@ -1,3 +1,4 @@
+import type { LpcConfig } from "../src/validators/lpcAsset";
 import type { ForumPolicy, ForumCapability } from "@/validators/forum";
 import type { StoreContents } from "@/validators/points";
 import type { TitleEffect } from "@/validators/title";
@@ -179,6 +180,7 @@ export const gameAsset = mysqlTable(
     licenseDetails: text("licenseDetails").default("TNR").notNull(),
     createdByUserId: varchar("createdByUserId", { length: 191 }),
     onInitialBattleField: boolean("onInitialBattleField").default(false).notNull(),
+    lpcConfig: json("lpcConfig").$type<LpcConfig | null>().default(null),
   },
   (table) => {
     return {

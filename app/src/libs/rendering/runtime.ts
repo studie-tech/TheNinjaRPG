@@ -1,4 +1,5 @@
 import { Container, UniformGroup, WebGLRenderer } from "pixi.js";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
@@ -14,6 +15,7 @@ const frames = createFrameLoop(
  * the scene and call onError. Hidden/offscreen canvases suspend their frame subscription.
  */
 export const createGameRenderer = async (options: {
+  lpcCatalog?: LpcCatalog;
   mount: HTMLElement;
   signal: AbortSignal;
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
@@ -175,6 +177,7 @@ export const createGameRenderer = async (options: {
   signal.addEventListener("abort", dispose, { once: true });
   updateSubscription();
   return {
+    lpcCatalog: options.lpcCatalog,
     stage,
     animation,
     renderer,

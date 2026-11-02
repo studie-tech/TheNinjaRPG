@@ -1,7 +1,19 @@
 /**
  * Database access for misc; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, gt, gte, inArray, like, lt, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  like,
+  lt,
+  ne,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { TRAINING_CAPTCHA_SOLVED_GRACE_MINUTES } from "@/drizzle/constants";
 import {
@@ -29,6 +41,7 @@ export const fetchGameAssets = async (client: DrizzleClient, ids?: string[]) => 
   return await client.query.gameAsset.findMany({
     where: and(
       eq(gameAsset.hidden, false),
+      ne(gameAsset.type, "LPC"),
       ...(ids ? [inArray(gameAsset.id, ids)] : []),
     ),
     orderBy: [desc(gameAsset.name)],

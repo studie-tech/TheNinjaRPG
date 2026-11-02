@@ -20,6 +20,7 @@ import {
 } from "@/hooks/combat";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -81,12 +82,14 @@ interface CombatProps {
   config: CombatPreferences;
 }
 
+/** Coordinate battle controls and snapshots with the owned battlefield renderer. */
 const Combat: React.FC<CombatProps> = (props) => {
   // Destructure props
   const { battleState, setBattleState, config } = props;
   const router = useRouter();
   const result = battleState.result;
   const utils = api.useUtils();
+  const loadLpcCatalog = useLpcCatalogLoader();
 
   // State
   const [isReturningFromTutorial, setIsReturningFromTutorial] = useState(false);
@@ -1029,6 +1032,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     mountRef,
     async (mount, signal, onError) =>
       createCombatScene({
+        // Keep one artwork snapshot for this scene; later scene loads pick up saved edits.
+        lpcCatalog: await loadLpcCatalog(),
         mount,
         signal,
         onError,

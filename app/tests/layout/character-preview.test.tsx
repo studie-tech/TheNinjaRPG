@@ -1,5 +1,6 @@
+import * as lpcHooks from "@/hooks/lpc";
+import { lpcCatalog } from "../setup/lpc";
 import { ensureDom } from "../setup/dom.mjs";
-const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import { Container } from "pixi.js";
 import { CharacterPreview } from "@/layout/CharacterPreview";
@@ -7,13 +8,18 @@ import * as character from "@/libs/rendering/primitives/character";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 
+const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
+
 const draw = vi.fn();
 const disposals: ReturnType<typeof vi.fn>[] = [];
+const loadCatalog = async () => lpcCatalog;
+
 let update: (frame: GameFrame) => void;
 let createActor: Mock<typeof character.createLpcCharacter>;
 
 beforeEach(() => {
   ensureDom();
+  vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(loadCatalog);
   draw.mockClear();
   disposals.length = 0;
   vi.spyOn(runtime, "createGameRenderer").mockImplementation(async ({ mount }) => {
@@ -36,6 +42,7 @@ beforeEach(() => {
     sprite: new Container(),
     render: draw,
     durations: {},
+    hasHeadgear: false,
   }));
 });
 

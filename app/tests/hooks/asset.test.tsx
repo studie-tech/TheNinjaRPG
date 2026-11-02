@@ -9,11 +9,12 @@ import { ensureDom } from "../setup/dom.mjs";
 
 type Result = { success: boolean; message: string };
 type Callbacks = {
-  onSuccess: (result: Result) => Promise<void>;
+  onSuccess: (result: Result, variables: { data: { type: string } }) => Promise<void>;
   onError: (error: Error) => void;
   onSettled: () => void;
 };
 const asset: GameAsset = {
+  lpcConfig: null,
   id: "asset", name: "Forest", type: "STATIC", image: "https://example.com/forest.webp",
   url: "https://example.com/forest.webp", folder: "Scenes", frames: 1, speed: 50,
   hidden: false, licenseDetails: "TNR", onInitialBattleField: false,
@@ -38,7 +39,7 @@ beforeEach(() => {
       const [isPending, setPending] = useState(false);
       return { isPending, mutateAsync: async (input: unknown) => {
         setPending(true);
-        try { const result = await save(input); await callbacks.onSuccess(result); return result; }
+        try { const result = await save(input); await callbacks.onSuccess(result, input as { data: { type: string } }); return result; }
         catch (error) { callbacks.onError(error as Error); throw error; }
         finally { callbacks.onSettled(); setPending(false); }
       } };

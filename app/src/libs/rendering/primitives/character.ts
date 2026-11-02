@@ -2,7 +2,6 @@ import { Container, Rectangle, Sprite, Texture, type TextureSource } from "pixi.
 import {
   LPC_ATTACK_FRAME_MS,
   LPC_IDLE_FRAME_MS,
-  lpcCatalog,
   lpcFrame,
   spriteLayerSheets,
 } from "@/libs/lpc/catalog";
@@ -18,16 +17,26 @@ export const createLpcCharacter = async (
   appearance: SpriteAppearance,
   mode: "all" | "travel" = "all",
 ) => {
-  const parts = appearance.layers.flatMap((layer) => {
-    const sheets = spriteLayerSheets(appearance, layer, mode);
-    // Oversized weapons split held and attack poses across separate sheets.
-    const authored = new Set(
-      sheets.flatMap((sheet) =>
-        Object.keys(lpcCatalog.layouts[sheet.layout]?.clips ?? {}),
-      ),
-    );
-    return sheets.map((sheet) => ({ layer, sheet, authored }));
-  });
+  const lpcCatalog = game.lpcCatalog;
+  if (!lpcCatalog) throw new Error("Character catalog unavailable");
+  const replacementSlots = new Set<string>(
+    appearance.layers.flatMap((layer) => {
+      const slot = lpcCatalog.designs[layer.profile]?.replacementSlot;
+      return slot && slot !== "none" && layer.slot !== slot ? [slot] : [];
+    }),
+  );
+  const parts = appearance.layers
+    .filter((layer) => !layer.slot || !replacementSlots.has(layer.slot))
+    .flatMap((layer) => {
+      const sheets = spriteLayerSheets(lpcCatalog, appearance, layer, mode);
+      // Oversized weapons split held and attack poses across separate sheets.
+      const authored = new Set(
+        sheets.flatMap((sheet) =>
+          Object.keys(lpcCatalog.layouts[sheet.layout]?.clips ?? {}),
+        ),
+      );
+      return sheets.map((sheet) => ({ layer, sheet, authored }));
+    });
   const loaded = await Promise.all(
     parts.map(async (part) => ({
       ...part,
@@ -149,6 +158,7 @@ export const createLpcCharacter = async (
           : undefined;
       // Flipping an off-hand pose reverses its horizontal facing, so sample the opposite row first.
       const sample = lpcFrame(
+        lpcCatalog,
         entry.sheet,
         animation,
         facing,
@@ -171,7 +181,14 @@ export const createLpcCharacter = async (
     if (!sprite.destroyed)
       sprite.destroy({ children: true, texture: false, textureSource: false });
   });
-  return { sprite, render, durations };
+  return {
+    sprite,
+    render,
+    durations,
+    hasHeadgear: appearance.layers.some(
+      (layer) => lpcCatalog.designs[layer.profile]?.category === "headgear",
+    ),
+  };
 };
 
 const sourceFrames = new WeakMap<TextureSource, Map<string, Texture>>();

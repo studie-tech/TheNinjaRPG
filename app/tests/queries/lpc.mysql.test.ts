@@ -1,3 +1,4 @@
+import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { item, itemVariant, userAttribute, userData, userItem } from "@/drizzle/schema";
@@ -21,6 +22,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     await insertUsers([{ userId: "sprite-owner", gender: "Other", spriteBodyStyle: "female", sector: 724, status: "AWAKE" }]);
     await insertItems([{ id: "sprite-coat", name: "Test coat", slot: "CHEST", itemType: "ARMOR", lpcProfile: "plate", lpcColor: "blue" }]);
     const database = await getTestDatabase();
+    await seedLpcAssets(database);
     await database.insert(itemVariant).values({ id: "sprite-red-coat", itemId: "sprite-coat", name: "Red leather", image: "/coat.png", costType: "MONEY", lpcProfile: "leather", lpcColor: "red" });
     await database.insert(userAttribute).values([{ id: "sprite-hair", userId: "sprite-owner", attribute: "Long Hair" }, { id: "sprite-color", userId: "sprite-owner", attribute: "Blue hair" }]);
     await insertUserItems([{ id: "sprite-worn", userId: "sprite-owner", itemId: "sprite-coat", equipped: "CHEST", activeVariantId: "sprite-red-coat" }]);
@@ -34,7 +36,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     const appearance = resolveSpriteAppearance(user);
     expect(appearance.body).toBe("female");
     expect(appearance.layers.find((layer) => layer.slot === "hair")).toMatchObject({ profile: "hair-long", color: "blue" });
-    expect(appearance.layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "leather", color: "red" });
+    expect(appearance.layers.find((layer) => layer.profile === "leather")).toMatchObject({ profile: "leather", color: "red" });
   });
   it("uses the same appearance inputs for the authenticated profile", async () => {
     const client = await getTestDatabase() as unknown as DrizzleClient;
@@ -84,7 +86,7 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     ]);
     for (const items of inventories) {
       const appearance = resolveSpriteAppearance({ items });
-      expect(appearance.layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "leather", color: "red" });
+      expect(appearance.layers.find((layer) => layer.profile === "leather")).toMatchObject({ profile: "leather", color: "red" });
     }
   });
   it("prevents body edits after a concurrent transition into combat", async () => {

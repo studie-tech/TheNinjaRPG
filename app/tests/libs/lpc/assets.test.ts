@@ -1,8 +1,9 @@
+import { lpcCatalog } from "../../setup/lpc";
 import { describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
-import { lpcCatalog, lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
-import credits from "@/libs/lpc/credits.json";
+import { lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
+import credits from "../../../drizzle/data/lpc/credits.json";
 
 // Publication verifies decoded RGBA pixels; runtime tests validate our atlas/frame manifest offline.
 describe("published LPC artwork", () => {
@@ -48,8 +49,8 @@ describe("published LPC artwork", () => {
         expect(layout.clips.walk).toBeDefined();
         expect(Object.keys(layout.clips).every((state) => ["stand", "idle", "walk"].includes(state))).toBe(true);
         for (const direction of [0, 1, 2, 3] as const) {
-          expect(lpcFrame(sheet.travel, "stand", direction, 0)).not.toBeNull();
-          expect(lpcFrame(sheet.travel, "walk", direction, 100)).not.toBeNull();
+          expect(lpcFrame(lpcCatalog, sheet.travel, "stand", direction, 0)).not.toBeNull();
+          expect(lpcFrame(lpcCatalog, sheet.travel, "walk", direction, 100)).not.toBeNull();
         }
       }
     }
@@ -78,8 +79,8 @@ describe("published LPC artwork", () => {
   it("uses the authored four directions, freezes reduced motion and clamps one-shot frames", () => {
     expect([lpcFacing(0, 1), lpcFacing(-1, 0), lpcFacing(0, -1), lpcFacing(1, 0)]).toEqual([0, 1, 2, 3]);
     const sheet = lpcCatalog.entries["body/male/light/blue"]![0]!;
-    expect(lpcFrame(sheet, "walk", 2, 10000, true)).toEqual(lpcFrame(sheet, "walk", 2, 0, true));
-    expect(lpcFrame(sheet, "slash", 2, 10000)).toEqual(lpcFrame(sheet, "slash", 2, 20000));
+    expect(lpcFrame(lpcCatalog, sheet, "walk", 2, 10000, true)).toEqual(lpcFrame(lpcCatalog, sheet, "walk", 2, 0, true));
+    expect(lpcFrame(lpcCatalog, sheet, "slash", 2, 10000)).toEqual(lpcFrame(lpcCatalog, sheet, "slash", 2, 20000));
   });
   it("records valid custom body timelines and a neutral held pose for reverse-slash weapons", () => {
     for (const body of ["male", "female"] as const) for (const profile of ["club", "whip", "crossbow"]) {
@@ -106,11 +107,11 @@ describe("published LPC artwork", () => {
         expect(frames[0]).toBe(frames[1]);
         expect(frames[1]).not.toBe(frames[2]);
       }
-      expect(lpcFrame(base, "combat", 2, 600)).toEqual(lpcFrame(base, "combat", 2, 0));
+      expect(lpcFrame(lpcCatalog, base, "combat", 2, 600)).toEqual(lpcFrame(lpcCatalog, base, "combat", 2, 0));
       const held = lpcCatalog.entries[`club/${body}/brown/blue`]![0]!;
       expect(lpcCatalog.layouts[held.layout]!.clips.idle).toBeUndefined();
       expect(lpcCatalog.layouts[held.layout]!.clips.combat).toBeUndefined();
-      expect(lpcFrame(held, "stand", 2, 600)).toEqual(lpcFrame(held, "stand", 2, 0));
+      expect(lpcFrame(lpcCatalog, held, "stand", 2, 600)).toEqual(lpcFrame(lpcCatalog, held, "stand", 2, 0));
     }
   });
 });

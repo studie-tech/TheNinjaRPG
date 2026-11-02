@@ -1,10 +1,11 @@
 import { ensureDom } from "../setup/dom.mjs";
-const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { SpriteAppearance } from "@/validators/lpc";
+
+const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 
 const browserEvents = ["Event", "CustomEvent"] as const;
 const originalEvents = browserEvents.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
@@ -39,7 +40,7 @@ it("loads the preview only when opened and follows inventory changes instead of 
   expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "shirt", color: "black" });
 
   view.rerender(<EquipmentPreview user={user} items={[{ ...items[0]!, equipped: "CHEST" }]} />);
-  expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "plate", color: "green" });
+  expect(appearance().layers.find((layer) => layer.profile === "plate")).toMatchObject({ profile: "plate", color: "green" });
   view.rerender(<EquipmentPreview user={user} items={[]} />);
   expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "shirt", color: "black" });
   fireEvent.click(view.getByRole("button", { name: "Preview equipped appearance" }));

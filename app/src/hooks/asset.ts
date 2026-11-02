@@ -35,11 +35,14 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknow
   // Mutation for updating asset
   const { mutateAsync: updateAsset, isPending: isUpdating } =
     api.gameAsset.update.useMutation({
-      onSuccess: async (data) => {
+      onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             refetch(),
+            ...(variables.data.type === "LPC"
+              ? [utils.gameAsset.getLpcCatalog.invalidate()]
+              : []),
             utils.gameAsset.getAll.invalidate(),
             utils.gameAsset.getAllFolders.invalidate(),
             utils.gameAsset.getAllNames.invalidate(),
@@ -98,7 +101,7 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknow
       size: type === "SCENE_BACKGROUND" ? "landscape" : "portrait",
       maxDim: 512,
     });
-  } else if (type !== "SFX") {
+  } else if (type !== "SFX" && type !== "LPC") {
     formData.push({
       id: "image",
       label: "Artwork",

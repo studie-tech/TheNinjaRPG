@@ -23,6 +23,7 @@ type Page = { data: GameAsset[]; nextCursor: number | null };
 type Result = { success: boolean; message: string };
 type CreateInput = Pick<GameAsset, "name" | "type" | "folder">;
 const asset: GameAsset = {
+  lpcConfig: null,
   id: "forest", name: "Forest", type: "STATIC", image: "https://example.com/forest.webp",
   url: "https://example.com/forest.webp", folder: "Scenes", frames: 1, speed: 50,
   hidden: false, licenseDetails: "TNR", onInitialBattleField: false,
@@ -75,7 +76,8 @@ beforeEach(() => {
     useUtils: () => ({
       gameAsset: {
         getAll: { invalidate: () => cache.invalidateQueries({ queryKey: ["assets"] }) },
-        getAllFolders: { invalidate: noOp }, getAllNames: { invalidate: noOp },
+        getAllFolders: { invalidate: noOp },
+        getLpcCatalog: { invalidate: noOp }, getAllNames: { invalidate: noOp },
         getNameTags: { invalidate: noOp },
       },
       misc: { getAllGameAssetNames: { invalidate: noOp } },

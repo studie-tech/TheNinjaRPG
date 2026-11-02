@@ -3,6 +3,7 @@ import type { Grid } from "honeycomb-grid";
 import { Container, Graphics, RenderLayer } from "pixi.js";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createMapControls } from "@/libs/rendering/mapControls";
@@ -31,6 +32,7 @@ import type { MapLocation } from "@/validators/mapLocation";
  * call updateWindow after window/library changes to reconcile the remaining sectors.
  */
 export const createTravelScene = async (options: {
+  lpcCatalog?: LpcCatalog;
   mount: HTMLElement;
   signal: AbortSignal;
   lightLayout: boolean;
