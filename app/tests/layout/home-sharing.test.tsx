@@ -36,7 +36,7 @@ const request = (overrides: Partial<HomeRequest> = {}): HomeRequest => ({
 beforeEach(() => {
   ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
-  Object.assign(vi.spyOn(client, "api" as never), { home: testApi.home, useUtils: testApi.useUtils });
+  Object.assign(vi.spyOn(client, "api" as never), { home: testApi.home, tournament: testApi.tournament, useUtils: testApi.useUtils });
   vi.spyOn(Link, "default").mockImplementation(({ children, href, onClick }) => (
     <a href={String(href)} onClick={onClick}>{children}</a>
   ));

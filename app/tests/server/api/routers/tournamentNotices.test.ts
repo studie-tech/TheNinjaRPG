@@ -13,12 +13,12 @@ import {
   eventTournamentConfigSchema,
 } from "@/validators/tournament";
 
-describe("event notice polling eligibility", () => {
+describe("event notices and participation", () => {
   it("does not mark an unregistered player as a participant", async () => {
     expect(await readNotices([])).toEqual({ notices: [], isEventParticipant: false });
   });
 
-  it("keeps the fast poll for a registered seat between ready checks", async () => {
+  it("retains participation for a registered seat between ready checks", async () => {
     const event = makeEvent();
     event.participants = [makeSeat("hero")];
     expect(await readNotices([event])).toEqual({ notices: [], isEventParticipant: true });
@@ -51,7 +51,7 @@ describe("event notice polling eligibility", () => {
     expect(await readNotices([event])).toEqual({ notices: [], isEventParticipant: true });
   });
 
-  it("returns a ready check and keeps polling after the player accepts it", async () => {
+  it("returns a ready check and retains participation after the player accepts it", async () => {
     const event = makeEvent();
     event.participants = [makeSeat("hero"), makeSeat("foe")];
     generateEventBracket(event, event.participants.map((seat) => seat.id));

@@ -31,7 +31,7 @@ export const fetchEventUser = async (client: DrizzleClient, id: string) => {
 
 /**
  * Share actionable invitations and match notices between global prompts and navigation.
- * Reuse the same rows for polling eligibility, including seats between actionable checks.
+ * Reuse the same rows for profile participation, including seats between actionable checks.
  * Restrict the capped query to this player, then discard withdrawn seats and closed checks.
  */
 export const fetchEventNoticeState = async (client: DrizzleClient, userId: string) => {
