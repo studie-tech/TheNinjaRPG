@@ -86,7 +86,7 @@ import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canAdministrateWars } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import {
   type FindSectorSchema,
   type FindSectorSchemaInput,
@@ -118,7 +118,7 @@ export const WarRoom: React.FC<{
 }> = ({ user, navTabs, initialBreak }) => {
   // tRPC utility
   const utils = api.useUtils();
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useUserInfo();
 
   // State
   const [warType, setWarType] = useState<"Active" | "Ended">("Active");

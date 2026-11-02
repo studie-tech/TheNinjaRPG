@@ -55,7 +55,7 @@ import {
   getTimeLeftStr,
   isNewSlotDue,
 } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import { countBoostingShrines } from "@/utils/village";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 import type { UserDeltaResponse } from "@/validators/userCache";
@@ -137,7 +137,7 @@ interface TabProps {
 
 const OverviewTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useUserInfo();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: shrineData } = api.travel.getSectorData.useQuery(
