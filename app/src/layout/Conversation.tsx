@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import ContentBox from "@/layout/ContentBox";
@@ -182,6 +183,7 @@ export const useConversation = (props: ConversationLogicProps) => {
   >;
 
   const utils = api.useUtils();
+  const { refreshConversationComments } = useConversationCacheUpdate();
 
   /**
    * Shared infinite-query cache writer for conversation comments. The
@@ -574,9 +576,10 @@ export const useConversation = (props: ConversationLogicProps) => {
     api.comments.createConversationComment.useMutation({
       onMutate: async (newMessage) => {
         onMutateCheck();
-        return await optimisticConversationUpdate(newMessage);
+        const input = queryKey;
+        return { ...(await optimisticConversationUpdate(newMessage)), input };
       },
-      onSuccess: (data, _newComment, context) => {
+      onSuccess: (data, newComment, context) => {
         if (data.success) {
           if (conversation)
             reset({
@@ -599,6 +602,7 @@ export const useConversation = (props: ConversationLogicProps) => {
               ),
             );
           }
+          void refreshConversationComments(newComment.object_id, context?.input);
         } else {
           removeOptimisticComment(context?.optimisticCommentId);
           showMutationToast({ success: false, message: data.message });

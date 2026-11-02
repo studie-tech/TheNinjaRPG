@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -57,6 +58,7 @@ export interface NewConversationPromptProps {
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
+  const { refreshConversationList } = useConversationCacheUpdate();
   const maxUsers = 5;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
     props.defaultOpen ?? false,
@@ -118,9 +120,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   }, [users, create]);
 
   const createConversation = api.comments.createConversation.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
+        await refreshConversationList();
         create.reset();
         setIsCreateDialogOpen(false);
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);

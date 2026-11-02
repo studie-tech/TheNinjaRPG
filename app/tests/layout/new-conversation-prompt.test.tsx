@@ -9,7 +9,9 @@ import * as userContext from "@/utils/UserContext";
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("notifies its parent after a committed dialog change and preserves queued functional toggles", () => {
-  Object.assign(vi.spyOn(clientModule, "api" as never), { comments: {
+  Object.assign(vi.spyOn(clientModule, "api" as never), { useUtils: () => ({
+    comments: { getUserConversations: { invalidate: vi.fn() } },
+  }), comments: {
     createConversation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
   } });
   vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: {
