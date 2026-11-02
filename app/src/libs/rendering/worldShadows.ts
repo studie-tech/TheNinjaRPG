@@ -189,6 +189,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     sun: SunCaster[];
     occluders: Occluder[];
     emitters: Caster[];
+    candidates: Caster[];
     owners: {
       owner: Container;
       matrix: Matrix;
@@ -369,6 +370,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         ]),
         active: true,
         cached: null,
+        selectionBounds: null,
         occluder: null,
         occlusionKey: "",
         wind: undefined,
@@ -650,13 +652,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         minY: sceneryBounds.minY - anchorY,
         maxY: sceneryBounds.maxY - anchorY,
       };
-      const retainedScenery =
+      const retainedPoses =
         sceneryCache &&
         sceneryCache.scale === scale &&
-        sceneryCache.bounds.minX === sceneryBounds.minX &&
-        sceneryCache.bounds.maxX === sceneryBounds.maxX &&
-        sceneryCache.bounds.minY === sceneryBounds.minY &&
-        sceneryCache.bounds.maxY === sceneryBounds.maxY &&
         sceneryCache.owners.every((previous) => {
           const current = origin(previous.owner);
           return (
@@ -665,7 +663,16 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             previous.order === current.drawRoot?.zIndex &&
             previous.group === current.drawRoot?.uid
           );
-        });
+        })
+          ? sceneryCache
+          : null;
+      const retainedScenery =
+        retainedPoses &&
+        retainedPoses.bounds.minX === sceneryBounds.minX &&
+        retainedPoses.bounds.maxX === sceneryBounds.maxX &&
+        retainedPoses.bounds.minY === sceneryBounds.minY &&
+        retainedPoses.bounds.maxY === sceneryBounds.maxY;
+      const candidates = retainedPoses?.candidates ?? orderedRecords;
       const scenery: Caster[] = [];
       if (retainedScenery)
         for (const record of sceneryCache?.emitters ?? [])
@@ -674,7 +681,15 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             boundsOverlap(record.cached.receiver.bounds, viewport, 384)
           )
             appendLights(record, record.cached.lights);
-      for (const record of retainedScenery ? liveRecords : orderedRecords) {
+      for (const record of retainedScenery ? liveRecords : candidates) {
+        if (
+          retainedPoses &&
+          record.sceneryOwner &&
+          !record.cached &&
+          record.selectionBounds &&
+          !boundsOverlap(record.selectionBounds, sceneryBounds, 384)
+        )
+          continue;
         const { sprite, description } = record;
         const sourcePose = record.wind?.pose ?? sprite;
         if (sprite.destroyed || !sprite.visible || !record.materials.length) continue;
@@ -723,14 +738,17 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         const radius =
           description.size +
           Math.abs(sprite.width) * Math.max(Math.abs(p.matrix.a), Math.abs(p.matrix.d));
+        const selectionBounds = {
+          minX: position.x - radius,
+          maxX: position.x + radius,
+          minY: position.y - radius,
+          maxY: position.y + radius,
+        };
+        if (record.sceneryOwner && !record.cached)
+          record.selectionBounds = selectionBounds;
         if (
           !boundsOverlap(
-            {
-              minX: position.x - radius,
-              maxX: position.x + radius,
-              minY: position.y - radius,
-              maxY: position.y + radius,
-            },
+            selectionBounds,
             record.sceneryOwner ? sceneryBounds : globalViewport,
             margin,
           )
@@ -932,6 +950,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
               castsShadows: true,
             });
           }
+        record.selectionBounds = null;
         record.cached = {
           pose: {
             parentMatrix: p.matrix,
@@ -1004,6 +1023,17 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           sun,
           occluders,
           emitters,
+          // Flat, non-emitting poses stay excluded until their owners, scale or registrations change.
+          // Unseen records remain candidates so entering the selection always prepares their material.
+          candidates: candidates.filter(
+            (record) =>
+              !record.sceneryOwner ||
+              !record.cached ||
+              !record.description.small ||
+              record.cached.receiver.height * scale >
+                WORLD_DETAIL.groundLightingPixels[0] ||
+              record.cached.lights.length > 0,
+          ),
           owners: sceneryOwners.map((owner) => {
             const pose = origin(owner);
             return {
@@ -1706,6 +1736,8 @@ type Caster = {
   materials: WorldMaterial[];
   sources: Map<Texture["source"], number>;
   active: boolean;
+  /** Fixed, unprepared poses retain their conservative world bounds until owner invalidation. */
+  selectionBounds: WorldBounds | null;
   cached: {
     pose: CachedPose;
     receiver: VisibleCaster;

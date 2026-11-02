@@ -483,6 +483,13 @@ export const createWorldOcclusion = (
         (entry) => entry?.cell === cell && contains(entry.domain, viewport),
       );
       const domain = retained?.domain ?? fieldDomain(viewport, cell);
+      // Compare retained values before allocating a request snapshot for unchanged scenery.
+      if (
+        requested?.heightRange === heightRange &&
+        sameDomain(requested.domain, domain) &&
+        sameRecords(requested, records)
+      )
+        return;
       const request = {
         records: [...records],
         wind: records.map((record) => record.wind),
@@ -1392,16 +1399,24 @@ const sameDomain = (a: WorldBounds | null | undefined, b: WorldBounds) =>
   a.minY === b.minY &&
   a.maxX === b.maxX &&
   a.maxY === b.maxY;
-const sameRecords = (a: readonly Occluder[] | undefined, b: readonly Occluder[]) =>
-  a?.length === b.length && a.every((record, index) => record.key === b[index]?.key);
+const sameRecords = (
+  a: FieldRequest,
+  b: readonly Occluder[],
+  wind?: FieldRequest["wind"],
+) =>
+  a.records.length === b.length &&
+  a.records.every(
+    (record, index) =>
+      record.key === b[index]?.key &&
+      a.wind[index] === (wind ? wind[index] : b[index]?.wind),
+  );
 const sameRequest = (a: FieldRequest | null, b: FieldRequest | null) =>
   a === b ||
   (!!a &&
     !!b &&
     a.heightRange === b.heightRange &&
     sameDomain(a.domain, b.domain) &&
-    a.wind.every((group, index) => group === b.wind[index]) &&
-    sameRecords(a.records, b.records));
+    sameRecords(a, b.records, b.wind));
 /** Sorted unions retain every air gap, independently of caster and triangle order. */
 const unionInterval = (intervals: HeightInterval[], lower: number, upper: number) => {
   let start = 0;

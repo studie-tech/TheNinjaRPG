@@ -899,9 +899,12 @@ describe("physical world lighting", () => {
     const sprites = fixtures.map((f) => {
       const sprite = new Sprite(source.texture); sprite.position.set(40, 40); sprite.width = sprite.height = 20; f.parent.addChild(sprite); return sprite;
     });
-    const releases = fixtures.map((f, index) => f.shadows.register(sprites[index]!, {
-      id: "scenery-pose", kind: "decoration", image: "scenery-pose.png", size: 20, x: 40, y: 40, groundY: 0, shadowCaster: "building", small: true,
-    }, [], undefined, index === 0 ? f.parent : undefined));
+    const distant = fixtures.map((f) => {
+      const sprite = new Sprite(source.texture); sprite.position.set(2040, 40); sprite.width = sprite.height = 20; f.parent.addChild(sprite); return sprite;
+    });
+    const releases = fixtures.flatMap((f, index) => [sprites[index]!, distant[index]!].map((sprite, object) => f.shadows.register(sprite, {
+      id: `scenery-pose:${object}`, kind: "decoration", image: "scenery-pose.png", size: 20, x: sprite.x, y: 40, groundY: 0, shadowCaster: "building", small: true,
+    }, [], undefined, index === 0 ? f.parent : undefined)));
     try {
       await Promise.all(releases.map((release) => release.ready));
       const layers: Container[] = [];
@@ -925,6 +928,9 @@ describe("physical world lighting", () => {
         fixtures.forEach((f) => f.world.scale.set(scale));
         compare();
         expect(layers[0]!.children.length).toBe(scale === 0.25 ? 0 : 1);
+        compare({ minX: 2020, maxX: 2120, minY: 0, maxY: 100 });
+        expect(layers[0]!.children.length).toBe(scale === 0.25 ? 0 : 1);
+        compare();
         if (scale === 0.25) {
           compare({ minX: 30.125, maxX: 130.125, minY: 0, maxY: 100 });
           fixtures.forEach((f) => f.parent.scale.set(4));
