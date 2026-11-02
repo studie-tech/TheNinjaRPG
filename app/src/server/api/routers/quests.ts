@@ -1018,19 +1018,6 @@ export const questsRouter = createTRPCRouter({
           id: entry.id,
           ...input.data,
         });
-        // Check if quest is changed to be an event
-        if (entry.questType !== "event" && input.data.questType === "event") {
-          const roles = availableRanks(input.data.questRank);
-          await upsertQuestEntries(
-            ctx.drizzle,
-            { ...entry, ...input.data },
-            and(
-              inArray(userData.rank, roles),
-              gte(userData.updatedAt, secondsFromNow(-60 * 60 * 24 * 7)),
-            ),
-          );
-        }
-
         const parsedPrevious = QuestValidator.safeParse(entry);
         const isPresentationOnlyChange =
           parsedPrevious.success &&
@@ -1055,6 +1042,19 @@ export const questsRouter = createTRPCRouter({
             : updateQuestHistoryForUpdate2(ctx.drizzle, input, entry, updatedAt),
           insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
         ]);
+        // Assign a quest that just became an event only once the edit has been saved;
+        // re-saving does not repeat it, so a failed assignment needs a manual re-run.
+        if (entry.questType !== "event" && input.data.questType === "event") {
+          const roles = availableRanks(input.data.questRank);
+          await upsertQuestEntries(
+            ctx.drizzle,
+            { ...entry, ...input.data, updatedAt },
+            and(
+              inArray(userData.rank, roles),
+              gte(userData.updatedAt, secondsFromNow(-60 * 60 * 24 * 7)),
+            ),
+          );
+        }
         await notifyMapLocationsChanged();
         await outdateProposalsFor(
           ctx.drizzle,
