@@ -22,10 +22,6 @@ const reskinInput = (jutsuId: string) => ({
 const reputationOf = async () =>
   (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, OWNER) }))?.reputationPoints;
 
-/** Run a reskin request, reporting a thrown error as a failed result. */
-const attempt = (request: Promise<{ success: boolean }>) =>
-  request.then((result) => result.success, () => false);
-
 describeWithDatabase("jutsu reskin charges", () => {
   beforeEach(async () => {
     await resetTables(jutsuReskin, userJutsu, jutsu, userData);
@@ -42,9 +38,9 @@ describeWithDatabase("jutsu reskin charges", () => {
     const db = await getTestDatabase();
     const results: boolean[] = [];
     const raced = beforeStatements(db, jutsuReskin, [async () => {
-      results.push(await attempt((await callerFor(jutsuRouter, OWNER)).createReskin(reskinInput("jutsu-a"))));
+      results.push((await (await callerFor(jutsuRouter, OWNER)).createReskin(reskinInput("jutsu-a"))).success);
     }]);
-    results.unshift(await attempt(callerForDatabase(jutsuRouter, OWNER, raced).createReskin(reskinInput("jutsu-a"))));
+    results.unshift((await callerForDatabase(jutsuRouter, OWNER, raced).createReskin(reskinInput("jutsu-a"))).success);
     expect({ reputation: await reputationOf(), reskins: (await db.query.jutsuReskin.findMany()).length, results })
       .toEqual({ reputation: COST_RESKIN_JUTSU, reskins: 1, results: [false, true] });
   });
@@ -54,9 +50,9 @@ describeWithDatabase("jutsu reskin charges", () => {
     const db = await getTestDatabase();
     const results: boolean[] = [];
     const raced = beforeStatements(db, userData, [async () => {
-      results.push(await attempt((await callerFor(jutsuRouter, OWNER)).createReskin(reskinInput("jutsu-b"))));
+      results.push((await (await callerFor(jutsuRouter, OWNER)).createReskin(reskinInput("jutsu-b"))).success);
     }]);
-    results.unshift(await attempt(callerForDatabase(jutsuRouter, OWNER, raced).createReskin(reskinInput("jutsu-a"))));
+    results.unshift((await callerForDatabase(jutsuRouter, OWNER, raced).createReskin(reskinInput("jutsu-a"))).success);
     expect({ reputation: await reputationOf(), reskins: (await db.query.jutsuReskin.findMany()).length, results })
       .toEqual({ reputation: 0, reskins: 1, results: [false, true] });
   });
