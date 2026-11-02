@@ -307,6 +307,8 @@ export const listPublicUserRows = (
         return [desc(userData.updatedAt)];
       case "Strongest":
         return [desc(userData.level), desc(userData.experience)];
+      case "Weakest":
+        return [asc(userData.level), asc(userData.experience)];
       case "Crafting":
         return [desc(userData.craftingExperience), desc(userData.experience)];
       case "Farming":

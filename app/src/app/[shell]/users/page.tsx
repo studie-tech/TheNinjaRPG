@@ -43,7 +43,6 @@ export default function Users() {
   type TabName =
     | "Online"
     | "Strongest"
-    | "Weakest"
     | "PvP"
     | "Ranked"
     | "Outlaws"
