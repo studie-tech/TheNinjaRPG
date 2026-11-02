@@ -65,7 +65,7 @@ export const createTravelScene = async (options: {
   lightLayout: boolean;
   getSnapshot: () => TravelSnapshot;
   onError: (error: unknown) => void;
-  /** Runs after each new sector installation, including before this factory returns. */
+  /** Runs when sector terrain is usable, possibly before scenery or this factory finishes. */
   onReady: () => void;
   onTap: (hit: TravelPick) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
@@ -538,6 +538,7 @@ export const createTravelScene = async (options: {
           sectors.set(entry.sector, installed);
           void scenery
             .then((result) => {
+              // Artwork may finish after navigation or a replacement of this sector.
               if (scope.isDisposed() || sectors.get(entry.sector) !== installed) return;
               if ("error" in result) {
                 // Terrain and live actors remain usable; the next scene retries the artwork.
@@ -881,7 +882,10 @@ type TravelSector = {
   art: Awaited<ReturnType<typeof createWorldSprites>>;
 };
 
-// One travel window of immutable terrain and descriptions; live users and renderer objects stay scene-local.
+/**
+ * Retain CPU terrain and descriptions for up to nine sectors across navigation.
+ * Live users and renderer resources stay scene-local; insertion order controls eviction.
+ */
 const cachedSectorData = new Map<
   number,
   {

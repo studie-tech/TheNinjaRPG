@@ -5,7 +5,10 @@ import { buildLpcCatalog } from "@/libs/lpc/catalog";
 /** Share the staff design discovery query across equipment and design editors. */
 export const useLpcDesigns = () => api.gameAsset.getLpcCatalog.useQuery();
 
-/** Share catalog reads; travel can use saved artwork while revalidating for its next scene. */
+/**
+ * Load a fresh catalog by default. Travel can return a cached scene snapshot while
+ * refreshing artwork for subsequent scenes; a cold cache still awaits the request.
+ */
 export const useLpcCatalogLoader = ({
   revalidateInBackground = false,
 }: {

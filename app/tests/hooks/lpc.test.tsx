@@ -10,6 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Control refresh completion while exercising the scene loader's cached and fresh snapshots. */
 const fixture = (cached?: typeof lpcAssets) => {
   let resolve!: (assets: typeof lpcAssets) => void;
   let reject!: (error: Error) => void;

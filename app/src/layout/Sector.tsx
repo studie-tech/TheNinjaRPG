@@ -2359,6 +2359,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const timer = setTimeout(() => setShowWorldLoader(true), 200);
     return () => clearTimeout(timer);
   }, [travel.isReady, travel.error]);
+  // Invalidate the paused destination on arrival so character tracking can resume.
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision, profile?.status]);

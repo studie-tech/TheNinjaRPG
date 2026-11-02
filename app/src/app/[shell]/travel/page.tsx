@@ -1409,6 +1409,7 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
+          {/* Invisible preparation preserves viewport measurements and the arrival canvas. */}
           {(showSector || isPreparingSector) && (
             <div
               aria-hidden={!showSector}
