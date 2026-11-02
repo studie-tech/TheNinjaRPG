@@ -117,6 +117,7 @@ import { Titles } from "@/layout/Titles";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getFreeBloodlineSwaps } from "@/libs/bloodline";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
@@ -1557,7 +1558,7 @@ const SwapBloodline: React.FC = () => {
 
   // Check for free swap eligibility
   const federalStatus = getUserFederalStatus(userData);
-  const hasFreeSwapEligibility = federalStatus === "SILVER" || federalStatus === "GOLD";
+  const hasFreeSwapEligibility = getFreeBloodlineSwaps(federalStatus) > 0;
   const hasFreeSwapAvailable = swapInfo?.isFree ?? false;
 
   // Calculate when free swap resets (30 days from oldest free swap)
@@ -1569,19 +1570,10 @@ const SwapBloodline: React.FC = () => {
     )
       return null;
 
-    const oldestFreeSwap = swapInfo.recentSwaps.sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    )[0];
-
-    if (!oldestFreeSwap) return null;
-
-    const resetDate = secondsFromDate(
-      BLOODLINE_SWAP_FREE_DAYS * DAY_S,
-      new Date(oldestFreeSwap.createdAt),
+    const oldestSwapTime = Math.min(
+      ...swapInfo.recentSwaps.map((swap) => new Date(swap.createdAt).getTime()),
     );
-    const now = new Date();
-    const secondsUntilReset = Math.floor((resetDate.getTime() - now.getTime()) / 1000);
-    return secondsFromNow(secondsUntilReset);
+    return secondsFromDate(BLOODLINE_SWAP_FREE_DAYS * DAY_S, new Date(oldestSwapTime));
   };
 
   const freeSwapResetTime = getFreeSwapResetTime();
