@@ -22,7 +22,7 @@ export const createGameRenderer = async (options: {
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
   height: (width: number) => number;
   width?: number;
-  /** Logical coordinates stay in CSS pixels; lower resolutions use crisp CSS enlargement. */
+  /** Defaults to display density capped at 2×; logical coordinates stay in CSS pixels. */
   resolution?: number;
   background?: number;
   backgroundAlpha?: number;
@@ -39,7 +39,8 @@ export const createGameRenderer = async (options: {
       width,
       height: options.height(width),
       preferWebGLVersion: 1,
-      resolution: options.resolution ?? 1,
+      // Bound color-buffer cost while preserving artwork detail on dense mobile displays.
+      resolution: options.resolution ?? Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
       antialias: false,
       background: premultipliedClearColor(

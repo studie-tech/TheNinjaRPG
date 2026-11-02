@@ -20,12 +20,12 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
 ensureDom();
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
-const fixture = (instanced = false) => {
+const fixture = (instanced = false, resolution = 1) => {
   const cleanups: (() => void)[] = [];
   const world = new Container(), parent = new Container();
   const render = vi.fn();
   const canvas = document.createElement("canvas");
-  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
+  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, resolution, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
@@ -104,6 +104,23 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("preserves artwork density without scaling retained lighting targets", () => {
+    const standard = fixture(), dense = fixture(false, 2);
+    try {
+      for (const f of [standard, dense]) {
+        f.shadows.registerTerrain(f.parent, f.terrain);
+        f.shadows.update(worldSunlight(), viewport);
+      }
+      expect(standard.shadows.container.filters![0]!.resolution).toBe(1);
+      expect(dense.shadows.container.filters![0]!.resolution).toBe(2);
+      const targets = (f: ReturnType<typeof fixture>) => f.render.mock.calls.map(
+        ([draw]) => [draw.target.width, draw.target.height],
+      );
+      expect(targets(dense)).toEqual(targets(standard));
+      expect(targets(dense).length).toBeGreaterThan(0);
+    } finally { standard.dispose(); dense.dispose(); }
+  });
+
   it("bypasses lighting targets while disabled and restores them on the next frame", () => {
     const f = fixture();
     try {

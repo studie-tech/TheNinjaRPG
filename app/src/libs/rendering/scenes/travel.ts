@@ -71,7 +71,6 @@ export const createTravelScene = async (options: {
   resolution?: number;
 }) => {
   const logicalWidth = 1024;
-  const resolution = options.resolution ?? 1;
   const displayRatio = () => {
     const map = options.getSnapshot().window[0]?.map;
     return map ? calculateWidth2Height(map.width, map.height + 2) : 0.7;
@@ -84,6 +83,7 @@ export const createTravelScene = async (options: {
         ? window.innerHeight
         : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
   });
+  const resolution = game.renderer.resolution ?? options.resolution ?? 1;
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
     const world = new Container({ isRenderGroup: true }),
