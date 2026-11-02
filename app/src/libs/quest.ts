@@ -2933,8 +2933,9 @@ export const questTypeConcurrentBlockMessage = (
       return null;
     }
     case "battlepyramid": {
-      if (activeOfType("battlepyramid").length >= 1) {
-        return `Already in active battle pyramid. Abandon if you want to restart.`;
+      const [activePyramid] = activeOfType("battlepyramid");
+      if (activePyramid) {
+        return `You have an unfinished Battle Pyramid run (${activePyramid.quest.name}). Go to Battle Arena → Battle Pyramid and abandon it to start this quest.`;
       }
       return null;
     }

@@ -26,6 +26,7 @@ import {
   getCraftingRankProgress,
   getCurrentCraftingStatus,
   getEffectiveMaxImbuements,
+  getImbuementRankCapMessage,
 } from "@/libs/crafting";
 import { calcItemRepairCost } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -262,6 +263,34 @@ export default function OccupationCrafting() {
   // Calculate max crystals per item based on crafting rank
   const userCraftingRank = craftingStatus?.craftingRank || "NOVICE";
   const maxCrystalsPerItem = CRAFTING_MAX_IMBUED_ITEMS[userCraftingRank];
+
+  // Items still able to take a crystal, and items blocked only by the crafting rank
+  const imbueOptions = imbuableItems.map((userItem) => {
+    const itemMaxImbuements = userItem.item?.maxImbueNumber || 1;
+    const effectiveMaxImbuements = getEffectiveMaxImbuements(
+      userCraftingRank,
+      itemMaxImbuements,
+    );
+    const currentCrystals =
+      userItem.imbuements?.filter(
+        (imbuement) =>
+          imbuement.craftingFinishedAt &&
+          new Date(imbuement.craftingFinishedAt) <= new Date(),
+      ).length || 0;
+    return {
+      userItem,
+      effectiveMaxImbuements,
+      currentCrystals,
+      canAddMoreCrystals: currentCrystals < effectiveMaxImbuements,
+      rankCapMessage: getImbuementRankCapMessage(
+        userCraftingRank,
+        itemMaxImbuements,
+        currentCrystals,
+      ),
+    };
+  });
+  const rankCappedItems = imbueOptions.filter((option) => option.rankCapMessage);
+  const hasImbueTargets = imbueOptions.some((option) => option.canAddMoreCrystals);
 
   // Guard
   if (userData?.occupation !== "CRAFTING") return null;
@@ -629,7 +658,8 @@ export default function OccupationCrafting() {
                 <Gem className="h-5 w-5" />
                 Imbueable Items
                 <Badge variant="outline" className="ml-auto">
-                  Max depends on item & crafting rank
+                  {capitalizeFirstLetter(userCraftingRank)} rank: up to{" "}
+                  {maxCrystalsPerItem} per item
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -653,33 +683,29 @@ export default function OccupationCrafting() {
                   <>
                     <div>
                       <h4 className="mb-2 font-medium">Select Item to Imbue</h4>
+                      {!hasImbueTargets && (
+                        <p className="mb-2 text-muted-foreground text-sm">
+                          None of your items can take another crystal right now.
+                        </p>
+                      )}
                       <ActionSelector
-                        items={imbuableItems
-                          .map((userItem) => {
-                            const effectiveMaxImbuements = getEffectiveMaxImbuements(
-                              userCraftingRank,
-                              userItem.item?.maxImbueNumber || 1,
-                            );
-                            const currentCrystals =
-                              userItem.imbuements?.filter(
-                                (imbuement) =>
-                                  imbuement.craftingFinishedAt &&
-                                  new Date(imbuement.craftingFinishedAt) <= new Date(),
-                              ).length || 0;
-                            const canAddMoreCrystals =
-                              currentCrystals < effectiveMaxImbuements;
-
-                            return {
+                        items={imbueOptions
+                          .filter((option) => option.canAddMoreCrystals)
+                          .map(
+                            ({
+                              userItem,
+                              currentCrystals,
+                              effectiveMaxImbuements,
+                            }) => ({
                               id: userItem.id,
                               name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
                               image: userItem.item?.image || "",
                               rarity: userItem.item?.rarity || "COMMON",
                               type: "item" as const,
                               effects: userItem.item?.effects || [],
-                              hidden: !canAddMoreCrystals,
-                            };
-                          })
-                          .filter((item) => !item.hidden)}
+                              hidden: false,
+                            }),
+                          )}
                         selectedId={selectedImbuableItem?.id}
                         showBgColor={false}
                         showLabels={true}
@@ -691,6 +717,25 @@ export default function OccupationCrafting() {
                           setSelectedCrystalUserItem(undefined);
                         }}
                       />
+                      {rankCappedItems.length > 0 && (
+                        <div
+                          className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3"
+                          data-testid="imbue-rank-cap-notes"
+                        >
+                          <p className="mb-1 flex items-center gap-2 font-medium text-sm">
+                            <Info className="h-4 w-4" />
+                            Limited by your crafting rank
+                          </p>
+                          <ul className="space-y-1 text-sm">
+                            {rankCappedItems.map(({ userItem, rankCapMessage }) => (
+                              <li key={userItem.id}>
+                                <strong>{userItem.item?.name || "Unknown"}</strong>:{" "}
+                                {rankCapMessage}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
 
                     {selectedImbuableItem && (

@@ -3,6 +3,7 @@ import { CRAFTING_REQUIRED_EXP } from "@/drizzle/constants";
 import {
   formatCraftingRank,
   getCraftingRank,
+  getImbuementRankCapMessage,
   getMissingCraftingRank,
 } from "@/libs/crafting";
 
@@ -65,5 +66,34 @@ describe("formatCraftingRank", () => {
   it("formats rank names for display", () => {
     expect(formatCraftingRank("FORGEMASTER")).toBe("Forgemaster");
     expect(formatCraftingRank("UNKNOWN")).toBe("Unknown");
+  });
+});
+
+describe("getImbuementRankCapMessage", () => {
+  it("explains the rank cap for an Apprentice on a 2-slot item (ticket BU927m7MVb)", () => {
+    expect(getImbuementRankCapMessage("APPRENTICE", 2, 1)).toBe(
+      "1/2 imbuements: your crafting rank (Apprentice) allows 1. Reach Master to add another.",
+    );
+  });
+
+  it("points Novices to Apprentice", () => {
+    expect(getImbuementRankCapMessage("NOVICE", 2, 0)).toBe(
+      "0/2 imbuements: your crafting rank (Novice) allows 0. Reach Apprentice to add another.",
+    );
+  });
+
+  it("names the next rank that actually allows another crystal", () => {
+    expect(getImbuementRankCapMessage("MASTER", 3, 2)).toContain(
+      "Reach Forgemaster to add another.",
+    );
+  });
+
+  it("stays quiet while the rank still allows another crystal", () => {
+    expect(getImbuementRankCapMessage("APPRENTICE", 2, 0)).toBeNull();
+  });
+
+  it("stays quiet when the item itself is full", () => {
+    expect(getImbuementRankCapMessage("APPRENTICE", 1, 1)).toBeNull();
+    expect(getImbuementRankCapMessage("FORGEMASTER", 2, 2)).toBeNull();
   });
 });
