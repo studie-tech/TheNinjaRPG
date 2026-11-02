@@ -1,11 +1,13 @@
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 
 /** Reconcile quest reward views without suppressing recovery or eligibility-changing reads. */
 export const useQuestRewardCacheUpdate = () => {
   const utils = api.useUtils();
+  const { invalidateInventory } = useInventoryCacheUpdate();
   const dashboard = useQueryCacheUpdate<RouterOutputs["profile"]["getDashboard"]>(
     getQueryKey(api.profile.getDashboard, undefined, "query"),
   );
@@ -30,10 +32,7 @@ export const useQuestRewardCacheUpdate = () => {
       !result.rewards.reward_hunter_items &&
       !result.rewards.reward_gathering_items
         ? []
-        : [
-            utils.item.getUserItems.invalidate(),
-            utils.item.getUserItemsWithVariants.invalidate(),
-          ]),
+        : [invalidateInventory()]),
       dashboard.updateCache(
         update
           ? (current) => getQuestRewardDashboardUpdate(current, update)

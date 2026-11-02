@@ -905,10 +905,9 @@ const Combat: React.FC<CombatProps> = (props) => {
       completionRevisionRef.current?.battleId === endedBattleId
         ? completionRevisionRef.current
         : null;
-    const revision =
-      capturedCompletion && capturedCompletion.battleId === endedBattleId
-        ? capturedCompletion.revision
-        : prepareUserUpdate();
+    const revision = capturedCompletion
+      ? capturedCompletion.revision
+      : prepareUserUpdate();
     const reconcileProfile = async () => {
       const inventory = capturedCompletion?.inventory ?? prepareInventoryUpdate();
       const sector = capturedCompletion?.sector ?? prepareSectorUpdate();

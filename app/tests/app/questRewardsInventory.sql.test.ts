@@ -96,8 +96,9 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       const end = hookSource.indexOf("\n  return {", start);
       if (start < 0 || end < 0) throw new Error("Quest reward cache controller was not found");
       const code = new (require("bun").Transpiler)({ loader: "ts" }).transformSync(hookSource.slice(start, end));
-      bindings.updateQuestRewards.mockImplementation(new Function("dashboard", "utils", `${code}; return updateQuestRewards;`)(
+      bindings.updateQuestRewards.mockImplementation(new Function("dashboard", "utils", "invalidateInventory", `${code}; return updateQuestRewards;`)(
         { updateCache: async () => false }, bindings.utils,
+        () => Promise.all([bindings.utils.item.getUserItems.invalidate(), bindings.utils.item.getUserItemsWithVariants.invalidate()]),
       ));
       // Run the production reward callbacks against real profile reads and both observed inventories.
       const source = readFileSync(join(import.meta.dirname, "../../src/layout/Logbook.tsx"), "utf8");
