@@ -58,6 +58,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  publicProcedure,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
@@ -606,8 +607,8 @@ export const activityStreakRouter = createTRPCRouter({
 
   // ===== Admin/Content Endpoints =====
 
-  // Get all streak configurations (admin only)
-  getConfigs: protectedProcedure
+  // Get all streak configurations; public for the activity streak manual page
+  getConfigs: publicProcedure
     .input(
       z
         .object({

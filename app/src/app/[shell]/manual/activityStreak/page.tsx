@@ -42,12 +42,14 @@ export default function ActivityStreakListPage() {
   const router = useRouter();
 
   const {
-    data: configs,
+    data: allConfigs,
     isFetching,
     refetch,
-  } = api.activityStreak.getConfigs.useQuery(
-    typeFilter === "all" ? {} : { streakType: typeFilter },
-  );
+  } = api.activityStreak.getConfigs.useQuery();
+  const configs =
+    typeFilter === "all"
+      ? allConfigs
+      : allConfigs?.filter((c) => c.streakType === typeFilter);
 
   const { mutate: create, isPending: createPending } =
     api.activityStreak.createConfig.useMutation({
@@ -74,8 +76,8 @@ export default function ActivityStreakListPage() {
 
   const isPending = isFetching || createPending || deletePending;
 
-  // Check if a RECURRING config already exists
-  const hasRecurring = configs?.some((c) => c.streakType === "RECURRING");
+  // Check if a RECURRING config already exists, regardless of the active tab
+  const hasRecurring = allConfigs?.some((c) => c.streakType === "RECURRING");
 
   const handleCreate = () => {
     // Default to EVENT_PASS if RECURRING already exists

@@ -67,6 +67,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  publicProcedure,
 } from "@/server/api/trpc";
 import {
   claimUserSnapshot,
@@ -101,7 +102,8 @@ import {
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const occupationRouter = createTRPCRouter({
-  getCraftableItems: protectedProcedure
+  /** Visible crafting recipes; public for the crafting manual page. */
+  getCraftableItems: publicProcedure
     .meta({ mcp: { description: "Get all craftable items" } })
     .query(async ({ ctx }) => {
       return await listItemForGetCraftableItems(ctx.drizzle);
