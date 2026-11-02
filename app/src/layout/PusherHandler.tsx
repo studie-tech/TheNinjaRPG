@@ -1,7 +1,7 @@
 "use client";
 
 import Pusher from "pusher-js";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
@@ -37,6 +37,8 @@ export const usePusherHandler = (
   // Navigation
   const router = useRouter();
   const pathname = usePublicPathname();
+  // Read at event time so the subscription does not reconnect on every navigation
+  const isOnInbox = useEffectEvent(() => pathname.includes("/inbox"));
 
   // tRPC utility
   const utils = api.useUtils();
@@ -150,7 +152,7 @@ export const usePusherHandler = (
           void utils.comments.getUserConversations.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
-          if (!pathname.includes("/inbox")) {
+          if (!isOnInbox()) {
             showMutationToast({
               success: true,
               message: "You have a new message",
