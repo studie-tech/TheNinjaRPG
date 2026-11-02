@@ -3,6 +3,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
+import * as sortableList from "@/components/ui/sortable-list";
 import type { TutorialStepConfig } from "@/hooks/tutorial";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
@@ -70,6 +71,7 @@ beforeEach(() => {
   ensureDom();
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
+  componentSpies.push(vi.spyOn(sortableList, "SortableList").mockImplementation(() => null));
   for (const [name, implementation] of Object.entries(dialogMocks)) {
     componentSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
   }

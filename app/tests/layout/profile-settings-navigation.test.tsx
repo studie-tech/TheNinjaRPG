@@ -102,11 +102,22 @@ it("finds settings by keywords and returns from the editor to search results", (
   fireEvent.change(view.getByRole("searchbox", { name: "Search settings" }), { target: { value: "  PHOTO  " } });
   expect(view.getByRole("status").textContent).toBe("1 setting found");
   expect(view.queryByRole("link", { name: /Name change/ })).toBeNull();
+  expect(within(view.getByRole("link", { name: /Avatar/ })).getByText("Profile & appearance")).toBeTruthy();
   fireEvent.click(view.getByRole("link", { name: /Avatar/ }));
   expect(view.getByRole("textbox", { name: "Avatar draft" })).toBeTruthy();
   fireEvent.click(view.getByRole("link", { name: "Search results" }));
   expect(view.getByRole("searchbox").getAttribute("value")).toBe("  PHOTO  ");
   expect(view.getByRole("status").textContent).toBe("1 setting found");
+});
+
+it.each(["Sound & music", "Help & tutorial"])("shows %s once in its search result", (title) => {
+  const view = mount([{
+    id: "single", title, description: "Single editor", icon: Settings,
+    settings: [{ id: "editor", title, description: "Editor controls", icon: Settings, content: <Editor name={title} /> }],
+  }]);
+  fireEvent.change(view.getByRole("searchbox"), { target: { value: title } });
+  const row = view.getByRole("link", { name: new RegExp(title) });
+  expect(within(row).getAllByText(title)).toHaveLength(1);
 });
 
 it("offers a recovery action when a search has no results", () => {

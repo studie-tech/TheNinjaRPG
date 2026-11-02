@@ -61,8 +61,14 @@ export type GameSettingsUser = Pick<
   | "preferredGeneral2"
 >;
 
+/** The profile page that contains game, profile and account settings. */
+export const SETTINGS_HREF = "/profile?tab=edit";
+
+type GameSettingsSection = "all" | "audio" | "display" | "effects";
+
 interface GameSettingsProps {
   onNavigate?: () => void;
+  section?: GameSettingsSection;
   userData?: GameSettingsUser | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
   trigger?: "audio" | "settings";
@@ -494,7 +500,9 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
   onNavigate,
+  section = "all",
 }) => {
+  const sfxVolumeId = useId();
   const {
     audioEnabled,
     setAudioEnabled,
@@ -590,21 +598,9 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
 
   const handleLayoutChange = useSelectGameLayout();
 
-  return (
-    <Tabs value={activeSettingsTab} onValueChange={setSettingsTab} className="min-w-0">
-      <TabsList aria-label="Settings categories" className="flex-nowrap">
-        <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
-          Audio
-        </TabsTrigger>
-        <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
-          Game layout
-        </TabsTrigger>
-        <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
-          Visual effects
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="audio" className="space-y-3 pt-2">
-        <p className="text-base font-semibold">Audio</p>
+  const sections = {
+    audio: (
+      <div className="space-y-3 pt-2">
         <div className="divide-border/50 divide-y">
           <SettingsToggle
             label="Music"
@@ -631,14 +627,14 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
         </div>
         {(sfxOn || buttonSfxOn) && (
           <div className="space-y-2 pb-2">
-            <label htmlFor="sfxVolume" className="block text-sm">
+            <label htmlFor={sfxVolumeId} className="block text-sm">
               Effects volume{" "}
               <span className="text-muted-foreground float-right tabular-nums">
                 {Math.round(sfxVolume * 100)}%
               </span>
             </label>
             <UncontrolledSliderField
-              id="sfxVolume"
+              id={sfxVolumeId}
               label=""
               value={Math.round(sfxVolume * 100)}
               min={0}
@@ -652,18 +648,17 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
             Click anywhere to start audio.
           </p>
         )}
-      </TabsContent>
-      <TabsContent value="layout" className="space-y-3 pt-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-base font-semibold">Game layout</p>
-          <Link
-            href="/layouts"
-            onClick={onNavigate}
-            className="text-primary inline-flex min-h-9 items-center text-xs underline underline-offset-2"
-          >
-            Explore layouts
-          </Link>
-        </div>
+      </div>
+    ),
+    layout: (
+      <div className="space-y-3 pt-2">
+        <Link
+          href="/layouts"
+          onClick={onNavigate}
+          className="text-primary inline-flex min-h-9 items-center text-xs underline underline-offset-2"
+        >
+          Explore layouts
+        </Link>
         <GameLayoutPicker layout={activeLayout} onLayoutChange={handleLayoutChange} />
         <div className="divide-border/50 divide-y">
           {isClassicLayout && (
@@ -696,10 +691,35 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
           </Button>
         )}
         <NativeSettingsEntry onNavigate={onNavigate} />
-      </TabsContent>
-      <TabsContent value="effects" className="space-y-3 pt-2">
+      </div>
+    ),
+    effects: (
+      <div className="space-y-3 pt-2">
         <VisualEffectsSettings />
-      </TabsContent>
+      </div>
+    ),
+  };
+
+  if (section !== "all") {
+    return sections[section === "display" ? "layout" : section];
+  }
+
+  return (
+    <Tabs value={activeSettingsTab} onValueChange={setSettingsTab} className="min-w-0">
+      <TabsList aria-label="Settings categories" className="flex-nowrap">
+        <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
+          Audio
+        </TabsTrigger>
+        <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
+          Game layout
+        </TabsTrigger>
+        <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
+          Visual effects
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="audio">{sections.audio}</TabsContent>
+      <TabsContent value="layout">{sections.layout}</TabsContent>
+      <TabsContent value="effects">{sections.effects}</TabsContent>
     </Tabs>
   );
 };
@@ -709,12 +729,6 @@ export const VisualEffectsSettings = () => {
   const { visualEffects, setVisualEffect } = useVisualEffects();
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-base font-semibold">Visual effects</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Adjust graphics for your device.
-        </p>
-      </div>
       <div className="divide-border/50 divide-y">
         <SettingsToggle
           label="Lighting"
@@ -797,26 +811,29 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
   onNavigate,
   userData,
   updateUser,
+  section = "all",
 }) => {
   return (
-    <div className="p-4">
+    <div className={section === "all" ? "p-4" : undefined}>
       <GameSettingsContent
         userData={userData}
         updateUser={updateUser}
         onNavigate={onNavigate}
+        section={section}
       />
     </div>
   );
 };
 
 /**
- * Categorized settings popover for the game header.
+ * Game header settings, with an audio shortcut linking to the settings page.
  */
 export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
   trigger = "audio",
   triggerClassName,
+  section,
 }) => {
   const { audioEnabled } = useGameSettings(userData);
   const isSettingsTrigger = trigger === "settings";
@@ -858,11 +875,23 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
         className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
         sideOffset={8}
       >
+        {section === "audio" && <p className="text-base font-semibold">Audio</p>}
         <GameSettingsContent
           userData={userData}
           updateUser={updateUser}
           onNavigate={() => setOpen(false)}
+          section={section}
         />
+        {section === "audio" && (
+          <Link
+            href={SETTINGS_HREF}
+            onClick={() => setOpen(false)}
+            className="text-primary mt-3 flex min-h-11 items-center gap-2 border-t pt-3 text-sm font-medium hover:underline"
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+            All settings
+          </Link>
+        )}
       </PopoverContent>
     </Popover>
   );

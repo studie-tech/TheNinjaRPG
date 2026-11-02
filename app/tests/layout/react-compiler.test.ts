@@ -16,6 +16,8 @@ const targets = [
   ["layout/MenuBoxProfile.tsx", ["MenuBoxProfile", "useExpiryAnchor", "Cooldown"]],
   ["layout/Countdown.tsx", ["Countdown"]],
   ["layout/LowerRightHelpBtn.tsx", ["LowerRightHelpBtn"]],
+  ["layout/GameSettings.tsx", ["GameSettingsContent", "GameSettingsPanel", "GameSettingsPopover"]],
+  ["layout/TutorialSettings.tsx", ["TutorialSettings"]],
   ["components/layout/shared/LayoutNotifications.tsx", ["MobileNotificationsPopover"]],
   ["hooks/tutorial.tsx", ["useTutorialStep"]],
   ["layout/TutorialAssistant.tsx", ["PlayerTutorialAssistant"]],
