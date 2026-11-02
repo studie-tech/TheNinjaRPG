@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
@@ -21,6 +21,7 @@ let queryClient: QueryClient;
 let onEvent: (data: BattleUpdate) => Promise<void>;
 let setState: (state: BattleState) => void;
 let performAction: () => void;
+let updateLogs: ReturnType<typeof useCombatUpdates>["updateLogs"];
 let finishAction: (response: ActionResponse) => void;
 let failAction: (error: Error) => void;
 let reads: string[];
@@ -61,7 +62,9 @@ const mount = (initial = stateAt(1)) => {
     const [state, updateState] = useState(initial);
     setState = updateState;
     latestState = state;
-    const { startAction, settleAction } = useCombatUpdates(state);
+    const updates = useCombatUpdates(state);
+    const { startAction, settleAction } = updates;
+    updateLogs = updates.updateLogs;
     const { data } = testApi.combat.getBattle.useQuery({ battleId: state.battle?.id });
     // The combat page applies query responses independently of the mutation.
     useEffect(() => { if (data?.battle) updateState({ ...data, isPending: false }); }, [data]);
@@ -282,4 +285,41 @@ it("keeps final results out of recovery reads even if their battle cache is stal
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
   expect(reads).toHaveLength(1);
   expect(latestState.result?.outcome).toBe("Won");
+});
+
+
+it("shares pending duplicate live refreshes while newer versions still replace the read", async () => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  await act(async () => onEvent({ version: 3 }));
+  expect(reads).toHaveLength(2);
+  await act(async () => { await onEvent({ version: 3 }); await onEvent({ version: 2 }); });
+  expect(reads).toHaveLength(2);
+  await act(async () => onEvent({ version: 4 }));
+  expect(reads).toHaveLength(3);
+  await act(async () => finishRead?.(stateAt(4)));
+  await act(async () => onEvent({ version: 5 }));
+  expect(reads).toHaveLength(4);
+});
+
+
+it("shares duplicate saved-log recovery until it settles and replaces it for newer events", async () => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  const key = getQueryKey(testApi.combat.getBattleEntries, { battleId: "battle", limit: 10 }, "query");
+  queryClient.setQueryData(key, []);
+  let finish: (() => void) | undefined;
+  const read = vi.fn(() => new Promise<never[]>(resolve => { finish = () => resolve([]); }));
+  const stop = new QueryObserver(queryClient, { queryKey: key, queryFn: read }).subscribe(() => {});
+  try {
+    await act(async () => updateLogs("battle", 2, null));
+    expect(read).toHaveBeenCalledTimes(1);
+    await act(async () => { await updateLogs("battle", 2, null); await updateLogs("battle", 1, null); });
+    expect(read).toHaveBeenCalledTimes(1);
+    await act(async () => updateLogs("battle", 3, null));
+    expect(read).toHaveBeenCalledTimes(2);
+    await act(async () => finish?.());
+    await act(async () => updateLogs("battle", 4, null));
+    expect(read).toHaveBeenCalledTimes(3);
+  } finally { stop(); }
 });

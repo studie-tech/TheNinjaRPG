@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 
 export const dayNightCycleStateSchema = z.object({
   phase: z.enum(["day", "night"]),
@@ -182,6 +183,20 @@ export const farmMutationResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   updatedPlot: farmPlotStateSchema.nullable().optional(),
+  updatedPlots: z
+    .array(
+      z.object({
+        before: farmPlotStateSchema.pick({
+          id: true,
+          seedItemId: true,
+          finishAt: true,
+          lastWateredAt: true,
+        }),
+        after: farmPlotStateSchema,
+      }),
+    )
+    .optional(),
+  inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
   farmCurrencyDelta: z.number().int().optional(),
   farmingExperienceDelta: z.number().int().optional(),
   inventoryDeltas: z.array(farmInventoryDeltaSchema).optional(),

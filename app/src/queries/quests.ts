@@ -1929,7 +1929,7 @@ export const listUserItemForHandleQuestConsequences = (
         lte(userItem.craftingFinishedAt, new Date()),
       ),
     ),
-    columns: { id: true, itemId: true },
+    columns: { id: true, itemId: true, quantity: true },
   });
 
 /** Build the `overworldAiPlacement` listing for `prepareOverworldBindings`, using predicates on `id`. */

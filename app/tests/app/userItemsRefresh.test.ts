@@ -6,9 +6,27 @@ import { describe, expect, it, vi } from "bun:test";
 import type { z } from "zod";
 import { finishItemConsumeRequest, getItemConsumeErrorMessage } from "@/libs/itemConsumption";
 import type { consumeItemInputSchema } from "@/validators/cooking";
+import { getInventoryQuantities, getConsumedRaidBuffs } from "@/deltas/item";
+import { updateQueryCache, prepareQueryUpdate } from "@/utils/queryCache";
 
 const sourceRoot = join(import.meta.dirname, "../../src");
 const read = (file: string) => readFileSync(join(sourceRoot, file), "utf8");
+/** Execute the production effect controller while callback tests supply their observed-query seams. */
+const consumptionController = (utils: any) => {
+  const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as { transformSync(source: string): string };
+  const source = transpiler.transformSync(read("hooks/useItemConsumptionCacheUpdate.ts"));
+  const start = source.indexOf("const updateConsumption =");
+  const end = source.indexOf("return {", source.indexOf("  };", start) + 4);
+  if (start < 0 || end < 0) throw new Error("Consumption controller was not found");
+  return new Function("utils", "inventory", "buffs", "getInventoryQuantities", "getConsumedRaidBuffs", `${source.slice(start, end)}; return updateConsumption;`)(
+    utils,
+    { updateInventory: () => Promise.all([utils.item?.getUserItems?.invalidate(), utils.item?.getUserItemsWithVariants?.invalidate()]) },
+    { updateCache: () => utils.raids?.getUserRaidBuffs?.invalidate() },
+    getInventoryQuantities, getConsumedRaidBuffs,
+  );
+};
+const prepareConsumptionUpdate = () => ({ inventory: {}, buffs: {} });
+
 const provider = read("app/_trpc/Provider.tsx");
 const staleTimeExpression = provider.match(/\bstaleTime:\s*([^,\n]+)/)?.[1];
 if (!staleTimeExpression) throw new Error("Provider query staleTime was not found");
@@ -59,7 +77,7 @@ describe("inventory pages", () => {
       (value: boolean) => { isOpen = value; },
       (value: unknown) => { selected = value; },
     );
-    const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userData", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", `return (${callbacks});`)(
+    const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userData", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
       {
         profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: ["profile"] }) } },
         item: { getUserItemsWithVariants: { invalidate: () => client.invalidateQueries({ queryKey: ["inventory"] }) } },
@@ -71,7 +89,7 @@ describe("inventory pages", () => {
       finishItemConsumeRequest,
       { userId: "user" },
       getItemConsumeErrorMessage,
-      () => 17, vi.fn(async () => undefined),
+      () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined),
     ) as MutationObserverOptions<{ success: boolean; message: string }, Error, z.input<typeof consumeItemInputSchema>>;
     const consume = new MutationObserver(client, { ...options, mutationFn: async () => ({ success: false, message: "Your meal stack changed. Refresh your inventory and try again" }) });
     try {
@@ -115,8 +133,8 @@ describe("inventory pages", () => {
       const setUserItem = (value: unknown) => { selected = value; };
       const settled = source.split("const Backpack:")[1]?.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
       const onSettled = settled ? new Function("setIsOpen", "setUserItem", `return (${settled});`)(setIsOpen, setUserItem) : undefined;
-      const options = new Function("showMutationToast", "getItemConsumeErrorMessage", "useritem", "onSettled", "setIsOpen", "setUserItem", "prepareUserUpdate", "updateUser", `return (${callbacks});`)(
-        toast, getItemConsumeErrorMessage, selected, onSettled, setIsOpen, setUserItem, () => 17, vi.fn(async () => undefined),
+      const options = new Function("showMutationToast", "getItemConsumeErrorMessage", "useritem", "onSettled", "setIsOpen", "setUserItem", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+        toast, getItemConsumeErrorMessage, selected, onSettled, setIsOpen, setUserItem, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined),
       ) as MutationObserverOptions<never, Error, z.input<typeof consumeItemInputSchema>>;
       const client = new QueryClient();
       const error = new Error(message);
@@ -147,11 +165,12 @@ describe("inventory pages", () => {
         item: { getUserItems: invalidate, getUserItemsWithVariants: invalidate },
         bloodline: { getItemRolls: invalidate }, raids: { getUserRaidBuffs: invalidate },
         pets: { getPet: { invalidate: refreshPets } } };
-      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", `return (${callbacks});`)(
-        utils, rewardToast, vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, () => 17, vi.fn(async () => undefined),
-      ) as { onSuccess: (data: unknown, variables: { userItemId: string }) => Promise<void> };
+      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+        utils, rewardToast, vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, consumptionController(utils),
+      ) as { onMutate: () => unknown; onSuccess: (data: unknown, variables: { userItemId: string }, context: unknown) => Promise<void> };
       const petRewards = [{ id: "new-pet", speciesId: "fox", name: "Nami" }];
-      await options.onSuccess({ success: true, rewards: {}, message: "Used contract", notifications: [], cacheRewards: [], petRewards }, { userItemId: "contract" });
+      await options.onSuccess({ success: true, rewards: {}, message: "Used contract", notifications: [], cacheRewards: [], petRewards }, { userItemId: "contract" }, options.onMutate());
+      await waitFor(() => expect(refreshPets).toHaveBeenCalledTimes(1));
       expect(refreshPets).toHaveBeenCalledTimes(1);
       expect(rewardToast.mock.calls[0]?.[7]).toEqual(petRewards);
     });
@@ -167,15 +186,15 @@ describe("inventory pages", () => {
       const invalidateProfile = vi.fn(async () => undefined);
       const leaf = { invalidate };
       const utils = { profile: { getUser: { invalidate: invalidateProfile } }, item: { getUserItems: leaf, getUserItemsWithVariants: leaf }, bloodline: { getItemRolls: leaf }, raids: { getUserRaidBuffs: leaf } };
-      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", `return (${callbacks});`)(
-        utils, vi.fn(), vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, prepareUserUpdate, updateUser,
+      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+        utils, vi.fn(), vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, prepareUserUpdate, updateUser, prepareConsumptionUpdate, consumptionController(utils),
       ) as { onMutate: () => number; onSuccess: (data: unknown, variables: { userItemId: string }, revision: number) => Promise<void> };
       const userPatch = { curHealth: 50 };
       const userDelta = {};
       await options.onSuccess({ success: true, message: "Healed", userPatch, userDelta }, { userItemId: "potion" }, options.onMutate());
-      expect(updateUser).toHaveBeenCalledWith(userPatch, { revision: 17, delta: userDelta, achievementProgress: undefined });
+      expect(updateUser).toHaveBeenCalledWith({ success: true, message: "Healed", userPatch, userDelta }, { revision: 17 });
       expect(prepareUserUpdate).toHaveBeenCalledTimes(1);
-      expect(invalidate).toHaveBeenCalledTimes(3);
+      await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(4));
       expect(invalidateProfile).not.toHaveBeenCalled();
     });
   }
@@ -226,19 +245,23 @@ describe("item-granting flows", () => {
     const observers = reads.map((queryFn, index) => new QueryObserver(client, { queryKey: ["inventory", index], queryFn }));
     const unsubscribe = observers.map((observer) => observer.subscribe(() => {}));
     const updateUser = vi.fn(async () => undefined);
-    const options = new Function("utils", "updateUser", `return (${callbacks});`)(
+    const options = new Function("utils", "updateUser", "prepareInventoryUpdate", "updateInventory", "getInventoryQuantities", "prepareUserUpdate", `return (${callbacks});`)(
       { item: {
         getUserItems: { invalidate: () => client.invalidateQueries({ queryKey: ["inventory", 0] }) },
         getUserItemsWithVariants: { invalidate: () => client.invalidateQueries({ queryKey: ["inventory", 1] }) },
       } },
       updateUser,
-    ) as { onSuccess: (result: unknown) => Promise<void> };
+      () => [0, 1].map(index => ({ key: ["inventory", index], revision: prepareQueryUpdate(client, ["inventory", index]) })),
+      (update: any, snapshots: any[]) => Promise.all(snapshots.map(snapshot => updateQueryCache(client, snapshot.key, update, { revision: snapshot.revision }))),
+      getInventoryQuantities,
+      () => 17,
+    ) as { onMutate: () => unknown; onSuccess: (result: unknown, input: undefined, context: unknown) => Promise<void> };
     try {
       await waitFor(() => observers.forEach((observer) => expect(observer.getCurrentResult().data).toBeDefined()));
       const updateAt = new Date();
-      await options.onSuccess({ success: true, itemsChanged, notifications: [], questData: [], updateAt });
+      await options.onSuccess({ success: true, itemsChanged, notifications: [], questData: [], updateAt }, undefined, options.onMutate());
       reads.forEach((read) => expect(read).toHaveBeenCalledTimes(itemsChanged ? 2 : 1));
-      expect(updateUser).toHaveBeenCalledWith({ questData: [], updatedAt: updateAt });
+      expect(updateUser).toHaveBeenCalledWith({ questData: [], updatedAt: updateAt }, { revision: 17 });
     } finally {
       unsubscribe.forEach((stop) => stop());
       client.clear();
@@ -248,7 +271,6 @@ describe("item-granting flows", () => {
   const userItemCaches = ["getUserItems", "getUserItemsWithVariants"];
   const flows = [
     { file: "layout/RewardChoice.tsx", flow: "quests.claimRewardChoice" },
-    { file: "layout/Sector.tsx", flow: "quests.checkLocationQuest" },
   ];
   for (const { file, flow } of flows) {
     it(`${flow} invalidates both user item caches`, () => {

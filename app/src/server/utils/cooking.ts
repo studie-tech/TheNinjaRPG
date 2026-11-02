@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { getInventoryQuantityChanges } from "@/deltas/item";
 import type {
   Item,
   UserData,
@@ -169,6 +170,13 @@ export const consumeMeal = async ({
   return {
     success: true,
     message: `Ate ${owned.item.name}. ${extendsMeal ? "Extended" : "Applied"} its meal effect.`,
+    inventoryChanges: getInventoryQuantityChanges(
+      [owned],
+      [{ id: owned.id, quantity: expectedQuantity - 1 }],
+      now,
+    ),
+    bloodlineRollsChanged: false,
+    raidBuffsChanged: true,
     userPatch: {
       updatedAt: getNextUserSnapshotAt(user.updatedAt, now),
       raidBuffs,

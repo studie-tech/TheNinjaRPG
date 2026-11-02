@@ -1,7 +1,9 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { getInventoryQuantityChanges } from "@/deltas/item";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
-import type { Quest, QuestHistory } from "@/drizzle/schema";
+import { UserStatNames, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import type { Quest, QuestHistory, UserItem } from "@/drizzle/schema";
 import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
 import {
   getQuestTargetSectorsToCheck,
@@ -10,16 +12,42 @@ import {
 } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
-
+import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+
+/** Project only confirmed whole-stack quest deliveries; grants, nested starts and combat need recovery. */
+export const getQuestConsequenceInventoryUpdate = (
+  owned: Pick<UserItem, "id" | "itemId" | "quantity">[],
+  removedIds: string[],
+  consequences: QuestConsequence[],
+  removed: boolean,
+) => {
+  if (
+    !removed ||
+    removedIds.some(
+      (id) =>
+        !owned.some(
+          (row) => row.id === id && Number.isInteger(row.quantity) && row.quantity > 0,
+        ),
+    ) ||
+    consequences.some((entry) => !["remove_item", "update_user"].includes(entry.type))
+  )
+    return;
+  return getInventoryQuantityChanges(
+    owned,
+    removedIds.map((id) => ({ id, quantity: 0 })),
+  );
+};
 
 /** Project a quest start only after pending announcements were claimed for delivery by this response. */
 export const getQuestStartUserUpdate = (
   user: Parameters<typeof getUserProgressionUpdate>[0],
   publishedAchievementIds: readonly string[],
   receipt: { announcements: { name: string }[]; claimedAt?: Date } | undefined,
+  questId: string,
+  inventoryChanges: InventoryQuantityChange[] | undefined,
 ) => {
   if (!receipt) return {};
   const projection = getUserProgressionUpdate(user, publishedAchievementIds);
@@ -32,7 +60,118 @@ export const getQuestStartUserUpdate = (
       ...(receipt.claimedAt ? { updatedAt: receipt.claimedAt } : {}),
     },
     announcements: receipt.announcements.map((entry) => entry.name),
+    inventoryChanges,
+    questStartUpdate: getQuestStartCacheUpdate(user, questId),
   };
+};
+
+/** Publish the history fields already written by this supported assignment. */
+export const getQuestStartCacheUpdate = (
+  user: Parameters<typeof getUserProgressionUpdate>[0],
+  questId: string,
+) => {
+  const entry = user.userQuests.find((entry) => entry.questId === questId);
+  if (!entry) return;
+  return {
+    questId,
+    beforePreviousAttempts: entry.previousAttempts - 1,
+    after: {
+      previousAttempts: entry.previousAttempts,
+      previousCompletes: entry.previousCompletes,
+      periodCompletes: entry.periodCompletes,
+      periodStartAt: entry.periodStartAt,
+      completed: entry.completed,
+    },
+  };
+};
+
+/** Describe ticket debits only after every guarded entry charge and its receipt committed. */
+export const getQuestEntryInventoryChanges = (
+  charges: { id: string; itemId: string; expectedQuantity: number; quantity: number }[],
+): InventoryQuantityChange[] =>
+  charges.map((charge) => ({
+    id: charge.id,
+    itemId: charge.itemId,
+    beforeQuantity: charge.expectedQuantity,
+    quantity: charge.expectedQuantity - charge.quantity,
+  }));
+
+/** Refilter confirmed starts; eligibility changes, day rollover, ticket totals and stale inputs retain reads. */
+export const getStartedQuestDiscovery = <
+  T extends RouterOutputs["quests"]["missionHall"][number],
+>(
+  rows: T[],
+  user: Parameters<typeof getUserProgressionUpdate>[0] | undefined,
+  update: NonNullable<ReturnType<typeof getQuestStartCacheUpdate>>,
+  inventoryChanges: InventoryQuantityChange[] | undefined,
+  input: { level?: number; villageId?: string },
+  baseline: { user: typeof user; queriedAt: number },
+  now: Date,
+): T[] | undefined => {
+  if (
+    !user ||
+    !baseline.user ||
+    periodStart("daily", new Date(baseline.queriedAt)).getTime() !==
+      periodStart("daily", now).getTime() ||
+    // Discovery is already filtered: changed eligibility can add rows that are absent locally.
+    (
+      [
+        ...UserStatNames,
+        "level",
+        "rank",
+        "role",
+        "villageId",
+        "isOutlaw",
+        "bloodlineId",
+        "sageModeId",
+        "sageMasteryExperience",
+        "medicalExperience",
+        "huntingExperience",
+        "gatheringExperience",
+        "farmingExperience",
+      ] as const
+    ).some((field) => baseline.user![field] !== user[field]) ||
+    user.completedQuests.some(
+      (entry) =>
+        entry.questId !== update.questId &&
+        !baseline.user!.completedQuests.some(
+          (before) =>
+            before.questId === entry.questId && before.completed === entry.completed,
+        ),
+    ) ||
+    input.level !== user.level ||
+    !inventoryChanges ||
+    (input.villageId !== undefined &&
+      input.villageId !==
+        (user.isOutlaw
+          ? VILLAGE_SYNDICATE_ID
+          : (user.villageId ?? VILLAGE_SYNDICATE_ID)))
+  )
+    return;
+  const started = rows.find((row) => row.id === update.questId);
+  if (
+    started &&
+    ((started.previousAttempts ?? 0) !== update.beforePreviousAttempts ||
+      (started.previousCompletes ?? 0) !== update.after.previousCompletes ||
+      (started.periodCompletes ?? 0) !== update.after.periodCompletes ||
+      (started.periodStartAt?.getTime() ?? null) !==
+        (update.after.periodStartAt?.getTime() ?? null))
+  )
+    return;
+  // Discovery stores item totals, not stack identities; ticket-bearing lists recover those totals.
+  if (
+    inventoryChanges.length &&
+    rows.some(
+      (row) =>
+        "entryRequirements" in row &&
+        Array.isArray(row.entryRequirements) &&
+        row.entryRequirements.length,
+    )
+  )
+    return;
+  return rows
+    .map((row) => (row.id === update.questId ? { ...row, ...update.after } : row))
+    .filter((row) => isAvailableUserQuests(row, user, true).check);
 };
 
 /**

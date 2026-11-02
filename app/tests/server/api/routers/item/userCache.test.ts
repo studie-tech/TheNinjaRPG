@@ -2,6 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { item, skillTree, userCookingJob, userData, userItem, userQueue, userRaidBuff, userSkill, userVote } from "@/drizzle/schema";
+import { getInventoryQuantities } from "@/deltas/item";
 import { itemRouter } from "@/server/api/routers/item";
 import { profileRouter } from "@/server/api/routers/profile";
 import { HealTag, IncreaseJutsuSlots, IncreaseRegenerationTag, NonCombatGainSkill } from "@/validators/combat";
@@ -28,6 +29,7 @@ describeWithDatabase("confirmed consumption profile updates", () => {
     const { itemId, equipped } = fixture;
     const db = await getTestDatabase();
     await insertUserItems([{ id: "carried", userId, itemId, equipped, quantity: 2 }]);
+    const inventory = await (await callerFor(itemRouter, userId)).getUserItems();
     const profile = await (await callerFor(profileRouter, userId)).getUser();
     if ("pendingCooking" in fixture) await db.insert(userCookingJob).values({ id: "completed-cooking", userId, experience: 23, finishesAt: new Date(Date.now() - 1000) });
     if ("newRegeneration" in fixture) await db.update(userData).set({ regeneration: fixture.newRegeneration }).where(eq(userData.userId, userId));
@@ -42,6 +44,9 @@ describeWithDatabase("confirmed consumption profile updates", () => {
       expect(result.success).toBe(true);
       expect(result.userPatch).toBeDefined();
       expect(result.userDelta).toEqual({});
+      expect(getInventoryQuantities(inventory, result.inventoryChanges)?.map(({ id, itemId, quantity }) => ({ id, itemId, quantity }))).toEqual((await (await callerFor(itemRouter, userId)).getUserItems()).map(({ id, itemId, quantity }) => ({ id, itemId, quantity })));
+      expect(result.bloodlineRollsChanged).toBe(false);
+      expect(result.raidBuffsChanged).toBe(itemId === "meal");
       await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
       const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
       const cached = client.getQueryData<typeof profile>(key)!.userData!;

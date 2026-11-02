@@ -1,4 +1,4 @@
-import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
+import { getQuestRewardDashboardUpdate, getStartedQuestDiscovery } from "@/deltas/quests";
 import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
@@ -89,6 +89,28 @@ describeWithDatabase("confirmed quest cache responses", () => {
       expect(await updateUserCache(client, key, result, { revision })).toBe(false);
       expect(reads).toHaveBeenCalledTimes(1);
     } finally { stop(); client.clear(); }
+  });
+
+  it.each(["startQuest", "startRandom"] as const)("projects %s discovery counters against the canonical query", async method => {
+    const db = await getTestDatabase();
+    if (method === "startRandom") await db.update(quest).set({ questType: "crime" }).where(eq(quest.id, missionId));
+    const api = await callerFor(questsRouter, playerId), profile = await callerFor(profileRouter, playerId);
+    const input = { level: 50, questType: method === "startRandom" ? "crime" as const : "mission" as const };
+    const before = await api.specificQuests(input), user = (await profile.getUser()).userData!;
+    const result = method === "startQuest"
+      ? await api.startQuest({ questId: missionId, userSector: 0, supportsAnnouncements: true })
+      : await api.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null, supportsAnnouncements: true });
+    expect(result.success, result.message).toBe(true);
+    expect(result.questStartUpdate).toBeDefined();
+    expect(result.inventoryChanges).toEqual([]);
+    const client = new QueryClient(), key = ["quest-start-profile"];
+    client.setQueryData(key, { userData: user });
+    expect(await updateUserCache(client, key, result, { revision: prepareUserUpdate(client, key) })).toBe(true);
+    const projected = client.getQueryData<{ userData: typeof user }>(key)!.userData;
+    const next = getStartedQuestDiscovery(before, projected, result.questStartUpdate!, result.inventoryChanges, input, { user, queriedAt: Date.now() }, new Date());
+    client.clear();
+    expect(next).toEqual(await api.specificQuests(input));
+    expect(getStartedQuestDiscovery(before, user, result.questStartUpdate!, undefined, input, { user, queriedAt: Date.now() }, new Date())).toBeUndefined();
   });
 
   it("lets only one announcement consumer claim feedback and preserves newly changed counters", async () => {

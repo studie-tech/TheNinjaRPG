@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  getClaimedStreakUpdate,
   getClaimStreakDayUserUpdate,
   getPurchaseEventPassUserUpdate,
 } from "@/deltas/activityStreak";
@@ -71,7 +72,7 @@ import {
   purchaseEventPassSchema,
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
-import { ObjectiveReward } from "@/validators/rewards";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const activityStreakRouter = createTRPCRouter({
@@ -358,7 +359,38 @@ export const activityStreakRouter = createTRPCRouter({
   claimStreakDay: protectedProcedure
     .meta({ mcp: { description: "Claim daily streak reward" } })
     .input(claimStreakDaySchema)
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        streakUpdate: z
+          .object({
+            claimedAt: z.date(),
+            configId: z.string(),
+            progressId: z.string(),
+            totalDays: z.number(),
+            streakType: z.enum(["RECURRING", "EVENT_PASS"]),
+            before: z.object({
+              currentDay: z.number(),
+              startedAt: z.date(),
+              lastClaimDate: z.date().nullable(),
+            }),
+            after: z
+              .object({
+                currentDay: z.number(),
+                startedAt: z.date(),
+                lastClaimDate: z.date(),
+                theoreticalMaxDay: z.number(),
+                needsCatchUp: z.boolean(),
+                nextDayNumber: z.number(),
+                daysToGo: z.number(),
+                alreadyClaimedToday: z.boolean(),
+                canClaimToday: z.boolean(),
+                nextRewards: z.custom<ObjectiveRewardType>().nullable(),
+              })
+              .nullable(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch user, config, and progress in parallel
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -602,6 +634,15 @@ export const activityStreakRouter = createTRPCRouter({
         // Scalar reward increments leave queued training and its recovery clock alone.
         // The shared cache revision guard reconciles any concurrently completed queue read.
         ...getClaimStreakDayUserUpdate({ processedRewards, paidCatchUp }),
+        streakUpdate: getClaimedStreakUpdate(
+          config,
+          progress,
+          newCurrentDay,
+          now,
+          streakReset ||
+            normalizedCompletion ||
+            (config.streakType === "RECURRING" && progress.currentDay === 0),
+        ),
       };
     }),
 

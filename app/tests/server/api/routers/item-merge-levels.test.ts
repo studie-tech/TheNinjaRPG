@@ -1,3 +1,4 @@
+import { getInventoryQuantities } from "@/deltas/item";
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { item, userData, userItem } from "@/drizzle/schema";
@@ -22,16 +23,26 @@ describeWithDatabase("consumable merges across ownership levels", () => {
       { id: "b-middle", userId: "merge-user", itemId: "consumable", quantity: 3, level: 9, storedAtHome },
     ]);
     const api = await callerFor(itemRouter, "merge-user");
+    const before = await (await getTestDatabase()).select().from(userItem).where(eq(userItem.userId, "merge-user"));
     const result = storedAtHome
       ? await api.mergeAllStacks({ storedAtHome: true })
       : await api.mergeStacks({ itemId: "consumable" });
     expect(result.success).toBe(true);
     const database = await getTestDatabase();
     const rows = await database.select().from(userItem).where(eq(userItem.userId, "merge-user"));
+    expect(getInventoryQuantities(before, result.inventoryChanges)?.sort((a, b) => a.id.localeCompare(b.id))).toEqual(rows.sort((a, b) => a.id.localeCompare(b.id)));
     expect(rows).toHaveLength(2);
     expect(rows.reduce((total, row) => total + row.quantity, 0)).toBe(18);
     expect(rows.find((row) => row.id === "z-high")).toMatchObject({ quantity: 10, level: 15, experience: 91 });
     expect(rows.find((row) => row.id === "b-middle")).toMatchObject({ quantity: 8, level: 9 });
+  });
+
+  it("withholds no-op merge metadata after recovering a stale claim", async () => {
+    await insertUserItems([{ id: "stale", userId: "merge-user", itemId: "consumable", quantity: -3, updatedAt: new Date(Date.now() - 60000) }]);
+    const api = await callerFor(itemRouter, "merge-user"), result = await api.mergeStacks({ itemId: "consumable" });
+    expect(result.success).toBe(true);
+    expect(result.inventoryChanges).toBeUndefined();
+    expect((await api.getUserItems()).find(row => row.id === "stale")?.quantity).toBe(3);
   });
 
   it("keeps different-level gear separate", async () => {

@@ -15,6 +15,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { getInventoryQuantities } from "@/deltas/item";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_ICON_MOVE,
@@ -35,6 +36,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useVisualEffects } from "@/hooks/visual-effects";
@@ -376,6 +378,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const userData = profile ? userRef.current : undefined;
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(props.sector);
+  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const appearanceSignature = useMemo(
     () => JSON.stringify(resolveSpriteAppearance(userData ?? {})),
     [userData],
@@ -634,7 +637,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   };
 
   const { mutate: checkQuest } = api.quests.checkLocationQuest.useMutation({
-    onSuccess: async (result) => {
+    onMutate: () => ({
+      userRevision: prepareUserUpdate(),
+      inventory: prepareInventoryUpdate(),
+    }),
+    onSuccess: async (result, _input, context) => {
       if (result.success) {
         // Push any notifications
         result.notifications.forEach((notification) => {
@@ -644,15 +651,21 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             message: notification,
           });
         });
-        // Update user quest data immidiately
-        if (result.questData && result.updateAt) {
-          await updateUser({ questData: result.questData, updatedAt: result.updateAt });
-        }
+        // Profile recovery can settle additional item rewards, so it also requires inventory recovery.
+        const profileApplied =
+          result.questData && result.updateAt
+            ? await updateUser(
+                { questData: result.questData, updatedAt: result.updateAt },
+                { revision: context.userRevision },
+              )
+            : false;
         if (result.itemsChanged) {
-          await Promise.all([
-            utils.item.getUserItems.invalidate(),
-            utils.item.getUserItemsWithVariants.invalidate(),
-          ]);
+          await updateInventory(
+            profileApplied
+              ? (rows) => getInventoryQuantities(rows, result.inventoryChanges)
+              : undefined,
+            context.inventory,
+          );
         }
       }
       // If there are any quest ids that have been updated,

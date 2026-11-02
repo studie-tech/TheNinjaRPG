@@ -1,5 +1,159 @@
-import { getFarmingLevel, patchFarmPlot } from "@/libs/farming";
+import {
+  applyWaterReduction,
+  type FarmPlotWithSeed,
+  getFarmingLevel,
+  mapPlotToState,
+  patchFarmPlot,
+} from "@/libs/farming";
 import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
+
+/** Publish only plots whose water CAS succeeded, together with their pre-write timelines. */
+export const getWateredFarmPlots = (
+  plots: FarmPlotWithSeed[],
+  watered: boolean[],
+  now: Date,
+) =>
+  plots.flatMap((plot, index) =>
+    watered[index] && plot.finishAt
+      ? [
+          {
+            before: {
+              id: plot.id,
+              seedItemId: plot.seedItemId,
+              finishAt: plot.finishAt,
+              lastWateredAt: plot.lastWateredAt,
+            },
+            after: mapPlotToState(
+              {
+                ...plot,
+                finishAt: applyWaterReduction(plot.finishAt, now),
+                lastWateredAt: now,
+              },
+              now,
+            ),
+          },
+        ]
+      : [],
+  );
+
+/** Clear only the plots confirmed by the bulk harvest write; item grants remain separate. */
+export const getHarvestedFarmPlots = (plots: FarmPlotWithSeed[], now: Date) =>
+  plots.map((plot) => ({
+    before: {
+      id: plot.id,
+      seedItemId: plot.seedItemId,
+      finishAt: plot.finishAt,
+      lastWateredAt: plot.lastWateredAt,
+    },
+    after: mapPlotToState(
+      {
+        ...plot,
+        seedItemId: null,
+        seedItem: null,
+        yieldItem: null,
+        plantedAt: null,
+        finishAt: null,
+        lastWateredAt: null,
+        fertilizerApplied: false,
+      },
+      now,
+    ),
+  }));
+
+/** Project complete bulk timelines and existing crop stacks; first collections, new stacks and unlocks refetch. */
+export const getFarmBulkMutationUpdate = (
+  state: FarmStateResponse,
+  result: FarmMutationResponse,
+  action: string,
+): FarmStateResponse | undefined => {
+  if (
+    !result.success ||
+    !["water", "harvest"].includes(action) ||
+    !result.updatedPlots?.length ||
+    result.farmingExperienceDelta === undefined ||
+    getFarmingLevel(state.farmingExperience + result.farmingExperienceDelta) !==
+      state.farmingLevel
+  )
+    return;
+  for (const { before, after } of result.updatedPlots) {
+    const current = state.plots.find((plot) => plot.id === before.id);
+    if (
+      !current ||
+      current.seedItemId !== before.seedItemId ||
+      current.finishAt?.getTime() !== before.finishAt?.getTime() ||
+      current.lastWateredAt?.getTime() !== before.lastWateredAt?.getTime() ||
+      after.id !== before.id
+    )
+      return;
+  }
+  let next = {
+    ...state,
+    farmingExperience: state.farmingExperience + result.farmingExperienceDelta,
+  };
+  if (action === "harvest") {
+    if (
+      !result.inventoryChanges ||
+      result.inventoryChanges.some(
+        (change) =>
+          !state.collectionLog.items.some(
+            (item) => item.itemId === change.itemId && item.harvested,
+          ) ||
+          state.availableSeeds.some((item) => item.itemId === change.itemId) ||
+          state.availableFertilizers.some((item) => item.itemId === change.itemId) ||
+          ![...state.extractableCrops, ...state.sellableCrops].some(
+            (row) =>
+              row.userItemId === change.id &&
+              row.itemId === change.itemId &&
+              row.quantity === change.beforeQuantity,
+          ),
+      )
+    )
+      return;
+    /** The grant identifies one owned stack, so duplicate item types in other stacks stay untouched. */
+    const patch = <T extends { userItemId: string; itemId: string; quantity: number }>(
+      rows: T[],
+    ): T[] | undefined => {
+      if (
+        rows.some((row) =>
+          result.inventoryChanges!.some(
+            (change) =>
+              change.id === row.userItemId &&
+              (change.itemId !== row.itemId || change.beforeQuantity !== row.quantity),
+          ),
+        )
+      )
+        return;
+      return rows.map((row) => {
+        const change = result.inventoryChanges!.find(
+          (change) => change.id === row.userItemId,
+        );
+        return change ? { ...row, quantity: change.quantity } : row;
+      });
+    };
+    const extractableCrops = patch(state.extractableCrops),
+      sellableCrops = patch(state.sellableCrops);
+    if (!extractableCrops || !sellableCrops) return;
+    next = { ...next, extractableCrops, sellableCrops };
+  }
+  return {
+    ...next,
+    plots: state.plots.map((plot) => {
+      const update = result.updatedPlots!.find(
+        (update) => update.before.id === plot.id,
+      );
+      if (!update) return plot;
+      if (action === "harvest") return update.after;
+      // The watering query loads seed data; preserve the crop catalog labels already in this view.
+      return {
+        ...update.after,
+        seedName: plot.seedName,
+        cropName: plot.cropName,
+        cropImage: plot.cropImage,
+        harvestExperience: plot.harvestExperience,
+      };
+    }),
+  };
+};
 
 /** Project item-level quantities onto existing inventory lists without creating missing rows. */
 const patchInventory = (

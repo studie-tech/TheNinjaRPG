@@ -1,3 +1,4 @@
+import { getEquippedInventory } from "@/deltas/item";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { COST_EXTRA_ITEM_SLOT, COST_EXTRA_JUTSU_SLOT, DURABILITY_MAX_DEFAULT } from "@/drizzle/constants";
@@ -257,6 +258,7 @@ describeWithDatabase("committed profile cache patches", () => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
     await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", itemId: "cache-armor", slot: "CHEST" }] });
+    const before = await db.select().from(userItem).where(eq(userItem.userId, userId));
     const reads = vi.spyOn(db.query.userData, "findFirst");
     const result = await (await callerFor(itemRouter, userId)).selectItemLoadout({ id: "cache-loadout" });
     expect(result.success).toBe(true);
@@ -264,8 +266,22 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(reads).toHaveBeenCalledTimes(2);
     expect(result.userPatch?.itemLoadout).toBe("cache-loadout");
     expect(result.userPatch?.items?.map((row) => row.equipped)).toEqual(["CHEST"]);
+    expect(getEquippedInventory(before, result.equipmentChanges)?.map(({ id, equipped }) => ({ id, equipped }))).toEqual((await db.select().from(userItem).where(eq(userItem.userId, userId))).map(({ id, equipped }) => ({ id, equipped })));
     expect(result.userPatch?.maxEnergy).toBe(calcEnergy(10) + 200);
     expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(165);
+  });
+
+  it("withholds inventory slots when the committed loadout readback exposes a changed stack", async () => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", itemId: "cache-armor", slot: "CHEST" }] });
+    const client = beforeStatements(db, userItem, [async () => {
+      await db.update(userItem).set({ quantity: 2 }).where(eq(userItem.id, "worn-armor"));
+    }]);
+    const result = await callerForDatabase(itemRouter, userId, client).selectItemLoadout({ id: "cache-loadout" });
+    expect(result.success).toBe(true);
+    expect(result.equipmentChanges).toBeUndefined();
+    expect(result.userPatch?.items?.[0]?.quantity).toBe(2);
   });
 
   it("keeps reconciliation when the loadout pointer write cannot confirm the user", async () => {
