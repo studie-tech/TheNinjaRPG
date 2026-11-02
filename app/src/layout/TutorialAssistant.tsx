@@ -88,18 +88,14 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
   return (safeTop + safeBottom) / 2;
 };
 
-/**
- * Reusable assistant portrait with correct styling
- * @param characterImage - Optional custom character image to display instead of default assistant
- * @returns
- */
+/** Perches the instructor above the dialogue, leaving underlying game controls clickable. */
 const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
   characterImage,
 }) => {
   const { variant } = useAbVariant(LEMU_EXPERIMENT);
   const defaultImage = getLemuImage(variant);
   const className = cn(
-    "pointer-events-none h-16 w-12 shrink-0 select-none object-contain scale-x-[-1]",
+    "pointer-events-none absolute right-4 bottom-full mb-2 h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl scale-x-[-1]",
   );
   return (
     <Image
@@ -153,13 +149,14 @@ const AssistantDialog: React.FC<{
     aria-label={`Tutorial: ${title}`}
     className="pointer-events-auto relative"
   >
-    <div className="relative p-4" aria-busy={isBusy}>
-      <div className="mb-3 flex items-center gap-3 pr-7">
-        <AssistantPortrait characterImage={characterImage} />
-        <h2 className="text-primary text-sm font-semibold uppercase tracking-wide">
-          {title}
-        </h2>
-      </div>
+    <AssistantPortrait characterImage={characterImage} />
+    <div
+      className="relative z-10 max-h-[min(55dvh,520px,calc(100dvh-var(--assistant-portrait-height)-12rem))] overflow-y-auto overscroll-contain rounded-b-xl bg-card p-4 md:p-5"
+      aria-busy={isBusy}
+    >
+      <h2 className="mb-3 pr-7 font-semibold text-base text-primary leading-snug">
+        {title}
+      </h2>
       {onOpenDisableModal && (
         <Button
           variant="ghost"

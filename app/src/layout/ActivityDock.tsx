@@ -58,7 +58,8 @@ export function ActivityDock({ children }: { children: ReactNode }) {
       data-activity-dock
       aria-label="Activity"
       className={cn(
-        "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] md:bottom-5 has-[[data-dodge-highlight=true]]:top-20 has-[[data-dodge-highlight=true]]:bottom-auto",
+        // Reserve the same portrait height for scrolling and the highlight-dodging position.
+        "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] [--assistant-portrait-height:min(16rem,24dvh)] md:bottom-5 md:[--assistant-portrait-height:min(24rem,32dvh)] has-[[data-dodge-highlight=true]]:top-[calc(var(--assistant-portrait-height)+4rem)] has-[[data-dodge-highlight=true]]:bottom-auto",
         open && tab === "tutorial" && user.tutorialOn !== false && "z-[61]",
         swapSides ? "right-4 md:right-5" : "left-4 md:left-5",
       )}
@@ -68,9 +69,9 @@ export function ActivityDock({ children }: { children: ReactNode }) {
           value={tab}
           onValueChange={setTab}
           id={panelId}
-          className="pointer-events-auto w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xl"
+          className="pointer-events-auto relative w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border-2 border-primary/60 bg-card text-card-foreground shadow-xl"
         >
-          <header className="flex items-center gap-1 border-b bg-muted/40 px-2 py-1.5">
+          <header className="relative z-10 flex items-center gap-1 rounded-t-[calc(var(--radius)-2px)] border-b bg-card px-2 py-1.5">
             <TabsList
               aria-label="Activity"
               className="h-auto w-auto flex-1 justify-start bg-transparent p-0"
@@ -112,14 +113,11 @@ export function ActivityDock({ children }: { children: ReactNode }) {
           </header>
           <TabsContent
             value="quests"
-            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain"
+            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain rounded-b-xl"
           >
             <ActivityQuests key={user.userId} user={user} />
           </TabsContent>
-          <TabsContent
-            value="tutorial"
-            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain"
-          >
+          <TabsContent value="tutorial" className="mt-0">
             {user.tutorialOn === false ? (
               <p className="p-4 text-sm text-muted-foreground">
                 Tutorial is off.{" "}
