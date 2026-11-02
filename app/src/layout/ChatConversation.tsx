@@ -72,6 +72,7 @@ export function ChatConversation({
   const scrollHeightRef = useRef(0);
   const newestIdRef = useRef<string | undefined>(undefined);
   const [unseen, setUnseen] = useState(0);
+  const [shouldFocusOnChange, setShouldFocusOnChange] = useState(false);
 
   const newestId = allComments?.[0]?.id;
   const newestIsOwn = !!userData && allComments?.[0]?.authorId === userData.userId;
@@ -150,6 +151,7 @@ export function ChatConversation({
 
   const mentionUser = (username: string) => {
     const current = getValues("comment") ?? "";
+    setShouldFocusOnChange(true);
     setValue(
       "comment",
       `${current}${current && !current.endsWith(" ") ? " " : ""}@${username} `,
@@ -304,7 +306,7 @@ export function ChatConversation({
               onSubmit={handleSubmitComment}
               enableMentions
               allowClipboardPaste
-              focusEndOnExternalChange
+              focusEndOnExternalChange={shouldFocusOnChange}
               autoFocus={false}
             />
           </>

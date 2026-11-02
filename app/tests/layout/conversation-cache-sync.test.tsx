@@ -21,11 +21,14 @@ import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
 import { chatDraftsAtom, chatViewingAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
 import * as pagination from "@/libs/pagination";
+import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
+import { actualRichInput } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
+const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 const user = {
   userId: "me", username: "Me", role: "USER", level: 50, rank: "CHUNIN",
   isBanned: false, isSilenced: false, tutorialOn: true,
@@ -40,6 +43,10 @@ const conversation = (id: string, title: string) => ({
 
 beforeEach(() => {
   ensureDom();
+  Object.defineProperties(globalThis, {
+    Event: { configurable: true, value: window.Event },
+    CustomEvent: { configurable: true, value: window.CustomEvent },
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments, useUtils: testApi.useUtils,
   });
@@ -49,13 +56,20 @@ beforeEach(() => {
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
+  await new Promise((resolve) => setTimeout(resolve, 0));
   for (const queryClient of clients.splice(0)) queryClient.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatDraftsAtom, {});
   getDefaultStore().set(chatViewingAtom, undefined);
+  localStorage.removeItem("selectedTavern2");
   vi.restoreAllMocks();
+  for (const [key, descriptor] of eventDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
 });
 
 /** Keep the actual tRPC hooks, keys and invalidation behavior while replacing only transport. */
@@ -268,21 +282,66 @@ it("clears cached unread markers only after authorized reads, including messages
   expect(singleReadInput).toEqual({ commentId: "incoming", conversationId: "chat", markRead: true });
 });
 
-it("navigates Chat tabs with arrow keys and restores the chosen conversation tab", async () => {
-  const { wrapper } = session((path) => {
-    if (path === "comments.getUserConversations") return [];
+it("targets the selected tavern's mute control only after that conversation loads", async () => {
+  let finishVillage!: (value: object) => void;
+  const { wrapper } = session((path, input) => {
+    if (path === "comments.getConversationComments") {
+      if ((input as { convo_title: string }).convo_title === "Village") return new Promise((resolve) => { finishVillage = resolve; });
+      return { data: [], convo: { id: "global-id", title: "Global", isPublic: true }, nextCursor: null };
+    }
     throw new Error(path);
   });
-  vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], isLoading: false } as never);
+  localStorage.removeItem("selectedTavern2");
+  vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global", "Village"], localTavern: "Village", canAccessGlobal: true, isLoading: false } as never);
+  const toggleMute = vi.fn();
+  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: () => false, toggleMute } as never);
+  vi.spyOn(richInput, "default").mockReturnValue(<textarea aria-label="Message" />);
+  const view = render(<ChatPanelBody isPhone={false} isWide={false} onToggleWide={() => {}} onClose={() => {}} />, { wrapper });
+  await view.findByRole("button", { name: "Mute Global" });
+  fireEvent.click(view.getByRole("button", { name: "Village" }));
+  await waitFor(() => expect(finishVillage).toBeDefined());
+  expect(view.getByText("Loading conversation")).toBeTruthy();
+  expect(view.queryByRole("button", { name: "Mute Village" })).toBeNull();
+  expect(view.queryByRole("button", { name: "Mute Global" })).toBeNull();
+  await act(async () => finishVillage({ data: [], convo: { id: "village-id", title: "Village", isPublic: true }, nextCursor: null }));
+  fireEvent.click(await view.findByRole("button", { name: "Mute Village" }));
+  expect(toggleMute.mock.calls).toEqual([["village-id"]]);
+});
+
+it.each(["", "<p>Unsent Tavern draft</p>"])("keeps arrow-key tab focus when mounting and restoring the Tavern composer (%s)", async (draft) => {
+  const { wrapper } = session((path) => {
+    if (path === "comments.getUserConversations") return [];
+    if (path === "comments.getConversationComments") return { data: [], convo: { id: "global-id", title: "Global", isPublic: true }, nextCursor: null };
+    if (path === "comments.sendTypingIndicator") return { success: true };
+    throw new Error(path);
+  });
+  localStorage.removeItem("selectedTavern2");
+  getDefaultStore().set(chatDraftsAtom, { Global: draft });
+  vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], canAccessGlobal: true, isLoading: false } as never);
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
-  vi.spyOn(chatConversation, "ChatConversation").mockReturnValue(<div>Tavern conversation</div>);
+  vi.spyOn(richInput, "default").mockImplementation(actualRichInput);
+  vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload: vi.fn() } as never);
+  vi.spyOn(conversationComments, "ConversationComments").mockImplementation(({ onMentionUser }) => <button type="button" onClick={() => onMentionUser?.("Friend")}>Mention Friend</button>);
+  if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0, toJSON: () => ({}) });
+  if (!Range.prototype.getClientRects) Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
   const view = render(<ChatPanelBody isPhone={false} isWide={false} onToggleWide={() => {}} onClose={() => {}} />, { wrapper });
   act(() => view.getByRole("tab", { name: "Tavern" }).focus());
+  await waitFor(() => expect(view.getByRole("textbox", { name: "Message Global…" }).textContent).toBe(draft ? "Unsent Tavern draft" : ""));
+  expect(document.activeElement).toBe(view.getByRole("tab", { name: "Tavern" }));
   fireEvent.keyDown(view.getByRole("tab", { name: "Tavern" }), { key: "ArrowRight" });
   await waitFor(() => expect(view.getByRole("tab", { name: "Inbox" }).getAttribute("aria-selected")).toBe("true"));
   expect(document.activeElement).toBe(view.getByRole("tab", { name: "Inbox" }));
-  expect(view.queryByText("Tavern conversation")).toBeNull();
+  expect(view.queryByRole("textbox", { name: "Message Global…" })).toBeNull();
   fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
   await waitFor(() => expect(view.getByRole("tab", { name: "Tavern" }).getAttribute("aria-selected")).toBe("true"));
-  expect(view.getByText("Tavern conversation")).toBeTruthy();
+  await waitFor(() => expect(view.getByRole("textbox", { name: "Message Global…" }).textContent).toBe(draft ? "Unsent Tavern draft" : ""));
+  expect(document.activeElement).toBe(view.getByRole("tab", { name: "Tavern" }));
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+  await waitFor(() => expect(document.activeElement).toBe(view.getByRole("tab", { name: "Inbox" })));
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+  const editor = await view.findByRole("textbox", { name: "Message Global…" });
+  fireEvent.click(view.getByRole("button", { name: "Mention Friend" }));
+  await waitFor(() => expect(editor.textContent?.endsWith("@Friend ")).toBe(true));
+  if (draft) expect(editor.textContent).toContain("Unsent Tavern draft");
+  expect(document.activeElement).toBe(editor);
 });

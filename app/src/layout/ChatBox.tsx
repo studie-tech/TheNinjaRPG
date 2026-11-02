@@ -337,7 +337,7 @@ const INITIAL_MESSAGES: UIMessage[] = [
 const AI_CHAT_STORAGE_PREFIX = "seichiAiChat:";
 const AI_CHAT_MAX_SAVED_MESSAGES = 50;
 
-/** Restore a saved conversation, ignoring anything that is not a list of text messages. */
+/** Restore text conversations, including the SDK's streamed step markers. */
 const loadSavedMessages = (key: string | null): UIMessage[] | null => {
   if (!key) return null;
   try {
@@ -355,9 +355,10 @@ const loadSavedMessages = (key: string | null): UIMessage[] | null => {
               part !== null &&
               typeof part === "object" &&
               "type" in part &&
-              part.type === "text" &&
-              "text" in part &&
-              typeof part.text === "string",
+              (part.type === "step-start" ||
+                (part.type === "text" &&
+                  "text" in part &&
+                  typeof part.text === "string")),
           ),
       )
     ) {

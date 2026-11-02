@@ -270,15 +270,25 @@ function TavernPane({
     "selectedTavern2",
     undefined,
   );
-  const [conversationId, setConversationId] = useState<string>();
+  const tavern =
+    fixedTavern ??
+    (selected && availTaverns.includes(selected)
+      ? selected
+      : canAccessGlobal
+        ? "Global"
+        : localTavern);
+  const [loadedConversation, setLoadedConversation] = useState<{
+    tavern: string;
+    id: string;
+  }>();
   const setMentions = useSetAtom(chatMentionsAtom);
 
   const onConversationLoaded = useCallback(
     (id: string) => {
-      setConversationId(id);
+      setLoadedConversation({ tavern, id });
       setMentions((current) => (current[id] ? { ...current, [id]: 0 } : current));
     },
-    [setMentions],
+    [tavern, setMentions],
   );
 
   if (!userData || isLoading) return <Loader explanation="Loading tavern" />;
@@ -289,14 +299,6 @@ function TavernPane({
       </div>
     );
   }
-  const tavern =
-    fixedTavern ??
-    (selected && availTaverns.includes(selected)
-      ? selected
-      : canAccessGlobal
-        ? "Global"
-        : localTavern);
-
   const tavernSwitch = fixedTavern ? (
     <span className="truncate px-[4px] text-[13px] font-semibold">{tavern} Tavern</span>
   ) : userData.role !== "USER" ? (
@@ -345,8 +347,8 @@ function TavernPane({
       toolbarStart={tavernSwitch}
       toolbarEnd={
         <>
-          {conversationId && (
-            <MuteButton label={tavern} conversationId={conversationId} />
+          {loadedConversation?.tavern === tavern && (
+            <MuteButton label={tavern} conversationId={loadedConversation.id} />
           )}
           <TavernMoreMenu
             onOpenFullTavern={() => {
