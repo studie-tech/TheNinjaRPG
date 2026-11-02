@@ -412,12 +412,16 @@ const UserMatch: React.FC<UserMatchProps> = (props) => {
           />
         </div>
       )}
-      <Link
-        href={`/userid/${seed.userId1}`}
-        className={`grow text-slate-100 ${seed.userId1 ? "hover:cursor-pointer hover:text-orange-100" : ""}`}
-      >
-        {user?.username || "---"}
-      </Link>
+      {user ? (
+        <Link
+          href={`/userid/${user.userId}`}
+          className="grow text-slate-100 hover:cursor-pointer hover:text-orange-100"
+        >
+          {user.username}
+        </Link>
+      ) : (
+        <span className="grow text-slate-100">---</span>
+      )}
       {seed.winnerId && seed.winnerId === user?.userId && (
         <Medal className="h-7 w-7 text-green-600" />
       )}
