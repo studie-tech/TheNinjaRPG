@@ -42,17 +42,21 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     { onlyOwnWar: true },
     { enabled: showOwnership },
   );
+  // Objectives already done are not marked, so a quest that visits several
+  // sectors only points at where the player still has to go.
   const questSectors =
-    userData?.userQuests.flatMap((entry) =>
-      entry.quest.content.objectives.flatMap((objective) =>
+    userData?.userQuests.flatMap((entry) => {
+      const goals = userData.questData?.find((q) => q.id === entry.questId)?.goals;
+      return entry.quest.content.objectives.flatMap((objective) =>
         "sector" in objective &&
         objective.sector &&
         !("hideLocation" in objective && objective.hideLocation) &&
-        objective.task !== "dialog"
+        objective.task !== "dialog" &&
+        !goals?.find((goal) => goal.id === objective.id)?.done
           ? [objective.sector]
           : [],
-      ),
-    ) ?? [];
+      );
+    }) ?? [];
   const hasQuestMarkers =
     !!props.userLocation && !showOwnership && questSectors.length > 0;
   const actionExplanation = props.actionExplanation || "Click tile to move there";
@@ -67,7 +71,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     ownership: ownershipData,
     autoRotate: props.autoRotate ?? true,
     intersection: props.intersection,
-    isTravelStep: currentStep?.title === "Travel",
+    isTravelStep: currentStep?.advanceOn === "travelArrive",
     focusSector: props.focusSector,
     questSectors,
   };

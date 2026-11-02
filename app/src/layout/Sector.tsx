@@ -102,7 +102,7 @@ import type {
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { isTutorialCaptureStep } from "@/libs/tutorial";
+import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
@@ -670,8 +670,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }
       }
       // If there are any quest ids that have been updated,
-      // let's see if we should show a modal with new objective for consecutive quests
-      if (result.questIdsUpdated && result.questIdsUpdated.length > 0) {
+      // let's see if we should show a modal with new objective for consecutive quests.
+      // The tutorial presents its own quest's dialogs in the assistant panel.
+      if (
+        result.questIdsUpdated &&
+        result.questIdsUpdated.length > 0 &&
+        !isTutorialActive(userData)
+      ) {
         result.questIdsUpdated.forEach((questId) => {
           const quest = userData?.userQuests?.find((q) => q.questId === questId);
           if (quest?.quest?.consecutiveObjectives) {
@@ -864,7 +869,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         if (
           objective.task === "dialog" &&
           !objective.overworldPlacementId &&
-          isOnLocation
+          isOnLocation &&
+          !isTutorialActive(userData)
         ) {
           setLogbookModalOpen(true);
           setLogbookModalQuestId(userquest.questId);

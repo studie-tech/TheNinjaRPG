@@ -328,7 +328,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     .filter((row) => isItemAvailableInStore(row.expireFromStoreAt));
 
   const pathname = usePublicPathname();
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
   // Shop also renders the souvenir and black-market catalogs; the tutorial pin
   // belongs only on the page its step points at.
   const isItemBuyStep =
@@ -375,7 +375,7 @@ const Shop: React.FC<ShopProps> = (props) => {
           void utils.home.getUserHome.invalidate();
         }
         if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {
-          handleNextStep();
+          void completeTutorialAction("buyItem");
         }
       } else {
         setPurchaseError(data.message);

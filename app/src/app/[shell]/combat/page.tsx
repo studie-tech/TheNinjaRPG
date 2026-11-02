@@ -32,6 +32,7 @@ import {
 import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { isTutorialActive } from "@/libs/tutorial";
 import {
   combatActionIdAtom,
   useRequiredUserData,
@@ -129,6 +130,7 @@ export default function CombatPage() {
     sessionBattleUser.curHealth > 0 &&
     !sessionBattleUser.fledBattle &&
     !sessionBattleUser.leftBattle;
+  const isTutorialRunning = isTutorialActive(userData);
   const actionGridClass = config.useSmallActions
     ? "grid grid-cols-7 md:grid-cols-9 gap-1"
     : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
@@ -348,7 +350,11 @@ export default function CombatPage() {
               config={config}
               userData={userData}
               autoCombatControl={
-                canToggleAutoCombat && !results ? (
+                // The tutorial teaches manual fighting; it only offers the switch to
+                // hand back a battle that is already running on auto.
+                canToggleAutoCombat &&
+                !results &&
+                (!isTutorialRunning || isAutoCombatActive) ? (
                   <AutoCombatControl
                     key={battle.id}
                     isActive={isAutoCombatActive}
@@ -382,6 +388,7 @@ export default function CombatPage() {
     userData,
     canToggleAutoCombat,
     isAutoCombatActive,
+    isTutorialRunning,
     isTogglingAutoCombat,
     autoCombatError,
     toggleAutoCombat,

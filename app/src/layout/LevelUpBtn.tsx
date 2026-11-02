@@ -17,9 +17,11 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 interface LevelUpBtnProps {
   id?: string;
+  /** Spacing around the button; it renders nothing while no level is available. */
+  className?: string;
 }
 
-const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
+const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   // State
   const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
@@ -30,7 +32,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   const utils = api.useUtils();
 
   // Tutorial hook
-  const { currentStep, handleNextStepAsync } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
 
   // Fetch avatar query
   const { mutate: levelUp } = api.profile.levelUp.useMutation({
@@ -50,7 +52,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
           }),
           utils.profile.getDashboard.invalidate(),
         ]);
-        if (currentStep?.title === "Level Up!") await handleNextStepAsync();
+        await completeTutorialAction("levelUp");
         sendGTMEvent({
           event: "level_up",
           level: userData.level + 1,
@@ -70,12 +72,12 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   // Derived
   const canLevel = !!userData && !levelUpBlockMessage(userData);
 
-  // If current tutorial step is "Level Up!", but user can't level up yet, progress the tutorial
+  // A level-up step the player cannot take (not enough experience) moves on
   useEffect(() => {
-    if (userData && currentStep?.title === "Level Up!" && !canLevel) {
-      void handleNextStepAsync();
+    if (userData && currentStep?.advanceOn === "levelUp" && !canLevel) {
+      void completeTutorialAction("levelUp");
     }
-  }, [currentStep?.title, userData, canLevel, handleNextStepAsync]);
+  }, [currentStep?.advanceOn, userData, canLevel, completeTutorialAction]);
 
   // Don't show anyth
   if (!userData) return null;
@@ -84,7 +86,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   return (
     <>
       {canLevel && (
-        <div className="mt-2">
+        <div className={className}>
           <Button
             id={id ?? undefined}
             decoration="gold"

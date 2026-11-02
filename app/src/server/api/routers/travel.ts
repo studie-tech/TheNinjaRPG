@@ -596,18 +596,20 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
-      // Tutorial arrivals keep the active objective in sight; other arrivals use the map center.
-      const tutorialTarget = isTutorialActive(user)
-        ? user.questData
-            ?.flatMap((quest) => quest.goals)
-            .find(
-              (goal) =>
-                !goal.done &&
-                goal.sector === input.sector &&
-                goal.longitude !== undefined &&
-                goal.latitude !== undefined,
-            )
-        : undefined;
+      // Players being onboarded (in the tutorial, or students on the road to Genin)
+      // land beside their active objective; other arrivals use the map center.
+      const tutorialTarget =
+        isTutorialActive(user) || user.rank === "STUDENT"
+          ? user.questData
+              ?.flatMap((quest) => quest.goals)
+              .find(
+                (goal) =>
+                  !goal.done &&
+                  goal.sector === input.sector &&
+                  goal.longitude !== undefined &&
+                  goal.latitude !== undefined,
+              )
+          : undefined;
       const destination =
         (tutorialTarget?.longitude !== undefined &&
         tutorialTarget?.latitude !== undefined

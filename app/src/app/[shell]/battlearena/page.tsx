@@ -87,10 +87,10 @@ export default function Arena() {
   // Tutorial step
   const { currentStep } = useTutorialStep();
 
-  // If we're on "Start arena match", set tab to arena & set to current AI id
+  // The arena step fights the Academy Dummy on the Arena tab
   useEffect(() => {
     if (
-      currentStep?.title === "Start Arena Match" &&
+      currentStep?.advanceOn === "arenaStart" &&
       (aiId !== TUTORIAL_ARENA_DUMMY_ID || tab !== "Arena")
     ) {
       setTab("Arena");
@@ -202,7 +202,9 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
   const router = useRouter();
 
   // Tutorial step
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
+  // The tutorial teaches fighting by hand, so its fights never start on auto.
+  const isTutorialFight = currentStep?.advanceOn === "arenaStart";
 
   // Sleep toggle
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
@@ -250,9 +252,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
           });
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
-          if (currentStep?.title === "Start Arena Match") {
-            handleNextStep();
-          }
+          void completeTutorialAction("arenaStart");
         } else {
           attackInFlightRef.current = false;
           showMutationToast(result);
@@ -267,7 +267,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
   const handleAttack = () => {
     if (attackInFlightRef.current || isAttacking || !aiId) return;
     attackInFlightRef.current = true;
-    attack({ aiId, autoCombat });
+    attack({ aiId, autoCombat: autoCombat && !isTutorialFight });
   };
 
   // Loaders
@@ -375,29 +375,36 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
               <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
               <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col">
-                <p className="flex items-center gap-2 font-semibold text-sm">
-                  <Bot className="h-4 w-4" /> Auto combat
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Your{" "}
-                  <Link
-                    href="/profile/edit"
-                    className="underline hover:text-orange-500"
-                  >
-                    AI profile
-                  </Link>{" "}
-                  fights for you while you watch the battle live. You can take back
-                  control at any time.
-                </p>
+            {isTutorialFight ? (
+              <p className="flex items-center gap-2 text-muted-foreground text-xs">
+                <Bot className="h-4 w-4 shrink-0" /> Auto combat stays off during your
+                academy training, so you learn to fight by hand.
+              </p>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <p className="flex items-center gap-2 font-semibold text-sm">
+                    <Bot className="h-4 w-4" /> Auto combat
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Your{" "}
+                    <Link
+                      href="/profile/edit"
+                      className="underline hover:text-orange-500"
+                    >
+                      AI profile
+                    </Link>{" "}
+                    fights for you while you watch the battle live. You can take back
+                    control at any time.
+                  </p>
+                </div>
+                <Switch
+                  checked={autoCombat}
+                  onCheckedChange={setAutoCombat}
+                  aria-label="Toggle auto combat"
+                />
               </div>
-              <Switch
-                checked={autoCombat}
-                onCheckedChange={setAutoCombat}
-                aria-label="Toggle auto combat"
-              />
-            </div>
+            )}
 
             {/* WAKE UP / ENTER CTA */}
             {isAsleep && (
@@ -437,7 +444,7 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
                   )}
                   {isAttacking ? "Starting" : "Enter arena"}
                 </Button>
-                {autoCombat && (
+                {autoCombat && !isTutorialFight && (
                   <p className="text-center text-muted-foreground text-xs">
                     <Bot className="mr-1 inline h-3 w-3" />
                     Auto combat is on — your AI profile will fight this battle

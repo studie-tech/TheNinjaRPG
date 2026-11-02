@@ -58,8 +58,9 @@ export function ActivityDock({ children }: { children: ReactNode }) {
       data-activity-dock
       aria-label="Activity"
       className={cn(
-        // Reserve the same portrait height for scrolling and the highlight-dodging position.
-        "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] [--assistant-portrait-height:min(16rem,24dvh)] md:bottom-5 md:[--assistant-portrait-height:min(24rem,32dvh)] has-[[data-dodge-highlight=true]]:top-[calc(var(--assistant-portrait-height)+4rem)] has-[[data-dodge-highlight=true]]:bottom-auto",
+        // The lesson's scroll height leaves room for the portrait above the dock. A dock
+        // dodging a highlight rises to just below the top bar, and its portrait steps aside.
+        "pointer-events-none fixed bottom-24 z-40 max-w-[calc(100vw-2rem)] [--assistant-portrait-height:min(16rem,24dvh)] md:bottom-5 md:[--assistant-portrait-height:min(24rem,32dvh)] has-[[data-dodge-highlight=true]]:top-20 has-[[data-dodge-highlight=true]]:bottom-auto",
         open && tab === "tutorial" && user.tutorialOn !== false && "z-[61]",
         swapSides ? "right-4 md:right-5" : "left-4 md:left-5",
       )}

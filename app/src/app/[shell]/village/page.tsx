@@ -130,8 +130,10 @@ export default function VillageOverview() {
     .filter((s) => s.showInVillagePage)
     .filter((s) => ownSector || s.allyAccess)
     .sort((a, v) => {
-      if (a.name === currentStep?.title) return -1;
-      if (v.name === currentStep?.title) return 1;
+      // The building the tutorial points at comes first, so it is never below the fold.
+      const highlighted = currentStep?.elementIds ?? [];
+      if (highlighted.includes(`tutorial-${a.route.replace("/", "")}`)) return -1;
+      if (highlighted.includes(`tutorial-${v.route.replace("/", "")}`)) return 1;
       return 0;
     });
 

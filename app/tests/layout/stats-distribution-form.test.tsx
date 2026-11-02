@@ -25,7 +25,7 @@ beforeEach(() => {
   localStorage.setItem(inputPreferenceKey, "true");
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
     currentStep: null,
-    handleNextStepAsync: vi.fn(async () => {}),
+    completeTutorialAction: vi.fn(async () => {}),
   } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
 });
 
@@ -81,8 +81,8 @@ describe("advanced experience assignment drafts", () => {
     const accept = vi.fn(() => assignment);
     const next = vi.fn(async () => {});
     vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-      currentStep: { title: "Assigning Stats" },
-      handleNextStepAsync: next,
+      currentStep: { advanceOn: "assignStats" },
+      completeTutorialAction: next,
     } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
     const view = render(form(accept));
     fireEvent.input(view.getByRole("spinbutton", { name: /^Offence/ }), {
@@ -92,14 +92,14 @@ describe("advanced experience assignment drafts", () => {
     await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
     expect(next).not.toHaveBeenCalled();
     await act(async () => resolveAssignment(true));
-    await waitFor(() => expect(next).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(next).toHaveBeenCalledWith("assignStats"));
   });
 
   it.each([false, undefined])("does not advance the tutorial after an unaccepted allocation (%s)", async (accepted) => {
     const next = vi.fn(async () => {});
     vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-      currentStep: { title: "Assigning Stats" },
-      handleNextStepAsync: next,
+      currentStep: { advanceOn: "assignStats" },
+      completeTutorialAction: next,
     } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
     const accept = vi.fn(async () => accepted);
     const view = render(form(accept));

@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ prepareUserUpdate: vi.fn(), updateUser } as never);
   vi.spyOn(routing, "useAwake").mockReturnValue(true);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/home");
-  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ currentStep: null, handleNextStep: vi.fn() } as never);
+  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ currentStep: null, completeTutorialAction: vi.fn(async () => {}) } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);

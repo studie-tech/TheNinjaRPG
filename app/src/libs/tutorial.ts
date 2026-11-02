@@ -1,4 +1,10 @@
-import { TUTORIAL_STARTER_QUEST_ID, TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
+import {
+  MAP_WAKE_ISLAND_SECTOR,
+  TUTORIAL_ARENA_DUMMY_ID,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STARTER_QUEST_ID,
+  TUTORIAL_STEPS_COUNT,
+} from "@/drizzle/constants";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 
 /**
@@ -15,48 +21,106 @@ export const isTutorialActive = (
   user.tutorialOn !== false &&
   (user.tutorialStep ?? 0) < TUTORIAL_STEPS_COUNT;
 
-/** Step that asks the player to start training a jutsu (Sonic Slash). */
-export const TUTORIAL_JUTSU_PICK_STEP_ID = "eSBZJXRN_MCSYM90z3d5f";
-
 /**
- * Step that sends the player after the starter quest's puppy. The step's text
- * promises a marker in the sector, which only exists once the quest's opening
- * dialog has been answered, so the tutorial answers it and opens the sector
- * zoomed out far enough to see where the marker actually is.
+ * Game actions a tutorial step can wait for. Pages report the action through
+ * `completeTutorialAction`, and the step whose `advanceOn` matches moves on, so
+ * no page has to know which step it belongs to.
  */
-export const TUTORIAL_CAPTURE_STEP_ID = "eRw6ObsRONhzY7AUMO3vm";
+export const TutorialTriggers = [
+  "questDialog",
+  "questReward",
+  "questObjective",
+  "arenaStart",
+  "assignStats",
+  "levelUp",
+  "trainStats",
+  "trainJutsu",
+  "buyItem",
+  "buyRamen",
+  "travelArrive",
+  "petAdopt",
+] as const;
+export type TutorialTrigger = (typeof TutorialTriggers)[number];
 
-/** Step that sends the player across the globe to the puppy's sector. */
-export const TUTORIAL_CAPTURE_TRAVEL_STEP_ID = "qPx_xVsMAZY0t05thYgZj";
-
-/** Step after the puppy fight: travel back to Horizon. */
-export const TUTORIAL_RETURN_HOME_STEP_ID = "UD2jVibug6Y0yKLYGzA_N";
-
-/** Step that has the player answer the starter quest's closing dialog at the academy. */
-export const TUTORIAL_STARTER_DEBRIEF_STEP_ID = "blL789mkRIKtjsWk";
-
-/** First step after the starter quest: the village tour. */
-export const TUTORIAL_VILLAGE_TOUR_STEP_ID = "fdalgdwlcigydvs";
+/** Step that asks the player to learn Sonic Slash at the training grounds. */
+export const TUTORIAL_JUTSU_PICK_STEP_ID = "tools-train-jutsu";
 
 /** Step that asks the player to buy the starter shuriken. */
-export const TUTORIAL_ITEM_BUY_STEP_ID = "KvGkDox06od5iiFaGAzkM";
+export const TUTORIAL_ITEM_BUY_STEP_ID = "tools-buy-shuriken";
+
+/** Step that sends the player across the globe to the pup's sector. */
+export const TUTORIAL_CAPTURE_TRAVEL_STEP_ID = "mission-travel-to-pup";
 
 /**
- * Starter-quest puppy fight. Mirrors the `defeat_opponents` objective of the
- * live "Getting Started" quest; the sector lives in quest content, so it is not
- * derivable here and must be re-checked if that objective moves. Moved from
- * 293 to 227 by migration 0038, which carries the reasoning.
+ * Step that has the player walk up to the pup. The sector opens zoomed in on
+ * the marker, since global travel lands a tutorial player a few tiles away.
+ */
+export const TUTORIAL_CAPTURE_STEP_ID = "mission-find-pup";
+
+/** Step that sends the player to Wake Island to return the pup. */
+export const TUTORIAL_WAKE_TRAVEL_STEP_ID = "bond-travel-wake";
+
+/**
+ * The pup's sector. Mirrors the `defeat_opponents` objective of the live
+ * "Getting Started" quest; the sector lives in quest content, so it is not
+ * derivable here and must be re-checked if that objective moves.
  */
 export const TUTORIAL_CAPTURE_SECTOR = 227;
+
+/** Wake Island, home of the Bondkeeper Sanctuary and the Genin exam. */
+export const TUTORIAL_WAKE_SECTOR = MAP_WAKE_ISLAND_SECTOR;
 
 /** Horizon's current world sector — not the pre-remap 296 value. */
 export const TUTORIAL_HOME_SECTOR =
   WORLD_LANDMARKS.find((landmark) => landmark.name === "Horizon")?.sector ?? 301;
 
 /**
- * Pathname of a tutorial step, without the hash used for in-page tabs.
+ * Objectives of the "Getting Started" quest, in the order its chain visits
+ * them. Tutorial steps name the objective they work towards, and this order
+ * tells which objectives a player has already passed (including ones an older
+ * version of the chain let them skip).
  */
-export const getTutorialStepPath = (page?: string | null) => page?.split("#")[0] ?? "";
+export const STARTER_QUEST_OBJECTIVES = {
+  accept: "eHayd",
+  arena: "tArna",
+  jutsu: "tJtsu",
+  brief: "tBrf1",
+  pup: "_nY7o",
+  sanctuary: "tSnct",
+  debrief: "tuQde",
+  genin: "tGnin",
+  win: "fsyYJ",
+} as const;
+export type StarterQuestObjectiveId =
+  (typeof STARTER_QUEST_OBJECTIVES)[keyof typeof STARTER_QUEST_OBJECTIVES];
+const STARTER_QUEST_ORDER: readonly string[] = Object.values(STARTER_QUEST_OBJECTIVES);
+
+/**
+ * Objectives of the "Road to Genin" quest that the exam chapter walks through.
+ * The village choice branches five ways, so joining and reporting home are
+ * groups: whichever village the player picked, its objective stands for the step.
+ */
+export const GENIN_QUEST_OBJECTIVES = {
+  level: "lG3__",
+  exam: "mKVnH",
+  tour: "tFTYj",
+  choose: "mgzw_",
+  join: ["x1IVl", "WmDyh", "xAiqy", "8Eksk", "VAYLT"],
+  report: ["pBq1F", "k3Joa", "lhFP_", "dHuAY", "IhGF0"],
+  win: "_l-eW",
+} as const;
+const GENIN_QUEST_IDS: ReadonlySet<string> = new Set(
+  Object.values(GENIN_QUEST_OBJECTIVES).flat(),
+);
+
+/** A step's objective: one id, or a group where any one of them counts. */
+export type TutorialObjectiveRef = string | readonly string[];
+const toObjectiveIds = (ref: TutorialObjectiveRef): readonly string[] =>
+  typeof ref === "string" ? [ref] : ref;
+
+/** Pathname of a tutorial step, without the hash or query used to pick a tab. */
+export const getTutorialStepPath = (page?: string | null) =>
+  page?.split(/[#?]/)[0] ?? "";
 
 /**
  * True when the player is on the page the current tutorial step expects.
@@ -92,6 +156,19 @@ export const getTutorialBattleReturnPage = (
   return getTutorialStepPath(next.page) === "/combat" ? fallback : next.page;
 };
 
+/**
+ * Whether a battle is one the tutorial teaches by hand: the arena dummy and
+ * the starter quest's fights while the tutorial runs. These always start under
+ * manual control, whatever the player's stored auto-combat default says.
+ */
+export const isTutorialGuidedBattle = (
+  user: { tutorialOn?: boolean | null; tutorialStep?: number | null },
+  battle: { opponentIds?: readonly string[]; questId?: string | null },
+) =>
+  isTutorialActive(user) &&
+  (battle.questId === TUTORIAL_STARTER_QUEST_ID ||
+    !!battle.opponentIds?.includes(TUTORIAL_ARENA_DUMMY_ID));
+
 export const isTutorialJutsuPickStep = (step?: { id?: string } | null) =>
   step?.id === TUTORIAL_JUTSU_PICK_STEP_ID;
 
@@ -110,14 +187,14 @@ export const getTutorialTakeQuestId = (step?: { elementIds?: string[] } | null) 
 /** Quest the academy picker should open for the current tutorial step. */
 export const getTutorialHighlightedQuestId = (
   step?: {
-    title?: string;
+    advanceOn?: TutorialTrigger;
     relatedValue?: string | number;
     elementIds?: string[];
   } | null,
 ) => {
   const fromButton = getTutorialTakeQuestId(step);
   if (fromButton) return fromButton;
-  if (step?.title === "Genin Exam" || step?.title === "Academy Dialog Option") {
+  if (step?.advanceOn === "questDialog" || step?.advanceOn === "questReward") {
     return typeof step.relatedValue === "string" ? step.relatedValue : undefined;
   }
   return undefined;
@@ -129,7 +206,7 @@ const MIN_HIGHLIGHT_PX = 4;
 export const isUsableHighlightRect = (rect: { width: number; height: number }) =>
   rect.width > MIN_HIGHLIGHT_PX && rect.height > MIN_HIGHLIGHT_PX;
 
-/** Reposition compact controls and maps that fit above Lemu; leave oversized maps scrollable. */
+/** Reposition compact controls and maps that fit above the assistant; leave oversized maps scrollable. */
 export const canPositionTutorialHighlight = (
   targetHeight: number,
   viewportHeight: number,
@@ -138,74 +215,282 @@ export const canPositionTutorialHighlight = (
   targetHeight < viewportHeight * 0.55 ||
   targetHeight + 80 < (assistantTop ?? viewportHeight);
 
+export type TutorialScreenBox = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+export type TutorialPortraitSide = "right" | "left";
+
+/**
+ * Which end of the Activity dock Lemu stands at, given the strip above the dock
+ * she is drawn in. She prefers the right end, steps to the left end when the
+ * highlight or the hand pointing at it is under her, and leaves (null) rather
+ * than hide what the player has to press.
+ */
+export const getTutorialPortraitSide = ({
+  frame,
+  portraitWidth,
+  inset,
+  avoid,
+}: {
+  frame: TutorialScreenBox;
+  portraitWidth: number;
+  /** Gap between her and the end of the dock. */
+  inset: number;
+  avoid: TutorialScreenBox | null;
+}): TutorialPortraitSide | null => {
+  if (!avoid) return "right";
+  // The hand pointer bounces just above or below the highlight.
+  const blocked = {
+    top: avoid.top - 72,
+    bottom: avoid.top + avoid.height + 80,
+    left: avoid.left - 16,
+    right: avoid.left + avoid.width + 16,
+  };
+  const candidates: [TutorialPortraitSide, number][] = [
+    ["right", frame.left + frame.width - inset - portraitWidth],
+    ["left", frame.left + inset],
+  ];
+  const clear = candidates.find(
+    ([, left]) =>
+      left + portraitWidth <= blocked.left ||
+      left >= blocked.right ||
+      frame.top + frame.height <= blocked.top ||
+      frame.top >= blocked.bottom,
+  );
+  return clear?.[0] ?? null;
+};
+
+/** Chapter progress shown in the assistant header. */
+export const getTutorialChapterProgress = (
+  steps: readonly { chapter: string }[],
+  stepIndex: number,
+) => {
+  const chapter = steps[stepIndex]?.chapter;
+  if (!chapter) return undefined;
+  const chapterSteps = steps
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => step.chapter === chapter);
+  const position = chapterSteps.findIndex(({ index }) => index === stepIndex);
+  return { chapter, position: position + 1, total: chapterSteps.length };
+};
+
 type StarterQuestTutorialUser = {
-  sector?: number | null;
-  questData?: { id: string; goals: { id: string; done?: boolean }[] }[] | null;
+  rank?: string;
+  questData?:
+    | {
+        id: string;
+        goals: {
+          id: string;
+          done?: boolean;
+          collected?: boolean;
+          selectedNextObjectiveId?: string;
+        }[];
+      }[]
+    | null;
   userQuests?:
     | {
         questId: string;
         completed?: number | null;
         endAt?: Date | string | null;
-        quest?: { content: { objectives: { id: string; task: string }[] } } | null;
       }[]
     | null;
 };
 
-/** The starter quest attempt that is still running, if any. */
-const getActiveStarterQuest = (user: StarterQuestTutorialUser) =>
-  user.userQuests?.find(
+/**
+ * Where a player stands in the starter quest: finished, or the index (in
+ * `STARTER_QUEST_ORDER`) of the objective their chain is currently on. The
+ * chain is walked through the tracker's own selected edges rather than the
+ * quest content, so a player who started under an older chain is placed by
+ * the path they actually took. Undefined while the quest data is still loading.
+ */
+export const getStarterQuestProgress = (user?: StarterQuestTutorialUser | null) => {
+  if (!user?.userQuests) return undefined;
+  const active = user.userQuests.find(
     (entry) =>
       entry.questId === TUTORIAL_STARTER_QUEST_ID && !entry.endAt && !entry.completed,
   );
-
-/**
- * The puppy objective of the starter quest: the `defeat_opponents` objective
- * the capture step sends the player after. Looked up by task, not id, so it
- * follows the quest content rather than a hard-coded objective id.
- */
-export const getStarterQuestCaptureObjectiveId = (
-  objectives?: { id: string; task: string }[] | null,
-) => objectives?.find((objective) => objective.task === "defeat_opponents")?.id;
-
-/**
- * Where the tutorial should jump to when the player reaches the puppy mission
- * having already done part of it, or undefined to stay put.
- *
- * The capture steps only make sense while the puppy is still out there: they
- * point at a marker that the active `defeat_opponents` objective draws. A
- * player who already beat the puppy, or finished the starter quest outright
- * (an account that came back after the tutorial grew new steps, or whose
- * stored step index shifted), would otherwise be stood in an empty sector with
- * nothing to fight and no way forward.
- *
- * - Quest no longer running: skip the whole mission to the village tour.
- * - Quest running, puppy already beaten: go to the trip home, or straight to
- *   the academy debrief when the player is already in Horizon (the travel step
- *   cannot advance for someone already in the destination sector).
- *
- * The debrief step itself is left alone: answering its dialog completes the
- * quest and the dialog handler advances the step, so acting on "quest gone"
- * there would race it and skip the village tour.
- */
-export const getStarterQuestCatchUpStepId = (
-  step?: { id?: string } | null,
-  user?: StarterQuestTutorialUser | null,
-) => {
-  if (!step?.id || !user?.userQuests) return undefined;
-  const isBeforeFight =
-    step.id === TUTORIAL_CAPTURE_TRAVEL_STEP_ID || step.id === TUTORIAL_CAPTURE_STEP_ID;
-  if (!isBeforeFight && step.id !== TUTORIAL_RETURN_HOME_STEP_ID) return undefined;
-  const active = getActiveStarterQuest(user);
-  if (!active) return TUTORIAL_VILLAGE_TOUR_STEP_ID;
-  if (!isBeforeFight) return undefined;
+  if (!active)
+    return { finished: true as const, activeIndex: STARTER_QUEST_ORDER.length };
   const tracker = user.questData?.find(
     (entry) => entry.id === TUTORIAL_STARTER_QUEST_ID,
   );
-  const captureId = getStarterQuestCaptureObjectiveId(active.quest?.content.objectives);
-  if (!tracker || !captureId) return undefined;
-  const captured = tracker.goals.some((goal) => goal.id === captureId && goal.done);
-  if (!captured) return undefined;
-  return user.sector === TUTORIAL_HOME_SECTOR
-    ? TUTORIAL_STARTER_DEBRIEF_STEP_ID
-    : TUTORIAL_RETURN_HOME_STEP_ID;
+  if (!tracker) return undefined;
+  let currentId: string | undefined = STARTER_QUEST_ORDER[0];
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const goal = tracker.goals.find((entry) => entry.id === currentId);
+    if (!goal?.done) break;
+    currentId =
+      goal.selectedNextObjectiveId ??
+      STARTER_QUEST_ORDER[STARTER_QUEST_ORDER.indexOf(currentId) + 1];
+  }
+  const activeIndex = currentId ? STARTER_QUEST_ORDER.indexOf(currentId) : -1;
+  return {
+    finished: false as const,
+    activeIndex: activeIndex === -1 ? STARTER_QUEST_ORDER.length : activeIndex,
+    goals: tracker.goals,
+  };
 };
+
+/**
+ * Whether the starter-quest objective a step works towards is behind the
+ * player. Reward steps additionally wait for the reward to be claimed, unless
+ * the chain has moved on without it (a bypassed objective has nothing to claim).
+ */
+export const isStarterObjectiveSatisfied = (
+  objectiveId: string,
+  progress: NonNullable<ReturnType<typeof getStarterQuestProgress>>,
+  requireCollected = false,
+) => {
+  if (progress.finished) return true;
+  const goal = progress.goals.find((entry) => entry.id === objectiveId);
+  if (goal?.done) return !requireCollected || !!goal.collected;
+  const index = STARTER_QUEST_ORDER.indexOf(objectiveId);
+  return index !== -1 && progress.activeIndex > index;
+};
+
+/**
+ * Whether the Road to Genin objective a step works towards is behind the
+ * player. The quest grants the Genin rank, so a player who is no longer a
+ * student and no longer has it active has finished it.
+ */
+export const isGeninObjectiveSatisfied = (
+  objectiveId: TutorialObjectiveRef,
+  user: StarterQuestTutorialUser,
+  requireCollected = false,
+) => {
+  const isActive = user.userQuests?.some(
+    (entry) =>
+      entry.questId === TUTORIAL_GENIN_EXAM_QUEST_ID &&
+      !entry.endAt &&
+      !entry.completed,
+  );
+  if (!isActive) return !!user.rank && user.rank !== "STUDENT";
+  const ids = toObjectiveIds(objectiveId);
+  // Winning marks itself done; the step is about claiming the quest, which ends it.
+  if (ids.includes(GENIN_QUEST_OBJECTIVES.win)) return false;
+  const tracker = user.questData?.find(
+    (entry) => entry.id === TUTORIAL_GENIN_EXAM_QUEST_ID,
+  );
+  return !!tracker?.goals.some(
+    (goal) =>
+      ids.includes(goal.id) && goal.done && (!requireCollected || goal.collected),
+  );
+};
+
+/**
+ * Index of the step a player should be moved to because their quest is
+ * already past what the current step asks for, or undefined to stay put.
+ *
+ * Steps that name an `objectiveId` only make sense while that objective is
+ * still ahead: a player who already beat the pup (or finished the quest under
+ * an older tutorial) would otherwise be pointed at a marker that no longer
+ * exists. The skip runs through every consecutive satisfied step, so it lands
+ * on the first lesson that still has something to do.
+ */
+export const getTutorialCatchUpStepIndex = (
+  steps: readonly {
+    objectiveId?: TutorialObjectiveRef;
+    advanceOn?: TutorialTrigger;
+  }[],
+  stepIndex: number,
+  user?: StarterQuestTutorialUser | null,
+) => {
+  if (!user?.userQuests) return undefined;
+  const starter = getStarterQuestProgress(user);
+  let index = stepIndex;
+  while (index < steps.length) {
+    const objectiveId = steps[index]?.objectiveId;
+    if (!objectiveId) break;
+    const requireCollected = steps[index]?.advanceOn === "questReward";
+    const isGeninStep = toObjectiveIds(objectiveId).some((id) =>
+      GENIN_QUEST_IDS.has(id),
+    );
+    const satisfied = isGeninStep
+      ? isGeninObjectiveSatisfied(objectiveId, user, requireCollected)
+      : !!starter &&
+        toObjectiveIds(objectiveId).some((id) =>
+          isStarterObjectiveSatisfied(id, starter, requireCollected),
+        );
+    if (!satisfied) break;
+    index += 1;
+  }
+  return index !== stepIndex ? index : undefined;
+};
+
+/** One action a player could take this turn, as the combat lesson sees it. */
+export type TutorialCombatOption = {
+  id: string;
+  name: string;
+  type: "basic" | "jutsu" | "item";
+  range: number;
+  /** Enough action points left and not on cooldown. */
+  isUsable: boolean;
+};
+
+/** What the combat lesson asks the player to do next. */
+export type TutorialCombatGuidance =
+  | { kind: "wait" }
+  | {
+      kind: "select";
+      actionId: string;
+      actionName: string;
+      reason: "attack" | "move" | "end";
+    }
+  | {
+      kind: "target";
+      actionId: string;
+      actionName: string;
+      reason: "attack" | "move" | "end";
+    };
+
+/**
+ * Next instruction of the hands-on combat lesson. Attacks are preferred
+ * strongest-first when the enemy is in their range (so a player who learned
+ * Sonic Slash or bought shuriken is shown when to use them), otherwise the
+ * player is walked closer, and when nothing else is affordable they end their
+ * turn. Once the right action is selected the instruction moves to the field.
+ */
+export const getTutorialCombatGuidance = (info: {
+  isPlayersTurn: boolean;
+  distanceToEnemy: number | null;
+  selectedActionId?: string;
+  options: readonly TutorialCombatOption[];
+}): TutorialCombatGuidance => {
+  const { isPlayersTurn, distanceToEnemy, selectedActionId, options } = info;
+  if (!isPlayersTurn || distanceToEnemy === null) return { kind: "wait" };
+  const byId = (id: string) => options.find((option) => option.id === id);
+  const attacks = options
+    .filter((option) => option.id !== "move" && option.id !== "wait")
+    .filter((option) => option.id !== "meditate")
+    .filter((option) => option.isUsable && option.range >= distanceToEnemy)
+    .sort((a, b) => typeRank(a.type) - typeRank(b.type));
+  const selected = selectedActionId ? byId(selectedActionId) : undefined;
+  const choose = (
+    option: TutorialCombatOption,
+    reason: "attack" | "move" | "end",
+  ): TutorialCombatGuidance =>
+    selected?.id === option.id
+      ? { kind: "target", actionId: option.id, actionName: option.name, reason }
+      : { kind: "select", actionId: option.id, actionName: option.name, reason };
+  // Respect a usable attack the player picked themselves, if it reaches.
+  if (selected && attacks.some((option) => option.id === selected.id)) {
+    return choose(selected, "attack");
+  }
+  const attack = attacks[0];
+  if (attack) return choose(attack, "attack");
+  const move = byId("move");
+  if (distanceToEnemy > 1 && move?.isUsable) return choose(move, "move");
+  const end = byId("wait");
+  if (end) return choose(end, "end");
+  return { kind: "wait" };
+};
+
+/** Jutsu first, then thrown tools, then the basic attack. */
+const typeRank = (type: TutorialCombatOption["type"]) =>
+  type === "jutsu" ? 0 : type === "item" ? 1 : 2;

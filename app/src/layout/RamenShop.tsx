@@ -8,6 +8,7 @@ import {
   IMG_RAMEN_SMALL,
   IMG_RAMEN_WELCOME,
 } from "@/drizzle/constants";
+import { useTutorialStep } from "@/hooks/tutorial";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -52,6 +53,7 @@ export const RamenMenu = ({
   imageClassName = "w-full",
 }: RamenMenuProps) => {
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { completeTutorialAction } = useTutorialStep();
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const { mutate, isPending } = api.village.buyFood.useMutation({
@@ -68,6 +70,7 @@ export const RamenMenu = ({
           delta: data.userDelta,
           achievementProgress: data.achievementProgress,
         });
+        void completeTutorialAction("buyRamen");
       }
     },
     onError: (error) => setPurchaseError(error.message),
@@ -96,6 +99,7 @@ export const RamenMenu = ({
       )}
       {isPending && <Loader explanation="Purchasing food" />}
       <div
+        id="tutorial-ramen-menu"
         className={`grid grid-cols-3 p-3 text-center font-bold italic ${isPending ? "hidden" : ""}`}
       >
         <MenuEntry

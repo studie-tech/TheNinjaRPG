@@ -3,11 +3,13 @@
 import { useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
+import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { experienceAssignmentBlockMessage } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
+import { isTutorialActive } from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function AssignExperience() {
@@ -62,20 +64,26 @@ export default function AssignExperience() {
       </ContentBox>
     );
 
-  // Show component
+  // Show component. Assigning and levelling are one motion, so the level-up
+  // button sits right above the form once the assigned experience allows it.
+  // Masteries and elements stay out of the tutorial: only combat stats count
+  // towards a level, which is what its assignment lessons build up to.
   return (
-    <DistributeStatsForm
-      includeMasteries
-      id="tutorial-unassigned-stats-contentbox"
-      userData={userData}
-      onAccept={submitStats}
-      availableStats={userData.earnedExperience}
-      title="Assign Experience Points"
-      subtitle={`You have ${userData.earnedExperience.toLocaleString()} unused experience points`}
-      defaultBackHref="/profile"
-      isPending={isPending}
-      pendingLabel="Assigning"
-    />
+    <>
+      <LevelUpBtn id="tutorial-level-up-experience" className="mb-6" />
+      <DistributeStatsForm
+        includeMasteries={!isTutorialActive(userData)}
+        id="tutorial-unassigned-stats-contentbox"
+        userData={userData}
+        onAccept={submitStats}
+        availableStats={userData.earnedExperience}
+        title="Assign Experience Points"
+        subtitle={`You have ${userData.earnedExperience.toLocaleString()} unused experience points`}
+        defaultBackHref="/profile"
+        isPending={isPending}
+        pendingLabel="Assigning"
+      />
+    </>
   );
 }
 

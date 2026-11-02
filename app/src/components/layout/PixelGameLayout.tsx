@@ -327,7 +327,8 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
               >
                 <div
                   className={cn(
-                    "p-3 pb-28 md:pb-3",
+                    // Phones also leave room to scroll content clear of an open lesson.
+                    "p-3 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-3",
                     // The footer bar below sits in normal flow under this wrapper, so it
                     // starts wherever first paint ends -- often a short spinner -- and
                     // travels down as the page loads. On desktop that growth is also when
@@ -335,7 +336,8 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     // takes its width and the centred layout shifts sideways. One viewport
                     // of minimum height keeps the bar below the fold, where its movement
                     // cannot register as a shift, and the scrollbar present from first paint.
-                    isSignedInLayout && "min-h-svh p-0 pb-28 md:pb-8",
+                    isSignedInLayout &&
+                      "min-h-svh p-0 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-8",
                     isAnonymousLayout && "p-5 pb-8 md:p-7",
                   )}
                 >

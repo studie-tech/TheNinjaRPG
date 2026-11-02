@@ -537,7 +537,7 @@ function Travel() {
   useAwake(userData);
 
   // Tutorial step
-  const { currentStep, handleNextStepAsync } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
 
   // While the tutorial is sending the player to one specific sector, open the
   // globe already centred on it and carrying the Target label. The camera
@@ -548,7 +548,7 @@ function Travel() {
   // else it names a quest.
   const tutorialFocusSector =
     userData?.tutorialOn &&
-    currentStep?.title === "Travel" &&
+    currentStep?.advanceOn === "travelArrive" &&
     typeof currentStep?.relatedValue === "number"
       ? currentStep.relatedValue
       : null;
@@ -645,7 +645,10 @@ function Travel() {
           { revision: context.revision, delta: result.userDelta },
         );
         await updateSector(profileApplied, context.sector);
-        if (currentStep?.title === "Travel") await handleNextStepAsync();
+        // A step that names its destination is only finished by arriving there.
+        if (tutorialFocusSector === null || patch?.sector === tutorialFocusSector) {
+          await completeTutorialAction("travelArrive");
+        }
       },
     });
 
@@ -751,25 +754,19 @@ function Travel() {
   const handleGlobalMove = useCallback(
     (sector: number) => {
       // Guards against global movement
-      if (
-        currentStep?.title === "Travel" &&
-        currentStep?.relatedValue !== undefined &&
-        userData?.tutorialOn
-      ) {
-        if (sector !== currentStep?.relatedValue) {
-          showMutationToast({
-            success: false,
-            message: `For now, you need to travel to sector ${currentStep?.relatedValue} first.`,
-          });
-          setAutoDestination(null);
-          return;
-        }
+      if (tutorialFocusSector !== null && sector !== tutorialFocusSector) {
+        showMutationToast({
+          success: false,
+          message: `For now, you need to travel to sector ${tutorialFocusSector} first.`,
+        });
+        setAutoDestination(null);
+        return;
       }
       // Stop any local-sector movement and begin global travel immediately.
       setTargetPosition(null);
       startGlobalMove({ sector });
     },
-    [currentStep, userData?.tutorialOn, startGlobalMove],
+    [tutorialFocusSector, startGlobalMove],
   );
 
   // Whether world-travel can be started toward a given sector

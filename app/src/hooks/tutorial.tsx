@@ -12,13 +12,22 @@ import {
   TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
-import { availableUserActions } from "@/libs/combat/actions";
-import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import {
+  actionPointsAfterAction,
+  availableUserActions,
+  calcActiveUser,
+} from "@/libs/combat/actions";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
 import {
+  GENIN_QUEST_OBJECTIVES,
+  getTutorialCombatGuidance,
   isTutorialActive,
+  STARTER_QUEST_OBJECTIVES,
   TUTORIAL_CAPTURE_SECTOR,
-  TUTORIAL_HOME_SECTOR,
+  TUTORIAL_WAKE_SECTOR,
+  type TutorialCombatGuidance,
+  type TutorialObjectiveRef,
+  type TutorialTrigger,
 } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import {
@@ -27,599 +36,667 @@ import {
   useUserDataSelector,
 } from "@/utils/UserContext";
 
+export const TUTORIAL_CHAPTERS = [
+  { id: "student", title: "A New Student" },
+  { id: "combat", title: "Trial by Combat" },
+  { id: "tools", title: "Tools of the Trade" },
+  { id: "mission", title: "The Missing Pup" },
+  { id: "bond", title: "Bondkeepers" },
+  { id: "genin", title: "Graduation" },
+  { id: "exam", title: "The Genin Exam" },
+] as const;
+export type TutorialChapterId = (typeof TUTORIAL_CHAPTERS)[number]["id"];
+
 export interface TutorialStepConfig {
   id: string;
+  chapter: TutorialChapterId;
   title: string;
+  /** What Lemu says: the story beat and why this step matters. */
   description: string | React.ReactNode;
+  /** The one thing to do now, shown as the step's call to action. */
+  action?: string;
+  /** Elements to highlight, most specific first; the first one on screen wins. */
   elementIds?: string[];
   page: string;
-  hideDialog?: boolean;
+  /** Quest whose dialog or reward the step shows, or the sector a travel step targets. */
   relatedValue?: number | string;
+  /** Quest objective this step works towards (or a group, any one of which counts); once it is behind the player the step is skipped. */
+  objectiveId?: TutorialObjectiveRef;
+  /** Shows the related quest's current objective text, for steps whose words come from the quest. */
+  quoteObjective?: boolean;
+  /** Label of a button that travels and walks to the related quest's current objective. */
+  autoTravelLabel?: string;
+  /** Game action that completes the step. */
+  advanceOn?: TutorialTrigger;
+  /** Skipped while the player has no unassigned experience to spend. */
+  needsUnassignedExperience?: boolean;
   showNextButton?: boolean;
+  nextLabel?: string;
   proceedOnHighlightClick?: boolean;
   requiresGameMenu?: boolean;
-  externalLink?: string;
   onCombatWin?: string;
   onCombatLoss?: string;
 }
 
-// Dynamic combat tutorial step IDs that should show contextual guidance
-const DYNAMIC_COMBAT_STEP_ID = "bRelJfsU9wuHNmhUSg0db";
-
-/**
- * Combat tutorial steps that teach manual fighting. While the player's AI
- * profile is fighting for them (auto combat), these collapse into a single
- * "watch the battle" step so a new player is never asked to click actions the
- * auto-combat panel has replaced. The step id and onCombatWin/onCombatLoss
- * handlers are inherited from the underlying step, so the battle outcome still
- * routes the tutorial forward (win) or back to the arena (loss) — and taking
- * back control mid-battle restores the normal teaching steps.
- */
-const COMBAT_TEACHING_STEP_IDS = [
-  "NASO2bE1zEQcc",
-  "Qz0sQcQLjTdlv",
-  DYNAMIC_COMBAT_STEP_ID,
-];
-
-// Hospitalized tutorial step
+/** Shown in place of any step while the player is in the hospital. */
 export const TUTORIAL_HOSPITALIZED_STEP: TutorialStepConfig = {
-  id: "5uhDcTB1sMeGO_",
-  title: "You are Hospitalized!",
+  id: "hospitalized",
+  chapter: "combat",
+  title: "Patched up",
   description:
-    "You have been injured in battle and are currently hospitalized. I have re-directed you to the hospital. Please get yourself sorted out and then we'll get back to it",
+    "Every shinobi loses a fight now and then. You'll be discharged for free when the timer runs out, or you can pay a little ryo to heal right away.",
+  action: "Heal or wait, then we'll try again.",
   page: "/hospital",
   elementIds: ["tutorial-hospital-buttons"],
-  showNextButton: false,
 };
 
-export const TUTORIAL_STEPS: TutorialStepConfig[] = [
-  // Profile page steps - main menu buttons
+const starterLogbookEntry = `logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`;
+const globalTravelElements = [
+  "tutorial-global-travel-proceed",
+  "tutorial-global-map",
+  "tutorial-Global",
+];
+const assignElements = [
+  "tutorial-specialization-confirm-content",
+  "tutorial-unassigned-stats-contentbox",
+];
+const levelUpElements = [
+  "tutorial-level-up-modal-content",
+  "tutorial-level-up-experience",
+];
 
+export const TUTORIAL_STEPS: TutorialStepConfig[] = [
+  // Chapter 1: A New Student
   {
-    id: "2XpCaDhi3elhVNLGssEjZ",
-    title: "Welcome to the game",
+    id: "student-welcome",
+    chapter: "student",
+    title: "Welcome to Horizon",
     description:
-      "Welcome to The Ninja-Rpg! I'm Lemu and I'll be guiding you through the early stages of your development here at the academy. Before starting we will quickly go through basic controls and features. This is your main profile where all your overall progress can be viewed.",
-    elementIds: ["tutorial-profile"],
+      "Welcome to Horizon, the academy town where every shinobi begins. I'm <b>Lemu</b>, your instructor. This is your profile, where everything you achieve is recorded. Before you can earn your Genin headband you must pass the <b>Academy Trials</b>, and I'll guide you through every one of them.",
     page: "/profile",
-    requiresGameMenu: false,
     showNextButton: true,
-    proceedOnHighlightClick: true,
+    nextLabel: "Let's begin",
   },
   {
-    id: "RiYke5IPcx6cN6ao1QA23",
-    title: "Strengths & Weaknesses",
+    id: "student-open-village",
+    chapter: "student",
+    title: "Into the village",
     description:
-      "In this section of the profile you can view the specifics of your character, your stats, strengths and weaknesses. Kinda weak right now, but we'll get you stronger. Let's go the the battle arena to train a bit. ",
-    elementIds: ["tutorial-strength-weaknesses"],
-    page: "/profile",
-    requiresGameMenu: false,
-    showNextButton: true,
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "YP5PEaCvfhJfdsl37V",
-    title: "Assigning Stats",
-    description:
-      "Naturally, having grown up in the ninja world, you already have some skills and abilities. Let's go assign some points to your stats.",
-    elementIds: ["tutorial-unassigned-stats"],
-    page: "/profile",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-    showNextButton: true,
-  },
-  {
-    id: "YPfhJfdsl37V",
-    title: "Assigning Stats",
-    description:
-      "You have 2000 points to assign freely to your stats. Assign to any stat of your liking - if in doubt, I'd recommend putting it all into strength, which will generally be useful.",
-    elementIds: [
-      "tutorial-specialization-confirm-content",
-      "tutorial-unassigned-stats-contentbox",
-    ],
-    page: "/profile/experience",
-  },
-  {
-    id: "f34p798tfn0327",
-    title: "Level Up!",
-    description:
-      "I knew it, you're far from our ordinary graduate. You're ready to level up! Let's do it.",
-    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
-    page: "/profile",
-  },
-  {
-    id: "f34p798tfn0fds327",
-    title: "Level Up!",
-    description:
-      "Hmm, I sense amazing power within you, I think you're already ready for another level up!",
-    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
-    page: "/profile",
-  },
-  {
-    id: "YP5PEaCvfhJl37V",
-    title: "Village",
-    description:
-      "The location Menu is the heart of your village, this is where you can access all your village has to offer from Trainings to the black-market, to taking Missions to buying Ramen. You can also view your village Notice board here as well. Let's click it to go to the battle arena.",
+      "The <b>location menu</b> always shows where you are standing. Tap it any time to see what the place has to offer.",
+    action: "Tap Horizon Village in the location menu.",
     elementIds: ["tutorial-village"],
     page: "/profile",
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
   },
-
   {
-    id: "1JShRbZwTTRQr",
-    title: "Battle Arena",
+    id: "student-academy-building",
+    chapter: "student",
+    title: "The Academy",
     description:
-      "We're going to the battle arena, where you can test your skills against NPCs. Let's go there now.",
+      "Every building in the village offers something different. The academy is where I teach, and where the trials begin.",
+    action: "Tap Academy.",
+    elementIds: ["tutorial-academy"],
+    page: "/village",
+    proceedOnHighlightClick: true,
+  },
+  {
+    id: "academy-accept-trials",
+    chapter: "student",
+    title: "Your quest log",
+    description:
+      "Quests are how you progress. Each is a chain of objectives with rewards along the way, and your active quests always live in this log. Your first one is the Academy Trials.",
+    action: "Accept the trials by answering me below.",
+    elementIds: [starterLogbookEntry],
+    page: "/academy",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.accept,
+    advanceOn: "questDialog",
+  },
+  // Chapter 2: Trial by Combat
+  {
+    id: "combat-arena-building",
+    chapter: "combat",
+    title: "The Battle Arena",
+    description:
+      "Your first trial is a fight. The arena is where you test yourself against training opponents.",
+    action: "Tap Battle Arena.",
     elementIds: ["tutorial-battlearena"],
     page: "/village",
     proceedOnHighlightClick: true,
   },
   {
-    id: "w3eWC11tISZc0CUZ2tvYN",
-    title: "Start Arena Match",
+    id: "combat-enter-arena",
+    chapter: "combat",
+    title: "Your first fight",
     description:
-      "Here we are! In the top right corner, you can chose from various arena options, e.g. sparring, ranked PvP, Battle pyramid, etc. Right now, we're simply going to challenge the training dummy in the arena to see how strong you are.",
+      "I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me: today you fight with your own hands.",
+    action: "Tap Enter arena.",
     elementIds: ["tutorial-battlearena-challenge-ai-enter"],
     page: "/battlearena",
+    advanceOn: "arenaStart",
   },
   {
-    id: "NASO2bE1zEQcc",
-    title: "The Battlefield",
+    id: "combat-battlefield",
+    chapter: "combat",
+    title: "The battlefield",
     description:
-      "This is the battlefield, where you can see your character and opponent(s). ",
+      "Fights play out on a grid of hexagonal tiles. Find yourself and the dummy. You act by choosing an action below the field and then tapping a tile on it.",
     elementIds: ["tutorial-combat-field"],
     page: "/combat",
-    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
-    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     showNextButton: true,
-    proceedOnHighlightClick: true,
+    onCombatWin: "combat-claim-reward",
+    onCombatLoss: "combat-enter-arena",
   },
   {
-    id: "Qz0sQcQLjTdlv",
-    title: "Combat Rounds",
-    description: `Combat is based on rounds, where during your round you have ${COMBAT_SECONDS} seconds to perform your actions, and then it's your opponent's turn. You can see your action points and the time left for your round here.`,
+    id: "combat-turns",
+    chapter: "combat",
+    title: "Turns and Action Points",
+    description:
+      "You and your opponent take turns. Each turn gives you <b>60 seconds</b> and <b>100 Action Points (AP)</b>. Moving costs 10 AP, a basic attack 20, and this bar shows what you have left.",
     elementIds: ["tutorial-combat-action-timer"],
     page: "/combat",
-    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
-    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
     showNextButton: true,
-    proceedOnHighlightClick: true,
+    onCombatWin: "combat-claim-reward",
+    onCombatLoss: "combat-enter-arena",
   },
   {
-    id: "bRelJfsU9wuHNmhUSg0db",
-    title: "Your Actions",
-    description:
-      "Move closer to your opponent, and beat it up with your basic attack. ",
-    elementIds: [
-      "tutorial-combat-action-move",
-      "tutorial-combat-action-basicAttack",
-      "tutorial-combat-field",
-    ],
+    id: "combat-fight",
+    chapter: "combat",
+    title: "Fight!",
+    description: "Defeat the Academy Dummy.",
+    elementIds: ["tutorial-combat-field"],
     page: "/combat",
-    onCombatLoss: "w3eWC11tISZc0CUZ2tvYN",
-    onCombatWin: "PCaQdWoDFuR0VGUq5c_ab",
+    onCombatWin: "combat-claim-reward",
+    onCombatLoss: "combat-enter-arena",
   },
   {
-    id: "PCaQdWoDFuR0VGUq5c_ab",
-    title: "Training",
-    elementIds: ["tutorial-traininggrounds"],
+    id: "combat-claim-reward",
+    chapter: "combat",
+    title: "Victory!",
     description:
-      "Awesome, that was your first battle. A little boring, maybe, but don't worry, it'll get a lot more interesting as you get advanced jutsus and weapons. In matter of fact, let's go train your character a bit and get a new jutsu.",
+      "Well fought! Winning completed your first objective. Objective rewards wait in your quest log until you claim them.",
+    action: "Claim your reward.",
+    elementIds: [starterLogbookEntry],
+    page: "/profile",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.arena,
+    advanceOn: "questReward",
+  },
+  {
+    id: "combat-assign-notice",
+    chapter: "combat",
+    title: "Unassigned experience",
+    description:
+      "Experience from quests is not spent for you: you decide which stats it strengthens. New experience always shows up here.",
+    action: "Tap Assign XP.",
+    elementIds: ["tutorial-unassigned-stats"],
+    page: "/profile",
+    proceedOnHighlightClick: true,
+    requiresGameMenu: true,
+    needsUnassignedExperience: true,
+  },
+  {
+    id: "combat-assign-form",
+    chapter: "combat",
+    title: "Choose your strengths",
+    description:
+      "Every style raises <b>Offence</b> (harder hits) and <b>Defence</b> (softer blows), plus two of the stats your techniques draw on. Pick the one that fits how you want to fight; <b>Advanced</b> lets you place each point yourself later.",
+    action: "Tap a style, then confirm.",
+    elementIds: assignElements,
+    page: "/profile/experience",
+    advanceOn: "assignStats",
+    needsUnassignedExperience: true,
+  },
+  {
+    id: "combat-level-up",
+    chapter: "combat",
+    title: "Level up!",
+    description:
+      "Your experience now covers level 2. Every level raises your maximum health, chakra and stamina.",
+    action: "Tap Level up!, then Awesome!",
+    elementIds: levelUpElements,
+    page: "/profile/experience",
+    advanceOn: "levelUp",
+  },
+  // Chapter 3: Tools of the Trade
+  {
+    id: "tools-training-building",
+    chapter: "tools",
+    title: "Training Grounds",
+    description:
+      "A win is a fine start, but shinobi grow through daily training. Let's visit the training grounds.",
+    action: "Tap Training Grounds.",
+    elementIds: ["tutorial-traininggrounds"],
     page: "/village",
     proceedOnHighlightClick: true,
   },
   {
-    id: "OGLXpIqVbb0hPWtJ00LzT",
-    title: "Training",
+    id: "tools-train-stat",
+    chapter: "tools",
+    title: "Train with Energy",
+    description:
+      "Training spends <b>Energy</b> to raise a stat instantly. Energy refills over time, even while you are offline, and the Energy queue can spend it for you.",
+    action: "Tap Offence to train it.",
     elementIds: ["tutorial-traininggrounds-offence"],
-    description:
-      "Welcome to the training grounds. The Stats tab contains instant stat training and your Energy queue. Other tabs cover masteries, jutsus and covert training. Let's start by training Offence to make your attacks more powerful.",
     page: "/traininggrounds",
-  },
-  {
-    id: "09RZadarkULsnPkbQUfzA",
-    title: "Training",
-    elementIds: ["training-energy"],
+    advanceOn: "trainStats",
     showNextButton: true,
-    description:
-      "The Stats tab spends Energy instantly. Its Energy queue trains each entry once when enough Energy is available, including offline and while sleeping. Masteries have their own tab: training them is timed and costs no Energy. Next, let's open the Jutsu tab!",
-    page: "/traininggrounds",
   },
   {
-    id: "eSBZJXRN_MCSYM90z3d5f",
-    title: "Jutsu Training",
+    id: "tools-train-jutsu",
+    chapter: "tools",
+    title: "Your first jutsu",
+    description:
+      "Jutsu are your signature techniques. <b>Sonic Slash</b> is a piercing blade strike that hits from a few tiles away. The first level takes about a minute and costs a little ryo, and a new jutsu is equipped automatically.",
+    action: "Tap Sonic Slash, then Train.",
     elementIds: [
       "tutorial-traininggrounds-trainJutsu-proceed",
       `tutorial-combat-action-${TUTORIAL_JUTSU_ID}`,
     ],
-    description:
-      "The Jutsu tab is now open. Click a jutsu from the list to train. The more you train and progress the more powerful jutsu will be available for you to train.",
     page: "/traininggrounds",
+    advanceOn: "trainJutsu",
     showNextButton: true,
   },
   {
-    id: "r2azv66f1YNtFW2gbldOd",
-    title: "Jutsu Training",
-    elementIds: ["tutorial-village"],
+    id: "tools-claim-jutsu",
+    chapter: "tools",
+    title: "Objective complete",
     description:
-      "Training your character and acquiring new and more powerful jutsus is one way to be better prepared for battle. Training your jutsu will take a while, but let's not stay to wait. Let's go get you some better gear.",
+      "Learning a jutsu completed your next trial. You can use Sonic Slash in battle right away, even while it finishes training.",
+    action: "Claim your reward.",
     page: "/traininggrounds",
-    requiresGameMenu: true,
-    proceedOnHighlightClick: true,
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
+    advanceOn: "questReward",
   },
   {
-    id: "lTgXEoGkIWxFh",
-    title: "Item shop",
+    id: "tools-itemshop-building",
+    chapter: "tools",
+    title: "Item Shop",
+    description:
+      "Jutsu are not your only weapons. Ninja tools let you strike from a distance.",
+    action: "Tap Item shop.",
     elementIds: ["tutorial-itemshop"],
-    description: "To purchase new items, you need to go to the itemshop.",
     page: "/village",
     proceedOnHighlightClick: true,
   },
   {
-    id: "KvGkDox06od5iiFaGAzkM",
-    title: "Item shop",
+    id: "tools-buy-shuriken",
+    chapter: "tools",
+    title: "Shuriken",
+    description:
+      "<b>Shuriken</b> hit from a distance and are used up when thrown. Tools you buy go straight into a free item slot, ready for battle.",
+    action: "Tap Shuriken, then buy a few.",
     elementIds: [
-      "tutorial-itemshop-item",
       "tutorial-itemshop-confirmPurchase-proceed",
+      "tutorial-itemshop-item",
       `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
     ],
-    description: "Let's buy some shurikens, a good weapon to start with.",
     page: "/itemshop",
+    advanceOn: "buyItem",
     showNextButton: true,
   },
   {
-    id: "U04RvrqvvYaOcenOGKMDw",
-    title: "Academy",
-    elementIds: ["tutorial-academy"],
-    description:
-      "You are a lot stronger now, but there's still room for you to grow. We should head to the academy. This is where I normally work as an instructor, and where we will guide you on your way to the next ninja rank of Genin. As a Genin, you will have access to more jutsus, more difficult missions, and much more. Let's go. ",
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "gaqwwlQAjB0b11DLsXMNE",
-    title: "Academy Dialog Option",
-    elementIds: [
-      `logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`,
-      `tutorial-take-quest-${TUTORIAL_STARTER_QUEST_ID}`,
-    ],
-    relatedValue: TUTORIAL_STARTER_QUEST_ID,
-    description: "",
-    page: "/academy",
-    hideDialog: true,
-  },
-  {
-    id: "YP5PEaCvfhJfdsl37V-academy",
-    title: "Assigning Stats",
-    description:
-      "Wow, you're picking up things fast. You already acquired a substantial amount of additional XP. Let's go assign it before we proceed on the mission.",
-    elementIds: ["tutorial-unassigned-stats"],
-    page: "/academy",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-    showNextButton: true,
-  },
-  {
-    id: "YPfhJfdsl37dsaV",
-    title: "Assigning Stats",
-    description:
-      "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
-    elementIds: [
-      "tutorial-specialization-confirm-content",
-      "tutorial-unassigned-stats-contentbox",
-    ],
-    page: "/profile/experience",
-  },
-  {
-    id: "f34p798tfn0327-mission-1",
-    title: "Level Up!",
-    description:
-      "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
-    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
-    page: "/profile",
-  },
-  {
-    id: "f34p798tfn0327-mission-2",
-    title: "Level Up!",
-    description:
-      "Another level up! Perfect, this will make our practise mission easier. Get your level, and then we head out of the village.",
-    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
-    page: "/profile",
-  },
-  {
-    id: "t1GFAMQyZuxQ7FyUX4",
-    title: "Travel",
-    description:
-      "Okay, you're now stronger, let's get back to our mission. Your target for our first practise mission will be to go eliminate a target in a different sector. So we'll have to move outside the borders of the village. Let's go. Don't worry, for this first mission I will accompany you.",
-    elementIds: ["tutorial-travel"],
-    page: "/profile",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-  },
-  {
-    id: "hQCIFuJKJ",
-    title: "Travel",
-    elementIds: ["tutorial-travel-sector"],
-    description:
-      "This is our humble village, where you can travel and see other players live. ",
-    page: "/travel",
-    showNextButton: true,
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "qPx_xVsMAZY0t05thYgZj",
-    title: "Travel",
-    elementIds: [
-      "tutorial-global-travel-proceed",
-      "tutorial-global-map",
-      "tutorial-Global",
-    ],
-    description:
-      "For our mission, we need to travel to another sector, so let's go to the global map. Here you can see the entire world of Seichi. We are currently in the starting village of Horizon. To proceed, tap the quest marker \u{1F4DC} on the global map.",
-    page: "/travel",
-    relatedValue: TUTORIAL_CAPTURE_SECTOR,
-  },
-  {
-    id: "eRw6ObsRONhzY7AUMO3vm",
-    title: "Capture Target",
-    elementIds: ["tutorial-travel-sector"],
-    description: (
-      <div>
-        You need to track down a sad puppy which has gone missing. Careful, it may be
-        aggressive, so we may have to fight it before we can bring it back to the
-        village. Approach the target which is marked with a{" "}
-        <MapPin className="inline-block h-5 w-5 text-red-500" /> in the sector, and
-        overpower it.
-      </div>
-    ),
-    page: "/travel",
-    relatedValue: TUTORIAL_STARTER_QUEST_ID,
-    onCombatLoss: "qPx_xVsMAZY0t05thYgZj",
-    onCombatWin: "UD2jVibug6Y0yKLYGzA_N",
-  },
-  {
-    id: "UD2jVibug6Y0yKLYGzA_N",
-    title: "Travel",
-    elementIds: [
-      "tutorial-global-travel-proceed",
-      "tutorial-global-map",
-      "tutorial-Global",
-    ],
-    description: (
-      <div>
-        Good job on capturing the puppy. Let&apos;s go back to the{" "}
-        <span className="rounded-md bg-[#81007f] p-1 font-bold text-white shadow-sm">
-          Horizon
-        </span>{" "}
-        village and the academy. With what I&apos;ve seen, I think you&apos;ll become a
-        great ninja, and you&apos;re ready to try for the Genin rank!
-      </div>
-    ),
-    page: "/travel",
-    relatedValue: TUTORIAL_HOME_SECTOR,
-  },
-  {
-    id: "blL789mkRIKtjsWk",
-    title: "Academy Dialog Option",
-    elementIds: [`logbook-entry-${TUTORIAL_STARTER_QUEST_ID}`],
-    description: "",
-    page: "/academy",
-    relatedValue: TUTORIAL_STARTER_QUEST_ID,
-    hideDialog: true,
-  },
-  {
-    id: "fdalgdwlcigydvs",
-    title: "Village",
-    description:
-      "Great job on getting the hang of things. Before I let you off the hook, let's review what is available in the village.",
-    elementIds: ["tutorial-village"],
-    page: "/academy",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-  },
-  {
-    id: "32f4tesregsdaxsd3n8f7t",
+    id: "tools-ramen-building",
+    chapter: "tools",
     title: "Ramen Shop",
     description:
-      "In the ramen shop you can purchase ramen to regain your health, stamina and chakra.",
+      "Basic attacks cost <b>Stamina</b> and jutsu cost <b>Chakra</b>. Both refill slowly on their own, or instantly with a bowl of ramen.",
+    action: "Tap Ramen Shop.",
     elementIds: ["tutorial-ramenshop"],
     page: "/village",
     proceedOnHighlightClick: true,
   },
   {
-    id: "32f4tedfhgdfh3n8f7t",
+    id: "tools-buy-ramen",
+    chapter: "tools",
+    title: "Refuel",
+    description:
+      "A small bowl costs only a few ryo. Top up before you head out. Health comes back by resting, or at the hospital.",
+    action: "Order a bowl of ramen.",
+    elementIds: ["tutorial-ramen-menu"],
+    page: "/ramenshop",
+    advanceOn: "buyRamen",
+    showNextButton: true,
+  },
+  {
+    id: "tools-mission-hall",
+    chapter: "tools",
     title: "Mission Hall",
     description:
-      "In the mission hall you can take missions to gain experience and ryo.",
+      "The <b>Mission Hall</b> is where you will earn ryo and experience every day: errands for the village now, and real missions as you climb the ranks.",
     elementIds: ["tutorial-missionhall"],
     page: "/village",
-    proceedOnHighlightClick: true,
+    showNextButton: true,
   },
   {
-    id: "32f4tebsgfdg3n8f7t",
+    id: "tools-home",
+    chapter: "tools",
     title: "Home",
     description:
-      "At your home you can sleep to regain your health, stamina and chakra. Note that when you are in your home you are safe from being attacked by other players.",
+      "At <b>Home</b> you can sleep to regenerate faster, safe from attacks, and cook meals in your kitchen.",
     elementIds: ["tutorial-home"],
     page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "gdffgdafgaerh",
-    title: "Clan Hall",
-    description:
-      "When you reach Chunin rank you can join a clan to fight together with other clans and get various benefits",
-    elementIds: ["tutorial-clanhall"],
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "32f4te3n8f7t",
-    title: "Town Hall",
-    description:
-      "Perhaps one of the most important buildings is the Town Hall. Let's go there to see what we can learn about the current village status.",
-    elementIds: ["tutorial-townhall"],
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "gsfgsdfg-alliance",
-    title: "Town Hall",
-    description:
-      "On the first tab you'll see the current alliance status between all the major villages in Seichi.",
-    elementIds: ["tutorial-townhall-alliance"],
-    page: "/townhall#Alliance",
-    proceedOnHighlightClick: true,
-    // The highlight here is a ContentBox the player is already looking at, not
-    // something to navigate to, so clicking it is not an action they would think
-    // to take -- unlike the building/tab steps, which are told to click.
     showNextButton: true,
   },
   {
-    id: "gsfgsdfg-kage-tab",
-    title: "Town Hall",
-    description: "Let's check on the kage of our village.",
-    elementIds: ["tutorial-Kage"],
-    page: "/townhall",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "gsfgsdfg-kage",
-    title: "Town Hall",
+    id: "tools-assign",
+    chapter: "tools",
+    title: "Grow stronger",
     description:
-      "This is the current kage of our village. The kage is the most powerful ninja, and gets to make decisions on behalf of the entire village together with the village elders.",
-    page: "/townhall#Kage",
-    showNextButton: true,
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "fadsbsdf",
-    title: "Village",
-    description:
-      "Allright, let's go back to the village. The last thing I want to show you is the black market.",
-    elementIds: ["tutorial-village"],
-    page: "/townhall",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-  },
-  {
-    id: "fasdgshsrvre",
-    title: "Black Market",
-    description:
-      'The black market is a place where you can purchase and sell more "untraditional"items',
-    elementIds: ["tutorial-blackmarket"],
-    page: "/village",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "bfsvsfgerhtr",
-    title: "Black Market",
-    description:
-      'Here you can purchase and genetically modify your character with a different bloodline. To do so costs "reputation points", which can be acquired e.g. through special events. ',
-    elementIds: ["tutorial-bloodline-purchase"],
-    page: "/blackmarket#Bloodline",
-    proceedOnHighlightClick: true,
-    showNextButton: true,
-  },
-  {
-    id: "vsdffdsiugvd",
-    title: "Black Market",
-    description:
-      "One way to obtain reputation points is to exchange ryo for them. This is done in the ryo shop. ",
-    elementIds: ["tutorial-Ryo"],
-    page: "/blackmarket",
-    proceedOnHighlightClick: true,
-  },
-  {
-    id: "vsdgfdgfdsiugvd",
-    title: "Black Market",
-    description:
-      "Here players are selling reputation points, which you can buy for ryo. Ryo is acquired by killing enemies, completing missions, etc.",
-    elementIds: ["tutorial-ryo-shop"],
-    page: "/blackmarket#Ryo",
-    proceedOnHighlightClick: true,
-    showNextButton: true,
-  },
-  {
-    id: "YP5PEaCvfhJfdsl37V-wrapup-1",
-    title: "Assigning Stats",
-    description:
-      "Okay, enough sightseeing. Great job on getting the hang of things. Let's assign all your experience points one more",
-    elementIds: ["tutorial-unassigned-stats"],
-    page: "/academy",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-    showNextButton: true,
-  },
-  {
-    id: "YP5PEaCvfhJfdsl37V-wrapup-2",
-    title: "Assigning Stats",
-    description:
-      "Great job on getting the hang of things. Let's assign all your experience points one more",
-    elementIds: ["tutorial-unassigned-stats"],
-    page: "/academy",
-    proceedOnHighlightClick: true,
-    requiresGameMenu: true,
-    showNextButton: true,
-  },
-  {
-    id: "YPfhJfdsl37V-wrapup",
-    title: "Assigning Stats",
-    description:
-      "Assign the obtained experience to the stat of your liking. A good ninja is well-rounded, so don't stress too much about which stat you assign it to yet.",
-    elementIds: [
-      "tutorial-specialization-confirm-content",
-      "tutorial-unassigned-stats-contentbox",
-    ],
+      "Your jutsu trial earned you 1,000 experience. Spend it the same way as before.",
+    action: "Tap a style, then confirm.",
+    elementIds: assignElements,
     page: "/profile/experience",
+    advanceOn: "assignStats",
+    needsUnassignedExperience: true,
   },
   {
-    id: "f34p798tfn0327-wrapup",
-    title: "Level Up!",
-    description: "And then let's claim your next level.",
-    elementIds: ["tutorial-level-up-modal-content", "tutorial-level-up-btn"],
-    page: "/profile",
+    id: "tools-level-up",
+    chapter: "tools",
+    title: "Level 3",
+    description: "Another level, earned the hard way.",
+    action: "Tap Level up!, then Awesome!",
+    elementIds: levelUpElements,
+    page: "/profile/experience",
+    advanceOn: "levelUp",
   },
+  // Chapter 4: The Missing Pup
   {
-    id: "f34p798tfn0327-academy-menu",
-    title: "Academy",
+    id: "mission-brief",
+    chapter: "mission",
+    title: "A real mission",
     description:
-      "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
-    elementIds: ["tutorial-village"],
+      "Last night a violet flash lit up the eastern ridge, and a pup from the <b>Bondkeeper Sanctuary</b> bolted in fright. It is out there alone and scared. Your final trial: bring it back safely.",
+    action: "Accept the mission below.",
+    elementIds: [starterLogbookEntry],
+    page: "/academy",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.brief,
+    advanceOn: "questDialog",
+  },
+  {
+    id: "mission-open-travel",
+    chapter: "mission",
+    title: "Beyond the walls",
+    description:
+      "Missions take you out into the world of Seichi. The travel map shows both the sector you stand in and the whole globe.",
+    action: "Tap Travel in the main menu.",
+    elementIds: ["tutorial-travel"],
+    page: "/academy",
+    objectiveId: STARTER_QUEST_OBJECTIVES.pup,
     proceedOnHighlightClick: true,
     requiresGameMenu: true,
-    page: "/profile",
   },
-
   {
-    id: "f34p798tfn0327-academy-building",
-    title: "Academy",
+    id: "mission-travel-to-pup",
+    chapter: "mission",
+    title: "The world map",
     description:
-      "I'll let you off the hook now, and then you can roam the village on your own a bit. Before that, please follow me to the academy first.",
-    elementIds: ["tutorial-academy"],
+      "This globe is the world of Seichi, and the \u{1F4DC} marks your objective. Journeys between sectors take a little time. Don't worry, I'm coming with you.",
+    action: "Open Global, tap the \u{1F4DC} marker, then confirm the trip.",
+    elementIds: globalTravelElements,
+    page: "/travel",
+    relatedValue: TUTORIAL_CAPTURE_SECTOR,
+    objectiveId: STARTER_QUEST_OBJECTIVES.pup,
+    advanceOn: "travelArrive",
+  },
+  {
+    id: "mission-find-pup",
+    chapter: "mission",
+    title: "Find the pup",
+    description: (
+      <>
+        The pup is hiding at the{" "}
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. It is
+        frightened and may lash out, so be ready to use Sonic Slash and your shuriken.
+      </>
+    ),
+    action: "Tap the ground next to the marker to walk there.",
+    elementIds: ["tutorial-travel-sector"],
+    page: "/travel",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.pup,
+    onCombatWin: "mission-claim-pup",
+    onCombatLoss: "mission-travel-to-pup",
+  },
+  {
+    id: "mission-claim-pup",
+    chapter: "mission",
+    title: "Safe and sound",
+    description:
+      "The pup calms the moment the fight is over. Caught in its collar is a sliver of <b>dark metal</b>, threaded with faint violet veins. Strange... Let's get it home first.",
+    action: "Claim your reward.",
+    page: "/travel",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.pup,
+    advanceOn: "questReward",
+  },
+  {
+    id: "mission-assign",
+    chapter: "mission",
+    title: "Grow stronger",
+    description: "Your first field mission earned you 1,500 experience.",
+    action: "Tap a style, then confirm.",
+    elementIds: assignElements,
+    page: "/profile/experience",
+    advanceOn: "assignStats",
+    needsUnassignedExperience: true,
+  },
+  {
+    id: "mission-level-up",
+    chapter: "mission",
+    title: "Level 4",
+    description: "Level 4. One more and you are ready for the Genin exam.",
+    action: "Tap Level up!, then Awesome!",
+    elementIds: levelUpElements,
+    page: "/profile/experience",
+    advanceOn: "levelUp",
+  },
+  // Chapter 5: Bondkeepers
+  {
+    id: "bond-travel-wake",
+    chapter: "bond",
+    title: "Bring it home",
+    description:
+      "The pup wears a Bondkeeper tag: it belongs to the sanctuary on <b>Wake Island</b>, a short trip from here. Wake Island is neutral ground, and it is where you will take your Genin exam.",
+    action: "Open Global, tap Wake Island, then confirm the trip.",
+    elementIds: globalTravelElements,
+    page: "/travel",
+    relatedValue: TUTORIAL_WAKE_SECTOR,
+    objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
+    advanceOn: "travelArrive",
+  },
+  {
+    id: "bond-open-village",
+    chapter: "bond",
+    title: "Wake Island",
+    description:
+      "Wake Island is neutral ground that every village shares. Its buildings open from the location menu, just like at home.",
+    action: "Tap Wake Island in the location menu.",
+    elementIds: ["tutorial-village"],
+    page: "/travel",
     proceedOnHighlightClick: true,
-    page: "/village",
+    requiresGameMenu: true,
   },
   {
-    id: "qgfxpmmQ2mYayeN2iMuX6",
-    title: "Genin Exam",
-    elementIds: [`tutorial-take-quest-${TUTORIAL_GENIN_EXAM_QUEST_ID}`],
+    id: "bond-sanctuary-building",
+    chapter: "bond",
+    title: "The Bondkeeper Sanctuary",
     description:
-      "You're ready to start the Genin exam. Passing this exam will award you the rank of Genin, which will unlock more difficult missions and jutsus, as well as pick pick one of the major ninja villages to join. Feel free to explore a bit, if you want, and otherwise come back here once you're ready for the exam. ",
-    page: "/academy",
-    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+      "The Bondkeepers care for the island's creatures and pair them with shinobi they trust.",
+    action: "Tap Bondkeeper Sanctuary.",
+    elementIds: ["tutorial-pets"],
+    page: "/village",
+    proceedOnHighlightClick: true,
+  },
+  {
+    id: "bond-return-pup",
+    chapter: "bond",
+    title: "Home at last",
+    description:
+      "The Bondkeepers rush out to meet you, and the pup bounds straight into their arms.",
+    action: "Hand over the pup below.",
+    page: "/pets",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.sanctuary,
+    advanceOn: "questDialog",
+  },
+  {
+    id: "bond-adopt",
+    chapter: "bond",
+    title: "A companion of your own",
+    description:
+      "To thank you, the Bondkeepers offer you a companion of your own, and your <b>first bond is free</b>. Choose a species, its colours, a defining trait and an aura, then give it a name.",
+    action: "Finish the steps, then tap Meet my first companion.",
+    elementIds: ["tutorial-pet-acquisition"],
+    page: "/pets",
+    advanceOn: "petAdopt",
     showNextButton: true,
   },
-  // {
-  //   title: "That's it for now!",
-  //   description:
-  //     "That's it for the tutorial, you can now start playing the game! You can find further information on how to play the game at this link",
-  //   elementIds: ["tutorial-logo"],
-  //   page: "/academy",
-  //   externalLink: "/guide",
-  //   showNextButton: true,
-  // },
+  {
+    id: "bond-pet-profile",
+    chapter: "bond",
+    title: "Your companion",
+    description:
+      "Companions grow alongside you: they share the experience you earn and fight at your side in quests and dungeons. Feed them meals from your home kitchen to help them grow, and manage everything from this tab.",
+    elementIds: ["tutorial-pet-profile"],
+    page: "/profile?tab=pet",
+    showNextButton: true,
+  },
+  // Chapter 6: Road to Genin
+  {
+    id: "genin-debrief",
+    chapter: "genin",
+    title: "Graduation",
+    description:
+      "You did well out there, better than most graduates. That metal in the pup's collar... show it to no one; I'll take it to the academy archives myself. Now, you have earned your graduation.",
+    action: "Answer me below to complete the Academy Trials.",
+    page: "/profile?tab=pet",
+    relatedValue: TUTORIAL_STARTER_QUEST_ID,
+    objectiveId: STARTER_QUEST_OBJECTIVES.debrief,
+    advanceOn: "questDialog",
+  },
+  {
+    id: "genin-assign",
+    chapter: "genin",
+    title: "Graduation rewards",
+    description:
+      "The Academy Trials paid out ryo, a badge and 2,000 experience. Assign it to reach level 5, the level the Genin exam requires.",
+    action: "Tap a style, then confirm.",
+    elementIds: assignElements,
+    page: "/profile/experience",
+    advanceOn: "assignStats",
+    needsUnassignedExperience: true,
+  },
+  {
+    id: "genin-level-up",
+    chapter: "genin",
+    title: "Level 5",
+    description: "Level 5. You are ready.",
+    action: "Tap Level up!, then Awesome!",
+    elementIds: levelUpElements,
+    page: "/profile/experience",
+    advanceOn: "levelUp",
+  },
+  // Chapter 7: The Genin Exam
+  {
+    id: "exam-walk",
+    chapter: "exam",
+    title: "The exam hall",
+    description: (
+      <>
+        Your <b>Road to Genin</b> has begun, and the exam is held right here on Wake
+        Island, in the Administration Building at the{" "}
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. Any quest
+        location works the same way: open it from your quest and you will walk there on
+        your own.
+      </>
+    ),
+    action: "Tap Walk to the exam, then Travel.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.exam,
+    autoTravelLabel: "Walk to the exam",
+  },
+  {
+    id: "exam-tour",
+    chapter: "exam",
+    title: "Wake Island",
+    description:
+      "The proctor is waiting. Wake Island belongs to no village, so every shinobi meets here.",
+    action: "Answer the proctor below.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.tour,
+    advanceOn: "questDialog",
+    quoteObjective: true,
+  },
+  {
+    id: "exam-choose",
+    chapter: "exam",
+    title: "Choose your village",
+    description:
+      "This is the biggest choice of your career: your village is your home for good. It decides who fights beside you, the missions you are given and the village bloodline you can earn.",
+    action: "Pick the village you want to join.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.choose,
+    advanceOn: "questDialog",
+    quoteObjective: true,
+  },
+  {
+    id: "exam-joined",
+    chapter: "exam",
+    title: "A new home",
+    description: "Your new village is expecting you.",
+    action: "Answer the proctor below.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.join,
+    advanceOn: "questDialog",
+    quoteObjective: true,
+  },
+  {
+    id: "exam-report",
+    chapter: "exam",
+    title: "Report for duty",
+    description: (
+      <>
+        Every new Genin reports to their village's mission hall, at the{" "}
+        <MapPin className="inline-block h-4 w-4 text-red-500" /> marker. The journey
+        takes only a few seconds.
+      </>
+    ),
+    action: "Tap Travel home, then Travel.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.report,
+    autoTravelLabel: "Travel home",
+  },
+  {
+    id: "exam-claim",
+    chapter: "exam",
+    title: "Your headband",
+    description:
+      "You made it. Claim your reward to receive the Genin rank and your headband.",
+    action: "Tap the claim button below.",
+    page: "/travel",
+    relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    objectiveId: GENIN_QUEST_OBJECTIVES.win,
+    advanceOn: "questReward",
+  },
+  {
+    id: "exam-farewell",
+    chapter: "exam",
+    title: "Genin",
+    description:
+      "Congratulations, Genin! This is your village. Its mission hall hands out daily missions, the tavern is where your villagers talk, and the <b>Guide</b> explains every system. Remember to assign the experience you earned on your profile. From here on I'll show your active quest in this panel, and once fighting feels natural you can switch auto combat on in the arena. Good luck, shinobi!",
+    page: "/village",
+    showNextButton: true,
+    nextLabel: "Finish",
+  },
 ];
 
 // Warn if TUTORIAL_STEPS_COUNT in constants.ts is out of sync
@@ -629,131 +706,8 @@ if (TUTORIAL_STEPS.length !== TUTORIAL_STEPS_COUNT) {
   );
 }
 
-/**
- * Get dynamic combat tutorial step based on distance to enemy and selected action
- * @param distanceToEnemy - Distance to the closest enemy
- * @param selectedActionId - Currently selected action ID
- * @param canAffordAttack - Whether the user has enough action points to afford an attack
- */
-const getDynamicCombatStep = (
-  distanceToEnemy: number | null,
-  selectedActionId: string | undefined,
-  canAffordAttack: boolean,
-): TutorialStepConfig | null => {
-  // If we can't determine distance, return null (use default step)
-  if (distanceToEnemy === null) return null;
-
-  const baseStep = TUTORIAL_STEPS.find((step) => step.id === DYNAMIC_COMBAT_STEP_ID);
-  if (!baseStep) return null;
-
-  // User is more than 1 square away from enemy
-  if (distanceToEnemy > 1) {
-    if (selectedActionId !== "move") {
-      // Highlight move action
-      return {
-        ...baseStep,
-        description:
-          "You need to get closer to your opponent! Select the movement action to move across the battlefield.",
-        elementIds: ["tutorial-combat-action-move"],
-        proceedOnHighlightClick: false,
-      };
-    } else {
-      // Move is selected, highlight battlefield
-      return {
-        ...baseStep,
-        description:
-          "Great! Now click on a hex tile on the battlefield to move closer to your opponent.",
-        elementIds: ["tutorial-combat-field"],
-        showNextButton: false,
-      };
-    }
-  }
-
-  // User is 1 square away (adjacent to enemy)
-  if (distanceToEnemy === 1) {
-    // Check if user can't afford attack - they need to use wait to end their turn
-    if (!canAffordAttack) {
-      if (selectedActionId !== "wait") {
-        // Highlight wait action
-        return {
-          ...baseStep,
-          description:
-            "You don't have enough action points to attack right now. Select the 'End Turn' action to pass your turn.",
-          elementIds: ["tutorial-combat-action-wait"],
-          proceedOnHighlightClick: false,
-        };
-      } else {
-        // Wait is selected, highlight user's character on battlefield
-        return {
-          ...baseStep,
-          description:
-            "Now click on your own character on the battlefield to end your turn.",
-          elementIds: ["tutorial-combat-field"],
-          showNextButton: false,
-        };
-      }
-    }
-
-    // User can afford attack
-    if (selectedActionId !== "basicAttack") {
-      // Highlight basic attack
-      return {
-        ...baseStep,
-        description:
-          "You're close enough to attack! Select the basic attack action to hit your opponent.",
-        elementIds: ["tutorial-combat-action-basicAttack"],
-        proceedOnHighlightClick: false,
-      };
-    } else {
-      // Basic attack is selected, highlight battlefield
-      return {
-        ...baseStep,
-        description:
-          "Excellent! Now click on your opponent on the battlefield to attack them!",
-        elementIds: ["tutorial-combat-field"],
-        showNextButton: false,
-      };
-    }
-  }
-
-  // User is on same tile as enemy (distance 0) - just attack
-  if (!canAffordAttack) {
-    if (selectedActionId !== "wait") {
-      return {
-        ...baseStep,
-        description:
-          "You don't have enough action points to attack. Select 'End Turn' to pass your turn.",
-        elementIds: ["tutorial-combat-action-wait"],
-        proceedOnHighlightClick: false,
-      };
-    } else {
-      return {
-        ...baseStep,
-        description:
-          "Now click on your own character on the battlefield to end your turn.",
-        elementIds: ["tutorial-combat-field"],
-        showNextButton: false,
-      };
-    }
-  }
-
-  if (selectedActionId !== "basicAttack") {
-    return {
-      ...baseStep,
-      description:
-        "You're right next to your opponent! Select the basic attack to finish them off!",
-      elementIds: ["tutorial-combat-action-basicAttack"],
-      proceedOnHighlightClick: false,
-    };
-  } else {
-    return {
-      ...baseStep,
-      description: "Now click on your opponent to attack!",
-      elementIds: ["tutorial-combat-field"],
-      showNextButton: false,
-    };
-  }
-};
+/** Steps the hands-on combat lesson replaces with live guidance once the fight is on. */
+const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "mission-find-pup"];
 
 /**
  * Hook to get the current tutorial step
@@ -761,14 +715,18 @@ const getDynamicCombatStep = (
  */
 export const useTutorialStep = () => {
   // State
-  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+  } = useUserDataSelector((user) => ({
     userId: user.userId,
     tutorialOn: user.tutorialOn,
     tutorialStep: user.tutorialStep,
+    status: user.status,
   }));
   const pathname = usePublicPathname();
   const router = useRouter();
-  const [currentStepNumber, setCurrentStepNumber] = useState<number>(0);
   const [isAssistantVisible, setIsAssistantVisible] = useState<boolean>(false);
 
   // Jotai atoms for combat state
@@ -783,75 +741,90 @@ export const useTutorialStep = () => {
   const staticStep = isTutorialActive(userData)
     ? TUTORIAL_STEPS?.[stepNumber]
     : undefined;
+  const userId = userData?.userId;
+  const inBattle = userData?.status === "BATTLE";
 
-  // Calculate distance to closest enemy for dynamic combat steps
-  const distanceToEnemy = (() => {
-    if (!battle || !userData?.userId) return null;
-    return getDistanceToClosestEnemy(battle, userData.userId);
+  // Live guidance for the hands-on combat lesson
+  const combatGuidance = (() => {
+    if (!battle || !userId || pathname !== "/combat") return undefined;
+    const self = battle.usersState.find((u) => u.userId === userId);
+    if (!self) return undefined;
+    if (self.isAutoCombat) return { kind: "auto" } as const;
+    const { actor } = calcActiveUser(battle, userId, timeDiff);
+    const options = availableUserActions(battle, userId).map((action) => ({
+      id: action.id,
+      name: action.name,
+      type: action.type,
+      range: action.range,
+      isUsable:
+        actionPointsAfterAction(self, battle, action).canAct &&
+        (!action.cooldown ||
+          !action.lastUsedRound ||
+          battle.round - action.lastUsedRound >= action.cooldown),
+    }));
+    return getTutorialCombatGuidance({
+      isPlayersTurn: actor.userId === userId,
+      distanceToEnemy: getDistanceToClosestEnemy(battle, userId),
+      selectedActionId,
+      options,
+    });
   })();
+  // Primitive fields, so the step below keeps its identity between renders
+  // until the instruction itself changes.
+  const guidanceKind = combatGuidance?.kind;
+  const guidanceActionId =
+    combatGuidance && "actionId" in combatGuidance
+      ? combatGuidance.actionId
+      : undefined;
+  const guidanceActionName =
+    combatGuidance && "actionName" in combatGuidance ? combatGuidance.actionName : "";
+  const guidanceReason =
+    combatGuidance && "reason" in combatGuidance ? combatGuidance.reason : "attack";
 
-  // Calculate if user can afford the basic attack action
-  const canAffordAttack = (() => {
-    if (!battle || !userData?.userId) return true; // Default to true if we can't determine
-
-    // Get the user's current action points
-    const user = battle.usersState.find((u) => u.userId === userData.userId);
-    if (!user) return true;
-
-    // Get available actions and check if basic attack is affordable
-    const actions = availableUserActions(battle, userData.userId);
-    const basicAttack = actions.find((a) => a.id === "basicAttack");
-
-    // If no basic attack action or no action cost defined, assume affordable
-    if (!basicAttack || basicAttack.actionCostPerc === undefined) return true;
-
-    // Check if user has enough action points for the basic attack
-    return user.actionPoints >= basicAttack.actionCostPerc;
-  })();
-
-  // Whether the player's AI profile is currently fighting for them
-  const isAutoCombatBattle = (() => {
-    if (!battle || !userData?.userId) return false;
-    return !!battle.usersState.find((u) => u.userId === userData.userId)?.isAutoCombat;
-  })();
-
-  // Compute dynamic combat step if applicable
+  // The step to show, with the combat lesson's live instruction in place of a
+  // static one while the player is fighting a guided battle.
   const currentStep = useMemo(() => {
-    // While auto combat fights the tutorial battle, collapse the manual
-    // teaching steps into one watch step (win/loss routing is inherited)
-    if (
-      staticStep &&
-      COMBAT_TEACHING_STEP_IDS.includes(staticStep.id) &&
-      pathname === "/combat" &&
-      isAutoCombatBattle
-    ) {
+    if (!staticStep) return staticStep;
+    if (pathname !== "/combat") return staticStep;
+    const isBattleStep = !!staticStep.onCombatWin || !!staticStep.onCombatLoss;
+    // After a guided fight the step has already moved on; point at the way back.
+    if (!isBattleStep) {
+      if (inBattle) return staticStep;
       return {
         ...staticStep,
-        title: "Auto Combat",
-        description:
-          "Auto combat is enabled, so your AI profile is fighting this battle for you — sit back and watch! If you'd rather learn to fight manually, press 'Take control' below the battlefield.",
-        elementIds: ["tutorial-combat-field"],
+        title: "Battle over",
+        description: "That's the fight done. Let's carry on where we left off.",
+        action: "Tap Continue tutorial.",
+        elementIds: ["return"],
+        page: "/combat",
+        // One call to action on the result screen; the next step does the rest.
+        advanceOn: undefined,
+        relatedValue: undefined,
         showNextButton: false,
         proceedOnHighlightClick: false,
       };
     }
-    // Check if we're on the dynamic combat step
-    if (staticStep?.id === DYNAMIC_COMBAT_STEP_ID && pathname === "/combat") {
-      const dynamicStep = getDynamicCombatStep(
-        distanceToEnemy,
-        selectedActionId,
-        canAffordAttack,
-      );
-      if (dynamicStep) return dynamicStep;
+    if (!GUIDED_COMBAT_STEP_IDS.includes(staticStep.id) || !guidanceKind) {
+      return staticStep;
     }
-    return staticStep;
+    const guidance: TutorialCombatGuidance | { kind: "auto" } =
+      guidanceKind === "auto" || guidanceKind === "wait" || !guidanceActionId
+        ? { kind: guidanceKind === "auto" ? "auto" : "wait" }
+        : {
+            kind: guidanceKind,
+            actionId: guidanceActionId,
+            actionName: guidanceActionName,
+            reason: guidanceReason,
+          };
+    return getGuidedCombatStep(staticStep, guidance);
   }, [
     staticStep,
     pathname,
-    distanceToEnemy,
-    selectedActionId,
-    canAffordAttack,
-    isAutoCombatBattle,
+    inBattle,
+    guidanceKind,
+    guidanceActionId,
+    guidanceActionName,
+    guidanceReason,
   ]);
 
   // Update user's tutorial step
@@ -862,79 +835,57 @@ export const useTutorialStep = () => {
           await updateUser({ tutorialStep: data.userPatch.tutorialStep });
           const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
           const onBattlePage = pathname === "/combat";
-          if (nextStepPage && pathname !== nextStepPage && !onBattlePage) {
-            if (nextStepPage.includes("#")) {
-              window.location.href = nextStepPage; // Force reload to update anchor section
-            } else {
-              router.push(nextStepPage);
-            }
+          if (nextStepPage && !onBattlePage && !isSamePage(nextStepPage, pathname)) {
+            router.push(nextStepPage);
           }
         }
       },
     });
 
+  // Hide the assistant once the player is past the last step
   useEffect(() => {
-    if (userData?.tutorialStep) {
-      setCurrentStepNumber(userData.tutorialStep);
-    }
-  }, [userData?.tutorialStep]);
+    if (stepNumber >= TUTORIAL_STEPS.length) setIsAssistantVisible(false);
+  }, [stepNumber]);
 
-  // Handle next step
-  const handleNextStep = (forceStep?: string) => {
-    setCurrentStepNumber((prevStep) => {
-      // Force step if provided
-      const setStep = TUTORIAL_STEPS.findIndex((step) => step.id === forceStep);
-      const nextStep = forceStep && setStep > -1 ? setStep : prevStep + 1;
-
-      // Update the user's tutorial step in the database
-      if (!isPending && nextStep !== stepNumber) {
-        updateTutorialStep({ step: nextStep });
-      }
-
-      // If we've reached the end of the tutorial, hide it
-      if (nextStep >= TUTORIAL_STEPS.length) {
-        setIsAssistantVisible(false);
-        return prevStep; // Return current step since we're hiding the tutorial
-      }
-
-      return nextStep;
+  /**
+   * Move to `forceStep`, or to the step after the current one. Saving the same
+   * index twice is skipped, so two triggers firing for one action cannot move
+   * the player on by two. The step changes on screen at once and is put back
+   * if the server does not take it, so a tap on Next never sits unanswered.
+   */
+  const saveStep = async (nextStep: number) => {
+    if (nextStep >= TUTORIAL_STEPS.length) setIsAssistantVisible(false);
+    if (isPending || nextStep === stepNumber) return;
+    const previousStep = stepNumber;
+    await updateUser({ tutorialStep: nextStep });
+    return new Promise<void>((resolve) => {
+      updateTutorialStep(
+        { step: nextStep },
+        {
+          onError: () => void updateUser({ tutorialStep: previousStep }),
+          onSettled: () => resolve(),
+        },
+      );
     });
   };
 
-  /**
-   * Async version of handleNextStep, returns a promise that resolves when the step is updated.
-   * @param info Optional info object with forceStep and skipOptimisticUpdate.
-   */
   const handleNextStepAsync = async (forceStep?: string) => {
-    // Force step if provided
-    const setStep = TUTORIAL_STEPS.findIndex((step) => step.id === forceStep);
-    const nextStep = forceStep && setStep > -1 ? setStep : stepNumber + 1;
+    const forcedIndex = TUTORIAL_STEPS.findIndex((step) => step.id === forceStep);
+    return saveStep(forceStep && forcedIndex > -1 ? forcedIndex : stepNumber + 1);
+  };
 
-    // If we've reached the end of the tutorial, hide it and resolve
-    if (nextStep >= TUTORIAL_STEPS.length) {
-      setIsAssistantVisible(false);
-    }
+  const handleNextStep = (forceStep?: string) => {
+    void handleNextStepAsync(forceStep);
+  };
 
-    // Only update if not already at this step
-    if (!isPending && nextStep !== stepNumber) {
-      return new Promise<void>((resolve) => {
-        updateTutorialStep(
-          { step: nextStep },
-          {
-            onSuccess: () => {
-              setCurrentStepNumber(nextStep);
-              resolve();
-            },
-            onError: () => {
-              resolve();
-            },
-          },
-        );
-      });
-    } else {
-      setCurrentStepNumber(nextStep);
-      return Promise.resolve();
-    }
+  /**
+   * Report a game action. Only the step waiting for that action moves on, so
+   * an action reported twice, or after the player already moved past the
+   * step, changes nothing.
+   */
+  const completeTutorialAction = async (trigger: TutorialTrigger) => {
+    if (!staticStep || staticStep.advanceOn !== trigger) return;
+    await saveStep(stepNumber + 1);
   };
 
   // Return
@@ -944,8 +895,104 @@ export const useTutorialStep = () => {
     updateTutorialStep,
     handleNextStep,
     handleNextStepAsync,
-    currentStepNumber,
+    completeTutorialAction,
     isAssistantVisible,
     setIsAssistantVisible,
+  };
+};
+
+/** A step page counts as reached when its path and any requested tab match. */
+const isSamePage = (stepPage: string, pathname: string) =>
+  stepPage.split("?")[0]?.split("#")[0] === pathname &&
+  !stepPage.includes("?") &&
+  !stepPage.includes("#");
+
+/** The combat lesson's live instruction, worded for what the player should do now. */
+const getGuidedCombatStep = (
+  step: TutorialStepConfig,
+  guidance: TutorialCombatGuidance | { kind: "auto" },
+): TutorialStepConfig => {
+  const base = {
+    ...step,
+    page: "/combat",
+    showNextButton: false,
+    proceedOnHighlightClick: false,
+  };
+  if (guidance.kind === "auto") {
+    return {
+      ...base,
+      title: "Auto combat",
+      description:
+        "Your AI profile is fighting this battle for you. Switch AI control off below the battlefield to take over and learn the controls.",
+      elementIds: ["battle-ai-control", "tutorial-combat-field"],
+    };
+  }
+  if (guidance.kind === "wait") {
+    return {
+      ...base,
+      title: "Opponent's turn",
+      description:
+        "Your opponent is acting now. Watch the battlefield: your turn comes right after.",
+      action: undefined,
+      elementIds: ["tutorial-combat-action-timer"],
+    };
+  }
+  const name = guidance.actionName;
+  if (guidance.kind === "select") {
+    if (guidance.reason === "move") {
+      return {
+        ...base,
+        title: "Close the distance",
+        description: "Your opponent is out of reach. Moving one tile costs 10 AP.",
+        action: `Select ${name}.`,
+        elementIds: [`tutorial-combat-action-${guidance.actionId}`],
+      };
+    }
+    if (guidance.reason === "end") {
+      return {
+        ...base,
+        title: "End your turn",
+        description:
+          "Nothing useful is left to do with the Action Points you have. Ending your turn refills them for the next round.",
+        action: `Select ${name}.`,
+        elementIds: [`tutorial-combat-action-${guidance.actionId}`],
+      };
+    }
+    return {
+      ...base,
+      title: "Strike!",
+      description:
+        guidance.actionId === "basicAttack"
+          ? "Your opponent is within reach of a basic attack: 20 AP and a little stamina."
+          : guidance.actionId === TUTORIAL_JUTSU_ID
+            ? "Your opponent is in range of Sonic Slash. Jutsu hit harder than basic attacks but need a few rounds to recharge."
+            : guidance.actionId === TUTORIAL_ITEM_ID
+              ? "Your opponent is in throwing range. Each shuriken is used up when thrown."
+              : `Your opponent is in range of ${name}.`,
+      action: `Select ${name}.`,
+      elementIds: [`tutorial-combat-action-${guidance.actionId}`],
+    };
+  }
+  return {
+    ...base,
+    title:
+      guidance.reason === "move"
+        ? "Pick a tile"
+        : guidance.reason === "end"
+          ? "End your turn"
+          : "Pick your target",
+    description:
+      guidance.reason === "move"
+        ? "Highlighted tiles are within reach. Step towards your opponent."
+        : guidance.reason === "end"
+          ? "End Turn targets yourself. Shortcut: press W."
+          : "Tap your opponent on the battlefield to attack.",
+    action:
+      guidance.reason === "move"
+        ? "Tap a highlighted tile next to you."
+        : guidance.reason === "end"
+          ? "Tap your own character."
+          : "Tap your opponent.",
+    elementIds: ["tutorial-combat-field"],
   };
 };
