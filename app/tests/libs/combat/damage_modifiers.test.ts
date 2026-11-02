@@ -1194,6 +1194,35 @@ describe("computeDamagePacket", () => {
 
     expect(damage).toBeCloseTo(baseline - 50, 2);
   });
+
+  it("skips static bloodline DR when the damage tag disallows bloodline decreases", () => {
+    const staticBloodlineDr = makeModifierEffect({
+      id: "static-bloodline-dr",
+      type: "decreasedamagetaken",
+      targetId: "defender",
+      fromType: "bloodline",
+      calculation: "static",
+      power: 50,
+    });
+    const packet = (damageEffect: ReturnType<typeof makeDamageEffect>, withDr: boolean) =>
+      computeDamagePacket({
+        rawDamage: 505,
+        damageEffect,
+        usersEffects: withDr ? [staticBloodlineDr] : [],
+        attackerId: "attacker",
+        defenderId: "defender",
+        battleRound: 1,
+        preBattleGearModifiers: {
+          attacker: gearMods(),
+          defender: gearMods(),
+        },
+      }).damage;
+
+    const allowed = makeDamageEffect({ allowBloodlineDamageDecrease: true });
+    const blocked = makeDamageEffect({ allowBloodlineDamageDecrease: false });
+    expect(packet(allowed, true)).toBeCloseTo(packet(allowed, false) - 50, 2);
+    expect(packet(blocked, true)).toBeCloseTo(packet(blocked, false), 2);
+  });
 });
 
 describe("element-scoped damage modifiers", () => {
