@@ -188,7 +188,7 @@ export default function ActivityStreakListPage() {
         </TabsContent>
       </Tabs>
 
-      {isOpen && userData && selectedConfig && (
+      {isOpen && selectedConfig && (
         <Modal
           title="Configuration Details"
           isOpen={isOpen}
@@ -291,7 +291,7 @@ export default function ActivityStreakListPage() {
                 </div>
               </div>
 
-              {canChangeContent(userData.role) && (
+              {userData && canChangeContent(userData.role) && (
                 <div className="flex gap-2 border-t pt-4">
                   <Button
                     onClick={() =>
