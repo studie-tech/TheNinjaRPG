@@ -34,11 +34,7 @@ export function TutorialSettings() {
   const showReminder = hasTutorialReminder(userData);
 
   return (
-    <div className="space-y-4 p-4">
-      <p className="text-sm">
-        The tutorial helps new players learn the game mechanics. You can enable or
-        disable it at any time.
-      </p>
+    <div className="space-y-4">
       {showReminder && (
         <div className="flex items-start gap-3 rounded-lg border border-orange-500 bg-orange-500/10 p-4">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />

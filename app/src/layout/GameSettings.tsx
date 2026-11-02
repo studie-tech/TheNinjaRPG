@@ -601,7 +601,6 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   const sections = {
     audio: (
       <div className="space-y-3 pt-2">
-        <p className="text-base font-semibold">Audio</p>
         <div className="divide-border/50 divide-y">
           <SettingsToggle
             label="Music"
@@ -653,16 +652,13 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     ),
     layout: (
       <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-base font-semibold">Game layout</p>
-          <Link
-            href="/layouts"
-            onClick={onNavigate}
-            className="text-primary inline-flex min-h-9 items-center text-xs underline underline-offset-2"
-          >
-            Explore layouts
-          </Link>
-        </div>
+        <Link
+          href="/layouts"
+          onClick={onNavigate}
+          className="text-primary inline-flex min-h-9 items-center text-xs underline underline-offset-2"
+        >
+          Explore layouts
+        </Link>
         <GameLayoutPicker layout={activeLayout} onLayoutChange={handleLayoutChange} />
         <div className="divide-border/50 divide-y">
           {isClassicLayout && (
@@ -733,12 +729,6 @@ export const VisualEffectsSettings = () => {
   const { visualEffects, setVisualEffect } = useVisualEffects();
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-base font-semibold">Visual effects</p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Adjust graphics for your device.
-        </p>
-      </div>
       <div className="divide-border/50 divide-y">
         <SettingsToggle
           label="Lighting"
@@ -821,10 +811,10 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
   onNavigate,
   userData,
   updateUser,
-  section,
+  section = "all",
 }) => {
   return (
-    <div className="p-4">
+    <div className={section === "all" ? "p-4" : undefined}>
       <GameSettingsContent
         userData={userData}
         updateUser={updateUser}
@@ -885,6 +875,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
         className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
         sideOffset={8}
       >
+        {section === "audio" && <p className="text-base font-semibold">Audio</p>}
         <GameSettingsContent
           userData={userData}
           updateUser={updateUser}

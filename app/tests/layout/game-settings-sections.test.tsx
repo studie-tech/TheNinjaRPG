@@ -107,7 +107,15 @@ const renderInAudio = (node: React.ReactNode) =>
 
 describe("game settings sections", () => {
   it("shows only sound controls for the sound section", () => {
-    renderInAudio(<GameSettingsPanel section="audio" />);
+    renderInAudio(
+      <section>
+        <h2>Sound &amp; music</h2>
+        <p>Music, sound effects, and effect volume</p>
+        <GameSettingsPanel section="audio" />
+      </section>,
+    );
+    expect(screen.getAllByText("Sound & music")).toHaveLength(1);
+    expect(screen.queryByText("Audio")).toBeNull();
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
     expect(screen.getByLabelText(SFX)).toBeTruthy();
     expect(screen.queryByLabelText(LIGHTING)).toBeNull();
@@ -124,6 +132,7 @@ describe("game settings sections", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
     });
+    expect(screen.getAllByText("Audio")).toHaveLength(1);
     const sliders = screen.getAllByRole("slider", {
       name: /^Effects volume\s*80%$/,
     });
@@ -140,7 +149,15 @@ describe("game settings sections", () => {
   });
 
   it("shows only layout and display controls for the display section", () => {
-    renderInAudio(<GameSettingsPanel section="display" />);
+    renderInAudio(
+      <section>
+        <h2>Game layout</h2>
+        <p>Layout, lighter layout, and sidebars</p>
+        <GameSettingsPanel section="display" />
+      </section>,
+    );
+    expect(screen.getAllByText("Game layout")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Explore layouts" }).getAttribute("href")).toBe("/layouts");
     expect(screen.getByLabelText("Lighter layout")).toBeTruthy();
     expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
     expect(screen.queryByLabelText(LIGHTING)).toBeNull();
@@ -149,7 +166,16 @@ describe("game settings sections", () => {
   });
 
   it("exposes each graphics preference in the visual effects section", () => {
-    renderInAudio(<GameSettingsPanel section="effects" />);
+    renderInAudio(
+      <section>
+        <h2>Visual effects</h2>
+        <p>Lighting, shadows, and animations</p>
+        <GameSettingsPanel section="effects" />
+      </section>,
+    );
+    expect(screen.getAllByText("Visual effects")).toHaveLength(1);
+    expect(screen.queryByText("Adjust graphics for your device.")).toBeNull();
+    expect(screen.getByText("Shared across the game; saved on this device.")).toBeTruthy();
     for (const label of [LIGHTING, "Shadows", "Animations"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
@@ -164,8 +190,10 @@ describe("game settings sections", () => {
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
     expect(screen.getByLabelText(SFX)).toBeTruthy();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), { button: 0 });
+    expect(screen.getAllByText("Game layout")).toHaveLength(1);
     expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), { button: 0 });
+    expect(screen.getAllByText("Visual effects")).toHaveLength(1);
     for (const label of [LIGHTING, "Shadows", "Animations"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
@@ -246,16 +274,35 @@ describe("tutorial reminder", () => {
 });
 
 describe("tutorial settings mutation", () => {
-  const mockUser = () => {
+  const mockUser = (hasActiveQuest = false) => {
     const prepareUserUpdate = vi.fn(() => 7);
     const updateUser = vi.fn(async () => true);
     vi.spyOn(userContext, "useRequiredUserDataSelector").mockReturnValue({
-      data: { tutorialOn: false, userQuests: [] },
+      data: {
+        tutorialOn: false,
+        userQuests: hasActiveQuest ? [{ completed: 0, quest: { questType: "starter" } }] : [],
+      },
       prepareUserUpdate,
       updateUser,
     } as never);
     return { prepareUserUpdate, updateUser };
   };
+
+  it("keeps active quest guidance and help actions beneath the settings description", () => {
+    mockUser(true);
+    render(
+      <section>
+        <h2>Help &amp; tutorial</h2>
+        <p>Tutorial mode, player guide, and support tickets</p>
+        <TutorialSettings />
+      </section>,
+    );
+    expect(screen.queryByText(/The tutorial helps new players/)).toBeNull();
+    expect(screen.getByText("You have active quests!")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Enable Tutorial" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Player guide" }).getAttribute("href")).toBe("/guide");
+    expect(screen.getByRole("link", { name: "Support tickets" }).getAttribute("href")).toBe("/support");
+  });
 
   it("applies the successful server patch at the captured cache revision", async () => {
     const { prepareUserUpdate, updateUser } = mockUser();

@@ -128,7 +128,9 @@ export function ProfileSettingsNavigation({
                       <SettingsRow
                         title={setting.title}
                         description={setting.description}
-                        context={group.title}
+                        context={
+                          group.title === setting.title ? undefined : group.title
+                        }
                         icon={setting.icon}
                         href={hrefFor(group, setting)}
                         onNavigate={navigate}
