@@ -173,7 +173,8 @@ describe("healing student shares", () => {
     const db = database();
     expect((await heal(db)).success).toBe(true);
     expect(db.update).toHaveBeenCalledTimes(1);
-    expect(deferred).toHaveLength(1);
+    // The student share, then the map broadcast of the healed state.
+    expect(deferred).toHaveLength(2);
     await deferred[0]?.();
     expect(db.update).toHaveBeenCalledTimes(2);
     expect(db.set.mock.calls[1]?.[0]).toHaveProperty("medicalExperience");
@@ -194,7 +195,8 @@ describe("healing student shares", () => {
     }) as never);
     const db = database();
     expect((await heal(db)).success).toBe(true);
-    expect(deferred).toHaveLength(0);
+    // Only the map broadcast is deferred.
+    expect(deferred).toHaveLength(1);
     expect(db.update).toHaveBeenCalledTimes(1);
   });
 
