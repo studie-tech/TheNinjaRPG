@@ -65,7 +65,7 @@ const setup = (file: string, procedure: string) => {
   const callbacks = source.slice(call).match(new RegExp(`useMutation\\(\\s*(\\{[\\s\\S]*?\\n${indent}\\}),?\\s*\\);`))?.[1];
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   const shared = procedure === "coop.dungeon.act"
-    ? source.slice(source.indexOf("  const refresh ="), source.indexOf("  const create ="))
+    ? source.slice(source.indexOf("  const prepareUpdate ="), source.indexOf("  const state =")) + source.slice(source.indexOf("  const refresh ="), source.indexOf("  const create ="))
     : procedure === "territoryWar.startBattle"
       ? source.slice(source.indexOf("  const onSuccess ="), source.indexOf("  const create ="))
       : "";
@@ -73,8 +73,8 @@ const setup = (file: string, procedure: string) => {
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
   const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", "available", "activeDungeonNotification", `${factory}\nreturn callbackOptions();`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: async () => { await invalidate(); return { data: { userPatch: {}, users: [], members: [{ runId: "squad", userId: "actor", activeUserId: "actor" }] }, isError: false }; } }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
-  ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: async () => { await invalidate(); return { data: { userPatch: {}, users: [], members: [{ runId: "squad", userId: "actor", activeUserId: "actor" }] }, isError: false }; } }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate, prepareAvailabilityUpdate: () => undefined, refreshAvailability: invalidate }, activeDungeonNotification,
+  ) as { onMutate: () => unknown; onSuccess: (data: unknown, input: unknown, snapshot: unknown) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
     value: () => client.getQueryData<typeof profile>(key),
