@@ -83,15 +83,13 @@ export const findCompletedPredecessor = (
     if (obj.id === targetId) return false;
 
     // Check if it is a predecessor
-    let isPredecessor = false;
+    let isPredecessor = "failObjectiveId" in obj && obj.failObjectiveId === targetId;
     if (obj.task === "dialog" && Array.isArray(obj.nextObjectiveId)) {
-      isPredecessor = obj.nextObjectiveId.some(
+      isPredecessor ||= obj.nextObjectiveId.some(
         (entry) => entry.nextObjectiveId === targetId,
       );
     } else if ("nextObjectiveId" in obj && typeof obj.nextObjectiveId === "string") {
-      isPredecessor = obj.nextObjectiveId === targetId;
-    } else if ("failObjectiveId" in obj && typeof obj.failObjectiveId === "string") {
-      isPredecessor = obj.failObjectiveId === targetId;
+      isPredecessor ||= obj.nextObjectiveId === targetId;
     }
     if (!isPredecessor) return false;
 
