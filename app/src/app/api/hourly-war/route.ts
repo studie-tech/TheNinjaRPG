@@ -149,6 +149,8 @@ export async function GET(request: Request) {
 
         // Calculate token reduction as percentage of current tokens
         // Apply multiple reductions if needed (but percentage is recalculated each time)
+        const attackerTokensBefore = activeWar.attackerVillage.tokens;
+        const defenderTokensBefore = activeWar.defenderVillage.tokens;
         for (let i = 0; i < reductionsToApply; i++) {
           const attackerReduction = Math.floor(
             activeWar.attackerVillage.tokens * (decayPercent / 100),
@@ -171,6 +173,21 @@ export async function GET(request: Request) {
           activeWar.defenderVillage.tokens,
         );
 
+        // Apply the decay as decrements so token changes since the fetch are kept
+        const decayVillageTokens = () =>
+          Promise.all([
+            updateWarVillageTokens(
+              drizzleDB,
+              attackerTokensBefore - activeWar.attackerVillage.tokens,
+              activeWar.attackerVillage.id,
+            ),
+            updateWarVillageTokens(
+              drizzleDB,
+              defenderTokensBefore - activeWar.defenderVillage.tokens,
+              activeWar.defenderVillage.id,
+            ),
+          ]);
+
         // Calculate war health drain (applied to both sides each reduction interval)
         const totalHealthDrain = WAR_DAILY_HEALTH_DRAIN * reductionsToApply;
 
@@ -190,19 +207,7 @@ export async function GET(request: Request) {
 
           // Only proceed if the war update actually modified a row (guarded update)
           if (result.rowsAffected > 0) {
-            // Update token counts
-            await Promise.all([
-              updateWarVillageTokens(
-                drizzleDB,
-                activeWar.attackerVillage.tokens,
-                activeWar.attackerVillage.id,
-              ),
-              updateWarVillageTokens(
-                drizzleDB,
-                activeWar.defenderVillage.tokens,
-                activeWar.defenderVillage.id,
-              ),
-            ]);
+            await decayVillageTokens();
 
             // Build updated war object with drained health values to avoid an extra DB roundtrip
             const warWithDrain: FetchActiveWarsReturnType = {
@@ -229,20 +234,7 @@ export async function GET(request: Request) {
           activeWar,
         );
 
-        if (result.rowsAffected > 0) {
-          await Promise.all([
-            updateWarVillageTokens(
-              drizzleDB,
-              activeWar.attackerVillage.tokens,
-              activeWar.attackerVillage.id,
-            ),
-            updateWarVillageTokens(
-              drizzleDB,
-              activeWar.defenderVillage.tokens,
-              activeWar.defenderVillage.id,
-            ),
-          ]);
-        }
+        if (result.rowsAffected > 0) await decayVillageTokens();
       }
 
       // Update daily decay timer

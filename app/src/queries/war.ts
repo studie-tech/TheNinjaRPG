@@ -99,12 +99,16 @@ export const updateWarForGET = (
     })
     .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
-/** Build a village token update from its settled war balance. */
+/** Build a village token decrement for war decay, floored at zero. */
 export const updateWarVillageTokens = (
   client: Pick<DrizzleClient, "update">,
-  tokens: number,
+  decay: number,
   villageId: string,
-) => client.update(village).set({ tokens: tokens }).where(eq(village.id, villageId));
+) =>
+  client
+    .update(village)
+    .set({ tokens: sql`GREATEST(${village.tokens} - ${decay}, 0)` })
+    .where(eq(village.id, villageId));
 
 /** Build the `war` update for `GET`, using predicates on `id` and `endedAt`. */
 export const updateWarForGET2 = (
