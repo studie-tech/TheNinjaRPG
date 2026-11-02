@@ -330,7 +330,10 @@ interface TutorialAssistantProps {
  */
 const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
   const pathname = usePublicPathname();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => ({
+    userId: user.userId,
+    tutorialStep: user.tutorialStep,
+  }));
   const tutorialIdentityRef = React.useRef({
     userId: userData?.userId,
     tutorialStep: userData?.tutorialStep,

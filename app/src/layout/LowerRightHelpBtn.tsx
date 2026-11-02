@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChatPanel } from "@/layout/ChatPanel";
 import { GameSettingsPanel } from "@/layout/GameSettings";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface LowerRightHelpProps {
   className?: string;
@@ -18,10 +18,10 @@ interface LowerRightHelpProps {
  * audio settings for visitors.
  */
 const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
-  const { data: userData, updateUser } = useUserData();
+  const { data: userId, updateUser } = useUserDataSelector((user) => user.userId);
   const [isOpen, setIsOpen] = useState(false);
 
-  if (userData) {
+  if (userId) {
     return <ChatPanel className={props.className}>{props.children}</ChatPanel>;
   }
 
@@ -41,7 +41,6 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
           <p className="mb-2 font-bold text-lg">Audio Settings</p>
           <div className="max-h-[400px] overflow-y-auto">
             <GameSettingsPanel
-              userData={userData}
               updateUser={updateUser}
               onNavigate={() => setIsOpen(false)}
             />
