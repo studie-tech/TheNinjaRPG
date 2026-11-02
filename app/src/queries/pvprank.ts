@@ -4,7 +4,6 @@
 import {
   and,
   asc,
-  count,
   eq,
   gt,
   gte,
@@ -279,15 +278,6 @@ export const updateUserDataForGetRankedPvpQueue = (
       ),
     );
 
-/** Build the `rankedPvpQueue` selection for `getRankedPvpQueue`, using predicates on `hasClaimed`. */
-export const selectRankedPvpQueueForGetRankedPvpQueue = (
-  client: Pick<DrizzleClient, "select">,
-) =>
-  client
-    .select({ count: count() })
-    .from(rankedPvpQueue)
-    .where(eq(rankedPvpQueue.hasClaimed, true));
-
 /** Build the `item` listing for `updateRankedLoadout`, using predicates on `id` and `inShop`. */
 export const listItemForUpdateRankedLoadout = (
   client: Pick<DrizzleClient, "query">,
@@ -539,10 +529,17 @@ export const insertRankedUserRewardsForEndRankedSeason = (
   >[],
 ) => client.insert(rankedUserRewards).values(rewardRows);
 
-/** Build the `rankedPvpQueue` count for `getRankedQueueCount`. */
+/** Count claimed entries within cleaner retention, even while expiry cleanup is delayed. */
 export const countRankedPvpQueueForGetRankedQueueCount = (
   client: Pick<DrizzleClient, "$count">,
-) => client.$count(rankedPvpQueue, eq(rankedPvpQueue.hasClaimed, true));
+) =>
+  client.$count(
+    rankedPvpQueue,
+    and(
+      eq(rankedPvpQueue.hasClaimed, true),
+      gte(rankedPvpQueue.createdAt, sql`CURRENT_TIMESTAMP(3) - INTERVAL 1 DAY`),
+    ),
+  );
 
 /** Build deletion of a user’s ranked PvP queue entry. */
 export const deleteRankedQueueForUser = (

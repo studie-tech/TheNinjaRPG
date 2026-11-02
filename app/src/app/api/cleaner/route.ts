@@ -49,6 +49,7 @@ import { cleanupOrphanRows, deleteCleanupCandidates } from "@/server/utils/clean
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
+import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { removeExpiredSanctionTombstones } from "@/server/utils/sanctionTombstone";
 import { getBankInterestDateRange } from "@/utils/time";
 
@@ -231,7 +232,11 @@ export async function GET(request: Request) {
     await deleteUserActivityEventForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Clear rankedPvpQueue entries older than 1 day
-    await deleteRankedPvpQueueForGET(drizzleDB, rangeCleanupBatchSize);
+    const expiredRankedRows = await deleteRankedPvpQueueForGET(
+      drizzleDB,
+      rangeCleanupBatchSize,
+    );
+    await notifyRankedQueueChanged(expiredRankedRows.rowsAffected);
 
     // Clear war kills older than 10 days
     await deleteWarKillForGET(drizzleDB, rangeCleanupBatchSize);

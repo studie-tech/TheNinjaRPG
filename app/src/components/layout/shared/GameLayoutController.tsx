@@ -16,6 +16,7 @@ import {
 } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { usePageActive } from "@/hooks/usePageActive";
+import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import TutorialAssistant from "@/layout/TutorialAssistant";
@@ -69,6 +70,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     isSignedIn,
     status: userStatus,
     userId,
+    pusher,
     timeDiff,
     updateUser,
   } = useUserDataSelector((user) => ({
@@ -116,13 +118,9 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     );
   }, [swapSidebars]);
 
-  const { data: rankedQueueCount = 0 } = api.pvpRank.getRankedQueueCount.useQuery(
-    undefined,
-    {
-      enabled: !!userId && isPageActive,
-      refetchInterval: 30_000,
-      refetchIntervalInBackground: false,
-    },
+  const { data: rankedQueueCount = 0 } = useRankedQueueCount(
+    !!userId && isPageActive,
+    pusher,
   );
 
   const activeTerritoryWar = useTerritoryWarNotice(!!userData, timeDiff, isPageActive);

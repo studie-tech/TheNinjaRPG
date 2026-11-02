@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   rankedLoadout,
@@ -6,6 +6,7 @@ import {
   rankedSeason,
   userData,
 } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
@@ -20,7 +21,9 @@ import {
 const USER = "ranked-player";
 
 describeWithDatabase("ranked queue claims and cleanup", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(rankedPvpQueue, rankedLoadout, rankedSeason, userData);
     await insertUsers([
       { userId: USER, username: USER, rank: "JONIN", rankedLp: 1000, status: "AWAKE" },
@@ -38,7 +41,10 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
 
   it("joins once and intentionally leaves a QUEUED user's row", async () => {
     const caller = await callerFor(pvpRankRouter, USER);
+    expect(await caller.getRankedQueueCount()).toBe(0);
     expect((await caller.queueForRankedPvp()).success).toBe(true);
+    expect(await caller.getRankedQueueCount()).toBe(1);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
     expect((await storedUser())?.status).toBe("QUEUED");
     expect(await storedQueue()).toHaveLength(1);
     expect(await caller.queueForRankedPvp()).toMatchObject({
@@ -48,6 +54,8 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
     expect((await caller.leaveRankedPvpQueue()).success).toBe(true);
     expect((await storedUser())?.status).toBe("AWAKE");
     expect(await storedQueue()).toHaveLength(0);
+    expect(await caller.getRankedQueueCount()).toBe(0);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledTimes(2);
   });
 
   it("removes only a losing join's row after another preloaded join wins", async () => {
@@ -66,6 +74,8 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
     ).toMatchObject({ success: false, message: "Need to be awake to queue" });
     expect((await storedUser())?.status).toBe("QUEUED");
     expect((await storedQueue()).map((entry) => entry.id)).toEqual([winningQueueId]);
+    expect(await winner.getRankedQueueCount()).toBe(1);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a provisional row until its join claims QUEUED", async () => {
@@ -173,6 +183,32 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
     });
   }
 
+  it("counts claimed entries within expiry without requiring cleaner deletion", async () => {
+    const db = await getTestDatabase();
+    await db.insert(rankedPvpQueue).values([
+      { id: "expired", userId: "expired", rankedLp: 1000, createdAt: new Date(Date.now() - 25 * 3_600_000) },
+      { id: "live", userId: "live", rankedLp: 1000 },
+      { id: "provisional", userId: "provisional", rankedLp: 1000, hasClaimed: false },
+    ]);
+    const caller = await callerFor(pvpRankRouter, USER);
+    expect(await caller.getRankedQueueCount()).toBe(1);
+    expect((await caller.getRankedPvpQueue()).queueCount).toBe(1);
+    expect(await db.query.rankedPvpQueue.findMany()).toHaveLength(3);
+    await db.delete(rankedPvpQueue).where(eq(rankedPvpQueue.id, "live"));
+    expect(await caller.getRankedQueueCount()).toBe(0);
+  });
+
+  it("keeps committed joins and leaves successful when push delivery fails", async () => {
+    vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(new Error("Socket unavailable"));
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const caller = await callerFor(pvpRankRouter, USER);
+    expect((await caller.queueForRankedPvp()).success).toBe(true);
+    expect(await caller.getRankedQueueCount()).toBe(1);
+    expect((await caller.leaveRankedPvpQueue()).success).toBe(true);
+    expect(await caller.getRankedQueueCount()).toBe(0);
+    expect(warning).toHaveBeenCalledTimes(2);
+  });
+
   it("retries a deadlocked claim without publishing another row", async () => {
     const db = await getTestDatabase();
     const client = beforeStatements(db, userData, [
@@ -211,5 +247,6 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
     );
     expect((await storedUser())?.status).toBe("AWAKE");
     expect(await storedQueue()).toHaveLength(0);
+    expect(Pusher.prototype.trigger).not.toHaveBeenCalled();
   });
 });

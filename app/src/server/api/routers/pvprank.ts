@@ -43,7 +43,6 @@ import {
   listItemForUpdateRankedLoadout,
   listRankedPvpQueueForCheckRankedPvpMatches,
   listUserDataForEndRankedSeason,
-  selectRankedPvpQueueForGetRankedPvpQueue,
   selectRankedUserRewardsForGetUnclaimedUserSeasonRewards,
   updateRankedLoadoutForUpdateRankedLoadout,
   updateRankedSeasonForEndRankedSeason,
@@ -67,6 +66,7 @@ import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,
 } from "@/server/utils/ranked";
+import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -358,9 +358,7 @@ export const pvpRankRouter = createTRPCRouter({
         );
       }
       // Get the queue count
-      const queueCount = await selectRankedPvpQueueForGetRankedPvpQueue(
-        ctx.drizzle,
-      ).then((result) => result[0]?.count ?? 0);
+      const queueCount = await countRankedPvpQueueForGetRankedQueueCount(ctx.drizzle);
 
       return {
         inQueue: !!queueEntry,
@@ -537,6 +535,7 @@ export const pvpRankRouter = createTRPCRouter({
         }
       }
       if (!hasClaimedQueue) return errorResponse("Need to be awake to queue");
+      await notifyRankedQueueChanged(1);
       return {
         success: true,
         message:
@@ -695,7 +694,13 @@ export const pvpRankRouter = createTRPCRouter({
           })),
         ];
         const postMatchTasks: PromiseLike<unknown>[] = [
-          deleteRankedPvpQueueForCheckRankedPvpMatches(ctx.drizzle, ctx, opponentEntry),
+          deleteRankedPvpQueueForCheckRankedPvpMatches(
+            ctx.drizzle,
+            ctx,
+            opponentEntry,
+          ).then(async (result) => {
+            await notifyRankedQueueChanged(result.rowsAffected);
+          }),
           insertLogQueueLengthsForCheckRankedPvpMatches(
             ctx.drizzle,
             rankedRank,
@@ -738,7 +743,10 @@ export const deleteUserRankedQueueRow = (
 ) =>
   retryOnDeadlock(() =>
     deleteRankedPvpQueueForDeleteUserRankedQueueRow(client, userId, onlyIfNotQueued),
-  );
+  ).then(async (result) => {
+    await notifyRankedQueueChanged(result.rowsAffected);
+    return result;
+  });
 
 /**
  * Get the unclaimed season rewards for a user

@@ -16,6 +16,7 @@ import {
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
+import { useRankedQueueCountCache } from "@/hooks/useRankedQueueCount";
 import BanInfo from "@/layout/BanInfo";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
@@ -66,6 +67,8 @@ export const RankedArenaMain: React.FC = () => {
     useRequireInVillage("/battlearena");
   const utils = api.useUtils();
 
+  const { refreshRankedQueueCount } = useRankedQueueCountCache();
+
   // Get queue data
   const { data: queueData } = api.pvpRank.getRankedPvpQueue.useQuery(undefined, {
     enabled: !!userData,
@@ -97,7 +100,7 @@ export const RankedArenaMain: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void utils.pvpRank.getRankedQueueCount.invalidate();
+          void refreshRankedQueueCount();
           if (data.removedJutsuIds?.length || data.removedItemIds?.length) {
             void utils.pvpRank.getRankedLoadout.invalidate();
           }
@@ -112,7 +115,7 @@ export const RankedArenaMain: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void utils.pvpRank.getRankedQueueCount.invalidate();
+          void refreshRankedQueueCount();
         }
       },
     });
@@ -135,7 +138,7 @@ export const RankedArenaMain: React.FC = () => {
       }
       if (data.success) {
         void utils.pvpRank.getRankedPvpQueue.invalidate();
-        void utils.pvpRank.getRankedQueueCount.invalidate();
+        void refreshRankedQueueCount();
       }
     },
   });
