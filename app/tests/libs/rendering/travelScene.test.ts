@@ -43,6 +43,7 @@ const gameFixture = () => {
   let disposed = false;
   const game = {
     lpcCatalog,
+    visualEffects: { lighting: true, shadows: true, animations: true },
     stage, canvas, signal: controller.signal, renderer: { width: 1024, height: 600 },
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
@@ -84,6 +85,48 @@ beforeEach(() => {
   vi.spyOn(maskedTextures, "acquireMaskedTexture").mockImplementation(() => ({ resource: Promise.resolve(texture), release: () => {} }));
 });
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
+
+describe("still travel rendering", () => {
+  it("sleeps after effects are disabled, wakes for ref updates and resumes after toggling", async () => {
+    let poll = () => {};
+    vi.spyOn(globalThis, "setInterval").mockImplementation(((callback: Parameters<typeof setInterval>[0]) => {
+      poll = callback as () => void;
+      return 1;
+    }) as unknown as typeof setInterval);
+    const clear = vi.spyOn(globalThis, "clearInterval").mockImplementation(() => {});
+    const { game, scene, state, advance } = await sceneFixture();
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    game.visualEffects.lighting = game.visualEffects.animations = false;
+    advance(frame());
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    state.users = [...state.users, player({ userId: "arrival", longitude: 5 })];
+    state.actorRevision++;
+    poll();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(frame()); await settle();
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    state.col = 5;
+    poll(); expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(frame());
+    game.visualEffects.lighting = game.visualEffects.animations = true;
+    advance(frame(1100, false));
+    expect(game.setAnimating).toHaveBeenLastCalledWith(true);
+    game.visualEffects.lighting = game.visualEffects.animations = false;
+    advance(frame(1200));
+    expect(game.setAnimating).toHaveBeenLastCalledWith(false);
+    invalidate.mockClear(); poll();
+    expect(invalidate).not.toHaveBeenCalled();
+    scene.clearHighlights();
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    scene.dispose();
+    expect(clear).toHaveBeenCalledWith(1);
+    invalidate.mockClear(); state.actorRevision++; poll();
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+});
 
 describe("travel scene ground depth", () => {
   it("prepares destination scenery during travel and resumes the same scene on arrival", async () => {
@@ -404,6 +447,29 @@ describe("travel scene ground depth", () => {
 });
 
 describe("travel scene window updates", () => {
+  it("invalidates each installed neighbor while later scenery is still loading", async () => {
+    const state = snapshotFixture(); state.users = [];
+    const { scene, game } = await sceneFixture(state);
+    const ready = windowEntry(725, 1), held = windowEntry(726, 2);
+    ready.structures[0]!.image = "ready-still-neighbor.png";
+    held.structures[0]!.image = "held-still-neighbor.png";
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes("held-still-neighbor") ? pending : Texture.WHITE);
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    invalidate.mockClear(); state.window.push(ready, held);
+    const updating = scene.updateWindow();
+    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
+    expect(scene.sectors.has(725)).toBe(true);
+    await updating;
+    expect(scene.sectors.has(726)).toBe(true);
+    expect(scene.sectors.get(726)!.art.entries).toHaveLength(0);
+    expect(invalidate).toHaveBeenCalled();
+    invalidate.mockClear(); release(Texture.WHITE); await settle();
+    expect(scene.sectors.get(726)!.art.entries.length).toBeGreaterThan(0);
+    expect(invalidate).toHaveBeenCalled();
+  });
+
   it.each(["worldArt", "route"] as const)("rebuilds cached terrain and scenery after a structure %s edit", async (field) => {
     const state = snapshotFixture();
     state.libraryVersion = `structure-edit-${field}`;

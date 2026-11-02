@@ -55,6 +55,7 @@ export const createWorldOcclusion = (
     job: Generator<void, FieldResult> | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false,
+    enabled = true,
     revision = 0,
     maxCandidates = 0,
     prismCount = 0,
@@ -459,7 +460,7 @@ export const createWorldOcclusion = (
   };
   const pump = () => {
     timer = null;
-    if (disposed) return;
+    if (disposed || !enabled) return;
     const startedAt = performance.now(),
       budget = Math.max(0.25, options.budgetMs ?? 2);
     do {
@@ -488,9 +489,10 @@ export const createWorldOcclusion = (
         job = null;
         active = null;
       }
-    } while (!disposed && performance.now() - startedAt < budget);
+    } while (!disposed && enabled && performance.now() - startedAt < budget);
     if (
       !disposed &&
+      enabled &&
       (job || (!sameRequest(published, requested) && !sameRequest(rejected, requested)))
     )
       timer = setTimeout(pump, 0);
@@ -501,6 +503,22 @@ export const createWorldOcclusion = (
     prisms: prisms.texture,
     bounds,
     geometryBounds,
+    /** Pause queued compilation while retaining the last complete field and resumable work. */
+    setEnabled: (value: boolean) => {
+      if (disposed || enabled === value) return;
+      enabled = value;
+      if (!enabled) {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+      } else if (
+        options.incremental &&
+        requested &&
+        (job ||
+          (!sameRequest(published, requested) && !sameRequest(rejected, requested)))
+      ) {
+        timer = setTimeout(pump, 0);
+      }
+    },
     get revision() {
       return revision;
     },
@@ -550,7 +568,7 @@ export const createWorldOcclusion = (
       viewport: WorldBounds,
       heightRange = DEFAULT_HEIGHT_RANGE,
     ) => {
-      if (disposed) return;
+      if (disposed || !enabled) return;
       const cell =
         Math.ceil(
           Math.max(

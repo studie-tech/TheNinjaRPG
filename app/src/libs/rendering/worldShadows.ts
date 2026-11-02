@@ -46,6 +46,7 @@ import {
   worldWindGroup,
   worldWindShader,
 } from "@/libs/rendering/worldWind";
+import { subscribeVisualEffects } from "@/libs/visualEffects";
 
 /** East (+X), south (−Y), west (−X) follow the existing server-corrected cycle. Null freezes noon. */
 export const worldSunlight = (date: Date | null = null) => {
@@ -115,6 +116,21 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       budgetMs: 2,
     }),
     dynamicField = createWorldOcclusion({ direct: true, onError: onOcclusionError });
+  const setOcclusionEnabled = (enabled: boolean) => {
+    staticField.setEnabled(enabled);
+    dynamicField.setEnabled(enabled);
+  };
+  setOcclusionEnabled(game.visualEffects.lighting && game.visualEffects.shadows);
+  // Offscreen renderers have no frame to reconcile settings; stop queued work on the preference event itself.
+  game.own(
+    subscribeVisualEffects((effect, enabled) => {
+      if (effect === "lighting" || effect === "shadows")
+        setOcclusionEnabled(
+          (effect === "lighting" ? enabled : game.visualEffects.lighting) &&
+            (effect === "shadows" ? enabled : game.visualEffects.shadows),
+        );
+    }),
+  );
   const view = new UniformGroup(
     {
       uViewport: { value: new Float32Array(4), type: "vec4<f32>" },
@@ -489,6 +505,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     ) => {
       if (disposed) return;
       const { lighting, shadows } = game.visualEffects;
+      setOcclusionEnabled(lighting && shadows);
       if (filter.enabled !== lighting) {
         filter.enabled = lighting;
         invalidate();

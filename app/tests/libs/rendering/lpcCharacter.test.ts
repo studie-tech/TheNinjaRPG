@@ -26,6 +26,7 @@ const gameFixture = () => {
   const source = texture();
   const game = {
     lpcCatalog,
+    invalidate: vi.fn(),
     own: (cleanup: () => void) => owned.add(cleanup),
     disown: (cleanup: () => void) => owned.delete(cleanup),
     assets: { texture: vi.fn(async () => source) },

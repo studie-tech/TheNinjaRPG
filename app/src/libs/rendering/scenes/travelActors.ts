@@ -241,6 +241,7 @@ export const createTravelActors = (
               )
                 layers?.overlay.attach(entry.sprite);
           updateActions();
+          game.invalidate();
         },
         (error) => {
           if (!scope.isDisposed()) console.warn("Travel actor unavailable", error);
@@ -392,6 +393,10 @@ export const createTravelActors = (
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
     for (const record of records.values()) {
       const { recipe, root } = record;
+      if (frame.reducedMotion) {
+        record.path.length = 0;
+        record.tile = recipe.tile;
+      }
       const waypoint = record.path[0] ?? recipe.tile;
       const dx = -waypoint.center.x - record.x,
         dy = -waypoint.center.y - record.y;
@@ -411,7 +416,7 @@ export const createTravelActors = (
         record.y = movement.y;
       } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
-        // Catch up queued network waypoints without overshooting; reduced motion snaps to each one.
+        // Still frames reach the authoritative tile in one update; animated movement catches up its queued path.
         const step = frame.reducedMotion
           ? distance
           : Math.min(
@@ -426,7 +431,11 @@ export const createTravelActors = (
         }
       }
       for (const entry of record.art?.entries ?? [])
-        entry.character?.render(frame, moving ? "walk" : "idle", record.facing);
+        entry.character?.render(
+          frame,
+          moving && !frame.reducedMotion ? "walk" : "idle",
+          record.facing,
+        );
       const phi = angle + recipe.orbit;
       root.position.set(
         record.x +
