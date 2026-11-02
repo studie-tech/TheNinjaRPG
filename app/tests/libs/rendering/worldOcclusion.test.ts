@@ -600,6 +600,32 @@ describe("custom-art occlusion profiles", () => {
 });
 
 describe("retained exact occlusion fields", () => {
+  it.each([false, true])("uploads exactly the first through last changed texels across pose and frame changes (direct: %s)", (direct) => {
+    const field = createWorldOcclusion({ direct }), frame = trackedFrame(64), replacement = trackedFrame(96, 0.8);
+    const sources = [field.texture.source, field.references.source, field.prisms.source];
+    const uploads = sources.map((source) => vi.spyOn(source, "update"));
+    const first = normalizedRecord("first", frame), moved = normalizedRecord("moved", frame, 40.25);
+    const replacementPose = normalizedRecord("replacement", replacement);
+    try {
+      for (const records of [[first], [moved], [{ ...moved, key: "unchanged-bytes" }], [first, replacementPose], [replacementPose], [], [first]]) {
+        const before = packedSnapshot(field);
+        uploads.forEach((upload) => upload.mockClear());
+        field.update(records, viewport, 32);
+        packedSources(field).forEach((data, source) => {
+          const previous = before[source]!;
+          const changes: number[] = [], calls: unknown = uploads[source]!.mock.calls;
+          if (data.length !== previous.length) {
+            expect(calls).toEqual([[0, data.length / 4]]);
+            return;
+          }
+          for (let i = 0; i < data.length; i += 4)
+            if (data.subarray(i, i + 4).some((value, channel) => value !== previous[i + channel])) changes.push(i / 4);
+          expect(calls).toEqual(changes.length ? [[changes[0], changes.at(-1)! + 1]] : []);
+        });
+      }
+    } finally { uploads.forEach((upload) => upload.mockRestore()); field.dispose(); }
+  });
+
   it("retains mesh bytes while moved instances match a freshly packed field", () => {
     const frame = trackedFrame(32), field = createWorldOcclusion(), fresh = createWorldOcclusion();
     const original = normalizedRecord("first", frame), moved = normalizedRecord("moved", frame, 40.1875);

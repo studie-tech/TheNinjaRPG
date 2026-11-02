@@ -1165,17 +1165,25 @@ function* compareBuffer(plan: BufferPlan): Generator<void, void> {
   const previous = new Uint32Array(plan.buffer.pixels.buffer),
     next = new Uint32Array(plan.buffer.scratch.buffer);
   const occupied = plan.buffer.occupied;
-  const indices = occupied
-    ? new Set([...occupied.pixels, ...occupied.scratch])
-    : next
-        .subarray(
-          plan.retainedTexels,
-          Math.max(plan.usedTexels, plan.buffer.publishedTexels),
-        )
-        .keys();
   let compared = 0;
-  for (const index of indices) {
-    const i = occupied ? index : index + plan.retainedTexels;
+  if (!occupied) {
+    let first = plan.retainedTexels,
+      last = Math.max(plan.usedTexels, plan.buffer.publishedTexels) - 1;
+    // Only the unchanged exterior matters to a contiguous upload; its interior needs no comparisons.
+    while (first <= last && previous[first] === next[first]) {
+      first++;
+      if (++compared % 2048 === 0) yield;
+    }
+    if (first > last) return;
+    while (last > first && previous[last] === next[last]) {
+      last--;
+      if (++compared % 2048 === 0) yield;
+    }
+    plan.start = Math.min(plan.start, first);
+    plan.end = Math.max(plan.end, last + 1);
+    return;
+  }
+  for (const i of new Set([...occupied.pixels, ...occupied.scratch])) {
     if (previous[i] !== next[i]) {
       plan.start = Math.min(plan.start, i);
       plan.end = Math.max(plan.end, i + 1);
