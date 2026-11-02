@@ -85,6 +85,41 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it.each([false, true])("shows terrain during scenery loading, gates interaction and owns cancellation (%s)", async (cancel) => {
+    const state = snapshotFixture();
+    state.window[0]!.structures[0]!.image = `pending-building-${cancel}.png`;
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>((resolve) => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes(`pending-building-${cancel}`) ? pending : texture);
+    const fixture = gameFixture(), onReady = vi.fn(), onTap = vi.fn();
+    let ready = false;
+    const creating = createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 }).then((scene) => { ready = true; return scene; });
+    await settle();
+    const world = fixture.stage.children[0]!, ground = world.children[0]!.children[0]!;
+    expect(ground).toBeDefined();
+    expect(world.children[1]!.children).toHaveLength(0);
+    expect(ready).toBe(false);
+    expect(onReady).not.toHaveBeenCalled();
+    const camera = { x: world.x, y: world.y };
+    fixture.event("pointerdown", 400, 300); fixture.event("pointerup", 400, 300);
+    expect(onTap).not.toHaveBeenCalled();
+    if (cancel) fixture.game.dispose();
+    release(texture);
+    const scene = await creating;
+    if (cancel) {
+      expect(ground.destroyed).toBe(true);
+      expect(onReady).not.toHaveBeenCalled();
+      expect(fixture.game.isDisposed()).toBe(true);
+    } else {
+      expect(scene.sectors.get(724)!.terrain.container).toBe(ground);
+      expect(world.children[1]!.children).toHaveLength(1);
+      expect(onReady).toHaveBeenCalledTimes(1);
+      fixture.advance();
+      expect({ x: world.x, y: world.y }).toEqual(camera);
+    }
+  });
+
   it("grounds border walls in neighboring water and refreshes their retained terrain after a layout change", async () => {
     const state=snapshotFixture(),water=state.window[0]!,village=windowEntry(725,1);
     const ocean=(entry:TravelWindowEntry)=>{

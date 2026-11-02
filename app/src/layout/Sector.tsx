@@ -43,6 +43,7 @@ import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import Loader from "@/layout/Loader";
 import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
@@ -2385,7 +2386,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       className={isWorldExpanded ? "fixed inset-0 z-50 bg-[#263c36]" : "relative"}
     >
       <div className="relative">
-        <div id="tutorial-travel-sector" ref={mountRef}></div>
+        <div
+          id="tutorial-travel-sector"
+          ref={mountRef}
+          aria-busy={!travel.isReady && !travel.error}
+          className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
+        ></div>
+        {!travel.isReady && !travel.error && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div
+              role="status"
+              className="bg-background/95 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm shadow-md motion-reduce:[&_img]:animate-none"
+            >
+              <Loader noPadding size={20} />
+              <span>Loading world…</span>
+            </div>
+          </div>
+        )}
         <aside
           aria-label="Map compass and neighboring sectors"
           className="pointer-events-none absolute top-3 left-3 z-10 rounded-lg border bg-background/90 p-2 text-center text-xs shadow-md backdrop-blur-sm"

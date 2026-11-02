@@ -220,7 +220,10 @@ export const createTravelScene = async (options: {
       return { tile, structureId, locationId, actor: actors.hit(x, y) };
     };
     const controls = createMapControls(game, {
-      enabled: () => options.getSnapshot().enabled,
+      enabled: () => {
+        const snapshot = options.getSnapshot();
+        return snapshot.enabled && sectors.has(snapshot.sector);
+      },
       tap: (x, y) => options.onTap(pick(x, y)),
       pan: (dx, dy) => {
         if (!camera) return;
@@ -458,13 +461,37 @@ export const createTravelScene = async (options: {
                 : undefined,
           });
           const [terrain, art] = await Promise.all([
-            createHexTerrain(scope, data),
+            createHexTerrain(scope, data).then((terrain) => {
+              if (
+                !disposed &&
+                token === generation &&
+                !sectors.size &&
+                entry.sector === snapshot.sector
+              ) {
+                // Show the rooted ground while scenery/materials load; installation still gates picking and actors.
+                const tile = grid.getHex({ col: snapshot.col, row: snapshot.row });
+                if (tile)
+                  camera = {
+                    x: -tile.center.x + tile.width / 2 + position.x,
+                    y: -tile.center.y + tile.height / 2 + position.y,
+                  };
+                transform();
+                setBackground(entry.map);
+                terrain.setLighting(snapshot.brightness);
+                terrain.container.position.copyFrom(position);
+                terrainLayer.addChild(terrain.container);
+                game.invalidate();
+              }
+              return terrain;
+            }),
             createWorldSprites(scope, descriptions, shadows, true),
           ]);
           if (disposed || token !== generation) {
             scope.dispose();
             return;
           }
+          // Physical lighting receives neutral albedo; ambient tint is only used by the loading preview.
+          terrain.setLighting(1);
           if (shadows) scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
           art.container.position.copyFrom(position);
