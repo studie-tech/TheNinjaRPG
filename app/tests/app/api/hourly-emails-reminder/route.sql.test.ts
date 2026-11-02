@@ -57,9 +57,9 @@ describeWithDatabase("hourly email reminders", () => {
   it("sends an encoded unsubscribe link and rewards the reminder once", async () => {
     const send = vi.spyOn(sgMail, "send").mockResolvedValue([] as never);
     expect((await GET(request())).status).toBe(200);
+    const [message] = send.mock.calls[0] ?? [];
     const url = new URL(
-      (send.mock.calls[0]?.[0] as { dynamicTemplateData: { unsubscribeUrl: string } })
-        .dynamicTemplateData.unsubscribeUrl,
+      (Array.isArray(message) ? message[0] : message)?.dynamicTemplateData?.unsubscribeUrl,
     );
     expect(url.searchParams.get("email")).toBe(email);
     expect(url.searchParams.get("secret")).toBe("secret+/=");
