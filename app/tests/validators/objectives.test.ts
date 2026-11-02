@@ -1,6 +1,23 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, setSystemTime } from "bun:test";
 import { LetterRanks } from "@/drizzle/constants";
-import { QuestValidator, QuestValidatorRawSchema } from "@/validators/objectives";
+import {
+  QuestTracker,
+  QuestValidator,
+  QuestValidatorRawSchema,
+} from "@/validators/objectives";
+
+describe("QuestTracker startAt default", () => {
+  it("stamps the time the tracker is parsed", () => {
+    try {
+      setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
+      expect(QuestTracker.parse({ id: "q1" }).startAt).toBe("2030-01-01T00:00:00.000Z");
+      setSystemTime(new Date("2030-01-02T00:00:00.000Z"));
+      expect(QuestTracker.parse({ id: "q1" }).startAt).toBe("2030-01-02T00:00:00.000Z");
+    } finally {
+      setSystemTime();
+    }
+  });
+});
 
 describe("QuestValidatorRawSchema requiredSageRank", () => {
   const shape = QuestValidatorRawSchema.shape.requiredSageRank;
