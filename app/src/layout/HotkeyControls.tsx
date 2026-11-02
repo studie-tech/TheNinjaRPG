@@ -1,7 +1,7 @@
 "use client";
 
 import { Keyboard } from "lucide-react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +34,7 @@ export function HotkeyCaptureDialog({
   onClose: () => void;
 }) {
   const [error, setError] = useState<string>();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -65,7 +66,26 @@ export function HotkeyCaptureDialog({
 
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-sm text-center md:max-w-sm">
+      <DialogContent
+        className="max-w-sm text-center md:max-w-sm"
+        onOpenAutoFocus={() => {
+          // Shared programmatic openers have no single DialogTrigger.
+          returnFocusRef.current =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          // Restore the opener only if focus has not moved elsewhere during dismissal.
+          if (
+            returnFocusRef.current?.isConnected &&
+            document.activeElement === document.body
+          ) {
+            event.preventDefault();
+            returnFocusRef.current.focus();
+          }
+        }}
+      >
         <DialogTitle className="flex items-center justify-center gap-2">
           <Keyboard className="h-5 w-5" aria-hidden /> Hotkey for {target?.name}
         </DialogTitle>
