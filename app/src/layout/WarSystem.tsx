@@ -63,6 +63,7 @@ import {
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
 import { useMap } from "@/hooks/map";
+import { useActiveWars } from "@/hooks/useActiveWars";
 import Building from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -117,15 +118,16 @@ export const WarRoom: React.FC<{
 }> = ({ user, navTabs, initialBreak }) => {
   // tRPC utility
   const utils = api.useUtils();
+  const { timeDiff } = useRequiredUserData();
 
   // State
   const [warType, setWarType] = useState<"Active" | "Ended">("Active");
 
   // Queries
-  const { data: activeWars } = api.war.getActiveWars.useQuery(
-    { villageId: user.villageId ?? "" },
-    { staleTime: 10000, enabled: warType === "Active" },
-  );
+  const { data: activeWars } = useActiveWars(user.villageId ?? "", {
+    enabled: warType === "Active",
+    timeDiff,
+  });
 
   const { data: endedWars } = api.war.getEndedWars.useQuery(
     { villageId: user.villageId ?? "" },

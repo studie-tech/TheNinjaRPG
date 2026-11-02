@@ -142,7 +142,7 @@ const renderShrineHall = (shrines: object[]) => {
       payWeeklyMaintenance: mutation,
       setBoostTemplate: mutation,
     },
-    war: { getActiveWars: { useQuery: () => ({ data: [] }) } },
+    war: { getActiveWars: { useQuery: () => ({ data: [], refetch: vi.fn() }) } },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: user,

@@ -37,6 +37,7 @@ import {
   SHRINE_UPGRADE_COST,
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
+import { useActiveWars } from "@/hooks/useActiveWars";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -136,6 +137,7 @@ interface TabProps {
 
 const OverviewTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
+  const { timeDiff } = useRequiredUserData();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: shrineData } = api.travel.getSectorData.useQuery(
@@ -164,13 +166,11 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
   const isKage = user.userId === user.village?.kageId;
 
-  const { data: activeWars } = api.war.getActiveWars.useQuery(
-    { villageId: user.villageId || "" },
-    {
-      enabled: isActive && !!user.villageId,
-      refetchInterval: isActive ? 10_000 : false,
-    },
-  );
+  const { data: activeWars } = useActiveWars(user.villageId || "", {
+    enabled: isActive && !!user.villageId,
+    polling: "live",
+    timeDiff,
+  });
 
   if (!shrineData) return <Loader explanation="Loading shrine data" />;
 

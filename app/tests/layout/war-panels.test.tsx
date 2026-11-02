@@ -77,6 +77,7 @@ const attack = mutation();
 const camp = mutation();
 const convert = mutation();
 const objectiveRefetch = vi.fn(async () => {});
+const activeWarsRefetch = vi.fn(async () => {});
 const claimRefetch = vi.fn(async () => {});
 const campRefetch = vi.fn(async () => {});
 const invalidateObjective = vi.fn(async () => {});
@@ -272,7 +273,7 @@ beforeEach(() => {
           },
         ),
       },
-      getActiveWars: { useQuery: () => ({ data: wars }) },
+      getActiveWars: { useQuery: vi.fn(() => ({ data: wars, refetch: activeWarsRefetch })) },
       getWarPointClaims: {
         useQuery: () => ({ data: claims, error: claimError, refetch: claimRefetch }),
       },
@@ -409,12 +410,21 @@ describe("war field objectives", () => {
   it("mounts one field panel only while its toolbar dialog is open", () => {
     const view = mount(<WarFieldActions />);
     const query = client.api.war.getObjectiveWarInfo.useQuery;
+    const activeWarsQuery = client.api.war.getActiveWars.useQuery;
     const toggle = view.getByRole("button", { name: "War" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(query).not.toHaveBeenCalled();
+    expect(activeWarsQuery).toHaveBeenLastCalledWith(
+      { villageId: "own" }, expect.objectContaining({ refetchInterval: 60_000 }),
+    );
+    expect(activeWarsRefetch).not.toHaveBeenCalled();
     expect(view.queryByRole("dialog")).toBeNull();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(activeWarsQuery).toHaveBeenLastCalledWith(
+      { villageId: "own" }, expect.objectContaining({ refetchInterval: 10_000 }),
+    );
+    expect(activeWarsRefetch).toHaveBeenCalledTimes(1);
     const dialog = view.getByRole("dialog", { name: "War" });
     expect(
       within(dialog).getAllByRole("region", { name: "War objectives" }),
@@ -431,6 +441,9 @@ describe("war field objectives", () => {
     expect(view.queryByRole("dialog")).toBeNull();
     expect(view.queryByRole("region", { name: "War objectives" })).toBeNull();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(activeWarsQuery).toHaveBeenLastCalledWith(
+      { villageId: "own" }, expect.objectContaining({ refetchInterval: 60_000 }),
+    );
   });
 
   it("selects one participating war at a time and falls back when the selected war ends", () => {
