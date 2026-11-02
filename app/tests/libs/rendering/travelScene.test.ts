@@ -5,6 +5,7 @@ import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as terrainData from "@/libs/rendering/terrainData";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import * as navigation from "@/libs/sector-map/navigation";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import * as terrain from "@/libs/rendering/primitives/terrain";
@@ -379,6 +380,26 @@ describe("travel scene ground depth", () => {
 });
 
 describe("travel scene window updates", () => {
+  it.each(["worldArt", "route"] as const)("rebuilds cached terrain and scenery after a structure %s edit", async (field) => {
+    const state = snapshotFixture();
+    state.libraryVersion = `structure-edit-${field}`;
+    const structure = state.window[0]!.structures[0]!;
+    structure.route = "/bank";
+    structure.worldArt = { ...Object.values(WORLD_STRUCTURE_ART)[0]!, route: structure.route, sourceImage: structure.image, height: 4 };
+    const first = await sceneFixture(state);
+    const original = first.scene.sectors.get(724)!;
+    const originalBuilding = original.art.entries.find((entry) => entry.description.id === structure.id)!.description;
+    first.scene.dispose();
+    if (field === "worldArt") structure.worldArt = { ...structure.worldArt, height: 5 };
+    else structure.route = "/hospital";
+    const second = await sceneFixture(state);
+    const revised = second.scene.sectors.get(724)!;
+    expect(revised.data).not.toBe(original.data);
+    const revisedBuilding = revised.art.entries.find((entry) => entry.description.id === structure.id)!.description;
+    expect(revisedBuilding.size).not.toBe(originalBuilding.size);
+    if (field === "route") expect(revisedBuilding.frame).toBeUndefined();
+  });
+
   it("ignores late scenery after a sector replacement", async () => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = "replaced-pending-building.png";

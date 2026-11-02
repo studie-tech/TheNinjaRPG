@@ -13,6 +13,7 @@ describe("travel sector identity", () => {
   it("replaces changed terrain, scenery, layout and library data", () => {
     expect(key({ ...entry, map: { ...entry.map, name: "Revised" } })).not.toBe(key());
     expect(key({ ...entry, structures: [{ ...entry.structures[0]!, image: "new.webp" }] })).not.toBe(key());
+    expect(key({ ...entry, structures: [{ ...entry.structures[0]!, route: "/bank" }] })).not.toBe(key());
     expect(key(entry, "v2")).not.toBe(key());
     expect(key(entry, "v1", true)).not.toBe(key());
   });
