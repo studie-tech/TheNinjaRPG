@@ -25,6 +25,7 @@ const consumptionController = (utils: any) => {
     getInventoryQuantities, getConsumedRaidBuffs,
   );
 };
+/** Provide callback snapshots for the controller's observed-query test bindings. */
 const prepareConsumptionUpdate = () => ({ inventory: {}, buffs: {} });
 
 const provider = read("app/_trpc/Provider.tsx");

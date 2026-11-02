@@ -378,7 +378,7 @@ export const getSoldInventory = <T extends { id: string }>(
     ? rows.filter((row) => row.id !== userItemId)
     : undefined;
 
-/** Describe quantities only after the guarded stack writes have committed. */
+/** Describe committed stack writes using a matching loaded baseline for every target. */
 export const getInventoryQuantityChanges = (
   before: Pick<UserItem, "id" | "itemId" | "quantity">[],
   after: { id: string; quantity: number }[],
@@ -395,7 +395,10 @@ export const getInventoryQuantityChanges = (
     };
   });
 
-/** Apply confirmed quantities to matching stacks, preserving variants and recovering ambiguous baselines. */
+/**
+ * Apply confirmed quantities while preserving row extensions. An empty change list confirms
+ * no stack changes; withheld metadata or a changed baseline returns undefined for refetch.
+ */
 export const getInventoryQuantities = <
   T extends Pick<UserItem, "id" | "itemId" | "quantity">,
 >(

@@ -4216,6 +4216,7 @@ const executeClaimedQuestConsequences = async ({
   // Ending a run frees its Pyramid slot before a replacement can claim it. Completed
   // history may already be closed while the caller's quest projection is still open.
   if (startedQuestIds.length > 0) await closeQuests;
+  // Materialize the lazy write once so the mutation phase and row-count check share one execution.
   const itemRemoval =
     removedUserItemIds.length > 0
       ? Promise.resolve(deleteUserItemsWithPositiveQuantity(client, removedUserItemIds))

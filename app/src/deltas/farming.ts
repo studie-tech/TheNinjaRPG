@@ -91,6 +91,7 @@ export const getFarmBulkMutationUpdate = (
     farmingExperience: state.farmingExperience + result.farmingExperienceDelta,
   };
   if (action === "harvest") {
+    // One owned stack can appear in both lists; every cached copy must match its baseline.
     const crops = [...state.extractableCrops, ...state.sellableCrops];
     if (
       !result.inventoryChanges ||

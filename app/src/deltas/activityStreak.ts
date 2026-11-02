@@ -109,6 +109,7 @@ export const getClaimedStreaks = (
   update: ReturnType<typeof getClaimedStreakUpdate>,
   now: Date,
 ): RouterOutputs["activityStreak"]["getUserStreaks"] | undefined => {
+  // Crossing the UTC claim day or an elapsed cycle day changes eligibility beyond this claim.
   if (
     periodStart("daily", now).getTime() !==
       periodStart("daily", update.claimedAt).getTime() ||
