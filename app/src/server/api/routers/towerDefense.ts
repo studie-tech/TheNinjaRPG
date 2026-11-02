@@ -318,7 +318,10 @@ export const towerDefenseRouter = createTRPCRouter({
         currentLevel,
       );
 
-      // Guarded update to deduct points
+      // Guarded update to deduct points. The level comes from the snapshot above, so
+      // concurrent purchases by the same account can each pay for the same level (or a
+      // stale request can write back a lower one). The cost stays on that account's own
+      // points and support can restore it, so this stays a readable check-then-write.
       const result = await updateUserDataForPurchasePermanentUpgrade(
         ctx.drizzle,
         cost,
