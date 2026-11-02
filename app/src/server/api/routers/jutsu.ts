@@ -34,7 +34,6 @@ import {
 import {
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
-  hotkeyLabel,
 } from "@/libs/combat/hotkeys";
 import {
   deletedReason,
@@ -1983,7 +1982,7 @@ export const jutsuRouter = createTRPCRouter({
       const conflict = findLoadoutHotkeyConflict("jutsu", input.hotkeys, itemLoadouts);
       if (conflict) {
         return errorResponse(
-          `${hotkeyLabel(conflict.key)} is used in ${conflict.loadoutName}. Change it there first.`,
+          `${conflict.key.toUpperCase()} is used in ${conflict.loadoutName}. Change it there first.`,
         );
       }
       // Concurrent edits on this account can leave a reversible binding conflict;

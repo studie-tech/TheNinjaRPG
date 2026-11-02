@@ -15,7 +15,6 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { getActionPointCost } from "@/libs/combat/actions";
-import { hotkeyLabel } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
@@ -215,10 +214,10 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
               <div className="relative h-full w-full">
                 {props.hotkeys?.[item.id] && (
                   <kbd
-                    title={`Hotkey ${hotkeyLabel(props.hotkeys[item.id] ?? "")}`}
+                    title={`Hotkey ${(props.hotkeys[item.id] ?? "").toUpperCase()}`}
                     className="pointer-events-none absolute top-[2px] left-[2px] z-10 min-w-[16px] rounded-[3px] border border-black/40 bg-white/90 px-[3px] text-center font-bold font-mono text-[10px] text-black leading-[14px] shadow-sm"
                   >
-                    {hotkeyLabel(props.hotkeys[item.id] ?? "")}
+                    {(props.hotkeys[item.id] ?? "").toUpperCase()}
                   </kbd>
                 )}
                 {renderItem ? (

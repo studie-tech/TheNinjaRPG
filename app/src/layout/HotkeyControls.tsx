@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type HotkeyKind, useBattleHotkeys } from "@/hooks/useBattleHotkeys";
-import { BASIC_HOTKEY_ACTIONS, hotkeyLabel, toHotkey } from "@/libs/combat/hotkeys";
+import { BASIC_HOTKEY_ACTIONS, toHotkey } from "@/libs/combat/hotkeys";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -93,7 +93,7 @@ export function HotkeyCaptureDialog({
           Press a key to use in battle. Backspace removes it, Escape cancels.
         </DialogDescription>
         <p className="font-mono text-3xl">
-          {currentKey ? hotkeyLabel(currentKey) : "—"}
+          {currentKey ? currentKey.toUpperCase() : "—"}
         </p>
         {error && (
           <p role="alert" className="text-destructive text-sm">
@@ -130,12 +130,12 @@ export function HotkeyChip({
       type="button"
       onClick={onClick}
       aria-label={
-        hotkey ? `${label}: hotkey ${hotkeyLabel(hotkey)}` : `Set hotkey for ${label}`
+        hotkey ? `${label}: hotkey ${hotkey.toUpperCase()}` : `Set hotkey for ${label}`
       }
       title={hotkey ? "Change hotkey" : "Set hotkey"}
       className="bg-background hover:bg-muted inline-flex h-[26px] min-w-[26px] items-center justify-center rounded border px-[6px] font-mono text-[12px] font-bold"
     >
-      {hotkey ? hotkeyLabel(hotkey) : <span className="text-muted-foreground">+</span>}
+      {hotkey ? hotkey.toUpperCase() : <span className="text-muted-foreground">+</span>}
     </button>
   );
 }

@@ -62,7 +62,6 @@ import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
-import { hotkeyLabel } from "@/libs/combat/hotkeys";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
@@ -1923,7 +1922,7 @@ const Equip: React.FC<EquipProps> = (props) => {
           />
           {canAssignHotkey && hotkey && (
             <kbd className="pointer-events-none absolute top-[2px] left-[2px] z-10 rounded-[3px] border border-black/40 bg-white/90 px-[3px] font-mono text-[10px] font-bold text-black leading-[14px]">
-              {hotkeyLabel(hotkey)}
+              {hotkey.toUpperCase()}
             </kbd>
           )}
           {/* Durability bar */}

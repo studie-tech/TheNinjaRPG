@@ -10,7 +10,6 @@ import {
   findLoadoutHotkeyConflict,
   type HotkeyKind,
   type HotkeyMap,
-  hotkeyLabel,
   resolveHotkeys,
 } from "@/libs/combat/hotkeys";
 import { showMutationToast } from "@/libs/toast";
@@ -122,13 +121,15 @@ export const useBattleHotkeys = (
     if (owner) {
       showMutationToast({
         success: false,
-        message: `${hotkeyLabel(owner.key)} is used by ${names[owner.actionId] ?? (kind === "jutsu" ? "an item" : "a jutsu or basic action")} in ${owner.loadoutName}. Change it there first.`,
+        message: `${owner.key.toUpperCase()} is used by ${names[owner.actionId] ?? (kind === "jutsu" ? "an item" : "a jutsu or basic action")} in ${owner.loadoutName}. Change it there first.`,
       });
       return false;
     }
     // Show the new keys at once (the next change builds on these rows); the save
     // confirms them or the refetch restores them. Cancelling first drops a
     // refetch already in flight, which would otherwise overwrite them.
+    // Shared cache helpers immediately reconcile dirty or changed revisions,
+    // which would overwrite maps still queued for saving.
     if (kind === "jutsu") {
       void utils.jutsu.getLoadouts.cancel();
       utils.jutsu.getLoadouts.setData(
@@ -147,7 +148,7 @@ export const useBattleHotkeys = (
     if (displaced.length > 0) {
       showMutationToast({
         success: true,
-        message: `${hotkeyLabel(key)} moved from ${displaced.map((id) => names[id] ?? id).join(", ")}`,
+        message: `${key.toUpperCase()} moved from ${displaced.map((id) => names[id] ?? id).join(", ")}`,
       });
     }
     return true;

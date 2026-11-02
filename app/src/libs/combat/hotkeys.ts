@@ -160,6 +160,3 @@ export const resolveHotkeys = (
   add(itemMap ?? {});
   return { byAction, byKey };
 };
-
-/** Display label for a key badge. */
-export const hotkeyLabel = (key: string) => key.toUpperCase();

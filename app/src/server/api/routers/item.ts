@@ -57,7 +57,7 @@ import {
   userItemImbuement,
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
-import { findLoadoutHotkeyConflict, hotkeyLabel } from "@/libs/combat/hotkeys";
+import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
 import {
   deletedReason,
   editedReason,
@@ -3544,7 +3544,7 @@ export const itemRouter = createTRPCRouter({
       const conflict = findLoadoutHotkeyConflict("item", input.hotkeys, jutsuLoadouts);
       if (conflict) {
         return errorResponse(
-          `${hotkeyLabel(conflict.key)} is used in ${conflict.loadoutName}. Change it there first.`,
+          `${conflict.key.toUpperCase()} is used in ${conflict.loadoutName}. Change it there first.`,
         );
       }
       // Concurrent edits on this account can leave a reversible binding conflict;
