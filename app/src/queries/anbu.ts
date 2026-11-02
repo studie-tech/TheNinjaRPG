@@ -393,29 +393,25 @@ export const updateAnbuSquadForPurchaseStealthUpgrade = (
       and(eq(anbuSquad.id, squad.id), gte(anbuSquad.points, ANBU_STEALTH_UPGRADE_COST)),
     );
 
-/** Build the `userData` update for `performEspionage`, setting `villagePrestige`, using predicates on `userId`. */
-export const updateUserDataForPerformEspionage = (
-  client: Pick<DrizzleClient, "update">,
+/**
+ * Execute the `performEspionage` charge: the member's village prestige and the squad's points
+ * in one statement, only while the user still belongs to the squad and both can afford it.
+ */
+export const executeChargeForPerformEspionage = (
+  client: Pick<DrizzleClient, "execute">,
   user: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({
-      villagePrestige: sql`${userData.villagePrestige} - ${ANBU_ESPIONAGE_PRESTIGE_COST}`,
-    })
-    .where(eq(userData.userId, user.userId));
-
-/** Build the `anbuSquad` update for `performEspionage`, setting `points`, using predicates on `id`. */
-export const updateAnbuSquadForPerformEspionage = (
-  client: Pick<DrizzleClient, "update">,
   userSquad: { id: string },
 ) =>
-  client
-    .update(anbuSquad)
-    .set({
-      points: sql`${anbuSquad.points} - ${ANBU_ESPIONAGE_POINTS_COST}`,
-    })
-    .where(eq(anbuSquad.id, userSquad.id));
+  client.execute(sql`
+      UPDATE ${userData}
+      INNER JOIN ${anbuSquad} ON ${anbuSquad.id} = ${userData.anbuId}
+      SET ${userData.villagePrestige} = ${userData.villagePrestige} - ${ANBU_ESPIONAGE_PRESTIGE_COST},
+          ${anbuSquad.points} = ${anbuSquad.points} - ${ANBU_ESPIONAGE_POINTS_COST}
+      WHERE ${userData.userId} = ${user.userId}
+        AND ${anbuSquad.id} = ${userSquad.id}
+        AND ${userData.villagePrestige} >= ${ANBU_ESPIONAGE_PRESTIGE_COST}
+        AND ${anbuSquad.points} >= ${ANBU_ESPIONAGE_POINTS_COST}
+    `);
 
 /**
  * Build the `userRequest` update for `createAnbuRequest`, setting `status`, including
