@@ -57,6 +57,39 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("retains painter keys between contact-order crossings and updates them across scenery", () => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 }); actors.sync(snapshot([user]));
+    const root = actors.container.children[0]!, key = root.zIndex, tile = grid.getHex({ col: 4, row: 4 })!;
+    const scenery = [-20, 20].map(offset => { const sprite = new Container(); sprite.zIndex = key + offset; stage.addChild(sprite); depth.attach(sprite); return sprite; });
+    const move = (y: number) => actors.animate(frame, new Map([[user.userId, { x: root.x, y, direction: null, facing: 1 }]]));
+    move(root.y); stage.renderGroup!.structureDidChange = false;
+    const y = root.y; move(y + 1);
+    expect(root.zIndex).toBe(key); expect(root.y).toBe(y + 1);
+    expect(stage.renderGroup!.structureDidChange).toBe(false);
+    expect(depth.renderLayerChildren).toEqual([scenery[0]!, root, scenery[1]!]);
+    move(y + 30);
+    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
+    expect(depth.renderLayerChildren).toEqual([root, ...scenery]);
+  });
+  it("orders crossing actors and inserted scenery by live contact planes", () => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture();
+    let users = [player(0, { longitude: 4, latitude: 4 }), player(1, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users));
+    const offset = grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64);
+    const fixed = new Container(); fixed.zIndex = -100; stage.addChild(fixed); depth.attach(fixed);
+    const check = (a: number, b: number) => {
+      actors.animate(frame, new Map(users.map((user, index) => [user.userId, { x: 100 + index * 10, y: -(index ? b : a) - offset - actors.container.y, direction: null, facing: 1 }])));
+      const contact = (root: Container) => root === fixed ? root.zIndex : -(root.y + offset + actors.container.y);
+      for (let i = 1; i < depth.renderLayerChildren.length; i++) expect(contact(depth.renderLayerChildren[i - 1]!)).toBeLessThanOrEqual(contact(depth.renderLayerChildren[i]!));
+    };
+    for (let i = 0; i < 100; i++) check(-100 + 35 * Math.sin(i * 0.7), -100 + 35 * Math.cos(i * 0.4));
+    check(20, 25); check(28, 29);
+    fixed.zIndex = 27; check(28, 29);
+    users = [users[0]!, player(2, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users)); check(-120, -90);
+    actors.container.y += 500; check(-85, -115);
+  });
   it("preserves a roaming NPC's rectangular artwork proportions", async () => {
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4 * 8 * 4), width: 4, height: 8 }) });
     vi.spyOn(Assets, "load").mockImplementation(async () => texture);
@@ -120,10 +153,11 @@ describe("travel actor artwork loading", () => {
 
   it("atomically replaces the placeholder at the retained foot, scale and current position", async () => {
     const pending = holdCharacters();
-    const { actors, grid, snapshot } = fixture();
+    const { actors, grid, snapshot, stage, depth } = fixture();
     actors.container.position.set(90, -70);
     actors.sync(snapshot([player(0)]));
     const root = actors.container.children[0]!;
+    const scenery = new Container(); scenery.zIndex = root.zIndex - 5; stage.addChild(scenery); depth.attach(scenery);
     const fallback = root.children.find((child) => child.label === "avatar")!;
     const tile = grid.getHex({ col: 0, row: 0 })!;
     expect(fallback.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);

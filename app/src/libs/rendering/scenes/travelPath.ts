@@ -4,7 +4,7 @@ import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 
 /** A retained ground ribbon rounds route corners; pooled motes travel toward its destination. */
 export const createTravelPath = () => {
-  const container = new Container({ label: "travel-path" });
+  const container = new Container({ label: "travel-path", isRenderGroup: true });
   const ribbon = new Graphics({ label: "travel-path-ribbon" });
   const destination = new Graphics({ label: "travel-path-destination" });
   const motes = Array.from({ length: WORLD_DETAIL.routeMotes }, () => {
@@ -47,7 +47,7 @@ export const createTravelPath = () => {
         .fill(0xddfff0);
       destination.position.copyFrom(end);
     }
-    container.visible = false;
+    if (!end) container.visible = false;
   };
 
   const animate = (frame: GameFrame, origin: RoutePoint | undefined, scale = 1) => {

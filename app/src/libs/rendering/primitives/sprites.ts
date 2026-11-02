@@ -409,7 +409,9 @@ export const createWorldSprites = async (
   const groundDetails = entries.filter((entry) => entry.description.small);
   let flatGround: Container | null = null;
   let detailZoom = Number.NaN;
-  let viewport: (WorldBounds & { padding: number }) | null = null;
+  let viewport:
+    | (WorldBounds & { padding: number; width: number; height: number })
+    | null = null;
   let attached: {
     ground?: RenderLayer;
     world: RenderLayer;
@@ -475,23 +477,29 @@ export const createWorldSprites = async (
       }
     },
     setViewport: (bounds: WorldBounds, padding: number) => {
-      // Conservative world-space cells retain visibility and sprite batches during small pans.
-      const next = {
-        minX: Math.floor(bounds.minX / 64) * 64,
-        minY: Math.floor(bounds.minY / 64) * 64,
-        maxX: Math.ceil(bounds.maxX / 64) * 64,
-        maxY: Math.ceil(bounds.maxY / 64) * 64,
-        padding,
-      };
+      const width = bounds.maxX - bounds.minX,
+        height = bounds.maxY - bounds.minY;
+      // A spare world-space cell prevents camera motion from repeatedly changing batch membership.
       if (
         viewport &&
-        viewport.minX === next.minX &&
-        viewport.minY === next.minY &&
-        viewport.maxX === next.maxX &&
-        viewport.maxY === next.maxY &&
-        viewport.padding === padding
+        viewport.padding === padding &&
+        Math.abs(viewport.width - width) <= Math.max(1, width) * 1e-6 &&
+        Math.abs(viewport.height - height) <= Math.max(1, height) * 1e-6 &&
+        bounds.minX >= viewport.minX &&
+        bounds.maxX <= viewport.maxX &&
+        bounds.minY >= viewport.minY &&
+        bounds.maxY <= viewport.maxY
       )
         return;
+      const next = {
+        minX: (Math.floor(bounds.minX / 64) - 1) * 64,
+        minY: (Math.floor(bounds.minY / 64) - 1) * 64,
+        maxX: (Math.ceil(bounds.maxX / 64) + 1) * 64,
+        maxY: (Math.ceil(bounds.maxY / 64) + 1) * 64,
+        width,
+        height,
+        padding,
+      };
       viewport = next;
       // Offscreen sprites keep their decoded lease but do not upload or join a GPU batch.
       for (const entry of entries) {

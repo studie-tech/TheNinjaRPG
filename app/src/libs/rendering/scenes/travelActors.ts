@@ -160,6 +160,7 @@ export const createTravelActors = (
         x: previous?.x ?? -recipe.tile.center.x,
         y: previous?.y ?? -recipe.tile.center.y,
         facing: previous?.facing ?? 2,
+        depth: 0,
       };
       root.position.set(record.x, record.y);
       root.zIndex = -(
@@ -168,6 +169,7 @@ export const createTravelActors = (
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
         container.y
       );
+      record.depth = root.zIndex;
       const body = recipe.parts.find((entry) => entry.character);
       if (body) {
         // Texture-free anonymous art stays usable through slow or failed atlas/portrait loads.
@@ -319,6 +321,16 @@ export const createTravelActors = (
     }
     return null;
   };
+  /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
+  const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
+  const hasDepthCrossing = (siblings: readonly Container[]) =>
+    siblings.some((root, index) => {
+      const before = siblings[index - 1];
+      return (
+        !!before &&
+        (before.zIndex > root.zIndex || contactDepth(before) > contactDepth(root))
+      );
+    });
   const animate = (
     frame: GameFrame,
     movements?: ReadonlyMap<string, TravelActorMovement>,
@@ -371,13 +383,21 @@ export const createTravelActors = (
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
       // Contact uses the interpolated/orbiting position and the current sector origin.
-      // zIndex also invalidates Pixi's retained render instructions when depth changes.
-      root.zIndex = -(
+      record.depth = -(
         root.y +
         recipe.tile.height *
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
         container.y
       );
+    }
+    if (
+      hasDepthCrossing(layers?.depth.renderLayerChildren ?? container.children) ||
+      (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))
+    ) {
+      // Publish moving keys together so actor crossings and new scenery share one coherent order.
+      for (const record of records.values()) record.root.zIndex = record.depth;
+      layers?.depth.sortRenderLayerChildren();
+      layers?.overlay.sortRenderLayerChildren();
     }
     container.sortChildren();
   };
@@ -720,6 +740,7 @@ type ActorRecipe = {
   spread: boolean;
 };
 type ActorRecord = {
+  depth: number;
   tile: TerrainHex;
   path: TerrainHex[];
   x: number;

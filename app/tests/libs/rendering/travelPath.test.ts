@@ -12,6 +12,19 @@ const fixture = () => {
 };
 
 describe("travel route ribbon", () => {
+  it("keeps an active route visible when its intended path changes", () => {
+    const path = fixture();
+    try {
+      path.set([{ x: 40, y: 0 }], 40); path.animate(frame(100), { x: 0, y: 0 });
+      expect(path.container.visible).toBe(true);
+      path.set([{ x: 80, y: 20 }], 40);
+      expect(path.container.visible).toBe(true);
+      path.animate(frame(200), { x: 1, y: 0 });
+      expect(path.destination.position).toMatchObject({ x: 80, y: 20 });
+      path.set([], 40); expect(path.container.visible).toBe(false);
+    } finally { path.container.destroy({ children: true }); }
+  });
+
   it("follows fractional feet, rounds bends and retains the actual destination", () => {
     const path = fixture(), draw = vi.spyOn(path.ribbon, "poly");
     try {

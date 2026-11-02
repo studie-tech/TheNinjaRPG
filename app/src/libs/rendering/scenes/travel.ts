@@ -561,7 +561,6 @@ export const createTravelScene = async (options: {
         lastActorSnapshot = snapshot;
         actors.sync(actorSnapshot);
       }
-      actors.animate(frame, movements);
       const breeze = sampleWorldWind(frame, scale());
       const viewport = camera
         ? {
@@ -599,6 +598,8 @@ export const createTravelScene = async (options: {
         if (visible || refreshDetails)
           rendered.art.animate(frame, scale(), null, breeze);
       }
+      // Zoom can reclassify foreground scenery before actor contact order is resolved.
+      actors.animate(frame, movements);
       sceneryScale = scale();
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;

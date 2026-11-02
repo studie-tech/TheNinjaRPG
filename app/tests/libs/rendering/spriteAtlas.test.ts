@@ -19,7 +19,7 @@ describe("world sprite atlas ownership", () => {
     vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
     const art = await createWorldSprites(game, [
       { id: "edge", kind: "decoration", image: "viewport-edge.png", size: 16, x: 62, y: 30, groundY: 0 },
-      { id: "next", kind: "decoration", image: "viewport-next.png", size: 16, x: 130, y: 30, groundY: 0 },
+      { id: "next", kind: "decoration", image: "viewport-next.png", size: 16, x: 194, y: 30, groundY: 0 },
     ]);
     cleanups.push(() => art.dispose());
     art.setViewport({ minX: 60, maxX: 64, minY: 16, maxY: 48 }, 0);
@@ -29,7 +29,7 @@ describe("world sprite atlas ownership", () => {
     expect(art.entries[0]!.sprite.renderable).toBe(true);
     art.setViewport({ minX: 124, maxX: 128, minY: 16, maxY: 48 }, 0);
     expect(art.entries[1]!.sprite.renderable).toBe(true);
-    art.setViewport({ minX: 256, maxX: 288, minY: 16, maxY: 48 }, 0);
+    art.setViewport({ minX: 384, maxX: 416, minY: 16, maxY: 48 }, 0);
     expect(art.entries.every((entry) => !entry.sprite.renderable)).toBe(true);
   });
   it("fades barely resolved ground cover smoothly, restores it on zoom and keeps offscreen props culled", async () => {
