@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it, setSystemTime } from "bun:test";
-import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, item, jutsu, userData, userJutsu } from "@/drizzle/schema";
+import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, item, jutsu, userData, userItem, userJutsu } from "@/drizzle/schema";
 import { loadEntities, entityKey } from "@/libs/contentReview/entities";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
@@ -45,7 +45,8 @@ const pauseBeforeTransaction = (database: DrizzleClient) => {
 
 describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(contentProposalBasis, contentProposal, actionLog, userJutsu, jutsu, bloodlineReskin, item, userData);
+    // Training loads equipment; reset inventory with its item catalogue.
+    await resetTables(contentProposalBasis, contentProposal, actionLog, userJutsu, jutsu, bloodlineReskin, userItem, item, userData);
     await insertUsers([{ userId: "staff", username: "Staff", role: "CONTENT" }, { userId: "player", username: "Player" }] as never);
     const db = await getTestDatabase();
     await db.insert(jutsu).values({

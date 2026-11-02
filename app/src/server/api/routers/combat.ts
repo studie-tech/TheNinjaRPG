@@ -7,7 +7,10 @@ import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
 import {
+  buildCombatStateUpdate,
+  type CombatStateUpdate,
   captureCombatCacheSnapshot,
+  captureCombatStateUpdate,
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
 } from "@/deltas/combat";
@@ -339,6 +342,7 @@ export const combatRouter = createTRPCRouter({
           if (!userBattle) {
             return { battle: null, result: null };
           }
+          const stateBaseline = captureCombatStateUpdate(userBattle);
 
           const spawnedWave = advanceEncounterWave(
             userBattle,
@@ -487,7 +491,15 @@ export const combatRouter = createTRPCRouter({
               history.length &&
               settledBattle.usersState.filter((user) => !user.isAi).length > 1
             ) {
-              notifyBattleLogs(pusher, settledBattle, logEntries, !!result);
+              notifyBattleLogs(
+                pusher,
+                settledBattle,
+                logEntries,
+                !!result,
+                result
+                  ? undefined
+                  : buildCombatStateUpdate(stateBaseline, settledBattle),
+              );
             }
           }
 
@@ -634,6 +646,7 @@ export const combatRouter = createTRPCRouter({
           ctx.waitForRateLimit(),
         ]);
         if (!battle) return { updateClient: true };
+        const stateBaseline = captureCombatStateUpdate(battle);
         // A denied request must not start a profiler that the action cannot stop.
         Sentry.profiler.startProfiler();
         if (debug) console.log("============ Performing action ============");
@@ -925,7 +938,13 @@ export const combatRouter = createTRPCRouter({
             // Polling clients may have read the claimed state before its log insert.
             const nUsers = battle.usersState.filter((u) => !u.isAi).length;
             if (nUsers > 1) {
-              notifyBattleLogs(pusher, newBattle, logEntries, !!result);
+              notifyBattleLogs(
+                pusher,
+                newBattle,
+                logEntries,
+                !!result,
+                result ? undefined : buildCombatStateUpdate(stateBaseline, newBattle),
+              );
             }
 
             // Stop profiling. Flush after the response so the client is not
@@ -1817,24 +1836,29 @@ export const combatRouter = createTRPCRouter({
 /***********************************************
  * CONVENIENCE FUNCTIONS USED ON COMBAT ENDPOINTS
  ***********************************************/
-/** Send only committed public log rows; oversized batches retain a small version notification. */
+/** Send committed public changes; oversized payloads retain log or version recovery signals. */
 const notifyBattleLogs = (
   pusher: ReturnType<typeof getServerPusher>,
   battle: { id: string; version: number },
   logEntries: BattleAction[],
   finished: boolean,
+  stateUpdate?: CombatStateUpdate,
 ) => {
   const state = { version: battle.version, ...(finished ? { finished: true } : {}) };
   const update = {
     ...state,
-    logEntries: superjson.serialize(logEntries),
+    ...(logEntries.length ? { logEntries: superjson.serialize(logEntries) } : {}),
+  };
+  const withState = {
+    ...update,
+    ...(stateUpdate ? { stateUpdate: superjson.serialize(stateUpdate) } : {}),
   };
   // Keep the Pusher-compatible event below its payload limit; never truncate a log.
   void pusher.trigger(
     battle.id,
     "event",
-    logEntries.length === 0
-      ? state
+    Buffer.byteLength(JSON.stringify(withState)) <= 10_000
+      ? withState
       : Buffer.byteLength(JSON.stringify(update)) <= 10_000
         ? update
         : { ...state, logEntries: null },
