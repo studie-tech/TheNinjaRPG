@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { subscribeConversation } from "@/libs/conversationEvents";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -57,17 +58,21 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
   useEffect(() => {
     if (!pusher || !conversationId) return;
 
-    const channel = pusher.subscribe(conversationId);
-    channel.bind("event", (data: { message?: string; fromId?: string }) => {
-      // Skip the echo of our own send — onSuccess already invalidated.
-      if (data.message === "new" && data.fromId !== userData?.userId) {
-        void util.comments.getConversationComments.invalidate(queryKey);
-      }
-    });
-
-    return () => {
-      pusher.unsubscribe(conversationId);
-    };
+    return subscribeConversation(
+      pusher,
+      conversationId,
+      JSON.stringify(queryKey),
+      (data, ownsCacheUpdate) => {
+        // Skip the echo of our own send — onSuccess already invalidated.
+        if (
+          ownsCacheUpdate &&
+          data.message === "new" &&
+          data.fromId !== userData?.userId
+        ) {
+          void util.comments.getConversationComments.invalidate(queryKey);
+        }
+      },
+    );
   }, [
     conversationId,
     pusher,

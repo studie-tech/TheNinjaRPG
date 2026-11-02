@@ -441,20 +441,10 @@ function InboxPane({
   hideRail: boolean;
   onMessageUser: (user: ChatStartUser) => void;
 }) {
-  const { data: userData, notifications, updateNotifications } = useUserData();
+  const { data: userData } = useUserData();
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mutes = useChatMutes();
-  const { data: conversations, isPending } = api.comments.getUserConversations.useQuery(
-    { selectedConvo: null },
-    { enabled: !!userData },
-  );
-
-  // Listing conversations clears the server's inbox counter; mirror it locally.
-  useEffect(() => {
-    if (conversations && getInboxNews(notifications) > 0) {
-      void updateNotifications(notifications?.filter((n) => n.href !== "/inbox"));
-    }
-  }, [conversations, notifications, updateNotifications]);
+  const { data: conversations, isPending } = useInboxConversations();
 
   const startWith = panel.startWith;
   const existingChat = startWith
@@ -707,16 +697,30 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
   );
 }
 
+/** Mirror the inbox counter reset performed by a successful conversation listing. */
+function useInboxConversations() {
+  const { data: userData, notifications, updateNotifications } = useUserData();
+  const result = api.comments.getUserConversations.useQuery(
+    { selectedConvo: null },
+    { enabled: !!userData },
+  );
+  useEffect(() => {
+    if (result.data && getInboxNews(notifications) > 0) {
+      void updateNotifications(
+        notifications?.filter((entry) => entry.href !== "/inbox"),
+      );
+    }
+  }, [result.data, notifications, updateNotifications]);
+  return result;
+}
+
 /** Phone start screen: taverns, then private conversations. */
 function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
   const { data: userData } = useUserData();
   const setPanel = useSetAtom(chatPanelAtom);
   const mutes = useChatMutes();
   const { availTaverns, isLoading } = useTaverns(userData);
-  const { data: conversations, isPending } = api.comments.getUserConversations.useQuery(
-    { selectedConvo: null },
-    { enabled: !!userData },
-  );
+  const { data: conversations, isPending } = useInboxConversations();
   if (!userData || isLoading) return <Loader explanation="Loading chats" />;
   const rowClass =
     "flex min-h-[56px] w-full items-center gap-[12px] border-b px-[12px] py-[8px] text-left hover:bg-muted/50";

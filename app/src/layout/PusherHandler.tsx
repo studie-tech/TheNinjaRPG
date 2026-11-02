@@ -34,6 +34,7 @@ export type UserEvent = {
   alertType?: string;
   sector?: number;
   conversationId?: string;
+  isPublic?: boolean;
 };
 
 export const usePusherHandler = (
@@ -243,7 +244,7 @@ export const usePusherHandler = (
           const isViewing =
             !!conversationId && store.get(chatViewingAtom) === conversationId;
           if (!isConversationMuted(cachedUser, conversationId) && !isViewing) {
-            if (conversationId) {
+            if (conversationId && data.isPublic) {
               store.set(chatMentionsAtom, (old) => ({
                 ...old,
                 [conversationId]: (old[conversationId] ?? 0) + 1,

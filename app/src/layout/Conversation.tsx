@@ -21,6 +21,7 @@ import { ConversationComments } from "@/layout/ConversationComments";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { subscribeConversation } from "@/libs/conversationEvents";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
@@ -622,19 +623,14 @@ export const useConversation = (props: ConversationLogicProps) => {
   useEffect(() => {
     if (conversation && pusher && !isPaused) {
       const ownUserId = userData?.userId;
-      const channel = pusher.subscribe(conversation.id);
-      channel.bind(
-        "event",
-        (data: {
-          message: string;
-          fromId?: string;
-          commentId?: string;
-          emoji?: string;
-          username?: string;
-        }) => {
+      return subscribeConversation(
+        pusher,
+        conversation.id,
+        JSON.stringify(queryKey),
+        (data, ownsCacheUpdate) => {
           switch (data.message) {
             case "new":
-              if (data.fromId !== ownUserId && data.commentId) {
+              if (ownsCacheUpdate && data.fromId !== ownUserId && data.commentId) {
                 fetchComment({
                   commentId: data.commentId,
                   conversationId: conversation.id,
@@ -643,6 +639,7 @@ export const useConversation = (props: ConversationLogicProps) => {
               break;
             case "reaction":
               if (
+                ownsCacheUpdate &&
                 data.fromId !== ownUserId &&
                 data.commentId &&
                 data.username &&
@@ -672,11 +669,8 @@ export const useConversation = (props: ConversationLogicProps) => {
           }
         },
       );
-      return () => {
-        pusher.unsubscribe(conversation.id);
-      };
     }
-  }, [isPaused, conversation, pusher]);
+  }, [isPaused, conversation, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {

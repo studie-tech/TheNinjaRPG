@@ -671,6 +671,7 @@ export const commentsRouter = createTRPCRouter({
           pusher.trigger(userId, "event", {
             type: "pinged",
             conversationId: convo.id,
+            isPublic: convo.isPublic,
             message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
           }),
         ),

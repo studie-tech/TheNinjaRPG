@@ -4,10 +4,12 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { createTRPCReact } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
+import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
+import { chatMentionsAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { ensureDom } from "../setup/dom.mjs";
@@ -63,4 +65,33 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   view.rerender();
   await act(async () => receiveEvent({ type: "newInbox" }));
   expect(showToast).toHaveBeenCalledTimes(1);
+});
+
+
+it("counts only public conversation pings as Tavern notifications", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation(function () {
+    return {
+      subscribe: () => ({ bind: (_event: string, handler: typeof receiveEvent) => { receiveEvent = handler; } }),
+      unsubscribe: vi.fn(), disconnect: vi.fn(),
+    };
+  } as never);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  const store = getDefaultStore();
+  store.set(chatMentionsAtom, {});
+  const queryClient = new QueryClient();
+  queryClients.push(queryClient);
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <testApi.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </testApi.Provider>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  await act(async () => receiveEvent({ type: "pinged", conversationId: "private", isPublic: false }));
+  expect(store.get(chatMentionsAtom)).toEqual({});
+  await act(async () => receiveEvent({ type: "pinged", conversationId: "tavern", isPublic: true }));
+  expect(store.get(chatMentionsAtom)).toEqual({ tavern: 1 });
+  store.set(chatMentionsAtom, {});
 });
