@@ -43,7 +43,11 @@ const getInitialIframeMuteState = (
  * Integrates with user database and localStorage fallback
  */
 export const useIframeMute = (): UseIframeMuteReturn => {
-  const { data: userData } = useUserDataSelector((user) => ({
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector((user) => ({
     preferredGeneral1: user.preferredGeneral1,
     preferredGeneral2: user.preferredGeneral2,
     iframesMuted: "iframesMuted" in user ? user.iframesMuted : undefined,
@@ -66,7 +70,9 @@ export const useIframeMute = (): UseIframeMuteReturn => {
 
   // Update preferences mutation
   const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _input, revision) => {
+      if (result.success) await updateUser(result, { revision });
       showMutationToast(result);
     },
   });
