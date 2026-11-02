@@ -216,9 +216,7 @@ export const DailyMeanStdChart: React.FC<DailyMeanStdProps> = (props) => {
               label: (ctx) => {
                 const i = ctx.dataIndex;
                 const m = mean[i] ?? 0;
-                const up = upper[i] ?? m;
-                const lo = lower[i] ?? m;
-                const s = (up - lo) / 2;
+                const s = data[i]?.std ?? 0;
                 const n = data[i]?.count ?? 0;
                 const isMean = ctx.dataset.label?.includes("mean");
                 const label = isMean ? "Mean" : (ctx.dataset.label ?? title);
