@@ -235,6 +235,8 @@ export class SpacetimeDBConnection {
             );
           }
           this.identity = identity.toHexString();
+          // Row listeners accumulate per registration, so attach them once per connection.
+          this.setupTableHandlers();
 
           // Set up filtered subscriptions first to avoid race conditions
           // PERFORMANCE: Only subscribe to this user's data
@@ -282,9 +284,13 @@ export class SpacetimeDBConnection {
   private setupGlobalSubscriptions() {
     if (!this.connection || !this.currentUserId) return;
 
+    if (this.globalSubscription) {
+      this.globalSubscription.unsubscribe();
+      this.globalSubscription = null;
+    }
+
     // For guests, skip global subscription - they'll use subscribeToGuestSession() with specific seed
     if (this.currentUserId === "guest") {
-      this.setupTableHandlers();
       // Mark WebSocket as ready immediately for guests (no subscription to wait for)
       this.connectionState = "connected";
       this.wsReady = true;
@@ -319,9 +325,6 @@ export class SpacetimeDBConnection {
         this.emit({ type: "error", message: "Global subscription error" });
       })
       .subscribe(queries);
-
-    // Set up table event handlers
-    this.setupTableHandlers();
   }
 
   /**
