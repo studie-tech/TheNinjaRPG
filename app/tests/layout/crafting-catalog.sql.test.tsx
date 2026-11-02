@@ -22,6 +22,7 @@ import { fetchUserItems } from "@/routers/item";
 import { occupationRouter } from "@/routers/occupation";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
+import * as userContext from "@/utils/UserContext";
 import { DecreaseCookingTime, DecreaseCraftingTime } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../setup/factories";
 import {
@@ -35,6 +36,8 @@ import { ensureDom } from "../setup/dom.mjs";
 describeWithDatabase("CraftingCatalog shrine duration preview", () => {
   beforeEach(async () => {
     ensureDom();
+    // Profile data comes from fixture props; the catalog only needs the context clock.
+    vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
     await resetTables(
       craftingRequirement,
       userQueue,

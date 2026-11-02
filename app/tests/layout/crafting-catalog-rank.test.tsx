@@ -62,6 +62,8 @@ const renderCatalog = (rarity: ItemRarity, userData = apprentice) => {
 
 describe("CraftingCatalog crafting rank gate", () => {
   beforeEach(() => {
+    // Keep context metadata local so another suite cannot supply the catalog's clock.
+    vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
     Object.assign(vi.spyOn(client, "api" as never), {
       useUtils: () => ({}),
       occupation: {
