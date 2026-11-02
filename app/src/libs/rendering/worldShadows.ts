@@ -114,7 +114,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       onError: onOcclusionError,
       budgetMs: 2,
     }),
-    dynamicField = createWorldOcclusion({ onError: onOcclusionError });
+    dynamicField = createWorldOcclusion({ direct: true, onError: onOcclusionError });
   const view = new UniformGroup(
     {
       uViewport: { value: new Float32Array(4), type: "vec4<f32>" },
@@ -140,6 +140,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       },
       uLightStrength: { value: 1, type: "f32" },
       uShadows: { value: 1, type: "f32" },
+      uDynamicDirect: { value: 0, type: "f32" },
       uInstanceCounts: { value: new Float32Array(2), type: "vec2<f32>" },
     },
     { isStatic: true },
@@ -175,6 +176,31 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     terrainLayer = new Container(),
     pointLayer = new Container();
   const receiverBatches: ReceiverBatch[] = [];
+  // Regions share a shader and a stable packed buffer instead of separate draw instructions.
+  const terrainBuffer = new Buffer({
+    data: new Float32Array(0),
+    usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
+    shrinkToFit: false,
+  });
+  const terrainGeometry = new Geometry({
+    attributes: {
+      aPosition: { buffer: terrainBuffer, format: "float32x3", stride: 12 },
+    },
+  });
+  const terrainShader = Shader.from({
+    gl: { vertex: terrainVertex, fragment: terrainFragment },
+    resources: { view },
+  });
+  const terrainState = new State();
+  terrainState.blend = false;
+  const terrainMesh = new Mesh({
+    geometry: terrainGeometry,
+    shader: terrainShader,
+    state: terrainState,
+  });
+  terrainMesh.visible = false;
+  terrainLayer.addChild(terrainMesh);
+  let terrainKey = "";
   // Retain released sources until the cached receiver and depth passes relinquish their bindings.
   const retired: (() => void)[] = [];
   const records = new Set<Caster>(),
@@ -301,10 +327,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     for (const batch of receiverBatches) destroyBatch(batch);
     receiverBatches.length = 0;
     previousReceivers = [];
-    for (const terrain of terrains) {
-      terrain.mesh.geometry.destroy(true);
-      terrain.mesh.shader?.destroy();
-    }
+    terrainGeometry.destroy(true);
+    terrainShader.destroy();
     terrains.clear();
     terrainLayer.destroy({ children: true });
     materialLayer.destroy({ children: true });
@@ -438,30 +462,19 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
               height,
             );
         }
-      const geometry = new Geometry({
-        attributes: {
-          aPosition: { buffer: new Float32Array(values), format: "float32x3" },
-        },
-      });
-      const shader = Shader.from({
-        gl: { vertex: terrainVertex, fragment: terrainFragment },
-        resources: {
-          view,
-          object: { uOffset: { value: new Float32Array(2), type: "vec2<f32>" } },
-        },
-      });
-      const state = new State();
-      state.blend = false;
-      const mesh = new Mesh({ geometry, shader, state });
-      terrainLayer.addChild(mesh);
-      const entry = { parent, mesh, id: String(++serial), minHeight };
+      const entry = {
+        parent,
+        positions: new Float32Array(values),
+        id: String(++serial),
+        minHeight,
+        x: 0,
+        y: 0,
+        visible: false,
+      };
       terrains.add(entry);
       invalidate();
       return () => {
         if (!terrains.delete(entry)) return;
-        geometry.destroy(true);
-        shader.destroy();
-        mesh.destroy();
         invalidate();
       };
     },
@@ -815,7 +828,22 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         }
         if (!boundsOverlap(bounds, recordViewport, margin)) continue;
         // Retained passes use the stored Float32 pose, including movement smaller than a screen pixel.
+        const prepared = record.cached?.receiver;
         const receiverEntry = {
+          // Translation changes only the two instance offsets; surface/atlas data belongs to the pose.
+          vertices:
+            canInstance &&
+            prepared?.vertices &&
+            pose?.texture === sprite.texture &&
+            prepared.material === material &&
+            prepared.frame === frame &&
+            prepared.height === objectHeight &&
+            prepared.transform[0] === transform[0] &&
+            prepared.transform[1] === transform[1] &&
+            prepared.transform[2] === transform[2] &&
+            prepared.transform[3] === transform[3]
+              ? prepared.vertices
+              : undefined,
           record,
           material,
           frame,
@@ -1082,15 +1110,35 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       let minReceiverHeight = 0;
       for (const terrain of terrains) {
         const p = origin(terrain.parent);
-        terrain.mesh.visible = p.visible && terrain.parent.renderable;
-        if (terrain.mesh.visible)
+        terrain.visible = p.visible && terrain.parent.renderable;
+        if (terrain.visible)
           minReceiverHeight = Math.min(minReceiverHeight, terrain.minHeight);
-        terrain.mesh.shader?.resources.object.uniforms.uOffset.set([
-          p.x - anchorX,
-          p.y - anchorY,
-        ]);
-        terrain.mesh.shader?.resources.object.update();
-        nextTerrainKey += `${terrain.id}:${p.x}:${p.y}:${terrain.mesh.visible}`;
+        // Match Float32 uniform offsets before adding the same local Float32 positions.
+        terrain.x = Math.fround(p.x - anchorX);
+        terrain.y = Math.fround(p.y - anchorY);
+        nextTerrainKey += `${terrain.id}:${terrain.x}:${terrain.y}:${terrain.visible}`;
+      }
+      if (nextTerrainKey !== terrainKey) {
+        terrainKey = nextTerrainKey;
+        let length = 0;
+        for (const terrain of terrains)
+          if (terrain.visible) length += terrain.positions.length;
+        const vertices =
+          terrainBuffer.data.length === length
+            ? (terrainBuffer.data as Float32Array)
+            : new Float32Array(length);
+        let offset = 0;
+        for (const terrain of terrains) {
+          if (!terrain.visible) continue;
+          for (let i = 0; i < terrain.positions.length; i += 3) {
+            vertices[offset++] = (terrain.positions[i] ?? 0) + terrain.x;
+            vertices[offset++] = (terrain.positions[i + 1] ?? 0) + terrain.y;
+            vertices[offset++] = terrain.positions[i + 2] ?? 0;
+          }
+        }
+        terrainBuffer.data = vertices;
+        terrainBuffer.update();
+        terrainMesh.visible = length > 0;
       }
       const receiverView = viewKey + nextTerrainKey;
       const contentsChanged =
@@ -1231,6 +1279,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       lightUniforms.uniforms.uDynamicBounds.set(
         boundsUniform(dynamicField.bounds, anchorX, anchorY * 2),
       );
+      lightUniforms.uniforms.uDynamicDirect = dynamicField.directCount;
       lightUniforms.uniforms.uInstanceCounts.set([
         staticField.instanceCount,
         dynamicField.instanceCount,
@@ -1398,139 +1447,49 @@ const updateReceiverBatches = (
     if (!batch.sources.includes(entry.material)) batch.sources.push(entry.material);
     batch.casters.push(entry);
   }
+  const available = batches.slice();
+  const retained: ReceiverBatch[] = [];
   for (let i = 0; i < pending.length; i++) {
     const next = pending[i];
     if (!next) continue;
-    let batch = batches[i];
-    const sourcesChanged =
-      !batch ||
-      batch.sources.length !== next.sources.length ||
-      batch.sources.some((source, index) => source !== next.sources[index]);
+    // Material bindings own the GPU batch; painter-order insertion only changes its position.
+    const match = available.findIndex(
+      (batch) =>
+        batch.sources.length === next.sources.length &&
+        batch.sources.every((source, index) => source === next.sources[index]),
+    );
+    let batch = match < 0 ? undefined : available.splice(match, 1)[0];
     // Camera uniforms and wind can change without changing any receiver vertices.
     if (
       batch &&
-      !sourcesChanged &&
       batch.casters.length === next.casters.length &&
       next.casters.every((entry, index) => entry === batch?.casters[index])
-    )
+    ) {
+      retained.push(batch);
+      if (layer.children[i] !== batch.mesh) layer.setChildIndex(batch.mesh, i);
       continue;
-    const vertices: number[] = [];
-    for (const entry of next.casters) {
-      const index = next.sources.indexOf(entry.material);
-      const sourceRatio =
-        entry.material.width / entry.record.sprite.texture.source.pixelWidth;
-      const heightRatio =
-        entry.material.height / entry.record.sprite.texture.source.pixelHeight;
-      const frame = entry.record.sprite.texture.frame,
-        m = entry.transform;
-      // Inverse transpose of the source-pixel surface transform, scaled by object height.
-      // The physical basis is (x, -2*(y+height), height), so screen shear also changes a wall's normal.
-      const aspect = entry.record.character
-          ? entry.record.sprite.texture.orig.width /
-            entry.record.sprite.texture.orig.height
-          : frame.width / frame.height,
-        h = entry.height;
-      const a = (m[0] ?? 0) / aspect,
-        b = -(m[2] ?? 0) * 0.5,
-        c = -(m[2] ?? 0),
-        d = (2 * (m[1] ?? 0)) / aspect,
-        e = -(m[3] ?? 0),
-        f = -2 * ((m[3] ?? 0) + h),
-        determinant = a * e - b * d;
-      const normalX =
-        Math.abs(determinant) > 0.000001
-          ? [
-              (h * e) / determinant,
-              (-h * b) / determinant,
-              (b * f - e * c) / determinant,
-            ]
-          : [1, 0, 0];
-      const normalY =
-        Math.abs(determinant) > 0.000001
-          ? [
-              (-h * d) / determinant,
-              (h * a) / determinant,
-              (d * c - a * f) / determinant,
-            ]
-          : [0, 1, 0];
+    }
+    const stride = instanced ? 28 : 120;
+    const length = next.casters.length * stride;
+    const vertices =
+      batch?.buffer.data instanceof Float32Array && batch.buffer.data.length === length
+        ? batch.buffer.data
+        : new Float32Array(length);
+    for (const [entryIndex, entry] of next.casters.entries()) {
+      entry.vertices ??= receiverVertices(entry, instanced);
+      const packed = entry.vertices;
+      const offset = entryIndex * stride;
+      vertices.set(packed, offset);
       if (instanced) {
-        const { orig, trim } = entry.record.sprite.texture;
-        // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
-        vertices.push(
-          m[0] ?? 0,
-          m[2] ?? 0,
-          m[4] ?? 0,
-          entry.material.width,
-          m[1] ?? 0,
-          m[3] ?? 0,
-          m[5] ?? 0,
-          entry.material.height,
-          (frame.x * sourceRatio) / entry.material.width,
-          (frame.y * heightRatio) / entry.material.height,
-          (frame.width * sourceRatio) / entry.material.width,
-          (frame.height * heightRatio) / entry.material.height,
-          h,
-          index,
-          entry.material.isBillboard
-            ? (frame.y -
-                (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
-                entry.record.sprite.texture.source.pixelHeight
-            : 0,
-          entry.material.isBillboard
-            ? (entry.record.character ? orig.height : frame.height) /
-                entry.record.sprite.texture.source.pixelHeight
-            : 0,
-          ...normalX,
-          h / ((entry.record.character ? orig.height : frame.height) * heightRatio),
-          ...normalY,
-          (entry.record.wind ? entry.record.wind.group + 2 : 1) *
-            (entry.record.description.small ? -1 : 1),
-          entry.record.character ? (trim?.x ?? 0) / orig.width : 0,
-          entry.record.character ? (trim?.y ?? 0) / orig.height : 0,
-          entry.record.character ? (trim?.width ?? orig.width) / orig.width : 1,
-          entry.record.character ? (trim?.height ?? orig.height) / orig.height : 1,
-        );
-        continue;
+        vertices[offset + 2] = entry.transform[4] ?? 0;
+        vertices[offset + 6] = entry.transform[5] ?? 0;
       }
-      for (const [u, v] of corners) {
-        const { orig, trim } = entry.record.sprite.texture;
-        const logicalU = entry.record.character
-          ? ((trim?.x ?? 0) + u * (trim?.width ?? orig.width)) / orig.width
-          : u;
-        const logicalV = entry.record.character
-          ? ((trim?.y ?? 0) + v * (trim?.height ?? orig.height)) / orig.height
-          : v;
-        vertices.push(
-          (m[4] ?? 0) + (m[0] ?? 0) * logicalU + (m[2] ?? 0) * logicalV,
-          (m[5] ?? 0) + (m[1] ?? 0) * logicalU + (m[3] ?? 0) * logicalV,
-          ((frame.x + u * frame.width) * sourceRatio) / entry.material.width,
-          ((frame.y + v * frame.height) * heightRatio) / entry.material.height,
-          entry.height,
-          index,
-          entry.material.isBillboard
-            ? (frame.y -
-                (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
-                entry.record.sprite.texture.source.pixelHeight
-            : 0,
-          entry.material.isBillboard
-            ? (entry.record.character ? orig.height : frame.height) /
-                entry.record.sprite.texture.source.pixelHeight
-            : 0,
-          ...normalX,
-          ...normalY,
-          entry.material.width,
-          entry.material.height,
-          entry.height /
-            ((entry.record.character ? orig.height : frame.height) * heightRatio),
-          Number(entry.record.description.small === true),
-          entry.record.wind ? entry.record.wind.group + 1 : 0,
-          1 - v,
-        );
-      }
+      const slot = next.sources.indexOf(entry.material);
+      for (let vertex = 0; vertex < stride; vertex += instanced ? 28 : 20)
+        vertices[offset + vertex + (instanced ? 13 : 5)] = slot;
     }
 
-    if (sourcesChanged) {
-      if (batch) destroyBatch(batch);
+    if (!batch) {
       const buffer = new Buffer({
         data: new Float32Array(0),
         usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
@@ -1626,20 +1585,127 @@ const updateReceiverBatches = (
       const mesh = new Mesh({ geometry, shader, state });
       layer.addChild(mesh);
       batch = { mesh, buffer, sources: next.sources, casters: next.casters };
-      batches[i] = batch;
+      batches.push(batch);
     }
-    if (!batch) continue;
     batch.casters = next.casters;
     if (instanced) batch.mesh.geometry.instanceCount = next.casters.length;
-    batch.buffer.data = new Float32Array(vertices);
+    batch.buffer.data = vertices;
     batch.buffer.update();
-    layer.setChildIndex(batch.mesh, i);
+    retained.push(batch);
+    if (layer.children[i] !== batch.mesh) layer.setChildIndex(batch.mesh, i);
   }
-  while (batches.length > pending.length) {
-    const batch = batches.pop();
-    if (batch) destroyBatch(batch);
-  }
+  for (const batch of available) destroyBatch(batch);
+  batches.splice(0, batches.length, ...retained);
 };
+/** A pose owns its packed geometry; texture-slot assignment belongs to its current adjacent batch. */
+const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
+  const vertices: number[] = [];
+  const index = 0;
+  const sourceRatio =
+    entry.material.width / entry.record.sprite.texture.source.pixelWidth;
+  const heightRatio =
+    entry.material.height / entry.record.sprite.texture.source.pixelHeight;
+  const frame = entry.record.sprite.texture.frame,
+    m = entry.transform;
+  // Inverse transpose of the source-pixel surface transform, scaled by object height.
+  // The physical basis is (x, -2*(y+height), height), so screen shear also changes a wall's normal.
+  const aspect = entry.record.character
+      ? entry.record.sprite.texture.orig.width / entry.record.sprite.texture.orig.height
+      : frame.width / frame.height,
+    h = entry.height;
+  const a = (m[0] ?? 0) / aspect,
+    b = -(m[2] ?? 0) * 0.5,
+    c = -(m[2] ?? 0),
+    d = (2 * (m[1] ?? 0)) / aspect,
+    e = -(m[3] ?? 0),
+    f = -2 * ((m[3] ?? 0) + h),
+    determinant = a * e - b * d;
+  const normalX =
+    Math.abs(determinant) > 0.000001
+      ? [(h * e) / determinant, (-h * b) / determinant, (b * f - e * c) / determinant]
+      : [1, 0, 0];
+  const normalY =
+    Math.abs(determinant) > 0.000001
+      ? [(-h * d) / determinant, (h * a) / determinant, (d * c - a * f) / determinant]
+      : [0, 1, 0];
+  if (instanced) {
+    const { orig, trim } = entry.record.sprite.texture;
+    // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
+    vertices.push(
+      m[0] ?? 0,
+      m[2] ?? 0,
+      m[4] ?? 0,
+      entry.material.width,
+      m[1] ?? 0,
+      m[3] ?? 0,
+      m[5] ?? 0,
+      entry.material.height,
+      (frame.x * sourceRatio) / entry.material.width,
+      (frame.y * heightRatio) / entry.material.height,
+      (frame.width * sourceRatio) / entry.material.width,
+      (frame.height * heightRatio) / entry.material.height,
+      h,
+      index,
+      entry.material.isBillboard
+        ? (frame.y -
+            (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
+            entry.record.sprite.texture.source.pixelHeight
+        : 0,
+      entry.material.isBillboard
+        ? (entry.record.character ? orig.height : frame.height) /
+            entry.record.sprite.texture.source.pixelHeight
+        : 0,
+      ...normalX,
+      h / ((entry.record.character ? orig.height : frame.height) * heightRatio),
+      ...normalY,
+      (entry.record.wind ? entry.record.wind.group + 2 : 1) *
+        (entry.record.description.small ? -1 : 1),
+      entry.record.character ? (trim?.x ?? 0) / orig.width : 0,
+      entry.record.character ? (trim?.y ?? 0) / orig.height : 0,
+      entry.record.character ? (trim?.width ?? orig.width) / orig.width : 1,
+      entry.record.character ? (trim?.height ?? orig.height) / orig.height : 1,
+    );
+    return new Float32Array(vertices);
+  }
+  for (const [u, v] of corners) {
+    const { orig, trim } = entry.record.sprite.texture;
+    const logicalU = entry.record.character
+      ? ((trim?.x ?? 0) + u * (trim?.width ?? orig.width)) / orig.width
+      : u;
+    const logicalV = entry.record.character
+      ? ((trim?.y ?? 0) + v * (trim?.height ?? orig.height)) / orig.height
+      : v;
+    vertices.push(
+      (m[4] ?? 0) + (m[0] ?? 0) * logicalU + (m[2] ?? 0) * logicalV,
+      (m[5] ?? 0) + (m[1] ?? 0) * logicalU + (m[3] ?? 0) * logicalV,
+      ((frame.x + u * frame.width) * sourceRatio) / entry.material.width,
+      ((frame.y + v * frame.height) * heightRatio) / entry.material.height,
+      entry.height,
+      index,
+      entry.material.isBillboard
+        ? (frame.y -
+            (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
+            entry.record.sprite.texture.source.pixelHeight
+        : 0,
+      entry.material.isBillboard
+        ? (entry.record.character ? orig.height : frame.height) /
+            entry.record.sprite.texture.source.pixelHeight
+        : 0,
+      ...normalX,
+      ...normalY,
+      entry.material.width,
+      entry.material.height,
+      entry.height /
+        ((entry.record.character ? orig.height : frame.height) * heightRatio),
+      Number(entry.record.description.small === true),
+      entry.record.wind ? entry.record.wind.group + 1 : 0,
+      1 - v,
+    );
+  }
+
+  return new Float32Array(vertices);
+};
+
 const destroyBatch = (batch: ReceiverBatch) => {
   batch.mesh.shader?.destroy();
   batch.mesh.geometry.destroy(true);
@@ -1710,8 +1776,8 @@ void main() {
   vec2 normal = octNormal(n);
   gl_FragColor = vec4((floor(normal.x * 31.0 + 0.5) * 8.0 + flags) / 255.0, normal.y, packHeight(height));
 }`;
-const terrainVertex = `precision highp float; attribute vec3 aPosition; varying float vHeight; uniform vec4 uViewport; uniform vec2 uOffset;
-void main() { vHeight = aPosition.z; gl_Position = vec4((aPosition.xy + uOffset - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
+const terrainVertex = `precision highp float; attribute vec3 aPosition; varying float vHeight; uniform vec4 uViewport;
+void main() { vHeight = aPosition.z; gl_Position = vec4((aPosition.xy - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
 const terrainFragment = `precision highp float; varying float vHeight; ${materialShader}
 void main() { gl_FragColor = vec4(128.0 / 255.0, 128.0 / 255.0, packHeight(vHeight)); }`;
 const pointVertex = `precision highp float; attribute vec2 aPosition; attribute vec4 aLight; attribute vec3 aColor; attribute float aCastsShadows;
@@ -1759,6 +1825,8 @@ type Caster = {
   };
 };
 type VisibleCaster = {
+  /** Packed vertices stay valid for this immutable material/pose; batch-local texture slots are copied separately. */
+  vertices?: Float32Array;
   record: Caster;
   material: WorldMaterial;
   frame: MaterialFrame;
@@ -1772,7 +1840,10 @@ type VisibleCaster = {
 type TerrainReceiver = {
   id: string;
   parent: Container;
-  mesh: Mesh<Geometry, Shader>;
+  positions: Float32Array;
+  x: number;
+  y: number;
+  visible: boolean;
   minHeight: number;
 };
 type ReceiverBatch = {

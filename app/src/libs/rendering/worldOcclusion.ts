@@ -12,9 +12,10 @@ const LEAF_SIZE = 8;
 const normalizedVolumeKeys = new WeakMap<NonNullable<Occluder["volumes"]>, object>();
 export const MAX_CELL_INSTANCES = 1024;
 export const MAX_BVH_NODES = 8192;
+export const MAX_DIRECT_INSTANCES = 16;
 
 /**
- * Cells reference instances, while identical frames share one exact local mesh and stackless BVH.
+ * Cells or bounded direct lists reference instances; identical frames share one exact local mesh and stackless BVH.
  * Header tiles store offset24/countLow8 and countHigh8/0/contact8/0. Each reference contains
  * instanceTexel24/lowerZ8, then upperZ8/minXY4/maxXY4/0. The geometry table retains IEEE Float32
  * transforms and sixteen-bit closed prisms, so baseline RGBA8 textures preserve every air gap.
@@ -23,6 +24,8 @@ export const MAX_BVH_NODES = 8192;
 export const createWorldOcclusion = (
   options: {
     incremental?: boolean;
+    /** Small moving sets publish one reference per instance; shaders test their retained BVHs directly. */
+    direct?: boolean;
     onUpdate?: () => void;
     onError?: (error: Error) => void;
     budgetMs?: number;
@@ -55,6 +58,7 @@ export const createWorldOcclusion = (
     prismCount = 0,
     referenceCount = 0,
     instanceCount = 0,
+    directCount = 0,
     precision = 0;
   let error: Error | null = null;
 
@@ -143,6 +147,12 @@ export const createWorldOcclusion = (
       }
     if (texels > MAX_TEXELS)
       throw new RangeError(`World occlusion geometry exceeds ${MAX_TEXELS} texels`);
+    const instanceCount = entries.reduce(
+      (count, entry) => count + Number(entry.address >= 0),
+      0,
+    );
+    const direct = options.direct && instanceCount <= MAX_DIRECT_INSTANCES;
+    const directEntries = direct ? entries.filter((entry) => entry.address >= 0) : [];
     const cells = new Map<
       number,
       { contact: number; refs: { id: number; meta: number }[] }
@@ -159,12 +169,12 @@ export const createWorldOcclusion = (
       }
       return value;
     };
-    let totalReferences = 0,
+    let totalReferences = directEntries.length,
       required = 0,
       work = 0;
     for (const entry of entries) {
       const b = entry.stamp.bounds;
-      if (entry.address >= 0) {
+      if (entry.address >= 0 && !direct) {
         const left = Math.max(0, Math.floor(b.minX / cell) - originX),
           right = Math.min(FIELD_SIZE, Math.ceil(b.maxX / cell) - originX),
           bottom = Math.max(0, Math.floor(b.minY / cell) - originY),
@@ -256,6 +266,8 @@ export const createWorldOcclusion = (
         if (++work % 128 === 0) yield;
       }
     }
+    for (const [index, entry] of directEntries.entries())
+      write24(references.scratch, index * 8, entry.address);
     const floats = new DataView(prisms.scratch.buffer);
     for (const [geometry, start] of geometryAddresses) {
       if (retainGeometry) break;
@@ -317,7 +329,8 @@ export const createWorldOcclusion = (
       maxCandidates: required,
       prismCount: totalPrisms,
       referenceCount: totalReferences,
-      instanceCount: entries.filter((entry) => entry.address >= 0).length,
+      instanceCount,
+      directCount: directEntries.length,
       precision: worldPrecision,
     };
   }
@@ -331,7 +344,8 @@ export const createWorldOcclusion = (
       result.plans.some((plan) => plan.end > plan.start || plan.resized) ||
       !sameDomain(published?.domain, request.domain) ||
       published?.heightRange !== request.heightRange ||
-      precision !== result.precision;
+      precision !== result.precision ||
+      directCount !== result.directCount;
     if (!changed) {
       published = request;
       error = null;
@@ -355,6 +369,7 @@ export const createWorldOcclusion = (
     prismCount = result.prismCount;
     referenceCount = result.referenceCount;
     instanceCount = result.instanceCount;
+    directCount = result.directCount;
     precision = result.precision;
     error = null;
     rejected = null;
@@ -432,6 +447,10 @@ export const createWorldOcclusion = (
     /** Maximum spatial error of packed prism vertices; independent of broad-phase cell size. */
     get precision() {
       return precision;
+    },
+    /** Nonzero means the reference table contains a bounded direct instance list, with contact pixels unchanged. */
+    get directCount() {
+      return directCount;
     },
     get maxCandidates() {
       return maxCandidates;
@@ -1464,6 +1483,7 @@ type FieldResult = {
   prismCount: number;
   referenceCount: number;
   instanceCount: number;
+  directCount: number;
   precision: number;
 };
 type FieldBuffer = {

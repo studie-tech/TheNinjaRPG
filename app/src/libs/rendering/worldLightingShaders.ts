@@ -1,4 +1,8 @@
-import { MAX_BVH_NODES, MAX_CELL_INSTANCES } from "@/libs/rendering/worldOcclusion";
+import {
+  MAX_BVH_NODES,
+  MAX_CELL_INSTANCES,
+  MAX_DIRECT_INSTANCES,
+} from "@/libs/rendering/worldOcclusion";
 import { worldWindShader } from "@/libs/rendering/worldWind";
 
 /** Numerical material buffers use unpremultiplied RGBA8 and world-space octahedral normals. */
@@ -63,6 +67,7 @@ ${worldWindShader}
 uniform float uLightStrength;
 uniform float uShadows;
 uniform vec2 uInstanceCounts;
+uniform float uDynamicDirect;
 ${materialShader}
 float unsigned16(vec2 bytes) { return dot(bytes, vec2(256.0, 1.0)) / 257.0; }
 float unsigned24(vec3 bytes) { return dot(floor(bytes * 255.0 + 0.5), vec3(65536.0, 256.0, 1.0)); }
@@ -267,7 +272,7 @@ void main() {
       vec3 q = origin + ray * sampleT;
       // A complete-ray miss exhausts a singleton field; empty fields need no traversal either.
       bool staticDone = uInstanceCounts.x < 0.5 || (uInstanceCounts.x < 1.5 && previousStatic >= 0.0);
-      bool dynamicDone = uInstanceCounts.y < 0.5 || (uInstanceCounts.y < 1.5 && previousDynamic >= 0.0);
+      bool dynamicDone = uDynamicDirect > 0.5 || uInstanceCounts.y < 0.5 || (uInstanceCounts.y < 1.5 && previousDynamic >= 0.0);
       float stepT = min(
         staticDone ? 1.0 : min(nextBoundary(q.x, ray.x, uStaticBounds.x, staticCell), nextBoundary(q.y, ray.y, uStaticBounds.y, staticCell)),
         dynamicDone ? 1.0 : min(nextBoundary(q.x, ray.x, uDynamicBounds.x, dynamicCell), nextBoundary(q.y, ray.y, uDynamicBounds.y, dynamicCell)));
@@ -284,6 +289,12 @@ void main() {
       visibility *= 1.0 - occluded;
       if (visibility < 0.5 || endT >= 1.0) break;
       t = endT;
+    }
+    // Small moving sets avoid rebuilding cell references; exact retained BVHs reject whole-ray misses.
+    for (int i = 0; i < ${MAX_DIRECT_INSTANCES}; i++) {
+      if (distanceToLight <= guard + uFieldHeights.w || visibility < 0.5 || float(i) >= uDynamicDirect) break;
+      float instance = unsigned24(tableTexel(uDynamicReferences, uDynamicTables.xy, float(i) * 2.0).rgb);
+      visibility *= 1.0 - casterHit(uDynamicPrisms, uDynamicTables.zw, instance, uDynamicGeometry.xy, origin, ray);
     }
   }
   float falloff = max(0.0, 1.0 - distanceToLight / vLight.w);

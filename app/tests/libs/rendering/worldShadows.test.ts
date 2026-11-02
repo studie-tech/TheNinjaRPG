@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
-import { Assets, BufferImageSource, Container, type Geometry, Rectangle, Shader, Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, Shader, Sprite, Texture } from "pixi.js";
 import sharp from "sharp";
 import { WORLD_CYCLE_SECONDS, WORLD_CYCLE_TRANSITION_SECONDS, WORLD_DAY_SECONDS } from "@/drizzle/constants";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -752,7 +752,8 @@ describe("physical world lighting", () => {
       await registration.ready;
       f.shadows.update(worldSunlight(), viewport);
       const receiverLayer = f.render.mock.calls[1]?.[0]?.container;
-      const field = f.shadows.container.filters?.[0]?.resources.uDynamicField as BufferImageSource;
+      const pointMesh = f.render.mock.calls.at(-1)?.[0]?.container.children[0];
+      const field = pointMesh.shader.resources.uDynamicPrisms as BufferImageSource;
       const before = (field.resource as Uint8Array).slice();
       sprite.texture = textures[1];
       f.shadows.update(worldSunlight(), viewport);
@@ -820,6 +821,40 @@ describe("physical world lighting", () => {
       f.dispose(); source.dispose();
     }
   });
+  it.each([false, true])("retains material batches and fixed buffers when an actor crosses their paint order (instanced: %s)", async (instanced) => {
+    const f = fixture(instanced), source = materialSourceFixture();
+    const sprites = Array.from({ length: 18 }, (_, index) => {
+      const sprite = new Sprite(source.texture); sprite.position.set(4 + index * 4, 40);
+      sprite.width = sprite.height = 20; sprite.zIndex = index; f.parent.addChild(sprite); return sprite;
+    });
+    const registrations = sprites.map((sprite, index) => f.shadows.register(sprite, {
+      id: `cross-batch:${index}`, kind: index === 0 ? "character" : "decoration", image: `cross-batch-${instanced}-${index}.png`,
+      size: 20, x: sprite.x, y: sprite.y, groundY: 0, shadowCaster: index === 0 ? "character" : "building",
+    }, [], undefined, index === 0 ? undefined : f.parent));
+    try {
+      await Promise.all(registrations.map(r => r.ready)); f.shadows.update(worldSunlight(), viewport);
+      const layer = f.render.mock.calls[1]![0]!.container as Container, before = layer.children.slice() as Mesh<Geometry>[];
+      expect(before).toHaveLength(4);
+      const attribute = instanced ? "aObjectX" : "aPosition";
+      const moving = before[0]!.geometry.getBuffer(attribute), movingData = moving.data, movingSnapshot = Array.from(moving.data);
+      const fixed = before.slice(1).map(mesh => ({ mesh, buffer: mesh.geometry.getBuffer(attribute), data: mesh.geometry.getBuffer(attribute).data }));
+      const uploads = fixed.map(({ buffer }) => vi.spyOn(buffer, "update"));
+      sprites[0]!.zIndex = 30; sprites[0]!.x += 0.5; f.shadows.update(worldSunlight(), viewport);
+      expect(layer.children).toEqual([...before.slice(1), before[0]!]);
+      expect(moving.data).toBe(movingData);
+      const translated = movingSnapshot.slice();
+      for (let vertex = 0; vertex < translated.length; vertex += instanced ? 28 : 20)
+        translated[vertex + (instanced ? 2 : 0)]! += 0.5;
+      expect(Array.from(moving.data)).toEqual(translated);
+      for (const [index, record] of fixed.entries()) {
+        expect(record.mesh.geometry.getBuffer(attribute)).toBe(record.buffer);
+        expect(record.buffer.data).toBe(record.data); expect(uploads[index]).not.toHaveBeenCalled();
+      }
+      sprites[0]!.zIndex = -1; f.shadows.update(worldSunlight(), viewport);
+      expect(layer.children).toEqual(before);
+    } finally { registrations.forEach(r => r()); f.dispose(); source.dispose(); }
+  });
+
   it("keeps fixed scenery receiver buffers while a character moves between their painter-ordered batches", async () => {
     const f = fixture(), source = materialSourceFixture();
     const sprites = [20, 40, 60].map((x, index) => {
@@ -961,18 +996,38 @@ describe("physical world lighting", () => {
     const release = f.shadows.registerTerrain(f.parent, f.terrain);
     f.shadows.update(worldSunlight(), viewport);
     const layer = f.render.mock.calls[0]?.[0]?.container as Container;
-    const mesh = layer.children[0] as unknown as { geometry: { getBuffer: (name: string) => { data: Float32Array } }; shader: { resources: { object: { uniforms: { uOffset: Float32Array } } } }; visible: boolean; destroyed: boolean };
+    const mesh = layer.children[0] as unknown as { geometry: { getBuffer: (name: string) => { data: Float32Array } }; visible: boolean; destroyed: boolean };
     expect(Array.from(mesh.geometry.getBuffer("aPosition").data)).toEqual([0, 0, -4, 10, 0, -4, 0, 10, -4]);
     f.parent.position.set(8, 12);
     f.shadows.update(worldSunlight(), viewport);
-    expect(Array.from(mesh.shader.resources.object.uniforms.uOffset)).toEqual([8, 12]);
+    expect(Array.from(mesh.geometry.getBuffer("aPosition").data)).toEqual([8, 12, -4, 18, 12, -4, 8, 22, -4]);
     f.parent.visible = false;
     f.shadows.update(worldSunlight(), viewport);
     expect(mesh.visible).toBe(false);
-    release(); release();
-    expect(mesh.destroyed).toBe(true);
-    expect(layer.children).toHaveLength(0);
-    f.dispose();
+    release(); release(); f.shadows.update(worldSunlight(), viewport);
+    expect(mesh.geometry.getBuffer("aPosition").data).toHaveLength(0);
+    expect(mesh.destroyed).toBe(false);
+    f.dispose(); expect(mesh.destroyed).toBe(true);
+  });
+  it("batches translated terrain regions while retaining camera-independent vertices and independent disposal", () => {
+    const f = fixture(), other = new Container(); other.position.set(-8.125, 12.25); f.world.addChild(other);
+    const releases = [f.shadows.registerTerrain(f.parent, f.terrain), f.shadows.registerTerrain(other, f.terrain)];
+    try {
+      f.shadows.update(worldSunlight(), viewport);
+      const layer = f.render.mock.calls[0]![0]!.container as Container;
+      expect(layer.children).toHaveLength(1);
+      const mesh = layer.children[0] as unknown as { geometry: { getBuffer: (name: string) => { data: Float32Array; update: () => void } }; visible: boolean; destroyed: boolean };
+      const buffer = mesh.geometry.getBuffer("aPosition"), original = buffer.data;
+      expect(Array.from(original)).toEqual([0,0,-4,10,0,-4,0,10,-4,-8.125,12.25,-4,1.875,12.25,-4,-8.125,22.25,-4]);
+      const upload = vi.spyOn(buffer, "update");
+      f.shadows.update(worldSunlight(), { minX: 0.25, minY: 0.25, maxX: 100.25, maxY: 100.25 });
+      expect(buffer.data).toBe(original); expect(upload).not.toHaveBeenCalled();
+      releases[0]!(); f.shadows.update(worldSunlight(), viewport);
+      expect(Array.from(buffer.data)).toEqual([-8.125,12.25,-4,1.875,12.25,-4,-8.125,22.25,-4]);
+      expect(mesh.destroyed).toBe(false); expect(mesh.visible).toBe(true);
+      releases[1]!(); f.shadows.update(worldSunlight(), viewport); expect(mesh.visible).toBe(false);
+      expect(buffer.data).toHaveLength(0);
+    } finally { releases.forEach(release => release()); f.dispose(); }
   });
   it("releases the lighting container once and ignores updates after disposal", () => {
     const f = fixture();

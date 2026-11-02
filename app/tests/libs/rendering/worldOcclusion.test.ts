@@ -4,7 +4,7 @@ import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterialFrame, type WorldMaterial } from "@/libs/rendering/worldMaterials";
 import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
-import { createWorldOcclusion, MAX_CELL_INSTANCES, type Occluder } from "@/libs/rendering/worldOcclusion";
+import { createWorldOcclusion, MAX_CELL_INSTANCES, MAX_DIRECT_INSTANCES, type Occluder } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 
@@ -152,6 +152,8 @@ const prismIntersects = (prism: Vertex[], origin: Point, end: Point) => {
 };
 /** Exact boundary divisions independently exercise packed references, coarse bounds and geometry. */
 const blocked = (field: Field, origin: Point, end: Point, coarse = false, wind: readonly number[] = []) => {
+  if (field.directCount) return Array.from({ length: field.directCount }, (_, i) => uint24(bytes(field.references), i * 8))
+    .some(id => instanceIntersects(field, id, origin, end, wind));
   const ray = subtract(end, origin), divisions = [0, 1], size = (field.bounds.maxX - field.bounds.minX) / 512;
   for (const axis of [0, 1] as const) {
     if (Math.abs(ray[axis]) < 1e-10) continue;
@@ -188,6 +190,47 @@ const shrine = () => record("shrine-pedestal", [], { volumes: [volume([
   367.58778862, 77.05150171, 2.42629515, 11.06750041,
   367.28225516, 84.59997551, 2.42629515, 12.41903667,
 ].map((value, index) => value + (index % 4 === 0 ? 512 : index % 4 === 1 ? 1024 : 0)), [0, 1, 2, 0, 2, 3, 3, 2, 4])] });
+
+describe("direct moving occluder references", () => {
+  it("matches grid ray intersections and ground contacts for transformed and global prisms", () => {
+    const grid = createWorldOcclusion(), direct = createWorldOcclusion({ direct: true });
+    const shapes = [record("global", [], { volumes: [box(10, 12, 25, 30, 0, 15)] }),
+      record("normalized", [], { volumes: [box(0, 0, 1, 1, 0.1, 0.7)], transform: new Float32Array([-18, 2, 3, -20, 65, 55]), height: 20 })];
+    try {
+      grid.update(shapes, viewport); direct.update(shapes, viewport);
+      expect(direct.directCount).toBe(2); expect(direct.referenceCount).toBe(2);
+      expect(direct.prismCount).toBe(grid.prismCount);
+      for (let y = 0; y <= 80; y += 8) for (let x = 0; x <= 80; x += 8) {
+        expect(cell(direct, x, y).contact).toBe(cell(grid, x, y).contact);
+        for (const light of [[0, 40, 30], [90, 40, 25], [40, 0, 35], [40, 90, 20]] as Point[])
+          expect(blocked(direct, [x, y, 0], light)).toBe(blocked(grid, [x, y, 0], light));
+      }
+    } finally { grid.dispose(); direct.dispose(); }
+  });
+  it("publishes coherent transitions between direct lists, crowded grids and empty fields", () => {
+    const grid = createWorldOcclusion(), direct = createWorldOcclusion({ direct: true });
+    const shapes = Array.from({ length: MAX_DIRECT_INSTANCES + 1 }, (_, i) => record(`body:${i}`, [], { volumes: [box(0, 0, 1, 1, 0, 0.5)], transform: new Float32Array([4, 0, 0, -4, i * 5, 40]), height: 10 }));
+    try {
+      for (const count of [MAX_DIRECT_INSTANCES, MAX_DIRECT_INSTANCES + 1, 1, 0, MAX_DIRECT_INSTANCES]) {
+        const records = shapes.slice(0, count); direct.update(records, viewport); grid.update(records, viewport);
+        expect(direct.directCount).toBe(count <= MAX_DIRECT_INSTANCES ? count : 0);
+        expect(direct.instanceCount).toBe(count);
+        for (let x = 0; x <= 90; x += 5) expect(blocked(direct, [x, 0, 0], [x, 80, 20])).toBe(blocked(grid, [x, 0, 0], [x, 80, 20]));
+      }
+    } finally { grid.dispose(); direct.dispose(); }
+  });
+  it("retains direct decoding metadata when an invalid publication is rejected", () => {
+    const errors: Error[] = [], direct = createWorldOcclusion({ direct: true, onError: error => errors.push(error) });
+    const records = [record("body", [], { volumes: [box(10, 10, 20, 20, 0, 10)] })];
+    try {
+      direct.update(records, viewport); const snapshot = packedSnapshot(direct), revision = direct.revision;
+      direct.update(records, viewport, Number.NaN);
+      expect(errors).toHaveLength(1); expect(direct.revision).toBe(revision); expect(direct.directCount).toBe(1);
+      expect(matchesSnapshot(direct, snapshot)).toEqual([true, true, true]);
+      direct.update([], viewport); expect(direct.error).toBeNull(); expect(direct.directCount).toBe(0);
+    } finally { direct.dispose(); }
+  });
+});
 
 describe("authored foliage under local lights", () => {
   it.skipIf(!worldArtDirectory).each([["woodland-village", 0], ["woodland-village", 1], ["woodland-village", 2], ["biome-scenery", 11], ["biome-scenery", 13]] as const)("retains distinct lit and shaded ground for four nearby lights around %s frame %i", (atlas, index) => {
