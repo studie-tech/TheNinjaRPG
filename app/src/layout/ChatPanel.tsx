@@ -107,6 +107,14 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
           <DialogContent
             showCloseButton={false}
             aria-describedby={undefined}
+            onCloseAutoFocus={(event) => {
+              // The phone dialog opens from the sibling popover's trigger.
+              const trigger = triggerRef.current;
+              if (trigger?.isConnected && trigger.getClientRects().length) {
+                event.preventDefault();
+                trigger.focus();
+              }
+            }}
             className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 rounded-none border-0 p-0 sm:rounded-none"
           >
             <DialogTitle className="sr-only">Chat</DialogTitle>

@@ -18,6 +18,7 @@ import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ConversationComment } from "@/drizzle/schema";
+import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import EmojiPicker from "@/layout/EmojiPicker";
@@ -258,17 +259,14 @@ function UserMenu({
 }) {
   const [open, setOpen] = useState(false);
   const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
-  const utils = api.useUtils();
+  const { refreshBlacklist } = useBlacklistCacheUpdate();
   const { mutate: toggleBlock, isPending } =
     api.profile.toggleBlacklistEntry.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success) {
           setOpen(false);
-          await Promise.all([
-            utils.profile.getBlacklist.invalidate(),
-            utils.comments.getConversationComments.invalidate(),
-          ]);
+          await refreshBlacklist();
         }
       },
     });

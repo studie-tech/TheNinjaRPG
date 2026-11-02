@@ -14,6 +14,7 @@ import * as taverns from "@/hooks/useTaverns";
 import * as conversationComments from "@/layout/ConversationComments";
 import * as chatConversation from "@/layout/ChatConversation";
 import ChatPanelBody from "@/layout/ChatPanelContent";
+import { CompactComment } from "@/layout/CompactComment";
 import { useConversation } from "@/layout/Conversation";
 import * as modal from "@/layout/Modal";
 import * as richInput from "@/layout/RichInput";
@@ -21,6 +22,7 @@ import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
 import { chatDraftsAtom, chatViewingAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
 import * as pagination from "@/libs/pagination";
+import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
@@ -48,7 +50,7 @@ beforeEach(() => {
     CustomEvent: { configurable: true, value: window.CustomEvent },
   });
   Object.assign(vi.spyOn(client, "api" as never), {
-    comments: testApi.comments, useUtils: testApi.useUtils,
+    comments: testApi.comments, profile: testApi.profile, reports: testApi.reports, useUtils: testApi.useUtils,
   });
   vi.spyOn(client, "useGlobalOnMutateProtect").mockReturnValue(() => undefined);
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, notifications: [] } as never);
@@ -89,6 +91,84 @@ const session = (read: (path: string, input: unknown) => unknown) => {
   );
   return { queryClient, wrapper };
 };
+
+/** Exercise both block entry points while the conversation-list refresh is still pending. */
+const blacklistPanel = (success: boolean) => {
+  let listReads = 0;
+  let finishList!: (value: object[]) => void;
+  const friend = {
+    userId: "friend", username: "Friend", avatar: null, level: 50,
+    rank: "GENIN" as const, role: "USER" as const, federalStatus: "NONE" as const, isOutlaw: false,
+  };
+  const privateChat = {
+    ...conversation("private", "Private chat"),
+    users: [{ userId: friend.userId, userData: friend }],
+  };
+  const friendComment = {
+    ...comment("message", "Private message"), userId: friend.userId, authorId: friend.userId,
+    isPinned: false, isReported: false, isStaffOnly: false,
+  };
+  const outcome = { success, message: success ? "Added Friend to blacklist" : "Cannot block this player" };
+  const { wrapper, queryClient } = session((path, input) => {
+    if (path === "comments.getUserConversations") {
+      if (++listReads === 1) return [privateChat];
+      return new Promise((resolve) => { finishList = resolve; });
+    }
+    if (path === "profile.toggleBlacklistEntry") {
+      expect(input).toEqual({ userId: "friend" });
+      return outcome;
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  const affectedKeys = [
+    getQueryKey(testApi.profile.getBlacklist, undefined, "query"),
+    ...[{ convo_id: "private", limit: 10 }, { convo_title: "Global", limit: 15 }].map((input) => getQueryKey(testApi.comments.getConversationComments, input, "infinite")),
+    getQueryKey(testApi.comments.getUserConversations, { selectedConvo: "private" }, "query"),
+  ];
+  for (const key of affectedKeys) queryClient.setQueryData(key, []);
+  getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "inbox", conversationId: "private" });
+  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
+  vi.spyOn(chatConversation, "ChatConversation").mockImplementation(({ toolbarStart, toolbarEnd }) => <div>
+    {toolbarStart}{toolbarEnd}
+    <CompactComment user={friend} comment={friendComment} editing={false} setEditing={() => {}}>Private message</CompactComment>
+  </div>);
+  const feedback = vi.spyOn(toast, "showMutationToast");
+  const view = render(<ChatPanelBody isPhone={false} isWide={false} onToggleWide={() => {}} onClose={() => {}} />, { wrapper });
+  return { view, queryClient, affectedKeys, outcome, feedback, listReads: () => listReads, finishList: () => finishList([]) };
+};
+
+const blockEntryPoints = [
+  { trigger: "Options for Private chat", action: "Block Friend" },
+  { trigger: "Actions for Friend", action: "Block user" },
+];
+
+it.each(blockEntryPoints)("reconciles blocked conversation and message caches from $trigger", async ({ trigger, action }) => {
+  const { view, queryClient, affectedKeys, feedback, outcome, listReads, finishList } = blacklistPanel(true);
+  fireEvent.click(await view.findByRole("button", { name: trigger }));
+  fireEvent.click(await view.findByRole("menuitem", { name: action }));
+  await waitFor(() => expect(listReads()).toBe(2));
+  // Close immediately, even if the conversation-list reconciliation is still in flight.
+  expect(view.queryByRole("menuitem", { name: action })).toBeNull();
+  expect(view.getByText("Private message")).toBeTruthy();
+  expect(feedback).toHaveBeenCalledWith(outcome);
+  for (const key of affectedKeys) expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  await act(async () => finishList());
+  await view.findByText("No private messages yet.");
+  expect(view.queryByRole("button", { name: /^Private chat/ })).toBeNull();
+  expect(view.queryByText("Private message")).toBeNull();
+});
+
+it.each(blockEntryPoints)("retains the conversation and shows a rejected block from $trigger", async ({ trigger, action }) => {
+  const { view, queryClient, affectedKeys, feedback, outcome, listReads } = blacklistPanel(false);
+  fireEvent.click(await view.findByRole("button", { name: trigger }));
+  fireEvent.click(await view.findByRole("menuitem", { name: action }));
+  await waitFor(() => expect(queryClient.getMutationCache().getAll().at(-1)?.state.status).toBe("success"));
+  expect(feedback).toHaveBeenCalledWith(outcome);
+  expect(view.getByRole("menuitem", { name: action }).hasAttribute("disabled")).toBe(false);
+  expect(view.getByText("Private message")).toBeTruthy();
+  expect(listReads()).toBe(1);
+  for (const key of affectedKeys) expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+});
 
 it.each([false, true])("selects a submitted new conversation after refreshing the panel rail (existing chat: %s)", async (hasExisting) => {
   const old = conversation("old", "Old conversation");

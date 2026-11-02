@@ -33,6 +33,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
+import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import { useTaverns } from "@/hooks/useTaverns";
 import AvatarImage from "@/layout/Avatar";
@@ -614,13 +615,17 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
   const [open, setOpen] = useState(false);
   const setPanel = useSetAtom(chatPanelAtom);
   const utils = api.useUtils();
+  const { refreshBlacklist } = useBlacklistCacheUpdate();
   const others = convo.users.filter((user) => user.userId !== meId);
   const partner = others.length === 1 ? others[0] : undefined;
   const { mutate: toggleBlock, isPending: isBlocking } =
     api.profile.toggleBlacklistEntry.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        if (result.success) await utils.profile.getBlacklist.invalidate();
+        if (result.success) {
+          setOpen(false);
+          await refreshBlacklist();
+        }
       },
     });
   const { mutate: exitConversation, isPending: isLeaving } =
