@@ -1,8 +1,9 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, quest, questHistory, userData, userItem, type UserItemWithRelations } from "@/drizzle/schema";
+import { item, quest, questHistory, sectorMap, userData, userItem, type UserItemWithRelations } from "@/drizzle/schema";
 import { getInventoryQuantities } from "@/deltas/item";
+import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { ObjectiveReward } from "@/validators/rewards";
 import { DeliverItem } from "@/validators/objectives";
 import { itemRouter } from "@/routers/item";
@@ -14,7 +15,8 @@ const userId = "location-merge-player";
 
 describeWithDatabase("location quest inventory recovery", () => {
   beforeEach(async () => {
-    await resetTables(userItem, item, questHistory, quest, userData);
+    await resetTables(userItem, item, questHistory, quest, sectorMap, userData);
+    invalidatePublishedMapCache();
     const now = new Date();
     setSystemTime(now);
     await insertUsers([{
@@ -24,7 +26,7 @@ describeWithDatabase("location quest inventory recovery", () => {
     }]);
     await insertItems([{ id: "merge-herb", stackSize: 100 }]);
   });
-  afterEach(() => setSystemTime());
+  afterEach(() => { setSystemTime(); invalidatePublishedMapCache(); });
 
   it("projects a confirmed whole-stack delivery against the canonical inventory", async () => {
     const db = await getTestDatabase();
