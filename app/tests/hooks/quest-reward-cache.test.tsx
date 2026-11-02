@@ -40,7 +40,7 @@ const setup = () => {
   const wrapper = ({ children }: { children: ReactNode }) => <api.Provider client={api.createClient({ links: [] })} queryClient={client}><QueryClientProvider client={client}>{children}</QueryClientProvider></api.Provider>;
   const view = renderHook(useQuestRewardCacheUpdate, { wrapper });
   const update = getQuestRewardCacheUpdate({ questId: "quest", ...before, quest: { retryDelay: "none" } }, null, PostProcessedRewardSchema.parse({}), false);
-  return { client, keys, current, reads, view, result: { success: true, message: "Progress", questCacheUpdate: update } };
+  return { client, keys, current, reads, view, result: { success: true, message: "Progress", rewards: PostProcessedRewardSchema.parse({}), questCacheUpdate: update } };
 };
 
 it("keeps reward-free objective progress local without discovery/history reads", async () => {
@@ -60,6 +60,26 @@ it("patches confirmed completion counters while retaining list-membership refres
   test.reads.slice(5).forEach(read => expect(read).not.toHaveBeenCalled());
   expect(test.client.getQueryData<{ candidates: { previousCompletes: number }[] }>(test.keys[0]!)?.candidates[0]?.previousCompletes).toBe(1);
 });
+
+it.each(["item", "hunter items", "gathering items", "missing rewards"] as const)(
+  "refreshes both inventories after an accepted profile projection with %s",
+  async reward => {
+    const test = setup();
+    const inventory = [{ id: "quest-gift" }];
+    test.reads.slice(5).forEach(read => read.mockResolvedValueOnce(inventory as never));
+    const rewards = reward === "missing rewards" ? undefined : PostProcessedRewardSchema.parse({
+      reward_items: reward === "item" ? ["Quest gift"] : [],
+      reward_hunter_items: reward === "hunter items",
+      reward_gathering_items: reward === "gathering items",
+    });
+    await act(async () => test.view.result.current.updateQuestRewards(
+      { ...test.result, rewards }, test.view.result.current.prepareQuestRewardUpdate(), true,
+    ));
+    test.reads.slice(0, 5).forEach(read => expect(read).not.toHaveBeenCalled());
+    test.reads.slice(5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+    test.keys.slice(5).forEach(key => expect(test.client.getQueryData(key)).toEqual(inventory));
+  },
+);
 
 it.each(["profile recovery", "missing projection", "rejected claim"])("preserves full fan-out after %s", async reason => {
   const test = setup();

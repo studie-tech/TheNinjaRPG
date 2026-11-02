@@ -52,6 +52,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
   const util = api.useUtils();
   const { prepareUserUpdate, updateUser } = useUserData();
   const activeContext = `${userData.userId}:${userData.sector}`;
+  const activeUserIdRef = useRef(userData.userId);
+  activeUserIdRef.current = userData.userId;
   const activeContextRef = useRef(activeContext);
   activeContextRef.current = activeContext;
   const startRequestRef = useRef<{
@@ -121,6 +123,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
         userSector: request.userSector,
         supportsAnnouncements: true,
       });
+      // Consumed announcements belong to this account even when its quest context changed.
+      if (activeUserIdRef.current === userData.userId) showMutationToast(data);
       if (
         startRequestRef.current !== request ||
         activeContextRef.current !== request.context
@@ -128,7 +132,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
         return false;
       }
 
-      showMutationToast(data);
       if (!data.success) return false;
 
       // The server has committed a mutually-exclusive mission. Suppress every stale start action

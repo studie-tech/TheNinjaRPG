@@ -23,9 +23,12 @@ export const useQuestRewardCacheUpdate = () => {
     const update =
       result.success && profileApplied ? result.questCacheUpdate : undefined;
     await Promise.all([
-      // Accepted reward projections exclude item grants and unprojected achievement effects.
+      // Profile projections can include ordinary item rewards; skip only known item-free claims.
       // A profile recovery can grant collection items, so refresh inventory only after it settles.
-      ...(update
+      ...(update &&
+      result.rewards?.reward_items.length === 0 &&
+      !result.rewards.reward_hunter_items &&
+      !result.rewards.reward_gathering_items
         ? []
         : [
             utils.item.getUserItems.invalidate(),
