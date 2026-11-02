@@ -916,11 +916,15 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
     filters.push(like(skillTree.name, `%${input.name}%`));
   }
 
-  if (input.effect && input.effect.length > 0) {
-    filters.push(
-      sql`JSON_SEARCH(${skillTree.effects}, 'one', ${input.effect[0]}, NULL, '$[*].type') IS NOT NULL`,
-    );
-  }
+  const effectFilter = input.effect?.length
+    ? or(
+        ...input.effect.map(
+          (e) =>
+            sql`JSON_SEARCH(${skillTree.effects}, 'one', ${e}, NULL, '$[*].type') IS NOT NULL`,
+        ),
+      )
+    : undefined;
+  if (effectFilter) filters.push(effectFilter);
 
   if (input.tier) {
     filters.push(eq(skillTree.tier, input.tier));
