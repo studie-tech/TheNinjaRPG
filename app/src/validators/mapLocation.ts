@@ -22,11 +22,6 @@ export const supportsMapStructure = (task: string) =>
 
 /** Shared refresh cadence for independently cached artwork and public landmarks. */
 export const MAP_LOCATION_REFRESH_MS = 10_000;
-/** Notification revision requests data newer than a worker's cached public presentation. */
-export const publicMapLocationsSchema = z
-  .object({ revision: z.number().int().nonnegative().optional() })
-  .optional();
-
 /** Neutral presentation shared by player and editor rendering, without quest mechanics or progress. */
 export interface MapLocation {
   id: string;

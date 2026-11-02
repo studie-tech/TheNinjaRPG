@@ -10,9 +10,9 @@ import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 export const usePublicQuestLocations = (timeDiff: number) => {
   const [contentRevision, setContentRevision] = useState(0);
   const day = periodStart("daily", new Date(Date.now() - timeDiff)).getTime();
-  // A new UTC day must not reuse the preceding day's still-fresh query after navigation.
+  // Publication days advance independently of edit timestamps, which may come from a faster worker clock.
   const input = useMemo(
-    () => ({ revision: Math.max(contentRevision, day) }),
+    () => ({ revision: Math.max(contentRevision, day), refreshKey: day }),
     [contentRevision, day],
   );
   const key = useMemo(
@@ -22,7 +22,8 @@ export const usePublicQuestLocations = (timeDiff: number) => {
   const cache = useQueryCacheUpdate<RouterOutputs["quests"]["getPublicLocations"]>(key);
   const query = api.quests.getPublicLocations.useQuery(input, {
     placeholderData: (previous) => previous,
-    staleTime: 5 * 60_000,
+    // A corrected clock offset may revisit a day key that was populated before its boundary.
+    staleTime: (query) => (query.state.dataUpdatedAt < day + timeDiff ? 0 : 5 * 60_000),
     refetchInterval: (query) =>
       query.state.status === "error" ? MAP_LOCATION_REFRESH_MS : 5 * 60_000,
     refetchIntervalInBackground: false,

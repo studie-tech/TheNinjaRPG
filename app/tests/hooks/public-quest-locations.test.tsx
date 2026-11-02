@@ -46,7 +46,7 @@ const advance = async (ms: number) => {
 };
 
 /** Exercise the feature hook against the same public projection used by the server. */
-const setup = (offset = 0, deferred = false) => {
+const setup = (offset = 0, deferred = false, initialOffset = offset) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(queryClient);
   let name = "Landmark";
@@ -66,7 +66,7 @@ const setup = (offset = 0, deferred = false) => {
     else void Promise.resolve().then(complete);
   })] });
   const wrapper = ({ children }: PropsWithChildren) => <testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>;
-  const view = renderHook(({ timeDiff }) => usePublicQuestLocations(timeDiff), { wrapper, initialProps: { timeDiff: offset } });
+  const view = renderHook(({ timeDiff }) => usePublicQuestLocations(timeDiff), { wrapper, initialProps: { timeDiff: initialOffset } });
   return { view, wrapper, queryClient, read, revisions, pending, setName: (value: string) => { name = value; }, fail: (value: boolean) => { fail = value; } };
 };
 
@@ -96,6 +96,40 @@ it("refreshes at a day change even when a render precedes the deadline's one-sec
   await settle();
   expect(t.view.result.current.data?.[0]?.questId).toBe("starting");
   expect(t.read).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])("publishes at midnight despite a future content revision, early render %s", async (earlyRender) => {
+  now = Date.UTC(2026, 10, 2, 23, 59, 59, 500);
+  const t = setup();
+  await settle();
+  const revision = now + 1000;
+  await act(async () => t.view.result.current.updatePublicLocations(revision));
+  await settle();
+  expect(t.view.result.current.data?.[0]?.questId).toBe("ending");
+  expect(t.read).toHaveBeenCalledTimes(2);
+  if (earlyRender) {
+    await act(async () => { now += 600; t.view.rerender({ timeDiff: 0 }); });
+    await settle();
+  } else await advance(1_501);
+  expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
+  expect(t.read).toHaveBeenCalledTimes(3);
+  expect(t.revisions.at(-1)).toBe(revision);
+});
+
+it("keeps midnight publication independent of a recovered revision after clock correction", async () => {
+  const offset = 120_000;
+  now = Date.UTC(2026, 10, 2, 23, 59) + offset;
+  const t = setup(offset, false, 0);
+  await settle();
+  await act(async () => t.view.result.current.recoverPublicLocations());
+  await settle();
+  const revision = t.revisions.at(-1);
+  await act(async () => t.view.rerender({ timeDiff: offset }));
+  await settle();
+  expect(t.view.result.current.data?.[0]?.questId).toBe("ending");
+  await advance(61_001);
+  expect(t.view.result.current.data?.map((row) => row.questId)).toEqual(["starting"]);
+  expect(t.revisions.at(-1)).toBe(revision);
 });
 
 it("does not reuse a fresh preceding-day cache after navigation across midnight", async () => {
@@ -155,7 +189,7 @@ it("retains ten-second error recovery and immediate focus/network recovery", asy
   await settle();
   t.fail(true);
   await advance(5 * 60_000);
-  const key = getQueryKey(testApi.quests.getPublicLocations, { revision: t.revisions.at(-1)! }, "query");
+  const key = getQueryKey(testApi.quests.getPublicLocations, { revision: t.revisions.at(-1)!, refreshKey: Date.UTC(2026, 10, 2) }, "query");
   expect(t.queryClient.getQueryState(key)?.status).toBe("error");
   t.fail(false);
   t.setName("Recovered");
