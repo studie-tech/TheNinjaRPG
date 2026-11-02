@@ -37,7 +37,12 @@ import {
 } from "@/libs/objectiveWar";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
-import { fetchUser, queueAwakeUser, wakeQueuedUser } from "@/queries/profile";
+import {
+  fetchUser,
+  findUserById,
+  queueAwakeUser,
+  wakeQueuedUser,
+} from "@/queries/profile";
 import {
   claimBattleQueue,
   deleteQueueById,
@@ -281,7 +286,7 @@ export const shrineRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchUser(ctx.drizzle, input.aiId),
+        findUserById(ctx.drizzle, input.aiId),
       ]);
 
       if (!user) return errorResponse("User not found");
@@ -337,7 +342,7 @@ export const shrineRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchUser(ctx.drizzle, input.aiId),
+        findUserById(ctx.drizzle, input.aiId),
       ]);
 
       if (!user) return errorResponse("User not found");

@@ -28,7 +28,12 @@ import {
   updateBountyForCollect,
   updateBountyForRetract,
 } from "@/queries/bounty";
-import { debitUserMoney, fetchUser, incrementUserMoney } from "@/queries/profile";
+import {
+  debitUserMoney,
+  fetchUser,
+  findUserById,
+  incrementUserMoney,
+} from "@/queries/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -161,7 +166,7 @@ export const bountyRouter = createTRPCRouter({
         findBountyById(ctx.drizzle, bountyId),
         listBountySignupForSignup(ctx.drizzle, bountyId),
         findBountySignupForSignup(ctx.drizzle, ctx),
-        fetchUser(ctx.drizzle, input.targetUserId),
+        findUserById(ctx.drizzle, input.targetUserId),
       ]);
       // Guards
       if (!curBounty) return errorResponse("Bounty not found");
