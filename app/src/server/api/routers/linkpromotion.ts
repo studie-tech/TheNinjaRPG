@@ -77,13 +77,16 @@ export const linkPromotionRouter = createTRPCRouter({
       if (!canReviewLinkPromotions(user.role)) {
         return errorResponse("Cannot review promotion links");
       }
-      // Mutate
-      await Promise.all([
-        updateLinkPromotionForReviewLinkPromotion(ctx.drizzle, input, ctx),
-        ...(input.points > 0
-          ? [updateUserDataForReviewLinkPromotion(ctx.drizzle, input, promotion)]
-          : []),
-      ]);
+      // Mutate: claim the review first so the reward is granted once
+      const review = await updateLinkPromotionForReviewLinkPromotion(
+        ctx.drizzle,
+        input,
+        ctx,
+      );
+      if (review.rowsAffected !== 1) return errorResponse("Already reviewed");
+      if (input.points > 0) {
+        await updateUserDataForReviewLinkPromotion(ctx.drizzle, input, promotion);
+      }
       return { success: true, message: `Reward for ${promotion.url}` };
     }),
 });
