@@ -7,6 +7,8 @@ import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
   getCollectPetTaskUserUpdate,
+  getQuestConsequenceInventoryUpdate,
+  getQuestEntryInventoryChanges,
   getQuestRewardCacheUpdate,
   getQuestRewardProjectionUpdate,
   getQuestStartUserUpdate,
@@ -306,6 +308,10 @@ import {
 } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
+import {
+  type InventoryQuantityChange,
+  inventoryQuantityChangeSchema,
+} from "@/validators/inventory";
 import { publicMapLocationsSchema } from "@/validators/mapLocation";
 import { idSchema } from "@/validators/misc";
 import {
@@ -541,7 +547,11 @@ export const questsRouter = createTRPCRouter({
         supportsAnnouncements: z.boolean().optional(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [updatedUser, sectorVillage, results] = await Promise.all([
         fetchUpdatedUser({
@@ -657,6 +667,7 @@ export const questsRouter = createTRPCRouter({
               user,
               updatedUser.publishedAchievementIds,
               await consumeUserAnnouncements(ctx.drizzle, user),
+              [],
             )
           : {}),
       };
@@ -670,7 +681,11 @@ export const questsRouter = createTRPCRouter({
         supportsAnnouncements: z.boolean().optional(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const [updatedUser, sectorVillage, questData, prevAttempt] = await Promise.all([
@@ -697,14 +712,15 @@ export const questsRouter = createTRPCRouter({
       );
       if (asleepBlock) return errorResponse(asleepBlock);
 
-      const { userCacheEligible, ...result } = await assignQuestToUser({
-        client: ctx.drizzle,
-        user,
-        quest: questData,
-        source: "ui",
-        sectorVillage,
-        prevAttempt,
-      });
+      const { userCacheEligible, inventoryChanges, ...result } =
+        await assignQuestToUser({
+          client: ctx.drizzle,
+          user,
+          quest: questData,
+          source: "ui",
+          sectorVillage,
+          prevAttempt,
+        });
       return {
         ...result,
         ...(result.success &&
@@ -715,6 +731,7 @@ export const questsRouter = createTRPCRouter({
               user,
               updatedUser.publishedAchievementIds,
               await consumeUserAnnouncements(ctx.drizzle, user),
+              inventoryChanges,
             )
           : {}),
       };
@@ -1798,6 +1815,7 @@ export const questsRouter = createTRPCRouter({
       z.object({
         success: z.boolean(),
         itemsChanged: z.boolean(),
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
         message: z.string().optional(),
         notifications: z.array(z.string()),
         questData: z.array(QuestTracker).optional(),
@@ -1883,10 +1901,19 @@ export const questsRouter = createTRPCRouter({
       user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
       // Handle consequences
-      const { notifications: finalNotification, battleAttempted } =
-        await handleQuestConsequences(ctx.drizzle, user, consequences, notifications, {
+      const {
+        notifications: finalNotification,
+        battleAttempted,
+        inventoryChanges,
+      } = await handleQuestConsequences(
+        ctx.drizzle,
+        user,
+        consequences,
+        notifications,
+        {
           rollObjectiveAttackers: true,
-        });
+        },
+      );
 
       user.questData = fullTrackers;
       const responseUser = getPublicQuestUser(user);
@@ -1910,6 +1937,13 @@ export const questsRouter = createTRPCRouter({
               // Battle setup can settle newly due crafts as well as pay quest entry costs.
               consequence.type === "combat",
           ),
+        inventoryChanges:
+          !inventoryRecovered &&
+          !craftingItemsChanged &&
+          !battleAttempted &&
+          trackerResults.consequences.every((entry) => entry.type === "update_user")
+            ? inventoryChanges
+            : undefined,
         notifications: finalNotification,
         questData: responseUser.questData ?? [],
         questIdsUpdated,
@@ -2787,7 +2821,12 @@ export const assignQuestToUser = async (args: {
   // Feeds availability/period-cap guards and skips upsertQuestEntry's history query.
   // Callers resolve this row in their opening parallel preload.
   prevAttempt: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
-}): Promise<{ success: boolean; message: string; userCacheEligible?: boolean }> => {
+}): Promise<{
+  success: boolean;
+  message: string;
+  userCacheEligible?: boolean;
+  inventoryChanges?: InventoryQuantityChange[];
+}> => {
   const {
     client,
     user,
@@ -3123,6 +3162,9 @@ export const assignQuestToUser = async (args: {
     success: true,
     message: `Quest started: ${questData.name}`,
     userCacheEligible: assignment.userCacheEligible,
+    inventoryChanges: assignment.userCacheEligible
+      ? getQuestEntryInventoryChanges(entryCharges ?? [])
+      : undefined,
   };
 };
 
@@ -4174,6 +4216,11 @@ const executeClaimedQuestConsequences = async ({
   // Ending a run frees its Pyramid slot before a replacement can claim it. Completed
   // history may already be closed while the caller's quest projection is still open.
   if (startedQuestIds.length > 0) await closeQuests;
+  // Materialize the lazy write once so the mutation phase and row-count check share one execution.
+  const itemRemoval =
+    removedUserItemIds.length > 0
+      ? Promise.resolve(deleteUserItemsWithPositiveQuantity(client, removedUserItemIds))
+      : Promise.resolve({ rowsAffected: 0 });
   await Promise.all([
     startedQuestIds.length === 0 ? closeQuests : undefined,
     ...(startedQuestIds.length > 0
@@ -4252,13 +4299,8 @@ const executeClaimedQuestConsequences = async ({
     ...(collectedItems.length > 0
       ? [insertUserItemForExecuteClaimedQuestConsequences(client, collectedItems, user)]
       : []),
-    ...(removedUserItemIds.length > 0
-      ? [
-          // The quantity guard refuses rows held by a stack-merge claim (negative quantity), so
-          // this delete can never break an in-flight merge publish and duplicate the stack.
-          deleteUserItemsWithPositiveQuantity(client, removedUserItemIds),
-        ]
-      : []),
+    // The deletion guard leaves rows held by an active merge untouched.
+    itemRemoval,
     ...[
       opponent
         ? (async () => {
@@ -4319,7 +4361,10 @@ const executeClaimedQuestConsequences = async ({
         : Promise.resolve(),
     ],
   ]);
-  return battleUserUpdate;
+  return {
+    battleUserUpdate,
+    itemsRemoved: (await itemRemoval).rowsAffected === removedUserItemIds.length,
+  };
 };
 
 /**
@@ -4350,6 +4395,7 @@ export const handleQuestConsequences = async (
   notifications: string[];
   claimed: boolean;
   battleAttempted: boolean;
+  inventoryChanges?: InventoryQuantityChange[];
   battleUserUpdate?: Pick<UserDeltaResponse, "userPatch" | "userDelta">;
 }> => {
   // Quests reset
@@ -4479,7 +4525,7 @@ export const handleQuestConsequences = async (
         });
         notifications.push("Quest team progress will update on your next request.");
       }
-      const battleUserUpdate = await executeClaimedQuestConsequences({
+      const { battleUserUpdate, itemsRemoved } = await executeClaimedQuestConsequences({
         client,
         user,
         claimedAt: claimResult.claimedAt,
@@ -4494,6 +4540,12 @@ export const handleQuestConsequences = async (
       return {
         notifications,
         claimed: true,
+        inventoryChanges: getQuestConsequenceInventoryUpdate(
+          ownedItems,
+          removedUserItemIds,
+          consequences,
+          itemsRemoved,
+        ),
         battleAttempted: !!opponent,
         ...(battleUserUpdate ? { battleUserUpdate } : {}),
       };

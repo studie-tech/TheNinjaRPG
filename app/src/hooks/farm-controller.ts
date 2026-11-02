@@ -3,7 +3,7 @@
 import { getQueryKey } from "@trpc/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getFarmMutationUpdate } from "@/deltas/farming";
+import { getFarmBulkMutationUpdate, getFarmMutationUpdate } from "@/deltas/farming";
 import { FARM_MAX_CROP_SELL_QUANTITY } from "@/drizzle/constants";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { summarizeFarmPlots } from "@/libs/farming";
@@ -164,16 +164,24 @@ export function useFarmController() {
   const runBulkAction = useCallback(
     async (key: string, request: () => Promise<FarmMutationResponse>) => {
       if (pendingBulkActionRef.current) return false;
+      const snapshot = farmCache.prepareUpdate();
       pendingBulkActionRef.current = key;
       setPendingBulkAction(key);
       try {
         const result = await request();
         showMutationToast(result);
         setAnnouncement(result.message);
-        if (!result.success) return false;
-        await utils.farming.getFarmState.invalidate();
-        return true;
+        // Partial bulk failures may already have changed plots or granted crops.
+        await farmCache.updateCache(
+          (current) =>
+            isFarmState(current)
+              ? getFarmBulkMutationUpdate(current, result, key)
+              : undefined,
+          snapshot,
+        );
+        return result.success;
       } catch (error) {
+        void utils.farming.getFarmState.invalidate();
         const message =
           error instanceof Error ? error.message : "Bulk farm action failed";
         setAnnouncement(message);
@@ -184,7 +192,7 @@ export function useFarmController() {
         setPendingBulkAction(null);
       }
     },
-    [utils],
+    [farmCache, utils],
   );
 
   const plantAll = useCallback(

@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { QuestType } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
 import Accordion from "@/layout/Accordion";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -36,9 +37,10 @@ interface QuestPickerProps {
   setActiveQuestId?: React.Dispatch<React.SetStateAction<string>>;
 }
 
+/** Start a selected quest and reconcile its profile, entry costs and discovery lists. */
 const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   // Utils
-  const util = api.useUtils();
+  const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
 
   // State
   const [startError, setStartError] = useState<{
@@ -74,7 +76,10 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
     onMutate: () => {
       setStartError(null);
-      return { userRevision: prepareUserUpdate() };
+      return {
+        userRevision: prepareUserUpdate(),
+        quests: prepareQuestStartUpdate(),
+      };
     },
     onSuccess: async (data, variables, context) => {
       // Failures are shown in the notice above the list, which stays put and can point
@@ -92,15 +97,13 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
             data.message === questTypeConcurrentBlockMessage(quest, userData),
         });
       }
-      await updateUser(data, { revision: context?.userRevision });
+      const profileApplied = await updateUser(data, {
+        revision: context?.userRevision,
+      });
       if (data.success && currentStep?.title === "Genin Exam") {
         await handleNextStepAsync();
       }
-      await Promise.all([
-        util.quests.specificQuests.invalidate(),
-        // Entry items are consumed when a run starts.
-        ...(data.success ? [util.item.getUserItems.invalidate()] : []),
-      ]);
+      await updateQuestStart(data, context.quests, profileApplied);
     },
   });
 

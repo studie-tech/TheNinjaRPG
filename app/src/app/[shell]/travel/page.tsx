@@ -66,6 +66,7 @@ import type { UserItemWithItem } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AutoAttackModal from "@/layout/AutoAttackModal";
@@ -679,9 +680,14 @@ function Travel() {
       },
     });
 
+  const { prepareConsumptionUpdate, updateConsumption } =
+    useItemConsumptionCacheUpdate();
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, variables, revision) => {
+    onMutate: () => ({
+      userRevision: prepareUserUpdate(),
+      consumption: prepareConsumptionUpdate(),
+    }),
+    onSuccess: async (data, variables, context) => {
       finishItemConsumeRequest(userData?.userId ?? "", variables.userItemId);
       if (data.success && "rewards" in data && data.rewards) {
         showRewardToast(
@@ -700,17 +706,9 @@ function Travel() {
       if (data.success) {
         // The action is complete; keep reconciliation off the dialog's pending path.
         void Promise.allSettled([
-          updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-            achievementProgress: data.achievementProgress,
-          }),
-          utils.item.getUserItems.invalidate(),
-          utils.bloodline.getItemRolls.invalidate(),
-          utils.raids.getUserRaidBuffs.invalidate(),
-          ...("petRewards" in data && data.petRewards?.length
-            ? [utils.pets.getPet.invalidate()]
-            : []),
+          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
+            updateConsumption(data, context.consumption, profileApplied),
+          ),
         ]);
       } else if (useritem?.item.itemType === "MEAL") {
         // A rejected snapshot must refresh the next modal's quantity and account state.
@@ -720,9 +718,15 @@ function Travel() {
         ]);
       }
     },
-    onError: (error) => {
+    onError: async (error, _input, context) => {
       const message = getItemConsumeErrorMessage(error, useritem?.item);
       if (message) showMutationToast({ success: false, message });
+      await updateUser(undefined);
+      await updateConsumption(
+        undefined,
+        context?.consumption ?? prepareConsumptionUpdate(),
+        false,
+      );
     },
     onSettled: () => {
       setIsOpen(false);

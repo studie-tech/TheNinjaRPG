@@ -53,6 +53,22 @@ export const useCombatUpdates = (state: BattleState) => {
   const responseVersionRef = useRef<{ battle: ReturnedBattle; version: number } | null>(
     null,
   );
+  const battleRefreshRef = useRef<{ battleId: string; version: number } | null>(null);
+  const logRefreshesRef = useRef(new Map<string, number>());
+
+  /** Coalesce duplicate live versions while newer events and failed actions retain immediate recovery. */
+  const refreshBattle = useCallback(
+    (id: string, version: number, force = false) => {
+      const pending = battleRefreshRef.current;
+      if (!force && pending?.battleId === id && pending.version >= version) return;
+      const request = { battleId: id, version };
+      battleRefreshRef.current = request;
+      void utils.combat.getBattle.invalidate({ battleId: id }).finally(() => {
+        if (battleRefreshRef.current === request) battleRefreshRef.current = null;
+      });
+    },
+    [utils],
+  );
 
   /** Reserve the action and capture its exact battle-query revision before sending it. */
   const startAction = useCallback(
@@ -93,7 +109,7 @@ export const useCombatUpdates = (state: BattleState) => {
         Math.max(battle.version, pending?.battleId === id ? pending.version : 0) >
           version
       ) {
-        void utils.combat.getBattle.invalidate({ battleId: id });
+        refreshBattle(id, Math.max(battle.version, pending?.version ?? 0), true);
       } else if (response.battle && pending?.battleId === id) {
         void battleCache.updateCache(
           (current) => getCombatStateUpdate(current, response, id),
@@ -101,7 +117,7 @@ export const useCombatUpdates = (state: BattleState) => {
         );
       }
     },
-    [battleCache.updateCache, utils],
+    [battleCache.updateCache, refreshBattle],
   );
 
   /** Merge committed history rows, retaining recovery for incomplete or filtered cache pages. */
@@ -218,8 +234,16 @@ export const useCombatUpdates = (state: BattleState) => {
           if (input.refreshKey && !finished) continue;
           // Ordinary version changes load their new history key naturally. At
           // settlement the battle may be deleted, leaving an older key mounted.
+          const key = hashKey(query.queryKey);
+          // Socket echoes and the action response can request the same recovery together.
+          // A genuinely newer version still cancels the older read and recovers normally.
+          if ((logRefreshesRef.current.get(key) ?? -1) >= version) continue;
+          logRefreshesRef.current.set(key, version);
           await utils.combat.getBattleEntries.cancel(input);
-          void utils.combat.getBattleEntries.invalidate(input);
+          void utils.combat.getBattleEntries.invalidate(input).finally(() => {
+            if (logRefreshesRef.current.get(key) === version)
+              logRefreshesRef.current.delete(key);
+          });
         }
       }
     },
@@ -256,14 +280,14 @@ export const useCombatUpdates = (state: BattleState) => {
         battle.version,
         response?.battle === battle ? response.version : 0,
       );
-      if (data.version > version) void utils.combat.getBattle.invalidate();
+      if (data.version > version) refreshBattle(battleId, data.version);
     };
     channel.bind("event", onUpdate);
     return () => {
       channel.unbind("event", onUpdate);
       pusher.unsubscribe(battleId);
     };
-  }, [battleId, pusher, utils, updateLogs]);
+  }, [battleId, pusher, refreshBattle, updateLogs]);
   return { updateLogs, startAction, settleAction };
 };
 

@@ -4,6 +4,8 @@ import { Merge } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { getInventoryQuantities } from "@/deltas/item";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import { showMutationToast } from "@/libs/toast";
 
@@ -13,32 +15,38 @@ interface MergeAllStacksButtonProps {
   onMerged?: () => void;
 }
 
+/** Confirm stack consolidation and reconcile both inventory views, including partial failures. */
 export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   storedAtHome,
   compact = false,
   onMerged,
 }) => {
-  const utils = api.useUtils();
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
 
   const { mutate: mergeAllStacks, isPending } = api.item.mergeAllStacks.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
-      // Invalidate even on failure responses: a partial merge reports success=false
-      // after having already mutated some stacks, and the UI must not go stale.
-      await Promise.all([
-        utils.item.getUserItemsWithVariants.invalidate(),
-        utils.item.getUserItems.invalidate(),
-      ]);
+      // Partial failures can already have changed stacks and require authoritative recovery.
+      await updateInventory(
+        data.success
+          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
+          : undefined,
+        snapshot,
+      );
       if (data.success) {
         onMerged?.();
       }
     },
-    onError: (error) => {
+    onError: async (error) => {
+      // Report the failure before recovery reads so slow requests cannot delay feedback.
       showMutationToast({
         success: false,
         message: error.message,
         variant: "destructive",
       });
+      await invalidateInventory();
     },
   });
 

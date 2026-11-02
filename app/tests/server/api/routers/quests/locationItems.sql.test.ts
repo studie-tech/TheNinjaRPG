@@ -1,17 +1,22 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, userData, userItem, type UserItemWithRelations } from "@/drizzle/schema";
+import { item, quest, questHistory, sectorMap, userData, userItem, type UserItemWithRelations } from "@/drizzle/schema";
+import { getInventoryQuantities } from "@/deltas/item";
+import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
+import { ObjectiveReward } from "@/validators/rewards";
+import { DeliverItem } from "@/validators/objectives";
 import { itemRouter } from "@/routers/item";
 import { questsRouter } from "@/routers/quests";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "location-merge-player";
 
 describeWithDatabase("location quest inventory recovery", () => {
   beforeEach(async () => {
-    await resetTables(userItem, item, userData);
+    await resetTables(userItem, item, questHistory, quest, sectorMap, userData);
+    invalidatePublishedMapCache();
     const now = new Date();
     setSystemTime(now);
     await insertUsers([{
@@ -21,7 +26,24 @@ describeWithDatabase("location quest inventory recovery", () => {
     }]);
     await insertItems([{ id: "merge-herb", stackSize: 100 }]);
   });
-  afterEach(() => setSystemTime());
+  afterEach(() => { setSystemTime(); invalidatePublishedMapCache(); });
+
+  it("projects a confirmed whole-stack delivery against the canonical inventory", async () => {
+    const db = await getTestDatabase();
+    const user = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+    await insertQuests([{ id: "delivery", questType: "mission", content: {
+      objectives: [DeliverItem.parse({ id: "deliver", task: "deliver_item", sector: user.sector, longitude: user.longitude, latitude: user.latitude, deliverItemIds: ["merge-herb"] })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await insertQuestHistory([{ userId, questId: "delivery", questType: "mission" }]);
+    await insertUserItems([{ id: "delivery-stack", userId, itemId: "merge-herb", quantity: 3 }]);
+    const items = await callerFor(itemRouter, userId), before = await items.getUserItems();
+    const result = await (await callerFor(questsRouter, userId)).checkLocationQuest();
+    expect(result.success).toBe(true);
+    expect(result.itemsChanged).toBe(true);
+    expect(result.inventoryChanges).toEqual([{ id: "delivery-stack", itemId: "merge-herb", beforeQuantity: 3, quantity: 0 }]);
+    expect(getInventoryQuantities(before, result.inventoryChanges)).toEqual(await items.getUserItems());
+  });
 
   it.each(["empty", "fresh", "stale"] as const)(
     "refreshes active inventory caches only when recovering a stale merge claim (%s)",

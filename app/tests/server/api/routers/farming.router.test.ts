@@ -2,13 +2,17 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { FARM_MAX_PLOTS, FARM_PLOT_PURCHASE_COST, FARM_STARTING_PLOTS } from "@/drizzle/constants";
 import { farmCollectionLog, farmExtraction, farmPlot, item, quest, questHistory, userData, userItem } from "@/drizzle/schema";
+import { getFarmBulkMutationUpdate } from "@/deltas/farming";
+import { setSystemTime } from "bun:test";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { DecreaseFarmingTime } from "@/validators/combat";
+import { beforeStatements } from "../../../setup/statements";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -101,6 +105,46 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await resetTables(farmCollectionLog, farmExtraction, farmPlot, userItem, item, questHistory, quest, userData);
     const database = await getTestDatabase();
     await database.insert(item).values([cropItemRow(), seedItemRow()] as never);
+  });
+
+  it.each(["water", "harvest", "first collection", "new stack"] as const)("reconciles bulk %s against the canonical farm view", async (action) => {
+    const now = new Date("2026-11-02T12:00:00Z");
+    setSystemTime(now);
+    try {
+      await farmer({ farmingExperience: 1000 });
+      const db = await getTestDatabase();
+      await giveItem("existing-crop", "crop-1", action === "new stack" ? 50 : 2);
+      if (action !== "first collection") await db.insert(farmCollectionLog).values({ id: "collected-crop", userId: "farm-user", itemId: "crop-1", firstHarvestedAt: now });
+      await db.insert(farmPlot).values([0, 1].map(slotIndex => ({
+        id: `bulk-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: "seed-1",
+        plantedAt: new Date(now.getTime() - 120000),
+        finishAt: new Date(now.getTime() + (action === "water" ? 3600000 : -60000)),
+      })));
+      const api = await caller("farm-user"), before = await api.getFarmState();
+      if (!("plots" in before)) throw new Error(before.message);
+      const result = action === "water" ? await api.waterAll() : await api.harvestAll();
+      expect(result.success, result.message).toBe(true);
+      const next = getFarmBulkMutationUpdate(before, result, action === "water" ? "water" : "harvest");
+      if (action === "first collection" || action === "new stack") expect(next).toBeUndefined();
+      else {
+        const canonical = await api.getFarmState();
+        if (!("plots" in canonical)) throw new Error(canonical.message);
+        expect(next).toEqual(canonical);
+      }
+    } finally { setSystemTime(); }
+  });
+
+  it("withholds bulk watering metadata when one plot loses its timeline CAS", async () => {
+    await farmer();
+    const db = await getTestDatabase(), finishAt = new Date(Date.now() + 3600000);
+    await db.insert(farmPlot).values([0, 1].map(slotIndex => ({ id: `partial-${slotIndex}`, slotIndex, userId: "farm-user", seedItemId: "seed-1", plantedAt: new Date(), finishAt })));
+    const client = beforeStatements(db, farmPlot, [async () => {
+      await db.update(farmPlot).set({ finishAt: new Date(finishAt.getTime() + 60000) }).where(eq(farmPlot.id, "partial-0"));
+    }]);
+    const result = await callerForDatabase(farmingRouter, "farm-user", client).waterAll();
+    expect(result.success).toBe(true);
+    expect(result.updatedPlots).toBeUndefined();
+    expect(result.farmingExperienceDelta).toBeGreaterThan(0);
   });
 
   for (const action of ["plantSeed", "plantAllEmpty", "applyFertilizer", "fertilizeAll"] as const) {

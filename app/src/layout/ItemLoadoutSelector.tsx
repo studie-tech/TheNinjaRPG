@@ -3,7 +3,9 @@
 import { getQueryKey } from "@trpc/react-query";
 import React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { getEquippedInventory } from "@/deltas/item";
 import { getRenamedLoadouts } from "@/deltas/loadout";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
@@ -21,6 +23,7 @@ interface ItemLoadoutSelectorProps {
   selectedOverrideId?: string | null;
 }
 
+/** Select or rename an item loadout and reconcile its profile, equipment and inventory caches. */
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
   const {
@@ -31,6 +34,7 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
 
   // tRPC utility
   const utils = api.useUtils();
+  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
 
   // How many loadouts?
   const maxLoadouts = availableSlots ?? 0;
@@ -44,15 +48,20 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
 
   // Mutations
   const mutationResult = api.item.selectItemLoadout.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onMutate: () => ({
+      revision: prepareUserUpdate(),
+      inventory: prepareInventoryUpdate(),
+    }),
+    onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          updateUser(data.userPatch, { revision }),
-          utils.item.getUserItems.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
-        ]);
+        const profileApplied = await updateUser(data, { revision: context.revision });
+        await updateInventory(
+          profileApplied
+            ? (rows) => getEquippedInventory(rows, data.equipmentChanges)
+            : undefined,
+          context.inventory,
+        );
       }
     },
   });

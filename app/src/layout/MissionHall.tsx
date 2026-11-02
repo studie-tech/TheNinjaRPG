@@ -25,6 +25,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
+import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
@@ -48,8 +49,9 @@ interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
 }
 
+/** Start mission and crime runs while reconciling entry costs, discovery lists and announcements. */
 export default function MissionHall({ userData }: MissionHallProps) {
-  const util = api.useUtils();
+  const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
   const { prepareUserUpdate, updateUser } = useUserData();
   const activeContext = `${userData.userId}:${userData.sector}`;
   const activeUserIdRef = useRef(userData.userId);
@@ -88,10 +90,16 @@ export default function MissionHall({ userData }: MissionHallProps) {
   );
 
   const { mutate: startRandom, isPending } = api.quests.startRandom.useMutation({
-    onMutate: () => ({ userRevision: prepareUserUpdate() }),
+    onMutate: () => ({
+      userRevision: prepareUserUpdate(),
+      quests: prepareQuestStartUpdate(),
+    }),
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
-      await updateUser(data, { revision: context?.userRevision });
+      const profileApplied = await updateUser(data, {
+        revision: context?.userRevision,
+      });
+      await updateQuestStart(data, context.quests, profileApplied);
     },
   });
 
@@ -114,6 +122,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
     setPendingQuestId(request.questId);
 
     const userRevision = prepareUserUpdate();
+    const questSnapshot = prepareQuestStartUpdate();
     try {
       const data = await startQuest({
         questId: request.questId,
@@ -136,8 +145,9 @@ export default function MissionHall({ userData }: MissionHallProps) {
       setCommittedStart({ context: request.context, questId: request.questId });
       setPendingQuestId(null);
       void Promise.allSettled([
-        updateUser(data, { revision: userRevision }),
-        util.quests.missionHall.invalidate(),
+        updateUser(data, { revision: userRevision }).then((profileApplied) =>
+          updateQuestStart(data, questSnapshot, profileApplied),
+        ),
       ]);
       return true;
     } catch (error) {

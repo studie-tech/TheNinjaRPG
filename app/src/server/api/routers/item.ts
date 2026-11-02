@@ -19,6 +19,8 @@ import {
   getConsumedItemUserUpdate,
   getConsumedMealUserUpdate,
   getInventoryEquipmentChanges,
+  getInventoryQuantityChanges,
+  getLoadoutInventoryChanges,
   getPurchaseVariantUserUpdate,
   getRepairedEquipmentUpdate,
   getSelectItemLoadoutUserUpdate,
@@ -319,6 +321,10 @@ import {
   type ZodAllTags,
 } from "@/validators/combat";
 import { consumeItemInputSchema } from "@/validators/cooking";
+import {
+  type InventoryQuantityChange,
+  inventoryQuantityChangeSchema,
+} from "@/validators/inventory";
 import {
   adjustUserItemSchema,
   evolveItemSchema,
@@ -1598,7 +1604,11 @@ export const itemRouter = createTRPCRouter({
       },
     })
     .input(z.object({ itemId: z.string() }))
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.status !== "AWAKE") {
@@ -1612,10 +1622,11 @@ export const itemRouter = createTRPCRouter({
       if (!result.success) {
         return { success: false, message: result.message };
       }
-      if (!result.didMerge) {
-        return { success: true, message: "Nothing to merge" };
-      }
-      return { success: true, message: result.message };
+      return {
+        success: true,
+        message: result.didMerge ? result.message : "Nothing to merge",
+        inventoryChanges: result.inventoryChanges,
+      };
     }),
 
   mergeAllStacks: protectedProcedure
@@ -1626,10 +1637,14 @@ export const itemRouter = createTRPCRouter({
       },
     })
     .input(z.object({ storedAtHome: z.boolean().optional() }).nullish())
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const storedAtHome = input?.storedAtHome ?? false;
-      const [user] = await Promise.all([
+      const [user, recovered] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         restoreStaleMergeStackClaims(ctx.drizzle, ctx.userId),
       ]);
@@ -1642,7 +1657,11 @@ export const itemRouter = createTRPCRouter({
         storedAtHome,
       );
       if (userItemsAll.length === 0) {
-        return { success: true, message: "Nothing to merge" };
+        return {
+          success: true,
+          message: "Nothing to merge",
+          inventoryChanges: recovered ? undefined : [],
+        };
       }
       const itemIds = [
         ...new Set(
@@ -1652,7 +1671,11 @@ export const itemRouter = createTRPCRouter({
         ),
       ];
       if (itemIds.length === 0) {
-        return { success: true, message: "Nothing to merge" };
+        return {
+          success: true,
+          message: "Nothing to merge",
+          inventoryChanges: recovered ? undefined : [],
+        };
       }
       const itemById = new Map<string, ItemRowForMerge>();
       for (const row of userItemsAll) {
@@ -1689,12 +1712,15 @@ export const itemRouter = createTRPCRouter({
           message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
         };
       }
-      if (mergedTypes === 0) {
-        return { success: true, message: "Nothing to merge" };
-      }
       return {
         success: true,
-        message: `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+        message:
+          mergedTypes === 0
+            ? "Nothing to merge"
+            : `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+        inventoryChanges: recovered
+          ? undefined
+          : results.flatMap((result) => result.inventoryChanges ?? []),
       };
     }),
   // Split item stack
@@ -1917,6 +1943,9 @@ export const itemRouter = createTRPCRouter({
         rewards: PostProcessedRewardSchema.nullish(),
         cacheRewards: cacheConsumptionResponseSchema.shape.cacheRewards.optional(),
         petRewards: cacheConsumptionResponseSchema.shape.petRewards,
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
+        bloodlineRollsChanged: z.boolean().optional(),
+        raidBuffsChanged: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -2565,6 +2594,10 @@ export const itemRouter = createTRPCRouter({
           notifications: messages,
           rewards: grantedRewards,
           cacheRewards,
+          bloodlineRollsChanged: useritem.item.effects.some(
+            (effect) => effect.type === "rollbloodline",
+          ),
+          raidBuffsChanged: false,
           ...getConsumedItemUserUpdate({
             user,
             updates,
@@ -3440,17 +3473,36 @@ export const itemRouter = createTRPCRouter({
   selectItemLoadout: protectedProcedure
     .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        equipmentChanges: z
+          .array(
+            z.object({
+              id: z.string(),
+              equipped: z.enum(ItemSlots),
+              beforeEquipped: z.enum(ItemSlots),
+            }),
+          )
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
+      let inventoryRecovered = false;
       const [loadouts, user, useritems, masterySources] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchUserItems(ctx.drizzle, ctx.userId, {
+          includeHidden: true,
+          onStaleMergeClaimRecovery: () => {
+            inventoryRecovered = true;
+          },
+        }),
         fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
       const id = input.id;
+      const beforeEquipment = useritems.map((row) => ({ ...row }));
       const result = await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
         ...user,
         ...masterySources,
@@ -3458,6 +3510,13 @@ export const itemRouter = createTRPCRouter({
       return result.success
         ? {
             ...result,
+            // Slot changes cannot represent stacks restored by the inventory preload.
+            equipmentChanges:
+              !inventoryRecovered &&
+              result.userCacheEligible &&
+              result.inventoryCacheEligible
+                ? getLoadoutInventoryChanges(beforeEquipment, useritems)
+                : undefined,
             ...getSelectItemLoadoutUserUpdate({
               result,
               user,
@@ -3612,6 +3671,8 @@ export const selectItemLoadout = async (
     success: true,
     message,
     userCacheEligible: pointerUpdate.rowsAffected === 1,
+    // Dropped assignments can reflect moved or unavailable rows beyond their equipment slots.
+    inventoryCacheEligible: invalidItems.length === 0,
     items: useritems.filter((ui) => committedSlot.has(ui.id)),
   };
 };
@@ -4187,9 +4248,10 @@ type PreloadedStackMergePayload = {
   item: ItemRowForMerge | undefined;
 };
 
-type MergeStacksExecutionResult =
+type MergeStacksExecutionResult = (
   | { success: true; didMerge: boolean; message: string }
-  | { success: false; didMerge: false; message: string };
+  | { success: false; didMerge: false; message: string }
+) & { inventoryChanges?: InventoryQuantityChange[] };
 
 /**
  * Merges stacks only within the same inventory bucket (`storedAtHome` + `equipped`) so
@@ -4210,7 +4272,7 @@ async function executeMergeStacksForItemBucket(
   bucketItems: UserItemMergeBucketRow[],
 ): Promise<MergeStacksExecutionResult> {
   if (stackSize <= 1) {
-    return { success: true, didMerge: false, message: "" };
+    return { success: true, didMerge: false, message: "", inventoryChanges: [] };
   }
 
   const totalQuantity = bucketItems.reduce((acc, i) => acc + i.quantity, 0);
@@ -4235,7 +4297,7 @@ async function executeMergeStacksForItemBucket(
       (item, index) => item.quantity !== targetQuantityForKeepIndex(index),
     );
   if (!needsMerge) {
-    return { success: true, didMerge: false, message: "" };
+    return { success: true, didMerge: false, message: "", inventoryChanges: [] };
   }
 
   const conflictMessage = `Failed to merge stacks of ${itemName} — inventory changed, please try again`;
@@ -4348,6 +4410,11 @@ async function executeMergeStacksForItemBucket(
     success: true,
     didMerge: true,
     message: `Merged stacks of ${itemName}`,
+    inventoryChanges: getInventoryQuantityChanges(
+      sortedItems,
+      publishTargets,
+      claimedAt,
+    ),
   };
 }
 
@@ -4373,6 +4440,7 @@ async function executeMergeStacksForItem(
   itemId: string,
   preloaded?: PreloadedStackMergePayload,
 ): Promise<MergeStacksExecutionResult> {
+  let canProject = true;
   let info: ItemRowForMerge | undefined;
   let userItems: MergeEligibleUserItemForStackMerge[];
 
@@ -4386,9 +4454,10 @@ async function executeMergeStacksForItem(
     // reaper → items chain instead of serializing behind it.
     const [fetchedInfo, fetchedUserItems] = await Promise.all([
       fetchItem(drizzle, itemId),
-      restoreStaleMergeStackClaims(drizzle, userId).then(() =>
-        listUserItemForExecuteMergeStacksForItem(drizzle, userId, itemId),
-      ),
+      restoreStaleMergeStackClaims(drizzle, userId).then((recovered) => {
+        canProject = !recovered;
+        return listUserItemForExecuteMergeStacksForItem(drizzle, userId, itemId);
+      }),
     ]);
     info = fetchedInfo ?? undefined;
     userItems = fetchedUserItems;
@@ -4400,7 +4469,12 @@ async function executeMergeStacksForItem(
       !i.isInAuction,
   );
   if (!info || filteredUserItems.length === 0) {
-    return { success: true, didMerge: false, message: "" };
+    return {
+      success: true,
+      didMerge: false,
+      message: "",
+      inventoryChanges: canProject ? [] : undefined,
+    };
   }
 
   const buckets = new Map<string, UserItemMergeBucketRow[]>();
@@ -4432,12 +4506,12 @@ async function executeMergeStacksForItem(
   }
 
   const didMerge = bucketResults.some((r) => r.didMerge);
-  if (!didMerge) {
-    return { success: true, didMerge: false, message: "" };
-  }
   return {
     success: true,
-    didMerge: true,
-    message: `Merged stacks of ${info.name}`,
+    didMerge,
+    message: didMerge ? `Merged stacks of ${info.name}` : "",
+    inventoryChanges: canProject
+      ? bucketResults.flatMap((result) => result.inventoryChanges ?? [])
+      : undefined,
   };
 }

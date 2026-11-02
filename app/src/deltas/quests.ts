@@ -1,7 +1,8 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { getInventoryQuantityChanges } from "@/deltas/item";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
-import type { Quest, QuestHistory } from "@/drizzle/schema";
+import type { Quest, QuestHistory, UserItem } from "@/drizzle/schema";
 import type { GetRewardResult, postProcessRewards } from "@/libs/quest";
 import {
   getQuestTargetSectorsToCheck,
@@ -10,16 +11,41 @@ import {
 } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
-
+import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+
+/** Project only confirmed whole-stack quest deliveries; grants, nested starts and combat need recovery. */
+export const getQuestConsequenceInventoryUpdate = (
+  owned: Pick<UserItem, "id" | "itemId" | "quantity">[],
+  removedIds: string[],
+  consequences: QuestConsequence[],
+  removed: boolean,
+) => {
+  if (
+    !removed ||
+    removedIds.some(
+      (id) =>
+        !owned.some(
+          (row) => row.id === id && Number.isInteger(row.quantity) && row.quantity > 0,
+        ),
+    ) ||
+    consequences.some((entry) => !["remove_item", "update_user"].includes(entry.type))
+  )
+    return;
+  return getInventoryQuantityChanges(
+    owned,
+    removedIds.map((id) => ({ id, quantity: 0 })),
+  );
+};
 
 /** Project a quest start only after pending announcements were claimed for delivery by this response. */
 export const getQuestStartUserUpdate = (
   user: Parameters<typeof getUserProgressionUpdate>[0],
   publishedAchievementIds: readonly string[],
   receipt: { announcements: { name: string }[]; claimedAt?: Date } | undefined,
+  inventoryChanges: InventoryQuantityChange[] | undefined,
 ) => {
   if (!receipt) return {};
   const projection = getUserProgressionUpdate(user, publishedAchievementIds);
@@ -32,8 +58,20 @@ export const getQuestStartUserUpdate = (
       ...(receipt.claimedAt ? { updatedAt: receipt.claimedAt } : {}),
     },
     announcements: receipt.announcements.map((entry) => entry.name),
+    inventoryChanges,
   };
 };
+
+/** Describe ticket debits only after every guarded entry charge and its receipt committed. */
+export const getQuestEntryInventoryChanges = (
+  charges: { id: string; itemId: string; expectedQuantity: number; quantity: number }[],
+): InventoryQuantityChange[] =>
+  charges.map((charge) => ({
+    id: charge.id,
+    itemId: charge.itemId,
+    beforeQuantity: charge.expectedQuantity,
+    quantity: charge.expectedQuantity - charge.quantity,
+  }));
 
 /**
  * Scalar rewards compose with accepted cache updates; derived state needs reconciliation.

@@ -1,3 +1,4 @@
+import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import type { UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
@@ -8,10 +9,9 @@ import {
 } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
-
 import type { fetchItem, fetchUserEquipmentSnapshot } from "@/queries/item";
 import type { fetchUser } from "@/queries/profile";
-
+import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { UserCachePatch } from "@/validators/userCache";
 
 type EquipmentSnapshot = Omit<MasteryBuffUser, "items"> &
@@ -187,7 +187,7 @@ export const getConsumedItemUserUpdate = ({
     "curHealth" | "curChakra" | "curStamina" | "marriageSlots" | "extraReskinSlots"
   > &
     Partial<UserData>;
-  useritem: Pick<UserItem, "id" | "quantity">;
+  useritem: Pick<UserItem, "id" | "itemId" | "quantity">;
   jutsuSlotIncrease: number;
   requiresProgressionRefresh: boolean;
   hasReward: boolean;
@@ -221,6 +221,10 @@ export const getConsumedItemUserUpdate = ({
   return {
     ...projection,
     userDelta: {},
+    inventoryChanges: getInventoryQuantityChanges(
+      [useritem],
+      [{ id: useritem.id, quantity: useritem.quantity - 1 }],
+    ),
     userPatch: {
       ...userPatch,
       items: user.items.flatMap((entry) =>
@@ -324,6 +328,24 @@ export const getInventoryEquipmentChanges = (
       : [];
   });
 
+/** Loadout readbacks may expose a raced stack change; only slot-only results can reuse inventory rows. */
+export const getLoadoutInventoryChanges = (before: UserItem[], after: UserItem[]) => {
+  if (
+    after.some((row) => {
+      const original = before.find((entry) => entry.id === row.id);
+      return (
+        !original ||
+        original.quantity !== row.quantity ||
+        original.durability !== row.durability ||
+        original.level !== row.level ||
+        original.experience !== row.experience
+      );
+    })
+  )
+    return;
+  return getInventoryEquipmentChanges(before, after);
+};
+
 /** Apply saved equipment slots without replacing variant data; stale or missing rows refetch. */
 export const getEquippedInventory = <T extends Pick<UserItem, "id" | "equipped">>(
   rows: T[],
@@ -355,3 +377,88 @@ export const getSoldInventory = <T extends { id: string }>(
   rows.some((row) => row.id === userItemId)
     ? rows.filter((row) => row.id !== userItemId)
     : undefined;
+
+/** Describe committed stack writes using a matching loaded baseline for every target. */
+export const getInventoryQuantityChanges = (
+  before: Pick<UserItem, "id" | "itemId" | "quantity">[],
+  after: { id: string; quantity: number }[],
+  updatedAt?: Date,
+): InventoryQuantityChange[] =>
+  after.map((row) => {
+    const original = before.find((entry) => entry.id === row.id)!;
+    return {
+      id: row.id,
+      itemId: original.itemId,
+      beforeQuantity: original.quantity,
+      quantity: row.quantity,
+      ...(updatedAt ? { updatedAt } : {}),
+    };
+  });
+
+/**
+ * Apply confirmed quantities while preserving row extensions. An empty change list confirms
+ * no stack changes; withheld metadata or a changed baseline returns undefined for refetch.
+ */
+export const getInventoryQuantities = <
+  T extends Pick<UserItem, "id" | "itemId" | "quantity">,
+>(
+  rows: T[],
+  changes: InventoryQuantityChange[] | undefined,
+): T[] | undefined => {
+  if (
+    !changes ||
+    new Set(changes.map((change) => change.id)).size !== changes.length ||
+    changes.some(
+      (change) =>
+        !rows.some(
+          (row) =>
+            row.id === change.id &&
+            row.itemId === change.itemId &&
+            row.quantity === change.beforeQuantity,
+        ),
+    )
+  )
+    return;
+  return rows.flatMap((row) => {
+    const change = changes.find((entry) => entry.id === row.id);
+    if (!change) return [row];
+    return change.quantity > 0
+      ? [
+          {
+            ...row,
+            quantity: change.quantity,
+            ...(change.updatedAt ? { updatedAt: change.updatedAt } : {}),
+          },
+        ]
+      : [];
+  });
+};
+
+/** Reuse existing buff labels for a confirmed meal extension; new buff identities require their relations. */
+export const getConsumedRaidBuffs = (
+  current: RouterOutputs["raids"]["getUserRaidBuffs"],
+  result: RouterOutputs["item"]["consume"],
+): RouterOutputs["raids"]["getUserRaidBuffs"] | undefined => {
+  const patch = result.userPatch;
+  if (!patch?.raidBuffs || !patch.updatedAt) return;
+  const buffs = patch.raidBuffs.filter((buff) => buff.expiresAt > patch.updatedAt!);
+  if (
+    buffs.some(
+      (buff) =>
+        !current.buffs.some(
+          (row) =>
+            row.id === buff.id &&
+            row.itemId === buff.itemId &&
+            row.questId === buff.questId,
+        ),
+    )
+  )
+    return;
+  return {
+    ...current,
+    buffs: buffs.map((buff) => ({
+      ...current.buffs.find((row) => row.id === buff.id)!,
+      ...buff,
+    })),
+  };
+};

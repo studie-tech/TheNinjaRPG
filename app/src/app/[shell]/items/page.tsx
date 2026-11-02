@@ -27,7 +27,11 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import { getEquippedInventory, getSoldInventory } from "@/deltas/item";
+import {
+  getEquippedInventory,
+  getInventoryQuantities,
+  getSoldInventory,
+} from "@/deltas/item";
 import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
@@ -41,6 +45,7 @@ import type {
   UserItemWithVariants,
 } from "@/drizzle/schema";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
+import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -853,6 +858,7 @@ interface BackpackProps {
   userData: NonNullable<UserWithRelations>;
 }
 
+/** Render inventory actions with access to carried items across tabs and equipped slots. */
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
   const { useritems, allUserItems, userData } = props;
@@ -885,16 +891,35 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   // Mutations
   const { mutate: merge, isPending: isMerging } = api.item.mergeStacks.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareInventoryUpdate,
+    onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
-      await utils.item.getUserItemsWithVariants.invalidate();
+      await updateInventory(
+        data.success
+          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
+          : undefined,
+        snapshot,
+      );
+    },
+    onError: async (error) => {
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await invalidateInventory();
     },
     onSettled,
   });
 
+  const { prepareConsumptionUpdate, updateConsumption } =
+    useItemConsumptionCacheUpdate();
   const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, variables, revision) => {
+    onMutate: () => ({
+      userRevision: prepareUserUpdate(),
+      consumption: prepareConsumptionUpdate(),
+    }),
+    onSuccess: async (data, variables, context) => {
       finishItemConsumeRequest(userData?.userId ?? "", variables.userItemId);
       if (data.success && "rewards" in data && data.rewards) {
         showRewardToast(
@@ -919,17 +944,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       if (data.success) {
         // The action is complete; keep reconciliation off the dialog's pending path.
         void Promise.allSettled([
-          updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-            achievementProgress: data.achievementProgress,
-          }),
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.bloodline.getItemRolls.invalidate(),
-          utils.raids.getUserRaidBuffs.invalidate(),
-          ...("petRewards" in data && data.petRewards?.length
-            ? [utils.pets.getPet.invalidate()]
-            : []),
+          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
+            updateConsumption(data, context.consumption, profileApplied),
+          ),
         ]);
       } else if (useritem?.item.itemType === "MEAL") {
         // A rejected snapshot must refresh the next modal's quantity and account state.
@@ -939,9 +956,15 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         ]);
       }
     },
-    onError: (error) => {
+    onError: async (error, _input, context) => {
       const message = getItemConsumeErrorMessage(error, useritem?.item);
       if (message) showMutationToast({ success: false, message });
+      await updateUser(undefined);
+      await updateConsumption(
+        undefined,
+        context?.consumption ?? prepareConsumptionUpdate(),
+        false,
+      );
     },
     onSettled,
   });

@@ -1,6 +1,8 @@
 import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { getHarvestedFarmPlots, getWateredFarmPlots } from "@/deltas/farming";
+import { getInventoryQuantityChanges } from "@/deltas/item";
 import {
   FARM_CROPS_PER_EXTRACTOR,
   FARM_MAX_CROP_SELL_QUANTITY,
@@ -108,6 +110,7 @@ import {
   farmMutationResponseSchema,
   farmShopPurchaseInputSchema,
 } from "@/validators/farming";
+import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { AllObjectiveTask } from "@/validators/objectives";
 
 export const farmingRouter = createTRPCRouter({
@@ -707,6 +710,10 @@ export const farmingRouter = createTRPCRouter({
         success: true,
         message: `Watered ${wateredCount} plot${wateredCount === 1 ? "" : "s"} (+${xpGain} farming XP)`,
         farmingExperienceDelta: xpGain,
+        // A lost plot CAS may hide another writer's timeline; recover the complete view.
+        updatedPlots: results.every(Boolean)
+          ? getWateredFarmPlots(waterable, results, now)
+          : undefined,
       };
     }),
 
@@ -829,9 +836,14 @@ export const farmingRouter = createTRPCRouter({
     .meta({ mcp: { description: "Harvest every ready farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
+      let inventoryRecovered = false;
       const [user, userItems, plots, questState] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId, {
+          onStaleMergeClaimRecovery: () => {
+            inventoryRecovered = true;
+          },
+        }),
         fetchFarmPlotsWithItems(ctx.drizzle, ctx.userId),
         fetchFarmingQuestState(ctx.drizzle, ctx.userId),
       ]);
@@ -920,6 +932,13 @@ export const farmingRouter = createTRPCRouter({
         success: true,
         message: `Harvested ${readyPlots.length} plot${readyPlots.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
         farmingExperienceDelta: xpGain,
+        updatedPlots: getHarvestedFarmPlots(readyPlots, now),
+        // Crop grants cannot represent unrelated seed or fertilizer stacks restored by the preload.
+        inventoryChanges:
+          !inventoryRecovered &&
+          awards.every((award) => award && award.inventoryChanges !== undefined)
+            ? awards.flatMap((award) => (award ? (award.inventoryChanges ?? []) : []))
+            : undefined,
         inventoryDeltas: [...harvests.entries()].map(([itemId, harvest]) => ({
           itemId,
           quantityDelta: harvest.quantity,
@@ -1876,7 +1895,7 @@ const payOutExtractions = async (
                 grant.quantity,
                 settledUserItems,
               );
-              return { ids: grant.ids, granted };
+              return { ids: grant.ids, granted: !!granted };
             } catch {
               return { ids: grant.ids, granted: false };
             }
@@ -2038,6 +2057,7 @@ const guardBulkItemAwardInventoryCapacity = (
 /** Max attempts to fill a partial stack before giving up and opening a new row. */
 const STACK_FILL_ATTEMPTS = 3;
 
+/** Grant crops with guarded stack fills; new ownership rows withhold cache quantities. */
 const awardItemToUser = async (
   client: DrizzleClient,
   userId: string,
@@ -2050,11 +2070,12 @@ const awardItemToUser = async (
    * one call, so that two grants never measure the same stack from this snapshot.
    */
   userItems: Awaited<ReturnType<typeof fetchUserItems>>,
-): Promise<boolean> => {
-  if (quantity <= 0) return true;
+): Promise<false | { inventoryChanges?: InventoryQuantityChange[] }> => {
+  if (quantity <= 0) return { inventoryChanges: [] };
   if (!itemInfo) return false;
 
   let remaining = quantity;
+  const inventoryChanges: InventoryQuantityChange[] = [];
   const stackSize = itemInfo.canStack ? Math.max(1, itemInfo.stackSize) : 1;
 
   if (itemInfo.canStack) {
@@ -2087,6 +2108,12 @@ const awardItemToUser = async (
         stackSize,
       );
       if (fillResult.rowsAffected === 1) {
+        inventoryChanges.push(
+          ...getInventoryQuantityChanges(
+            [{ ...existing, quantity: quantityOnRecord }],
+            [{ id: existing.id, quantity: quantityOnRecord + toAdd }],
+          ),
+        );
         remaining -= toAdd;
         break;
       }
@@ -2110,7 +2137,7 @@ const awardItemToUser = async (
   if (inserts.length > 0) {
     await insertUserItems(client, inserts);
   }
-  return true;
+  return { inventoryChanges: inserts.length === 0 ? inventoryChanges : undefined };
 };
 
 type FarmingQuestTask =

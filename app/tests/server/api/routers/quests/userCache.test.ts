@@ -70,6 +70,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const api = await callerFor(questsRouter, playerId);
     const result = method === "startQuest" ? await api.startQuest({ questId: missionId, userSector: 0, supportsAnnouncements: true }) : await api.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null, supportsAnnouncements: true });
     expect(result.success, result.message).toBe(true);
+    expect(result.inventoryChanges).toEqual([]);
     expect(result.userPatch).toBeDefined();
     expect(result.userPatch).toMatchObject({ unreadNotifications: 0, unreadRecruitRewards: 0 });
     expect(result.announcements).toContain("First announcement");

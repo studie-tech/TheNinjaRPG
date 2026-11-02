@@ -8,6 +8,7 @@ import MissionHall from "@/layout/MissionHall";
 import * as MissionPicker from "@/layout/MissionPicker";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import * as QuestStartCache from "@/hooks/useQuestStartCacheUpdate";
 import { ensureDom } from "../setup/dom.mjs";
 
 type StartResult = RouterOutputs["quests"]["startQuest"];
@@ -26,6 +27,7 @@ beforeEach(() => {
     return null;
   });
   vi.spyOn(toast, "showMutationToast").mockImplementation(shown);
+  vi.spyOn(QuestStartCache, "useQuestStartCacheUpdate").mockReturnValue({ prepareQuestStartUpdate: () => ({}), updateQuestStart: invalidate } as never);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({
     prepareUserUpdate: () => 7, updateUser,
   } as never);

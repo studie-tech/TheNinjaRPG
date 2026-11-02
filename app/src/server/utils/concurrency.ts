@@ -198,16 +198,18 @@ type RestoreStaleUserItemMergeClaimsParams = {
  * original value remains recoverable after a process crash. Its atomic publish turns obsolete
  * rows into zero-quantity tombstones, which are safe to delete once stale. Fresh non-positive rows
  * are left alone for the active merge; callers exclude them from inventory reads and writes.
+ * Return whether recovery changed rows so mutation responses can withhold incomplete cache metadata.
  */
 export const restoreStaleUserItemMergeClaims = async ({
   client,
   userId,
   staleBefore,
 }: RestoreStaleUserItemMergeClaimsParams) => {
-  await Promise.all([
+  const results = await Promise.all([
     updateUserItemForRestoreStaleUserItemMergeClaims(client, userId, staleBefore),
     deleteUserItemForRestoreStaleUserItemMergeClaims(client, userId, staleBefore),
   ]);
+  return results.some((result) => result.rowsAffected > 0);
 };
 
 /**
