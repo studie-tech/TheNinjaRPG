@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
@@ -63,48 +64,22 @@ export function ActivityDock({ children }: { children: ReactNode }) {
       )}
     >
       {open ? (
-        <div
+        <Tabs
+          value={tab}
+          onValueChange={setTab}
           id={panelId}
           className="pointer-events-auto w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xl"
         >
           <header className="flex items-center gap-1 border-b bg-muted/40 px-2 py-1.5">
-            <div
-              role="tablist"
+            <TabsList
               aria-label="Activity"
-              className="flex flex-1 items-center gap-1"
+              className="h-auto w-auto flex-1 justify-start bg-transparent p-0"
             >
               {(["tutorial", "quests"] as const).map((value) => (
-                <button
+                <TabsTrigger
                   key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === value}
-                  tabIndex={tab === value ? 0 : -1}
-                  aria-controls={`${panelId}-${value}`}
-                  id={`${panelId}-${value}-tab`}
-                  onClick={() => setTab(value)}
-                  onKeyDown={(event) => {
-                    const next =
-                      event.key === "Home"
-                        ? "tutorial"
-                        : event.key === "End"
-                          ? "quests"
-                          : ["ArrowLeft", "ArrowRight"].includes(event.key)
-                            ? value === "tutorial"
-                              ? "quests"
-                              : "tutorial"
-                            : undefined;
-                    if (!next) return;
-                    event.preventDefault();
-                    setTab(next);
-                    document.getElementById(`${panelId}-${next}-tab`)?.focus();
-                  }}
-                  className={cn(
-                    "flex h-9 items-center gap-1.5 rounded-md px-2 text-sm",
-                    tab === value
-                      ? "bg-background font-semibold shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
+                  value={value}
+                  className="flex h-9 items-center gap-1.5 px-2 data-[state=active]:font-semibold"
                 >
                   {value === "tutorial" ? (
                     <BookOpen className="h-4 w-4" />
@@ -112,9 +87,9 @@ export function ActivityDock({ children }: { children: ReactNode }) {
                     <ListChecks className="h-4 w-4" />
                   )}
                   {capitalizeFirstLetter(value)}
-                </button>
+                </TabsTrigger>
               ))}
-            </div>
+            </TabsList>
             <Button
               variant="ghost"
               size="icon"
@@ -135,15 +110,17 @@ export function ActivityDock({ children }: { children: ReactNode }) {
               <ChevronDown className="h-4 w-4" />
             </Button>
           </header>
-          <div
-            role="tabpanel"
-            id={`${panelId}-${tab}`}
-            aria-labelledby={`${panelId}-${tab}-tab`}
-            className="max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain"
+          <TabsContent
+            value="quests"
+            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain"
           >
-            {tab === "quests" ? (
-              <ActivityQuests key={user.userId} user={user} />
-            ) : user.tutorialOn === false ? (
+            <ActivityQuests key={user.userId} user={user} />
+          </TabsContent>
+          <TabsContent
+            value="tutorial"
+            className="mt-0 max-h-[min(55dvh,520px)] overflow-y-auto overscroll-contain"
+          >
+            {user.tutorialOn === false ? (
               <p className="p-4 text-sm text-muted-foreground">
                 Tutorial is off.{" "}
                 <Link
@@ -157,8 +134,8 @@ export function ActivityDock({ children }: { children: ReactNode }) {
             ) : (
               children
             )}
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       ) : (
         <Button
           variant="outline"

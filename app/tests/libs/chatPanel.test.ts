@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { addInboxNotification } from "@/deltas/chat";
 import {
-  addInboxNotification,
   countChatNotifications,
   getInboxNews,
   isConversationMuted,

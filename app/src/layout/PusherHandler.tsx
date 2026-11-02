@@ -6,12 +6,12 @@ import { useEffect, useEffectEvent, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
+import { addInboxNotification } from "@/deltas/chat";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
 import {
-  addInboxNotification,
   chatMentionsAtom,
   chatPanelAtom,
   chatViewingAtom,
@@ -174,10 +174,10 @@ export const usePusherHandler = (
             await utils.profile.getUser.cancel();
             utils.profile.getUser.setData(undefined, (old) =>
               old
-                ? ({
+                ? {
                     ...old,
                     notifications: addInboxNotification(old.notifications),
-                  } as typeof old)
+                  }
                 : old,
             );
             if (!isOnInbox()) {

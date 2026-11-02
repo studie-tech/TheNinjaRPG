@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
 import type { Dispatch, SetStateAction } from "react";
@@ -27,7 +28,8 @@ it("notifies its parent after a committed dialog change and preserves queued fun
       <button type="button" onClick={() => setIsOpen((current) => !current)}>Toggle once</button>
     </>;
   });
-  const view = render(<NewConversationPrompt newButton="New chat" onOpenChange={(open) => { expect(committed).toBe(true); events.push(open); }} />);
+  const queryClient = new QueryClient();
+  const view = render(<QueryClientProvider client={queryClient}><NewConversationPrompt newButton="New chat" onOpenChange={(open) => { expect(committed).toBe(true); events.push(open); }} /></QueryClientProvider>);
   fireEvent.click(view.getByRole("button", { name: "Toggle twice" }));
   expect(events).toEqual([]);
   fireEvent.click(view.getByRole("button", { name: "Toggle once" }));

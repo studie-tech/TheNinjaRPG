@@ -26,6 +26,8 @@ export function ChatConversation({
   toolbarStart,
   toolbarEnd,
 }: ChatConversationProps) {
+  const draftKey = convoId ?? convoTitle ?? "";
+  const [drafts, setDrafts] = useAtom(chatDraftsAtom);
   const {
     userData,
     comments,
@@ -51,7 +53,19 @@ export function ChatConversation({
     reactConversationComment,
     handleConversationCommentDeleted,
     typingUsers,
-  } = useConversation({ convo_id: convoId, convo_title: convoTitle, refreshKey: 0 });
+  } = useConversation({
+    convo_id: convoId,
+    convo_title: convoTitle,
+    refreshKey: 0,
+    onCommentPosted: (submittedText) => {
+      // A send can finish after closing chat saved its pending text as a draft.
+      setDrafts((current) => {
+        if (current[draftKey] !== submittedText) return current;
+        const { [draftKey]: _submitted, ...rest } = current;
+        return rest;
+      });
+    },
+  });
 
   const listRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -94,8 +108,6 @@ export function ChatConversation({
   }, [newestId, loadedCount, newestIsOwn]);
 
   // Keep unsent text when the panel closes or another chat opens, and restore it.
-  const draftKey = convoId ?? convoTitle ?? "";
-  const [drafts, setDrafts] = useAtom(chatDraftsAtom);
   const savedDraft = useRef(drafts[draftKey]);
   useEffect(() => {
     if (savedDraft.current) setValue("comment", savedDraft.current);

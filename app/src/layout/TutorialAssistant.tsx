@@ -32,7 +32,9 @@ import {
 } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { ActivityDock } from "@/layout/ActivityDock";
+import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
@@ -909,7 +911,7 @@ const PlayerTutorialAssistant: React.FC<
     const handleKeyPress = (event: KeyboardEvent) => {
       // Let the confirmation dialog own its keyboard interactions. In particular,
       // Enter on its focused action must not also advance the obscured tutorial.
-      if (showCancelConfirmDialog) return;
+      if (event.defaultPrevented || showCancelConfirmDialog) return;
       const target = event.target;
       // Focused controls own their keys, including Activity tabs and panel actions.
       if (
@@ -1328,11 +1330,23 @@ const PlayerTutorialAssistant: React.FC<
     );
   }
 
-  // If the regular tutorial is not visible and there's no post-tutorial quest to show, don't render anything
-  if (!isAssistantVisible && !showPostTutorialQuest) return null;
-
-  // Guard against undefined currentTutorialStep
-  if (!currentTutorialStep) return null;
+  if ((!isAssistantVisible && !showPostTutorialQuest) || !currentTutorialStep) {
+    return (
+      <div className="space-y-2 p-4 text-sm text-muted-foreground">
+        <p>
+          {isTutorialActive(userData)
+            ? "There is no tutorial guidance on this page."
+            : "Tutorial complete. Quest guidance will appear here when available."}
+        </p>
+        <Link
+          className="text-primary underline"
+          href={`${SETTINGS_HREF}&settings=help&setting=tutorial`}
+        >
+          Open tutorial settings
+        </Link>
+      </div>
+    );
+  }
 
   // Render the tutorial overlay with highlight and assistant panel
   return (

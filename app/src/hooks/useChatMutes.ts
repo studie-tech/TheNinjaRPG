@@ -14,32 +14,30 @@ import { useUserData } from "@/utils/UserContext";
 
 /** Read and change chat mutes, saved on the account so every device agrees. */
 export const useChatMutes = () => {
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useUserData();
   const store = useStore();
   const pending = useAtomValue(chatMutePendingAtom);
   const pendingUserId = useRef<string | undefined>(undefined);
   const { mutate: updatePreferences, isPending } =
     api.profile.updatePreferences.useMutation({
-      onMutate: () => pendingUserId.current,
-      onSuccess: (result, patch, userId) => {
+      onMutate: () => ({
+        userId: pendingUserId.current,
+        revision: prepareUserUpdate(),
+      }),
+      onSuccess: (result, _patch, context) => {
         if (!result.success) {
           showMutationToast(result);
           return;
         }
-        return updateUser((current) =>
-          current.userId === userId
-            ? {
-                ...(patch.chatMuted !== undefined && { chatMuted: patch.chatMuted }),
-                ...(patch.mutedConversationIds !== undefined && {
-                  mutedConversationIds: patch.mutedConversationIds,
-                }),
-              }
-            : undefined,
+        return updateUser(
+          (current) =>
+            current.userId === context?.userId ? result.userPatch : undefined,
+          { revision: context?.revision },
         );
       },
-      onSettled: (_result, _error, _patch, userId) => {
+      onSettled: (_result, _error, _patch, context) => {
         // The global session guard can reject before this hook's onMutate runs.
-        const savingUserId = userId ?? pendingUserId.current;
+        const savingUserId = context?.userId ?? pendingUserId.current;
         pendingUserId.current = undefined;
         if (!savingUserId) return;
         store.set(chatMutePendingAtom, (current) => {

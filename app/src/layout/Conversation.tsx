@@ -46,7 +46,7 @@ export interface ConversationLogicProps {
   convo_title?: string;
   convo_id?: string;
   refreshKey: number;
-  onCommentPosted?: () => void;
+  onCommentPosted?: (comment: string) => void;
   /** When set, banned/silenced users may only compose if they created this ticket */
   supportTicketCreatedByUserId?: string;
 }
@@ -183,7 +183,14 @@ export const useConversation = (props: ConversationLogicProps) => {
   >;
 
   const utils = api.useUtils();
-  const { refreshConversationComments } = useConversationCacheUpdate();
+  const { refreshConversationComments, recordConversationRead } =
+    useConversationCacheUpdate();
+  const lastReadAt = conversation?.lastReadAt;
+  useEffect(() => {
+    if (conversation?.id && lastReadAt) {
+      void recordConversationRead(conversation.id, lastReadAt);
+    }
+  }, [conversation?.id, lastReadAt, recordConversationRead]);
 
   /**
    * Shared infinite-query cache writer for conversation comments. The
@@ -590,7 +597,7 @@ export const useConversation = (props: ConversationLogicProps) => {
             });
           setEditorKey((prev) => prev + 1);
           if (props.onCommentPosted) {
-            props.onCommentPosted();
+            props.onCommentPosted(newComment.comment);
           }
           if (data.commentId && context?.optimisticCommentId) {
             // Stamp the server id onto the matching optimistic comment only.
@@ -617,7 +624,10 @@ export const useConversation = (props: ConversationLogicProps) => {
   // Create comment & optimistically update the interface
   const { mutate: fetchComment } = api.comments.fetchConversationComment.useMutation({
     onSuccess: async (data) => {
-      if (data) await optimisticConversationUpdate(data);
+      if (!data) return;
+      await optimisticConversationUpdate(data);
+      if (data.lastReadAt && data.conversationId)
+        await recordConversationRead(data.conversationId, data.lastReadAt);
     },
   });
 
@@ -638,6 +648,7 @@ export const useConversation = (props: ConversationLogicProps) => {
                 fetchComment({
                   commentId: data.commentId,
                   conversationId: conversation.id,
+                  markRead: isPageActive,
                 });
               }
               break;
@@ -674,7 +685,7 @@ export const useConversation = (props: ConversationLogicProps) => {
         },
       );
     }
-  }, [isPaused, conversation, pusher, queryKey]);
+  }, [isPaused, isPageActive, conversation, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {

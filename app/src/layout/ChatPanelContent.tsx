@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useChatMutes } from "@/hooks/useChatMutes";
@@ -127,7 +128,11 @@ export default function ChatPanelBody({
   };
 
   return (
-    <div className="bg-popover text-popover-foreground flex h-full min-h-0 flex-col">
+    <Tabs
+      value={isPhone && panel.tab !== "ai" ? "tavern" : panel.tab}
+      onValueChange={(value) => setTab(value as ChatTab)}
+      className="bg-popover text-popover-foreground flex h-full min-h-0 flex-col"
+    >
       <header className="bg-muted/40 flex shrink-0 items-center gap-[4px] border-b px-[8px] py-[6px]">
         {isPhone && phoneChat && panel.tab !== "ai" ? (
           <Button
@@ -140,40 +145,26 @@ export default function ChatPanelBody({
             Chats
           </Button>
         ) : (
-          <div
-            role="tablist"
+          <TabsList
             aria-label="Chat"
-            className="flex min-w-0 items-center gap-[4px]"
+            className="h-auto w-auto min-w-0 flex-nowrap justify-start gap-[4px] bg-transparent p-0"
           >
-            {tabs.map((tab) => {
-              const selected = isPhone
-                ? (tab.id === "ai") === (panel.tab === "ai")
-                : tab.id === panel.tab;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setTab(tab.id)}
-                  className={cn(
-                    "flex h-[32px] items-center gap-[4px] rounded-md px-[10px] text-[13px]",
-                    selected
-                      ? "bg-background text-foreground font-semibold shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                  {!!tab.count && (
-                    <span className="rounded-full bg-red-500 px-[6px] text-[11px] leading-4 text-white">
-                      {tab.count > 99 ? "99+" : tab.count}
-                      <span className="sr-only"> unread</span>
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+            {tabs.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className="flex h-[32px] items-center gap-[4px] px-[10px] text-[13px] data-[state=active]:font-semibold"
+              >
+                {tab.label}
+                {!!tab.count && (
+                  <span className="rounded-full bg-red-500 px-[6px] text-[11px] leading-4 text-white">
+                    {tab.count > 99 ? "99+" : tab.count}
+                    <span className="sr-only"> unread</span>
+                  </span>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
         )}
         <div className="ml-auto flex items-center">
           {!isPhone && (
@@ -232,26 +223,32 @@ export default function ChatPanelBody({
           </span>
         </Link>
       )}
-      <div role="tabpanel" className="flex min-h-0 flex-1 flex-col">
-        {activeTab === "ai" ? (
-          <ChatBox
-            className="min-h-0 flex-1"
-            autoFocus={false}
-            onAskTavern={() => setTab("tavern")}
-          />
-        ) : showPhoneList ? (
-          <PhoneChatList onOpen={setPhoneChat} />
-        ) : activeTab === "inbox" ? (
-          <InboxPane hideRail={isPhone} onMessageUser={openMessageWith} />
-        ) : (
-          <TavernPane
-            fixedTavern={phoneChat?.kind === "tavern" ? phoneChat.tavern : undefined}
-            onMessageUser={openMessageWith}
-            onClose={onClose}
-          />
-        )}
-      </div>
-    </div>
+      {tabs.map((tab) => (
+        <TabsContent
+          key={tab.id}
+          value={tab.id}
+          className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+        >
+          {tab.id === "ai" ? (
+            <ChatBox
+              className="min-h-0 flex-1"
+              autoFocus={false}
+              onAskTavern={() => setTab("tavern")}
+            />
+          ) : showPhoneList ? (
+            <PhoneChatList onOpen={setPhoneChat} />
+          ) : (isPhone ? activeTab : tab.id) === "inbox" ? (
+            <InboxPane hideRail={isPhone} onMessageUser={openMessageWith} />
+          ) : (
+            <TavernPane
+              fixedTavern={phoneChat?.kind === "tavern" ? phoneChat.tavern : undefined}
+              onMessageUser={openMessageWith}
+              onClose={onClose}
+            />
+          )}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
 

@@ -9,7 +9,9 @@ import { useController } from "react-hook-form";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as mutes from "@/hooks/useChatMutes";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import * as taverns from "@/hooks/useTaverns";
+import * as conversationComments from "@/layout/ConversationComments";
 import * as chatConversation from "@/layout/ChatConversation";
 import ChatPanelBody from "@/layout/ChatPanelContent";
 import { useConversation } from "@/layout/Conversation";
@@ -17,7 +19,7 @@ import * as modal from "@/layout/Modal";
 import * as richInput from "@/layout/RichInput";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
-import { chatPanelAtom } from "@/libs/chatPanel";
+import { chatDraftsAtom, chatViewingAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
 import * as pagination from "@/libs/pagination";
 import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
@@ -51,6 +53,8 @@ afterEach(() => {
   cleanup();
   for (const queryClient of clients.splice(0)) queryClient.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(chatDraftsAtom, {});
+  getDefaultStore().set(chatViewingAtom, undefined);
   vi.restoreAllMocks();
 });
 
@@ -168,4 +172,117 @@ it("keeps team and panel messages synchronized in both send directions without d
   const panelKey = getQueryKey(testApi.comments.getConversationComments, { convo_id: "chat", limit: 10, refreshKey: 0, searchQuery: "" }, "infinite");
   const cached = queryClient.getQueryData<{ pages: { data: { id: string; reactions: unknown }[] }[] }>(panelKey);
   expect(cached?.pages[0]?.data.find((row) => row.id === "old")?.reactions).toEqual({ "👍": ["Peer"] });
+});
+
+it.each(["sent", "failed", "newer draft"])("retains only unsent drafts after a closed panel's request completes (%s)", async (outcome) => {
+  let finish!: (value: object) => void;
+  vi.spyOn(conversationComments, "ConversationComments").mockReturnValue(<></>);
+  const { wrapper, queryClient } = session((path) => {
+    if (path === "comments.getConversationComments") return { data: [], convo: { id: "chat", title: "Chat", isPublic: false }, nextCursor: null };
+    if (path === "comments.createConversationComment") return new Promise((resolve) => { finish = resolve; });
+    throw new Error(path);
+  });
+  vi.spyOn(richInput, "default").mockImplementation(({ id, control, onSubmit }) => {
+    const { field } = useController({ name: id, control });
+    return <><textarea aria-label="Message" {...field} /><button type="button" onClick={onSubmit}>Send message</button></>;
+  });
+  const view = render(<chatConversation.ChatConversation convoId="chat" />, { wrapper });
+  fireEvent.change(await view.findByRole("textbox", { name: "Message" }), { target: { value: "Submitted message" } });
+  fireEvent.click(view.getByRole("button", { name: "Send message" }));
+  await waitFor(() => expect(finish).toBeDefined());
+  view.unmount();
+  expect(getDefaultStore().get(chatDraftsAtom).chat).toBe("Submitted message");
+  if (outcome === "newer draft") getDefaultStore().set(chatDraftsAtom, { chat: "New unsent text" });
+  await act(async () => finish({ success: outcome !== "failed", message: "Result", commentId: "saved" }));
+  await waitFor(() => expect(queryClient.getMutationCache().getAll().at(-1)?.state.status).toBe("success"));
+  const reopened = render(<chatConversation.ChatConversation convoId="chat" />, { wrapper });
+  const expected = outcome === "sent" ? "" : outcome === "failed" ? "Submitted message" : "New unsent text";
+  expect((await reopened.findByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).value).toBe(expected);
+});
+
+it("refreshes title and ID variants of a sent conversation while retaining its initiating optimistic row", async () => {
+  const calls: string[] = [];
+  const { wrapper, queryClient } = session((path, input) => {
+    if (path === "comments.getConversationComments") {
+      const value = input as { convo_title?: string; convo_id?: string; searchQuery?: string };
+      calls.push(value.convo_title ?? value.convo_id ?? "");
+      return { data: [], convo: { id: value.convo_id === "other" ? "other" : "chat", isPublic: true }, nextCursor: null };
+    }
+    throw new Error(path);
+  });
+  const inputs = [
+    { convo_title: "Global", limit: 10, searchQuery: "Find" },
+    { convo_id: "chat", limit: 15 },
+    { convo_id: "other", limit: 10 },
+  ];
+  const hooks = renderHook(() => ({
+    search: testApi.comments.getConversationComments.useInfiniteQuery(inputs[0]!, { getNextPageParam: () => null }),
+    id: testApi.comments.getConversationComments.useInfiniteQuery(inputs[1]!, { getNextPageParam: () => null }),
+    other: testApi.comments.getConversationComments.useInfiniteQuery(inputs[2]!, { getNextPageParam: () => null }),
+    cache: useConversationCacheUpdate(),
+  }), { wrapper });
+  await waitFor(() => expect(hooks.result.current.search.isSuccess && hooks.result.current.id.isSuccess && hooks.result.current.other.isSuccess).toBe(true));
+  const initiating = { convo_title: "Global", limit: 10, refreshKey: 0, searchQuery: "" };
+  const key = getQueryKey(testApi.comments.getConversationComments, initiating, "infinite");
+  const optimistic = { pages: [{ convo: { id: "chat" }, data: [comment("optimistic", "Find new message")] }], pageParams: [null] };
+  queryClient.setQueryData(key, optimistic);
+  calls.length = 0;
+  await act(async () => { await hooks.result.current.cache.refreshConversationComments("chat", initiating); });
+  expect(calls.sort()).toEqual(["Global", "chat"]);
+  expect(queryClient.getQueryData(key)).toBe(optimistic);
+});
+
+it("clears cached unread markers only after authorized reads, including messages received while viewing", async () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 1, 12, minute));
+  let finishRead!: (value: object) => void;
+  let receive!: (event: object) => void;
+  let singleReadInput: unknown;
+  const pusher = {
+    subscribe: () => ({ bind: (_event: string, handler: typeof receive) => { receive = handler; }, unbind: vi.fn() }),
+    unsubscribe: vi.fn(), connection: { bind: vi.fn(), unbind: vi.fn() },
+  };
+  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, pusher } as never);
+  const { wrapper, queryClient } = session((path, input) => {
+    if (path === "comments.getUserConversations") return [{ ...conversation("chat", "Private"), updatedAt: at(2), lastReadAt: at(1) }];
+    if (path === "comments.getConversationComments") return new Promise((resolve) => { finishRead = resolve; });
+    if (path === "comments.fetchConversationComment") {
+      singleReadInput = input;
+      return { ...comment("incoming", "Received while viewing"), lastReadAt: at(4) };
+    }
+    throw new Error(path);
+  });
+  const list = renderHook(() => testApi.comments.getUserConversations.useQuery({ selectedConvo: null }), { wrapper });
+  await waitFor(() => expect(list.result.current.data).toHaveLength(1));
+  const selected = renderHook(() => useConversation({ convo_id: "chat", refreshKey: 0 }), { wrapper });
+  await waitFor(() => expect(finishRead).toBeDefined());
+  expect(isConversationUnread(list.result.current.data![0]!)).toBe(true);
+  await act(async () => finishRead({ data: [], convo: { id: "chat", isPublic: false, lastReadAt: at(3) }, nextCursor: null }));
+  await waitFor(() => expect(isConversationUnread(list.result.current.data![0]!)).toBe(false));
+  const listKey = getQueryKey(testApi.comments.getUserConversations, { selectedConvo: null }, "query");
+  await act(async () => {
+    queryClient.setQueryData(listKey, [{ ...conversation("chat", "Private"), updatedAt: at(4), lastReadAt: at(3) }]);
+    receive({ message: "new", fromId: "friend", commentId: "incoming" });
+  });
+  await waitFor(() => expect(selected.result.current.allComments).toHaveLength(1));
+  await waitFor(() => expect(isConversationUnread(list.result.current.data![0]!)).toBe(false));
+  expect(singleReadInput).toEqual({ commentId: "incoming", conversationId: "chat", markRead: true });
+});
+
+it("navigates Chat tabs with arrow keys and restores the chosen conversation tab", async () => {
+  const { wrapper } = session((path) => {
+    if (path === "comments.getUserConversations") return [];
+    throw new Error(path);
+  });
+  vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], isLoading: false } as never);
+  vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
+  vi.spyOn(chatConversation, "ChatConversation").mockReturnValue(<div>Tavern conversation</div>);
+  const view = render(<ChatPanelBody isPhone={false} isWide={false} onToggleWide={() => {}} onClose={() => {}} />, { wrapper });
+  act(() => view.getByRole("tab", { name: "Tavern" }).focus());
+  fireEvent.keyDown(view.getByRole("tab", { name: "Tavern" }), { key: "ArrowRight" });
+  await waitFor(() => expect(view.getByRole("tab", { name: "Inbox" }).getAttribute("aria-selected")).toBe("true"));
+  expect(document.activeElement).toBe(view.getByRole("tab", { name: "Inbox" }));
+  expect(view.queryByText("Tavern conversation")).toBeNull();
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+  await waitFor(() => expect(view.getByRole("tab", { name: "Tavern" }).getAttribute("aria-selected")).toBe("true"));
+  expect(view.getByText("Tavern conversation")).toBeTruthy();
 });

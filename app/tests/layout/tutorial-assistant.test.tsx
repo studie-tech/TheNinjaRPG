@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { getDefaultStore } from "jotai";
 import { chatPanelAtom } from "@/libs/chatPanel";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
@@ -27,6 +27,8 @@ function testMocks() {
     updateUser: ReturnType<typeof vi.fn<(patch: UserPatch) => Promise<void>>>;
     rewardHook: ReturnType<typeof vi.fn>;
     step: TutorialStepConfig;
+    stepNumber: number;
+    visible: boolean;
     next: ReturnType<typeof vi.fn>;
   } };
   globals.__tutorialAssistantMocks ??= {
@@ -35,7 +37,7 @@ function testMocks() {
     updateUser: vi.fn(async (patch: UserPatch) => { await updateUserCache(testMocks().client, key, patch); }),
     rewardHook: vi.fn(),
     step: { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" },
-    next: vi.fn(),
+    next: vi.fn(), stepNumber: 0, visible: true,
   };
   return globals.__tutorialAssistantMocks;
 }
@@ -52,7 +54,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 vi.mock("@/utils/routing", () => ({ usePublicPathname: () => "/profile" }));
 vi.mock("@/hooks/tutorial", () => {
   const step = { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" };
-  return { TUTORIAL_STEPS: [step], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, currentStepNumber: 0, isAssistantVisible: true, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next }) };
+  return { TUTORIAL_STEPS: [step], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, currentStepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next }) };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
 vi.mock("@/layout/Logbook", () => ({ LogbookEntry: () => null, useCheckRewards: () => {
@@ -68,9 +70,13 @@ let close: (() => void) | undefined;
 const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
 const customEvent = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 beforeEach(() => {
+  componentSpies.push(vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
+    data: mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData,
+  }) as never));
   componentSpies.push(vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const data = mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData;
-    return { data: data ? select(data) : undefined, updateUser: mocks.updateUser } as never;
+    const selected = useMemo(() => data ? select(data) : undefined, [data]);
+    return { data: selected, updateUser: mocks.updateUser } as never;
   }));
   ensureDom();
   localStorage.clear();
@@ -86,6 +92,8 @@ beforeEach(() => {
   mocks.client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mocks.client.setQueryData(key, profile());
   mocks.disable.mockResolvedValue({ success: true, message: "Saved" });
+  mocks.stepNumber = 0;
+  mocks.visible = true;
   mocks.step = { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" };
   Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: () => 0 });
 });
@@ -151,13 +159,20 @@ it("pauses tutorial controls while chatting and restores the saved lesson on clo
   expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData.tutorialOn).toBe(true);
 });
 
-it("lets Activity controls handle Enter and arrow keys without advancing the lesson", () => {
+it("lets Activity controls handle Enter and arrow keys without advancing the lesson", async () => {
   mocks.step = { ...mocks.step, showNextButton: true };
   const view = renderAssistant();
   fireEvent.keyDown(view.getByRole("button", { name: "Swap Chat and Activity sides" }), { key: "Enter" });
+  act(() => view.getByRole("tab", { name: "Tutorial" }).focus());
   fireEvent.keyDown(view.getByRole("tab", { name: "Tutorial" }), { key: "ArrowRight" });
   expect(mocks.next).not.toHaveBeenCalled();
-  expect(view.getByRole("tab", { name: "Quests" }).getAttribute("aria-selected")).toBe("true");
+  await waitFor(() => expect(view.getByRole("tab", { name: "Quests" }).getAttribute("aria-selected")).toBe("true"));
+  expect(document.activeElement).toBe(view.getByRole("tab", { name: "Quests" }));
+  fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+  await waitFor(() => expect(view.getByRole("tab", { name: "Tutorial" }).getAttribute("aria-selected")).toBe("true"));
+  expect(mocks.next).not.toHaveBeenCalled();
+  fireEvent.keyDown(window, { key: "Enter" });
+  expect(mocks.next).toHaveBeenCalledTimes(1);
 });
 const confirmDisable = (view: ReturnType<typeof renderAssistant>) => {
   fireEvent.click(view.getByRole("button", { name: "Disable tutorial" }));
@@ -262,4 +277,29 @@ describe("TutorialAssistant disable reconciliation", () => {
     expect(view.queryByRole("button", { name: "Skip Tutorial" })).toBeNull();
     expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
   });
+});
+
+it("shows a completed tutorial state and still presents available quest guidance", async () => {
+  mocks.stepNumber = 100;
+  mocks.visible = false;
+  mocks.step = undefined as never;
+  const completed = profile();
+  completed.userData.tutorialStep = 100;
+  completed.userData.userQuests = [];
+  completed.userData.questData = [];
+  mocks.client.setQueryData(key, completed);
+  const view = renderAssistant();
+  fireEvent.click(view.getByRole("button", { name: "Open Activity" }));
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Tutorial" }), { button: 0 });
+  expect(view.getByText("Tutorial complete. Quest guidance will appear here when available.")).toBeTruthy();
+  expect(view.getByRole("link", { name: "Open tutorial settings" }).getAttribute("href")).toContain("setting=tutorial");
+  completed.userData.userQuests = [{
+    id: "attempt", questId: "quest", endAt: null,
+    quest: { id: "quest", name: "Current quest", questType: "starter", description: "Follow your quest", consecutiveObjectives: false, content: { objectives: [], sceneCharacters: [] } },
+  }] as never;
+  completed.userData.questData = [{ id: "quest", goals: [] }] as never;
+  mocks.client.setQueryData(key, { userData: { ...completed.userData } });
+  view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+  await waitFor(() => expect(view.getByRole("region", { name: "Tutorial: Current quest" })).toBeTruthy());
+  expect(view.queryByText("Tutorial complete. Quest guidance will appear here when available.")).toBeNull();
 });

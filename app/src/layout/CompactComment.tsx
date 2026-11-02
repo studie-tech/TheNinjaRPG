@@ -146,7 +146,7 @@ export function CompactComment(props: CompactCommentProps) {
         )}
         <div
           className={cn(
-            "bg-popover absolute -top-[8px] right-[4px] z-10 hidden items-center gap-[2px] rounded-md border px-[2px] shadow-sm group-hover:flex focus-within:flex [@media(hover:none)]:static [@media(hover:none)]:ml-auto [@media(hover:none)]:flex [@media(hover:none)]:w-fit",
+            "bg-popover absolute -top-[8px] right-[4px] z-10 hidden items-center gap-[2px] rounded-md border px-[2px] shadow-sm group-hover:flex group-focus-within:flex focus-within:flex [@media(hover:none)]:static [@media(hover:none)]:ml-auto [@media(hover:none)]:flex [@media(hover:none)]:w-fit",
             emojiOpen && "flex",
           )}
         >

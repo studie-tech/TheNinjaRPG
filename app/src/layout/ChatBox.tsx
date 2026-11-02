@@ -349,7 +349,16 @@ const loadSavedMessages = (key: string | null): UIMessage[] | null => {
         (message) =>
           typeof message?.id === "string" &&
           ["user", "assistant"].includes(message?.role) &&
-          Array.isArray(message?.parts),
+          Array.isArray(message?.parts) &&
+          message.parts.every(
+            (part: unknown) =>
+              part !== null &&
+              typeof part === "object" &&
+              "type" in part &&
+              part.type === "text" &&
+              "text" in part &&
+              typeof part.text === "string",
+          ),
       )
     ) {
       return parsed as UIMessage[];

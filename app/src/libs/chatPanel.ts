@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import type { UserWithRelations } from "@/routers/profile";
 
 export const ChatTabs = ["tavern", "inbox", "ai"] as const;
@@ -85,29 +86,6 @@ export const isConversationUnread = (convo: {
   lastReadAt: Date | null;
 }) => !convo.lastReadAt || convo.updatedAt > convo.lastReadAt;
 
-type InboxNotification = {
-  href: string;
-  name: string;
-  color?: string;
-  notificationCount?: number;
-};
-
-/** Notification list with one more unread inbox message, matching the server's entry. */
-export const addInboxNotification = <T extends InboxNotification>(
-  notifications: T[] | undefined,
-): InboxNotification[] => {
-  const list: InboxNotification[] = notifications ?? [];
-  const current = list.find((n) => n.href === "/inbox");
-  const count = (current?.notificationCount ?? 0) + 1;
-  const entry = {
-    href: "/inbox",
-    name: `${count} messages`,
-    color: "hidden",
-    notificationCount: count,
-  };
-  return current ? list.map((n) => (n === current ? entry : n)) : [...list, entry];
-};
-
 /** Inbox news count from the user's notification list. */
-export const getInboxNews = (notifications: InboxNotification[] | undefined) =>
+export const getInboxNews = (notifications: NavBarDropdownLink[] | undefined) =>
   notifications?.find((n) => n.href === "/inbox")?.notificationCount ?? 0;

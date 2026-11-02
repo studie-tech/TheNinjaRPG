@@ -67,7 +67,7 @@ it("pins active quest attempts, restores pins, and removes completed attempts fr
   user.userQuests = [quest("first", "First mission"), quest("second", "Second mission")];
   user.questData = [{ id: "first" }, { id: "second" }];
   const view = render(<ActivityDock>Lesson</ActivityDock>);
-  fireEvent.click(view.getByRole("tab", { name: "Quests" }));
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), { button: 0, ctrlKey: false });
   expect(view.queryByText("Lesson")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Pin Second mission" }));
   expect(view.getByText("Progress for Second mission")).toBeTruthy();

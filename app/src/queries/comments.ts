@@ -352,18 +352,16 @@ export const selectConversationCommentForGetConversationComments = (
     .limit(input.limit)
     .offset(skip);
 
-/**
- * Build the `user2conversation` update for `getConversationComments`, setting
- * `lastReadAt`, using predicates on `userId` and `conversationId`.
- */
-export const updateUser2conversationForGetConversationComments = (
+/** Record the confirmed read time for one player's private conversation. */
+export const updateUserConversationReadAt = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
   convo: { id: string },
+  lastReadAt: Date,
 ) =>
   client
     .update(user2conversation)
-    .set({ lastReadAt: new Date() })
+    .set({ lastReadAt })
     .where(
       and(
         eq(user2conversation.userId, ctx.userId),

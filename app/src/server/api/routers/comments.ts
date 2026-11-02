@@ -53,7 +53,7 @@ import {
   updateConversationCommentForReactConversationComment,
   updateConversationForCreateConversationComment,
   updateSupportTicketForUpdateSupportTicketStatusAfterComment,
-  updateUser2conversationForGetConversationComments,
+  updateUserConversationReadAt,
   updateUserDataForCreateConversationComment,
   updateUserDataForCreateConversationComment2,
   updateUserDataForGetUserConversations,
@@ -329,6 +329,7 @@ export const commentsRouter = createTRPCRouter({
       z.object({
         commentId: z.string(),
         conversationId: z.string().min(1).optional(),
+        markRead: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -362,8 +363,12 @@ export const commentsRouter = createTRPCRouter({
         !canViewConversation(convo, ctx.userId, found.readerRole)
       )
         return null;
+      const lastReadAt = input.markRead && !convo.isPublic ? new Date() : undefined;
+      if (lastReadAt) {
+        await updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt);
+      }
       const { readerRole: _readerRole, ...result } = found;
-      return result;
+      return { ...result, ...(lastReadAt && { lastReadAt }) };
     }),
   getConversationComments: protectedProcedure
     .meta({ mcp: { description: "Get messages in a conversation" } })
@@ -450,6 +455,7 @@ export const commentsRouter = createTRPCRouter({
         );
       }
 
+      const lastReadAt = convo.isPublic ? undefined : new Date();
       const [comments] = await Promise.all([
         selectConversationCommentForGetConversationComments(
           ctx.drizzle,
@@ -460,21 +466,15 @@ export const commentsRouter = createTRPCRouter({
           skip,
         ),
         // Update last read
-        ...(convo.isPublic
-          ? []
-          : [
-              updateUser2conversationForGetConversationComments(
-                ctx.drizzle,
-                ctx,
-                convo,
-              ),
-            ]),
+        ...(lastReadAt
+          ? [updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt)]
+          : []),
       ]);
       // Fetch
       const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
       return {
         restrictionMessage: null,
-        convo: convo,
+        convo: { ...convo, ...(lastReadAt && { lastReadAt }) },
         data: comments,
         nextCursor: nextCursor,
       };
