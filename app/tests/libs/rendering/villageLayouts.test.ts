@@ -13,7 +13,7 @@ import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { villageLayouts } from "../../setup/villageLayouts";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
-const migration = readFileSync(new URL("../../../drizzle/migrations/0131_mighty_thor.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../../drizzle/migrations/0132_mighty_thor.sql", import.meta.url), "utf8");
 const plots = [...migration.matchAll(/UNION ALL SELECT (NULL|'[^']+'), '([^']+)', (\d+), (\d+), (\d+), (\d+), '([^']+)'/g)]
   .map(([, village, route, x, y, nextX, nextY, image]) => ({ village: village === "NULL" ? null : village!.slice(1, -1), route, x: Number(x), y: Number(y), nextX: Number(nextX), nextY: Number(nextY), image }));
 

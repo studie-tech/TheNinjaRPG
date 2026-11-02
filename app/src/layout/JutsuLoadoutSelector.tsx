@@ -23,7 +23,11 @@ interface JutsuLoadoutSelectorProps {
 
 const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   // State
-  const { data: availableSlots, prepareUserUpdate, updateUser } = useUserDataSelector(fedJutsuLoadouts);
+  const {
+    data: availableSlots,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector(fedJutsuLoadouts);
 
   // tRPC utility
   const utils = api.useUtils();

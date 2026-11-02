@@ -292,7 +292,7 @@ describe("canonical world landmarks", () => {
 
   it("keeps saved border repairs aligned with the world fields and the Tiled terrain references", () => {
     const sql = readFileSync(
-      resolve(process.cwd(), "drizzle/migrations/0131_mighty_thor.sql"),
+      resolve(process.cwd(), "drizzle/migrations/0132_mighty_thor.sql"),
       "utf8",
     );
     const repairs = [...sql.matchAll(/INSERT INTO SectorMap[\s\S]*?;\n/g)];

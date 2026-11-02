@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { lpcCatalog } from "../../setup/lpc";
 import * as pixi from "pixi.js";
 import { BufferImageSource, Container, Mesh, RenderTexture, Sprite, Texture, UniformGroup } from "pixi.js";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -71,6 +72,7 @@ const rendererFixture = () => {
   let update: (frame: runtime.GameFrame) => void = () => {};
   let disposed = false;
   const game = {
+    lpcCatalog,
     visualEffects: { lighting: true, shadows: true, animations: true },
     stage, canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),

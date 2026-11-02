@@ -6,7 +6,7 @@ import { observable } from "@trpc/server/observable";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
-import { useContext } from "react";
+import { createContext, useContext } from "react";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
@@ -22,7 +22,7 @@ import { eventTournamentConfigSchema } from "@/validators/tournament";
 import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
-const { UserContext } = userContext;
+const UserContext = createContext<ReturnType<typeof userContext.useUserData> | null>(null);
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
 const clients: QueryClient[] = [];
 const router = {
@@ -53,7 +53,11 @@ beforeEach(() => {
     tournament: testApi.tournament, profile: testApi.profile, useUtils: testApi.useUtils,
   });
   // Bun retains module mocks across suites; read this fixture's live provider.
-  vi.spyOn(userContext, "useUserData").mockImplementation(() => useContext(UserContext));
+  vi.spyOn(userContext, "useUserData").mockImplementation(() => {
+    const value = useContext(UserContext);
+    if (!value) throw new Error("Test user context unavailable");
+    return value;
+  });
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
 });
@@ -66,7 +70,7 @@ afterEach(() => {
 
 /** Mount one tab with its own profile cache and the production Pusher handler. */
 const LiveTab = ({ actor }: { actor: boolean }) => {
-  const defaults = useContext(UserContext);
+  const defaults = userContext.useUserInfo();
   const pusher = usePusherHandler("player");
   const queryClient = useQueryClient();
   const profile = testApi.profile.getUser.useQuery();
