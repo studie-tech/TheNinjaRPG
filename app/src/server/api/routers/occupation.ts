@@ -765,8 +765,9 @@ export const occupationRouter = createTRPCRouter({
 
       // Check rarity
       if (imbuingTime === 0) {
+        const missingRank = getMissingCraftingRank(crystalItem, userCraftingRank);
         return errorResponse(
-          `You need to be at least ${crystalItem.rarity === "EPIC" ? "Apprentice" : "Master"} rank to imbue ${crystalItem.rarity} crystals`,
+          `You need to be at least ${formatCraftingRank(missingRank ?? "UNKNOWN")} rank to imbue ${crystalItem.rarity} crystals`,
         );
       }
 
