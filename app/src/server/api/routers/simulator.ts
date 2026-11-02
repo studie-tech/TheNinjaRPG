@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   deleteDamageSimulationForCreateDamageSimulation,
@@ -38,18 +39,26 @@ export const simulatorRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const maxEntries = 20;
-      const [current] = await Promise.all([
-        listDamageSimulationForCreateDamageSimulation(ctx.drizzle, ctx, maxEntries),
-        insertDamageSimulationForCreateDamageSimulation(ctx.drizzle, ctx, input),
+      const id = nanoid();
+      const current = await listDamageSimulationForCreateDamageSimulation(
+        ctx.drizzle,
+        ctx,
+        maxEntries,
+      );
+      // Keep the newest maxEntries - 1 saved entries plus the new one.
+      const oldestEntry = current.at(-1);
+      const keepIds = [id, ...current.slice(0, maxEntries - 1).map((e) => e.id)];
+      await Promise.all([
+        insertDamageSimulationForCreateDamageSimulation(ctx.drizzle, ctx, id, input),
+        current.length >= maxEntries &&
+          oldestEntry &&
+          deleteDamageSimulationForCreateDamageSimulation(
+            ctx.drizzle,
+            ctx,
+            oldestEntry,
+            keepIds,
+          ),
       ]);
-      const lastEntry = current.at(-1);
-      if (current.length >= maxEntries && lastEntry) {
-        await deleteDamageSimulationForCreateDamageSimulation(
-          ctx.drizzle,
-          ctx,
-          lastEntry,
-        );
-      }
       return { success: true, message: "Damage simulation saved" };
     }),
   updateDamageSimulation: protectedProcedure
