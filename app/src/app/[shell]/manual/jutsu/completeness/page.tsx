@@ -49,6 +49,7 @@ export default function ManualJutsuBalance() {
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
   // Table processing
+  const assetIdSet = new Set((gameAssets ?? []).map((a) => a.id));
   const processed = allJutsus
     ?.map((jutsu) => {
       // Checks
@@ -70,7 +71,6 @@ export default function ManualJutsuBalance() {
         : 0;
 
       // Check: referenced asset IDs exist in gameAsset table
-      const assetIdSet = new Set((gameAssets ?? []).map((a) => a.id));
       const invalidAssets = gameAssets
         ? jutsu.effects.some((e) =>
             [
@@ -78,7 +78,7 @@ export default function ManualJutsuBalance() {
               e.disappearAnimation,
               e.staticAnimation,
               e.staticAssetPath,
-            ].every((v) => v && !assetIdSet.has(v)),
+            ].some((v) => !!v && !assetIdSet.has(v)),
           )
           ? 1
           : 0

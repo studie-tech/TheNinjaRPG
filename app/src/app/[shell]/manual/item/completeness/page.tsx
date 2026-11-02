@@ -45,6 +45,7 @@ export default function ManualItemBalance() {
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
   // Table processing
+  const assetIdSet = new Set((gameAssets ?? []).map((a) => a.id));
   const processed = allItems
     ?.map((item) => {
       // Checks
@@ -69,7 +70,6 @@ export default function ManualItemBalance() {
           ? 1
           : 0;
       // Check: referenced asset IDs exist in gameAsset table
-      const assetIdSet = new Set((gameAssets ?? []).map((a) => a.id));
       const invalidAssets = gameAssets
         ? item.effects.some((e) =>
             [
@@ -77,7 +77,7 @@ export default function ManualItemBalance() {
               e.disappearAnimation,
               e.staticAnimation,
               e.staticAssetPath,
-            ].every((v) => v && !assetIdSet.has(v)),
+            ].some((v) => !!v && !assetIdSet.has(v)),
           ) && !noBattleUsage
           ? 1
           : 0
