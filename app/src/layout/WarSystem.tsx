@@ -181,6 +181,11 @@ export const WarRoom: React.FC<{
   const villages = villageData?.villages;
   const userVillage = villages?.find((v) => v.id === user.villageId);
   const relationships = villageData?.relationships || [];
+  // Ended sector wars have no ended view, so only village wars are listed as ended
+  const shownWars =
+    warType === "Active"
+      ? activeWars
+      : endedWars?.filter((war) => war.type !== "SECTOR_WAR");
 
   return (
     <>
@@ -234,43 +239,23 @@ export const WarRoom: React.FC<{
         }
       >
         <div className="grid grid-cols-1 gap-4">
-          {warType === "Active" &&
-            activeWars?.map((war) =>
-              war.type === "SECTOR_WAR" ? (
-                <SectorWar key={war.id} war={war} user={user} isKage={isLeader} />
-              ) : (
-                <VillageWar
-                  key={war.id}
-                  war={war}
-                  user={user}
-                  villages={villages}
-                  relationships={relationships}
-                  userVillage={userVillage}
-                  isKage={isLeader}
-                />
-              ),
-            )}
-          {warType === "Active" && activeWars && activeWars.length === 0 && (
-            <p>No active wars</p>
+          {shownWars?.map((war) =>
+            war.type === "SECTOR_WAR" ? (
+              <SectorWar key={war.id} war={war} user={user} isKage={isLeader} />
+            ) : (
+              <VillageWar
+                key={war.id}
+                war={war}
+                user={user}
+                villages={villages}
+                relationships={relationships}
+                userVillage={userVillage}
+                isKage={isLeader}
+              />
+            ),
           )}
-          {warType === "Ended" &&
-            endedWars?.map((war) =>
-              war.type === "SECTOR_WAR" ? (
-                <SectorWar key={war.id} war={war} user={user} isKage={isLeader} />
-              ) : (
-                <VillageWar
-                  key={war.id}
-                  war={war}
-                  user={user}
-                  villages={villages}
-                  relationships={relationships}
-                  userVillage={userVillage}
-                  isKage={isLeader}
-                />
-              ),
-            )}
-          {warType === "Ended" && endedWars && endedWars.length === 0 && (
-            <p>No ended wars</p>
+          {shownWars && shownWars.length === 0 && (
+            <p>{warType === "Active" ? "No active wars" : "No ended wars"}</p>
           )}
         </div>
       </ContentBox>
