@@ -835,7 +835,6 @@ export const updateUserJutsuForToggleEquip = (
       ),
     );
 
-/** Build the `jutsuLoadout` update for `renameLoadout`, setting `name`, using predicates on `id` and `userId`. */
 /** Build the `jutsuLoadout` update for `setLoadoutHotkeys`, using predicates on `id` and `userId`. */
 export const updateJutsuLoadoutForSetLoadoutHotkeys = (
   client: Pick<DrizzleClient, "update">,
@@ -847,6 +846,7 @@ export const updateJutsuLoadoutForSetLoadoutHotkeys = (
     .set({ hotkeys: input.hotkeys })
     .where(and(eq(jutsuLoadout.id, input.id), eq(jutsuLoadout.userId, ctx.userId)));
 
+/** Build the `jutsuLoadout` update for `renameLoadout`, setting `name`, using predicates on `id` and `userId`. */
 export const updateJutsuLoadoutForRenameLoadout = (
   client: Pick<DrizzleClient, "update">,
   name: string,
