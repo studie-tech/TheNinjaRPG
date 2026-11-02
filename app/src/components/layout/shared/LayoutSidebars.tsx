@@ -364,7 +364,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
       <GameSettingsPopover
         userData={userData}
         updateUser={updateUser}
-        section={isSignedIn ? "audio" : "all"}
+        section={userData ? "audio" : "all"}
       />
       {variant === "default" && (
         <Eclipse

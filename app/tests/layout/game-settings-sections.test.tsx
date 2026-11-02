@@ -1,6 +1,8 @@
+import * as clerk from "@clerk/nextjs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
+import { SignedInIcons } from "@/components/layout/shared/LayoutSidebars";
 import * as nativeEntry from "@/components/native/NativeSettingsEntry";
 import * as audioHook from "@/hooks/useAudio";
 import * as gameLayoutHook from "@/hooks/useGameLayout";
@@ -72,6 +74,7 @@ beforeEach(() => {
   vi.spyOn(gameLayoutHook, "useSelectGameLayout").mockReturnValue(vi.fn());
   vi.spyOn(layoutPicker, "GameLayoutPicker").mockReturnValue(null as never);
   vi.spyOn(nativeEntry, "NativeSettingsEntry").mockReturnValue(null as never);
+  vi.spyOn(clerk, "UserButton").mockReturnValue(null as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: {
       updatePreferences: {
@@ -143,8 +146,24 @@ describe("game settings sections", () => {
     }
   });
 
-  it("turns the top-bar popover into a sound switch that links to all settings", async () => {
-    renderInAudio(<GameSettingsPopover section="audio" />);
+  it("gives character owners a top-bar sound switch that links to all settings", async () => {
+    renderInAudio(<SignedInIcons
+      variant="default"
+      isSignedIn
+      userData={{
+        musicOn: true,
+        buttonSfxOn: true,
+        sfxOn: true,
+        village: null,
+        isOutlaw: false,
+        bloodlineId: null,
+        status: "AWAKE",
+        preferredGeneral1: null,
+        preferredGeneral2: null,
+      }}
+      updateUser={async () => undefined}
+      onEventClick={() => {}}
+    />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
     });
@@ -152,6 +171,25 @@ describe("game settings sections", () => {
     expect(screen.queryByLabelText(LIGHTING)).toBeNull();
     const link = screen.getByRole("link", { name: "All settings" });
     expect(link.getAttribute("href")).toBe(SETTINGS_HREF);
+    expect(screen.queryByRole("tab", { name: "Game layout" })).toBeNull();
+  });
+
+  it.each([false, true])("keeps full top-bar settings without a character when isSignedIn=%s", async (isSignedIn) => {
+    renderInAudio(<SignedInIcons
+      variant="default"
+      isSignedIn={isSignedIn}
+      updateUser={async () => undefined}
+      onEventClick={() => {}}
+    />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
+    });
+    expect(screen.getByLabelText(MUSIC)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "All settings" })).toBeNull();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), { button: 0 });
+    expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), { button: 0 });
+    expect(screen.getByLabelText(LIGHTING)).toBeTruthy();
   });
 
   it("keeps the full popover without a settings link elsewhere", async () => {
