@@ -18,6 +18,7 @@ describe("character attribute choices", () => {
   it("keeps styles out of color categories and supports saved legacy palettes", () => {
     expect(getCharacterAttributes(["Long Hair", "SHORT HAIR", "green eyes", "yellow HAIR", "Albino skin"]))
       .toEqual({ traits: ["Long Hair"], Hair: "Yellow", Eyes: "Green", Skin: "Albino" });
+    expect(getAttributeGroup("Alibino skin")).toContain("Albino Skin");
     expect(getAttributeGroup("BLUE hair")).toContain("Gray Hair");
     expect(getAttributeGroup("Blue Hair")).not.toContain("Long Hair");
     expect(getCharacterAttributes([])).toEqual({ traits: [], Hair: "Black", Eyes: "Blue", Skin: "Light" });
