@@ -19,6 +19,7 @@ export const fetchStudents = async (client: DrizzleClient, userId: string) => {
       eq(userData.senseiId, userId),
       lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
     ),
+    columns: { userId: true, username: true, avatar: true, rank: true, level: true },
     orderBy: asc(userData.level),
   });
 };

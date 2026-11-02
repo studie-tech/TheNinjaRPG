@@ -583,7 +583,7 @@ export const calcJutsuTrainCost = (
   jutsu: Jutsu,
   level: number,
   userdata?: UserData,
-  students?: UserData[],
+  students?: readonly unknown[],
 ) => {
   let base = 50;
   if (jutsu.jutsuRank === "C") {

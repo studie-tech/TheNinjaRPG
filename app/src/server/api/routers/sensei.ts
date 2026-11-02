@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
-import { SENSEI_RANKS } from "@/drizzle/constants";
+import { SENSEI_MAX_ACTIVE_STUDENTS, SENSEI_RANKS } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUser } from "@/queries/profile";
 import {
@@ -129,8 +129,10 @@ export const senseiRouter = createTRPCRouter({
       if (user.rank === "GENIN" && user.senseiId) {
         return errorResponse("You already have a sensei");
       }
-      if (activeStudents.length > 3) {
-        return errorResponse("Can only have 3 active students");
+      if (activeStudents.length >= SENSEI_MAX_ACTIVE_STUDENTS) {
+        return errorResponse(
+          `Can only have ${SENSEI_MAX_ACTIVE_STUDENTS} active students`,
+        );
       }
       // Mutate. If not successfull, assume student already has a sensei
       const result = await updateUserDataForAcceptRequest(

@@ -1715,6 +1715,7 @@ export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training exp
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
 export const SENSEI_STUDENT_MISSION_EXP_BOOST_PERC = 3; // % extra mission experience for Chunin (<= lvl 40)
 export const SENSEI_MAX_STUDENT_LEVEL = 40;
+export const SENSEI_MAX_ACTIVE_STUDENTS = 3; // Active (Genin) students per sensei
 export const SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC = 5; // % reduced jutsu training cost for Chunin (<= lvl 40) and their senseis
 
 // Medical Ninja config
