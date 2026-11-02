@@ -5,11 +5,12 @@ import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import { getDefaultStore } from "jotai";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactElement } from "react";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
-import { chatMentionsAtom } from "@/libs/chatPanel";
+import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { ensureDom } from "../setup/dom.mjs";
@@ -28,6 +29,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   for (const queryClient of queryClients.splice(0)) queryClient.clear();
   vi.restoreAllMocks();
 });
@@ -50,7 +52,7 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   queryClients.push(queryClient);
   const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
   const profile = {
-    userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
+    userData: { userId: "player", level: MESSAGING_MIN_LEVEL, chatMuted: false, mutedConversationIds: [] },
     notifications: [],
   };
   queryClient.setQueryDefaults(profileKey, { queryFn: async () => profile });
@@ -72,6 +74,19 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   view.rerender();
   await act(async () => receiveEvent({ type: "newInbox" }));
   expect(showToast).toHaveBeenCalledTimes(1);
+  const chatAction = showToast.mock.calls[0]![0].action as unknown as ReactElement<{ onClick: () => void; children: string }>;
+  expect(chatAction.props.children).toBe("Open chat");
+  act(() => chatAction.props.onClick());
+  expect(getDefaultStore().get(chatPanelAtom).openRequested).toBe(true);
+
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  profile.userData.level = MESSAGING_MIN_LEVEL - 1;
+  await act(async () => receiveEvent({ type: "newInbox" }));
+  const inboxAction = showToast.mock.calls[1]![0].action as unknown as ReactElement<{ onClick: () => void; children: string }>;
+  expect(inboxAction.props.children).toBe("To Inbox");
+  act(() => inboxAction.props.onClick());
+  expect(router.push).toHaveBeenCalledWith("/inbox");
+  expect(getDefaultStore().get(chatPanelAtom).openRequested).not.toBe(true);
 });
 
 

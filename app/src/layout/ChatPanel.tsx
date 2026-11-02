@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ignoreToastInteractions } from "@/components/ui/outside-interaction";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Loader from "@/layout/Loader";
@@ -30,9 +31,9 @@ const ChatPanelBody = dynamic(() => import("@/layout/ChatPanelContent"), {
 });
 
 /**
- * Floating chat for signed-in players: taverns, private messages and Seichi AI in
- * one panel. Desktop shows a popover; phones show it full screen. Conversations
- * only subscribe to live updates while the panel shows them.
+ * Floating chat for players who meet the messaging level requirement: taverns,
+ * private messages and Seichi AI. Desktop shows a popover; phones show it full
+ * screen. Conversations only subscribe to live updates while the panel shows them.
  */
 export function ChatPanel({ children, className }: ChatPanelProps) {
   const { data: userData, notifications } = useUserData();
@@ -43,7 +44,8 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const { swapSides } = useActivityDock();
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const open = panel.owner === id;
+  const canUseChat = !!userData && userData.level >= MESSAGING_MIN_LEVEL;
+  const open = canUseChat && panel.owner === id;
 
   const badge = countChatNotifications(userData, getInboxNews(notifications), mentions);
   const showReminder = hasTutorialReminder(userData);
@@ -55,11 +57,22 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
 
   // The first visible chat button answers requests to open the panel.
   useEffect(() => {
+    if (!canUseChat) {
+      // Hidden chat must release Activity and discard requests for its unavailable launcher.
+      setPanel((current) =>
+        current.owner || current.openRequested
+          ? { ...current, owner: null, openRequested: false }
+          : current,
+      );
+      return;
+    }
     if (!panel.openRequested || !triggerRef.current?.getClientRects().length) return;
     setPanel((current) =>
       current.openRequested ? { ...current, openRequested: false, owner: id } : current,
     );
-  }, [panel.openRequested, id, setPanel]);
+  }, [canUseChat, panel.openRequested, id, setPanel]);
+  if (!canUseChat) return null;
+
   const body = (
     <ChatPanelBody
       isPhone={isPhone}

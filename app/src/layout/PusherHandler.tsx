@@ -7,6 +7,7 @@ import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { addConversationMention } from "@/deltas/chat";
+import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
@@ -208,6 +209,9 @@ export const usePusherHandler = (
             }
             if (!canNotifyConversation(data.conversationId)) return;
             if (!isOnInbox()) {
+              const canOpenChat =
+                (utils.profile.getUser.getData()?.userData?.level ?? 0) >=
+                MESSAGING_MIN_LEVEL;
               showMutationToast({
                 success: true,
                 message: "You have a new message",
@@ -215,17 +219,21 @@ export const usePusherHandler = (
                 title: "Notification!",
                 action: (
                   <ToastAction
-                    altText="Open chat"
-                    onClick={() =>
+                    altText={canOpenChat ? "Open chat" : "To Inbox"}
+                    onClick={() => {
+                      if (!canOpenChat) {
+                        router.push("/inbox");
+                        return;
+                      }
                       store.set(chatPanelAtom, (current) => ({
                         ...current,
                         openRequested: true,
                         tab: "inbox",
                         conversationId: data.conversationId,
-                      }))
-                    }
+                      }));
+                    }}
                   >
-                    Open chat
+                    {canOpenChat ? "Open chat" : "To Inbox"}
                   </ToastAction>
                 ),
               });

@@ -82,6 +82,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
     comments: testApi.comments,
+    tournament: testApi.tournament,
     useUtils: testApi.useUtils,
   });
   getDefaultStore().set(chatMentionsAtom, {});
