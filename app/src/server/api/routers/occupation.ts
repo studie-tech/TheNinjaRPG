@@ -22,6 +22,7 @@ import {
   getCraftingRank,
   getCraftingSeconds,
   getEffectiveMaxImbuements,
+  getImbuementRankCapMessage,
   getMissingCraftingRank,
   getTotalItemQuantity,
 } from "@/libs/crafting";
@@ -743,7 +744,12 @@ export const occupationRouter = createTRPCRouter({
       }
       if (targetUserItem.imbuements.length >= maxImbuedItems) {
         return errorResponse(
-          `You have reached the maximum number of crystals for this item (${maxImbuedItems})`,
+          getImbuementRankCapMessage(
+            userCraftingRank,
+            targetUserItem.item?.maxImbueNumber || 1,
+            targetUserItem.imbuements.length,
+          ) ??
+            `This item already has its maximum of ${targetUserItem.item?.maxImbueNumber || 1} crystals`,
         );
       }
       if (

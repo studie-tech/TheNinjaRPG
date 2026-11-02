@@ -267,3 +267,30 @@ export const getEffectiveMaxImbuements = (
   const rankLimit = CRAFTING_MAX_IMBUED_ITEMS[craftingRank];
   return Math.min(rankLimit, itemMaxImbueNumber);
 };
+
+/**
+ * Explain why an item cannot take another crystal yet when the crafting rank, not the item,
+ * is the limit (e.g. an Apprentice holding an item that allows 2 imbuements).
+ * @param craftingRank - The user's crafting rank
+ * @param itemMaxImbueNumber - The item's max imbue number
+ * @param currentImbuements - Crystals already on the item
+ * @returns A player-facing explanation, or null when the rank is not what blocks the item
+ */
+export const getImbuementRankCapMessage = (
+  craftingRank: CRAFTING_RANK,
+  itemMaxImbueNumber: number,
+  currentImbuements: number,
+): string | null => {
+  const rankLimit = CRAFTING_MAX_IMBUED_ITEMS[craftingRank];
+  if (rankLimit >= itemMaxImbueNumber) return null;
+  if (currentImbuements < rankLimit || currentImbuements >= itemMaxImbueNumber) {
+    return null;
+  }
+  const nextRank = CRAFTING_RANKS.find(
+    (rank) => CRAFTING_MAX_IMBUED_ITEMS[rank] > currentImbuements,
+  );
+  const reach = nextRank
+    ? ` Reach ${formatCraftingRank(nextRank)} to add another.`
+    : "";
+  return `${currentImbuements}/${itemMaxImbueNumber} imbuements: your crafting rank (${formatCraftingRank(craftingRank)}) allows ${rankLimit}.${reach}`;
+};

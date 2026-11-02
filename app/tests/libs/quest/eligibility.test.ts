@@ -66,6 +66,16 @@ describe("questTypeConcurrentBlockMessage", () => {
     },
   );
 
+  it("tells the player where to abandon an unfinished Battle Pyramid run", () => {
+    const msg = questTypeConcurrentBlockMessage(
+      { questType: "battlepyramid", name: "Next" } as never,
+      userWith([{ questType: "battlepyramid" }]),
+    );
+    expect(msg).toBe(
+      "You have an unfinished Battle Pyramid run (battlepyramid-0). Go to Battle Arena → Battle Pyramid and abandon it to start this quest.",
+    );
+  });
+
   it("ignores completed history rows when enforcing concurrency", () => {
     expect(
       questTypeConcurrentBlockMessage(
