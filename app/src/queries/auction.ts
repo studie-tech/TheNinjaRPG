@@ -207,6 +207,10 @@ export const findUserItemForCreateAuctionListing = (
 /**
  * Build the `userItem` update for `createAuctionListing`, setting `isInAuction` and
  * `updatedAt`, including predicates on `id`, `userId`, `quantity`.
+ *
+ * Escrow takes the row out of home storage and off any furniture placement, matching
+ * settlement and trade escrow: a reserved row stays carried so home storage, layout
+ * saves and the store/retrieve toggle never act on it.
  */
 export const updateUserItemForCreateAuctionListing = (
   client: Pick<DrizzleClient, "update">,
@@ -218,6 +222,10 @@ export const updateUserItemForCreateAuctionListing = (
     .update(userItem)
     .set({
       isInAuction: true,
+      storedAtHome: false,
+      homeX: null,
+      homeY: null,
+      homeRotation: 0,
       updatedAt: new Date(),
     })
     .where(
