@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { ActiveBanStates } from "@/drizzle/constants";
 import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
 import {
   listUserReportForGET,
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
       }
 
       // Track which type of report is expiring
-      if (report.status === "BAN_ACTIVATED") {
+      if (ActiveBanStates.includes(report.status)) {
         userBanReports.set(userId, true);
       } else if (
         report.status === "SILENCE_ACTIVATED" ||
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     for (const report of activeReports) {
       if (!report.reportedUserId) continue;
 
-      if (report.status === "BAN_ACTIVATED") {
+      if (ActiveBanStates.includes(report.status)) {
         userHasActiveBan.set(report.reportedUserId, true);
       } else if (
         report.status === "SILENCE_ACTIVATED" ||

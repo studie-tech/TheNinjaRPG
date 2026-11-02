@@ -1,6 +1,7 @@
 import { exists } from "drizzle-orm";
 import { after } from "next/server";
 import {
+  ActiveBanStates,
   DISCORD_INDEFINITE_SANCTION_DAYS,
   DISCORD_SYNC_BATCH_SIZE,
   DISCORD_SYNC_REFRESH_DAYS,
@@ -320,9 +321,9 @@ const discordBanReason = (
   tombstones: Awaited<ReturnType<typeof fetchActiveSanctionTombstones>>,
 ) => {
   const sanction =
-    sanctions.find((entry) => entry.status === "BAN_ACTIVATED") ?? sanctions[0];
+    sanctions.find((entry) => ActiveBanStates.includes(entry.status)) ?? sanctions[0];
   if (sanction)
-    return `TNR report ${sanction.id}: indefinite ${sanction.status === "BAN_ACTIVATED" ? "ban" : "silence"}`;
+    return `TNR report ${sanction.id}: indefinite ${ActiveBanStates.includes(sanction.status) ? "ban" : "silence"}`;
   const hash = discordTombstoneHash(discordId);
   const tombstone = tombstones.find(
     (entry) =>
