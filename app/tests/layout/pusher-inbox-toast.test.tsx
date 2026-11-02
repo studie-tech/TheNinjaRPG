@@ -46,12 +46,15 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   let pathname = "/profile";
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
 
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClients.push(queryClient);
-  queryClient.setQueryData(getQueryKey(testApi.profile.getUser, undefined, "query"), {
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const profile = {
     userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
     notifications: [],
-  });
+  };
+  queryClient.setQueryDefaults(profileKey, { queryFn: async () => profile });
+  queryClient.setQueryData(profileKey, profile);
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
     <testApi.Provider client={trpcClient} queryClient={queryClient}>
@@ -84,12 +87,15 @@ it("counts only public conversation pings as Tavern notifications", async () => 
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
   const store = getDefaultStore();
   store.set(chatMentionsAtom, {});
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClients.push(queryClient);
-  queryClient.setQueryData(getQueryKey(testApi.profile.getUser, undefined, "query"), {
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const profile = {
     userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
     notifications: [],
-  });
+  };
+  queryClient.setQueryDefaults(profileKey, { queryFn: async () => profile });
+  queryClient.setQueryData(profileKey, profile);
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
     <testApi.Provider client={trpcClient} queryClient={queryClient}>

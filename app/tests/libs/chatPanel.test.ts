@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { addInboxNotification } from "@/deltas/chat";
 import {
   countChatNotifications,
   getInboxNews,
@@ -41,21 +40,6 @@ describe("chat badge", () => {
 });
 
 describe("inbox notifications", () => {
-  it("adds the inbox entry the server sends, then counts it up", () => {
-    const first = addInboxNotification([{ href: "/news", name: "1 news" }]);
-    expect(getInboxNews(first)).toBe(1);
-    expect(first).toContainEqual({
-      href: "/inbox",
-      name: "1 messages",
-      color: "hidden",
-      notificationCount: 1,
-    });
-    const second = addInboxNotification(first);
-    expect(getInboxNews(second)).toBe(2);
-    expect(second.filter((n) => n.href === "/inbox")).toHaveLength(1);
-    expect(second.find((n) => n.href === "/news")).toEqual({ href: "/news", name: "1 news" });
-  });
-
   it("reads zero without an inbox entry", () => {
     expect(getInboxNews(undefined)).toBe(0);
     expect(getInboxNews([{ href: "/news", name: "1 news" }])).toBe(0);

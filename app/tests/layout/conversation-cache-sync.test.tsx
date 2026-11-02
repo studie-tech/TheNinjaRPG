@@ -21,6 +21,7 @@ import * as richInput from "@/layout/RichInput";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
 import { chatDraftsAtom, chatViewedConversationsAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
+import * as media from "@/hooks/useMediaQuery";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
@@ -45,6 +46,7 @@ const conversation = (id: string, title: string) => ({
 
 beforeEach(() => {
   ensureDom();
+  vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

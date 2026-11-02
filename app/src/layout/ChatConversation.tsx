@@ -57,6 +57,7 @@ export function ChatConversation({
     convo_id: convoId,
     convo_title: convoTitle,
     refreshKey: 0,
+    isInChatPanel: true,
     onCommentPosted: (submittedText) => {
       // A send can finish after closing chat saved its pending text as a draft.
       setDrafts((current) => {

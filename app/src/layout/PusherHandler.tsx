@@ -6,7 +6,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
-import { addConversationMention, addInboxNotification } from "@/deltas/chat";
+import { addConversationMention } from "@/deltas/chat";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
@@ -83,8 +83,7 @@ export const usePusherHandler = (
         );
       };
       const resolveNotificationProfile = async (conversationId: string | undefined) => {
-        const wasCached = !!utils.profile.getUser.getData()?.userData;
-        if (!wasCached) {
+        if (!utils.profile.getUser.getData()?.userData) {
           try {
             // Join the initial profile request so its loading and error state can settle normally.
             await utils.profile.getUser.fetch(undefined, { staleTime: Infinity });
@@ -93,7 +92,7 @@ export const usePusherHandler = (
             return;
           }
         }
-        return canNotifyConversation(conversationId) ? { wasCached } : undefined;
+        return canNotifyConversation(conversationId);
       };
       // Pusher Channel
       const pusher = new Pusher(
@@ -199,25 +198,15 @@ export const usePusherHandler = (
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
           void utils.comments.getUserConversations.invalidate();
-          const profile = await resolveNotificationProfile(data.conversationId);
-          if (profile && canNotifyConversation(data.conversationId)) {
-            if (profile.wasCached) {
-              await utils.profile.getUser.cancel();
-              if (!canNotifyConversation(data.conversationId)) return;
-              utils.profile.getUser.setData(undefined, (old) =>
-                old?.userData?.userId === userId
-                  ? { ...old, notifications: addInboxNotification(old.notifications) }
-                  : old,
-              );
-            } else {
-              try {
-                // The initial snapshot may predate or include this event; reconcile instead of incrementing it.
-                await utils.profile.getUser.fetch(undefined, { staleTime: 0 });
-              } catch {
-                // The profile observer exposes the failed refresh; an eligible message can still show its toast.
-              }
-              if (!canNotifyConversation(data.conversationId)) return;
+          const shouldNotify = await resolveNotificationProfile(data.conversationId);
+          if (shouldNotify && canNotifyConversation(data.conversationId)) {
+            try {
+              // Cancel cached refreshes so the authoritative read starts after this delivery.
+              await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
+            } catch {
+              // UserContext exposes a failed refresh; an eligible message can still show its toast.
             }
+            if (!canNotifyConversation(data.conversationId)) return;
             if (!isOnInbox()) {
               showMutationToast({
                 success: true,

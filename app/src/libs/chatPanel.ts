@@ -3,6 +3,8 @@ import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { UserWithRelations } from "@/routers/profile";
 
+export const CHAT_PANEL_PHONE_MEDIA_QUERY = "(max-width: 639px)";
+
 export const ChatTabs = ["tavern", "inbox", "ai"] as const;
 export type ChatTab = (typeof ChatTabs)[number];
 

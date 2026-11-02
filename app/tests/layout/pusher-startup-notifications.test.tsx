@@ -58,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   for (const qc of clients.splice(0)) qc.clear();
+  getDefaultStore().set(chatMentionsAtom, {});
   vi.restoreAllMocks();
 });
 
@@ -135,6 +136,72 @@ it.each([0, 1])(
     expect(test.qc.getQueryState(test.key)?.status).toBe("success");
   },
 );
+
+it("retains the authoritative count when the profile includes a message before its socket delivery", async () => {
+  const test = mount({ initialCount: 1 });
+  await act(async () => {
+    test.finish();
+  });
+  await test.view.findByText("Profile loaded");
+  await act(async () => test.receive({ type: "newInbox", conversationId: "private" }));
+  expect(test.inboxCount()).toBe(1);
+  expect(test.reads()).toBe(2);
+  expect(test.showToast).toHaveBeenCalledTimes(1);
+});
+
+it.each([0, 1])(
+  "reconciles overlapping startup inbox events with initial count %i",
+  async (initialCount) => {
+    const test = mount({ initialCount, deferredRefresh: true, refreshCounts: [1, 2] });
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = test.receive({ type: "newInbox", conversationId: "private" });
+    });
+    await act(async () => {
+      test.finish();
+    });
+    await waitFor(() => expect(test.reads()).toBe(2));
+    act(() => {
+      second = test.receive({ type: "newInbox", conversationId: "private" });
+    });
+    await act(async () => {
+      test.finishRefresh();
+    });
+    // The in-flight snapshot predates the second event, so it needs another authoritative read.
+    await waitFor(() => expect(test.reads()).toBe(3));
+    await act(async () => {
+      test.finishRefresh();
+      await Promise.all([first, second]);
+    });
+    expect(test.inboxCount()).toBe(2);
+    expect(test.showToast).toHaveBeenCalledTimes(2);
+  },
+);
+
+it("reconciles after an unrelated profile refresh that started before socket delivery", async () => {
+  const test = mount({ initialCount: 0, deferredRefresh: true, refreshCounts: [0, 1] });
+  await act(async () => {
+    test.finish();
+  });
+  await test.view.findByText("Profile loaded");
+  let refresh!: Promise<void>;
+  act(() => {
+    refresh = test.qc.refetchQueries({ queryKey: test.key });
+  });
+  await waitFor(() => expect(test.reads()).toBe(2));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = test.receive({ type: "newInbox", conversationId: "private" });
+  });
+  await waitFor(() => expect(test.reads()).toBe(3));
+  await act(async () => {
+    test.finishRefresh();
+    await Promise.all([refresh, pending]);
+  });
+  expect(test.inboxCount()).toBe(1);
+  expect(test.showToast).toHaveBeenCalledTimes(1);
+});
 
 it.each(muteSettings)(
   "lets muted startup inbox activity finish loading normally (%j)",
@@ -227,6 +294,7 @@ function mount(
     mute?: { chatMuted: boolean; mutedConversationIds: string[] };
     initialCount?: number;
     deferredRefresh?: boolean;
+    refreshCounts?: number[];
   } = {},
 ) {
   let receive!: (data: object) => Promise<void>;
@@ -273,7 +341,10 @@ function mount(
           observable((observer) => {
             if (op.path !== "profile.getUser") throw new Error(op.path);
             reads++;
-            const count = reads === 1 ? options.initialCount : 1;
+            const count =
+              reads === 1
+                ? options.initialCount
+                : (options.refreshCounts?.[reads - 2] ?? 1);
             const send = () => {
               observer.next({ result: { data: profile(count) } });
               observer.complete();

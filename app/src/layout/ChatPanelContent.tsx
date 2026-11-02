@@ -35,6 +35,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import { useChatMutes } from "@/hooks/useChatMutes";
+import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import { useTaverns } from "@/hooks/useTaverns";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -696,23 +697,6 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
       </PopoverContent>
     </Popover>
   );
-}
-
-/** Mirror the inbox counter reset performed by a successful conversation listing. */
-function useInboxConversations() {
-  const { data: userData, notifications, updateNotifications } = useUserData();
-  const result = api.comments.getUserConversations.useQuery(
-    { selectedConvo: null },
-    { enabled: !!userData },
-  );
-  useEffect(() => {
-    if (result.data && getInboxNews(notifications) > 0) {
-      void updateNotifications(
-        notifications?.filter((entry) => entry.href !== "/inbox"),
-      );
-    }
-  }, [result.data, notifications, updateNotifications]);
-  return result;
 }
 
 /** Phone start screen: taverns, then private conversations. */

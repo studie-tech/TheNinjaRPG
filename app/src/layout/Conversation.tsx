@@ -47,6 +47,8 @@ export interface ConversationLogicProps {
   convo_title?: string;
   convo_id?: string;
   refreshKey: number;
+  /** The compact panel remains visible while its phone dialog covers the full page. */
+  isInChatPanel?: boolean;
   onCommentPosted?: (comment: string) => void;
   /** When set, banned/silenced users may only compose if they created this ticket */
   supportTicketCreatedByUserId?: string;
@@ -156,7 +158,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     placeholderData: (previousData) => previousData,
   });
   const conversation = comments?.pages[0]?.convo;
-  useConversationViewing(conversation?.id, isPageActive);
+  useConversationViewing(conversation?.id, isPageActive, props.isInChatPanel);
   const canComposeDespiteRestriction =
     !!userData &&
     !!conversation?.isStaffAvailable &&

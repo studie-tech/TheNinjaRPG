@@ -11,6 +11,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Loader from "@/layout/Loader";
 import { hasTutorialReminder } from "@/layout/TutorialSettings";
 import {
+  CHAT_PANEL_PHONE_MEDIA_QUERY,
   chatMentionsAtom,
   chatPanelAtom,
   countChatNotifications,
@@ -37,7 +38,7 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const { data: userData, notifications } = useUserData();
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
-  const isPhone = useMediaQuery("(max-width: 639px)");
+  const isPhone = useMediaQuery(CHAT_PANEL_PHONE_MEDIA_QUERY);
   const [isWide, setIsWide] = useState(false);
   const { swapSides } = useActivityDock();
   const id = useId();

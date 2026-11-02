@@ -5,7 +5,7 @@ import * as dialog from "@/components/ui/dialog";
 import * as media from "@/hooks/useMediaQuery";
 import { ChatPanel } from "@/layout/ChatPanel";
 import * as content from "@/layout/ChatPanelContent";
-import { chatPanelAtom } from "@/libs/chatPanel";
+import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
 import { actualDialog } from "../setup/preload";
@@ -22,15 +22,17 @@ beforeEach(() => {
     vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
   }
   vi.spyOn(media, "useMediaQuery").mockReturnValue(true);
-  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true } } as never);
+  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: [] } } as never);
   vi.spyOn(content, "default").mockImplementation(({ onClose }) => <button type="button" onClick={onClose}>Close chat</button>);
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(chatMentionsAtom, {});
 });
 
 afterEach(async () => {
   cleanup();
   await new Promise((resolve) => setTimeout(resolve, 0));
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(chatMentionsAtom, {});
   vi.restoreAllMocks();
   for (const [key, descriptor] of eventDescriptors) {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);

@@ -1,17 +1,30 @@
-import { useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { useEffect } from "react";
 import { clearConversationMentions, updateConversationViewCount } from "@/deltas/chat";
-import { chatMentionsAtom, chatViewedConversationsAtom } from "@/libs/chatPanel";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  CHAT_PANEL_PHONE_MEDIA_QUERY,
+  chatMentionsAtom,
+  chatPanelAtom,
+  chatViewedConversationsAtom,
+} from "@/libs/chatPanel";
 
 /** Own one visible conversation registration for a full page or compact chat surface. */
 export const useConversationViewing = (
   conversationId: string | undefined,
   isPageActive: boolean,
+  isInChatPanel = false,
 ) => {
   const store = useStore();
+  const isPhone = useMediaQuery(CHAT_PANEL_PHONE_MEDIA_QUERY);
+  const isPanelOpen = useAtomValue(chatPanelAtom).owner !== null;
   useEffect(() => {
-    // The activity hook settles initial visibility in an effect; hidden mounts must retain their mentions.
-    if (!conversationId || !isPageActive || document.hidden) return;
+    // Lifecycle and media hooks settle initial state in effects; obscured mounts must retain their mentions.
+    const isCoveredByPanel =
+      !isInChatPanel &&
+      isPanelOpen &&
+      (isPhone || window.matchMedia?.(CHAT_PANEL_PHONE_MEDIA_QUERY).matches);
+    if (!conversationId || !isPageActive || document.hidden || isCoveredByPanel) return;
     store.set(chatViewedConversationsAtom, (current) =>
       updateConversationViewCount(current, conversationId, 1),
     );
@@ -23,5 +36,5 @@ export const useConversationViewing = (
         updateConversationViewCount(current, conversationId, -1),
       );
     };
-  }, [conversationId, isPageActive, store]);
+  }, [conversationId, isPageActive, isInChatPanel, isPanelOpen, isPhone, store]);
 };

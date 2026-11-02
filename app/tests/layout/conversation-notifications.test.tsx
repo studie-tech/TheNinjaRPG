@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { getDefaultStore } from "jotai";
@@ -9,27 +9,40 @@ import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
+import * as dialog from "@/components/ui/dialog";
 import * as mastery from "@/hooks/useMasteryQueueRefresh";
+import * as media from "@/hooks/useMediaQuery";
 import * as refresh from "@/hooks/useRefreshAt";
 import { ChatConversation } from "@/layout/ChatConversation";
+import { ChatPanel } from "@/layout/ChatPanel";
+import * as panelContent from "@/layout/ChatPanelContent";
 import Conversation from "@/layout/Conversation";
 import * as comments from "@/layout/ConversationComments";
 import * as richInput from "@/layout/RichInput";
-import { chatMentionsAtom } from "@/libs/chatPanel";
+import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
-import { actualUserContext } from "../setup/preload";
+import { actualDialog, actualUserContext } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
+const eventDescriptors = ["Event", "CustomEvent"].map(
+  (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+);
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let pathname = "/tavern";
 beforeEach(() => {
   ensureDom();
+  Object.defineProperties(globalThis, {
+    Event: { configurable: true, value: window.Event },
+    CustomEvent: { configurable: true, value: window.CustomEvent },
+  });
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   // Bun retains other suites' module mocks; exercise the provider's real cache observers.
   vi.spyOn(userContext, "useUserData").mockImplementation(
     actualUserContext.useUserData,
@@ -74,12 +87,19 @@ beforeEach(() => {
   getDefaultStore().set(chatMentionsAtom, {});
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   for (const qc of clients.splice(0)) qc.clear();
+  getDefaultStore().set(chatMentionsAtom, {});
   vi.restoreAllMocks();
   if (hiddenDescriptor) Object.defineProperty(document, "hidden", hiddenDescriptor);
   else Reflect.deleteProperty(document, "hidden");
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  for (const [key, descriptor] of eventDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
 });
 function mount(
   kind: "public" | "private",
@@ -139,6 +159,20 @@ function mount(
       () =>
         ({ op }) =>
           observable((observer) => {
+            if (op.path === "profile.getUser") {
+              observer.next({
+                result: {
+                  data: {
+                    ...qc.getQueryData<object>(profileKey),
+                    notifications: [
+                      { href: "/inbox", name: "1 messages", notificationCount: 1 },
+                    ],
+                  },
+                },
+              });
+              observer.complete();
+              return;
+            }
             if (op.path !== "comments.getConversationComments")
               throw new Error(op.path);
             const conversationId = (op.input as { convo_id: string }).convo_id;
@@ -176,8 +210,12 @@ function mount(
             convo_id={id}
             refreshKey={0}
           />
-          {showPanel && (
-            <ChatConversation convoId={typeof panel === "string" ? panel : id} />
+          {panel === "launcher" ? (
+            <ChatPanel>Chat</ChatPanel>
+          ) : (
+            showPanel && (
+              <ChatConversation convoId={typeof panel === "string" ? panel : id} />
+            )
           )}
         </UserContextProvider>
       </QueryClientProvider>
@@ -338,3 +376,44 @@ it("preserves existing mentions when cached conversations mount in a hidden page
   expect(test.showToast).toHaveBeenCalledTimes(1);
   expect(getDefaultStore().get(chatMentionsAtom)).toEqual({ global: 3, other: 3 });
 });
+
+it.each([false, true])(
+  "suppresses only visible conversations while phone chat covers the full page (%s)",
+  async (isPhone) => {
+    vi.spyOn(media, "useMediaQuery").mockReturnValue(isPhone);
+    for (const key of Object.keys(actualDialog) as (keyof typeof actualDialog)[]) {
+      vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
+    }
+    vi.spyOn(panelContent, "default").mockImplementation(() => (
+      <ChatConversation convoId="private" />
+    ));
+    const test = mount("public", "launcher");
+    await test.view.findByText("Visible conversation message");
+    fireEvent.click(test.view.getByRole("button", { name: "Chat" }));
+    await waitFor(() =>
+      expect(test.view.getAllByText("Visible conversation message")).toHaveLength(2),
+    );
+    expect(test.view.container.getAttribute("aria-hidden")).toBe(
+      isPhone ? "true" : null,
+    );
+    await act(async () =>
+      test.receive({ type: "pinged", conversationId: "global", isPublic: true }),
+    );
+    expect(test.showToast).toHaveBeenCalledTimes(isPhone ? 1 : 0);
+    expect(getDefaultStore().get(chatMentionsAtom)).toEqual(
+      isPhone ? { global: 1 } : {},
+    );
+    await act(async () =>
+      test.receive({ type: "pinged", conversationId: "private", isPublic: false }),
+    );
+    expect(test.showToast).toHaveBeenCalledTimes(isPhone ? 1 : 0);
+    act(() =>
+      getDefaultStore().set(chatPanelAtom, (current) => ({ ...current, owner: null })),
+    );
+    expect(getDefaultStore().get(chatMentionsAtom)).toEqual({});
+    await act(async () =>
+      test.receive({ type: "pinged", conversationId: "global", isPublic: true }),
+    );
+    expect(test.showToast).toHaveBeenCalledTimes(isPhone ? 1 : 0);
+  },
+);

@@ -1,9 +1,11 @@
 import { hashKey, type InfiniteData, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
-import { applyConversationRead } from "@/deltas/chat";
+import { applyConversationRead, clearInboxNotifications } from "@/deltas/chat";
+import { getInboxNews } from "@/libs/chatPanel";
 import { updateQueryCache } from "@/utils/queryCache";
+import { useUserData } from "@/utils/UserContext";
 
 type CommentPage = RouterOutputs["comments"]["getConversationComments"];
 
@@ -57,3 +59,18 @@ export const useConversationCacheUpdate = () => {
     recordConversationRead,
   };
 };
+
+/** Mirror the inbox counter reset performed by a successful conversation listing. */
+export function useInboxConversations() {
+  const { data: userData, notifications, updateNotifications } = useUserData();
+  const result = api.comments.getUserConversations.useQuery(
+    { selectedConvo: null },
+    { enabled: !!userData },
+  );
+  useEffect(() => {
+    if (result.data && getInboxNews(notifications) > 0) {
+      void updateNotifications(clearInboxNotifications(notifications));
+    }
+  }, [result.data, notifications, updateNotifications]);
+  return result;
+}
