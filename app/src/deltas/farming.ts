@@ -91,49 +91,41 @@ export const getFarmBulkMutationUpdate = (
     farmingExperience: state.farmingExperience + result.farmingExperienceDelta,
   };
   if (action === "harvest") {
+    const crops = [...state.extractableCrops, ...state.sellableCrops];
     if (
       !result.inventoryChanges ||
-      result.inventoryChanges.some(
-        (change) =>
+      result.inventoryChanges.some((change) => {
+        const rows = crops.filter((row) => row.userItemId === change.id);
+        return (
           !state.collectionLog.items.some(
             (item) => item.itemId === change.itemId && item.harvested,
           ) ||
           state.availableSeeds.some((item) => item.itemId === change.itemId) ||
           state.availableFertilizers.some((item) => item.itemId === change.itemId) ||
-          ![...state.extractableCrops, ...state.sellableCrops].some(
+          rows.length === 0 ||
+          rows.some(
             (row) =>
-              row.userItemId === change.id &&
-              row.itemId === change.itemId &&
-              row.quantity === change.beforeQuantity,
-          ),
-      )
+              row.itemId !== change.itemId || row.quantity !== change.beforeQuantity,
+          )
+        );
+      })
     )
       return;
     /** The grant identifies one owned stack, so duplicate item types in other stacks stay untouched. */
     const patch = <T extends { userItemId: string; itemId: string; quantity: number }>(
       rows: T[],
-    ): T[] | undefined => {
-      if (
-        rows.some((row) =>
-          result.inventoryChanges!.some(
-            (change) =>
-              change.id === row.userItemId &&
-              (change.itemId !== row.itemId || change.beforeQuantity !== row.quantity),
-          ),
-        )
-      )
-        return;
-      return rows.map((row) => {
+    ): T[] =>
+      rows.map((row) => {
         const change = result.inventoryChanges!.find(
           (change) => change.id === row.userItemId,
         );
         return change ? { ...row, quantity: change.quantity } : row;
       });
+    next = {
+      ...next,
+      extractableCrops: patch(state.extractableCrops),
+      sellableCrops: patch(state.sellableCrops),
     };
-    const extractableCrops = patch(state.extractableCrops),
-      sellableCrops = patch(state.sellableCrops);
-    if (!extractableCrops || !sellableCrops) return;
-    next = { ...next, extractableCrops, sellableCrops };
   }
   return {
     ...next,

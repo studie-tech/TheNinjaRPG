@@ -1622,16 +1622,9 @@ export const itemRouter = createTRPCRouter({
       if (!result.success) {
         return { success: false, message: result.message };
       }
-      if (!result.didMerge) {
-        return {
-          success: true,
-          message: "Nothing to merge",
-          inventoryChanges: result.inventoryChanges,
-        };
-      }
       return {
         success: true,
-        message: result.message,
+        message: result.didMerge ? result.message : "Nothing to merge",
         inventoryChanges: result.inventoryChanges,
       };
     }),
@@ -1719,16 +1712,12 @@ export const itemRouter = createTRPCRouter({
           message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
         };
       }
-      if (mergedTypes === 0) {
-        return {
-          success: true,
-          message: "Nothing to merge",
-          inventoryChanges: recovered ? undefined : [],
-        };
-      }
       return {
         success: true,
-        message: `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
+        message:
+          mergedTypes === 0
+            ? "Nothing to merge"
+            : `Merged stacks for ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}`,
         inventoryChanges: recovered
           ? undefined
           : results.flatMap((result) => result.inventoryChanges ?? []),
@@ -4517,18 +4506,10 @@ async function executeMergeStacksForItem(
   }
 
   const didMerge = bucketResults.some((r) => r.didMerge);
-  if (!didMerge) {
-    return {
-      success: true,
-      didMerge: false,
-      message: "",
-      inventoryChanges: canProject ? [] : undefined,
-    };
-  }
   return {
     success: true,
-    didMerge: true,
-    message: `Merged stacks of ${info.name}`,
+    didMerge,
+    message: didMerge ? `Merged stacks of ${info.name}` : "",
     inventoryChanges: canProject
       ? bucketResults.flatMap((result) => result.inventoryChanges ?? [])
       : undefined,
