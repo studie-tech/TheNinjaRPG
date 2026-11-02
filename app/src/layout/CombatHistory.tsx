@@ -58,8 +58,10 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   if (allEntries) maxRound = Math.max(...allEntries.map((e) => e.battleRound));
   if (battleRound) maxRound = battleRound;
 
+  const placeholderRounds = new Set<number>();
   for (let i = 1; i < maxRound; i++) {
     if (!groups?.has(i)) {
+      placeholderRounds.add(i);
       groups?.set(i, [
         {
           id: "0",
@@ -97,7 +99,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   sortedGroups?.forEach((entries, roundKey) => {
     const round = roundKey; // round is a meaningful identifier (round number), not just an index
     const isOpen = openRounds.includes(round);
-    const roundTime = entries[0]?.createdAt;
+    const roundTime = placeholderRounds.has(round) ? undefined : entries[0]?.createdAt;
     const timeString = roundTime
       ? roundTime.toLocaleTimeString([], {
           hour: "2-digit",
