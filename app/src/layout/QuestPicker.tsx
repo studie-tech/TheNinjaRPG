@@ -1,8 +1,9 @@
 "use client";
 
-import { Gamepad2 } from "lucide-react";
+import { CircleAlert, Gamepad2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { QuestType } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -17,6 +18,7 @@ import { PetTaskDispatch } from "@/layout/PetTasks";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { getActiveObjective } from "@/libs/objectives";
 import { isPetTaskContract } from "@/libs/pets/tasks";
+import { questTypeConcurrentBlockMessage } from "@/libs/quest";
 import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialHighlightedQuestId } from "@/libs/tutorial";
@@ -39,7 +41,12 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   const util = api.useUtils();
 
   // State
-  const [startError, setStartError] = useState("");
+  const [startError, setStartError] = useState<{
+    message: string;
+    questId: string;
+    /** True when another unfinished run of the same type is what blocks the start. */
+    concurrent: boolean;
+  } | null>(null);
   const [localActiveElement, setLocalActiveElement] = useState<string>("");
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
@@ -65,10 +72,24 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
 
   // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
-    onMutate: () => ({ userRevision: prepareUserUpdate() }),
-    onSuccess: async (data, _variables, context) => {
-      showMutationToast(data);
-      setStartError(data.success ? "" : data.message);
+    onMutate: () => {
+      setStartError(null);
+      return { userRevision: prepareUserUpdate() };
+    },
+    onSuccess: async (data, variables, context) => {
+      // Failures are shown in the notice above the list, which stays put and can point
+      // at the blocking run, so only successes get a toast.
+      if (data.success) {
+        showMutationToast(data);
+      } else {
+        const quest = quests?.find((q) => q.id === variables.questId);
+        setStartError({
+          message: data.message,
+          questId: variables.questId,
+          concurrent:
+            !!quest && !!userData && !!questTypeConcurrentBlockMessage(quest, userData),
+        });
+      }
       await updateUser(data, { revision: context?.userRevision });
       if (data.success && currentStep?.title === "Genin Exam") {
         await handleNextStepAsync();
@@ -152,6 +173,27 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   // Filter for story quests only
   const availableQuests = quests ?? [];
 
+  // Unfinished runs listed below that block the quest the user tried to start
+  const attemptedQuest = availableQuests.find((q) => q.id === startError?.questId);
+  const blockingQuests = startError?.concurrent
+    ? availableQuests.filter(
+        (q) =>
+          q.id !== attemptedQuest?.id &&
+          q.questType === attemptedQuest?.questType &&
+          userData?.userQuests?.some((uq) => uq.questId === q.id && !uq.endAt),
+      )
+    : [];
+
+  /** Opens a quest's entry in the list and scrolls to it. */
+  const showQuest = (quest: { id: string; name: string }) => {
+    setActiveElement(quest.name);
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`quest-entry-${quest.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
+
   return (
     <ContentBox
       title={props.title}
@@ -166,9 +208,43 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         </p>
       )}
       {startError && (
-        <p role="alert" className="p-3 text-destructive">
-          {startError}
-        </p>
+        <div className="p-3">
+          <Alert className="border-destructive/30 bg-destructive/5 [&>svg]:text-destructive pr-12">
+            <CircleAlert aria-hidden="true" />
+            <AlertTitle>
+              Couldn&apos;t start {attemptedQuest?.name ?? "this quest"}
+            </AlertTitle>
+            <AlertDescription className="gap-3">
+              {blockingQuests.length > 0 ? (
+                <p>
+                  {blockingQuests.length === 1
+                    ? `${blockingQuests[0]?.name} is still active. Abandon it from its entry below first.`
+                    : `${blockingQuests.map((q) => q.name).join(", ")} are still active. Abandon one from its entry below first.`}
+                </p>
+              ) : (
+                <p>{startError.message}</p>
+              )}
+              {blockingQuests.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {blockingQuests.map((q) => (
+                    <Button key={q.id} size="sm" onClick={() => showQuest(q)}>
+                      Show {q.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </AlertDescription>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-1.5 right-1.5 h-8 w-8"
+              aria-label="Dismiss"
+              onClick={() => setStartError(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </Alert>
+        </div>
       )}
       {isPending && <Loader explanation="Starting quest..." />}
       {!userData && <Loader explanation="Loading userdata..." />}
@@ -189,12 +265,19 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
             const active = currentQuest && currentTracker;
 
             return (
-              <div key={quest.id}>
+              <div
+                key={quest.id}
+                id={`quest-entry-${quest.id}`}
+                className="scroll-mt-16"
+              >
                 <Accordion
                   title={quest.name}
                   selectedTitle={activeElement}
                   titlePrefix={`${userData.petTask?.questId === quest.id ? "Companion task" : active ? "Active" : "Available"}: `}
-                  onClick={setActiveElement}
+                  onClick={(value) => {
+                    setStartError(null);
+                    setActiveElement(value);
+                  }}
                 >
                   {userData.petTask?.questId === quest.id ? (
                     <p className="p-3">
