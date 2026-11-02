@@ -312,7 +312,6 @@ import {
   type InventoryQuantityChange,
   inventoryQuantityChangeSchema,
 } from "@/validators/inventory";
-import { publicMapLocationsSchema } from "@/validators/mapLocation";
 import { idSchema } from "@/validators/misc";
 import {
   type AllObjectivesType,
@@ -352,7 +351,15 @@ import {
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */
   getPublicLocations: publicProcedure
-    .input(publicMapLocationsSchema)
+    .input(
+      z
+        .object({
+          revision: z.number().int().nonnegative().optional(),
+          // Cache-only publication key; revision alone guards server-worker catalogue freshness.
+          refreshKey: z.number().int().optional(),
+        })
+        .optional(),
+    )
     .query(({ ctx, input }) =>
       fetchPublicQuestLocations(ctx.drizzle, { revision: input?.revision }),
     ),
