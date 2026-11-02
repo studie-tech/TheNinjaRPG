@@ -1,7 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Earth, House, MessagesSquare, Music } from "lucide-react";
+import { Earth, House, MessageCircle, Music } from "lucide-react";
 import type React from "react";
 import { Suspense } from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
@@ -76,7 +76,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
         >
           <LowerRightHelpBtn className="hidden md:block">
             {userData ? (
-              <MessagesSquare className={cn(variantClasses.yellowButton)} />
+              <MessageCircle className={cn(variantClasses.yellowButton)} />
             ) : (
               <Music className={cn(variantClasses.yellowButton)} />
             )}
@@ -213,7 +213,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 <div className="z-10 ml-auto flex shrink-0 items-center gap-2">
                   <LowerRightHelpBtn className="block">
                     <span className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}>
-                      <MessagesSquare className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
+                      <MessageCircle className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </span>
                   </LowerRightHelpBtn>
                   <Sheet

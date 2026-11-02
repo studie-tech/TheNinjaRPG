@@ -8,7 +8,7 @@ import {
   House,
   LogIn,
   Menu,
-  MessagesSquare,
+  MessageCircle,
   Music,
 } from "lucide-react";
 import type React from "react";
@@ -89,7 +89,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
       >
         <LowerRightHelpBtn className="hidden md:block">
           {userData ? (
-            <MessagesSquare className={cn(variantClasses.yellowButton)} />
+            <MessageCircle className={cn(variantClasses.yellowButton)} />
           ) : (
             <Music className={cn(variantClasses.yellowButton)} />
           )}
@@ -387,7 +387,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           <div className="flex justify-center">
             <LowerRightHelpBtn className="block md:hidden">
               {userData ? (
-                <MessagesSquare className={cn(variantClasses.yellowButton)} />
+                <MessageCircle className={cn(variantClasses.yellowButton)} />
               ) : (
                 <Music className={cn(variantClasses.yellowButton)} />
               )}

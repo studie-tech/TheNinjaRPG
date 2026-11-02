@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, House, MessagesSquare } from "lucide-react";
+import { Compass, House, MessageCircle } from "lucide-react";
 import { Suspense } from "react";
 import {
   Sheet,
@@ -59,7 +59,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
         )}
       >
         <LowerRightHelpBtn className="theme-header-button shadow-lg">
-          <MessagesSquare aria-hidden="true" />
+          <MessageCircle aria-hidden="true" />
         </LowerRightHelpBtn>
       </div>
       <a className="theme-skip-link" href="#game-content">
@@ -118,7 +118,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
             {props.variant === "20-eclipse-observatory" && (
               <div className="theme-world-access">
                 <LowerRightHelpBtn className="theme-header-button">
-                  <MessagesSquare aria-hidden="true" />
+                  <MessageCircle aria-hidden="true" />
                 </LowerRightHelpBtn>
               </div>
             )}
@@ -186,7 +186,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
             </Link>
           ))}
           <LowerRightHelpBtn className="theme-help">
-            <MessagesSquare aria-hidden="true" />
+            <MessageCircle aria-hidden="true" />
             <span>Chat</span>
           </LowerRightHelpBtn>
         </nav>
