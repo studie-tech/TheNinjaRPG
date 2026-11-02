@@ -15,6 +15,26 @@ import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
+/** Project a quest start only after pending announcements were claimed for delivery by this response. */
+export const getQuestStartUserUpdate = (
+  user: Parameters<typeof getUserProgressionUpdate>[0],
+  publishedAchievementIds: readonly string[],
+  receipt: { announcements: { name: string }[]; claimedAt?: Date } | undefined,
+) => {
+  if (!receipt) return {};
+  const projection = getUserProgressionUpdate(user, publishedAchievementIds);
+  return {
+    ...projection,
+    userPatch: {
+      ...projection.userPatch,
+      unreadNotifications: 0,
+      unreadRecruitRewards: 0,
+      ...(receipt.claimedAt ? { updatedAt: receipt.claimedAt } : {}),
+    },
+    announcements: receipt.announcements.map((entry) => entry.name),
+  };
+};
+
 /**
  * Scalar rewards compose with accepted cache updates; derived state needs reconciliation.
  * Pet XP needs a refresh because its committed amount depends on live SQL eligibility.

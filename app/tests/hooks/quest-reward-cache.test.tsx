@@ -14,7 +14,7 @@ ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const stops: (() => void)[] = [];
-beforeEach(() => Object.assign(vi.spyOn(appClient, "api" as never), { profile: api.profile, quests: api.quests, useUtils: api.useUtils }));
+beforeEach(() => Object.assign(vi.spyOn(appClient, "api" as never), { profile: api.profile, quests: api.quests, item: api.item, useUtils: api.useUtils }));
 afterEach(() => { cleanup(); stops.splice(0).forEach(stop => stop()); clients.splice(0).forEach(client => client.clear()); vi.restoreAllMocks(); });
 
 /** Observe the actual feature keys to count server recovery requested by the hook. */
@@ -27,7 +27,9 @@ const setup = () => {
     getQueryKey(api.quests.missionHall, { villageId: "leaf", level: 50 }, "query"),
     getQueryKey(api.quests.specificQuests, { questType: "story", level: 50 }, "query"),
     getQueryKey(api.quests.getQuestHistory, { limit: 10 }, "query"),
-    getQueryKey(api.quests.allianceBuilding, { level: 50 }, "query")];
+    getQueryKey(api.quests.allianceBuilding, { level: 50 }, "query"),
+    getQueryKey(api.item.getUserItems, undefined, "query"),
+    getQueryKey(api.item.getUserItemsWithVariants, undefined, "query")];
   const reads = keys.map((queryKey, i) => {
     const value = i === 0 ? current : [];
     client.setQueryData(queryKey, value);
@@ -38,7 +40,7 @@ const setup = () => {
   const wrapper = ({ children }: { children: ReactNode }) => <api.Provider client={api.createClient({ links: [] })} queryClient={client}><QueryClientProvider client={client}>{children}</QueryClientProvider></api.Provider>;
   const view = renderHook(useQuestRewardCacheUpdate, { wrapper });
   const update = getQuestRewardCacheUpdate({ questId: "quest", ...before, quest: { retryDelay: "none" } }, null, PostProcessedRewardSchema.parse({}), false);
-  return { client, keys, current, reads, view, result: { success: true, message: "Progress", questCacheUpdate: update } };
+  return { client, keys, current, reads, view, result: { success: true, message: "Progress", rewards: PostProcessedRewardSchema.parse({}), questCacheUpdate: update } };
 };
 
 it("keeps reward-free objective progress local without discovery/history reads", async () => {
@@ -54,9 +56,30 @@ it("patches confirmed completion counters while retaining list-membership refres
   test.result.questCacheUpdate = { ...test.result.questCacheUpdate, after: { ...test.result.questCacheUpdate.after, previousCompletes: 1 }, discoveryUnchanged: false };
   await act(async () => test.view.result.current.updateQuestRewards(test.result, test.view.result.current.prepareQuestRewardUpdate(), true));
   expect(test.reads[0]).not.toHaveBeenCalled();
-  test.reads.slice(1).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+  test.reads.slice(1, 5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+  test.reads.slice(5).forEach(read => expect(read).not.toHaveBeenCalled());
   expect(test.client.getQueryData<{ candidates: { previousCompletes: number }[] }>(test.keys[0]!)?.candidates[0]?.previousCompletes).toBe(1);
 });
+
+it.each(["item", "hunter items", "gathering items", "missing rewards"] as const)(
+  "refreshes both inventories after an accepted profile projection with %s",
+  async reward => {
+    const test = setup();
+    const inventory = [{ id: "quest-gift" }];
+    test.reads.slice(5).forEach(read => read.mockResolvedValueOnce(inventory as never));
+    const rewards = reward === "missing rewards" ? undefined : PostProcessedRewardSchema.parse({
+      reward_items: reward === "item" ? ["Quest gift"] : [],
+      reward_hunter_items: reward === "hunter items",
+      reward_gathering_items: reward === "gathering items",
+    });
+    await act(async () => test.view.result.current.updateQuestRewards(
+      { ...test.result, rewards }, test.view.result.current.prepareQuestRewardUpdate(), true,
+    ));
+    test.reads.slice(0, 5).forEach(read => expect(read).not.toHaveBeenCalled());
+    test.reads.slice(5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+    test.keys.slice(5).forEach(key => expect(test.client.getQueryData(key)).toEqual(inventory));
+  },
+);
 
 it.each(["profile recovery", "missing projection", "rejected claim"])("preserves full fan-out after %s", async reason => {
   const test = setup();

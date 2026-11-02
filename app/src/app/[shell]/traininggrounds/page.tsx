@@ -80,6 +80,7 @@ import {
 import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -1181,24 +1182,28 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     { enabled: isJutsuPickStep },
   );
 
+  const { prepareTrainingUpdate, updateTraining } = useJutsuTrainingCacheUpdate();
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (result, variables, revision) => {
+      onMutate: () => ({
+        revision: prepareUserUpdate(),
+        training: prepareTrainingUpdate(),
+      }),
+      onSuccess: async (result, variables, context) => {
         showMutationToast(result);
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result.data, { revision });
+          await updateUser(result.data, { revision: context.revision });
           if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
             handleNextStep();
           }
         }
-        await utils.jutsu.getTrainingQueue.invalidate();
-        await Promise.all([
-          utils.jutsu.getUserJutsus.invalidate(),
-          utils.profile.getSidebarTimers.invalidate(),
-        ]);
+        await updateTraining(result, context.training);
+      },
+      onError: async (error, _input, context) => {
+        showMutationToast({ success: false, message: error.message });
+        await updateTraining(undefined, context?.training ?? prepareTrainingUpdate());
       },
       onSettled: () => {
         document.body.style.cursor = "default";

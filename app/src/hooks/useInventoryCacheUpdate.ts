@@ -6,12 +6,15 @@ import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 /** Preserve each view's row extensions; undefined requests authoritative reconciliation. */
 type InventoryUpdate = <T extends UserItem>(rows: T[]) => T[] | undefined;
 
-const inventoryKey = getQueryKey(api.item.getUserItems, undefined, "query");
-const variantsKey = getQueryKey(api.item.getUserItemsWithVariants, undefined, "query");
-
 /** Reconcile the shared inventory views together, preserving each view's extra row data. */
 export const useInventoryCacheUpdate = () => {
   const utils = api.useUtils();
+  const inventoryKey = getQueryKey(api.item.getUserItems, undefined, "query");
+  const variantsKey = getQueryKey(
+    api.item.getUserItemsWithVariants,
+    undefined,
+    "query",
+  );
   const inventory =
     useQueryCacheUpdate<RouterOutputs["item"]["getUserItems"]>(inventoryKey);
   const variants =

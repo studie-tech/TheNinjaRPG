@@ -247,10 +247,8 @@ describe("item-granting flows", () => {
 
   const userItemCaches = ["getUserItems", "getUserItemsWithVariants"];
   const flows = [
-    { file: "layout/Logbook.tsx", flow: "quests.checkRewards" },
     { file: "layout/RewardChoice.tsx", flow: "quests.claimRewardChoice" },
     { file: "layout/Sector.tsx", flow: "quests.checkLocationQuest" },
-    { file: "layout/Combat.tsx", flow: "battle end" },
   ];
   for (const { file, flow } of flows) {
     it(`${flow} invalidates both user item caches`, () => {

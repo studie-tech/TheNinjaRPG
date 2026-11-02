@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
-import { getEquippedJutsuUserPatch } from "@/deltas/jutsu";
+import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
@@ -34,6 +34,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
+import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -144,6 +145,8 @@ export default function MyJutsu() {
   // User Jutsus & items
   const jutsuInput = { ...getFilter(state), includeEquipped: true };
   const { prepareJutsuUpdate, updateJutsus } = useJutsuCacheUpdate(jutsuInput);
+  const { prepareLoadoutUpdate, updateEquippedLoadout, updateLoadoutOrder } =
+    useJutsuLoadoutCacheUpdate();
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
@@ -208,6 +211,7 @@ export default function MyJutsu() {
     onMutate: () => ({
       jutsus: prepareJutsuUpdate(),
       user: prepareUserUpdate(),
+      loadouts: prepareLoadoutUpdate(),
     }),
     onSuccess: async (data, variables, context) => {
       showMutationToast(data);
@@ -215,16 +219,10 @@ export default function MyJutsu() {
         const change = data.data;
         await Promise.allSettled([
           updateJutsus(variables.userJutsuId, change, context.jutsus),
-          ...(change
-            ? [
-                updateUser(
-                  (current) =>
-                    getEquippedJutsuUserPatch(current.loadout?.jutsuIds ?? [], change),
-                  { revision: context.user },
-                ),
-              ]
-            : []),
-          utils.jutsu.getLoadouts.invalidate(),
+          updateUser((current) => getEquippedJutsuProfilePatch(current, change), {
+            revision: context.user,
+          }),
+          updateEquippedLoadout(change, context.loadouts),
         ]);
       }
     },
@@ -273,19 +271,26 @@ export default function MyJutsu() {
 
   const { mutate: updateOrder, isPending: isReordering } =
     api.jutsu.updateUserJutsuOrder.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, variables, revision) => {
+      onMutate: () => ({
+        revision: prepareUserUpdate(),
+        loadouts: prepareLoadoutUpdate(),
+      }),
+      onSuccess: async (data, variables, context) => {
         showMutationToast(data);
         if (data.success) {
           const loadout = data.userPatch?.loadout;
           await Promise.all([
-            utils.jutsu.getLoadouts.invalidate(),
+            updateLoadoutOrder(
+              variables.loadoutId,
+              loadout?.jutsuIds,
+              context.loadouts,
+            ),
             updateUser(
               loadout
                 ? (current) =>
                     current.jutsuLoadout === variables.loadoutId ? { loadout } : {}
                 : undefined,
-              { revision },
+              { revision: context.revision },
             ),
           ]);
         }

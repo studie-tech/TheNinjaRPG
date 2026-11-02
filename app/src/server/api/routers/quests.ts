@@ -9,6 +9,7 @@ import {
   getCollectPetTaskUserUpdate,
   getQuestRewardCacheUpdate,
   getQuestRewardProjectionUpdate,
+  getQuestStartUserUpdate,
   getRetryBattleUserUpdate,
   getRewardUserDelta,
   getStartPetTaskUserUpdate,
@@ -269,6 +270,7 @@ import {
   masteryRankUpdate,
 } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { consumeUserAnnouncements } from "@/server/utils/profile";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import { getQuestEntryCharges, payQuestEntryAtStart } from "@/server/utils/questEntry";
@@ -535,12 +537,18 @@ export const questsRouter = createTRPCRouter({
         userLevel: z.number(),
         userSector: z.number(),
         userVillageId: z.string().nullish(),
+        // Older clients recover announcements through getUser rather than displaying response feedback.
+        supportsAnnouncements: z.boolean().optional(),
       }),
     )
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [updatedUser, sectorVillage, results] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          includeAnnouncementsInResponse: input.supportsAnnouncements === true,
+        }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
         // Random missions/crimes/errands/medical/pvp all resolve the candidate pool the same
         // way (same widened LEFT JOIN + filters); the quest type is already carried by the
@@ -645,13 +653,23 @@ export const questsRouter = createTRPCRouter({
         success: true,
         message: `Quest started: ${result.name}${rankInfo}`,
         ...(assignment.userCacheEligible && !updatedUser.requiresProgressionRefresh
-          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
+          ? getQuestStartUserUpdate(
+              user,
+              updatedUser.publishedAchievementIds,
+              await consumeUserAnnouncements(ctx.drizzle, user),
+            )
           : {}),
       };
     }),
   startQuest: protectedProcedure
     .meta({ mcp: { description: "Start a specific quest by ID" } })
-    .input(z.object({ questId: z.string(), userSector: z.number() }))
+    .input(
+      z.object({
+        questId: z.string(),
+        userSector: z.number(),
+        supportsAnnouncements: z.boolean().optional(),
+      }),
+    )
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -660,6 +678,7 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           forceRegen: true, // Force regeneration to ensure we have latest quest data
+          includeAnnouncementsInResponse: input.supportsAnnouncements === true,
         }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
         fetchQuest(ctx.drizzle, input.questId),
@@ -692,7 +711,11 @@ export const questsRouter = createTRPCRouter({
         userCacheEligible === true &&
         !updatedUser.requiresProgressionRefresh &&
         questData.questType !== "war"
-          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
+          ? getQuestStartUserUpdate(
+              user,
+              updatedUser.publishedAchievementIds,
+              await consumeUserAnnouncements(ctx.drizzle, user),
+            )
           : {}),
       };
     }),

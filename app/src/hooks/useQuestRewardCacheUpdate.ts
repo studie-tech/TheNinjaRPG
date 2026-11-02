@@ -1,11 +1,13 @@
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 
 /** Reconcile quest reward views without suppressing recovery or eligibility-changing reads. */
 export const useQuestRewardCacheUpdate = () => {
   const utils = api.useUtils();
+  const { invalidateInventory } = useInventoryCacheUpdate();
   const dashboard = useQueryCacheUpdate<RouterOutputs["profile"]["getDashboard"]>(
     getQueryKey(api.profile.getDashboard, undefined, "query"),
   );
@@ -23,6 +25,14 @@ export const useQuestRewardCacheUpdate = () => {
     const update =
       result.success && profileApplied ? result.questCacheUpdate : undefined;
     await Promise.all([
+      // Profile projections can include ordinary item rewards; skip only known item-free claims.
+      // A profile recovery can grant collection items, so refresh inventory only after it settles.
+      ...(update &&
+      result.rewards?.reward_items.length === 0 &&
+      !result.rewards.reward_hunter_items &&
+      !result.rewards.reward_gathering_items
+        ? []
+        : [invalidateInventory()]),
       dashboard.updateCache(
         update
           ? (current) => getQuestRewardDashboardUpdate(current, update)

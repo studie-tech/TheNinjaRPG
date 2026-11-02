@@ -32,6 +32,7 @@ for (const procedure of ["item.sellUserItem", "item.toggleEquip", "jutsu.toggleE
       prepareInventoryUpdate: vi.fn(), updateInventory: vi.fn(),
       invalidateInventory: () => Promise.all(caches.map((cache) => cache.invalidate())),
       prepareJutsuUpdate: vi.fn(), prepareUserUpdate: vi.fn(),
+      prepareLoadoutUpdate: vi.fn(), updateEquippedLoadout: vi.fn(),
       updateJutsus: vi.fn(), updateUser: vi.fn(),
       utils: { jutsu: { getUserJutsus: caches[0], getLoadouts: caches[1] }, profile: { getUser: caches[2] } },
       showMutationToast, onSettled, loadoutRequestInFlightRef,

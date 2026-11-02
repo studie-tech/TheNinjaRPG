@@ -207,7 +207,6 @@ import {
   insertUserVoteForFetchUpdatedUserOnce,
   listItemForComputeUserContentChanges,
   listJutsuForComputeUserContentChanges,
-  listNotificationForGetUser,
   listQuestPartyForGetUser,
   listRaidParticipationForGetDashboard,
   listRecruitmentRewardsForGetRecruitmentRewards,
@@ -238,8 +237,6 @@ import {
   updateUserDataForFetchUpdatedUserOnce,
   updateUserDataForFetchUpdatedUserOnce2,
   updateUserDataForGetPublicUser,
-  updateUserDataForGetUser,
-  updateUserDataForGetUser2,
   updateUserDataForToggleDeletionTimer,
   updateUserDataForUpdateAi,
   updateUserDataForUpdateBattleDescription,
@@ -291,7 +288,7 @@ import {
 } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
-import { fetchPublicUsers } from "@/server/utils/profile";
+import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import {
   fetchBloodlineCollectionCatalogue,
@@ -1165,28 +1162,8 @@ export const profileRouter = createTRPCRouter({
             notificationCount: user.unreadNews,
           });
         }
-        // Rank milestone rewards from recruits, counted when they were paid
-        if (user.unreadRecruitRewards > 0) {
-          notifications.push({
-            href: "/profile/recruit",
-            name: `Your recruits earned you ${user.unreadRecruitRewards} rank milestone ${user.unreadRecruitRewards === 1 ? "reward" : "rewards"}`,
-            color: "toast",
-          });
-          await updateUserDataForGetUser(ctx.drizzle, user, ctx);
-        }
-        if (user.unreadNotifications > 0) {
-          const [unread] = await Promise.all([
-            listNotificationForGetUser(ctx.drizzle, user),
-            updateUserDataForGetUser2(ctx.drizzle, ctx),
-          ]);
-          unread?.forEach((n) => {
-            notifications?.push({
-              href: "/news",
-              name: n.content,
-              color: "toast",
-            });
-          });
-        }
+        const receipt = await consumeUserAnnouncements(ctx.drizzle, user);
+        notifications.push(...(receipt?.announcements ?? []));
       }
       return {
         userData: user
@@ -2606,6 +2583,8 @@ const fetchUpdatedUserOnce = async (
     allowQuestPartySyncFallback?: boolean;
     /** Server actions can omit display-only alerts while retaining all readiness settlement. */
     includeNotifications?: boolean;
+    /** Callers must atomically consume pending announcements and return them before projecting. */
+    includeAnnouncementsInResponse?: boolean;
     /** Reject outside actions before queue settlement, regeneration or quest consequences. */
     rejectIsolatedPyramid?: boolean;
   },
@@ -3366,7 +3345,8 @@ const fetchUpdatedUserOnce = async (
       requiresProgressionRefresh:
         requiresProgressionRefresh ||
         toastMessages.length > 0 ||
-        Boolean(user?.unreadNotifications || user?.unreadRecruitRewards),
+        (!props.includeAnnouncementsInResponse &&
+          Boolean(user?.unreadNotifications || user?.unreadRecruitRewards)),
       toastMessages,
       hasUnvotedPolls,
       trackerResults,

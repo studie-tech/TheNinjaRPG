@@ -3,12 +3,13 @@ import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MAX_SKILL_POINTS, SECTOR_MAP_VERSION } from "@/drizzle/constants";
-import { item, quest, questHistory, sectorMap, userCookingJob, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
+import { item, notification, quest, questHistory, sectorMap, userCookingJob, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";
 import { getEnergyQueue } from "@/libs/queue";
 import * as questQueries from "@/queries/quests";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
+import { consumeUserAnnouncements } from "@/server/utils/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -44,7 +45,7 @@ const countProfileReads = async () => {
 
 describeWithDatabase("confirmed quest cache responses", () => {
   beforeEach(async () => {
-    await resetTables(userCookingJob, userItem, item, userQueue, questHistory, quest, sectorMap, userVote, userData);
+    await resetTables(notification, userCookingJob, userItem, item, userQueue, questHistory, quest, sectorMap, userVote, userData);
     invalidatePublishedMapCache();
     await insertUsers([{ userId: playerId, username: "questcache", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", isOutlaw: true, status: "AWAKE",
@@ -58,6 +59,64 @@ describeWithDatabase("confirmed quest cache responses", () => {
     await (await getTestDatabase()).insert(userVote).values({ id: "cache-vote", userId: playerId, secret: "secret01", lastVoteAt: new Date() });
   });
   afterEach(() => { vi.restoreAllMocks(); invalidatePublishedMapCache(); });
+
+  it.each(["startQuest", "startRandom"] as const)("delivers consumed alerts through %s without a second profile read and preserves revision recovery", async method => {
+    const db = await getTestDatabase();
+    if (method === "startRandom") await db.update(quest).set({ questType: "crime" }).where(eq(quest.id, missionId));
+    const profileApi = await callerFor(profileRouter, playerId);
+    const before = await profileApi.getUser();
+    await db.insert(notification).values([{ userId: playerId, content: "First announcement" }, { userId: playerId, content: "Second announcement" }]);
+    await db.update(userData).set({ unreadNotifications: 2, unreadRecruitRewards: 1 }).where(eq(userData.userId, playerId));
+    const api = await callerFor(questsRouter, playerId);
+    const result = method === "startQuest" ? await api.startQuest({ questId: missionId, userSector: 0, supportsAnnouncements: true }) : await api.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null, supportsAnnouncements: true });
+    expect(result.success, result.message).toBe(true);
+    expect(result.userPatch).toBeDefined();
+    expect(result.userPatch).toMatchObject({ unreadNotifications: 0, unreadRecruitRewards: 0 });
+    expect(result.announcements).toContain("First announcement");
+    expect(result.announcements).toContain("Second announcement");
+    expect(result.announcements).toContain("Your recruits earned you 1 rank milestone reward");
+    expect(await readPlayer()).toMatchObject({ unreadNotifications: 0, unreadRecruitRewards: 0, updatedAt: result.userPatch!.updatedAt });
+    const client = new QueryClient(), key = [["profile", "getUser"], { type: "query" }];
+    client.setQueryData(key, before);
+    const reads = vi.fn(() => profileApi.getUser());
+    const stop = new QueryObserver(client, { queryKey: key, queryFn: reads, staleTime: Infinity }).subscribe(() => {});
+    try {
+      expect(await updateUserCache(client, key, result, { revision: prepareUserUpdate(client, key) })).toBe(true);
+      expect(reads).not.toHaveBeenCalled();
+      expect(client.getQueryData<typeof before>(key)?.notifications).toEqual(before.notifications);
+      const revision = prepareUserUpdate(client, key);
+      client.setQueryData(key, before);
+      expect(await updateUserCache(client, key, result, { revision })).toBe(false);
+      expect(reads).toHaveBeenCalledTimes(1);
+    } finally { stop(); client.clear(); }
+  });
+
+  it("lets only one announcement consumer claim feedback and preserves newly changed counters", async () => {
+    const db = await getTestDatabase();
+    await db.insert(notification).values({ userId: playerId, content: "Claim once" });
+    const snapshot = { userId: playerId, unreadNotifications: 1, unreadRecruitRewards: 1 };
+    await db.update(userData).set(snapshot).where(eq(userData.userId, playerId));
+    const receipts = await Promise.all([consumeUserAnnouncements(db, snapshot), consumeUserAnnouncements(db, snapshot)]);
+    expect(receipts.filter(Boolean)).toHaveLength(1);
+    expect(receipts.find(Boolean)?.announcements.map(entry => entry.name)).toContain("Claim once");
+    await db.update(userData).set({ unreadNotifications: 2, unreadRecruitRewards: 1 }).where(eq(userData.userId, playerId));
+    expect(await consumeUserAnnouncements(db, snapshot)).toBeUndefined();
+    expect(await readPlayer()).toMatchObject({ unreadNotifications: 2, unreadRecruitRewards: 1 });
+  });
+
+  it("retains profile delivery for clients without announcement response support", async () => {
+    const db = await getTestDatabase();
+    await db.insert(notification).values({ userId: playerId, content: "Legacy delivery" });
+    await db.update(userData).set({ unreadNotifications: 1 }).where(eq(userData.userId, playerId));
+    const result = await (await callerFor(questsRouter, playerId)).startQuest({ questId: missionId, userSector: 0 });
+    expect(result.success, result.message).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.announcements).toBeUndefined();
+    expect((await readPlayer())?.unreadNotifications).toBe(1);
+    const profile = await (await callerFor(profileRouter, playerId)).getUser();
+    expect(profile.notifications?.some(entry => entry.color === "toast" && entry.name === "Legacy delivery")).toBe(true);
+    expect((await readPlayer())?.unreadNotifications).toBe(0);
+  });
 
   it("returns ordinary abandonment from the existing profile read and exact written timestamp", async () => {
     const db = await getTestDatabase();

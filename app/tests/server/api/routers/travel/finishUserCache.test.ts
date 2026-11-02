@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { bloodline, item, quest, questHistory, skillTree, userCookingJob, userData, userItem, userQueue, userSkill, userTitle, userVote, village, war, warAlly, warMercenary } from "@/drizzle/schema";
 import { globalTravelFinishPatch } from "@/libs/travel";
+import { getSectorUserUpdate } from "@/deltas/travel";
 import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/server/api/routers/profile";
 import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/travel";
@@ -28,6 +29,19 @@ describeWithDatabase("confirmed arrival profile updates", () => {
     await (await getTestDatabase()).update(userData).set({ questData: [2, 3].map((sector) => QuestTracker.parse({ id: `hidden-${sector}`, goals: [{ id: "target", sector, longitude: 4, latitude: 5, locationChecked: true }] })) }).where(eq(userData.userId, userId));
   });
   afterEach(() => { vi.restoreAllMocks(); setSystemTime(); });
+
+  it("matches the canonical public sector snapshot after confirmed caller movement", async () => {
+    const db = await getTestDatabase();
+    await db.delete(questHistory).where(eq(questHistory.userId, userId));
+    await db.update(userData).set({ status: "AWAKE", travelFinishAt: null }).where(eq(userData.userId, userId));
+    const profile = await callerFor(profileRouter, userId), travel = await callerFor(travelRouter, userId);
+    await profile.getUser();
+    const before = await travel.getSectorData({ sector: 1 });
+    await db.update(userData).set({ longitude: 6, latitude: 7, location: "Moved" }).where(eq(userData.userId, userId));
+    const user = (await profile.getUser()).userData;
+    expect(getSectorUserUpdate(before, user ?? undefined)).toEqual(await travel.getSectorData({ sector: 1 }));
+    expect(getSectorUserUpdate({ users: [], village: null, sectorData: null, warData: null }, user ?? undefined)).toBeUndefined();
+  });
 
   it.each(["move_to_location", "collect_item"] as const)("reconciles %s progress when the cleaner finishes before the client", async (task) => {
     const db = await getTestDatabase();

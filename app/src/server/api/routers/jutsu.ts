@@ -7,6 +7,7 @@ import {
   getEvolveJutsuUserUpdate,
   getImportJutsuLoadoutUserUpdate,
   getSelectJutsuLoadoutUserUpdate,
+  getStartedJutsuTrainingUpdate,
   getTransferLevelUserUpdate,
   getUpdateUserJutsuOrderUserUpdate,
 } from "@/deltas/jutsu";
@@ -1289,6 +1290,18 @@ export const jutsuRouter = createTRPCRouter({
         data: z
           .object({ money: z.number(), questData: z.array(QuestTracker).nullable() })
           .optional(),
+        // Only a confirmed existing ownership row with no queued successors can project.
+        trainingUpdate: z
+          .object({
+            id: z.string(),
+            jutsuId: z.string(),
+            beforeLevel: z.number(),
+            level: z.number(),
+            name: z.string(),
+            trainingStartedAt: z.date(),
+            finishTraining: z.date(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1445,13 +1458,18 @@ export const jutsuRouter = createTRPCRouter({
 
       // Insert or update user jutsu
       if (userjutsuObj) {
-        await updateUserJutsuForStartTraining(
+        const saved = await updateUserJutsuForStartTraining(
           ctx.drizzle,
           trainingStartedAt,
           finishTraining,
           userjutsuObj,
           ctx,
         );
+        // The returned level must describe this increment, even when two starts race.
+        if (saved.rowsAffected !== 1) {
+          await incrementUserMoney(ctx.drizzle, trainCost, ctx.userId);
+          return errorResponse("Jutsu training changed. Refresh and try again");
+        }
       } else {
         // Soft pre-check whether auto-equip is likely to succeed. Insert already
         // equipped when the snapshot says yes; only the over-cap rollback CAS
@@ -1552,6 +1570,18 @@ export const jutsuRouter = createTRPCRouter({
           questData: getPublicQuestUser({ ...user, questData: questDataFull })
             .questData,
         },
+        trainingUpdate:
+          userjutsuObj &&
+          levels === 1 &&
+          !data.requiresProgressionRefresh &&
+          !data.startedQueuedJobs
+            ? getStartedJutsuTrainingUpdate(
+                userjutsuObj,
+                info.name,
+                trainingStartedAt,
+                finishTraining,
+              )
+            : undefined,
       };
     }),
 
@@ -1676,7 +1706,16 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ userJutsuId: z.string() }))
     .output(
       baseServerResponse.extend({
-        data: z.object({ equipped: z.boolean(), jutsuId: z.string() }).optional(),
+        data: z
+          .object({
+            equipped: z.boolean(),
+            jutsuId: z.string(),
+            // The loaded order is a baseline, not a replacement for concurrent SQL appends.
+            loadout: z
+              .object({ id: z.string(), jutsuIds: z.array(z.string()) })
+              .optional(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1702,6 +1741,7 @@ export const jutsuRouter = createTRPCRouter({
       const equippedCapCounts = countEquippedByCap(equippedJutsus);
       const newEquippedState = !isEquipped;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
+      let canProjectLoadout = false;
 
       // Guards
       if (!userjutsuObj) return errorResponse("Jutsu not found");
@@ -1764,7 +1804,9 @@ export const jutsuRouter = createTRPCRouter({
             loadoutId: loadout.id,
             userId: ctx.userId,
             jutsuId: userjutsuObj.jutsuId,
+            expectedJutsuIds: loadout.jutsuIds,
           });
+          canProjectLoadout = synced === "snapshot";
           if (!synced) {
             const rolledBack = await updateUserJutsuForToggleEquip(
               ctx.drizzle,
@@ -1799,7 +1841,9 @@ export const jutsuRouter = createTRPCRouter({
             loadoutId: loadout.id,
             userId: ctx.userId,
             jutsuId: userjutsuObj.jutsuId,
+            expectedJutsuIds: loadout.jutsuIds,
           });
+          canProjectLoadout = synced === "snapshot";
           if (!synced) {
             return errorResponse("Failed to update loadout — please retry");
           }
@@ -1860,7 +1904,11 @@ export const jutsuRouter = createTRPCRouter({
       return {
         success: true,
         message: `Jutsu ${isEquipped ? "unequipped" : "equipped"}`,
-        data: { equipped: newEquippedState, jutsuId: userjutsuObj.jutsuId },
+        data: {
+          equipped: newEquippedState,
+          jutsuId: userjutsuObj.jutsuId,
+          loadout: canProjectLoadout ? loadout : undefined,
+        },
       };
     }),
 
@@ -2830,14 +2878,17 @@ export const tryEquipUserJutsuAtomically = async (args: {
  * concurrent equips cannot drop each other's IDs. Idempotent via NOT JSON_CONTAINS.
  * Only mutates the loadout if it is still the user's active pointer — otherwise a
  * concurrent selectJutsuLoadout would desynchronize the old loadout from equipped
- * rows. Returns true when the *active* loadout contains jutsuId.
+ * rows. Concurrent edits retry without projecting.
+ * @returns "snapshot" when the expected order matched, "confirmed" for success without that
+ * baseline proof, or false when synchronization cannot be confirmed.
  */
 const appendJutsuIdToLoadoutAtomically = async (args: {
   client: DrizzleClient;
   loadoutId: string;
   userId: string;
   jutsuId: string;
-}): Promise<boolean> => {
+  expectedJutsuIds?: string[];
+}): Promise<false | "snapshot" | "confirmed"> => {
   const { client, loadoutId, userId, jutsuId } = args;
   try {
     const result = await updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically(
@@ -2845,11 +2896,25 @@ const appendJutsuIdToLoadoutAtomically = async (args: {
       jutsuId,
       loadoutId,
       userId,
+      args.expectedJutsuIds,
     );
-    if (result.rowsAffected === 1) return true;
+    if (result.rowsAffected === 1)
+      return args.expectedJutsuIds ? "snapshot" : "confirmed";
+    if (
+      args.expectedJutsuIds &&
+      (
+        await updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically(
+          client,
+          jutsuId,
+          loadoutId,
+          userId,
+        )
+      ).rowsAffected === 1
+    )
+      return "confirmed";
     // Already present, pointer moved, or missing loadout — check the active one.
     const ids = await fetchActiveLoadoutJutsuIds(client, userId);
-    return !!ids?.includes(jutsuId);
+    return ids?.includes(jutsuId) ? "confirmed" : false;
   } catch {
     return false;
   }
@@ -2866,14 +2931,17 @@ const escapeJsonSearchPattern = (value: string) =>
  * Remove a jutsuId from a loadout's JSON array without rewriting the whole array, so
  * concurrent unequips cannot restore each other's IDs from stale snapshots.
  * Only mutates the loadout if it is still the user's active pointer.
- * Returns true when the *active* loadout no longer contains jutsuId.
+ * Concurrent edits retry without projecting.
+ * @returns "snapshot" when the expected order matched, "confirmed" for success without that
+ * baseline proof, or false when synchronization cannot be confirmed.
  */
 const removeJutsuIdFromLoadoutAtomically = async (args: {
   client: DrizzleClient;
   loadoutId: string;
   userId: string;
   jutsuId: string;
-}): Promise<boolean> => {
+  expectedJutsuIds?: string[];
+}): Promise<false | "snapshot" | "confirmed"> => {
   const { client, loadoutId, userId, jutsuId } = args;
   const searchPattern = escapeJsonSearchPattern(jutsuId);
   try {
@@ -2884,11 +2952,26 @@ const removeJutsuIdFromLoadoutAtomically = async (args: {
       userId,
 
       jutsuId,
+      args.expectedJutsuIds,
     );
-    if (result.rowsAffected === 1) return true;
+    if (result.rowsAffected === 1)
+      return args.expectedJutsuIds ? "snapshot" : "confirmed";
+    if (
+      args.expectedJutsuIds &&
+      (
+        await updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically(
+          client,
+          searchPattern,
+          loadoutId,
+          userId,
+          jutsuId,
+        )
+      ).rowsAffected === 1
+    )
+      return "confirmed";
     // Pointer moved or already absent — only the active loadout must lack this id.
     const ids = await fetchActiveLoadoutJutsuIds(client, userId);
-    return !ids?.includes(jutsuId);
+    return !ids?.includes(jutsuId) ? "confirmed" : false;
   } catch {
     return false;
   }
