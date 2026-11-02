@@ -92,14 +92,18 @@ export default function NativeBrowserSignIn() {
             </strong>
             ?
           </p>
-          <div className="grid grid-cols-2 items-stretch gap-3">
-            <Button
-              className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
-              disabled={approve.isPending}
-              onClick={() => void returnToApp()}
-            >
-              {approve.isPending ? "Returning…" : "Continue to the app"}
-            </Button>
+          <div
+            className={`grid items-stretch gap-3 ${callback ? "grid-cols-1" : "grid-cols-2"}`}
+          >
+            {!callback && (
+              <Button
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+                disabled={approve.isPending}
+                onClick={() => void returnToApp()}
+              >
+                {approve.isPending ? "Returning…" : "Continue to the app"}
+              </Button>
+            )}
             {callback ? (
               <Button
                 asChild

@@ -16,7 +16,7 @@ beforeEach(() => {
     isInstalled: false, isIOS: true, isMobile: true, isStandalone: false,
   } as ReturnType<typeof install.useInstallPrompt>);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ currentStep: undefined } as ReturnType<typeof tutorial.useTutorialStep>);
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: { userId: "player" } } as ReturnType<typeof userContext.useUserData>);
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({ data: "player" } as ReturnType<typeof userContext.useUserDataSelector>);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 

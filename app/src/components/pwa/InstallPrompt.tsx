@@ -8,6 +8,7 @@ import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector } from "@/utils/UserContext";
 
+/** Offers web installation without interrupting browser-to-app authentication. */
 export default function InstallPrompt() {
   const pathname = usePublicPathname();
   const {
