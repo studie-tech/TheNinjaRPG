@@ -13,6 +13,21 @@ const periodic = readdirSync(resolve(appRoot, "src/app/api"))
   .map((name) => `/api/${name}`);
 const routes = [...new Set([...config.crons.map((cron) => cron.path), ...periodic])];
 
+// Content-review routes authenticate with the cron secret but are called by the audit workflow.
+const cronAuthenticated = readdirSync(resolve(appRoot, "src/app/api"), { recursive: true })
+  .map(String)
+  .filter((file) => file.endsWith("route.ts") && !file.startsWith("content-review"))
+  .filter((file) =>
+    readFileSync(resolve(appRoot, "src/app/api", file), "utf8").includes(
+      "authenticateCronRequest(",
+    ),
+  )
+  .map((file) => `/api/${file.replace(/\/?route\.ts$/, "")}`);
+
+it.each(cronAuthenticated)("%s is scheduled in vercel.json", (route) => {
+  expect(config.crons.map((cron) => cron.path)).toContain(route);
+});
+
 it.each([...routes])("%s authenticates before timers or other work", (route) => {
   const file = resolve(appRoot, `src/app${route}/route.ts`);
   const source = readFileSync(file, "utf8");
