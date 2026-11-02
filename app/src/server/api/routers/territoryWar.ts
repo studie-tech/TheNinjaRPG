@@ -4,6 +4,7 @@ import {
   getCreateTeamUserUpdate,
   getJoinTeamUserUpdate,
   getLeaveTeamUserUpdate,
+  getTerritoryWarNotice,
 } from "@/deltas/territoryWar";
 import {
   TERRITORY_WAR_INTERVAL_HOURS,
@@ -20,7 +21,6 @@ import {
   executeInsertedForJoinTeam,
   executeRemovedForLeaveTeam,
   executeRowsForStartBattle,
-  fetchActiveTerritoryWar,
   fetchLatestTerritoryWar,
   findMpvpBattleQueueForStartBattle,
   findTerritoryWarById,
@@ -36,9 +36,9 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Read the global competition and manage same-competitor guardian lobbies. */
 export const territoryWarRouter = createTRPCRouter({
-  /** Read-only notice polling; synchronization belongs to the minute scheduler. */
-  getNotice: protectedProcedure.query(
-    async ({ ctx }) => (await fetchActiveTerritoryWar(ctx.drizzle)) ?? null,
+  /** Read the notice and quiet-window deadline; synchronization belongs to the scheduler. */
+  getNotice: protectedProcedure.query(async ({ ctx }) =>
+    getTerritoryWarNotice(await fetchLatestTerritoryWar(ctx.drizzle), Date.now()),
   ),
   /** Include the latest result, standings, own competitor's lobbies and next opening. */
   getCurrent: protectedProcedure.query(async ({ ctx }) => {

@@ -67,6 +67,23 @@ describeWithDatabase("Territory War participation", () => {
   });
   afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks(); });
 
+  it("reads the notice and durable next opening without synchronizing or writing", async () => {
+    const db = await getTestDatabase();
+    const reader = callerForDatabase(territoryWarRouter, "leader", db);
+    const active = await recordQueries(() => reader.getNotice());
+    expect(active.result.event?.id).toBe("event");
+    expect(active.result.nextStartsAt).toBeNull();
+    expect(active.statements.filter(statement => /from `TerritoryWar`/i.test(statement))).toHaveLength(1);
+    expect(active.statements.every(statement => /^select /i.test(statement))).toBe(true);
+    const resolvedAt = new Date(Date.now() - 1000);
+    await db.update(territoryWar).set({ resolvedAt });
+    expect(await reader.getNotice()).toEqual({ event: null, nextStartsAt: new Date(resolvedAt.getTime() + 5 * 3_600_000) });
+    await db.update(territoryWar).set({ resolvedAt: null, endsAt: new Date(0) });
+    expect(await reader.getNotice()).toEqual({ event: null, nextStartsAt: null });
+    await db.delete(territoryWar);
+    expect(await reader.getNotice()).toEqual({ event: null, nextStartsAt: null });
+  });
+
   it("validates sector and competitor and caps a team at three players", async () => {
     const leader = await caller();
     expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
