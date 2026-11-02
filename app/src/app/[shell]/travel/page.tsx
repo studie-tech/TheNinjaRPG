@@ -129,12 +129,13 @@ import {
 } from "@/validators/travel";
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
-// Travel needs the globe immediately, so start its chunk alongside hydration.
+const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+// Start both renderers alongside hydration while the map queries load.
 if (typeof window !== "undefined") {
   // The dynamic component reports a failed chunk load when it renders.
   void import("@/layout/Map").catch(() => undefined);
+  void import("@/layout/Sector").catch(() => undefined);
 }
-const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 
 /** A stored per-sector window entry (position within a window comes from the layout) */
 type StoredSectorEntry =

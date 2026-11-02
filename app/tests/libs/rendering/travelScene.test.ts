@@ -85,7 +85,7 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
-  it.each([false, true])("shows terrain during scenery loading, gates interaction and owns cancellation (%s)", async (cancel) => {
+  it.each([false, true])("allows walking and live actors during scenery loading and owns cancellation (%s)", async (cancel) => {
     const state = snapshotFixture();
     state.window[0]!.structures[0]!.image = `pending-building-${cancel}.png`;
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
@@ -93,27 +93,28 @@ describe("travel scene ground depth", () => {
     const pending = new Promise<Texture>((resolve) => { release = resolve; });
     vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes(`pending-building-${cancel}`) ? pending : texture);
     const fixture = gameFixture(), onReady = vi.fn(), onTap = vi.fn();
-    let ready = false;
-    const creating = createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 }).then((scene) => { ready = true; return scene; });
+    const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => state, onError: (error) => { throw error; }, onReady, onTap, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
+    fixture.advance();
     await settle();
     const world = fixture.stage.children[0]!, ground = world.children[0]!.children[0]!;
     expect(ground).toBeDefined();
-    expect(world.children[1]!.children).toHaveLength(0);
-    expect(ready).toBe(false);
-    expect(onReady).not.toHaveBeenCalled();
+    expect(scene.sectors.get(724)!.art.entries).toHaveLength(0);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(world.children.at(-1)!.children.some((child) => child.label === "user:self")).toBe(true);
     const camera = { x: world.x, y: world.y };
     fixture.event("pointerdown", 400, 300); fixture.event("pointerup", 400, 300);
-    expect(onTap).not.toHaveBeenCalled();
+    expect(onTap).toHaveBeenCalledTimes(1);
     if (cancel) fixture.game.dispose();
     release(texture);
-    const scene = await creating;
+    await settle();
     if (cancel) {
       expect(ground.destroyed).toBe(true);
-      expect(onReady).not.toHaveBeenCalled();
       expect(fixture.game.isDisposed()).toBe(true);
+      expect(world.destroyed).toBe(true);
     } else {
       expect(scene.sectors.get(724)!.terrain.container).toBe(ground);
       expect(world.children[1]!.children).toHaveLength(1);
+      expect(scene.sectors.get(724)!.art.entries.some((entry) => entry.description.id === "building")).toBe(true);
       expect(onReady).toHaveBeenCalledTimes(1);
       fixture.advance();
       expect({ x: world.x, y: world.y }).toEqual(camera);
@@ -378,6 +379,61 @@ describe("travel scene ground depth", () => {
 });
 
 describe("travel scene window updates", () => {
+  it("ignores late scenery after a sector replacement", async () => {
+    const state = snapshotFixture();
+    state.window[0]!.structures[0]!.image = "replaced-pending-building.png";
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>((resolve) => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async (input) => JSON.stringify(input).includes("replaced-pending-building") ? pending : Texture.WHITE);
+    const { scene } = await sceneFixture(state);
+    const previous = scene.sectors.get(724)!;
+    expect(previous.art.entries).toHaveLength(0);
+    state.window[0]!.structures = [{ ...state.window[0]!.structures[0]!, image: "replacement-building.png" }];
+    await scene.updateWindow(); await settle();
+    const replacement = scene.sectors.get(724)!;
+    expect(previous.scope.isDisposed()).toBe(true);
+    release(Texture.WHITE); await settle();
+    expect(scene.sectors.get(724)).toBe(replacement);
+    expect(replacement.art.entries.find((entry) => entry.description.id === "building")!.description.image).toBe("replacement-building.png");
+  });
+
+  it("reuses terrain across navigation while creating fresh scenery and actors", async () => {
+    const state = snapshotFixture();
+    state.libraryVersion = "navigation-cache";
+    const first = await sceneFixture(state);
+    const original = first.scene.sectors.get(724)!;
+    first.scene.dispose();
+    state.users = [player({ userId: "new-arrival" })];
+    const second = await sceneFixture(state);
+    const restored = second.scene.sectors.get(724)!;
+    expect(restored.grid).toBe(original.grid);
+    expect(restored.data).toBe(original.data);
+    expect(original.terrain.container.destroyed).toBe(true);
+    expect(restored.terrain).not.toBe(original.terrain);
+    expect(restored.art).not.toBe(original.art);
+    expect(second.depth.renderLayerChildren.some((child) => child.label === "user:new-arrival")).toBe(true);
+    expect(second.depth.renderLayerChildren.some((child) => child.label === "user:self")).toBe(false);
+    second.scene.dispose();
+    state.libraryVersion = "edited-navigation-cache";
+    const edited = await sceneFixture(state);
+    expect(edited.scene.sectors.get(724)!.data).not.toBe(original.data);
+  });
+
+  it("evicts terrain outside the bounded nine-sector cache", async () => {
+    const state = snapshotFixture();
+    state.libraryVersion = "bounded-navigation-cache";
+    const first = await sceneFixture(state);
+    const data = first.scene.sectors.get(724)!.data;
+    first.scene.dispose();
+    for (let sector = 1000; sector < 1009; sector++) {
+      const next = { ...state, sector, window: [windowEntry(sector)] };
+      const loaded = await sceneFixture(next);
+      loaded.scene.dispose();
+    }
+    const restored = await sceneFixture(state);
+    expect(restored.scene.sectors.get(724)!.data).not.toBe(data);
+  });
+
   it("keeps a sector installed just before a newer window update interrupts it", async () => {
     const fixture = gameFixture();
     const state = snapshotFixture();

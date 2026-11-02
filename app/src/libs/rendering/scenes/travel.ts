@@ -21,7 +21,10 @@ import { travelSectorKey } from "@/libs/rendering/scenes/travelData";
 import { createTravelPath } from "@/libs/rendering/scenes/travelPath";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
-import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
+import {
+  sectorSpriteDescriptions,
+  type WorldSpriteDescription,
+} from "@/libs/rendering/sectorSprites";
 import {
   createWaterShelf,
   type HexTerrainData,
@@ -52,8 +55,8 @@ import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /**
- * Owns retained sector scopes. Initialization awaits only the current sector;
- * call updateWindow after window/library changes to reconcile the remaining sectors.
+ * Owns retained sector scopes. Initialization awaits the current sector's terrain;
+ * scenery loads independently. updateWindow reconciles the remaining sectors and edits.
  */
 export const createTravelScene = async (options: {
   lpcCatalog?: LpcCatalog;
@@ -318,7 +321,8 @@ export const createTravelScene = async (options: {
             snapshot.locations.filter((location) => location.sector === entry.sector),
             wallPlans.get(entry.sector)?.foundationKeys,
           );
-          const cached = sectors.get(entry.sector);
+          const cached =
+            sectors.get(entry.sector) ?? cachedSectorData.get(entry.sector);
           if (cached?.sourceKey === sourceKey)
             return [
               entry.sector,
@@ -415,82 +419,97 @@ export const createTravelScene = async (options: {
         const scope = createRenderScope(game);
         pending.add(scope);
         try {
-          if (!prng) {
-            prng = alea(entry.sector + 1);
-            ({ grid, villageWallPlan } = prepareSectorGrid(
-              logicalWidth,
-              prng,
-              entry.globalTileType,
-              entry.structures,
-              entry.map,
-              snapshot.terrains,
-              entry.villageType,
-              wallPlans.get(entry.sector) ?? null,
-            ));
+          const cached = cachedSectorData.get(entry.sector);
+          let descriptions: WorldSpriteDescription[];
+          let data: HexTerrainData;
+          if (cached?.key === key) {
+            descriptions = cached.descriptions;
+            data = cached.data;
+          } else {
+            if (!prng) {
+              prng = alea(entry.sector + 1);
+              ({ grid, villageWallPlan } = prepareSectorGrid(
+                logicalWidth,
+                prng,
+                entry.globalTileType,
+                entry.structures,
+                entry.map,
+                snapshot.terrains,
+                entry.villageType,
+                wallPlans.get(entry.sector) ?? null,
+              ));
+            }
+            const roads = planVillageLandscape(grid, entry.structures, villageWallPlan);
+            descriptions = sectorSpriteDescriptions({
+              map: entry.map,
+              grid,
+              structures: entry.structures,
+              decorations: snapshot.decorations,
+              wall: villageWallPlan,
+              lightLayout: options.lightLayout,
+              locations,
+              mapAssets: snapshot.mapAssets,
+              roads,
+            });
+            data = buildSectorTerrainData(grid, prng, options.lightLayout, {
+              sector: entry.sector,
+              sprites: descriptions,
+              wall: villageWallPlan,
+              roads,
+              waterDepthAt:
+                shelf && unifiedOrigin && localOrigin
+                  ? (point) =>
+                      shelf({
+                        x:
+                          unifiedOrigin.x +
+                          ((point.x - localOrigin.x) * unifiedOrigin.width) /
+                            localOrigin.width,
+                        y:
+                          unifiedOrigin.y +
+                          ((point.y - localOrigin.y) * unifiedOrigin.height) /
+                            localOrigin.height,
+                      })
+                  : undefined,
+            });
           }
-          const roads = planVillageLandscape(grid, entry.structures, villageWallPlan);
-          const descriptions = sectorSpriteDescriptions({
-            map: entry.map,
+          // Retain only CPU scenery data across navigation; each scene owns its GPU resources.
+          cachedSectorData.delete(entry.sector);
+          cachedSectorData.set(entry.sector, {
+            key,
+            sourceKey: preparedSector.sourceKey,
             grid,
-            structures: entry.structures,
-            decorations: snapshot.decorations,
-            wall: villageWallPlan,
-            lightLayout: options.lightLayout,
-            locations,
-            mapAssets: snapshot.mapAssets,
-            roads,
+            data,
+            descriptions,
           });
-          const data = buildSectorTerrainData(grid, prng, options.lightLayout, {
-            sector: entry.sector,
-            sprites: descriptions,
-            wall: villageWallPlan,
-            roads,
-            waterDepthAt:
-              shelf && unifiedOrigin && localOrigin
-                ? (point) =>
-                    shelf({
-                      x:
-                        unifiedOrigin.x +
-                        ((point.x - localOrigin.x) * unifiedOrigin.width) /
-                          localOrigin.width,
-                      y:
-                        unifiedOrigin.y +
-                        ((point.y - localOrigin.y) * unifiedOrigin.height) /
-                          localOrigin.height,
-                    })
-                : undefined,
-          });
+          while (cachedSectorData.size > 9) {
+            const oldest = cachedSectorData.keys().next().value;
+            if (oldest === undefined) break;
+            cachedSectorData.delete(oldest);
+          }
+          // Artwork and material maps must not hold walking or live actors behind a loading screen.
+          const scenery = createWorldSprites(scope, descriptions, shadows, true).then(
+            (art) => ({ art }),
+            (error: unknown) => ({ error }),
+          );
           const [terrain, art] = await Promise.all([
-            createHexTerrain(scope, data).then((terrain) => {
-              if (
-                !disposed &&
-                token === generation &&
-                !sectors.size &&
-                entry.sector === snapshot.sector
-              ) {
-                // Show the rooted ground while scenery/materials load; installation still gates picking and actors.
-                const tile = grid.getHex({ col: snapshot.col, row: snapshot.row });
-                if (tile)
-                  camera = {
-                    x: -tile.center.x + tile.width / 2 + position.x,
-                    y: -tile.center.y + tile.height / 2 + position.y,
-                  };
-                transform();
-                setBackground(entry.map);
-                terrain.setLighting(snapshot.brightness);
-                terrain.container.position.copyFrom(position);
-                terrainLayer.addChild(terrain.container);
-                game.invalidate();
-              }
-              return terrain;
-            }),
-            createWorldSprites(scope, descriptions, shadows, true),
+            createHexTerrain(scope, data),
+            createWorldSprites(scope, [], shadows, true),
           ]);
           if (disposed || token !== generation) {
             scope.dispose();
             return;
           }
-          // Physical lighting receives neutral albedo; ambient tint is only used by the loading preview.
+          if (!sectors.size && entry.sector === snapshot.sector) {
+            const tile = grid.getHex({ col: snapshot.col, row: snapshot.row });
+            if (tile)
+              camera = {
+                x: -tile.center.x + tile.width / 2 + position.x,
+                y: -tile.center.y + tile.height / 2 + position.y,
+              };
+            transform();
+            setBackground(entry.map);
+          }
+          // Physical lighting receives neutral albedo; the frame loop applies ambient-only lighting.
           terrain.setLighting(1);
           if (shadows) scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
@@ -502,7 +521,7 @@ export const createTravelScene = async (options: {
           artLayer.addChild(art.container);
           placeArt(art, position);
           existing?.scope.dispose();
-          sectors.set(entry.sector, {
+          const installed = {
             key,
             sourceKey: preparedSector.sourceKey,
             scope,
@@ -515,7 +534,26 @@ export const createTravelScene = async (options: {
               logicalWidth *
               calculateWidth2Height(entry.map.width, entry.map.height + 2),
             margin: (grid.toArray()[0]?.width ?? 50) * 3,
-          });
+          };
+          sectors.set(entry.sector, installed);
+          void scenery
+            .then((result) => {
+              if (scope.isDisposed() || sectors.get(entry.sector) !== installed) return;
+              if ("error" in result) {
+                // Terrain and live actors remain usable; the next scene retries the artwork.
+                console.warn("Travel scenery unavailable", result.error);
+                return;
+              }
+              installed.art.dispose();
+              installed.art = result.art;
+              result.art.container.position.copyFrom(installed.position);
+              artLayer.addChild(result.art.container);
+              placeArt(result.art, installed.position);
+              game.invalidate();
+            })
+            .catch((error: unknown) => {
+              if (!scope.isDisposed()) options.onError(error);
+            });
           // A ready callback may reconcile immediately; cancellation must only dispose uninstalled scopes.
           pending.delete(scope);
           actorsDirty = true;
@@ -838,3 +876,15 @@ type TravelSector = {
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
 };
+
+// One travel window of immutable terrain and descriptions; live users and renderer objects stay scene-local.
+const cachedSectorData = new Map<
+  number,
+  {
+    key: string;
+    sourceKey: string;
+    grid: Grid<TerrainHex>;
+    data: HexTerrainData;
+    descriptions: WorldSpriteDescription[];
+  }
+>();

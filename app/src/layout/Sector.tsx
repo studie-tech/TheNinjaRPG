@@ -367,7 +367,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // tRPC utility
   const utils = api.useUtils();
-  const loadLpcCatalog = useLpcCatalogLoader();
+  const loadLpcCatalog = useLpcCatalogLoader({ revalidateInBackground: true });
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db
@@ -2348,6 +2348,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }),
     `${lightLayout}:${isWorldExpanded}`,
   );
+  const [showWorldLoader, setShowWorldLoader] = useState(false);
+  useEffect(() => {
+    if (travel.isReady || travel.error) {
+      setShowWorldLoader(false);
+      return;
+    }
+    // Cached terrain normally renders before loading feedback needs to appear.
+    const timer = setTimeout(() => setShowWorldLoader(true), 200);
+    return () => clearTimeout(timer);
+  }, [travel.isReady, travel.error]);
   useEffect(() => {
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision]);
@@ -2406,7 +2416,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           aria-busy={!travel.isReady && !travel.error}
           className={!travel.isReady && !travel.error ? "min-h-60" : undefined}
         ></div>
-        {!travel.isReady && !travel.error && (
+        {showWorldLoader && !travel.isReady && !travel.error && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div
               role="status"
