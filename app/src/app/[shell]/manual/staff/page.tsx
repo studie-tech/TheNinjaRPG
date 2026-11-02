@@ -301,7 +301,7 @@ export default function Staff() {
                   users={users.filter((user) => user.role === "EVENT-ADMIN")}
                   expectedLength={1}
                 />
-                <Information hoverEffect="hover:fill-purple-700">
+                <Information hoverEffect="hover:fill-rose-500">
                   Main responsibility is to oversee and manage all in-game content to
                   enhance player engagement and ensure a high-quality experience.
                   Working with content & event members, supervising the creation,
