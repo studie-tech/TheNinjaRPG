@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useActiveWars } from "@/hooks/useActiveWars";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
@@ -25,15 +26,11 @@ export const WarFieldActions = () => {
     villageId: user.villageId,
     warMission: user.warMission,
   }));
-  const { data: wars } = api.war.getActiveWars.useQuery(
-    { villageId: user?.villageId ?? "" },
-    {
-      enabled: !!user,
-      staleTime: 10000,
-      refetchInterval: 10000,
-      notifyOnChangeProps: ["data"],
-    },
-  );
+  const { data: wars } = useActiveWars(user?.villageId ?? "", {
+    enabled: !!user,
+    polling: isOpen ? "live" : "discovery",
+    timeDiff,
+  });
   const objectiveWars = useMemo(() => wars?.filter((war) => war.rules) ?? [], [wars]);
   const camps = api.war.getWarCampNotices.useQuery(undefined, {
     enabled: objectiveWars.length > 0,
