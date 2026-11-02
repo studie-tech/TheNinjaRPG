@@ -27,7 +27,6 @@ import {
   auctionBid,
   auctionListing,
   item,
-  type notification,
   userData,
   userItem,
 } from "@/drizzle/schema";
@@ -48,7 +47,6 @@ import {
   insertActionLogForRecordBidActivity,
   insertAuctionBidForPlaceBid,
   insertAuctionListingForCreateAuctionListing,
-  insertNotificationForRecordBidActivity,
   listAuctionListingForGetAuctionListings,
   selectAuctionBidForGetAuctionListings,
   updateAuctionBidForSettleAuction,
@@ -61,7 +59,6 @@ import {
   updateUserItemForCreateAuctionListing,
   updateUserItemForSettleAuction,
 } from "@/queries/auction";
-import { incrementNotificationCounters } from "@/queries/misc";
 import { fetchUser, findUserIdentityById, findUserRoleById } from "@/queries/profile";
 import {
   baseServerResponse,
@@ -72,7 +69,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
-import { tradeUpdate } from "@/server/utils/push/messages";
+import { auctionOutbid, tradeUpdate } from "@/server/utils/push/messages";
 import type { QueryCondition } from "@/utils/typeutils";
 import {
   createAuctionListingSchema,
@@ -499,7 +496,6 @@ export const auctionRouter = createTRPCRouter({
         }
       }
 
-      const itemLabel = auction.userItem?.item?.name ?? "An auction lot";
       const bidId = existingBid?.id ?? nanoid();
       const updatedAt = new Date();
       const bidLog = {
@@ -518,15 +514,11 @@ export const auctionRouter = createTRPCRouter({
         ),
         relatedId: bidId,
       };
-      const outbidNotification =
-        outbidUserId === null
-          ? null
-          : {
-              userId: outbidUserId,
-              content: isBuyoutBid
-                ? `Someone bought out "${itemLabel}" — you were the previous high bidder.`
-                : `You were outbid on "${itemLabel}" in the auction.`,
-            };
+      // Buyouts notify every participant through their settlement instead.
+      const notifyOutbid = () => {
+        if (outbidUserId)
+          deferPushToUsers(ctx.drizzle, [outbidUserId], auctionOutbid(auction.id));
+      };
       const listingGuard = and(
         eq(auctionListing.id, auction.id),
         eq(auctionListing.status, "ACTIVE"),
@@ -587,7 +579,8 @@ export const auctionRouter = createTRPCRouter({
 
         // Activity failures must not turn a committed raise into a failed response.
         // Report them separately, as with training logs.
-        await recordBidActivity(ctx.drizzle, bidLog, outbidNotification, true);
+        await recordBidActivity(ctx.drizzle, bidLog, true);
+        notifyOutbid();
         return { success: true, message: "Bid raised successfully", amountToDeduct };
       }
 
@@ -602,7 +595,7 @@ export const auctionRouter = createTRPCRouter({
               bidderGuard,
             }),
           );
-          await recordBidActivity(ctx.drizzle, bidLog, outbidNotification, true);
+          await recordBidActivity(ctx.drizzle, bidLog, true);
           notifyAuctionSettlement(ctx.drizzle, settlement);
           return { success: true, message: "Buyout successful - auction completed" };
         }
@@ -652,7 +645,7 @@ export const auctionRouter = createTRPCRouter({
 
               await insertAuctionBidForPlaceBid(tx, bidId, auctionId, ctx, amount);
             }
-            await recordBidActivity(tx, bidLog, outbidNotification);
+            await recordBidActivity(tx, bidLog);
             // Buyout escrow, delivery and every payment share this commit.
             return isBuyoutBid ? settleAuction(tx, auction.id, ctx.userId) : null;
           }),
@@ -661,6 +654,7 @@ export const auctionRouter = createTRPCRouter({
           notifyAuctionSettlement(ctx.drizzle, settlement);
           return { success: true, message: "Buyout successful - auction completed" };
         }
+        notifyOutbid();
       } catch (error) {
         if (
           error instanceof Error &&
@@ -969,40 +963,22 @@ const requireBidWrite = (rowsAffected: number, message: string) => {
 
 /** Activity is ancillary after a standalone raise; inside a bid transaction errors abort it. */
 const recordBidActivity = async (
-  client: Pick<DrizzleClient, "insert" | "update">,
+  client: Pick<DrizzleClient, "insert">,
   log: typeof actionLog.$inferInsert,
-  outbid: typeof notification.$inferInsert | null,
   hasCommitted = false,
 ) => {
-  const writes = [
-    async () => insertActionLogForRecordBidActivity(client, log),
-    ...(outbid
-      ? [
-          async () => {
-            await insertNotificationForRecordBidActivity(client, outbid);
-            await incrementNotificationCounters(client, [outbid.userId]);
-          },
-        ]
-      : []),
-  ];
   if (!hasCommitted) {
-    // Finish each write before the transaction can roll back; no queued continuation
-    // may run against its connection after the rollback has released it.
-    for (const write of writes) await write();
+    await insertActionLogForRecordBidActivity(client, log);
     return;
   }
-  await Promise.all(
-    writes.map(async (write) => {
-      try {
-        await write();
-      } catch (error) {
-        Sentry.captureException(error, {
-          tags: { source: "auctionBidActivity" },
-          extra: { bidId: log.relatedId },
-        });
-      }
-    }),
-  );
+  try {
+    await insertActionLogForRecordBidActivity(client, log);
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { source: "auctionBidActivity" },
+      extra: { bidId: log.relatedId },
+    });
+  }
 };
 
 const requireAuctionSettlementWrite = (rowsAffected: number, message: string) => {

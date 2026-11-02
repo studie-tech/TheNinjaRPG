@@ -22,7 +22,6 @@ import {
   auctionBid,
   auctionListing,
   item,
-  notification,
   userData,
   userItem,
 } from "@/drizzle/schema";
@@ -647,12 +646,6 @@ export const insertActionLogForRecordBidActivity = (
   client: Pick<DrizzleClient, "insert">,
   log: typeof actionLog.$inferInsert,
 ) => client.insert(actionLog).values(log);
-
-/** Build the `notification` insert for `recordBidActivity`. */
-export const insertNotificationForRecordBidActivity = (
-  client: Pick<DrizzleClient, "insert">,
-  outbid: typeof notification.$inferInsert,
-) => client.insert(notification).values(outbid);
 
 /** Build the matching auction-ID subquery so callers can compose it without an extra database round trip. */
 export const fetchAuctionListingIds = (
