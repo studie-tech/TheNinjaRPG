@@ -114,6 +114,31 @@ describe("game settings sections", () => {
     expect(screen.queryByLabelText(SIDEBARS)).toBeNull();
   });
 
+  it("labels both effects volume sliders when the sound panel and quick controls are open", async () => {
+    renderInAudio(
+      <>
+        <GameSettingsPanel section="audio" />
+        <GameSettingsPopover section="audio" />
+      </>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
+    });
+    const sliders = screen.getAllByRole("slider", {
+      name: /^Effects volume\s*80%$/,
+    });
+    expect(sliders).toHaveLength(2);
+
+    fireEvent.change(sliders[1]!, { target: { value: "45" } });
+    expect(
+      screen.getAllByRole("slider", { name: /^Effects volume\s*45%$/ }),
+    ).toHaveLength(2);
+    expect(sliders.map((slider) => (slider as HTMLInputElement).value)).toEqual([
+      "45",
+      "45",
+    ]);
+  });
+
   it("shows only layout and display controls for the display section", () => {
     renderInAudio(<GameSettingsPanel section="display" />);
     expect(screen.getByLabelText("Lighter layout")).toBeTruthy();

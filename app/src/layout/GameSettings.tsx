@@ -502,6 +502,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   onNavigate,
   section = "all",
 }) => {
+  const sfxVolumeId = useId();
   const {
     audioEnabled,
     setAudioEnabled,
@@ -627,14 +628,14 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
         </div>
         {(sfxOn || buttonSfxOn) && (
           <div className="space-y-2 pb-2">
-            <label htmlFor="sfxVolume" className="block text-sm">
+            <label htmlFor={sfxVolumeId} className="block text-sm">
               Effects volume{" "}
               <span className="text-muted-foreground float-right tabular-nums">
                 {Math.round(sfxVolume * 100)}%
               </span>
             </label>
             <UncontrolledSliderField
-              id="sfxVolume"
+              id={sfxVolumeId}
               label=""
               value={Math.round(sfxVolume * 100)}
               min={0}
