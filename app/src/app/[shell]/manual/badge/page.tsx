@@ -42,8 +42,10 @@ export default function ManualBadges() {
   const { mutate: create, isPending: load1 } = api.badge.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await refetch();
-      router.push(`/manual/badge/edit/${data.message}`);
+      if (data.success) {
+        await refetch();
+        router.push(`/manual/badge/edit/${data.message}`);
+      }
     },
   });
 

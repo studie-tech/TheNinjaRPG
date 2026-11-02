@@ -54,8 +54,10 @@ export default function ManualJutsus() {
   const { mutate: create, isPending: load1 } = api.jutsu.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await refetch();
-      router.push(`/manual/jutsu/edit/${data.message}`);
+      if (data.success) {
+        await refetch();
+        router.push(`/manual/jutsu/edit/${data.message}`);
+      }
     },
   });
 

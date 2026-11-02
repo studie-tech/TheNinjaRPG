@@ -50,8 +50,10 @@ export default function ManualQuests() {
   const { mutate: create, isPending: load1 } = api.quests.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await refetch();
-      router.push(`/manual/quest/edit/${data.message}`);
+      if (data.success) {
+        await refetch();
+        router.push(`/manual/quest/edit/${data.message}`);
+      }
     },
   });
 

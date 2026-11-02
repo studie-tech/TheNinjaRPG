@@ -65,8 +65,10 @@ export default function ManualAI() {
   const { mutate: create, isPending: load1 } = api.profile.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await refetch();
-      router.push(`/manual/ai/edit/${data.message}`);
+      if (data.success) {
+        await refetch();
+        router.push(`/manual/ai/edit/${data.message}`);
+      }
     },
   });
 
