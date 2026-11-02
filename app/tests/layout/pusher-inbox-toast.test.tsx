@@ -39,6 +39,8 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
     };
   } as never);
   const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  // Another suite's module mock may already be the spied function; count only this test's calls.
+  showToast.mockClear();
   let pathname = "/profile";
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
 
