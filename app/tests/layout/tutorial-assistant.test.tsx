@@ -56,7 +56,6 @@ vi.mock("@/layout/Logbook", () => ({ useCheckRewards: () => {
   return { checkRewards: vi.fn(), isCheckingRewards: false };
 } }));
 vi.mock("@/layout/Image", () => ({ default: () => null }));
-vi.mock("@/components/ui/sortable-list", () => ({ SortableList: () => null }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: dialogContent, DialogDescription: dialogContent, DialogHeader: dialogContent, DialogTitle: dialogContent };
 const componentSpies: { mockRestore: () => void }[] = [];
