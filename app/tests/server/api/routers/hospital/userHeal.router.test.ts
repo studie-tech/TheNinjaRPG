@@ -519,6 +519,12 @@ describeWithDatabase("hospital healing another user", () => {
       "event",
       expect.objectContaining({ type: "userMessage" }),
     );
+    // The map receives the healed state, not the pre-heal snapshot.
+    expect(trigger).toHaveBeenCalledWith(
+      expect.any(String),
+      "event",
+      expect.objectContaining({ userId: TARGET_ID, curHealth: 1000 }),
+    );
   });
 
   it("settles a hospitalized target's Energy before resetting its recovery clock", async () => {
