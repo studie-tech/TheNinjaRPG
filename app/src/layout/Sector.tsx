@@ -2855,7 +2855,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
 
   return (
     <Modal
-      isOpen={true}
+      isOpen={userData.status === "AWAKE"}
       title={`Scouting. Your position: [${props.hex.col}, ${props.hex.row}]`}
       setIsOpen={props.setIsOpen}
       isValid={false}

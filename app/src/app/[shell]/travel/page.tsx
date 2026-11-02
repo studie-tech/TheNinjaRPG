@@ -1100,10 +1100,12 @@ function Travel() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <UserRoundSearch
-                  className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
-                  onClick={() => setShowSorrounding((prev) => !prev)}
-                />
+                {userData.status === "AWAKE" && (
+                  <UserRoundSearch
+                    className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                    onClick={() => setShowSorrounding((prev) => !prev)}
+                  />
+                )}
               </>
             )}
             {activeTab === globalLink && (
