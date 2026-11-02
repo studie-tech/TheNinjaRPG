@@ -53,15 +53,25 @@ export const listEmailReminderForGET = (client: Pick<DrizzleClient, "query">) =>
     limit: 10,
   });
 
-/** Build the `emailReminder` update for `GET`, setting `latestRejoinRequest`, using predicates on `id`. */
+/**
+ * Build the `emailReminder` update for `GET`, setting `latestRejoinRequest`, guarded on
+ * `id` and the `latestRejoinRequest` value the reminder was listed with.
+ */
 export const updateEmailReminderForGET = (
   client: Pick<DrizzleClient, "update">,
-  reminder: { id: number },
+  reminder: { id: number; latestRejoinRequest: Date | null },
 ) =>
   client
     .update(emailReminder)
     .set({ latestRejoinRequest: new Date() })
-    .where(eq(emailReminder.id, reminder.id));
+    .where(
+      and(
+        eq(emailReminder.id, reminder.id),
+        reminder.latestRejoinRequest
+          ? eq(emailReminder.latestRejoinRequest, reminder.latestRejoinRequest)
+          : isNull(emailReminder.latestRejoinRequest),
+      ),
+    );
 
 /** Build the `userData` update for `GET`, setting `earnedExperience` and `petExperience`, using predicates on `userId`. */
 export const updateUserDataForGET = (
