@@ -69,10 +69,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
       setStartError(data.success ? "" : data.message);
-      await updateUser(data, {
-        revision: context?.userRevision,
-        achievementProgress: data.achievementProgress,
-      });
+      await updateUser(data, { revision: context?.userRevision });
       if (data.success && currentStep?.title === "Genin Exam") {
         await handleNextStepAsync();
       }

@@ -91,10 +91,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
     onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
-      await updateUser(data, {
-        revision: context?.userRevision,
-        achievementProgress: data.achievementProgress,
-      });
+      await updateUser(data, { revision: context?.userRevision });
     },
   });
 
@@ -139,10 +136,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
       setCommittedStart({ context: request.context, questId: request.questId });
       setPendingQuestId(null);
       void Promise.allSettled([
-        updateUser(data, {
-          revision: userRevision,
-          achievementProgress: data.achievementProgress,
-        }),
+        updateUser(data, { revision: userRevision }),
         util.quests.missionHall.invalidate(),
       ]);
       return true;
