@@ -637,7 +637,11 @@ export const startDeclaredWar = async (
   if (declaration.defenderKageId) notifyKageIds.push(declaration.defenderKageId);
   try {
     await Promise.all([
-      insertNotificationForStartDeclaredWar(client, notifyKageIds, warContent),
+      insertNotificationForStartDeclaredWar(
+        client,
+        declaration.initiatedByUserId,
+        warContent,
+      ),
       incrementNotificationCounters(client, notifyKageIds),
     ]);
   } catch (error) {

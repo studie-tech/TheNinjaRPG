@@ -905,15 +905,12 @@ export const insertWarForStartDeclaredWar = (
     defenderShrineStatus: "ACTIVE",
   });
 
-/** Build the `notification` insert for `startDeclaredWar`. */
+/** Build the `notification` insert for `startDeclaredWar`: one feed row authored by the declaring Kage. */
 export const insertNotificationForStartDeclaredWar = (
   client: Pick<DrizzleClient, "insert">,
-  notifyKageIds: string[],
+  authorId: string,
   warContent: string,
-) =>
-  client
-    .insert(notification)
-    .values(notifyKageIds.map((userId) => ({ userId, content: warContent })));
+) => client.insert(notification).values({ userId: authorId, content: warContent });
 
 /**
  * Build the `villageElderVote` update for `startApprovedVoteWar`, setting `status`,
@@ -1808,21 +1805,12 @@ export const insertVillageElderVoteForDeclareVillageWarOrRaid = (
     endsAt,
   });
 
-/** Build the `notification` insert for `declareVillageWarOrRaid`. */
+/** Build the `notification` insert for `declareVillageWarOrRaid`: one feed row authored by the Kage. */
 export const insertNotificationForDeclareVillageWarOrRaid = (
   client: Pick<DrizzleClient, "insert">,
   user: { userId: string },
-  kageContent: string,
-  elderUserIds: string[],
-  elderContent: string,
-) =>
-  client.insert(notification).values([
-    { userId: user.userId, content: kageContent },
-    ...elderUserIds.map((userId) => ({
-      userId,
-      content: elderContent,
-    })),
-  ]);
+  content: string,
+) => client.insert(notification).values({ userId: user.userId, content });
 
 /** Build the `warKill` listing for `getWarKills`, using predicates on `warId`. */
 export const listWarKillForGetWarKills = (
@@ -1892,18 +1880,15 @@ export const updateVillageElderVoteForCancelWarDeclaration = (
       ),
     );
 
-/** Build the `notification` insert for `cancelWarDeclaration`. */
+/** Build the `notification` insert for `cancelWarDeclaration`: one feed row authored by the Kage. */
 export const insertNotificationForCancelWarDeclaration = (
   client: Pick<DrizzleClient, "insert">,
-  notifyIds: string[],
-  user: { username: string },
+  user: { userId: string; username: string },
 ) =>
-  client.insert(notification).values(
-    notifyIds.map((userId) => ({
-      userId,
-      content: `${user.username} has cancelled the war declaration. No war will be started.`,
-    })),
-  );
+  client.insert(notification).values({
+    userId: user.userId,
+    content: `${user.username} has cancelled the war declaration. No war will be started.`,
+  });
 
 /** Build the `userData` selection for `voteOnWarDeclaration`, using predicates on `villageId`, `rank`, `isAi`. */
 export const selectUserDataForVoteOnWarDeclaration = (

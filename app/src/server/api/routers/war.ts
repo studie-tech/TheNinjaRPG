@@ -1319,18 +1319,10 @@ export const warRouter = createTRPCRouter({
         structure,
         endsAt,
       );
-      const elderContent = `${user.username} has submitted a war declaration against ${defenderVillage.name}. You have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const kageContent = `Your war declaration against ${defenderVillage.name} has been submitted. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
-      const elderUserIds = eligibleElders.map((e) => e.userId);
-      const allNotifyIds = [user.userId, ...elderUserIds];
+      const content = `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
+      const allNotifyIds = [user.userId, ...eligibleElders.map((e) => e.userId)];
       await Promise.all([
-        insertNotificationForDeclareVillageWarOrRaid(
-          ctx.drizzle,
-          user,
-          kageContent,
-          elderUserIds,
-          elderContent,
-        ),
+        insertNotificationForDeclareVillageWarOrRaid(ctx.drizzle, user, content),
         incrementNotificationCounters(ctx.drizzle, allNotifyIds),
       ]);
       return {
@@ -1839,7 +1831,7 @@ export const warRouter = createTRPCRouter({
       if (elders.length > 0) {
         const notifyIds = elders.map((e) => e.userId);
         await Promise.all([
-          insertNotificationForCancelWarDeclaration(ctx.drizzle, notifyIds, user),
+          insertNotificationForCancelWarDeclaration(ctx.drizzle, user),
           incrementNotificationCounters(ctx.drizzle, notifyIds),
         ]);
       }
