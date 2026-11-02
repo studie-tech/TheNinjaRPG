@@ -160,7 +160,8 @@ export const createWorldSprites = async (
     !game.signal.aborted &&
     descriptions.some(
       (description) =>
-        description.shadow && !(worldShadows && description.shadowCaster),
+        description.shadow &&
+        !(worldShadows?.kind === "physical" && description.shadowCaster),
     )
   ) {
     shadowLease = acquireSoftShadowTexture();
@@ -302,7 +303,7 @@ export const createWorldSprites = async (
       if (
         description.shadow &&
         shadowTexture &&
-        !(worldShadows && description.shadowCaster)
+        !(worldShadows?.kind === "physical" && description.shadowCaster)
       ) {
         if (!shadows) {
           shadows = new Container();
@@ -323,7 +324,7 @@ export const createWorldSprites = async (
         shadows.addChild(shadow);
       }
       let light: Sprite | undefined;
-      if (description.light && !worldShadows) {
+      if (description.light && worldShadows?.kind !== "physical") {
         if (!lights) {
           lights = new Container();
           lights.label = "scenery-lights";
@@ -334,7 +335,12 @@ export const createWorldSprites = async (
         light = new Sprite(lightTexture);
         light.anchor.set(0.5);
         light.position.set(characterFoot?.x ?? description.x, footY);
-        light.width = description.size * description.light;
+        light.width =
+          description.size *
+          description.light *
+          (worldShadows?.kind === "projected" && description.shadowCaster === "building"
+            ? 2.2
+            : 1);
         light.height = light.width * 0.5;
         light.tint = 0xffaa52;
         light.blendMode = "add";
@@ -461,12 +467,13 @@ export const createWorldSprites = async (
       layers.ui.sortRenderLayerChildren();
     },
     setLighting: (brightness: number) => {
-      if (worldShadows) return;
+      if (worldShadows?.kind === "physical") return;
       brightness = Math.round(brightness * 256) / 256;
       if (lastBrightness === brightness) return;
       lastBrightness = brightness;
       const { night, tint } = worldLighting(brightness);
-      if (lights) lights.alpha = night * 0.3;
+      if (lights)
+        lights.alpha = night * (worldShadows?.kind === "projected" ? 0.8 : 0.3);
       for (const entry of entries) {
         if (!entry.description.mask && !entry.description.unlit)
           entry.sprite.tint = Color.shared
@@ -501,6 +508,7 @@ export const createWorldSprites = async (
         padding,
       };
       viewport = next;
+      let membershipChanged = false;
       // Offscreen sprites keep their decoded lease but do not upload or join a GPU batch.
       for (const entry of entries) {
         entry.sprite.renderable =
@@ -516,6 +524,27 @@ export const createWorldSprites = async (
           ) && entry.sprite.alpha > 0;
         if (entry.shadow) entry.shadow.renderable = entry.sprite.renderable;
         if (entry.light) entry.light.renderable = entry.sprite.renderable;
+        if (
+          attached &&
+          !entry.description.mask &&
+          !entry.description.unlit &&
+          entry.sprite.parent === container
+        ) {
+          const layer = attached.world;
+          if (entry.sprite.renderable && entry.sprite.parentRenderLayer !== layer) {
+            layer.attach(entry.sprite);
+            membershipChanged = true;
+          } else if (
+            !entry.sprite.renderable &&
+            entry.sprite.parentRenderLayer === layer
+          ) {
+            layer.detach(entry.sprite);
+            membershipChanged = true;
+          }
+        }
+      }
+      if (membershipChanged) {
+        attached?.world.sortRenderLayerChildren();
       }
     },
     animate: (
@@ -540,7 +569,13 @@ export const createWorldSprites = async (
         for (const entry of groundDetails) {
           const pixels = Math.abs(entry.sprite.height) * zoom;
           if (attached && !entry.description.mask && !entry.description.unlit) {
-            if (attached.ground && pixels <= WORLD_DETAIL.groundLightingPixels[0]) {
+            if (
+              attached.ground &&
+              pixels <=
+                (worldShadows?.kind === "projected"
+                  ? WORLD_DETAIL.projectedGroundPixels
+                  : WORLD_DETAIL.groundLightingPixels[0])
+            ) {
               // Retained ground instructions keep actor motion from repacking flat cover.
               flatGround ??= new Container({
                 isRenderGroup: true,

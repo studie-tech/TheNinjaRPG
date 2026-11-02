@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
-import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, Shader, Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, RenderLayer, Shader, Sprite, Texture } from "pixi.js";
 import sharp from "sharp";
 import { WORLD_CYCLE_SECONDS, WORLD_CYCLE_TRANSITION_SECONDS, WORLD_DAY_SECONDS } from "@/drizzle/constants";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -13,7 +13,9 @@ import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldShadows } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
+import { ensureDom } from "../../setup/dom.mjs";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
@@ -1057,5 +1059,30 @@ describe("physical world lighting", () => {
     f.shadows.update(worldSunlight(), viewport);
     expect(f.render).toHaveBeenCalledTimes(draws);
     expect(() => { release(); release(); }).not.toThrow();
+  });
+});
+
+
+describe("scenery draw membership", () => {
+  it("removes offscreen artwork from depth scans and restores its owned sprite when panning back", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    try {
+      const art = await createWorldSprites(f.game, [
+        { id: "near", kind: "decoration", image: "near.png", x: 0, y: 0, size: 10, groundY: 0 },
+        { id: "far", kind: "decoration", image: "far.png", x: 400, y: 0, size: 10, groundY: 0 },
+      ]);
+      const depth = new RenderLayer(), ui = new RenderLayer();
+      f.world.addChild(depth, ui); f.parent.addChild(art.container);
+      art.attachLayers({ world: depth, ui });
+      const near = art.entries[0]!.sprite, far = art.entries[1]!.sprite;
+      art.setViewport({ minX: -20, maxX: 20, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([near]);
+      expect(far.parent).toBe(art.container);
+      expect(far.destroyed).toBe(false);
+      art.setViewport({ minX: 380, maxX: 420, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([far]);
+      art.setViewport({ minX: -20, maxX: 20, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([near]);
+    } finally { f.dispose(); source.dispose(); }
   });
 });

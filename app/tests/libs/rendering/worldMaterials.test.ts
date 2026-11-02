@@ -14,7 +14,7 @@ import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
 import { acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
-import { worldSunlight } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
 
 const material = (width: number, height: number): WorldMaterial => {

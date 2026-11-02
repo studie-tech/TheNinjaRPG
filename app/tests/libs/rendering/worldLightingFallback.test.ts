@@ -123,6 +123,7 @@ const drawOrder = (stage: Container) => {
       );
     } },
     blendMode: { pushBlendMode() {}, popBlendMode() {} },
+    filter: { push() {}, pop() {} },
   } };
   stage.collectRenderables(
     {} as Parameters<Container["collectRenderables"]>[0],
@@ -338,7 +339,7 @@ describe("world lighting precision fallback", () => {
     expectAmbientOnly();
   });
 
-  it("retains physical filters, terrain receivers and cycle updates when highp is supported", async () => {
+  it("uses projected travel lighting without physical targets when highp is supported", async () => {
     vi.spyOn(pixi, "getMaxFragmentPrecision").mockReturnValue("highp");
     vi.spyOn(sectorSprites, "sectorSpriteDescriptions").mockReturnValue([]);
     const fixture = rendererFixture(), snapshot = travelSnapshot();
@@ -347,14 +348,12 @@ describe("world lighting precision fallback", () => {
     snapshot.lightDate = new Date((WORLD_DAY_SECONDS + 10) * 1000);
     const scene = await startTravel(snapshot);
     fixture.tick();
-    expect(worldShadows.createWorldShadows).toHaveBeenCalledTimes(1);
-    expect(RenderTexture.create).toHaveBeenCalled();
-    expect(worldOcclusion.createWorldOcclusion).toHaveBeenCalledTimes(2);
-    expect(fixture.game.renderer.render).toHaveBeenCalled();
-    const physical = fixture.game.stage.getChildByLabel("physical-world", true)!;
-    expect(physical.filters).toHaveLength(1);
-    const filter = (physical.filters as pixi.Filter[])[0]!;
-    expect(filter.resources.look.uniforms.uDay).toBe(0);
-    expect(terrainAmbient(scene.sectors.get(map.sector)!.terrain.container)).toEqual([1, 1, 1]);
+    expectAmbientOnly();
+    const projected = fixture.game.stage.getChildByLabel("projected-world", true)!;
+    expect(projected.filters).toHaveLength(1);
+    const filter = (projected.filters as pixi.Filter[])[0]!;
+    expect(filter.enabled).toBe(true);
+    expect(filter.resources.night.uniforms.uNight).toBe(1);
+    expect(terrainAmbient(scene.sectors.get(map.sector)!.terrain.container)[0]).toBeLessThan(1);
   });
 });

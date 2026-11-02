@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Shader, Texture } from "pixi.js";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { MaterialFrame, WorldMaterial } from "@/libs/rendering/worldMaterials";
-import { worldSunlight } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows, type SunCaster } from "@/libs/rendering/worldSunShadows";
 
 const fixture = (instanced = false) => {

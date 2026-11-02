@@ -38,7 +38,8 @@ import {
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldShadows } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
   getWorldWeather,

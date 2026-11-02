@@ -1,6 +1,6 @@
 import alea from "alea";
 import type { Grid } from "honeycomb-grid";
-import { Container, getMaxFragmentPrecision, RenderLayer } from "pixi.js";
+import { Container, RenderLayer } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -10,6 +10,7 @@ import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
+import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import { createGameRenderer, type GameRenderer } from "@/libs/rendering/runtime";
 import {
   createTravelActors,
@@ -33,7 +34,7 @@ import {
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
   getWorldWeather,
@@ -94,14 +95,10 @@ export const createTravelScene = async (options: {
       terrainDrawLayer = new RenderLayer(),
       artLayer = new Container(),
       groundArtLayer = new RenderLayer(),
-      depthLayer = new RenderLayer({ sortableChildren: true }),
+      depthLayer = new RenderLayer(),
       uiLayer = new RenderLayer();
-    // Packed geometry decoding needs highp; mediump devices use the primitives' ambient lighting.
-    const shadows =
-      getMaxFragmentPrecision() === "highp"
-        ? createWorldShadows(game, world)
-        : undefined;
-    const lightingLayer = shadows?.container ?? new Container();
+    const shadows = createProjectedWorldLighting(game, world);
+    const lightingLayer = shadows.container;
     const weather = createWorldWeather(game, options.lightLayout);
     const sceneryBounds = new WeakMap<Container, WorldBounds>();
     const route = createTravelPath(),
@@ -111,7 +108,7 @@ export const createTravelScene = async (options: {
         shadows,
         sceneryBounds,
       );
-    // Ownership stays with sector scopes; their physical draw layers share one lighting pass.
+    // Sector scopes own artwork while terrain, scenery and actors share one lit world.
     lightingLayer.addChild(
       terrainDrawLayer,
       groundArtLayer,
@@ -509,9 +506,9 @@ export const createTravelScene = async (options: {
             transform();
             setBackground(entry.map);
           }
-          // Physical lighting receives neutral albedo; the frame loop applies ambient-only lighting.
+          // The scene applies the cycle tint to neutral terrain before drawing.
           terrain.setLighting(1);
-          if (shadows) scope.own(shadows.registerTerrain(terrain.container, data));
+          scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
           art.container.position.copyFrom(position);
           terrainLayer.addChild(terrain.container);
@@ -676,18 +673,16 @@ export const createTravelScene = async (options: {
         // Terrain needs only one tile of edge clearance; tall scenery retains its wider margin.
         rendered.terrain.container.renderable =
           !viewport || boundsOverlap(bounds, viewport, rendered.margin / 3);
-        if (visible) {
-          if (camera)
-            rendered.art.setViewport(
-              {
-                minX: camera.x - halfWidth - rendered.position.x,
-                maxX: camera.x + halfWidth - rendered.position.x,
-                minY: camera.y - halfHeight - rendered.position.y,
-                maxY: camera.y + halfHeight - rendered.position.y,
-              },
-              Math.max(6, game.renderer.width * 0.0035) / scale(),
-            );
-        }
+        if (camera)
+          rendered.art.setViewport(
+            {
+              minX: camera.x - halfWidth - rendered.position.x,
+              maxX: camera.x + halfWidth - rendered.position.x,
+              minY: camera.y - halfHeight - rendered.position.y,
+              maxY: camera.y + halfHeight - rendered.position.y,
+            },
+            Math.max(6, game.renderer.width * 0.0035) / scale(),
+          );
         if (visible || refreshDetails)
           rendered.art.animate(frame, scale(), null, breeze);
       }
@@ -792,18 +787,15 @@ export const createTravelScene = async (options: {
         world.position,
         snapshot.brightness,
       );
-      // Physical lighting excludes the canvas UI and the actors' identity markers.
+      // World lighting excludes the canvas UI and the actors' identity markers.
       game.canvas.style.filter = "none";
-      if (shadows) {
-        if (viewport)
-          shadows.update(worldSunlight(snapshot.lightDate), viewport, breeze);
-      } else {
-        for (const rendered of sectors.values()) {
-          rendered.terrain.setLighting(snapshot.brightness);
-          rendered.art.setLighting(snapshot.brightness);
-        }
-        actors.setLighting(snapshot.brightness);
+      if (viewport)
+        shadows.update(worldSunlight(snapshot.lightDate, 60_000), viewport, breeze);
+      for (const rendered of sectors.values()) {
+        rendered.terrain.setLighting(snapshot.brightness);
+        rendered.art.setLighting(snapshot.brightness);
       }
+      actors.setLighting(snapshot.brightness);
     });
     await updateWindow(true);
     return {

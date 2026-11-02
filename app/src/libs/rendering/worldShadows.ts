@@ -15,8 +15,7 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
-import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
-import { getWorldCycleBrightness, getWorldCyclePosition } from "@/libs/dayNight";
+import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
@@ -37,6 +36,7 @@ import {
   worldMaterialFrame,
 } from "@/libs/rendering/worldMaterials";
 import { createWorldOcclusion, type Occluder } from "@/libs/rendering/worldOcclusion";
+import type { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows, type SunCaster } from "@/libs/rendering/worldSunShadows";
 import {
   MAX_SMALL_WORLD_WIND,
@@ -46,33 +46,6 @@ import {
   worldWindGroup,
   worldWindShader,
 } from "@/libs/rendering/worldWind";
-
-/** East (+X), south (−Y), west (−X) follow the existing server-corrected cycle. Null freezes noon. */
-export const worldSunlight = (date: Date | null = null) => {
-  const cycle = date ? getWorldCyclePosition(date) : null;
-  const brightness = date ? getWorldCycleBrightness(date) : WORLD_DAY_BRIGHTNESS;
-  const day = Math.max(
-    0,
-    Math.min(
-      1,
-      (brightness - WORLD_NIGHT_BRIGHTNESS) /
-        (WORLD_DAY_BRIGHTNESS - WORLD_NIGHT_BRIGHTNESS),
-    ),
-  );
-  const progress = !cycle
-    ? 0.5
-    : cycle.phase === "day"
-      ? cycle.phaseOffset / cycle.phaseDuration
-      : day > 0
-        ? 0
-        : 1;
-  const angle = Math.PI * progress;
-  const x = Math.cos(angle),
-    y = -Math.sin(angle) * 0.65,
-    z = 0.28 + Math.sin(angle) * 0.8;
-  const length = Math.hypot(x, y, z);
-  return { x: x / length, y: y / length, z: z / length, day };
-};
 
 /**
  * Physical albedo, matched receiver data and bounded lighting share one composite.
@@ -353,6 +326,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     if (!container.destroyed) container.destroy({ children: true });
   });
   return {
+    kind: "physical" as const,
     container,
     /**
      * Shares decoded materials and releases pending leases when an owner disappears.
@@ -1793,7 +1767,9 @@ export type WorldShadowShape =
   | "wall"
   | "character"
   | "column";
-export type WorldShadows = ReturnType<typeof createWorldShadows>;
+export type WorldShadows =
+  | ReturnType<typeof createWorldShadows>
+  | ProjectedWorldLighting;
 type Caster = {
   character?: Container;
   sceneryOwner?: Container;
