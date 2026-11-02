@@ -290,7 +290,6 @@ export default function OccupationCrafting() {
     };
   });
   const rankCappedItems = imbueOptions.filter((option) => option.rankCapMessage);
-  const hasImbueTargets = imbueOptions.some((option) => option.canAddMoreCrystals);
 
   // Guard
   if (userData?.occupation !== "CRAFTING") return null;
@@ -683,11 +682,6 @@ export default function OccupationCrafting() {
                   <>
                     <div>
                       <h4 className="mb-2 font-medium">Select Item to Imbue</h4>
-                      {!hasImbueTargets && (
-                        <p className="mb-2 text-muted-foreground text-sm">
-                          None of your items can take another crystal right now.
-                        </p>
-                      )}
                       <ActionSelector
                         items={imbueOptions
                           .filter((option) => option.canAddMoreCrystals)
