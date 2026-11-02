@@ -58,7 +58,7 @@ export const QuestTeams = ({
         utils.coop.quest.overview.invalidate(),
         utils.quests.specificQuests.invalidate(),
         utils.quests.getPendingRewardChoices.invalidate(),
-        updateUser(undefined),
+        updateUser(undefined, { revision: undefined }),
       ]);
     }
   };
@@ -91,7 +91,7 @@ export const QuestTeams = ({
     if (questId && data?.current && data.current.questId !== questId) return;
     if (previousTeamVersion.current && previousTeamVersion.current !== teamVersion)
       void Promise.all([
-        updateUser(undefined),
+        updateUser(undefined, { revision: undefined }),
         utils.quests.getPendingRewardChoices.invalidate(),
       ]).catch(onError);
     previousTeamVersion.current = teamVersion;
