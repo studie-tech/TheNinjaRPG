@@ -28,13 +28,7 @@ export default function MapTilesets() {
   const [deletingAssetIds, setDeletingAssetIds] = useState<string[]>([]);
   const deletingAssetIdsRef = useRef(new Set<string>());
 
-  const {
-    data: assets,
-    refetch,
-    isPending,
-  } = api.mapAsset.getAll.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: assets, refetch, isPending } = api.mapAsset.getAll.useQuery();
 
   const { mutate: create, isPending: isCreating } = api.mapAsset.create.useMutation({
     onSuccess: async (data) => {
@@ -274,11 +268,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const createInFlightRef = useRef(false);
   const [deletingTerrainIds, setDeletingTerrainIds] = useState<string[]>([]);
   const deletingTerrainIdsRef = useRef(new Set<string>());
-  const {
-    data: terrains,
-    refetch,
-    isPending,
-  } = api.mapTerrain.getAll.useQuery(undefined, { enabled: canEdit });
+  const { data: terrains, refetch, isPending } = api.mapTerrain.getAll.useQuery();
 
   const { mutate: create, isPending: isCreating } = api.mapTerrain.create.useMutation({
     onSuccess: async (data) => {
