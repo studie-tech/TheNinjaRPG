@@ -931,7 +931,7 @@ export const useCheckRewards = () => {
             ? `Finished: ${quest.name}`
             : `Reward from ${quest.name}`;
           if (resolved || showToast)
-            showRewardToast(notifications, rewards, message, false, quest, badges);
+            showRewardToast(notifications, rewards, message, resolved, quest, badges);
         }
         // Only the academy tutorial needs refreshed quest lists before its next highlight.
         const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
