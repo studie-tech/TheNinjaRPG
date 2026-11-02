@@ -177,19 +177,23 @@ export const getShrineBoost = (
  * level of the structure.
  *
  * @param boost - The boost value to calculate the interest rate.
- * @returns The calculated bank interest rate.
+ * @param user - Adds the federal supporter bonus when given.
+ * @returns The daily bank interest rate in percent.
  */
-export const calcBankInterest = (boost: number, user?: UserData) => {
+export const calcBankInterest = (
+  boost: number,
+  user?: Pick<UserData, "staffAccount" | "federalStatus">,
+) => {
   const baseFactor = boost > 1 ? 1 + (boost - 1) * 0.1 : 1;
   if (!user) return baseFactor;
   const status = getUserFederalStatus(user);
   switch (status) {
     case "NORMAL":
-      return baseFactor + FED_NORMAL_BANK_INTEREST / 100;
+      return baseFactor + FED_NORMAL_BANK_INTEREST;
     case "SILVER":
-      return baseFactor + FED_SILVER_BANK_INTEREST / 100;
+      return baseFactor + FED_SILVER_BANK_INTEREST;
     case "GOLD":
-      return baseFactor + FED_GOLD_BANK_INTEREST / 100;
+      return baseFactor + FED_GOLD_BANK_INTEREST;
   }
   return baseFactor;
 };
