@@ -10,6 +10,7 @@ import * as dialog from "@/components/ui/dialog";
 import * as ContentBox from "@/layout/ContentBox";
 import * as RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
+import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { ensureDom } from "../../setup/dom.mjs";
@@ -46,7 +47,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ poll: { getPolls: { invalidate } } }),
     poll: {
-      getPolls: { useQuery: () => ({ data: { data: [poll] }, isLoading: false }) },
+      getPolls: { useInfiniteQuery: () => ({ data: { pages: [{ data: [poll], nextCursor: null }] }, isLoading: false, fetchNextPage: async () => undefined, hasNextPage: false }) },
       getUserVote: { useQuery: () => ({ data: null }) },
       createPoll: { useMutation: (options: UseMutationOptions<Result, Error, CreateInput>) => useMutation({ ...options, mutationFn: create }) },
       updatePoll: { useMutation: (options: UseMutationOptions<Result, Error, UpdateInput>) => useMutation({ ...options, mutationFn: update }) },
@@ -55,6 +56,7 @@ beforeEach(() => {
       deletePollOption: { useMutation: noMutation },
     },
   });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "admin", role: "CONTENT-ADMIN" } } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(RichInput, "default").mockImplementation(({ control, id }) => (

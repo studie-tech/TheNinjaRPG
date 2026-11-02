@@ -7,6 +7,7 @@ import PollsPage from "@/app/[shell]/manual/polls/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
+import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
 import { ensureDom } from "../setup/dom.mjs";
@@ -25,10 +26,11 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
     poll: {
-      getPolls: { useQuery: () => ({ data: { data: [] }, isLoading: false }) },
+      getPolls: { useInfiniteQuery: () => ({ data: { pages: [{ data: [], nextCursor: null }] }, isLoading: false, fetchNextPage: async () => undefined, hasNextPage: false }) },
       createPoll: { useMutation: () => ({ mutate: createPoll, isPending: false }) },
     },
   });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "OWNER" } } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <>{children}</>);
   vi.spyOn(RichInput, "default").mockImplementation(({ control, id }) => (
