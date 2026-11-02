@@ -457,30 +457,28 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   } = useDungeonAvailability(sector, userData?.sector === sector, timeDiff);
   const dungeonStructures = useMemo(
     () =>
-      (sectorDungeons ?? [])
-        .filter((d) => d.content.sector === sector)
-        .map((d) => ({
-          ...createGenericStructure({
-            name: d.content.name,
-            route: "/dungeon",
-            image:
-              sectorWindow.mapAssets.find(
-                (asset) => asset.id === d.content.structureAssetId,
-              )?.imageUrl ??
-              WAR_SHRINE_IMAGE_BY_BIOME[
-                d.content.background === "default"
+      (sectorDungeons ?? []).map((d) => ({
+        ...createGenericStructure({
+          name: d.content.name,
+          route: "/dungeon",
+          image:
+            sectorWindow.mapAssets.find(
+              (asset) => asset.id === d.content.structureAssetId,
+            )?.imageUrl ??
+            WAR_SHRINE_IMAGE_BY_BIOME[
+              d.content.background === "default"
+                ? "ground"
+                : d.content.background === "arena"
                   ? "ground"
-                  : d.content.background === "arena"
-                    ? "ground"
-                    : d.content.background
-              ],
-            longitude: d.content.longitude,
-            latitude: d.content.latitude,
-          }),
-          id: `dungeon-${d.id}`,
-          hasPage: d.content.structureAssetId ? 0 : 1,
-        })),
-    [sectorDungeons, sector, sectorWindow.mapAssets],
+                  : d.content.background
+            ],
+          longitude: d.content.longitude,
+          latitude: d.content.latitude,
+        }),
+        id: `dungeon-${d.id}`,
+        hasPage: d.content.structureAssetId ? 0 : 1,
+      })),
+    [sectorDungeons, sectorWindow.mapAssets],
   );
   const firstDungeon = dungeonStructures[0];
   // Add dynamic entrances and the shrine without mutating cached village structures.
