@@ -15,6 +15,7 @@ import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import { useConversationViewing } from "@/hooks/useConversationViewing";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import ContentBox from "@/layout/ContentBox";
@@ -155,6 +156,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     placeholderData: (previousData) => previousData,
   });
   const conversation = comments?.pages[0]?.convo;
+  useConversationViewing(conversation?.id, isPageActive);
   const canComposeDespiteRestriction =
     !!userData &&
     !!conversation?.isStaffAvailable &&

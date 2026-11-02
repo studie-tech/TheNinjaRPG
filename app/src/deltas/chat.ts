@@ -31,3 +31,34 @@ export const applyConversationRead = (
       ? { ...conversation, lastReadAt }
       : conversation,
   );
+
+/** Register or release one visible surface without clearing another surface's ownership. */
+export const updateConversationViewCount = (
+  views: Record<string, number>,
+  conversationId: string,
+  change: 1 | -1,
+): Record<string, number> => {
+  const count = (views[conversationId] ?? 0) + change;
+  if (count > 0) return { ...views, [conversationId]: count };
+  const { [conversationId]: _released, ...remaining } = views;
+  return remaining;
+};
+
+/** Count a public mention addressed to the player in an unseen conversation. */
+export const addConversationMention = (
+  mentions: Record<string, number>,
+  conversationId: string,
+): Record<string, number> => ({
+  ...mentions,
+  [conversationId]: (mentions[conversationId] ?? 0) + 1,
+});
+
+/** Clear mentions for the conversation the player can see, preserving other badges. */
+export const clearConversationMentions = (
+  mentions: Record<string, number>,
+  conversationId: string,
+): Record<string, number> => {
+  if (!mentions[conversationId]) return mentions;
+  const { [conversationId]: _seen, ...remaining } = mentions;
+  return remaining;
+};

@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { ArrowDown, Reply, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useConversation } from "@/layout/Conversation";
 import { ConversationComments } from "@/layout/ConversationComments";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
-import { type ChatStartUser, chatDraftsAtom, chatViewingAtom } from "@/libs/chatPanel";
+import { type ChatStartUser, chatDraftsAtom } from "@/libs/chatPanel";
 import { stripBlockquotes } from "@/utils/sanitize";
 
 /**
@@ -78,14 +78,9 @@ export function ChatConversation({
   const newestIsOwn = !!userData && allComments?.[0]?.authorId === userData.userId;
   const loadedCount = allComments?.length ?? 0;
 
-  // While shown, this conversation's messages and pings count as seen.
-  const setViewing = useSetAtom(chatViewingAtom);
   useEffect(() => {
-    if (!conversation?.id) return;
-    onConversationLoaded?.(conversation.id);
-    setViewing(conversation.id);
-    return () => setViewing(undefined);
-  }, [conversation?.id, onConversationLoaded, setViewing]);
+    if (conversation?.id) onConversationLoaded?.(conversation.id);
+  }, [conversation?.id, onConversationLoaded]);
 
   // Keep the reader's place: follow new messages only when already at the bottom,
   // and hold the visible message steady when older history loads above it.

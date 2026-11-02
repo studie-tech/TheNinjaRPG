@@ -35,8 +35,8 @@ export const chatPanelAtom = atom<{
 /** Unsent text per conversation, kept while the panel is closed or switches chats. */
 export const chatDraftsAtom = atom<Record<string, string>>({});
 
-/** Conversation currently on screen in the panel; its activity is already seen. */
-export const chatViewingAtom = atom<string | undefined>(undefined);
+/** Number of visible chat surfaces showing each conversation. */
+export const chatViewedConversationsAtom = atom<Record<string, number>>({});
 
 /** Serialize full-list preference saves across every chat surface for the same account. */
 export const chatMutePendingAtom = atom<Record<string, boolean>>({});

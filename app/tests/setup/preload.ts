@@ -23,6 +23,7 @@ import {
 // Bun preserves loaded exports when a suite supplies a partial module mock.
 // Load the toast module before any suite can hide exports needed by another suite.
 import * as toast from "@/libs/toast";
+import * as userContext from "@/utils/UserContext";
 
 // UI suites can restore real components and feedback after another suite mocks their module.
 export const actualDialog = { ...dialog };
@@ -32,6 +33,7 @@ export const actualRichInput = RichInput;
 export const actualItemWithEffects = ItemWithEffects;
 export const actualContentImageSelector = ContentImageSelector;
 export const actualShowMutationToast = toast.showMutationToast;
+export const actualUserContext = { ...userContext };
 
 // Cron SQL suites restore real timers after unit suites replace the module exports.
 export const actualGameSettings = { ...gamesettings };

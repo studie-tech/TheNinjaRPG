@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { createTRPCReact } from "@trpc/react-query";
+import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import { getDefaultStore } from "jotai";
@@ -48,6 +48,10 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
 
   const queryClient = new QueryClient();
   queryClients.push(queryClient);
+  queryClient.setQueryData(getQueryKey(testApi.profile.getUser, undefined, "query"), {
+    userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
+    notifications: [],
+  });
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
     <testApi.Provider client={trpcClient} queryClient={queryClient}>
@@ -82,6 +86,10 @@ it("counts only public conversation pings as Tavern notifications", async () => 
   store.set(chatMentionsAtom, {});
   const queryClient = new QueryClient();
   queryClients.push(queryClient);
+  queryClient.setQueryData(getQueryKey(testApi.profile.getUser, undefined, "query"), {
+    userData: { userId: "player", chatMuted: false, mutedConversationIds: [] },
+    notifications: [],
+  });
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
     <testApi.Provider client={trpcClient} queryClient={queryClient}>

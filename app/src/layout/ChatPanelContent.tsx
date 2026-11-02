@@ -282,14 +282,11 @@ function TavernPane({
     tavern: string;
     id: string;
   }>();
-  const setMentions = useSetAtom(chatMentionsAtom);
-
   const onConversationLoaded = useCallback(
     (id: string) => {
       setLoadedConversation({ tavern, id });
-      setMentions((current) => (current[id] ? { ...current, [id]: 0 } : current));
     },
-    [tavern, setMentions],
+    [tavern],
   );
 
   if (!userData || isLoading) return <Loader explanation="Loading tavern" />;

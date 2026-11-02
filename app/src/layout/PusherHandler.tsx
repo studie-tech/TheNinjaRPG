@@ -2,11 +2,11 @@
 
 import { useStore } from "jotai";
 import Pusher from "pusher-js";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
-import { addInboxNotification } from "@/deltas/chat";
+import { addConversationMention, addInboxNotification } from "@/deltas/chat";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
@@ -14,7 +14,7 @@ import Link from "@/layout/Link";
 import {
   chatMentionsAtom,
   chatPanelAtom,
-  chatViewingAtom,
+  chatViewedConversationsAtom,
   isConversationMuted,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
@@ -59,9 +59,42 @@ export const usePusherHandler = (
   // Pusher connection
   const [pusher, setPusher] = useState<Pusher | undefined>(undefined);
 
+  // Pending chat events belong to the account, including across membership-channel rebinding.
+  const notificationSession = useRef<symbol | undefined>(undefined);
+  useEffect(() => {
+    notificationSession.current = Symbol();
+    return () => {
+      notificationSession.current = undefined;
+    };
+  }, [userId]);
+
   // Listen on user channel for live updates on things
   useEffect(() => {
     if (userId) {
+      const session = notificationSession.current;
+      const canNotifyConversation = (conversationId: string | undefined) => {
+        const user = utils.profile.getUser.getData()?.userData;
+        return (
+          !!session &&
+          notificationSession.current === session &&
+          user?.userId === userId &&
+          !isConversationMuted(user, conversationId) &&
+          (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
+        );
+      };
+      const resolveNotificationProfile = async (conversationId: string | undefined) => {
+        const wasCached = !!utils.profile.getUser.getData()?.userData;
+        if (!wasCached) {
+          try {
+            // Join the initial profile request so its loading and error state can settle normally.
+            await utils.profile.getUser.fetch(undefined, { staleTime: Infinity });
+          } catch {
+            // UserContext owns the profile failure and the page's recovery/redirect UX.
+            return;
+          }
+        }
+        return canNotifyConversation(conversationId) ? { wasCached } : undefined;
+      };
       // Pusher Channel
       const pusher = new Pusher(
         process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
@@ -166,20 +199,25 @@ export const usePusherHandler = (
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
           void utils.comments.getUserConversations.invalidate();
-          // Read mutes and the open panel at event time; this listener outlives renders.
-          const cachedUser = utils.profile.getUser.getData()?.userData;
-          const isViewing =
-            !!data.conversationId && store.get(chatViewingAtom) === data.conversationId;
-          if (!isConversationMuted(cachedUser, data.conversationId) && !isViewing) {
-            await utils.profile.getUser.cancel();
-            utils.profile.getUser.setData(undefined, (old) =>
-              old
-                ? {
-                    ...old,
-                    notifications: addInboxNotification(old.notifications),
-                  }
-                : old,
-            );
+          const profile = await resolveNotificationProfile(data.conversationId);
+          if (profile && canNotifyConversation(data.conversationId)) {
+            if (profile.wasCached) {
+              await utils.profile.getUser.cancel();
+              if (!canNotifyConversation(data.conversationId)) return;
+              utils.profile.getUser.setData(undefined, (old) =>
+                old?.userData?.userId === userId
+                  ? { ...old, notifications: addInboxNotification(old.notifications) }
+                  : old,
+              );
+            } else {
+              try {
+                // The initial snapshot may predate or include this event; reconcile instead of incrementing it.
+                await utils.profile.getUser.fetch(undefined, { staleTime: 0 });
+              } catch {
+                // The profile observer exposes the failed refresh; an eligible message can still show its toast.
+              }
+              if (!canNotifyConversation(data.conversationId)) return;
+            }
             if (!isOnInbox()) {
               showMutationToast({
                 success: true,
@@ -239,16 +277,15 @@ export const usePusherHandler = (
             ),
           });
         } else if (data.type === "pinged") {
-          const cachedUser = utils.profile.getUser.getData()?.userData;
           const conversationId = data.conversationId;
-          const isViewing =
-            !!conversationId && store.get(chatViewingAtom) === conversationId;
-          if (!isConversationMuted(cachedUser, conversationId) && !isViewing) {
+          if (
+            (await resolveNotificationProfile(conversationId)) &&
+            canNotifyConversation(conversationId)
+          ) {
             if (conversationId && data.isPublic) {
-              store.set(chatMentionsAtom, (old) => ({
-                ...old,
-                [conversationId]: (old[conversationId] ?? 0) + 1,
-              }));
+              store.set(chatMentionsAtom, (old) =>
+                addConversationMention(old, conversationId),
+              );
             }
             showMutationToast({
               success: true,

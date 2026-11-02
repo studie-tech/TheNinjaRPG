@@ -20,7 +20,7 @@ import * as modal from "@/layout/Modal";
 import * as richInput from "@/layout/RichInput";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
-import { chatDraftsAtom, chatViewingAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
+import { chatDraftsAtom, chatViewedConversationsAtom, isConversationUnread, chatPanelAtom } from "@/libs/chatPanel";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
@@ -65,7 +65,7 @@ afterEach(async () => {
   for (const queryClient of clients.splice(0)) queryClient.clear();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   getDefaultStore().set(chatDraftsAtom, {});
-  getDefaultStore().set(chatViewingAtom, undefined);
+  getDefaultStore().set(chatViewedConversationsAtom, {});
   localStorage.removeItem("selectedTavern2");
   vi.restoreAllMocks();
   for (const [key, descriptor] of eventDescriptors) {
