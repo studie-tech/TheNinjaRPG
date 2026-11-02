@@ -836,9 +836,14 @@ export const farmingRouter = createTRPCRouter({
     .meta({ mcp: { description: "Harvest every ready farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
+      let inventoryRecovered = false;
       const [user, userItems, plots, questState] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId, {
+          onStaleMergeClaimRecovery: () => {
+            inventoryRecovered = true;
+          },
+        }),
         fetchFarmPlotsWithItems(ctx.drizzle, ctx.userId),
         fetchFarmingQuestState(ctx.drizzle, ctx.userId),
       ]);
@@ -928,11 +933,12 @@ export const farmingRouter = createTRPCRouter({
         message: `Harvested ${readyPlots.length} plot${readyPlots.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
         farmingExperienceDelta: xpGain,
         updatedPlots: getHarvestedFarmPlots(readyPlots, now),
-        inventoryChanges: awards.every(
-          (award) => award && award.inventoryChanges !== undefined,
-        )
-          ? awards.flatMap((award) => (award ? (award.inventoryChanges ?? []) : []))
-          : undefined,
+        // Crop grants cannot represent unrelated seed or fertilizer stacks restored by the preload.
+        inventoryChanges:
+          !inventoryRecovered &&
+          awards.every((award) => award && award.inventoryChanges !== undefined)
+            ? awards.flatMap((award) => (award ? (award.inventoryChanges ?? []) : []))
+            : undefined,
         inventoryDeltas: [...harvests.entries()].map(([itemId, harvest]) => ({
           itemId,
           quantityDelta: harvest.quantity,

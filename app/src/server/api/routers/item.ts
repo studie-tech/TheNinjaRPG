@@ -3499,10 +3499,16 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query
+      let inventoryRecovered = false;
       const [loadouts, user, useritems, masterySources] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchUserItems(ctx.drizzle, ctx.userId, {
+          includeHidden: true,
+          onStaleMergeClaimRecovery: () => {
+            inventoryRecovered = true;
+          },
+        }),
         fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
@@ -3515,8 +3521,11 @@ export const itemRouter = createTRPCRouter({
       return result.success
         ? {
             ...result,
+            // Slot changes cannot represent stacks restored by the inventory preload.
             equipmentChanges:
-              result.userCacheEligible && result.inventoryCacheEligible
+              !inventoryRecovered &&
+              result.userCacheEligible &&
+              result.inventoryCacheEligible
                 ? getLoadoutInventoryChanges(beforeEquipment, useritems)
                 : undefined,
             ...getSelectItemLoadoutUserUpdate({
