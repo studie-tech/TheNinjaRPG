@@ -1669,8 +1669,8 @@ export const applySingleEffect = (
     newUsersEffects.push(effect);
   } else if (
     (effect.disappearAnimation || effect.disappearSfx) &&
-    longitude &&
-    latitude
+    longitude !== undefined &&
+    latitude !== undefined
   ) {
     newGroundEffects.push(
       getVisualOrSound(
