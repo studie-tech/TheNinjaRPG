@@ -97,7 +97,13 @@ import {
   publicState,
 } from "./constants";
 import { checkFriendlyFire, expireGroundEffects } from "./process";
-import { decreaseMastery, getPower, increaseMastery, sealCheck } from "./tags";
+import {
+  decreaseMastery,
+  getPower,
+  increaseMastery,
+  sealCheck,
+  settleCurse,
+} from "./tags";
 import type {
   BattleRoundContext,
   BattleUserState,
@@ -1244,6 +1250,8 @@ export const calcApplyRatio = (
     "poison",
     "recoil",
     "reflect",
+    "parry",
+    "curse",
     "robprevent",
     "sealprevent",
     "stunprevent",
@@ -3031,13 +3039,17 @@ export const alignBattle = (
   if (changedActor || progressRound) {
     battle.roundStartAt = now;
   }
-  let expiredEffects: ReturnType<typeof expireGroundEffects> = [];
+  const expiredEffects: ReturnType<typeof expireGroundEffects> = [];
   // If we progress the battle round;
   // 1. refill action points
   // 2. update round info on battle
   // 3. update all user effect rounds
   // 4. update all updatedAt fields on items & jutsus
   if (progressRound) {
+    const expiringCurses = battle.usersEffects.filter(
+      (e) =>
+        e.type === "curse" && e.rounds === 1 && !e.castThisRound && isEffectActive(e),
+    );
     refillActionPoints(battle);
     battle.round = actionRound;
     // console.log("Action round: ", actionRound);
@@ -3072,7 +3084,25 @@ export const alignBattle = (
       ...battle.usersState.slice(actorIndex + 1),
       ...battle.usersState.slice(0, actorIndex),
     ];
-    expiredEffects = expireGroundEffects(battle, actionRounds);
+    // Only the duration transition pays Curse; Clear and replacement never enter this list.
+    for (const effect of expiringCurses) {
+      const holder = battle.usersState.find((u) => u.userId === effect.targetId);
+      if (!holder) continue;
+      if (
+        !battle.usersState.some(
+          (u) => !areBattleAllies(u, holder) && stillInBattle(u, battle.usersEffects),
+        )
+      ) {
+        if (effect.curseState) {
+          effect.curseState.storedHealing = 0;
+          effect.curseState.settled = true;
+        }
+        continue;
+      }
+      const info = settleCurse(effect, holder, battle.usersEffects);
+      if (info) expiredEffects.push(info);
+    }
+    expiredEffects.push(...expireGroundEffects(battle, actionRounds));
     // Preserve cyclic initiative if the next actor expired; refilled action
     // points can make recalculation restart at a different combatant.
     if (!battle.usersState.some((user) => user.userId === actor.userId)) {

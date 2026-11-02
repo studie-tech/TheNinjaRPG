@@ -36,12 +36,16 @@ import {
 } from "@/libs/combat/summon";
 import type { CombatAction } from "@/libs/combat/types";
 import {
+  canStackEffect,
   getBaseDamageForModifier,
+  getEffectiveMaxPool,
+  getEffectStackKey,
   getPoolsAffected,
   getPreventTypeName,
   isEffectActive,
   isEffectEnabled,
   selectTransferEffects,
+  sortEffects,
   storeMasteryBases,
 } from "@/libs/combat/util";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
@@ -319,6 +323,7 @@ const applyTransferClones = (
 ): string[] =>
   selected.map((source) => {
     const clone = structuredClone(source);
+    delete clone.curseState;
     clone.id = nanoid();
     clone.fromEffectId = source.id;
     clone.targetId = landingId;
@@ -1811,6 +1816,121 @@ export const decreasepoolcost = (effect: UserEffect, target: BattleUserState) =>
   effect.power = -Math.abs(effect.power);
   effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
   return pooladjust(effect, target);
+};
+
+/** Activate a Curse instance without granting healing on the casting action. */
+export const curse = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+  round: number,
+) => {
+  if (!isEffectActive(effect) || effect.curseState) return;
+  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
+    effect.rounds = 0;
+    return preventResponse(effect, target, "cannot be buffed");
+  }
+  effect.curseState = {
+    storedHealing: 0,
+    activatedRound: effect.isNew ? round : effect.createdRound,
+  };
+  return getInfo(
+    target,
+    effect,
+    `will store ${getPower(effect).power / 2}% of damage dealt and received as healing`,
+  );
+};
+
+/** Consume a naturally expired Curse once, applying the holder's current healing defenses. */
+export const settleCurse = (
+  effect: UserEffect,
+  target: BattleUserState,
+  usersEffects: UserEffect[],
+): ActionEffect | undefined => {
+  const state = effect.curseState;
+  if (!state || state.settled) return;
+  state.settled = true;
+  const stored = state.storedHealing;
+  state.storedHealing = 0;
+  if (stored <= 0 || target.curHealth <= 0 || target.fledBattle) return;
+  if (
+    sealCheck(
+      effect,
+      usersEffects.filter((e) => e.type === "seal" && !e.isNew && isEffectActive(e)),
+    )
+  )
+    return;
+  if (!preventCheck(usersEffects, "healprevent", target).pass)
+    return preventResponse(effect, target, "cannot receive Curse healing");
+  const consequence: Consequence = {
+    userId: target.userId,
+    targetId: target.userId,
+    heal_hp: stored,
+  };
+  const consequences = new Map([[effect.id, consequence]]);
+  const applied = new Set<string>();
+  for (const modifier of usersEffects
+    .filter((e) => e.type === "increaseheal" || e.type === "decreaseheal")
+    .sort(sortEffects)) {
+    if (
+      modifier.targetId !== target.userId ||
+      !isEffectEnabled(modifier, usersEffects) ||
+      !canStackEffect(modifier, applied)
+    )
+      continue;
+    applied.add(getEffectStackKey(modifier));
+    const resolved = { ...modifier };
+    if (resolved.type === "increaseheal")
+      increaseHealGiven(resolved, usersEffects, consequences, target);
+    else decreaseHealGiven(resolved, usersEffects, consequences, target);
+  }
+  const healing = Math.min(
+    Math.max(0, consequence.heal_hp ?? 0),
+    Math.max(0, getEffectiveMaxPool(target, usersEffects, "Health") - target.curHealth),
+  );
+  target.curHealth += healing;
+  return {
+    txt: `${target.username}'s Curse expires and restores ${healing.toFixed(2)} HP`,
+    color: "green",
+    types: ["curse"],
+  };
+};
+
+/** Collect eligible Parry percentages so stacking splits each direct hit once. */
+export const parry = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  consequences: Map<string, Consequence>,
+  target: BattleUserState,
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
+  if (preventTag && preventTag.createdRound < effect.createdRound && !pass)
+    return preventResponse(effect, target, "cannot be buffed");
+  const { power, qualifier } = getPower(effect);
+  if (!effect.isNew && !effect.castThisRound) {
+    consequences.forEach((consequence, effectId) => {
+      if (
+        consequence.targetId !== effect.targetId ||
+        consequence.userId === effect.targetId ||
+        consequence.damageSource ||
+        !consequence.damage
+      )
+        return;
+      const source = usersEffects.find((e) => e.id === effectId);
+      if (
+        !source ||
+        (source.type !== "damage" &&
+          source.type !== "elementaldamage" &&
+          source.type !== "pierce")
+      )
+        return;
+      consequence.parryPercentage =
+        (consequence.parryPercentage ?? 0) +
+        Math.max(0, power) * getEfficiencyRatio(source, effect);
+    });
+  }
+  return getInfo(target, effect, `will parry ${qualifier} incoming damage`);
 };
 
 /** Reflect damage back to the opponent */

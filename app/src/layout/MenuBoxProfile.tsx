@@ -1094,6 +1094,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "diffuse",
     "absorb",
     "reflect",
+    "parry",
+    "curse",
     "recoil",
     "afterburn",
     "drain",
@@ -1188,6 +1190,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
   const statusLabel: Record<string, string> = {
     reflect: "Reflect",
+    parry: "Parry",
+    curse: "Curse",
     diffuse: "Diffuse",
     shield: "Shield",
     absorb: "Absorb",
@@ -1247,6 +1251,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     </div>
   ));
 
+  const activeCurses = effects.filter(
+    (effect) =>
+      effect.type === "curse" &&
+      effect.targetId === userId &&
+      isEffectActive(effect) &&
+      effect.curseState &&
+      !effect.curseState.settled,
+  );
   const pendingDiffuseDamage = diffuseDamage.filter((debt) => debt.remainingTurns > 0);
   const diffuseDebt = pendingDiffuseDamage.reduce(
     (sum, debt) => sum + debt.remainingDamage,
@@ -1329,6 +1341,16 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           <div className="flex flex-col gap-1">{statusVisuals}</div>
         </div>
       )}
+
+      {activeCurses.map((effect) => (
+        <div key={`stored-${effect.id}`}>
+          <div className="mb-1 font-semibold">Curse Healing</div>
+          <div>
+            {effect.curseState?.storedHealing.toFixed(2)} HP stored · {effect.rounds}{" "}
+            rounds remaining
+          </div>
+        </div>
+      ))}
 
       {diffuseDebt > 0 && (
         <div>

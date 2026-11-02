@@ -8,6 +8,7 @@ import {
   NO_DURABILITY_LOSS_COMBATS,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
+  PARRY_MAX_PERCENTAGE,
   POST_DAMAGE_MODIFIER_TYPES,
   type PoolType,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
@@ -33,6 +34,7 @@ import {
   damageReductionTypes,
   dmgConfig as defaultDmgConfig,
 } from "./constants";
+import { accumulateCurseConsequence, accumulateCurseDamage } from "./curse";
 import { type DiffusePacket, deferDiffuseDamage, repayDiffuseDamage } from "./diffuse";
 import { areBattleAllies } from "./participants";
 import {
@@ -50,6 +52,7 @@ import {
   clearPrevent,
   clone,
   copy,
+  curse,
   damageBarrier,
   damageUser,
   debuffPrevent,
@@ -89,6 +92,7 @@ import {
   movePrevent,
   onehitkill,
   onehitkillPrevent,
+  parry,
   poison,
   potency,
   realizeTag,
@@ -620,6 +624,14 @@ export const applyEffects = (
     round,
     actionEffects,
     (userId, targetId, damage, healthLost) => {
+      accumulateCurseDamage(
+        newUsersEffects,
+        newUsersState,
+        userId,
+        targetId,
+        healthLost,
+        round,
+      );
       if (userId !== targetId) {
         accumulateShieldConversion(userId, damage, "consume");
         accumulateShieldConversion(targetId, healthLost, "siphon");
@@ -755,12 +767,61 @@ export const applyEffects = (
     );
   });
 
+  // Split direct hits before damage-derived effects; delay returns to prevent recursion.
+  postDamageModifierEffects
+    .filter((e) => e.type === "parry")
+    .sort(sortEffects)
+    .forEach((effect) => {
+      applySingleEffect(
+        consequences,
+        newUsersState,
+        newUsersEffects,
+        newGroundEffects,
+        actionEffects,
+        appliedEffects,
+        battle,
+        actorId,
+        effect,
+        action,
+      );
+    });
+  const parryReturns: [string, Consequence][] = [];
+  for (const [id, consequence] of consequences) {
+    if (!consequence.damage || !consequence.parryPercentage) continue;
+    const fraction = Math.min(PARRY_MAX_PERCENTAGE, consequence.parryPercentage) / 100;
+    const returned = consequence.damage * fraction;
+    consequence.damage -= returned;
+    // Preserve the split when Diffuse recomputes its damage basis.
+    if (consequence.baseDamageForModifiers !== undefined)
+      consequence.baseDamageForModifiers *= 1 - fraction;
+    parryReturns.push([
+      `parry-${id}`,
+      {
+        userId: consequence.targetId,
+        targetId: consequence.userId,
+        damage: returned,
+        damageSource: "parry",
+        diffuseSourceEffectId: id,
+        types: ["parry"],
+      },
+    ]);
+    actionEffects.push({
+      txt: `Parry redirects ${returned.toFixed(2)} damage to the attacker`,
+      color: "red",
+    });
+  }
+
   // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
   // These read consequence.damage to calculate their effect, so they must run after pierce
   // to include pierce damage in their calculations
   postDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    if (effect.type === "parry") return;
     // Absorb reads the immediate portion after Diffuse, including secondary damage.
-    if (effect.type === "absorb" && diffuseTargets.has(effect.targetId)) return;
+    if (
+      effect.type === "absorb" &&
+      (parryReturns.length > 0 || diffuseTargets.has(effect.targetId))
+    )
+      return;
     applySingleEffect(
       consequences,
       newUsersState,
@@ -775,6 +836,8 @@ export const applyEffects = (
     );
   });
 
+  for (const [id, returned] of parryReturns) consequences.set(id, returned);
+
   applyDiffuseToConsequences({
     consequences,
     effects: diffuseEffects,
@@ -784,7 +847,11 @@ export const applyEffects = (
     actionEffects,
   });
   postDamageModifierEffects
-    .filter((e) => e.type === "absorb" && diffuseTargets.has(e.targetId))
+    .filter(
+      (e) =>
+        e.type === "absorb" &&
+        (parryReturns.length > 0 || diffuseTargets.has(e.targetId)),
+    )
     .forEach((effect) => {
       applySingleEffect(
         consequences,
@@ -972,6 +1039,13 @@ export const applyEffects = (
         // spawn, so the opponent predicate is evaluated from the controller too.
         const damageCreditUser = resolveDamageCreditUser(newUsersState, user);
         if (c.damage !== undefined && c.damage >= 0) {
+          accumulateCurseConsequence(
+            c,
+            "damage",
+            newUsersEffects,
+            newUsersState,
+            round,
+          );
           creditConsequenceEnmity(c, "damage", newUsersState, usersEffects);
           accumulateSiphonShield(c, "damage", target);
           target.curHealth -= c.damage;
@@ -1021,6 +1095,13 @@ export const applyEffects = (
           }
         }
         if (c.residual !== undefined && c.residual >= 0) {
+          accumulateCurseConsequence(
+            c,
+            "residual",
+            newUsersEffects,
+            newUsersState,
+            round,
+          );
           creditConsequenceEnmity(c, "residual", newUsersState, usersEffects);
           accumulateSiphonShield(c, "residual", target);
           target.curHealth -= c.residual;
@@ -1047,6 +1128,7 @@ export const applyEffects = (
           }
         }
         if (c.wound !== undefined && c.wound >= 0) {
+          accumulateCurseConsequence(c, "wound", newUsersEffects, newUsersState, round);
           creditConsequenceEnmity(c, "wound", newUsersState, usersEffects);
           accumulateSiphonShield(c, "wound", target);
           target.curHealth -= c.wound;
@@ -1101,6 +1183,14 @@ export const applyEffects = (
           const preShieldDamage = c.preDiffuseDamage ?? c.preShieldDamage ?? 0;
           const maxReflect = preShieldDamage * 0.6;
           const finalReflect = Math.min(c.reflect, maxReflect);
+          accumulateCurseDamage(
+            newUsersEffects,
+            newUsersState,
+            target.userId,
+            user.userId,
+            Math.min(user.curHealth, finalReflect),
+            round,
+          );
           creditDamageEnmity(
             target,
             user,
@@ -1132,6 +1222,13 @@ export const applyEffects = (
           });
         }
         if (c.afterburn !== undefined && c.afterburn >= 0) {
+          accumulateCurseConsequence(
+            c,
+            "afterburn",
+            newUsersEffects,
+            newUsersState,
+            round,
+          );
           creditConsequenceEnmity(c, "afterburn", newUsersState, usersEffects);
           accumulateSiphonShield(c, "afterburn", target);
           target.curHealth -= c.afterburn;
@@ -1193,6 +1290,13 @@ export const applyEffects = (
         }
         // Handle drain effects for each pool
         if (c.drain_hp !== undefined && c.drain_hp >= 0 && target.curHealth > 0) {
+          accumulateCurseConsequence(
+            c,
+            "drain_hp",
+            newUsersEffects,
+            newUsersState,
+            round,
+          );
           creditConsequenceEnmity(c, "drain_hp", newUsersState, usersEffects);
           accumulateSiphonShield(c, "drain_hp", target);
           target.curHealth = Math.max(0, target.curHealth - c.drain_hp);
@@ -1217,6 +1321,13 @@ export const applyEffects = (
           });
         }
         if (c.poison !== undefined && c.poison >= 0) {
+          accumulateCurseConsequence(
+            c,
+            "poison",
+            newUsersEffects,
+            newUsersState,
+            round,
+          );
           creditConsequenceEnmity(c, "poison", newUsersState, usersEffects);
           accumulateSiphonShield(c, "poison", target);
           target.curHealth = Math.max(
@@ -1254,6 +1365,11 @@ export const applyEffects = (
         }
       }
     });
+
+  // A newly cast Curse starts collecting on the next action, including within this round.
+  for (const effect of newUsersEffects) {
+    if (effect.type === "curse" && effect.curseState) effect.curseState.ready = true;
+  }
 
   // Grant shields after all damage, sharing each recipient's HP cap proportionally.
   shieldConversionsByUser.forEach(({ shields }, userId) => {
@@ -1463,6 +1579,14 @@ export const applySingleEffect = (
           } else if (effect.type === "onehitkill") {
             const healthBefore = newTarget.curHealth;
             info = onehitkill(effect, getPreventionEffects(), newTarget);
+            accumulateCurseDamage(
+              usersEffects,
+              newUsersState,
+              newUser.userId,
+              newTarget.userId,
+              healthBefore - newTarget.curHealth,
+              round,
+            );
             // Count the HP an instant kill removes as damage dealt, so raid
             // progress (capped at the attackers' damageDealt) includes it.
             creditDamageDealt(
@@ -1533,6 +1657,10 @@ export const applySingleEffect = (
           info = increaseHealGiven(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "decreaseheal") {
           info = decreaseHealGiven(effect, usersEffects, consequences, curTarget);
+        } else if (effect.type === "curse") {
+          info = curse(effect, getPreventionEffects(), curTarget, round);
+        } else if (effect.type === "parry") {
+          info = parry(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "reflect") {
           info = reflect(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "recoil") {
@@ -2063,7 +2191,9 @@ const applyDiffuseToConsequences = ({
   const affected = new Set<Consequence>();
   for (const [effectId, consequence] of consequences) {
     const source =
-      battle.usersEffects.find((e) => e.id === effectId) ??
+      battle.usersEffects.find(
+        (e) => e.id === (consequence.diffuseSourceEffectId ?? effectId),
+      ) ??
       battle.usersEffects.find(
         (e) =>
           e.id === effectId.replace(/^wound-/, "") ||
@@ -2095,7 +2225,7 @@ const applyDiffuseToConsequences = ({
           ? Math.min(originalDamage, (consequence.damage ?? 0) * 0.6)
           : originalDamage;
       const damage =
-        isPrimary && source && !isPierce
+        isPrimary && source && !isPierce && !consequence.damageSource
           ? computeDamagePacket({
               rawDamage: consequence.baseDamageForModifiers ?? originalDamage,
               damageEffect: source,
@@ -2118,7 +2248,7 @@ const applyDiffuseToConsequences = ({
         attackerId,
         damage,
         deferredDamage: cappedDamage,
-        creditDamage: !isReturnDamage,
+        creditDamage: !isReturnDamage && !consequence.damageSource,
         creditEnmity: key !== "recoil",
         applyRemaining: (fraction) => {
           // Preserve the source's existing DR and bypass rules; mitigation runs only once.
