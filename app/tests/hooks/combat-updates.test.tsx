@@ -5,6 +5,8 @@ import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { useEffect, useState } from "react";
+import superjson from "superjson";
+import type { CombatStateUpdate } from "@/deltas/combat";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
@@ -39,7 +41,7 @@ beforeEach(() => {
   pauseSuccess = undefined;
   queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   Object.assign(vi.spyOn(client, "api" as never), { combat: testApi.combat, useUtils: testApi.useUtils });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ pusher: {
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "viewer" }, pusher: {
     subscribe: () => ({ bind: (_event: string, handler: typeof onEvent) => { onEvent = handler; }, unbind: vi.fn() }),
     unsubscribe: vi.fn(),
   } } as never);
@@ -322,4 +324,60 @@ it("shares duplicate saved-log recovery until it settles and replaces it for new
     await act(async () => updateLogs("battle", 4, null));
     expect(read).toHaveBeenCalledTimes(3);
   } finally { stop(); }
+});
+
+/** A bounded public update whose baseline was validated for this participant. */
+const stateEvent = (previousVersion: number, version = previousVersion + 1, patch: Partial<CombatStateUpdate> = {}): BattleUpdate => ({
+  version,
+  stateUpdate: superjson.serialize({ previousVersion, fields: { id: "battle", version },
+    usersState: [], usersEffects: [], groundEffects: [], userIds: ["viewer"], ...patch } satisfies CombatStateUpdate),
+});
+
+it("applies committed observer state without getBattle reads across consecutive, duplicate and stale events", async () => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  await act(async () => { await Promise.all([onEvent(stateEvent(1)), onEvent(stateEvent(1))]); });
+  for (const event of [stateEvent(1), stateEvent(2), stateEvent(1)]) {
+    await act(async () => onEvent(event));
+  }
+  await waitFor(() => expect(latestState.battle?.version).toBe(3));
+  expect(reads).toHaveLength(1);
+});
+
+it.each(["gap", "private", "lost", "terminal", "identity"])("recovers %s public payloads with one coalesced read", async (reason) => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  const event = reason === "lost" ? { version: 2 } : reason === "terminal"
+    ? { ...stateEvent(1), finished: true } : reason === "identity"
+    ? stateEvent(1, 2, { fields: { id: "other", version: 2 } })
+    : stateEvent(reason === "gap" ? 2 : 1, reason === "gap" ? 3 : 2, reason === "private" ? { userIds: [] } : {});
+  await act(async () => { await onEvent(event); await onEvent(event); });
+  expect(reads).toHaveLength(2);
+  await act(async () => finishRead?.(stateAt(event.version)));
+  await waitFor(() => expect(latestState.battle?.version).toBe(event.version));
+});
+
+it("retains recovery when public updates race an unfinished poll", async () => {
+  mount();
+  await waitFor(() => expect(reads).toHaveLength(1));
+  await act(async () => onEvent({ version: 2 }));
+  const finishOldRead = finishRead;
+  await act(async () => onEvent(stateEvent(1, 3)));
+  expect(reads).toHaveLength(3);
+  await act(async () => finishOldRead?.(stateAt(1)));
+  expect(latestState.battle?.version).toBe(1);
+  await act(async () => finishRead?.(stateAt(3)));
+  await waitFor(() => expect(latestState.battle?.version).toBe(3));
+});
+
+it("defers public updates during actor responses and recovers an uncovered newer turn", async () => {
+  mount();
+  await beginAction();
+  await act(async () => onEvent(stateEvent(1)));
+  await respond();
+  expect(reads).toHaveLength(1);
+  await beginAction();
+  await act(async () => onEvent(stateEvent(3, 4)));
+  await respond(3);
+  await waitFor(() => expect(reads).toHaveLength(2));
 });

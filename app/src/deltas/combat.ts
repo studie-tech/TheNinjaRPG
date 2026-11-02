@@ -1,3 +1,4 @@
+import superjson from "superjson";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { BattleType } from "@/drizzle/constants";
 import {
@@ -12,7 +13,9 @@ import type {
   BattleUserItem,
   CombatResult,
   CompleteBattle,
+  ReturnedBattle,
 } from "@/libs/combat/types";
+import { maskBattle } from "@/libs/combat/util";
 import {
   effectiveMasteries,
   MASTERY_REQUIREMENT_FIELDS,
@@ -508,3 +511,144 @@ export const getCombatStateUpdate = (
     ? current
     : { battle: response.battle, result: response.result ?? null };
 };
+
+type PublicBattleFields = Omit<
+  ReturnedBattle,
+  "usersState" | "usersEffects" | "groundEffects" | "extraState"
+>;
+type PublicRows<T, Key extends keyof T> = (Partial<T> & Pick<T, Key>)[];
+
+/** Public changes that reconstruct canonical viewer state without disclosing private values. */
+export type CombatStateUpdate = {
+  previousVersion: number;
+  fields: Partial<PublicBattleFields> & Pick<ReturnedBattle, "id" | "version">;
+  usersState: PublicRows<ReturnedBattle["usersState"][number], "userId">;
+  usersEffects: PublicRows<ReturnedBattle["usersEffects"][number], "id">;
+  groundEffects: PublicRows<ReturnedBattle["groundEffects"][number], "id">;
+  userIds: string[];
+};
+
+/** Capture immutable masked baselines only for battles with other human viewers. */
+export const captureCombatStateUpdate = (battle: CompleteBattle) => {
+  const viewers = battle.usersState.filter((user) => !user.isAi && !user.isSummon);
+  if (viewers.length < 2) return;
+  return structuredClone({
+    publicBattle: maskBattle(battle, ""),
+    viewers: viewers.map(({ userId }) => ({
+      userId,
+      battle: maskBattle(battle, userId),
+    })),
+  });
+};
+
+/**
+ * Build public field changes and admit only living viewers whose complete masked state is
+ * reproduced exactly. Catalog changes and private changes retain canonical read recovery.
+ */
+export const buildCombatStateUpdate = (
+  baseline: ReturnType<typeof captureCombatStateUpdate>,
+  battle: CompleteBattle,
+): CombatStateUpdate | undefined => {
+  if (!baseline || battle.version <= baseline.publicBattle.version) return;
+  const publicBattle = maskBattle(battle, "");
+  const {
+    usersState,
+    usersEffects,
+    groundEffects,
+    extraState: _extra,
+    ...fields
+  } = publicBattle;
+  const update: CombatStateUpdate = {
+    previousVersion: baseline.publicBattle.version,
+    fields: {
+      ...changedPublicFields(baseline.publicBattle, fields),
+      id: battle.id,
+      version: battle.version,
+    },
+    usersState: usersState.map((user) => ({
+      ...changedPublicFields(
+        baseline.publicBattle.usersState.find((row) => row.userId === user.userId),
+        user,
+      ),
+      userId: user.userId,
+    })),
+    usersEffects: usersEffects.map((effect) => ({
+      ...changedPublicFields(
+        baseline.publicBattle.usersEffects.find((row) => row.id === effect.id),
+        effect,
+      ),
+      id: effect.id,
+    })),
+    groundEffects: groundEffects.map((effect) => ({
+      ...changedPublicFields(
+        baseline.publicBattle.groundEffects.find((row) => row.id === effect.id),
+        effect,
+      ),
+      id: effect.id,
+    })),
+    userIds: [],
+  };
+  update.userIds = baseline.viewers.flatMap(({ userId, battle: previous }) => {
+    const viewer = battle.usersState.find((user) => user.userId === userId);
+    return viewer &&
+      viewer.curHealth > 0 &&
+      !viewer.fledBattle &&
+      !viewer.leftBattle &&
+      superjson.stringify(applyCombatStateUpdate(previous, update)) ===
+        superjson.stringify(maskBattle(battle, userId))
+      ? [userId]
+      : [];
+  });
+  return update.userIds.length ? update : undefined;
+};
+
+/** Apply a public event only to its exact baseline and an explicitly validated participant. */
+export const getCombatEventUpdate = (
+  current: RouterOutputs["combat"]["getBattle"],
+  update: CombatStateUpdate,
+  userId: string | undefined,
+): RouterOutputs["combat"]["getBattle"] | undefined => {
+  if (!current.battle || current.battle.id !== update.fields.id) return;
+  if (current.result || current.battle.version >= update.fields.version) return current;
+  if (
+    current.battle.version !== update.previousVersion ||
+    update.fields.version <= update.previousVersion ||
+    !userId ||
+    !update.userIds.includes(userId)
+  )
+    return;
+  return { battle: applyCombatStateUpdate(current.battle, update), result: null };
+};
+
+/** Preserve viewer-only fields while replacing public roster membership and changed fields. */
+const applyCombatStateUpdate = (
+  battle: ReturnedBattle,
+  update: CombatStateUpdate,
+): ReturnedBattle => ({
+  ...battle,
+  ...update.fields,
+  usersState: update.usersState.map((user) => ({
+    ...battle.usersState.find((row) => row.userId === user.userId),
+    ...user,
+  })) as ReturnedBattle["usersState"],
+  usersEffects: update.usersEffects.map((effect) => ({
+    ...battle.usersEffects.find((row) => row.id === effect.id),
+    ...effect,
+  })) as ReturnedBattle["usersEffects"],
+  groundEffects: update.groundEffects.map((effect) => ({
+    ...battle.groundEffects.find((row) => row.id === effect.id),
+    ...effect,
+  })) as ReturnedBattle["groundEffects"],
+});
+
+/** Compare shallow public fields; absent fields require canonical recovery rather than deletion. */
+const changedPublicFields = <T extends object>(
+  previous: T | undefined,
+  next: T,
+): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(next).filter(
+      ([key, value]) =>
+        superjson.stringify(value) !== superjson.stringify(previous?.[key as keyof T]),
+    ),
+  ) as Partial<T>;

@@ -3,7 +3,12 @@ import { getQueryKey } from "@trpc/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import superjson from "superjson";
 import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
-import { getCombatStateUpdate, mergeBattleEntries } from "@/deltas/combat";
+import {
+  type CombatStateUpdate,
+  getCombatEventUpdate,
+  getCombatStateUpdate,
+  mergeBattleEntries,
+} from "@/deltas/combat";
 import type { BattleAction } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
@@ -32,19 +37,22 @@ export const useBattleMaps = (battle: ReturnedBattle | null): BattleMaps => {
 /**
  * Apply committed deltas to actor and observer history caches.
  * Complete saved logs reuse committed rows; gaps, filters and pending reads recover.
- * Confirmed ongoing actions update their captured query; newer observer events still read.
+ * Confirmed actions and eligible public events update exact battle baselines; gaps still read.
  */
 export const useCombatUpdates = (state: BattleState) => {
-  const { pusher } = useUserData();
+  const { pusher, data: userData } = useUserData();
   const utils = api.useUtils();
   const queryClient = useQueryClient();
-  const battleCache = useQueryCacheUpdate<RouterOutputs["combat"]["getBattle"]>(
-    getQueryKey(api.combat.getBattle, { battleId: state.battle?.id }, "query"),
+  const battleId = state.battle?.id;
+  const battleKey = useMemo(
+    () => getQueryKey(api.combat.getBattle, { battleId }, "query"),
+    [battleId],
   );
+  const battleCache =
+    useQueryCacheUpdate<RouterOutputs["combat"]["getBattle"]>(battleKey);
   // Keep the subscription stable while its handler reads the latest battle/result.
   const stateRef = useRef(state);
   stateRef.current = state;
-  const battleId = state.battle?.id;
   const pendingActionRef = useRef<{
     battleId: string;
     version: number;
@@ -280,14 +288,52 @@ export const useCombatUpdates = (state: BattleState) => {
         battle.version,
         response?.battle === battle ? response.version : 0,
       );
-      if (data.version > version) refreshBattle(battleId, data.version);
+      if (data.version <= version) return;
+      if (data.stateUpdate && !data.finished) {
+        const update = superjson.deserialize<CombatStateUpdate>(data.stateUpdate);
+        if (update.fields.id === battleId && update.fields.version === data.version) {
+          const snapshot = battleCache.prepareUpdate();
+          const current = utils.combat.getBattle.getData({ battleId });
+          if (
+            snapshot.revision === undefined ||
+            !current ||
+            !getCombatEventUpdate(current, update, userData?.userId)
+          ) {
+            refreshBattle(battleId, data.version);
+            return;
+          }
+          const pending = battleRefreshRef.current;
+          if (pending?.battleId === battleId && pending.version >= data.version) return;
+          const applying = { battleId, version: data.version };
+          battleRefreshRef.current = applying;
+          try {
+            await battleCache.updateCache(
+              (current) => getCombatEventUpdate(current, update, userData?.userId),
+              snapshot,
+            );
+          } finally {
+            if (battleRefreshRef.current === applying) battleRefreshRef.current = null;
+          }
+          return;
+        }
+      }
+      refreshBattle(battleId, data.version);
     };
     channel.bind("event", onUpdate);
     return () => {
       channel.unbind("event", onUpdate);
       pusher.unsubscribe(battleId);
     };
-  }, [battleId, pusher, refreshBattle, updateLogs]);
+  }, [
+    battleId,
+    pusher,
+    refreshBattle,
+    updateLogs,
+    battleCache.prepareUpdate,
+    battleCache.updateCache,
+    userData?.userId,
+    utils,
+  ]);
   return { updateLogs, startAction, settleAction };
 };
 

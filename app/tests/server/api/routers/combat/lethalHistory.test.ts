@@ -5,6 +5,8 @@ import superjson from "superjson";
 import { type BattleAction, aiProfile, battle, battleAction, battleHistory, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import type { BattleUpdate } from "@/libs/combat/log";
+import { buildCombatStateUpdate, captureCombatStateUpdate, getCombatEventUpdate, type CombatStateUpdate } from "@/deltas/combat";
+import { maskBattle } from "@/libs/combat/util";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { makeEffect } from "../../../../libs/combat/helpers/battleScenario";
 import { insertUsers } from "../../../../setup/factories";
@@ -136,6 +138,7 @@ describeWithDatabase("lethal combat history", () => {
     victim.curHealth = victim.maxHealth = 5000;
     if (oversized) victim.username = "界".repeat(5000);
     await db.update(battle).set({ usersState: snapshot.usersState }).where(eq(battle.id, snapshot.id));
+    const previous = (await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!;
     const caller = await callerFor(combatRouter, "killer");
     const battleRead = vi.spyOn(db.query.battle, "findFirst");
     const logRead = vi.spyOn(db.query.battleAction, "findMany");
@@ -146,10 +149,73 @@ describeWithDatabase("lethal combat history", () => {
     expect(battleRead).toHaveBeenCalledTimes(1);
     expect(logRead).not.toHaveBeenCalled();
     const notification = [...trigger.mock.calls].reverse().find(([channel]) => channel === snapshot.id)?.[2] as BattleUpdate;
-    expect(Object.keys(notification).sort()).toEqual(["logEntries", "version"]);
+    expect(Object.keys(notification).sort()).toEqual(oversized ? ["logEntries", "version"] : ["logEntries", "stateUpdate", "version"]);
     expect(Buffer.byteLength(JSON.stringify(notification))).toBeLessThanOrEqual(10_000);
     if (oversized) expect(notification.logEntries).toBeNull();
-    else expect(superjson.deserialize<BattleAction[]>(notification.logEntries!)).toEqual(response.logEntries);
+    else {
+      expect(superjson.deserialize<BattleAction[]>(notification.logEntries!)).toEqual(response.logEntries);
+      const stateUpdate = superjson.deserialize<CombatStateUpdate>(notification.stateUpdate!);
+      const recovered = getCombatEventUpdate({ battle: maskBattle(previous, "victim"), result: null }, stateUpdate, "victim");
+      const saved = (await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!;
+      // JSON storage represents participant timestamps as strings.
+      expect(JSON.parse(JSON.stringify(recovered?.battle))).toEqual(JSON.parse(JSON.stringify(maskBattle(saved, "victim"))));
+      expect(stateUpdate.userIds).toContain("victim");
+      expect(recovered?.battle?.version).toBe(response.battleUpdate.version);
+    }
+  });
+
+  it("publishes canonical observer state after a committed idle-round poll", async () => {
+    const snapshot = await startLethalBattle("COMBAT");
+    const db = await getTestDatabase();
+    snapshot.usersState.find((user) => user.userId === "victim")!.curHealth = 5000;
+    const old = new Date(Date.now() - 120_000);
+    await db.update(battle).set({ usersState: snapshot.usersState, roundStartAt: old, updatedAt: old }).where(eq(battle.id, snapshot.id));
+    const previous = (await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!;
+    const response = await (await callerFor(combatRouter, "victim")).getBattle({ battleId: snapshot.id });
+    expect(response.result).toBeNull();
+    const notification = [...trigger.mock.calls].reverse().find(([channel]) => channel === snapshot.id)?.[2] as BattleUpdate;
+    const update = superjson.deserialize<CombatStateUpdate>(notification.stateUpdate!);
+    expect(getCombatEventUpdate({ battle: maskBattle(previous, "killer"), result: null }, update, "killer"))
+      .toEqual({ battle: maskBattle((await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!, "killer"), result: null });
+  });
+
+  it("drops oversized state changes while preserving bounded logs and version recovery", async () => {
+    const snapshot = await startLethalBattle("COMBAT");
+    const db = await getTestDatabase();
+    snapshot.usersState.find((user) => user.userId === "victim")!.curHealth = 5000;
+    snapshot.usersEffects = Array.from({ length: 600 }, (_, i) => makeEffect("increasedamagegiven", { power: 0, elements: [] }, {
+      id: `effect-${i}`, creatorId: "killer", targetId: "killer", targetType: "user", rounds: 3,
+      isNew: false, castThisRound: false, createdRound: 1, description: "界".repeat(200),
+    }));
+    await db.update(battle).set({ usersState: snapshot.usersState, usersEffects: snapshot.usersEffects }).where(eq(battle.id, snapshot.id));
+    const baseline = captureCombatStateUpdate((await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!);
+    const response = await (await callerFor(combatRouter, "killer")).performAction({ battleId: snapshot.id, version: snapshot.version,
+      actionId: "basicAttack", longitude: 1, latitude: 0 });
+    expect(response.result).toBeNull();
+    const notification = [...trigger.mock.calls].reverse().find(([channel]) => channel === snapshot.id)?.[2] as BattleUpdate;
+    const stateUpdate = buildCombatStateUpdate(baseline, (await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!)!;
+    expect(stateUpdate.userIds).toContain("victim");
+    expect(Buffer.byteLength(JSON.stringify(superjson.serialize(stateUpdate)))).toBeGreaterThan(10_000);
+    expect(notification.stateUpdate).toBeUndefined();
+    expect(notification.logEntries).not.toBeNull();
+    expect(Buffer.byteLength(JSON.stringify(notification))).toBeLessThanOrEqual(10_000);
+  });
+
+  it("publishes no state delta when the committed log write fails", async () => {
+    const snapshot = await startLethalBattle("COMBAT");
+    const db = await getTestDatabase();
+    snapshot.usersState.find((user) => user.userId === "victim")!.curHealth = 5000;
+    await db.update(battle).set({ usersState: snapshot.usersState }).where(eq(battle.id, snapshot.id));
+    const failed = new Proxy(db, { get(target, key, receiver) {
+      if (key === "insert") return (table: Parameters<typeof db.insert>[0]) => table !== battleAction ? db.insert(table) : {
+        values: () => ({ onDuplicateKeyUpdate: async () => { throw new Error("Log insert failed"); } }),
+      };
+      return Reflect.get(target, key, receiver);
+    } });
+    const response = await (await callerForDatabase(combatRouter, "killer", failed)).performAction({ battleId: snapshot.id, version: snapshot.version,
+      actionId: "basicAttack", longitude: 1, latitude: 0 });
+    expect(response).toMatchObject({ updateClient: true, notification: "Unable to update battle. Please try again." });
+    expect(trigger.mock.calls.filter(([channel]) => channel === snapshot.id)).toHaveLength(0);
   });
 
 });
