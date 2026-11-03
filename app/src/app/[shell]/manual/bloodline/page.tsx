@@ -125,13 +125,11 @@ export default function ManualBloodlines() {
                     <ListChecks className="h-5 w-5" />
                   </Button>
                 </Link>
-                {userData && canChangeContent(userData.role) && (
-                  <Link href="/manual/bloodline/reskins">
-                    <Button id="bloodline-reskins" hoverText="Reskins (Staff)">
-                      <Palette className="h-6 w-6" />
-                    </Button>
-                  </Link>
-                )}
+                <Link href="/manual/bloodline/reskins">
+                  <Button id="bloodline-reskins" hoverText="Reskins (Staff)">
+                    <Palette className="h-6 w-6" />
+                  </Button>
+                </Link>
               </>
             )}
             <BloodFiltering state={state} />
