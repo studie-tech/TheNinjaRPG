@@ -312,24 +312,6 @@ export const makeDamageModifierEffect = (params: {
   );
 
 /**
- * Backwards-compatible shortcut for damage-taken modifiers used by the
- * clear/cleanse regression tests.
- */
-export const makeDamageTakenEffect = (params: {
-  id: string;
-  targetId: string;
-  type: "decreasedamagetaken" | "increasedamagetaken";
-  fromType?: UserEffect["fromType"];
-  rounds?: number;
-  power?: number;
-}): UserEffect =>
-  makeDamageModifierEffect({
-    ...params,
-    creatorId: params.targetId,
-    runtime: { actionId: params.id },
-  });
-
-/**
  * Builds a complete pre-battle gear modifier record with zero defaults.
  */
 export const gearMods = (

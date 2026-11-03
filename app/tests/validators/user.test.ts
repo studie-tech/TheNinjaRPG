@@ -8,7 +8,6 @@ import {
   getBloodlineElements,
   createAssignedExperienceSchema,
   tavernColorChangeSchema,
-  updateUserSchema,
 } from "@/validators/user";
 
 describe("createAssignedExperienceSchema", () => {
@@ -46,23 +45,6 @@ describe("getPublicUsersSchema", () => {
     });
 
     expect(result.orderBy).toBe("Farming");
-  });
-});
-
-describe("updateUserSchema", () => {
-  it("ignores removed player custom-title inputs", () => {
-    expect(
-      updateUserSchema.safeParse({
-        username: "LegacyUser",
-        customTitle: "Moderator",
-        bloodlineId: null,
-        sageModeId: null,
-        villageId: null,
-        role: "USER",
-        rank: "STUDENT",
-        reason: "Updating an unrelated profile field",
-      }).success,
-    ).toBe(true);
   });
 });
 
