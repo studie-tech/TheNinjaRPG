@@ -225,8 +225,6 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect((await target())?.reputationPoints).toBe(20);
     expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(20);
     expect(await (await getTestDatabase()).query.paypalTransaction.findMany()).toHaveLength(1);
-    expect((await paypal.resolveOrder({ orderId: order.orderId })).success).toBe(true);
-    expect((await target())?.reputationPoints).toBe(20);
   });
   it.each(["RESERVED", "CAPTURING", "DELIVERY_PENDING"])("retains compatibility allowance for historical %s receipts", async (status) => {
     const db = await getTestDatabase();
@@ -503,8 +501,6 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     }
     const info = { transaction_id: "legacy_capture", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: amount, transaction_updated_date: new Date().toISOString(), invoice_id: invoiceId };
     expect(await syncTransactions(db, [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: !refunded }]);
-    const paypal = await callerFor(paypalRouter, migrated ? OTHER : BUYER);
-    expect((await paypal.resolveOrder({ orderId })).success).toBe(!refunded);
     expect((await target())?.reputationPoints).toBe(refunded ? 0 : 20);
     expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
   });

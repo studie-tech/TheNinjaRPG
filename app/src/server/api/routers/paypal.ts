@@ -386,61 +386,6 @@ export const paypalRouter = createTRPCRouter({
       };
     }),
 
-  resolveOrder: protectedProcedure
-    .input(z.strictObject({ orderId: z.string().min(15).max(20) }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      if (isNativeUserAgent(ctx.userAgent))
-        return errorResponse("Use the in-app store to purchase in the native app.");
-      const token = await getPaypalAccessToken();
-      const order = await getPaypalOrder({ orderId: input.orderId, token: token });
-      // Guarding
-      if (order === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not fetch order");
-      }
-      const unit = order.purchase_units?.[0];
-      const snapshotId = readStoreCustomId(unit?.custom_id);
-      if (snapshotId) {
-        const capture = unit?.payments?.captures?.[0];
-        if (isDeclinedStoreCapture(capture?.status)) {
-          const snapshot = await findWebStoreOrderById(ctx.drizzle, snapshotId);
-          if (
-            snapshot?.buyerId === ctx.userId &&
-            snapshot.captureAttemptId &&
-            order.purchase_units?.length === 1 &&
-            unit?.invoice_id === snapshot.id &&
-            unit.amount?.currency_code === "USD" &&
-            unit.amount.value &&
-            /^\d+(?:\.\d{1,2})?$/.test(unit.amount.value) &&
-            Math.round(Number(unit.amount.value) * 100) === snapshot.priceCents
-          ) {
-            await releaseDeclinedStoreCapture(
-              ctx.drizzle,
-              snapshotId,
-              ctx.userId,
-              snapshot.captureAttemptId,
-            );
-          }
-          return errorResponse(
-            "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.",
-          );
-        }
-        if (capture?.status !== "COMPLETED")
-          return errorResponse(
-            "Payment is not completed yet. Retry using Lookup Transaction after it clears.",
-          );
-        return deliverStoreOrder(ctx.drizzle, {
-          snapshotId,
-          captureId: capture.id,
-          orderId: input.orderId,
-          currency: capture.amount.currency_code ?? "",
-          value: capture.amount.value ?? "",
-          invoiceId: capture.invoice_id ?? unit?.invoice_id,
-          raw: order,
-        });
-      }
-      return deliverPaypalOrder(ctx.drizzle, order, ctx.userId, input.orderId);
-    }),
   resolveTransaction: protectedProcedure
     .input(searchPaypalTransactionSchema)
     .output(baseServerResponse)

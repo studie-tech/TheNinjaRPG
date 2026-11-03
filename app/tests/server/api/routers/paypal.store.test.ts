@@ -210,7 +210,6 @@ describeWithDatabase("web store payments", () => {
       await expect(owner.captureStoreOrder({orderId:"TESTORDER123456789"})).rejects.toThrow("PayPal could not complete checkout");
       expect((await db.query.webStoreOrder.findFirst())?.captureAttemptId).not.toBeNull();
       await db.update(webStoreOrder).set({expiresAt:new Date(0)});
-      expect((await owner.resolveOrder({orderId:"TESTORDER123456789"})).message).toContain("not completed");
       expect((await owner.createStoreOrder({recipientId:"recipient",selection:{type:"bundle",bundleId:limited.bundleId}})).message).toContain("purchase limit");
     } finally {fetchMock.mockRestore();}
     expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
@@ -241,14 +240,12 @@ describeWithDatabase("web store payments", () => {
       ? Response.json({access_token:"test-only"})
       : Response.json({status:"COMPLETED",purchase_units:[{custom_id:`store:${reserved.order.id}`,invoice_id:reserved.order.id,amount:{currency_code:"USD",value:"12.50"},payments:{captures:[{status}]}}]}));
     try {
-      for (const endpoint of ["captureStoreOrder","resolveOrder"] as const) {
-        for (status of ["DECLINED","DENIED","FAILED"]) {
-          expect(await authorizeStoreCapture(db,reserved.order.id,"buyer")).toBeNull();
-          const result = await owner[endpoint]({orderId:"TESTORDER123456789"});
-          expect(result.success).toBe(false);
-          expect(result.message).toContain("declined");
-          expect((await db.query.webStoreOrder.findFirst())?.captureAttemptId).toBeNull();
-        }
+      for (status of ["DECLINED","DENIED","FAILED"]) {
+        expect(await authorizeStoreCapture(db,reserved.order.id,"buyer")).toBeNull();
+        const result = await owner.captureStoreOrder({orderId:"TESTORDER123456789"});
+        expect(result.success).toBe(false);
+        expect(result.message).toContain("declined");
+        expect((await db.query.webStoreOrder.findFirst())?.captureAttemptId).toBeNull();
       }
       expect((await reserveStoreOrder(db,"buyer","recipient",limited)).success).toBe(true);
     } finally {fetchMock.mockRestore();}
@@ -932,7 +929,6 @@ describeWithDatabase("web store payments", () => {
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
       completePayment();
       expect((await owner.captureStoreOrder({orderId:provider.id})).success).toBe(true);
-      expect((await owner.resolveOrder({orderId:provider.id})).success).toBe(true);
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
       expect(await db.query.userData.findFirst({where:eq(userData.userId,"recipient")})).toMatchObject({reputationPoints:20,money:500});
       expect((await db.query.userItem.findMany()).reduce((sum,row)=>sum+row.quantity,0)).toBe(7);
@@ -1045,14 +1041,14 @@ describeWithDatabase("web store payments", () => {
       expect((await db.query.storeUserIdAlias.findFirst())?.newUserId).toMatch(/^__tnr_deleted_store_user__:/);
       expect(await db.query.userItem.findMany()).toHaveLength(0);
       expect(await db.query.userData.findFirst({where:eq(userData.userId,"recipient")})).toBeDefined();
-      await expect(buyer.resolveOrder({orderId:"TESTORDER123456789"})).rejects.toThrow("Recipient unavailable");
+      await expect(buyer.captureStoreOrder({orderId:"TESTORDER123456789"})).rejects.toThrow("Recipient unavailable");
     }]);
     try {
       await deleteUser(deleting,"recipient");
       expect(attemptedRecovery).toBe(true);
       expect(await db.query.userData.findFirst({where:eq(userData.userId,"recipient")})).toBeUndefined();
       await insertUsers([{userId:"recipient",username:"Recreated",reputationPoints:0,money:0}]);
-      await expect(buyer.resolveOrder({orderId:"TESTORDER123456789"})).rejects.toThrow("Recipient unavailable");
+      await expect(buyer.captureStoreOrder({orderId:"TESTORDER123456789"})).rejects.toThrow("Recipient unavailable");
       const inventory = await callerFor(itemRouter,"recipient");
       expect(await inventory.getUserItems()).toHaveLength(0);
       expect(await db.query.userItem.findMany()).toHaveLength(0);
