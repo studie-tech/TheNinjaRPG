@@ -1497,7 +1497,7 @@ const buildShopEntries = (
   return [...staticEntries, ...dynamicEntries];
 };
 
-export const buildFarmState = async (
+const buildFarmState = async (
   client: DrizzleClient,
   userId: string,
 ): Promise<FarmStateResponse> => {
@@ -1921,7 +1921,7 @@ const payOutExtractions = async (
   return new Set(doneIds);
 };
 
-export const ensureFarmPlots = async (
+const ensureFarmPlots = async (
   client: DrizzleClient,
   userId: string,
   totalPlots: number,
