@@ -1378,7 +1378,6 @@ export const performBattleAction = (props: {
   battle: CompleteBattle;
   action: CombatAction;
   grid: Grid<TerrainHex>;
-  contextUserId: string;
   actorId: string;
   longitude: number;
   latitude: number;

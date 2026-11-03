@@ -775,7 +775,6 @@ export const combatRouter = createTRPCRouter({
                 battle: newBattle,
                 action,
                 grid,
-                contextUserId: suid,
                 actorId: actor.userId,
                 longitude: input.longitude,
                 latitude: input.latitude,

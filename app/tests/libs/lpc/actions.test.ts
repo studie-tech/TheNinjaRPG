@@ -22,7 +22,7 @@ it("removes broken gear and preserves its attack cue through a batched end-turn"
     extraState: { items: weaponState.items, jutsus: {}, bloodlines: {}, villages: {}, wars: {}, clans: {} },
   });
   const action = userItemToAction(owned, user, battle);
-  const { newBattle } = performBattleAction({ battle, action, grid: getBattleGrid(1, battle), contextUserId: user.userId, actorId: user.userId, longitude: 4, latitude: 3 });
+  const { newBattle } = performBattleAction({ battle, action, grid: getBattleGrid(1, battle), actorId: user.userId, longitude: 4, latitude: 3 });
   const wearer = newBattle.usersState.find((entry) => entry.userId === user.userId)!;
   expect(wearer.items[0]?.equipped).toBe("NONE");
   expect(wearer.spriteAppearance).toEqual(base);
@@ -30,6 +30,6 @@ it("removes broken gear and preserves its attack cue through a batched end-turn"
   expect(wearer.spriteAction?.id).not.toBe("previous");
   const cue = wearer.spriteAction;
   const wait = availableUserActions(newBattle, user.userId, true, true).find((action) => action.id === "wait")!;
-  const finished = performBattleAction({ battle: newBattle, action: wait, grid: getBattleGrid(1, newBattle), contextUserId: user.userId, actorId: user.userId, longitude: user.longitude, latitude: user.latitude }).newBattle;
+  const finished = performBattleAction({ battle: newBattle, action: wait, grid: getBattleGrid(1, newBattle), actorId: user.userId, longitude: user.longitude, latitude: user.latitude }).newBattle;
   expect(finished.usersState.find((entry) => entry.userId === user.userId)?.spriteAction).toEqual(cue);
 });

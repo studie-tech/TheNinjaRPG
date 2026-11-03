@@ -205,7 +205,7 @@ describe("summons from a loadout swapped in mid-lobby", () => {
       );
       if (!action) throw new Error(`missing ${actionId}`);
       battle = performBattleAction({
-        battle, action, grid, contextUserId: "user_thab", actorId: "user_thab",
+        battle, action, grid, actorId: "user_thab",
         longitude, latitude,
       }).newBattle;
     };
