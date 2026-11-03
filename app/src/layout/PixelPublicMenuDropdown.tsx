@@ -11,20 +11,14 @@ import {
 } from "@/components/ui/menubar";
 import Link from "@/layout/Link";
 import { BUGS_NAV_LINK, getMainNavbarLinks } from "@/libs/menus";
-import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 
-const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }) => {
+const PixelPublicMenuDropdown: React.FC = () => {
   const { notifications } = useUserData();
   const menuItems = [...getMainNavbarLinks(notifications), BUGS_NAV_LINK];
 
   return (
-    <Menubar
-      className={cn(
-        "tnr-ink-menu-root border-0 bg-transparent p-0 shadow-none",
-        className,
-      )}
-    >
+    <Menubar className="tnr-ink-menu-root border-0 bg-transparent p-0 shadow-none">
       <MenubarMenu>
         <MenubarTrigger aria-label="Open site menu" className="tnr-ink-menu-trigger">
           <Menu className="h-4 w-4" />
@@ -33,14 +27,7 @@ const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }
           {menuItems.map((item) => {
             const count = item.notificationCount ?? 0;
             return (
-              <MenubarItem
-                key={item.href}
-                asChild
-                onSelect={async () => {
-                  if (item.onClick) await item.onClick();
-                }}
-                className="tnr-ink-menu-item"
-              >
+              <MenubarItem key={item.href} asChild className="tnr-ink-menu-item">
                 <Link href={item.href}>
                   {item.icon}
                   <span>{item.name}</span>

@@ -1163,20 +1163,18 @@ function ElapsedMeter({
   return <Progress value={progress} className="mt-1.5 h-1.5" />;
 }
 
-function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function RetryPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
       <span>{message}</span>
-      {onRetry && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="hover:text-black"
-          onClick={onRetry}
-        >
-          <RotateCcw className="mr-1 h-4 w-4" /> Retry
-        </Button>
-      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="hover:text-black"
+        onClick={onRetry}
+      >
+        <RotateCcw className="mr-1 h-4 w-4" /> Retry
+      </Button>
     </div>
   );
 }

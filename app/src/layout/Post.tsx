@@ -40,8 +40,6 @@ export interface PostProps {
   align_middle?: boolean;
   hover_effect?: boolean;
   href?: string;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
   tavernStyling?: boolean;
 }
 
@@ -137,7 +135,6 @@ const Post: React.FC<PostProps> = (props) => {
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: Mouse hover events are for visual feedback only
     <div
       className={cn(
         `relative mb-3 flex flex-row rounded-lg border ${color} px-1 py-3 shadow`,
@@ -145,8 +142,6 @@ const Post: React.FC<PostProps> = (props) => {
         props.hover_effect ? hover : "",
         props.className,
       )}
-      onMouseEnter={props.onMouseEnter}
-      onMouseLeave={props.onMouseLeave}
     >
       {props.image}
       {props.user && (
