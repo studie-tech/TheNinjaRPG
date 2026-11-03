@@ -17,6 +17,7 @@ const mk = (over: Partial<BattleUserState>): BattleUserState =>
     isSummon: false,
     isSummonTemplate: false,
     curHealth: 100,
+    usedActions: [],
     fledBattle: false,
     leftBattle: false,
     ...over,

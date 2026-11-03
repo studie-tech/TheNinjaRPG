@@ -300,7 +300,7 @@ export const getOpposingBattleWars = (
 /**
  * Get all relations for a user as array
  */
-export const getRelationsArray = (
+const getRelationsArray = (
   battle: CompleteBattle | ReturnedBattle,
   user: BattleUserState,
 ) => {
@@ -504,7 +504,7 @@ export const creditDamageDealt = (
   amount: number,
 ): void => {
   if (amount > 0 && isOpponentDamageTarget(attacker, target)) {
-    attacker.damageDealt = (attacker.damageDealt ?? 0) + amount;
+    attacker.damageDealt += amount;
   }
 };
 
@@ -512,7 +512,7 @@ export const creditDamageDealt = (
  * Records an applied effect tag on the crediting user's `usedTagTypes` for the `tag_usage_win`
  * tracker. Summons/clones credit their controller (resolveDamageCreditUser), matching
  * damage_dealt; everyone else credits themselves. Deduped so a tag re-applied across rounds
- * counts once, and defensively inits the field for battle JSON that predates it. Both write
+ * counts once. Both write
  * sites in process.ts (the resolution branch and the damage-modifier loop) share this helper so
  * they agree on what "applied" means.
  */
@@ -522,7 +522,6 @@ export const recordUsedTag = (
   tagType: EffectType,
 ): void => {
   const creditUser = resolveDamageCreditUser(usersState, caster);
-  creditUser.usedTagTypes = creditUser.usedTagTypes ?? [];
   if (!creditUser.usedTagTypes.includes(tagType)) {
     creditUser.usedTagTypes.push(tagType);
   }
@@ -637,7 +636,7 @@ export const buildCombatTrackerTasks = (
   );
   // Participation is settled once per real match on wins, losses, draws and fleeing.
   // Practice ranked spars and staff tournament exhibitions do not advance competitive counters.
-  if (!curBattle.extraState?.tournamentGameId && !user.isAi && !user.isSummon) {
+  if (!curBattle.extraState.tournamentGameId && !user.isAi && !user.isSummon) {
     if (curBattle.battleType === "COMBAT" && isPvp)
       tasks.push({ task: "pvp_participated", increment: 1 });
     if (curBattle.battleType === "SPARRING" && isPvp)
@@ -679,8 +678,8 @@ export const buildCombatTrackerTasks = (
   // damage_dealt: total damage this user dealt to real opponents this battle (accumulated
   // at consequence application in process.ts; damage from the user's summons/clones is
   // credited here via controllerId). Any outcome; skip a no-op zero emit.
-  if ((user.damageDealt ?? 0) > 0) {
-    tasks.push({ task: "damage_dealt", increment: user.damageDealt ?? 0 });
+  if (user.damageDealt > 0) {
+    tasks.push({ task: "damage_dealt", increment: user.damageDealt });
   }
 
   if (result.didWin > 0) {
@@ -695,7 +694,7 @@ export const buildCombatTrackerTasks = (
     }
     // tag_usage_win: one tick per DISTINCT tag type the user APPLIED (resolved) this
     // battle. usedTagTypes is populated at effect resolution in process.ts.
-    for (const t of new Set(user.usedTagTypes ?? [])) {
+    for (const t of new Set(user.usedTagTypes)) {
       tasks.push({ task: "tag_usage_win", increment: 1, contentId: t });
     }
   }
@@ -706,7 +705,7 @@ export const buildCombatTrackerTasks = (
 /**
  * Get bounties from extraState for a user
  */
-export const getUserBounties = (
+const getUserBounties = (
   battle: CompleteBattle | ReturnedBattle,
   controllerId: string,
 ) => {
@@ -716,7 +715,7 @@ export const getUserBounties = (
 /**
  * Get bounty signups from extraState for a user
  */
-export const getUserBountySignups = (
+const getUserBountySignups = (
   battle: CompleteBattle | ReturnedBattle,
   controllerId: string,
 ) => {
@@ -764,7 +763,7 @@ export const getPoolsAffected = (
  * This is a pure calculation - no mutation occurs.
  * If no effects are provided, returns 0 (no adjustment).
  */
-export const getPoolAdjustment = (
+const getPoolAdjustment = (
   user: ReturnedUserState,
   effects: UserEffect[] | undefined,
   pool: PoolType,
@@ -1761,7 +1760,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
   if (controlledUsers.some((u) => u.sageModeId))
     jutsuIds.add(SAGE_MODE_ACTIVATION_JUTSU_ID);
   for (const user of battle.usersState) {
-    for (const action of user.usedActions ?? []) {
+    for (const action of user.usedActions) {
       if (action.type === "jutsu") jutsuIds.add(action.id);
       if (action.type === "item") itemIds.add(action.id);
     }
@@ -2986,15 +2985,6 @@ export const resolveControlledActorId = (
 };
 
 /**
- * Refill action points for all users in the battle
- */
-export const refillActionPoints = (battle: ReturnedBattle) => {
-  battle.usersState.forEach((u) => {
-    u.actionPoints = 100;
-  });
-};
-
-/**
  * Align the round, active actor and action points in place using the battle timer.
  * Expire battlefield entities before exposing the next turn and return teardown effects for history.
  */
@@ -3036,32 +3026,19 @@ export const alignBattle = (
       (e) =>
         e.type === "curse" && e.rounds === 1 && !e.castThisRound && isEffectActive(e),
     );
-    refillActionPoints(battle);
+    battle.usersState.forEach((u) => {
+      u.actionPoints = 100;
+    });
     battle.round = actionRound;
-    // console.log("Action round: ", actionRound);
     // Effects can be persisted without passing through the pruning gate in
     // applyEffects, so the counter must floor at 0; a negative value survives
     // in the battle row and fails the tag schemas, which all require rounds >= 0.
-    battle.usersEffects.forEach((e) => {
-      if (e.rounds !== undefined) {
-        if (!e.castThisRound) {
-          // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = Math.max(0, e.rounds - 1);
-        }
-        e.isNew = false;
-        e.castThisRound = false;
-      }
-    });
-    battle.groundEffects.forEach((e) => {
-      if (e.rounds !== undefined) {
-        if (!e.castThisRound) {
-          // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = Math.max(0, e.rounds - 1);
-        }
-        e.isNew = false;
-        e.castThisRound = false;
-      }
-    });
+    for (const e of [...battle.usersEffects, ...battle.groundEffects]) {
+      if (e.rounds === undefined) continue;
+      if (!e.castThisRound) e.rounds = Math.max(0, e.rounds - 1);
+      e.isNew = false;
+      e.castThisRound = false;
+    }
 
     const actorIndex = battle.usersState.findIndex(
       (user) => user.userId === actor.userId,
@@ -3110,8 +3087,6 @@ export const alignBattle = (
   // Update the active user on the battle
   battle.activeUserId = actor.userId;
   battle.updatedAt = now;
-  // TOOD: Debug
-  // console.log("New Actor: ", actor.username, battle.round, battle.version, Date.now());
   return {
     actor,
     progressRound,

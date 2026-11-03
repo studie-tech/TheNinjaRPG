@@ -39,6 +39,7 @@ describe("isPiloted masking round-trip", () => {
       isSummon: false,
       isPiloted: false,
       curHealth: 100,
+      usedActions: [],
       fledBattle: false,
       leftBattle: false,
     }) as unknown as BattleUserState;

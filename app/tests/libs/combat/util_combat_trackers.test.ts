@@ -13,6 +13,7 @@ const makeBattle = (
     battleType: "COMBAT",
     usersState,
     usersEffects: [],
+    extraState: {},
   }) as unknown as CompleteBattle;
 
 describe("buildCombatTrackerTasks — creatures_hunted", () => {
