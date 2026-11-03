@@ -159,8 +159,7 @@ export const isSummonActionCastable = (
   action: Pick<CombatAction, "effects">,
   battle: Pick<Battle, "battleType">,
 ): boolean =>
-  summonsAllowedInBattle(battle) ||
-  !action.effects.some((e) => "type" in e && e.type === "summon");
+  summonsAllowedInBattle(battle) || !action.effects.some((e) => e.type === "summon");
 
 /** An ACTIVE summon whose controller can no longer act (dead/fled/left/absent).
  *  Templates are excluded by isActiveSummon; the stillInBattle(summon) guard

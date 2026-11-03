@@ -197,9 +197,9 @@ export const checkFriendlyFire = (
 const getVisualOrSound = (
   longitude: number,
   latitude: number,
-  animation?: string,
-  sfx?: string,
-  round = 0,
+  animation: string | undefined,
+  sfx: string | undefined,
+  round: number,
 ): GroundEffect => {
   return {
     ...VisualTag.parse({
@@ -756,7 +756,7 @@ export const applyEffects = (
     if (
       !damageModifierTypes.includes(e.type) ||
       presentEffectIds.has(e.id) ||
-      !((isEffectActive(e) && !e.fromGround) || e.type === "visual")
+      !(isEffectActive(e) && !e.fromGround)
     ) {
       continue;
     }
@@ -1848,8 +1848,6 @@ export const applySingleEffect = (
 
 // ─── Consolidated damage modifier pipeline (battle damage packets) ─────────────
 
-export type { PreBattleGearModifiers };
-
 export const emptyPreBattleGearModifiers = (): PreBattleGearModifiers => ({
   incDamageGivenFromGear: 0,
   incDamageTakenFromGear: 0,
@@ -2500,25 +2498,18 @@ export const applyDamageModifierPipelineToConsequences = ({
   usersEffects,
   extraState,
   battleRound,
-  sealEffects: sealEffectsInput,
-  eligibilityById: eligibilityByIdInput,
-  usersStateById,
+  sealEffects,
+  eligibilityById,
 }: {
   consequences: Map<string, Consequence>;
   usersEffects: UserEffect[];
   extraState: ExtraState;
   battleRound: number;
-  sealEffects?: UserEffect[];
-  eligibilityById?: Map<string, DamageModifierEligibility>;
-  /** @deprecated Prefer passing eligibilityById from applyEffects. */
-  usersStateById?: Map<string, BattleUserState>;
+  sealEffects: UserEffect[];
+  eligibilityById: Map<string, DamageModifierEligibility>;
 }) => {
   const preBattleGearModifiers = extraState.preBattleGearModifiers ?? {};
-  const sealEffects = sealEffectsInput ?? getActiveSealEffects(usersEffects);
   const effectById = new Map(usersEffects.map((e) => [e.id, e]));
-  const eligibilityById =
-    eligibilityByIdInput ??
-    buildDamageModifierEligibilityById(usersEffects, battleRound, usersStateById);
   const modifierListsByPair = new Map<string, DamagePacketModifierLists>();
 
   for (const [effectId, consequence] of consequences) {

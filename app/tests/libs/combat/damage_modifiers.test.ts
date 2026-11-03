@@ -1074,15 +1074,16 @@ describe("computeDamagePacket", () => {
       ],
     ]);
 
+    const usersEffects = [
+      firstDamage,
+      secondDamage,
+      round2Increase,
+      round3Increase,
+      round3Reduction,
+    ];
     applyDamageModifierPipelineToConsequences({
       consequences,
-      usersEffects: [
-        firstDamage,
-        secondDamage,
-        round2Increase,
-        round3Increase,
-        round3Reduction,
-      ],
+      usersEffects,
       // The pipeline only reads extraState.preBattleGearModifiers, so the test
       // supplies just that slice; route through unknown since the partial does
       // not satisfy the full ExtraState shape.
@@ -1095,6 +1096,8 @@ describe("computeDamagePacket", () => {
         typeof applyDamageModifierPipelineToConsequences
       >[0]["extraState"],
       battleRound: 4,
+      sealEffects: [],
+      eligibilityById: buildDamageModifierEligibilityById(usersEffects, 4),
     });
 
     const expectedDamage =
