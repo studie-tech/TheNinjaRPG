@@ -200,7 +200,6 @@ const PityBloodlineRoll: React.FC<{
   });
 
   // Loaders
-  if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPendingRolls) return <Loader explanation="Loading previous rolls" />;
   if (isPendingBloodlines) return <Loader explanation="Loading bloodlines" />;
   if (!prevRolls || !bloodlines) return null;
@@ -277,9 +276,6 @@ const PityBloodlineRoll: React.FC<{
 const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
-  // Loaders
-  if (!userData) return <Loader explanation="Loading userdata" />;
-
   // Derived
   const bloodlineId = userData.bloodlineId;
 

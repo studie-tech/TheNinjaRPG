@@ -137,7 +137,7 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
       <AnbuOrders
         squadId={squadId}
         title="Leader Orders"
-        subtitle={`From leader ${squad?.leader?.username}`}
+        subtitle={`From leader ${squad.leader?.username}`}
         type="LEADER"
         order={squad.leaderOrder}
         canPost={isLeader}
@@ -341,9 +341,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   // Set squad name
   useEffect(() => {
-    if (squad) {
-      renameForm.setValue("name", squad.name);
-    }
+    renameForm.setValue("name", squad.name);
   }, [renameForm, squad]);
 
   // Adjust members for table
