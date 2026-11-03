@@ -886,8 +886,9 @@ export const travelRouter = createTRPCRouter({
       const userVillage = villageId ?? "syndicate";
       // When the destination looks like a default-sized border crossing, load
       // that neighbour in the same query so the walk does not wait on a
-      // second sequential published-map read. A sector without a published map
-      // is simply absent from the result.
+      // second sequential published-map read. A failed read answers like a
+      // missing map: a thrown error would leave the client's walk re-issuing
+      // the move while its target is still set.
       const sectorsToPrefetch = publishedMapsToPrefetchForMove(sector, {
         x: longitude,
         y: latitude,
@@ -896,12 +897,7 @@ export const travelRouter = createTRPCRouter({
       // prefetches are retried below only when the move actually crosses.
       const prefetchedCampSector = sectorsToPrefetch[1];
       const [maps, originalUser, warCampEntry, isolated] = await Promise.all([
-        fetchPublishedSectorMaps(ctx.drizzle, sectorsToPrefetch).catch(
-          (error: unknown) => {
-            if (isTransientDatabaseError(error)) return null;
-            throw error;
-          },
-        ),
+        fetchPublishedSectorMaps(ctx.drizzle, sectorsToPrefetch).catch(() => null),
         findUserDataForMoveInSector(ctx.drizzle, userId),
         prefetchedCampSector === undefined
           ? undefined
