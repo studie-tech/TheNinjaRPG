@@ -25,6 +25,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -498,7 +499,7 @@ export const executeResultForSettleAuctionWithoutRefunds2 = (
           ${userItem.homeX} = NULL, ${userItem.homeY} = NULL, ${userItem.homeRotation} = 0,
           ${userItem.updatedAt} = CURRENT_TIMESTAMP(3),
           ${auctionBid.amount} = ${winningBid.amount}, ${auctionBid.status} = 'WON',
-          ${sellerBalance} = ${sellerBalance} + ${winningBid.amount},
+          ${sellerBalance} = ${sellerBalance} + ${getAuctionSellerPayout(winningBid.amount)},
           ${seller.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${seller.updatedAt})),
           ${buyerBalance} = ${buyerBalance} - ${raise?.amountToDeduct ?? 0},
           ${userData.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))

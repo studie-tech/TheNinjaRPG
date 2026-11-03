@@ -88,6 +88,7 @@ import {
   AUCTION_HOUSE_MIN_LEVEL,
   AUCTION_LISTING_STATES,
   AUCTION_LISTING_TYPES,
+  AUCTION_SALES_TAX_PERCENT,
   type AuctionListingState,
   auctionHouseLevelMessage,
   IMG_AVATAR_DEFAULT,
@@ -106,6 +107,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -1952,6 +1954,11 @@ export const NewAuctionListingDialog: React.FC<{
                 Prices below are totals for {listingQuantity} units.
               </p>
             )}
+            <p className="text-muted-foreground text-sm">
+              A {AUCTION_SALES_TAX_PERCENT}% sales tax is deducted from your proceeds
+              when an auction or direct sale completes, in either currency. Your payout
+              is rounded down to a whole number. Unsold listings are not taxed.
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={createForm.control}
@@ -1973,6 +1980,17 @@ export const NewAuctionListingDialog: React.FC<{
                         onValueChange={field.onChange}
                       />
                     </FormControl>
+                    {field.value != null &&
+                      Number.isFinite(field.value) &&
+                      field.value > 0 && (
+                        <p className="text-muted-foreground text-xs">
+                          Estimated proceeds at starting price:{" "}
+                          {formatAuctionCurrency(
+                            getAuctionSellerPayout(field.value),
+                            watchedCurrency ?? TRADEABLE_CURRENCY_TYPES[0],
+                          )}
+                        </p>
+                      )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1999,6 +2017,17 @@ export const NewAuctionListingDialog: React.FC<{
                         onOptionalValueChange={field.onChange}
                       />
                     </FormControl>
+                    {field.value != null &&
+                      Number.isFinite(field.value) &&
+                      field.value > 0 && (
+                        <p className="text-muted-foreground text-xs">
+                          Estimated proceeds at buyout:{" "}
+                          {formatAuctionCurrency(
+                            getAuctionSellerPayout(field.value),
+                            watchedCurrency ?? TRADEABLE_CURRENCY_TYPES[0],
+                          )}
+                        </p>
+                      )}
                     <FormMessage />
                   </FormItem>
                 )}

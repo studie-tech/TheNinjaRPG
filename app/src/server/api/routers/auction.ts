@@ -30,7 +30,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
-import { getAuctionPriceError } from "@/libs/itemEconomy";
+import { getAuctionPriceError, getAuctionSellerPayout } from "@/libs/itemEconomy";
 import {
   executeCancelResForCancelAuction,
   executeRaiseStatementForPlaceBid,
@@ -894,7 +894,8 @@ const settleAuction = async (
 
   const refunds = auction.bids.filter((bid) => bid.id !== winningBid?.id);
   const credits = new Map<string, number>();
-  if (winningBid) credits.set(auction.sellerId, winningBid.amount);
+  if (winningBid)
+    credits.set(auction.sellerId, getAuctionSellerPayout(winningBid.amount));
   for (const bid of refunds)
     credits.set(bid.bidderId, (credits.get(bid.bidderId) ?? 0) + bid.amount);
   if (winningBid && !credits.has(winningBid.bidderId))

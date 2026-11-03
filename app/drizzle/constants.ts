@@ -3420,6 +3420,7 @@ export const AUCTION_LISTING_STATES = [
 export type AuctionListingState = (typeof AUCTION_LISTING_STATES)[number];
 
 export const AUCTION_LISTING_TYPES = ["AUCTION", "DIRECT"] as const;
+export const AUCTION_SALES_TAX_PERCENT = 10;
 export type AuctionListingType = (typeof AUCTION_LISTING_TYPES)[number];
 
 export const AUCTION_OFFER_TYPES = ["REQUEST", "TRADE"] as const;
