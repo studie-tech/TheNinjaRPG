@@ -32,7 +32,6 @@
     "emptymigration": "drizzle-kit generate --custom",
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit",
-    "postinstall": "bun run scripts/ensure-map-data.ts",
     "prepare": "cd .. && husky",
     "bundle:report": "node node_modules/nextjs-bundle-analysis/report.js",
     "bundle:compare": "node node_modules/nextjs-bundle-analysis/compare.js"
