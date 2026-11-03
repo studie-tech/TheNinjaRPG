@@ -391,7 +391,7 @@ export default function NativeStore() {
       if (data && observation === "pending") {
         observation = storePurchaseReconciliation(data, attempt);
       }
-      return { status: finalStorePurchaseResult(observation) };
+      return finalStorePurchaseResult(observation);
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -538,7 +538,7 @@ export default function NativeStore() {
       }
       await Promise.all([refetchRecent(), refreshProfile()]);
       assertCurrent?.();
-      return { status: finalStoreRestoreResult(observation) };
+      return finalStoreRestoreResult(observation);
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -719,18 +719,18 @@ export default function NativeStore() {
         assertCurrentCheckout,
       );
       assertCurrentCheckout();
-      if (settlement.status !== "timed-out") {
+      if (settlement !== "timed-out") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, chargedAttempt),
         );
       }
-      if (settlement.status === "rejected") {
+      if (settlement === "rejected") {
         showMutationToast({
           success: false,
           message:
             "The store completed checkout, but the server rejected the receipt. You were not credited; please contact support.",
         });
-      } else if (settlement.status === "timed-out") {
+      } else if (settlement === "timed-out") {
         showMutationToast({
           success: false,
           message:
@@ -787,11 +787,11 @@ export default function NativeStore() {
         );
         assertCurrentRestore();
         showMutationToast({
-          success: result.status === "reconciled",
+          success: result === "reconciled",
           message:
-            result.status === "reconciled"
+            result === "reconciled"
               ? "Purchases restored."
-              : result.status === "rejected"
+              : result === "rejected"
                 ? "The store restored a subscription, but the server rejected its receipt. Please contact support."
                 : "The store restored a subscription, but the server is still processing it. Please try again shortly.",
         });
