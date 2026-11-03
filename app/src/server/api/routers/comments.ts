@@ -342,7 +342,7 @@ export const commentsRouter = createTRPCRouter({
             })
           : undefined,
       ]);
-      const found = comment?.[0];
+      const found = comment[0];
       if (
         !found?.conversationId ||
         (input.conversationId && found.conversationId !== input.conversationId)
@@ -389,13 +389,6 @@ export const commentsRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
-      // Guard
-      if (!input.convo_id && !input.convo_title) {
-        throw serverError(
-          "BAD_REQUEST",
-          "Invalid request; must specify either ID or title",
-        );
-      }
       // Fetch data
       const [user, convo] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -407,15 +400,7 @@ export const commentsRouter = createTRPCRouter({
         }),
       ]);
       // Guard
-      if (!convo) {
-        return {
-          restrictionMessage: null,
-          convo: null,
-          data: [],
-          nextCursor: null,
-        };
-      }
-      if (!canViewConversation(convo, ctx.userId, user.role)) {
+      if (!convo || !canViewConversation(convo, ctx.userId, user.role)) {
         return {
           restrictionMessage: null,
           convo: null,
@@ -750,7 +735,6 @@ export const commentsRouter = createTRPCRouter({
     .input(z.object({ conversationId: z.string() }))
     .use(ratelimitMiddleware)
     .mutation(async ({ ctx, input }) => {
-      if (!ctx.userId) return errorResponse("You are not logged in");
       const [user, convo] = await Promise.all([
         findUserDataForSendTypingIndicator(ctx.drizzle, ctx),
         fetchConversation({
