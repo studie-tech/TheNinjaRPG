@@ -1,7 +1,6 @@
 "use client";
 
 import { memo, type Ref, useEffect, useImperativeHandle, useRef } from "react";
-import { FARM_PLOT_COLUMNS } from "@/drizzle/constants";
 import { useGameScene } from "@/hooks/game-scene";
 import { useVisualEffects } from "@/hooks/visual-effects";
 import WebGlError from "@/layout/WebGLError";
@@ -93,9 +92,3 @@ const propsAreEqual = (prev: FarmCanvasProps, next: FarmCanvasProps) =>
   prev.ref === next.ref;
 
 export const FarmCanvas = memo(FarmCanvasInner, propsAreEqual);
-
-export const getPlotIdBySlot = (plots: FarmPlotState[], slotIndex: number) =>
-  plots.find((plot) => plot.slotIndex === slotIndex)?.id;
-
-export const estimateFarmGridRows = (totalPlots: number) =>
-  Math.ceil(totalPlots / FARM_PLOT_COLUMNS);
