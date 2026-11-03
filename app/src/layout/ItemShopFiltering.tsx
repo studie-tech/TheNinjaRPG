@@ -18,15 +18,9 @@ import { effectFilters } from "@/validators/combat";
 
 interface ItemShopFilteringProps {
   state: ItemShopFilteringState;
-  defaultType: ItemType;
-  restrictTypes?: ItemType[];
-  /** When true, item type is controlled elsewhere (e.g. shop tabs); omit Type from the filter popover. */
-  hideItemTypeField?: boolean;
   /** Popover trigger button id (unique when several shops on one page). */
   filterTriggerId?: string;
 }
-
-type ItemShopFilterContext = { hideItemType?: boolean };
 
 const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType) => {
   const first = (types[0] ?? "WEAPON") as ItemType;
@@ -42,7 +36,8 @@ const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType
         includeNone: false,
         emptyValues: [],
         options: types.map((t) => ({ value: t, label: t })),
-        visibleIf: (ctx) => !(ctx as ItemShopFilterContext).hideItemType,
+        // Item type is driven by the shop tabs, so the popover never shows it
+        visibleIf: () => false,
       },
       { id: "name", label: "Name", type: "text", defaultValue: "" },
       {
@@ -95,23 +90,14 @@ const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType
   });
 };
 
+const itemShopSchema = makeItemShopSchema(Object.values(ItemTypes));
+
 const ItemShopFiltering: React.FC<ItemShopFilteringProps> = (props) => {
-  const restrictKey = props.restrictTypes?.join() ?? "";
-  const schema = useMemo(() => {
-    let categories = Object.values(ItemTypes) as string[];
-    if (props.restrictTypes?.length) {
-      categories = categories.filter((t) =>
-        props.restrictTypes?.includes(t as ItemType),
-      );
-    }
-    return makeItemShopSchema(categories, props.defaultType);
-  }, [restrictKey, props.defaultType]);
   return (
     <ContentFiltering
-      schema={schema}
+      schema={itemShopSchema}
       state={props.state.cf}
       triggerButtonId={props.filterTriggerId ?? "filter-item"}
-      context={{ hideItemType: props.hideItemTypeField }}
     />
   );
 };
@@ -119,7 +105,7 @@ const ItemShopFiltering: React.FC<ItemShopFilteringProps> = (props) => {
 export { ItemShopFiltering };
 
 export const getShopFilter = (state: ItemShopFilteringState) =>
-  buildFilter(state.cf, makeItemShopSchema(Object.values(ItemTypes)));
+  buildFilter(state.cf, itemShopSchema);
 
 export const useShopFiltering = (defaultType: ItemType) => {
   const schema = useMemo(

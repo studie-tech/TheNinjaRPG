@@ -666,9 +666,6 @@ const Shop: React.FC<ShopProps> = (props) => {
               {catalog?.headerExtra}
               <ItemShopFiltering
                 state={filteringState}
-                defaultType={defaultType}
-                restrictTypes={props.restrictTypes}
-                hideItemTypeField
                 filterTriggerId={catalog?.filterTriggerId}
               />
             </div>
