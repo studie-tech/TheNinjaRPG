@@ -139,6 +139,75 @@ it("splits Diffuse debt after Parry for both participants", () => {
   ).toBe(false);
 });
 
+it.each([
+  ["increasedamagegiven", 0],
+  ["increasedamagetaken", 0],
+  ["increasedamagegiven", 50],
+  ["increasedamagetaken", 50],
+] as const)(
+  "checks Diffuse lethality after Parry and static %s with %i percent player DR",
+  (type, damageReduction) => {
+    const hasDamageReduction = damageReduction > 0;
+    const expectedDamage = hasDamageReduction ? 420 : 770;
+    for (const health of [770, 775]) {
+      const source = hit();
+      source.power = 1250;
+      const targetId = type === "increasedamagegiven" ? "attacker" : "defender";
+      const modifier = makeEffect(
+        type,
+        { power: 100, calculation: "static", rounds: 3 },
+        { creatorId: targetId, targetId, targetType: "user", createdRound: 1 },
+      );
+      const diffuse = makeEffect(
+        "diffuse",
+        { power: 50, rounds: 3, delayRounds: 1 },
+        {
+          creatorId: "defender",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 1,
+        },
+      );
+      const reduction = makeEffect(
+        "decreasedamagetaken",
+        { power: damageReduction, calculation: "percentage", rounds: 3 },
+        {
+          creatorId: "defender",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 1,
+        },
+      );
+      const result = applyEffects(
+        makeCompleteBattle({
+          round: 3,
+          usersState: [
+            makeBattleUser("attacker", { curHealth: 10000, maxHealth: 10000 }),
+            makeBattleUser("defender", { curHealth: health, maxHealth: 10000 }),
+          ],
+          usersEffects: [
+            source,
+            modifier,
+            defense(30),
+            diffuse,
+            ...(hasDamageReduction ? [reduction] : []),
+          ],
+        }),
+        "attacker",
+      ).newBattle;
+      const defender = result.usersState.find((u) => u.userId === "defender")!;
+      const deferred =
+        defender.diffuseDamage?.reduce((sum, d) => sum + d.remainingDamage, 0) ?? 0;
+      const expectedDeferred = health > 770 ? expectedDamage / 2 : 0;
+      expect(deferred).toBeCloseTo(expectedDeferred);
+      expect(defender.curHealth).toBeCloseTo(
+        Math.max(0, health - expectedDamage + expectedDeferred),
+      );
+      expect(hp(result, "attacker")).toBeCloseTo(10000 - (expectedDamage * 3) / 7);
+    }
+  },
+);
+
 it("excludes residual damage", () => {
   const damage = hit();
   damage.isNew = false;

@@ -1582,6 +1582,18 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
   );
   const isAOE = data.method.includes("AOE");
   const isEmptyGround = data.target === "EMPTY_GROUND";
+  // Curse stores healing on a persistent user effect until it expires.
+  if (data.target === "GROUND" || isEmptyGround) {
+    data.effects.forEach((effect, index) => {
+      if (effect.type === "curse" && effect.target !== "SELF") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["effects", index, "target"],
+          message: "Curse tags must target self when the action targets ground.",
+        });
+      }
+    });
+  }
   // Move uses the clicked destination rather than the affected pattern.
   if (
     hasMove &&
@@ -1913,6 +1925,13 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
         code: "custom",
         path: [index, "target"],
         message: "Move tags must inherit the clicked destination or target self.",
+      });
+    }
+    if (e.target === "COORDINATES" && e.type === "curse") {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "target"],
+        message: "Curse tags must target users rather than coordinates.",
       });
     }
     if (e.type === "barrier" && e.staticAssetPath === "") {

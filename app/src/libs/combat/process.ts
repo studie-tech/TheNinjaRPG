@@ -791,9 +791,6 @@ export const applyEffects = (
     const fraction = Math.min(PARRY_MAX_PERCENTAGE, consequence.parryPercentage) / 100;
     const returned = consequence.damage * fraction;
     consequence.damage -= returned;
-    // Preserve the split when Diffuse recomputes its damage basis.
-    if (consequence.baseDamageForModifiers !== undefined)
-      consequence.baseDamageForModifiers *= 1 - fraction;
     parryReturns.push([
       `parry-${id}`,
       {
@@ -2251,6 +2248,9 @@ const applyDiffuseToConsequences = ({
         key === "reflect"
           ? Math.min(originalDamage, (consequence.damage ?? 0) * 0.6)
           : originalDamage;
+      // Parry splits the complete packet, including static damage increases.
+      const parryFraction =
+        Math.min(PARRY_MAX_PERCENTAGE, consequence.parryPercentage ?? 0) / 100;
       const damage =
         isPrimary && source && !isPierce && !consequence.damageSource
           ? computeDamagePacket({
@@ -2268,7 +2268,8 @@ const applyDiffuseToConsequences = ({
                 eligibilityById,
               ),
               ignoreDamageReduction: true,
-            }).damage
+            }).damage *
+            (1 - parryFraction)
           : cappedDamage;
       packets.push({
         targetId,
