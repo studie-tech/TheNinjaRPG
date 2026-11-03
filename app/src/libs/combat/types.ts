@@ -657,10 +657,14 @@ export type Consequence = {
   rawDamage?: number;
   residual?: number;
   rawResidual?: number;
+  /** HP already removed by an instant kill, pending Curse accounting after passive resolution. */
+  instantKillDamage?: number;
   /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
   baseDamageForModifiers?: number;
   wound?: number;
   reflect?: number;
+  /** Combined eligible Parry percentage, resolved once per direct hit. */
+  parryPercentage?: number;
   recoil?: number;
   afterburn?: number;
   /** Post-mitigation source hit before Diffuse, retained for Reflect's cap. */
@@ -669,7 +673,7 @@ export type Consequence = {
   diffuseImmediateDamage?: number;
   diffuseSourceEffectId?: string;
   /** Returned damage normalized onto its recipient after Diffuse; excluded from quest credit. */
-  damageSource?: "reflect" | "recoil";
+  damageSource?: "reflect" | "recoil" | "parry";
   /** Post-defense contributions retained independently of target-level damage aggregation. */
   enmitySources?: Pick<Consequence, "userId" | EnmityDamageKey>[];
   lifesteal_hp?: number;
@@ -747,6 +751,13 @@ export type BattleEffect = ZodAllTags & {
 export type GroundEffect = BattleEffect;
 
 export type UserEffect = BattleEffect & {
+  /** Accumulation belongs to this Curse instance and is consumed on natural expiry. */
+  curseState?: {
+    storedHealing: number;
+    activatedRound: number;
+    ready?: boolean;
+    settled?: boolean;
+  };
   /** Absolute expiry in milliseconds; independent of the battle's round counter. */
   timedBuffExpiresAt?: number;
   targetId: string;

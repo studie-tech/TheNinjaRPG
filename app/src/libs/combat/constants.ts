@@ -193,6 +193,7 @@ export const damageDerivedTagTypes: string[] = [
   "recoil",
   "absorb",
   "reflect",
+  "parry",
   "wound",
 ];
 
@@ -209,6 +210,7 @@ export const POST_PIERCE_TAGS: string[] = [
   "absorb",
   "recoil",
   "reflect",
+  "parry",
   "wound",
   "decreaseheal",
   "increaseheal",

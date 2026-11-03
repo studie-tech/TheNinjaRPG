@@ -257,6 +257,8 @@ export const OBJECTIVE_TAG_TYPES = [
   "recoil",
   "redirection",
   "reflect",
+  "parry",
+  "curse",
   "removebloodline",
   "rob",
   "robprevent",

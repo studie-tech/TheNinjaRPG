@@ -20,6 +20,8 @@ export const POTENCY_TAG_LABELS: Record<PotencyTag["affectedTag"], string> = {
   afterburn: "Afterburn",
   lifesteal: "Lifesteal",
   reflect: "Reflect",
+  parry: "Parry",
+  curse: "Curse",
   increaseheal: "Increase Heal",
   heal: "Heal",
   vamp: "Vamp",

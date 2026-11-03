@@ -306,6 +306,8 @@ export const PotencyTagTypes = [
   "afterburn",
   "lifesteal",
   "reflect",
+  "parry",
+  "curse",
   "increaseheal",
   "heal",
   "vamp",
@@ -864,6 +866,28 @@ export const OneHitKillPreventTag = z.object({
   description: msg("Prevents instant kill effects"),
 });
 
+export const CurseTag = z.object({
+  ...BaseAttributes,
+  ...PowerAttributes,
+  type: z.literal("curse").prefault("curse"),
+  description: msg(
+    "Store half the percentage of enemy damage dealt and half of enemy damage received as healing. Heals once on natural expiration; removal discards stored healing. Uses actual HP damage and cannot revive. Healing increases and decreases apply at payout before the maximum-HP cap; stored healing is unchanged. While active, disables the holder's Lifesteal, Absorb, and Vamp conversions.",
+  ),
+  calculation: z.literal("percentage").prefault("percentage"),
+  rounds: z.coerce.number().int().min(1).max(100).prefault(3),
+});
+
+export const ParryTag = z.object({
+  ...BaseAttributes,
+  ...IncludeGeneralsAndElements,
+  ...PowerAttributes,
+  type: z.literal("parry").prefault("parry"),
+  description: msg(
+    "Redirect a percentage of incoming direct damage to the attacker before shields and absorption. Stacks up to 100%. Returned damage cannot trigger Parry.",
+  ),
+  calculation: z.literal("percentage").prefault("percentage"),
+});
+
 export const ReflectTag = z.object({
   ...BaseAttributes,
   ...IncludeGeneralsAndElements,
@@ -1271,6 +1295,8 @@ export const AllTags = z.union([
   RecoilTag.prefault({}),
   RedirectionTag.prefault({}),
   ReflectTag.prefault({}),
+  ParryTag.prefault({}),
+  CurseTag.prefault({}),
   RemoveBloodline.prefault({}),
   RobPreventTag.prefault({}),
   RobTag.prefault({}),
@@ -1320,6 +1346,8 @@ export const questBuffTypes = [
   "lifesteal",
   "onehitkillprevent",
   "reflect",
+  "parry",
+  "curse",
   "robprevent",
   "sealprevent",
   "shield",
@@ -1413,6 +1441,8 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "moveprevent",
       "onehitkillprevent",
       "reflect",
+      "parry",
+      "curse",
       "robprevent",
       "sealprevent",
       "shield",
@@ -1552,6 +1582,18 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
   );
   const isAOE = data.method.includes("AOE");
   const isEmptyGround = data.target === "EMPTY_GROUND";
+  // Curse stores healing on a persistent user effect until it expires.
+  if (data.target === "GROUND" || isEmptyGround) {
+    data.effects.forEach((effect, index) => {
+      if (effect.type === "curse" && effect.target !== "SELF") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["effects", index, "target"],
+          message: "Curse tags must target self when the action targets ground.",
+        });
+      }
+    });
+  }
   // Move uses the clicked destination rather than the affected pattern.
   if (
     hasMove &&
@@ -1883,6 +1925,13 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
         code: "custom",
         path: [index, "target"],
         message: "Move tags must inherit the clicked destination or target self.",
+      });
+    }
+    if (e.target === "COORDINATES" && e.type === "curse") {
+      ctx.addIssue({
+        code: "custom",
+        path: [index, "target"],
+        message: "Curse tags must target users rather than coordinates.",
       });
     }
     if (e.type === "barrier" && e.staticAssetPath === "") {
