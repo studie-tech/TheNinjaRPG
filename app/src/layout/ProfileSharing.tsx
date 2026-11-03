@@ -60,8 +60,6 @@ export function ProfileSharing() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
-  // tRPC utility
-
   // mutations
   const { mutate: claimVotes, isPending } = api.profile.claimVotes.useMutation({
     onSuccess: async (data) => {
@@ -241,7 +239,7 @@ export function ProfileSharing() {
         {recruitTab === "Rewards" && <RecruitRewardsTab />}
       </ContentBox>
 
-      {allUsers && allUsers.length > 0 && (
+      {allUsers.length > 0 && (
         <ContentBox
           title="Recruits"
           subtitle="Members recruited by you"

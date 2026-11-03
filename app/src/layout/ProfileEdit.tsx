@@ -626,7 +626,7 @@ const EmailReminderSettings: React.FC<{
         </p>
       </div>
 
-      <Link href={emailSettingsUrl} passHref>
+      <Link href={emailSettingsUrl}>
         <Button className="flex items-center gap-2">
           <SendHorizontal className="h-4 w-4" />
           Manage Email Settings
@@ -1200,7 +1200,9 @@ const Marriage: React.FC = () => {
             id="send"
             disabled={targetUser === undefined}
             className="mt-2 w-full"
-            onClick={() => create({ userId: targetUser?.userId || "" })}
+            onClick={() => {
+              if (targetUser) create({ userId: targetUser.userId });
+            }}
           >
             <SendHorizontal className="mr-2 h-5 w-5" />
             Send Proposal
@@ -1519,7 +1521,6 @@ const SwapVillage: React.FC = () => {
       if (data.success) await utils.profile.getUser.invalidate();
     },
     onSettled: () => {
-      document.body.style.cursor = "default";
       setIsOpen(false);
     },
   });
@@ -1613,7 +1614,6 @@ const SwapBloodline: React.FC = () => {
         ]);
       },
       onSettled: () => {
-        document.body.style.cursor = "default";
         setIsOpen(false);
       },
     });
@@ -2155,7 +2155,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
   onReroll,
 }) => (
   <Confirm
-    title={`Confirm ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element Re-Roll`}
+    title={`Confirm ${capitalizeFirstLetter(elementType)} Element Re-Roll`}
     button={
       <Button
         id={`reroll-${elementType}`}
@@ -2163,7 +2163,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
         className="w-full"
         disabled={!canAfford || !canChange}
       >
-        Re-Roll {elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element
+        Re-Roll {capitalizeFirstLetter(elementType)} Element
       </Button>
     }
     onAccept={(e) => {
