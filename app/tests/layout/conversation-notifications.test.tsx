@@ -65,7 +65,6 @@ beforeEach(() => {
     bfcacheId: "conversation-notifications",
   } as never);
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
-  vi.spyOn(client, "useGlobalOnMutateProtect").mockReturnValue(() => undefined);
   vi.spyOn(mastery, "useMasteryQueueRefresh").mockImplementation(() => {});
   vi.spyOn(refresh, "useRefreshAt").mockImplementation(() => {});
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => {});

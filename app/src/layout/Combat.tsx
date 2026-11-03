@@ -3,7 +3,7 @@ import { useSetAtom } from "jotai";
 import { Check, HelpCircle, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api, type RouterInputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { combatProfilePatch, getCombatInventoryUpdate } from "@/deltas/combat";
 import {
@@ -166,7 +166,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { currentStep, handleNextStepAsync } = useTutorialStep();
 
   // Mutation protection
-  const onMutateCheck = useGlobalOnMutateProtect();
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
@@ -403,12 +402,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           });
           void utils.combat.getBattle.invalidate();
         } else {
-          arenaStartInFlightRef.current = false;
           showMutationToast(result);
         }
       },
       onError: (error) => {
-        arenaStartInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {
@@ -453,7 +450,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   // User Action
   const { mutate: mutateAction, isPending } = api.combat.performAction.useMutation({
     onMutate: () => {
-      onMutateCheck();
       document.body.style.cursor = "wait";
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
       return {

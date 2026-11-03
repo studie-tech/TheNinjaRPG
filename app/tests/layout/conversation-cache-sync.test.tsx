@@ -54,7 +54,6 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments, profile: testApi.profile, reports: testApi.reports, useUtils: testApi.useUtils,
   });
-  vi.spyOn(client, "useGlobalOnMutateProtect").mockReturnValue(() => undefined);
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, notifications: [] } as never);
   vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);

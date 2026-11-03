@@ -6,7 +6,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -98,7 +98,6 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
  */
 export const useConversation = (props: ConversationLogicProps) => {
   const isNativeShell = useNativeShell();
-  const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, pusher } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [editorKey, setEditorKey] = useState<number>(0);
@@ -344,7 +343,6 @@ export const useConversation = (props: ConversationLogicProps) => {
   const { mutate: reactConversationComment } =
     api.comments.reactConversationComment.useMutation({
       onMutate: async (data) => {
-        onMutateCheck();
         if (!userData) return;
         return await optimisticReactionUpdate(
           data.commentId,
@@ -586,7 +584,6 @@ export const useConversation = (props: ConversationLogicProps) => {
   const { mutate: createComment, isPending: isCommenting } =
     api.comments.createConversationComment.useMutation({
       onMutate: async (newMessage) => {
-        onMutateCheck();
         const input = queryKey;
         return { ...(await optimisticConversationUpdate(newMessage)), input };
       },
