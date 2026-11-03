@@ -1035,13 +1035,12 @@ const petMutationConflict = () =>
 const isPetMutationConflict = (error: unknown) =>
   error instanceof Error && error.name === "PetMutationConflict";
 
-/** Publish a pet patch with its account claim and optional reputation charge. */
+/** Publish a pet patch guarded by the owner and pet snapshots. */
 const updateOwnedPet = async (
   client: DrizzleClient,
   user: UserData,
   pet: UserPet,
   patch: Partial<UserPet>,
-  cost = 0,
 ) => {
   const now = new Date();
   const assignments = Object.entries(patch)
@@ -1053,13 +1052,12 @@ const updateOwnedPet = async (
       return sql`${column} = ${sql.param(value, column)}`;
     });
   // Drizzle cannot build a multi-table UPDATE. Both snapshot guards gate the
-  // patch and any debit together; free edits have no balance precondition.
+  // patch and the account claim together.
   const result = await retryOnDeadlock(() =>
     executeResultForUpdateOwnedPet(
       client,
       user,
       now,
-      cost,
       assignments,
       ownerSnapshotWhere,
 
