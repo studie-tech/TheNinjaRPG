@@ -1396,104 +1396,85 @@ export const questStartingEffectsSchema = (types: readonly string[]) =>
 export const effectFilters = tagTypes;
 export type EffectType = (typeof effectFilters)[number];
 
-/**
- * Returns true if it is a positive user effect
- * @param tag
- * @returns
- */
-export const isPositiveUserEffect = (tag: ZodAllTags) => {
-  if (isActivityBonus(tag)) return true;
-  if (
-    [
-      "absorb",
-      // "clearprevent",
-      "consume",
-      "siphon",
-      "debuffprevent",
-      "increaseaggro",
-      "decreaseaggro",
-      "decreasedamagetaken",
-      "decreasepoolcost",
-      "heal",
-      "increasedamagegiven",
-      "increaseheal",
-      "increasepotency",
-      "increasemaxpools",
-      "increasestat",
-      "increasemastery",
-      "increaserange",
-      "decreasecooldown",
-      "lifesteal",
-      "move",
-      "moveprevent",
-      "onehitkillprevent",
-      "reflect",
-      "parry",
-      "curse",
-      "robprevent",
-      "sealprevent",
-      "shield",
-      "stealth",
-      "stunprevent",
-      "summon",
-      "timedilation",
-      //"injectjutsus",
-      "immunity",
-    ].includes(tag.type)
-  ) {
-    return true;
-  }
-  // Default to return true
-  return false;
-};
+// clearprevent, cleanseprevent and injectjutsus are deliberately unclassified, so
+// clear/cleanse cannot remove their own prevention effects.
+const POSITIVE_USER_EFFECT_TYPES: ReadonlySet<string> = new Set([
+  "absorb",
+  "consume",
+  "siphon",
+  "debuffprevent",
+  "increaseaggro",
+  "decreaseaggro",
+  "decreasedamagetaken",
+  "decreasepoolcost",
+  "heal",
+  "increasedamagegiven",
+  "increaseheal",
+  "increasepotency",
+  "increasemaxpools",
+  "increasestat",
+  "increasemastery",
+  "increaserange",
+  "decreasecooldown",
+  "lifesteal",
+  "move",
+  "moveprevent",
+  "onehitkillprevent",
+  "reflect",
+  "parry",
+  "curse",
+  "robprevent",
+  "sealprevent",
+  "shield",
+  "stealth",
+  "stunprevent",
+  "summon",
+  "timedilation",
+  "immunity",
+]);
 
-/**
- * Returns true if it is a negative user effect
- * @param tag
- * @returns
- */
-export const isNegativeUserEffect = (tag: ZodAllTags) => {
-  if (
-    [
-      "afterburn",
-      "buffprevent",
-      // "cleanseprevent",
-      "clear",
-      "damage",
-      "elementaldamage",
-      "decreasedamagegiven",
-      "decreaseheal",
-      "decreasepotency",
-      "decreasestat",
-      "decreasemastery",
-      "decreasemaxpools",
-      "disarm",
-      "drain",
-      "elementalseal",
-      "flee",
-      "fleeprevent",
-      "healprevent",
-      "increasedamagetaken",
-      "increasepoolcost",
-      "increasecooldown",
-      "moveprevent",
-      "onehitkill",
-      "pierce",
-      "poison",
-      "recoil",
-      "redirection",
-      "rob",
-      "seal",
-      "summonprevent",
-      "timecompression",
-      "weakness",
-      "wound",
-    ].includes(tag.type)
-  ) {
-    return true;
-  }
-  return false;
-};
+const NEGATIVE_USER_EFFECT_TYPES: ReadonlySet<string> = new Set([
+  "afterburn",
+  "buffprevent",
+  "clear",
+  "damage",
+  "elementaldamage",
+  "decreasedamagegiven",
+  "decreaseheal",
+  "decreasepotency",
+  "decreasestat",
+  "decreasemastery",
+  "decreasemaxpools",
+  "disarm",
+  "drain",
+  "elementalseal",
+  "flee",
+  "fleeprevent",
+  "healprevent",
+  "increasedamagetaken",
+  "increasepoolcost",
+  "increasecooldown",
+  "moveprevent",
+  "onehitkill",
+  "pierce",
+  "poison",
+  "recoil",
+  "redirection",
+  "rob",
+  "seal",
+  "summonprevent",
+  "timecompression",
+  "weakness",
+  "wound",
+]);
+
+/** Returns true if it is a positive user effect */
+export const isPositiveUserEffect = (tag: ZodAllTags) =>
+  isActivityBonus(tag) || POSITIVE_USER_EFFECT_TYPES.has(tag.type);
+
+/** Returns true if it is a negative user effect */
+export const isNegativeUserEffect = (tag: ZodAllTags) =>
+  NEGATIVE_USER_EFFECT_TYPES.has(tag.type);
 
 /** Based on type name, get the zod schema for validation of that tag */
 export const getTagSchema = (type: ZodAllTags["type"]) => {
