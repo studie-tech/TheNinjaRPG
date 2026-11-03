@@ -186,7 +186,7 @@ typecheck: # Run TypeScript type checking
 
 -------------DEPENDENCIES---------------: # -------------------------------------------------------
 .PHONY: deps-upgrade
-deps-upgrade: install # Upgrade npm manifests and lockfiles across the app, mobile shells and tower defense
+deps-upgrade: install # Upgrade npm manifests and lockfiles across the app and mobile shells
 	@echo "${YELLOW}Upgrading all dependencies ${RESET}"
 	node scripts/deps-upgrade.mjs
 
