@@ -169,7 +169,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     !!userData &&
     !conversation?.sendRestriction &&
     (!composeRestriction || canComposeDespiteRestriction);
-  // Single source of truth for toast + inline copy when compose is blocked.
+  // Single source of truth for the inline copy when compose is blocked.
   const composeRestrictionMessage =
     conversation?.sendRestriction ??
     (!composeRestriction
@@ -733,19 +733,12 @@ export const useConversation = (props: ConversationLogicProps) => {
    * cannot memoize what a render-time `handleSubmit(...)` captures.
    */
   const handleSubmitComment = (event?: React.BaseSyntheticEvent) =>
-    handleSubmit((data) => {
-      if (composeRestriction && !canComposeDespiteRestriction) {
-        showMutationToast({
-          success: false,
-          message: composeRestrictionMessage,
-        });
-        return;
-      }
+    handleSubmit((data) =>
       createComment({
         ...data,
         ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
-      });
-    })(event);
+      }),
+    )(event);
 
   /**
    * Invalidate comments & allow refetches again
