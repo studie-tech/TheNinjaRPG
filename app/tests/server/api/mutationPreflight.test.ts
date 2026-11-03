@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
 import { SELF_GUARDED_PYRAMID_PROCEDURES, ISOLATED_PYRAMID_MESSAGE, isPyramidRestrictedProcedure } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { homeRouter } from "@/server/api/routers/home";
@@ -173,7 +172,6 @@ describe("combat deferred rate limit", () => {
 
   it.each([1, 0])("preserves a single denial penalty with rowsAffected=%i", async (rowsAffected) => {
     mockLimiter(async () => [-1, 60]);
-    const profiler = vi.spyOn(Sentry.profiler, "startProfiler").mockImplementation(() => {});
     const penalty = vi.fn(async () => ({ rowsAffected }));
     const update = vi.fn(() => ({ set: () => ({ where: penalty }) }));
     // Any processing of this sentinel would throw; rate limiting must finish first.
@@ -181,7 +179,6 @@ describe("combat deferred rate limit", () => {
     await expect(api.performAction({ battleId: "battle" })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
     expect(update).toHaveBeenCalledTimes(1);
     expect(penalty).toHaveBeenCalledTimes(1);
-    expect(profiler).not.toHaveBeenCalled();
   });
 
   it("observes a limiter failure even if the first battle read rejects", async () => {

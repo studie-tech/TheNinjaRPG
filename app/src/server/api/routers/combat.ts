@@ -2,7 +2,6 @@ import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { after } from "next/server";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
@@ -308,9 +307,6 @@ import type { HuntingBattleState } from "@/validators/hunting";
 import { sectorIdSchema } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
-
-// Debug flag when testing battle
-const debug = false;
 
 // Pusher instance
 const pusher = getServerPusher();
@@ -653,10 +649,6 @@ export const combatRouter = createTRPCRouter({
         ]);
         if (!battle) return { updateClient: true };
         const stateBaseline = captureCombatStateUpdate(battle);
-        // A denied request must not start a profiler that the action cannot stop.
-        Sentry.profiler.startProfiler();
-        if (debug) console.log("============ Performing action ============");
-
         advanceEncounterWave(battle, !!dungeonBattleOutcome(battle));
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
@@ -709,12 +701,6 @@ export const combatRouter = createTRPCRouter({
           if (progressedRoundBeforeAction) {
             applySageModeAfterRoundTransition(newBattle);
           }
-          if (debug) {
-            console.log(
-              `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
-            );
-          }
-
           // Record all rounds for this endpoint call¨
           if (!actionRounds.includes(actionRound)) {
             actionRounds.push(actionRound);
@@ -797,7 +783,6 @@ export const combatRouter = createTRPCRouter({
               battleDescriptions.push(...aiState.aiDescriptions);
               performedActionId = aiState.nextActionId ?? performedActionId;
               performedByUserId = actor.userId;
-              // console.log("STATE SPACE: ", aiState.searchSize);
             } catch (error) {
               let notification = "Unknown Error";
               if (error instanceof Error) notification = error.message;
@@ -950,11 +935,6 @@ export const combatRouter = createTRPCRouter({
                 result ? undefined : buildCombatStateUpdate(stateBaseline, newBattle),
               );
             }
-
-            // Stop profiling. Flush after the response so the client is not
-            // blocked; after() keeps the Vercel lambda alive via waitUntil.
-            Sentry.profiler.stopProfiler();
-            after(() => Sentry.flush(15000));
 
             // Return the new battle + result state if applicable
             return {
