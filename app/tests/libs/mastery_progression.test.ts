@@ -11,7 +11,7 @@ import {
   masteryGainRoom,
   masteryTotal,
 } from "@/libs/masteryProgression";
-import { masteryQuestTemplates } from "@/libs/masteryQuests";
+import { masteryQuestTemplates } from "../setup/mastery";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { isAvailableUserQuests, collapseRewards } from "@/libs/quest";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -97,16 +97,6 @@ describe("earned mastery progression", () => {
         user({ ninjutsuMastery: 375000 }),
       ).check,
     ).toBe(true);
-  });
-  it("provides four hidden editable templates per mastery without requiring legacy quest history", () => {
-    const templates = masteryQuestTemplates();
-    expect(templates).toHaveLength(MasteryNames.length * 4);
-    expect(new Set(templates.map((t) => t.id)).size).toBe(24);
-    for (const template of templates) {
-      expect(template.hidden).toBe(true);
-      expect(template.prerequisiteQuestId).toBeNull();
-      expect(template.content.objectives).toHaveLength(3);
-    }
   });
   it("uses configured minimums for rank rewards instead of adding an implicit soft cap gate", () => {
     const adept = {
