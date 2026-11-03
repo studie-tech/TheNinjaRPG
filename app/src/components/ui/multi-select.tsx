@@ -43,7 +43,6 @@ function MultiSelect({
   onAddNewOption,
   placeholder,
   disabled = false,
-  ...props
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [newItemInput, setNewItemInput] = React.useState("");
@@ -83,7 +82,6 @@ function MultiSelect({
       onOpenChange={(nextOpen) => {
         if (!disabled) setOpen(nextOpen);
       }}
-      {...props}
     >
       <PopoverTrigger asChild>
         <div
@@ -96,9 +94,6 @@ function MultiSelect({
             isDirty ? "border-orange-300" : "border-input",
             disabled && "cursor-not-allowed opacity-50",
           )}
-          onClick={() => {
-            if (!disabled) setOpen(!open);
-          }}
           onKeyDown={(e) => {
             if (disabled) return;
             if (e.key === "Enter" || e.key === " ") {
@@ -181,7 +176,6 @@ function MultiSelect({
                 <Input
                   placeholder="Add new option..."
                   value={newItemInput}
-                  disabled={disabled}
                   onChange={(e) => setNewItemInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -194,7 +188,7 @@ function MultiSelect({
                 <Button
                   size="sm"
                   onClick={addNewItem}
-                  disabled={disabled || !newItemInput.trim()}
+                  disabled={!newItemInput.trim()}
                   className="h-8 w-8 p-0"
                 >
                   <Plus className="h-4 w-4" />
