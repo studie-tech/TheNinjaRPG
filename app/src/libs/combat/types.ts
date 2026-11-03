@@ -705,6 +705,9 @@ export type ShieldConversionsByUser = Map<
  * reference information added to the tag (i.e. how powerful was the effect)
  */
 export type BattleEffect = ZodAllTags & {
+  /** Presentation captured on the hidden cast, including reskins. */
+  counterName?: string;
+  counterDescription?: string;
   id: string;
   creatorId: string;
   level: number;

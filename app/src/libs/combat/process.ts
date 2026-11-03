@@ -33,6 +33,7 @@ import {
   damageReductionTypes,
   dmgConfig as defaultDmgConfig,
 } from "./constants";
+import { revealCounter } from "./counter";
 import { type DiffusePacket, deferDiffuseDamage, repayDiffuseDamage } from "./diffuse";
 import { areBattleAllies } from "./participants";
 import {
@@ -42,6 +43,7 @@ import {
   adjustDamageTaken,
   afterburn,
   applyFinalStandDamage,
+  armCounter,
   buffPrevent,
   calcDmgModifier,
   cleanse,
@@ -755,6 +757,107 @@ export const applyEffects = (
     );
   });
 
+  // Cancel all direct damage packets from the triggering cast before dependent
+  // effects read them. Retaliation is generated once and never re-enters Counter.
+  const retaliation = new Map<string, Consequence>();
+  const retaliationEffects: UserEffect[] = [];
+  const counteredTargets = new Set<string>();
+  for (const counter of newUsersEffects) {
+    if (
+      counter.type !== "counter" ||
+      !isEffectActive(counter) ||
+      counter.createdRound >= round ||
+      counteredTargets.has(counter.targetId)
+    )
+      continue;
+    const defender = usersStateById.get(counter.targetId);
+    const triggeringHit = usersEffects.find(
+      (hit) =>
+        (hit.type === "damage" || hit.type === "pierce") &&
+        hit.fromType === "jutsu" &&
+        hit.creatorId === actorId &&
+        hit.createdRound === round &&
+        hit.castThisRound &&
+        hit.targetId === counter.targetId &&
+        (consequences.get(hit.id)?.rawDamage ?? 0) > 0,
+    );
+    const attacker = triggeringHit && usersStateById.get(triggeringHit.creatorId);
+    if (!defender || !attacker || areBattleAllies(defender, attacker)) continue;
+    counteredTargets.add(counter.targetId);
+    for (const hit of usersEffects) {
+      if (
+        hit.creatorId === attacker.userId &&
+        hit.targetId === defender.userId &&
+        hit.actionId === triggeringHit.actionId &&
+        hit.createdRound === round &&
+        (hit.type === "damage" || hit.type === "pierce")
+      )
+        consequences.delete(hit.id);
+    }
+    const returnHit: UserEffect = {
+      ...counter,
+      type: "damage",
+      rounds: 0,
+      createdRound: round,
+      castThisRound: true,
+      isNew: true,
+      id: nanoid(),
+      targetId: attacker.userId,
+      barrierAbsorb: 0,
+    };
+    // Formula damage reads the transient stats after active stat tags apply.
+    const counterOrigin = usersState.find((user) => user.userId === defender.userId);
+    const counterTarget =
+      usersState.find((user) => user.userId === attacker.userId) ?? attacker;
+    damageUser(
+      returnHit,
+      counterOrigin,
+      counterTarget,
+      retaliation,
+      calcDmgModifier(returnHit, counterTarget, usersEffects),
+      battle.extraState.dmgConfig ?? defaultDmgConfig,
+    );
+    retaliationEffects.push(returnHit);
+    counter.rounds = 0;
+    const name = revealCounter(battle, counter);
+    actionEffects.push({
+      txt: `${counter.counterDescription ?? `${defender.username} uses ${name}`}. ${defender.username} counters ${attacker.username}'s jutsu, negating its damage.`,
+      color: "blue",
+      types: ["counter"],
+    });
+    if (counter.appearAnimation || counter.appearSfx) {
+      newGroundEffects.push(
+        getVisualOrSound(
+          attacker.longitude,
+          attacker.latitude,
+          counter.appearAnimation,
+          counter.appearSfx,
+          round,
+        ),
+      );
+    }
+    recordUsedTag(newUsersState, defender, "counter");
+  }
+  if (retaliation.size > 0) {
+    applyDamageModifierPipelineToConsequences({
+      consequences: retaliation,
+      usersEffects: [...usersEffects, ...retaliationEffects],
+      extraState: battle.extraState,
+      battleRound: round,
+      sealEffects,
+      eligibilityById: damageModifierEligibilityById,
+    });
+  }
+  for (const [id, consequence] of retaliation) {
+    consequence.types?.push("counter");
+    consequences.set(id, consequence);
+  }
+  for (let index = newUsersEffects.length - 1; index >= 0; index--) {
+    const effect = newUsersEffects[index];
+    if (effect?.type === "counter" && !isEffectActive(effect))
+      newUsersEffects.splice(index, 1);
+  }
+
   // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
   // These read consequence.damage to calculate their effect, so they must run after pierce
   // to include pierce damage in their calculations
@@ -1353,6 +1456,17 @@ export const applySingleEffect = (
   // Get the round information for the effect
   const { startRound, curRound } = calcEffectRoundInfo(effect, battle);
   effect.castThisRound = startRound === curRound;
+  // Hidden counters have no activation or teardown visuals. Their duration is
+  // advanced by alignBattle; a fresh cast cannot react during its casting round.
+  if (effect.type === "counter") {
+    const target = usersState.find((user) => user.userId === effect.targetId);
+    if (target) armCounter(effect, usersEffects, target);
+    if (isEffectActive(effect)) {
+      effect.isNew = false;
+      newUsersEffects.push(effect);
+    }
+    return;
+  }
   // Bookkeeping
   let longitude: number | undefined;
   let latitude: number | undefined;

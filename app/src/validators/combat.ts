@@ -306,6 +306,7 @@ export const PotencyTagTypes = [
   "afterburn",
   "lifesteal",
   "reflect",
+  "counter",
   "increaseheal",
   "heal",
   "vamp",
@@ -864,6 +865,16 @@ export const OneHitKillPreventTag = z.object({
   description: msg("Prevents instant kill effects"),
 });
 
+export const CounterTag = z.object({
+  ...DamageTag.shape,
+  type: z.literal("counter").prefault("counter"),
+  target: z.literal("SELF").prefault("SELF"),
+  rounds: z.coerce.number().int().min(1).max(100).prefault(1),
+  description: msg(
+    "Secretly prepare a single counter starting next round. Negate an enemy jutsu's damage and retaliate using this tag's power. Reveal on trigger or unused expiry.",
+  ),
+});
+
 export const ReflectTag = z.object({
   ...BaseAttributes,
   ...IncludeGeneralsAndElements,
@@ -1270,6 +1281,7 @@ export const AllTags = z.union([
   PoisonTag.prefault({}),
   RecoilTag.prefault({}),
   RedirectionTag.prefault({}),
+  CounterTag.prefault({}),
   ReflectTag.prefault({}),
   RemoveBloodline.prefault({}),
   RobPreventTag.prefault({}),
@@ -1393,6 +1405,7 @@ export const isPositiveUserEffect = (tag: ZodAllTags) => {
       "absorb",
       // "clearprevent",
       "consume",
+      "counter",
       "siphon",
       "debuffprevent",
       "increaseaggro",
@@ -1527,6 +1540,15 @@ const addIssue = (ctx: z.RefinementCtx, message: string) => {
  * Validator for using a specific item/jutsu action
  */
 const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) => {
+  if (
+    data.effects.some((e) => e.type === "counter") &&
+    (data.effects.length !== 1 || data.target !== "SELF")
+  ) {
+    addIssue(
+      ctx,
+      "Counter requires a self-targeted action containing only the Counter tag",
+    );
+  }
   if (data.method === "COORDINATES" && !data.coordinateTargeting) {
     ctx.addIssue({
       code: "custom",
@@ -1588,6 +1610,8 @@ const SuperRefineBase = (data: ContentBaseValidatorType, ctx: z.RefinementCtx) =
  * Validator specific to items
  */
 const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
+  if (data.effects.some((e) => e.type === "counter"))
+    addIssue(ctx, "Counter is only supported on jutsu");
   if (data.itemType === "MEAL") {
     for (const [field, expected] of Object.entries(MEAL_ITEM_DEFAULTS)) {
       if (
@@ -1936,6 +1960,9 @@ export const SuperRefinePassiveEffects = (
   effects: ZodAllTags[],
   ctx: z.RefinementCtx,
 ) => {
+  if (effects.some((e) => e.type === "counter"))
+    addIssue(ctx, "Counter requires an actively cast jutsu");
+
   effects.forEach((effect, index) => {
     if (effect.type === "increasejutsuslots") {
       ctx.addIssue({

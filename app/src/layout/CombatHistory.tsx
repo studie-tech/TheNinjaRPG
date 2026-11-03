@@ -146,6 +146,11 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
         <div className="flex flex-col gap-1">
           {isOpen &&
             entries
+              // Hidden casts retain anonymous rows for cache continuity.
+              .filter(
+                (entry) =>
+                  entry.description || (entry.appliedEffects as ActionEffect[])?.length,
+              )
               .sort((a, b) => b.battleVersion - a.battleVersion)
               .map((entry) => {
                 const effects = entry.appliedEffects as ActionEffect[];

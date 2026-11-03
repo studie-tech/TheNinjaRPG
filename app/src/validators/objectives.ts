@@ -211,6 +211,7 @@ export const OBJECTIVE_TAG_TYPES = [
   "clear",
   "clearprevent",
   "consume",
+  "counter",
   "siphon",
   "copy",
   "damage",

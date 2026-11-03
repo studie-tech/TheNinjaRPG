@@ -99,6 +99,7 @@ import {
   InjectJutsusTag,
   MoveTag,
 } from "@/validators/combat";
+import { isCounterAction } from "./counter";
 
 /**
  * Given a user, return a list of actions that the user can perform
@@ -1246,7 +1247,10 @@ export const insertAction = (info: {
       });
       // Combat logs outlive summons and clones; retain definitions of revealed
       // actions even when their caster is removed from usersState.
-      if (action.type === "jutsu" || action.type === "item") {
+      if (
+        !isCounterAction(action) &&
+        (action.type === "jutsu" || action.type === "item")
+      ) {
         battle.extraState.revealedActions ??= { jutsuIds: [], itemIds: [] };
         const revealed = battle.extraState.revealedActions;
         const ids = action.type === "jutsu" ? revealed.jutsuIds : revealed.itemIds;
@@ -1306,6 +1310,19 @@ export const insertAction = (info: {
           "%target",
           targetUsernames.join(", "),
         );
+      }
+      if (isCounterAction(action)) {
+        for (const effect of usersEffects) {
+          if (
+            effect.type === "counter" &&
+            effect.isNew &&
+            effect.creatorId === actorId
+          ) {
+            effect.counterName = action.name;
+            effect.counterDescription = action.battleDescription;
+          }
+        }
+        action.battleDescription = "";
       }
       // Successful action
       return true;
@@ -1442,7 +1459,7 @@ export const performBattleAction = (props: {
   const animated = newBattle.usersState.find((entry) => entry.userId === actorId);
   const animation = spriteActionAnimation(action);
   // Batched auto turns can end with wait/stance bookkeeping after the visible attack.
-  if (animated && animation !== "idle")
+  if (animated && animation !== "idle" && !isCounterAction(action))
     animated.spriteAction = {
       id: nanoid(),
       animation,

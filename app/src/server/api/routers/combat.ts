@@ -75,6 +75,7 @@ import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
+import { isCounterAction } from "@/libs/combat/counter";
 import {
   createAction,
   saveUsage,
@@ -777,7 +778,9 @@ export const combatRouter = createTRPCRouter({
               newBattle = newState.newBattle;
               actionPerformed = true;
               actionEffects.push(...newState.actionEffects);
-              battleDescriptions.push(action.battleDescription);
+              if (isCounterAction(action)) performedActionId = "unknown";
+              if (action.battleDescription)
+                battleDescriptions.push(action.battleDescription);
             } catch (error) {
               let notification = "Unknown Error";
               if (error instanceof Error) notification = error.message;
@@ -808,11 +811,8 @@ export const combatRouter = createTRPCRouter({
             !actor.isSummon
           )
             newBattle.extraState.dungeon.lastActionRound[actor.userId] = actionRound;
-          // If no description, means no actions, just return now
-          let description = battleDescriptions.join(". ");
-          if (!description && actionPerformed && history.length === 0) {
-            return { updateClient: false, notification: "No battle description" };
-          }
+          // Hidden actions still spend resources and advance the battle version.
+          let description = battleDescriptions.filter(Boolean).join(". ");
 
           // Check if everybody finished their action, and if so, fast-forward the battle
           // (alignBattle removes masterless summons before it picks the next actor)
@@ -836,15 +836,19 @@ export const combatRouter = createTRPCRouter({
           });
           if (actionPerformed && progressRound) {
             const dot = description.endsWith(".");
-            description += `${dot ? "" : ". "} It is now ${newActor.username}'s turn.`;
+            description = description
+              ? `${description}${dot ? "" : "."} It is now ${newActor.username}'s turn.`
+              : `It is now ${newActor.username}'s turn.`;
           }
 
-          // Round expiry can change the battlefield without an action description.
-          if (description || actionEffects.length) {
+          // Anonymous empty rows keep hidden casts contiguous for log caches.
+          // Round expiry can also change the battlefield without an action.
+          if (description || actionEffects.length || actionPerformed) {
             history.push({
               battleRound: actionRound,
               appliedEffects: actionEffects,
-              description: description || "Battlefield effects expire.",
+              description:
+                description || (actionPerformed ? "" : "Battlefield effects expire."),
               battleVersion: newBattle.version + nActions,
               actionId: performedActionId ?? "unknown",
               userId: performedByUserId ?? actor.userId,

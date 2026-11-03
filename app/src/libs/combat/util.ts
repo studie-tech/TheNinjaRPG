@@ -96,6 +96,7 @@ import {
   POST_PIERCE_TAGS,
   publicState,
 } from "./constants";
+import { expireCounters, isCounterAction } from "./counter";
 import { checkFriendlyFire, expireGroundEffects } from "./process";
 import { decreaseMastery, getPower, increaseMastery, sealCheck } from "./tags";
 import type {
@@ -1763,7 +1764,12 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
     jutsuIds.add(SAGE_MODE_ACTIVATION_JUTSU_ID);
   for (const user of battle.usersState) {
     for (const action of user.usedActions ?? []) {
-      if (action.type === "jutsu") jutsuIds.add(action.id);
+      if (
+        action.type === "jutsu" &&
+        (!isCounterAction({ effects: state?.jutsus?.[action.id]?.effects ?? [] }) ||
+          controlledUsers.some((controlled) => controlled.userId === user.userId))
+      )
+        jutsuIds.add(action.id);
       if (action.type === "item") itemIds.add(action.id);
     }
   }
@@ -1906,6 +1912,8 @@ const maskBattleEffects = <T extends BattleEffect>(
   return (effects ?? [])
     .filter(
       (effect) =>
+        (effect.type !== "counter" ||
+          ("targetId" in effect && controlledIds.has(String(effect.targetId)))) &&
         !templateIds.has(effect.creatorId) &&
         !("targetId" in effect && templateIds.has(String(effect.targetId))),
     )
@@ -3072,7 +3080,10 @@ export const alignBattle = (
       ...battle.usersState.slice(actorIndex + 1),
       ...battle.usersState.slice(0, actorIndex),
     ];
-    expiredEffects = expireGroundEffects(battle, actionRounds);
+    expiredEffects = [
+      ...expireCounters(battle),
+      ...expireGroundEffects(battle, actionRounds),
+    ];
     // Preserve cyclic initiative if the next actor expired; refilled action
     // points can make recalculation restart at a different combatant.
     if (!battle.usersState.some((user) => user.userId === actor.userId)) {

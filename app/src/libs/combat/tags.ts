@@ -230,6 +230,28 @@ const checkPreventImmunity = (
   return undefined;
 };
 
+/** Arm a private Counter, respecting buff prevention without public cast text. */
+export const armCounter = (
+  effect: UserEffect,
+  effects: UserEffect[],
+  target: BattleUserState,
+) => {
+  if (effect.isNew) {
+    const { pass } = preventCheck(effects, "buffprevent", target, effect);
+    if (!pass) effect.rounds = 0;
+    else {
+      for (const previous of effects) {
+        if (
+          previous.type === "counter" &&
+          previous.id !== effect.id &&
+          previous.targetId === target.userId
+        )
+          previous.rounds = 0;
+      }
+    }
+  }
+};
+
 /** Prevent buffing */
 export const buffPrevent = (
   effect: UserEffect,

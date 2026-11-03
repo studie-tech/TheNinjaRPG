@@ -32,6 +32,7 @@ import type { ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
 import { ActionEndTurn, enforceExtraRules, getBackupRules } from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
 import type { TerrainHex } from "../hexgrid";
+import { isCounterAction } from "./counter";
 
 type ActionWithTarget = {
   action: CombatAction;
@@ -449,7 +450,9 @@ export const performAIaction = (
             if (!targetUser) return false;
             const targetEffects = nextBattle.usersEffects.filter(
               (e) =>
-                e.targetId === targetUser.userId && e.type === condition.effectType,
+                e.targetId === targetUser.userId &&
+                e.type === condition.effectType &&
+                (e.type !== "counter" || targetUser.controllerId === user.controllerId),
             );
             if (targetEffects.length === 0) return false;
             const totalTargetPower = targetEffects.reduce(
@@ -600,7 +603,8 @@ export const performAIaction = (
         if (check.canAct && result) {
           nextBattle = result.newBattle;
           nextActionEffects.push(...result.actionEffects);
-          aiDescriptions.push(nextAction.action.battleDescription);
+          if (nextAction.action.battleDescription)
+            aiDescriptions.push(nextAction.action.battleDescription);
           break;
         }
         nextAction = undefined;
@@ -645,7 +649,10 @@ export const performAIaction = (
   }
 
   // Return the new state
-  const nextActionId = nextAction?.action?.id ?? undefined;
+  const nextActionId =
+    nextAction && isCounterAction(nextAction.action)
+      ? "unknown"
+      : nextAction?.action?.id;
   return { nextBattle, nextActionEffects, aiDescriptions, nextActionId };
 };
 

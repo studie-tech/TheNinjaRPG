@@ -372,3 +372,14 @@ it("marks an inactive saved log stale once until it is reopened", async () => {
   expect(invalidate).toHaveBeenCalledTimes(1);
   expect(readEntries).toHaveBeenCalledTimes(1);
 });
+
+
+it("keeps anonymous hidden casts in the cache without rendering a log entry", async () => {
+  entries = [{ ...lethalEntry, id: "hidden-cast", actionId: "unknown", description: "", appliedEffects: [] }];
+  const view = mount(false);
+  await waitFor(() => expect(readEntries).toHaveBeenCalledTimes(1));
+  await waitFor(() => {
+    expect(queryClient.getQueryCache().getAll().some((query) => Array.isArray(query.state.data) && query.state.data.some((row) => row.id === "hidden-cast"))).toBe(true);
+  });
+  expect(view.queryByText(/#3:/)).toBeNull();
+});
