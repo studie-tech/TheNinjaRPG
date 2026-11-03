@@ -1410,7 +1410,7 @@ const PlayerTutorialAssistant: React.FC<
                 className="absolute rounded-lg"
                 style={highlightHoleStyle(gameMenuHighlight)}
               >
-                <span className="absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70" />
+                <span className="absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70 motion-reduce:animate-none" />
                 <div className="absolute inset-0 z-[1] rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]">
                   <button
                     type="button"
@@ -1558,7 +1558,7 @@ const PlayerTutorialAssistant: React.FC<
               style={highlightHoleStyle(highlight)}
             >
               {showPointer && (
-                <span className="pointer-events-none absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70" />
+                <span className="pointer-events-none absolute inset-0 animate-ping rounded-lg border-2 border-amber-300/70 motion-reduce:animate-none" />
               )}
               <div className="absolute inset-0 z-[1] rounded-lg border-[3px] border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.8)]">
                 <button
@@ -1878,7 +1878,7 @@ const HandPointer: React.FC<{
       alt=""
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute h-14 w-14 animate-bounce drop-shadow-lg",
+        "pointer-events-none absolute h-14 w-14 animate-bounce drop-shadow-lg motion-reduce:animate-none",
         !below && "rotate-180",
       )}
       width={80}

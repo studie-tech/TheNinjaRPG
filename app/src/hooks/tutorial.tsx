@@ -746,11 +746,25 @@ export const useTutorialStep = () => {
 
   // Live guidance for the hands-on combat lesson
   const combatGuidance = (() => {
-    if (!battle || !userId || pathname !== "/combat") return undefined;
+    if (
+      !battle ||
+      !userId ||
+      pathname !== "/combat" ||
+      !staticStep ||
+      !GUIDED_COMBAT_STEP_IDS.includes(staticStep.id)
+    )
+      return undefined;
     const self = battle.usersState.find((u) => u.userId === userId);
     if (!self) return undefined;
     if (self.isAutoCombat) return { kind: "auto" } as const;
-    const { actor } = calcActiveUser(battle, userId, timeDiff);
+    // A snapshot without an acting combatant (between rounds) gives no
+    // instruction rather than breaking the battle page.
+    let actorId: string;
+    try {
+      actorId = calcActiveUser(battle, userId, timeDiff).actor.userId;
+    } catch {
+      return undefined;
+    }
     const options = availableUserActions(battle, userId).map((action) => ({
       id: action.id,
       name: action.name,
@@ -763,7 +777,7 @@ export const useTutorialStep = () => {
           battle.round - action.lastUsedRound >= action.cooldown),
     }));
     return getTutorialCombatGuidance({
-      isPlayersTurn: actor.userId === userId,
+      isPlayersTurn: actorId === userId,
       distanceToEnemy: getDistanceToClosestEnemy(battle, userId),
       selectedActionId,
       options,
