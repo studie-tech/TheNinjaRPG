@@ -1928,7 +1928,6 @@ const Equip: React.FC<EquipProps> = (props) => {
           {/* Durability bar */}
           {item.maxDurability !== undefined &&
             item.durability !== undefined &&
-            item.maxDurability > 0 &&
             typeof item.durability === "number" && (
               <DurabilityBar
                 currentDurability={item.durability}

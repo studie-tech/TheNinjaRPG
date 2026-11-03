@@ -59,7 +59,6 @@ interface ActionSelectorSettingsProps {
   labelSingles?: boolean;
   onClick: (id: string) => void;
   emptyText?: string;
-  lastElement?: HTMLDivElement | null;
   setLastElement?: (el: HTMLDivElement | null) => void;
   showInfoIcon?: boolean;
   /**
@@ -463,16 +462,14 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           </div>
         ))}
         {/* Durability bar */}
-        {item.durability !== undefined &&
-          item.maxDurability !== undefined &&
-          item.maxDurability > 0 && (
-            <DurabilityBar
-              currentDurability={item.durability}
-              maxDurability={item.maxDurability}
-              position="top-left"
-              size="medium"
-            />
-          )}
+        {item.durability !== undefined && item.maxDurability !== undefined && (
+          <DurabilityBar
+            currentDurability={item.durability}
+            maxDurability={item.maxDurability}
+            position="top-left"
+            size="medium"
+          />
+        )}
         {/* Favorite indicator - top right corner */}
         {item.isFavorite && (
           <div className="absolute top-[-5px] right-[-5px]">

@@ -1522,7 +1522,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 }}
                 showBgColor={false}
                 showLabels={true}
-                lastElement={lastElement}
                 setLastElement={setLastElement}
               />
             </div>

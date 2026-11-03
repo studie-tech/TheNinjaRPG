@@ -11,7 +11,6 @@ const durabilityBarVariants = cva(
         "top-left": "top-1 left-1",
       },
       size: {
-        small: "h-8 w-1",
         medium: "h-12 w-1.5",
         large: "h-16 w-2",
       },
@@ -23,13 +22,11 @@ const durabilityBarVariants = cva(
   },
 );
 
-export interface DurabilityBarProps extends VariantProps<typeof durabilityBarVariants> {
+interface DurabilityBarProps extends VariantProps<typeof durabilityBarVariants> {
   /** Current durability value */
   currentDurability: number;
-  /** Maximum durability value */
+  /** Maximum durability value; nothing renders unless it is positive */
   maxDurability: number;
-  /** Additional CSS classes */
-  className?: string;
 }
 
 export const DurabilityBar: React.FC<DurabilityBarProps> = ({
@@ -37,8 +34,9 @@ export const DurabilityBar: React.FC<DurabilityBarProps> = ({
   maxDurability,
   position,
   size,
-  className,
 }) => {
+  if (maxDurability <= 0) return null;
+
   // Calculate durability percentage
   const durabilityPercentage = Math.max(
     0,
@@ -53,7 +51,7 @@ export const DurabilityBar: React.FC<DurabilityBarProps> = ({
   };
 
   return (
-    <div className={cn(durabilityBarVariants({ position, size, className }))}>
+    <div className={durabilityBarVariants({ position, size })}>
       <div
         className={cn("w-full rounded-sm transition-all duration-300", getColor())}
         style={{
