@@ -666,7 +666,7 @@ const StatsTraining: React.FC<
     });
 
   // A solved captcha covers stat, Energy queue and mastery actions for the grace window,
-  // so the training actions themselves no longer send a guess.
+  // so the training actions themselves send no guess.
   const collectMasteryTraining = () => {
     const { stat, startedAt } = session;
     if (stat && startedAt) stopMasteryTraining({ stat, startedAt });
