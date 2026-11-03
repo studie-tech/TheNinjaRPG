@@ -357,11 +357,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     username: string;
   } | null>(null);
   const [avatarUpdatePending, setAvatarUpdatePending] = useState(false);
-  const [committedAvatarUpdate, setCommittedAvatarUpdate] = useState<{
-    userId: string;
-    sourceAvatar: string | null;
-    avatar: string;
-  } | null>(null);
   const avatarUpdateRequestRef = useRef<typeof avatarUpdateTarget>(null);
   const [clearNindoTarget, setClearNindoTarget] = useState<{
     userId: string;
@@ -517,8 +512,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       showMutationToast(data);
       if (!data.success) return;
 
-      // Hide the action and render the committed image before cache work, so a stale
-      // profile response cannot expose a second moderation request for the old avatar.
+      // The modal closes before the profile refresh.
       setAvatarUpdateTarget(null);
       void utils.profile.getPublicUser.invalidate();
     } catch (error) {
@@ -876,18 +870,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Derived
   const canChange = userData && canClearUserNindo(userData);
 
-  let visibleAvatar = profile?.avatar;
-  let suppressStaleAvatarAction = false;
-  if (
-    committedAvatarUpdate &&
-    profile &&
-    committedAvatarUpdate.userId === profile.userId &&
-    committedAvatarUpdate.sourceAvatar === profile.avatar
-  ) {
-    visibleAvatar = committedAvatarUpdate.avatar;
-    suppressStaleAvatarAction = true;
-  }
-
   const suppressStaleClearedNindo = Boolean(
     committedNindoClear &&
       profile?.nindo &&
@@ -895,17 +877,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       committedNindoClear.nindoId === profile.nindo.id &&
       committedNindoClear.expectedContent === profile.nindo.content,
   );
-
-  useEffect(() => {
-    if (
-      committedAvatarUpdate &&
-      profile &&
-      committedAvatarUpdate.userId === profile.userId &&
-      profile.avatar === committedAvatarUpdate.avatar
-    ) {
-      setCommittedAvatarUpdate(null);
-    }
-  }, [committedAvatarUpdate, profile?.avatar, profile?.userId]);
 
   useEffect(() => {
     if (
@@ -1584,7 +1555,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   className="rounded-2xl"
                 >
                   <AvatarImage
-                    href={visibleAvatar}
+                    href={profile.avatar}
                     alt={profile.username}
                     hover_effect={false}
                     className="w-full"
@@ -1592,7 +1563,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     size={100}
                   />
                 </GlowingBorder>
-                {canChange && !profile.isAi && !suppressStaleAvatarAction && (
+                {canChange && !profile.isAi && (
                   <TooltipProvider delayDuration={50}>
                     <Tooltip>
                       <TooltipTrigger asChild>
