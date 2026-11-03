@@ -397,12 +397,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {navbarMenuItems.map((system) => {
           return (
-            <Link
-              key={system.href}
-              href={system.href}
-              onClick={onNavigate}
-              className={system.className ? system.className : ""}
-            >
+            <Link key={system.href} href={system.href} onClick={onNavigate}>
               <Button
                 decoration={variantClasses.mainMenuDecoration}
                 className={variantClasses.mainMenuButton}
@@ -448,17 +443,11 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
         {systems.map((system) => {
           const disabled = system.requireAwake && userData?.status !== "AWAKE";
           return (
-            <Link
-              key={system.href}
-              href={system.href}
-              className={system.className ? system.className : ""}
-              id={system.id}
-            >
+            <Link key={system.href} href={system.href} id={system.id}>
               <Button
                 decoration={variantClasses.rightMenuDecoration}
                 className={cn(
                   variantClasses.rightMenuButton,
-                  system.className,
                   variant === "default" &&
                     (disabled ? "opacity-30" : "hover:bg-orange-200"),
                   variant === "pixel" && disabled && "opacity-35",

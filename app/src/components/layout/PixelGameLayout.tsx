@@ -125,9 +125,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       key={link.name}
                       className="relative z-10 flex flex-row items-center justify-center gap-1 px-2 py-2 hover:text-amber-300"
                       href={link.href}
-                      onClick={async () => {
-                        if (link.onClick) await link.onClick();
-                      }}
                     >
                       <span className="relative flex min-w-0 items-center gap-1">
                         {link.icon}

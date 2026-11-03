@@ -35,10 +35,8 @@ export interface NavBarDropdownLink {
   href: string;
   name: string;
   requireAwake?: boolean;
-  className?: string;
   color?: "default" | "red" | "green" | "blue" | "toast" | "hidden";
   icon?: ReactNode;
-  onClick?: () => Promise<void>;
   group?: string;
   notificationCount?: number;
   /** If true, notification will be shown even when user is on the same page as href */

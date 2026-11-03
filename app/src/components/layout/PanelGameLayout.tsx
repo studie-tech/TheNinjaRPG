@@ -168,13 +168,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
           data-compact-hide
         >
           {navbarMenuItems.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              onClick={async () => {
-                if (link.onClick) await link.onClick();
-              }}
-            >
+            <Link key={link.name} href={link.href}>
               {link.icon}
               <span>{link.name}</span>
               {(link.notificationCount ?? 0) > 0 && (

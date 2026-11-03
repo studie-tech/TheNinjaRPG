@@ -160,11 +160,6 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                     key={link.name}
                     className="relative z-10 flex flex-row items-center justify-center gap-1 hover:cursor-pointer hover:text-orange-500"
                     href={link.href}
-                    onClick={async () => {
-                      if (link.onClick) {
-                        await link.onClick();
-                      }
-                    }}
                   >
                     {link.icon}
                     {link.name}
@@ -183,9 +178,6 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   key={link.name}
                   className="z-10 flex flex-row items-center justify-center gap-1 hover:text-orange-500"
                   href={link.href}
-                  onClick={async () => {
-                    if (link.onClick) await link.onClick();
-                  }}
                 >
                   {link.icon}
                   {link.name}
