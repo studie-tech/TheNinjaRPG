@@ -103,13 +103,11 @@ describeWithDatabase("mutation cache recovery for abandoned merge claims", () =>
     await db.insert(farmPlot).values({ id: "ready", userId: "recovery-player", slotIndex: 0, seedItemId: "seed", plantedAt: new Date(initialTime.getTime() - 7_200_000), finishAt: new Date(initialTime.getTime() - 1000) });
     const api = await callerFor(farmingRouter, "recovery-player");
     const before = await api.getFarmState();
-    if (!("plots" in before)) throw new Error(before.message);
     expect(before.availableSeeds).toEqual([]);
     const client = new QueryClient();
     cleanups.push(() => client.clear());
     const farm = observeCache(client, ["farm"], before, async () => {
       const state = await api.getFarmState();
-      if (!("plots" in state)) throw new Error(state.message);
       return state;
     });
 

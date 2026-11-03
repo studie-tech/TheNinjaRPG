@@ -151,7 +151,6 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     await db.insert(farmPlot).values(Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({ id: `plot-${slotIndex}`, userId, slotIndex, ...(planting ? {} : { seedItemId: "seed", plantedAt: new Date(Date.now() - 120000), finishAt: new Date(Date.now() + (harvesting ? -60000 : 3600000)) }) })));
     const api = await callerFor(farmingRouter, userId);
     const before = await api.getFarmState();
-    if ("success" in before) throw new Error(before.message);
     const actions = {
       plantSeed: () => api.plantSeed({ plotId: "plot-0", seedItemId: "seed" }),
       plantAllEmpty: () => api.plantAllEmpty({ seedItemId: "seed" }),

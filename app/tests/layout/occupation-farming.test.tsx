@@ -6,7 +6,7 @@ import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const refetch = vi.fn(async () => undefined);
 const query = {
-  data: undefined as { success: false; message: string } | undefined,
+  data: undefined,
   isLoading: false,
   isFetching: false,
   refetch,
@@ -125,11 +125,10 @@ describe("OccupationFarming load recovery", () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("shows prerequisite rejection feedback and blocks duplicate retries", () => {
-    query.data = { success: false, message: "You must be awake to use your farm." };
+  it("blocks duplicate retries while a refetch is in flight", () => {
     query.isFetching = true;
     const view = renderFarm();
-    expect(view.getByRole("alert").textContent).toContain(query.data.message);
+    expect(view.getByRole("alert").textContent).toContain("Could not load the farm.");
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(refetch).not.toHaveBeenCalled();
   });

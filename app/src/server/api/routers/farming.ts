@@ -1500,7 +1500,7 @@ const buildShopEntries = (
 export const buildFarmState = async (
   client: DrizzleClient,
   userId: string,
-): Promise<FarmStateResponse | { success: false; message: string }> => {
+): Promise<FarmStateResponse> => {
   const now = new Date();
   const userPromise = fetchUser(client, userId);
   const extractionsPromise = settleFarmExtractions(client, userId, now);
