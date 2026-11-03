@@ -70,19 +70,6 @@ import {
 } from "@/validators/weightedCache";
 
 /**
- * Schema & types for performing battle actions
- */
-export const performActionSchema = z.object({
-  battleId: z.string(),
-  userId: z.string().optional(),
-  actionId: z.string().optional(),
-  longitude: z.number().optional(),
-  latitude: z.number().optional(),
-  version: z.number(),
-});
-export type PerformActionType = z.infer<typeof performActionSchema>;
-
-/**
  * Convenience method for a string with a default value
  */
 const msg = (defaultString: string) => {
@@ -2438,11 +2425,6 @@ export const actSchema = z.object({
     )
     .prefault(["Ninjutsu"]),
   generalTypes: z.array(z.enum(GeneralTypes)).prefault(["Strength"]),
-});
-
-export const toggleAutoCombatSchema = z.object({
-  battleId: z.string(),
-  enabled: z.boolean(),
 });
 
 /** A player's real level and experience, which can exceed what their stats sum to */

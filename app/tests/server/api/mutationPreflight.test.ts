@@ -163,7 +163,7 @@ describe("combat deferred rate limit", () => {
     mockLimiter(() => { limiterStarted.resolve(); return limiter.promise; });
     const read = vi.fn(async () => { battleStarted.resolve(); return undefined; });
     let finished = false;
-    const result = caller(combatRouter, withTx({ query: { battle: { findFirst: read } } })).performAction({ battleId: "missing", version: 0 }).then((value) => { finished = true; return value; });
+    const result = caller(combatRouter, withTx({ query: { battle: { findFirst: read } } })).performAction({ battleId: "missing" }).then((value) => { finished = true; return value; });
     await Promise.all([limiterStarted.promise, battleStarted.promise]);
     expect(finished).toBe(false);
     limiter.resolve([59, 60]);
@@ -178,7 +178,7 @@ describe("combat deferred rate limit", () => {
     const update = vi.fn(() => ({ set: () => ({ where: penalty }) }));
     // Any processing of this sentinel would throw; rate limiting must finish first.
     const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => ({}) }, userData: { findFirst: async () => balance } }, update, insert: logInsert() }));
-    await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
+    await expect(api.performAction({ battleId: "battle" })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
     expect(update).toHaveBeenCalledTimes(1);
     expect(penalty).toHaveBeenCalledTimes(1);
     expect(profiler).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe("combat deferred rate limit", () => {
   it("observes a limiter failure even if the first battle read rejects", async () => {
     mockLimiter(async () => ({ error: "ERR limiter unavailable" }));
     const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => { throw new Error("battle read failed"); } } } }));
-    await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toThrow("limiter unavailable");
+    await expect(api.performAction({ battleId: "battle" })).rejects.toThrow("limiter unavailable");
   });
 
   it("keeps limiter rejection ahead of input validation without a battle read", async () => {

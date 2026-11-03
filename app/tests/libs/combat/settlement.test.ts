@@ -717,7 +717,6 @@ describeWithDatabase("CAS combat settlement", () => {
     const api = await callerFor(combatRouter, "winner");
     const response = await api.performAction({
       battleId: snapshot.id,
-      version: 1,
     });
     if (!("result" in response) || !response.result)
       throw new Error("Expected settlement result");
@@ -794,7 +793,7 @@ describeWithDatabase("CAS combat settlement", () => {
       const request =
         route === "getBattle"
           ? api.getBattle({ battleId: snapshot.id })
-          : api.performAction({ battleId: snapshot.id, version: 1 });
+          : api.performAction({ battleId: snapshot.id });
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
@@ -837,7 +836,7 @@ describeWithDatabase("CAS combat settlement", () => {
       const response =
         route === "getBattle"
           ? await api.getBattle({ battleId: snapshot.id })
-          : await api.performAction({ battleId: snapshot.id, version: 1 });
+          : await api.performAction({ battleId: snapshot.id });
       if (!("result" in response) || !response.result)
         throw new Error("Expected settlement result");
       expect(attempts).toBe(2);

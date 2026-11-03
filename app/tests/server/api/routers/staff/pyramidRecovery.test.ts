@@ -99,7 +99,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeUndefined();
     const oldTab = await callerFor(combatRouter, "hero");
     expect(await oldTab.getBattle({ battleId: "hunt" })).toEqual({ battle: null, result: null });
-    expect(await oldTab.performAction({ battleId: "hunt", version: 0 })).toEqual({ updateClient: true });
+    expect(await oldTab.performAction({ battleId: "hunt" })).toEqual({ updateClient: true });
   });
 
   it("keeps the hunting battle recoverable when waking the character fails", async () => {
@@ -121,7 +121,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     if (route === "getBattle")
       await expect(oldTab.getBattle({ battleId: "hunt" })).rejects.toThrow("Hunting session changed during settlement");
     else
-      expect(await oldTab.performAction({ battleId: "hunt", version: 0 })).toEqual({ updateClient: true, notification: "Unable to update battle. Please try again." });
+      expect(await oldTab.performAction({ battleId: "hunt" })).toEqual({ updateClient: true, notification: "Unable to update battle. Please try again." });
     expect(await database.query.huntingReceipt.findMany()).toHaveLength(0);
     expect(await database.query.userItem.findMany()).toHaveLength(0);
     expect(await database.query.huntingProgress.findFirst()).toMatchObject({ used: 1, cooldownUntil: null, version: 0 });

@@ -301,9 +301,7 @@ import {
   BarrierTag,
   IncreaseDamageGivenTag,
   isActivityBonus,
-  performActionSchema,
   statSchema,
-  toggleAutoCombatSchema,
   type ZodAllTags,
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
@@ -631,7 +629,14 @@ export const combatRouter = createTRPCRouter({
   performAction: protectedProcedure
     .meta({ mcp: { description: "Perform action in battle" } })
     .use(deferredRatelimitMiddleware)
-    .input(performActionSchema)
+    .input(
+      z.object({
+        battleId: z.string(),
+        actionId: z.string().optional(),
+        longitude: z.number().optional(),
+        latitude: z.number().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Short-form
       const suid = ctx.userId;
@@ -1575,7 +1580,7 @@ export const combatRouter = createTRPCRouter({
       },
     })
     .use(ratelimitMiddleware)
-    .input(toggleAutoCombatSchema)
+    .input(z.object({ battleId: z.string(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Maximum number of retry attempts
       const MAX_RETRIES = 3;

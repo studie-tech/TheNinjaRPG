@@ -85,7 +85,7 @@ const mount = (initial = stateAt(1)) => {
     });
     performAction = () => {
       if (!startAction("battle")) return;
-      action.mutate({ battleId: "battle" } as never);
+      action.mutate({ battleId: "battle" });
     };
     return null;
   }

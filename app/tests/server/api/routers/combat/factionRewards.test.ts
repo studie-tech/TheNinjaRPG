@@ -99,7 +99,7 @@ describeWithDatabase("combat team faction rewards", () => {
         updatedAt: new Date(Date.now() + 1000) }).where(eq(battle.id, saved.id));
       const actor = await callerFor(combatRouter, actorId);
       const ally = await callerFor(combatRouter, allyId);
-      const acting = await actor.performAction({ battleId: saved.id, version: saved.version });
+      const acting = await actor.performAction({ battleId: saved.id });
       if (!("result" in acting) || !acting.result) throw new Error("Expected acting settlement");
       const polls = await Promise.all([
         ally.getBattle({ battleId: saved.id }), ally.getBattle({ battleId: saved.id }),
@@ -120,7 +120,7 @@ describeWithDatabase("combat team faction rewards", () => {
         const paid = await factionTotals(userId);
         const api = userId === actorId ? actor : ally;
         expect((await api.getBattle({ battleId: saved.id })).result).toBeNull();
-        await api.performAction({ battleId: saved.id, version: saved.version });
+        await api.performAction({ battleId: saved.id });
         expect(await factionTotals(userId)).toEqual(paid);
       }
       expect(polling.clanPoints).toBe(acting.result.clanPoints);
@@ -170,7 +170,7 @@ describeWithDatabase("combat team faction rewards", () => {
       expect(predicted[1]!.didWin).toBe(1);
       expect(predicted[1]!.clanPoints).toBeGreaterThan(0);
       const allyBefore = (await db.query.userData.findFirst({ where: eq(userData.userId, winners[1]!) }))!;
-      if (route === "performAction") await actor.performAction({ battleId: saved.id, version: saved.version });
+      if (route === "performAction") await actor.performAction({ battleId: saved.id });
       else await actor.getBattle({ battleId: saved.id });
       for (const [index, id] of winners.entries()) {
         const result = predicted[index]!;
@@ -185,8 +185,8 @@ describeWithDatabase("combat team faction rewards", () => {
       expect(await db.query.raidParticipation.findFirst({ where: eq(raidParticipation.userId, winners[1]!) })).toBeUndefined();
       expect(await ally.getBattle({ battleId: saved.id })).toEqual({ battle: null, result: null });
       const paid = await factionTotals(winners[1]!);
-      await ally.performAction({ battleId: saved.id, version: saved.version });
-      await actor.performAction({ battleId: saved.id, version: saved.version });
+      await ally.performAction({ battleId: saved.id });
+      await actor.performAction({ battleId: saved.id });
       expect(await factionTotals(winners[1]!)).toEqual(paid);
     },
   );
@@ -214,12 +214,12 @@ describeWithDatabase("combat team faction rewards", () => {
     });
     const staleApi = callerForDatabase(combatRouter, winners[staleUser === "actor" ? 0 : 1]!, staleClient);
     const staleRequest = staleUser === "actor"
-      ? staleApi.performAction({ battleId: saved.id, version: saved.version })
+      ? staleApi.performAction({ battleId: saved.id })
       : staleApi.getBattle({ battleId: saved.id });
     try {
       await ready;
       if (staleUser === "actor") await (await callerFor(combatRouter, winners[1]!)).getBattle({ battleId: saved.id });
-      else await (await callerFor(combatRouter, winners[0]!)).performAction({ battleId: saved.id, version: saved.version });
+      else await (await callerFor(combatRouter, winners[0]!)).performAction({ battleId: saved.id });
     } finally { unblock(); }
     expect(await staleRequest).toEqual(staleUser === "actor" ? { updateClient: true } : { battle: null, result: null });
     const predicted = calcBattleResult(structuredClone(saved), winners[1]!)!;
@@ -230,7 +230,7 @@ describeWithDatabase("combat team faction rewards", () => {
   it.each(["dead", "fled", "settled"] as const)("RAID grants no faction credit to a %s teammate", async (state) => {
     const saved = await startDecidedRaid(state);
     const before = await factionTotals(winners[1]!);
-    await (await callerFor(combatRouter, winners[0]!)).performAction({ battleId: saved.id, version: saved.version });
+    await (await callerFor(combatRouter, winners[0]!)).performAction({ battleId: saved.id });
     expect(await factionTotals(winners[1]!)).toEqual(before);
   });
 });

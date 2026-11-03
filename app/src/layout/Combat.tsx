@@ -763,11 +763,9 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (canPerformAction()) {
             performAction({
               battleId: battleRef.current.id,
-              userId: actor.userId,
               actionId: "wait",
               longitude: actor.longitude,
               latitude: actor.latitude,
-              version: battleRef.current.version,
             });
           }
         }
@@ -869,10 +867,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         const { isAITurn } = getTurnControl(actor, suid);
         if (isAITurn && !isPending && !inLobby) {
           if (canPerformAction()) {
-            performAction({
-              battleId: battleRef.current.id,
-              version: battleRef.current.version,
-            });
+            performAction({ battleId: battleRef.current.id });
           }
         } else {
           // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
@@ -1031,11 +1026,9 @@ const Combat: React.FC<CombatProps> = (props) => {
     document.body.style.cursor = "wait";
     performAction({
       battleId: battle.id,
-      userId: userIdRef.current,
       actionId: action.id,
       longitude: target.col,
       latitude: target.row,
-      version: battle.version,
     });
   };
   const sceneSnapshot = useRef<CombatSceneSnapshot | null>(null);

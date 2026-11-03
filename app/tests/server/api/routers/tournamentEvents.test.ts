@@ -1015,14 +1015,10 @@ describeWithDatabase("event tournament persistence", () => {
               ? beforeTransactionalWrite(database, tournamentMatch, wait)
               : afterTransactionCommit(database, wait),
           );
-          const current = (await database.query.battle.findFirst())!;
           second =
             route === "getBattle"
               ? last.getBattle({ battleId: game.battleId })
-              : last.performAction({
-                  battleId: game.battleId,
-                  version: current.version,
-                });
+              : last.performAction({ battleId: game.battleId });
           await secondReached.promise;
           await syncEventTournament(database, "launch");
           const during = (await fetchEvent(database, "launch"))!.eventData!;
