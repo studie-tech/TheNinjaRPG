@@ -430,7 +430,7 @@ export const insertUserDataForUpsertUserData = (
   villageId: string,
   sector: number,
   isBanned: false | true,
-  AGENT_FRIENDLY_SETTINGS: { tutorialOn: false; tutorialStep: 100; musicOn: false },
+  AGENT_FRIENDLY_SETTINGS: { tutorialOn: false; tutorialStep: number; musicOn: false },
 ) =>
   client.insert(userData).values({
     userId,
@@ -456,7 +456,7 @@ export const updateUserDataForUpsertUserData = (
   villageId: string,
   sector: number,
   isBanned: false | true,
-  AGENT_FRIENDLY_SETTINGS: { tutorialOn: false; tutorialStep: 100; musicOn: false },
+  AGENT_FRIENDLY_SETTINGS: { tutorialOn: false; tutorialStep: number; musicOn: false },
   userId: string,
 ) =>
   client

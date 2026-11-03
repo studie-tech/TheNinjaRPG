@@ -9,7 +9,11 @@
  * run ID and profile key, so repeated runs reuse/reset the same accounts.
  */
 import { createHash, randomBytes } from "node:crypto";
-import type { UserRank, UserRole } from "@/drizzle/constants";
+import {
+  TUTORIAL_STEPS_COUNT,
+  type UserRank,
+  type UserRole,
+} from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 import { findUserIdentityById } from "@/queries/profile";
 import {
@@ -146,8 +150,9 @@ const findUserByEmail = async (email: string) => {
  * Strategy:
  *  1. Look up by external_id (fast path for repeat runs).
  *  2. If not found, CREATE with external_id + email.
- *  3. If CREATE fails (e.g. email collision from a pre-external_id run),
- *     fall back to email lookup and PATCH the external_id onto that user.
+ *  3. If CREATE fails, adopt a user already created with this deterministic
+ *     email (a concurrent request for the same run, or a create that timed
+ *     out client-side after Clerk accepted it) and PATCH the external_id onto it.
  */
 const upsertClerkUser = async (
   externalId: string,
@@ -179,8 +184,7 @@ const upsertClerkUser = async (
     })) as { id: string };
     return { userId: created.id };
   } catch (_createError) {
-    // Step 3: creation failed (likely email collision from a run before
-    // external_id was introduced) — adopt the existing user
+    // Step 3: creation failed — adopt a user that already holds this email
     const existingByEmail = await findUserByEmail(email);
     if (existingByEmail?.id) {
       const updated = (await fetchClerkApi(`/users/${existingByEmail.id}`, {
@@ -209,7 +213,7 @@ const upsertClerkUser = async (
  */
 const AGENT_FRIENDLY_SETTINGS = {
   tutorialOn: false,
-  tutorialStep: 100,
+  tutorialStep: TUTORIAL_STEPS_COUNT,
   musicOn: false,
 } as const;
 
@@ -312,19 +316,6 @@ const upsertUserData = async ({
   await suppressActivityStreakPopup(userId);
 };
 
-/** Request a Clerk testing token (used by Clerk's testing mode, not required). */
-const createTestingToken = async (): Promise<string | undefined> => {
-  try {
-    const response = (await fetchClerkApi("/testing_tokens", {
-      method: "POST",
-      body: JSON.stringify({}),
-    })) as { token?: string };
-    return response.token;
-  } catch (_error) {
-    return undefined;
-  }
-};
-
 /** Generate a one-time Clerk sign-in token for passwordless browser login. */
 const createSignInToken = async (userId: string): Promise<string | undefined> => {
   try {
@@ -338,8 +329,6 @@ const createSignInToken = async (userId: string): Promise<string | undefined> =>
   }
 };
 
-const BROKER_VERSION = "v5-sector-fix";
-
 /**
  * Provision one or more test users for a single reviewer run.
  *
@@ -349,11 +338,7 @@ const BROKER_VERSION = "v5-sector-fix";
 export const provisionAiTestUsers = async (
   profiles: AiTestUserProfile[],
   runId: string,
-): Promise<{
-  users: ProvisionedAiTestUser[];
-  testingToken?: string;
-  version?: string;
-}> => {
+): Promise<{ users: ProvisionedAiTestUser[] }> => {
   // Provision all profiles in parallel — each profile is independent
   const users = await Promise.all(
     profiles.map(async (profile) => {
@@ -418,6 +403,5 @@ export const provisionAiTestUsers = async (
     }),
   );
 
-  const testingToken = await createTestingToken();
-  return { users, testingToken, version: BROKER_VERSION };
+  return { users };
 };

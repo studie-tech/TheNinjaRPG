@@ -112,7 +112,7 @@ const authBlock =
         "",
         "The response will be JSON:",
         "```json",
-        '{ "success": true, "users": [{ "key": "player1", "userId": "...", "username": "...", "email": "...", "password": "...", "level": 100, "rank": "JONIN", "villageId": "...", "villageName": "Shine", "isBanned": false, "signInToken": "..." }], "testingToken": "..." }',
+        '{ "success": true, "users": [{ "key": "player1", "userId": "...", "username": "...", "email": "...", "password": "...", "level": 100, "rank": "JONIN", "villageId": "...", "villageName": "Shine", "isBanned": false, "signInToken": "..." }] }',
         "```",
         "",
         "Valid village names are: Shine, Tsukimori, Glacier, Shroud, Current.",

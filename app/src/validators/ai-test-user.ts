@@ -93,8 +93,6 @@ export const aiTestUserResponseSchema = z.object({
       signInToken: z.string().optional(),
     }),
   ),
-  testingToken: z.string().optional(),
-  version: z.string().optional(),
 });
 
 /** Request schema for calling a tRPC endpoint as a provisioned test user. */
