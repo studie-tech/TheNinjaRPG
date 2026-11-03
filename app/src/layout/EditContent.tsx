@@ -114,16 +114,6 @@ export type FormDbValue = { id: string; name: string };
 const hasComboboxValue = (value: unknown) =>
   value !== undefined && value !== null && value !== "";
 
-/** Effect fields edited through the game-asset picker instead of a combobox. */
-const ASSET_PICKER_FIELDS: readonly string[] = [
-  "appearAnimation",
-  "disappearAnimation",
-  "staticAnimation",
-  "staticAssetPath",
-  "appearSfx",
-  "disappearSfx",
-];
-
 export type FormEntry<K> = {
   id: K;
   label?: string;
@@ -512,26 +502,13 @@ export const EditContent = <
         {/* biome-ignore format: Keep the display-contents fieldset from reformatting the large field renderer. */}
         <fieldset disabled={submitLoading} aria-busy={submitLoading} className="contents">
         {formData
-          .filter((formEntry) => {
-            return (
-              !["reward_hunter_items_ids", "reward_hunter_items"].includes(
-                formEntry.id,
-              ) ||
-              questType === "hunting" ||
-              props.type === "activityStreak" ||
-              props.allowMaterialRewards
-            );
-          })
-          .filter((formEntry) => {
-            return (
-              !["reward_gathering_items_ids", "reward_gathering_items"].includes(
-                formEntry.id,
-              ) ||
-              questType === "gathering" ||
-              props.type === "activityStreak" ||
-              props.allowMaterialRewards
-            );
-          })
+          .filter((formEntry) =>
+            isMaterialRewardFieldVisible(
+              String(formEntry.id),
+              questType,
+              props.allowMaterialRewards,
+            ),
+          )
           .map((formEntry) => {
             return { ...formEntry, category: getCategory(formEntry.id) };
           })
@@ -2571,18 +2548,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     })
     .filter((value) => {
       return (
-        props?.quest?.questType === "hunting" ||
-        !["reward_hunter_items_ids"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        props?.quest?.questType === "gathering" ||
-        !["reward_gathering_items_ids"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
         !["fail_quest", "win_quest", "reset_quest"].includes(watchTask) ||
         !["nextObjectiveId"].includes(value)
       );
@@ -2964,7 +2929,6 @@ interface RewardFormWrapperProps {
   rewards: ObjectiveRewardType[];
   setRewards: (rewards: ObjectiveRewardType[]) => void;
   hideFields?: string[];
-  type?: ContentType;
 }
 
 /**
@@ -2972,7 +2936,7 @@ interface RewardFormWrapperProps {
  * @returns React.ReactNode
  */
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const { idx, reward, rewards, setRewards, hideFields = [], type } = props;
+  const { idx, reward, rewards, setRewards, hideFields = [] } = props;
 
   const { data: rewardUser } = useUserData();
   // Parse reward with schema
@@ -3133,7 +3097,6 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
       form={form}
       formData={formData}
       showSubmit={false}
-      type={type}
     />
   );
 };
@@ -3930,3 +3893,32 @@ const unwrapFieldSchema = (schema: z.ZodType): z.ZodType => {
   }
   return inner;
 };
+
+/**
+ * Hunter and gathering rewards show on quests of their own type, or wherever the
+ * caller allows material rewards.
+ */
+const isMaterialRewardFieldVisible = (
+  id: string,
+  questType: unknown,
+  allowMaterialRewards?: boolean,
+) => {
+  if (allowMaterialRewards) return true;
+  if (id === "reward_hunter_items" || id === "reward_hunter_items_ids") {
+    return questType === "hunting";
+  }
+  if (id === "reward_gathering_items" || id === "reward_gathering_items_ids") {
+    return questType === "gathering";
+  }
+  return true;
+};
+
+/** Effect fields edited through the game-asset picker instead of a combobox. */
+const ASSET_PICKER_FIELDS: readonly string[] = [
+  "appearAnimation",
+  "disappearAnimation",
+  "staticAnimation",
+  "staticAssetPath",
+  "appearSfx",
+  "disappearSfx",
+];
