@@ -195,26 +195,6 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
   };
 };
 
-/**
- * Checks the game timer and returns a response indicating how much time is left before the game can be run again.
- * @param client - The database client used to read or initialize the timer.
- * @param timerName - Stable game-setting name, independent of the duration.
- * @param durationMs - The timer duration in milliseconds.
- * @returns A JSON response indicating the time left before the game can be run again.
- */
-export const checkGameTimer = async (
-  client: DrizzleClient,
-  timerName: string,
-  durationMs: number,
-) => {
-  const timer = await getGameSetting(client, timerName);
-  const deltaTime = durationMs * 0.9999;
-  if (timer.time > new Date(Date.now() - deltaTime)) {
-    return gameTimerWaitResponse(timer.time, deltaTime);
-  }
-  return false;
-};
-
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");
