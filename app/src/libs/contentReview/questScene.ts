@@ -1,33 +1,5 @@
 import { IMG_SCENE_BACKGROUND } from "@/drizzle/constants";
 
-/** Scenes affected by a proposal, including objectives inheriting the quest scene. */
-export const changedQuestScenes = (
-  current: Record<string, unknown> | null,
-  proposed: Record<string, unknown>,
-) => {
-  const before = contentOf(current);
-  const after = contentOf(proposed);
-  const hasQuestChange = sceneKey(before) !== sceneKey(after);
-  const scenes: { label: string; objectiveIndex?: number }[] = [];
-  if (hasQuestChange) scenes.push({ label: "Quest scene" });
-  const oldObjectives = objectivesOf(before);
-  const newObjectives = objectivesOf(after);
-  for (
-    let index = 0;
-    index < Math.max(oldObjectives.length, newObjectives.length);
-    index++
-  ) {
-    if (
-      sceneKey(oldObjectives[index]) !== sceneKey(newObjectives[index]) ||
-      (hasQuestChange &&
-        (current?.consecutiveObjectives || proposed.consecutiveObjectives))
-    ) {
-      scenes.push({ label: `Objective ${index + 1}`, objectiveIndex: index });
-    }
-  }
-  return scenes;
-};
-
 /** Same objective fallback and default background used by the quest dialog. */
 export const questSceneOf = (
   fields: Record<string, unknown>,
@@ -58,8 +30,6 @@ export const questSceneOf = (
 const contentOf = (fields: Record<string, unknown> | null) =>
   (fields?.content ?? {}) as SceneContent;
 const objectivesOf = (content: SceneContent) => content.objectives ?? [];
-const sceneKey = (scene: SceneContent | undefined) =>
-  JSON.stringify([scene?.sceneBackground || "", scene?.sceneCharacters ?? []]);
 
 type SceneContent = {
   sceneBackground?: string;
