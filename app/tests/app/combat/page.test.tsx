@@ -126,6 +126,23 @@ it("retains the shared battle across focus and viewport layout changes and clear
   expect(store.get(userContext.userBattleAtom)).toBeUndefined();
 });
 
+it.each([false, true])("returns keyboard focus to the shown battle layout with results=%s", async (finished) => {
+  vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: "focus-return", usersState: [makeUser({ userId: "player" })] });
+  const setBattleFocus = (battleFocus: boolean) => changeLayout({ battleFocus });
+  const { view, changeLayout } = mount(battle.id, async () => ({
+    battle, result: finished ? { outcome: "Won" } : null,
+  }) as unknown as Response, { battleFocus: true, setBattleFocus, layoutOrder: ["timer", "battlefield"] });
+  const exit = await view.findByRole("button", { name: "Show layout" });
+  expect(document.activeElement).toBe(exit);
+  fireEvent.click(exit);
+  await waitFor(() => expect(view.queryByRole("button", { name: "Show layout" })).toBeNull());
+  const button = view.queryByRole("button", { name: "Battle focus" });
+  expect(document.activeElement === (finished ? view.container.firstElementChild : button)).toBe(true);
+  expect(document.activeElement?.closest("[inert]")).toBeNull();
+});
+
 it.each(["settled", "healing", "starting"] as const)("retains arena heal protection across viewport and focus remounts while %s", async (phase) => {
   const viewport = vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
   vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);

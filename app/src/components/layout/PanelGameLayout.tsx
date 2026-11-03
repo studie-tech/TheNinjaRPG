@@ -50,6 +50,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
   return (
     <div data-world-page className="tnr-theme-game" data-layout-variant={props.variant}>
       <div
+        data-battle-focus-layer
         className={cn(
           "fixed hidden min-[1100px]:block",
           userData

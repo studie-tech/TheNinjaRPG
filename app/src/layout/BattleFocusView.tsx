@@ -1,7 +1,7 @@
 "use client";
 
 import { Minimize2, Swords } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,7 @@ import { useUserData } from "@/utils/UserContext";
  * Full-window battlefield, fighters, actions and history above the game layout.
  * Desktop panels fit the viewport; phones scroll when the field and usable action
  * space need more height. Popovers, toasts and tutorials can open above this portal.
+ * Raised layout siblings opt into keyboard access with data-battle-focus-layer.
  */
 export function BattleFocusView({
   battle,
@@ -34,6 +35,8 @@ export function BattleFocusView({
 }: BattleFocusViewProps) {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [mounted, setMounted] = useState(false);
+  const viewRef = useRef<HTMLElement>(null);
+  const exitButtonRef = useRef<HTMLButtonElement>(null);
 
   // The page behind stays put while the battle covers it.
   useEffect(() => {
@@ -44,6 +47,61 @@ export function BattleFocusView({
       document.body.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!mounted || !view) return;
+    const covered = new Set<HTMLElement>();
+    const restore = () => {
+      for (const element of covered) element.removeAttribute("inert");
+      covered.clear();
+    };
+
+    // A modal focus trap would exclude the visible chat and tutorial siblings.
+    // Inert only covered branches, keeping Radix portals and live feedback usable.
+    // This stays separate from Radix's aria-hidden bookkeeping so dialog cleanup
+    // cannot retain an inert attribute on the layout.
+    const isolateBattle = () => {
+      restore();
+      const layers = new Set<Element>([
+        view,
+        ...document.body.querySelectorAll(
+          "[data-battle-focus-layer], body > [data-state], [data-radix-popper-content-wrapper], [data-sonner-toaster]",
+        ),
+      ]);
+      const ancestors = new Set<Element>();
+      for (const layer of layers) {
+        for (let parent = layer.parentElement; parent; parent = parent.parentElement) {
+          ancestors.add(parent);
+        }
+      }
+      const cover = (parent: Element) => {
+        for (const child of parent.children) {
+          if (layers.has(child)) continue;
+          if (ancestors.has(child)) cover(child);
+          else if (child instanceof HTMLElement && !child.hasAttribute("inert")) {
+            child.setAttribute("inert", "");
+            covered.add(child);
+          }
+        }
+      };
+      cover(document.body);
+    };
+
+    isolateBattle();
+    exitButtonRef.current?.focus({ preventScroll: true });
+    const observer = new MutationObserver(isolateBattle);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-battle-focus-layer"],
+    });
+    return () => {
+      observer.disconnect();
+      restore();
+    };
+  }, [mounted]);
 
   if (!mounted) return null;
 
@@ -56,6 +114,7 @@ export function BattleFocusView({
 
   const exitButton = (
     <Button
+      ref={exitButtonRef}
       type="button"
       variant="outline"
       size="sm"
@@ -228,6 +287,7 @@ export function BattleFocusView({
 
   return createPortal(
     <section
+      ref={viewRef}
       aria-label="Battle"
       className="bg-background text-foreground fixed inset-0 z-50 h-dvh"
     >

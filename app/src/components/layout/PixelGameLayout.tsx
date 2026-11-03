@@ -64,6 +64,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
     >
       {(userData || isAnonymousLayout) && (
         <div
+          data-battle-focus-layer
           className={cn(
             "fixed bottom-1 rounded-full bg-slate-500",
             userData

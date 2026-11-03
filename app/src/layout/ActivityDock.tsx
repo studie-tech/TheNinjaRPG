@@ -56,6 +56,9 @@ export function ActivityDock({ children }: { children: ReactNode }) {
   return (
     <aside
       data-activity-dock
+      data-battle-focus-layer={
+        open && tab === "tutorial" && user.tutorialOn !== false ? "" : undefined
+      }
       aria-label="Activity"
       className={cn(
         // The lesson's scroll height leaves room for the portrait above the dock. A dock

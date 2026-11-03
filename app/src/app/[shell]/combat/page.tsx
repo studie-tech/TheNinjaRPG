@@ -67,11 +67,24 @@ export default function CombatPage() {
   const [hotkeyTarget, setHotkeyTarget] = useState<HotkeyTarget | null>(null);
   const arenaHealInFlightRef = useRef(false);
   const arenaStartInFlightRef = useRef(false);
+  const battleFocusButtonRef = useRef<HTMLButtonElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const wasBattleFocusRef = useRef(config.battleFocus);
   const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
     "statDistribution",
     undefined,
   );
   const [autoCombat] = useAutoCombatSetting();
+
+  useEffect(() => {
+    const shouldRestoreFocus = wasBattleFocusRef.current && !config.battleFocus;
+    wasBattleFocusRef.current = config.battleFocus;
+    if (!shouldRestoreFocus) return;
+    // The focus button remounts with the layout; finished timers are inert.
+    const button = battleFocusButtonRef.current;
+    const target = button && !button.closest("[inert]") ? button : layoutRef.current;
+    target?.focus({ preventScroll: true });
+  }, [config.battleFocus]);
 
   // Download and evaluate the scene while the battle query is in flight.
   useEffect(() => {
@@ -560,6 +573,7 @@ export default function CombatPage() {
             <>
               {!config.battleFocus && (
                 <Button
+                  ref={battleFocusButtonRef}
                   type="button"
                   variant="outline"
                   size="icon"
@@ -899,7 +913,7 @@ export default function CombatPage() {
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
   return (
-    <div className="flex flex-col gap-1 sm:container">
+    <div ref={layoutRef} tabIndex={-1} className="flex flex-col gap-1 sm:container">
       {config.useTabs ? (
         // Tabs mode: render non-tabbed components in order, then tabs
         <>

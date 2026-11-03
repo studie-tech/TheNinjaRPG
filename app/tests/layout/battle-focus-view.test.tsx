@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useState } from "react";
 import * as pools from "@/hooks/useEffectivePools";
@@ -103,6 +103,53 @@ describe("BattleFocusView", () => {
     expect(document.body.style.overflow).toBe("hidden");
     view.unmount();
     expect(document.body.style.overflow).toBe("");
+  });
+
+  it("focuses the battle and isolates covered controls without disabling raised siblings", async () => {
+    const layout = document.createElement("div");
+    layout.innerHTML = '<nav><a href="/village">Village</a></nav><div data-battle-focus-layer><button>Chat</button></div><aside><button>Activity</button></aside><div inert><button>Unavailable</button></div>';
+    const iframe = document.createElement("iframe");
+    document.body.append(layout, iframe);
+    const navigation = layout.querySelector("nav")!;
+    const chat = layout.querySelector("[data-battle-focus-layer]")!;
+    const activity = layout.querySelector("aside")!;
+    const unavailable = layout.querySelector("[inert]")!;
+    layout.querySelector("a")!.focus();
+
+    const view = renderView();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Show layout" }));
+    expect(navigation.closest("[inert]")).toBeTruthy();
+    expect(iframe.hasAttribute("inert")).toBe(true);
+    expect(chat.closest("[inert]")).toBeNull();
+    expect(activity.closest("[inert]")).toBeTruthy();
+    expect(document.body.hasAttribute("inert")).toBe(false);
+
+    // Activity moves above the battlefield only while its tutorial panel is raised.
+    activity.setAttribute("data-battle-focus-layer", "");
+    await waitFor(() => expect(activity.closest("[inert]")).toBeNull());
+    activity.removeAttribute("data-battle-focus-layer");
+    await waitFor(() => expect(activity.closest("[inert]")).toBeTruthy());
+
+    // Radix mounts the modal overlay and content as body siblings after opening.
+    const overlay = document.createElement("div");
+    overlay.setAttribute("data-state", "open");
+    const dialog = document.createElement("div");
+    dialog.setAttribute("data-state", "open");
+    dialog.setAttribute("role", "dialog");
+    const popover = document.createElement("div");
+    popover.setAttribute("data-radix-popper-content-wrapper", "");
+    document.body.append(overlay, dialog, popover);
+    await waitFor(() => {
+      expect(overlay.closest("[inert]")).toBeNull();
+      expect(dialog.closest("[inert]")).toBeNull();
+      expect(popover.closest("[inert]")).toBeNull();
+    });
+
+    view.unmount();
+    expect(navigation.closest("[inert]")).toBeNull();
+    expect(iframe.hasAttribute("inert")).toBe(false);
+    expect(activity.closest("[inert]")).toBeNull();
+    expect(unavailable.hasAttribute("inert")).toBe(true);
   });
 
   it("shows a controlled summon and its effects alongside its owner", () => {
