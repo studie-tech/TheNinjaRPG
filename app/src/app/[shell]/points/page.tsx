@@ -177,13 +177,9 @@ const PaypalShopContent = ({
   userData: NonNullable<ReturnType<typeof useRequiredUserData>["data"]>;
 }) => {
   const [activeTab, setActiveTab] = useState<string>("Reputation");
-  const [isReady, setIsReady] = useState(true);
   const [, dispatch] = usePayPalScriptReducer();
 
-  const allowance = api.paypal.getRecentRepsCount.useQuery(
-    { userId: userData?.userId ?? "-" },
-    { enabled: !!userData },
-  );
+  const allowance = api.paypal.getRecentRepsCount.useQuery({ userId: userData.userId });
 
   // Properly update SDK options when tab changes
   useEffect(() => {
@@ -197,14 +193,6 @@ const PaypalShopContent = ({
       },
     });
   }, [activeTab, dispatch]);
-
-  // Prevent PayPal components from rendering during unmount
-  useEffect(() => {
-    setIsReady(true);
-    return () => {
-      setIsReady(false);
-    };
-  }, []);
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -233,13 +221,13 @@ const PaypalShopContent = ({
         }
       >
         <TabsContent value="Reputation" className="mt-0">
-          {isReady ? <ReputationStore /> : <Loader />}
+          <ReputationStore />
         </TabsContent>
         <TabsContent value="Bundles" className="mt-0">
-          {isReady ? <StoreBundles /> : <Loader />}
+          <StoreBundles />
         </TabsContent>
         <TabsContent value="Federal" className="mt-0">
-          {isReady ? <FederalStore /> : <Loader />}
+          <FederalStore />
         </TabsContent>
       </ContentBox>
       <StripePendingCheckouts />
@@ -431,12 +419,10 @@ const ReputationStore = () => {
 const PayPalSubscriptionButton = (props: {
   subscriptionPlan: string;
   userId: string;
-  buyerId: string;
   imageSrc: string;
   buttonStatus: (typeof FederalStatuses)[number];
   currentUserStatus: (typeof FederalStatuses)[number];
   onSuccess?: () => void;
-  onFailure?: () => void;
 }) => {
   // User state
   const { data: userData } = useRequiredUserData();
@@ -463,7 +449,6 @@ const PayPalSubscriptionButton = (props: {
       },
       onError: (error) => {
         onError(error);
-        if (props.onFailure) props.onFailure();
       },
     });
 
@@ -480,7 +465,6 @@ const PayPalSubscriptionButton = (props: {
       },
       onError: (error) => {
         onError(error);
-        if (props.onFailure) props.onFailure();
       },
     });
 
@@ -497,7 +481,6 @@ const PayPalSubscriptionButton = (props: {
       },
       onError: (error) => {
         onError(error);
-        if (props.onFailure) props.onFailure();
       },
     },
   );
@@ -644,7 +627,7 @@ const PayPalSubscriptionButton = (props: {
             createSubscription={(_data, actions) => {
               return actions.subscription.create({
                 plan_id: props.subscriptionPlan,
-                custom_id: `${props.buyerId}-${props.userId}`,
+                custom_id: `${userData.userId}-${props.userId}`,
               });
             }}
             onApprove={(data, actions) => {
@@ -690,9 +673,6 @@ const PayPalSubscriptionButton = (props: {
               } else {
                 return Promise.resolve();
               }
-            }}
-            onCancel={() => {
-              // User closed the popup without completing subscription - this is expected behavior
             }}
             onError={(err) => {
               // Suppress PayPal cleanup errors (occur during navigation)
@@ -759,12 +739,11 @@ const PayPalSubscriptionButton = (props: {
           onAccept={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (userData)
-              buy({
-                userId: props.userId,
-                expectedUserId: userData.userId,
-                status: props.buttonStatus,
-              });
+            buy({
+              userId: props.userId,
+              expectedUserId: userData.userId,
+              status: props.buttonStatus,
+            });
           }}
         >
           You are about to purchase a federal subscription with reputation points. You
@@ -835,7 +814,6 @@ const FederalStore = () => {
             <PayPalSubscriptionButton
               subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL}
               userId={selectedUser.userId}
-              buyerId={userData.userId}
               imageSrc={IMG_REPSHOP_BRONZE}
               buttonStatus="NORMAL"
               currentUserStatus={selectedUser.federalStatus}
@@ -853,7 +831,6 @@ const FederalStore = () => {
             <PayPalSubscriptionButton
               subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER}
               userId={selectedUser.userId}
-              buyerId={userData.userId}
               imageSrc={IMG_REPSHOP_SILVER}
               buttonStatus="SILVER"
               currentUserStatus={selectedUser.federalStatus}
@@ -871,7 +848,6 @@ const FederalStore = () => {
             <PayPalSubscriptionButton
               subscriptionPlan={process.env.NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD}
               userId={selectedUser.userId}
-              buyerId={userData.userId}
               imageSrc={IMG_REPSHOP_GOLD}
               buttonStatus="GOLD"
               currentUserStatus={selectedUser.federalStatus}

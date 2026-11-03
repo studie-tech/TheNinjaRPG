@@ -22,18 +22,17 @@ const callbacks = [
 
 // Run the pages' actual callback expressions, including the unexported poll form.
 // Taking them from source makes a bypass in any one callback fail the feedback check.
-const pageOnError = (source: (typeof callbacks)[number], onFailure: () => void) => {
+const pageOnError = (source: (typeof callbacks)[number]) => {
   const file = join(import.meta.dirname, "../../src/app/[shell]", source.file, "page.tsx");
   const expression = readFileSync(file, "utf8")
     .split(`api.${source.path}.useMutation`)[1]
     ?.match(/onError:\s*(\(error\) => \{[\s\S]*?\n\s*\}),/)?.[1];
   if (!expression) throw new Error(`${source.path} onError callback was not found`);
   return new Function(
-    "toast", "onError", "props", "getSessionErrorToastId", "showMutationToast", `return (${expression});`,
+    "toast", "onError", "getSessionErrorToastId", "showMutationToast", `return (${expression});`,
   )(
     uiToast,
     clientModule.onError,
-    { onFailure },
     Reflect.get(sessionModule, "getSessionErrorToastId"),
     toast.showMutationToast,
   ) as (error: { message: string }) => void;
@@ -55,27 +54,23 @@ for (const source of callbacks) {
       `${source.path} renders ${message} once when shared feedback arrives first=%s`,
       (sharedFirst) => {
         const shared = () => toast.showMutationToast({ success: false, message });
-        const onFailure = vi.fn();
-        const local = () => pageOnError(source, onFailure)(TRPCClientError.from(new Error(message)));
+        const local = () => pageOnError(source)(TRPCClientError.from(new Error(message)));
         for (const notify of sharedFirst ? [shared, local] : [local, shared]) notify();
         expect(notices()).toHaveLength(1);
         expect([notices()[0]?.title, notices()[0]?.description].filter((value) => value === message)).toHaveLength(1);
         // The app's toaster hides titles on mobile; the recovery message must stay visible.
         expect(notices()[0]?.description).toBe(message);
-        expect(onFailure).toHaveBeenCalledTimes("subscription" in source ? 1 : 0);
       },
     );
   }
 
   it(`${source.path} keeps equal ordinary failures separate with their existing presentation`, () => {
     const message = "This action is unavailable.";
-    const onFailure = vi.fn();
-    const callback = pageOnError(source, onFailure);
+    const callback = pageOnError(source);
     const error = TRPCClientError.from({ error: {
       message, code: -32600, data: { code: "BAD_REQUEST" },
     } });
     for (let i = 0; i < 2; i++) callback(error);
-    expect(onFailure).toHaveBeenCalledTimes("subscription" in source ? 2 : 0);
     expect(messages()).toEqual([message, message]);
     expect(notices().map((notice) => notice.title)).toEqual(
       Array(2).fill("subscription" in source ? "BAD_REQUEST" : "Error"),
@@ -102,7 +97,7 @@ it.each([sessionModule.SESSION_CHANGED_MESSAGE, sessionModule.SESSION_EXPIRED_ME
 );
 
 it("preserves the support callback's empty-message fallback", () => {
-  pageOnError(callbacks[0], vi.fn())(new Error(""));
+  pageOnError(callbacks[0])(new Error(""));
   expect(messages()).toEqual(["Could not update the ticket. Please try again."]);
   expect(notices()[0]?.type).toBe("error");
 });
