@@ -574,7 +574,6 @@ export const blackMarketRouter = createTRPCRouter({
  *
  * @param {DrizzleClient} client - The Drizzle client used to make the query.
  * @param {string} userId - The ID of the user who rolled the element.
- * @param {string} elementType - The type of element rolled (primary or secondary).
  * @returns {Promise<{primary: string[], secondary: string[]}>} A promise that resolves to an object containing the rolled elements.
  */
 export const getRolledElements = async (client: DrizzleClient, userId: string) => {
