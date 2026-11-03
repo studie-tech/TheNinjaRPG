@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
 import * as sortableList from "@/components/ui/sortable-list";
 import type { TutorialStepConfig } from "@/hooks/tutorial";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import { BattleFocusView } from "@/layout/BattleFocusView";
 import * as objective from "@/layout/Objective";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -127,6 +129,29 @@ describe("TutorialAssistant highlight activation", () => {
     view.rerender(highlightedAssistant());
     expect(view.getByRole("region", { name: "Tutorial: Next lesson" })).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Continue tutorial" }));
+    expect(mocks.next).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the highlighted tutorial control interactive above battle focus", async () => {
+    componentSpies.push(vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false));
+    mocks.step = { ...mocks.step, elementIds: ["lesson-control"], proceedOnHighlightClick: true };
+    const view = render(highlightedAssistant());
+    render(
+      <BattleFocusView
+        battle={undefined}
+        timer={<p>Timer</p>}
+        field={<p>Field</p>}
+        dock={<p>Actions</p>}
+        log={<p>Log</p>}
+        timeline={<p>Timeline</p>}
+        onShowLayout={() => {}}
+      />,
+    );
+    const control = view.getByRole("button", { name: "Continue tutorial" });
+    await waitFor(() => expect(control.closest("[inert]")).toBeNull());
+    control.focus();
+    expect(document.activeElement).toBe(control);
+    fireEvent.click(control);
     expect(mocks.next).toHaveBeenCalledTimes(1);
   });
 });

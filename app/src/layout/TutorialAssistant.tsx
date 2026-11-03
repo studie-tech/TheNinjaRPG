@@ -1359,7 +1359,10 @@ const PlayerTutorialAssistant: React.FC<
       return (
         <>
           {createPortal(
-            <div className="pointer-events-none fixed inset-0 z-[60]">
+            <div
+              data-battle-focus-layer
+              className="pointer-events-none fixed inset-0 z-[60]"
+            >
               <HighlightDim box={gameMenuHighlight} />
               <div
                 className="absolute rounded-lg"
@@ -1506,7 +1509,10 @@ const PlayerTutorialAssistant: React.FC<
         !showCancelConfirmDialog &&
         createPortal(
           // Only the highlighted control captures clicks; game controls stay reachable.
-          <div className="pointer-events-none fixed inset-0 z-[60]">
+          <div
+            data-battle-focus-layer
+            className="pointer-events-none fixed inset-0 z-[60]"
+          >
             <HighlightDim box={highlight} />
             <div
               className={cn("absolute rounded-lg bg-transparent", pointerEvents)}
