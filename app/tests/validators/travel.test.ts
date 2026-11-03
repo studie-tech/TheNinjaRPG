@@ -34,12 +34,6 @@ test("startGlobalMoveSchema accepts only the target sector", () => {
   expect(startGlobalMoveSchema.parse({ sector: 1649 })).toEqual({ sector: 1649 });
 });
 
-test("startGlobalMoveSchema tolerates and strips a stale current sector", () => {
-  expect(
-    startGlobalMoveSchema.parse({ sector: 1649, curSector: 1631 }),
-  ).toEqual({ sector: 1649 });
-});
-
 test("startGlobalMoveSchema rejects client-supplied landing coordinates", () => {
   const result = startGlobalMoveSchema.safeParse({
     sector: 1649,
