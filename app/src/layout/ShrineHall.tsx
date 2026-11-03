@@ -140,14 +140,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
   const { timeDiff } = useUserInfo();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
-  const { data: shrineData } = api.travel.getSectorData.useQuery(
-    { sector: user.sector ?? 0 },
-    {
-      enabled: isActive,
-      refetchInterval: isActive ? 30_000 : false,
-    },
-  );
-
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
@@ -172,7 +164,8 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     timeDiff,
   });
 
-  if (!shrineData) return <Loader explanation="Loading shrine data" />;
+  if (user.villageId && !capturedSectors)
+    return <Loader explanation="Loading shrine data" />;
 
   const activeShrines = (capturedSectors || []).filter(
     (s) => s.shrineLevel && s.shrineLevel > 0,
@@ -182,7 +175,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     sector: number;
     shrineLevel: number;
     health: React.ReactNode;
-    capturedAt: Date;
     action?: React.ReactNode;
   };
 
@@ -234,7 +226,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
             ))}
           </div>
         ),
-      capturedAt: shrine.capturedAt ? new Date(shrine.capturedAt) : new Date(),
       action: isKage ? (
         shrine.shrineLevel < SHRINE_MAX_LEVEL ? (
           user.village?.tokens !== undefined &&
@@ -312,11 +303,6 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const currentDayOfWeek = now.getUTCDay();
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
-  const { data: sectorData } = api.travel.getSectorData.useQuery(
-    { sector: user.sector ?? 0 },
-    { enabled: isActive && typeof user.sector === "number" },
-  );
-
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
@@ -377,7 +363,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     refreshBoostState,
   );
 
-  if (!sectorData) return <Loader explanation="Loading shrine data" />;
+  if (user.villageId && !capturedSectors)
+    return <Loader explanation="Loading shrine data" />;
 
   const isKage = user.userId === user.village?.kageId;
   const isElder = user.rank === "ELDER";

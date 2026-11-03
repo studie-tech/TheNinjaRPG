@@ -130,7 +130,6 @@ const renderShrineHall = (shrines: object[]) => {
         getBoostTemplate: invalidation,
       },
     }),
-    travel: { getSectorData: { useQuery: () => ({ data: {} }) } },
     shrine: {
       getCapturedSectors: { useQuery: () => ({ data: shrines }) },
       getShrineAis: { useQuery: () => ({ data: [] }) },
