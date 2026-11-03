@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as client from "@/app/_trpc/client";
+import * as tutorial from "@/hooks/tutorial";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import * as RamenShop from "@/layout/RamenShop";
@@ -24,6 +25,7 @@ let purchaseOptions: PurchaseOptions;
 let purchaseResult: FoodResult;
 let isPending = false;
 const prepareUserUpdate = vi.fn(() => 17);
+const completeTutorialAction = vi.fn(async () => {});
 const updateUser = vi.fn(async (_patch: unknown, _options: unknown) => undefined);
 const user = {
   status: "AWAKE", money: 1_000, level: 10, sector: 1, isOutlaw: false,
@@ -51,6 +53,7 @@ beforeEach(() => {
     data: user, prepareUserUpdate, updateUser,
   } as never);
   vi.spyOn(routing, "useAwake").mockReturnValue(true);
+  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ completeTutorialAction } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(Image, "default").mockImplementation(({ alt, src }) => <img alt={alt} src={typeof src === "string" ? src : undefined} />);
@@ -69,6 +72,7 @@ describe("shared ramen menu", () => {
     expect(purchase).toHaveBeenCalledWith({ ramen: "small" });
     expect(prepareUserUpdate).toHaveBeenCalledTimes(1);
     expect(updateUser).toHaveBeenCalledWith(purchaseResult.userPatch, { revision: 17, delta: { money: -10 }, achievementProgress: undefined });
+    expect(completeTutorialAction).toHaveBeenCalledWith("buyRamen");
   });
 
   it("keeps rejected food purchases visible beside a recoverable menu", async () => {

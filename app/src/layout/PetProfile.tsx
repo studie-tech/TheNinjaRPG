@@ -816,6 +816,7 @@ export function PetProfile() {
     <div className="break-words [&_.self-start]:min-w-0">
       {collection}
       <ContentBox
+        id="tutorial-pet-profile"
         title={pet.name}
         subtitle="Train and care for your companion"
         initialBreak

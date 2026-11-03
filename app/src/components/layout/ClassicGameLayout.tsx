@@ -255,8 +255,11 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 className="flex min-h-[200px] w-full grow flex-col overflow-x-scroll bg-background"
               >
                 {/* From md the footer bar below is in flow rather than fixed; one viewport
-                    of minimum height keeps it below the fold (see PixelGameLayout.tsx). */}
-                <div className="p-3 pb-28 md:min-h-svh md:pb-3">{children}</div>
+                    of minimum height keeps it below the fold (see PixelGameLayout.tsx).
+                    Phones also leave room to scroll content clear of an open lesson. */}
+                <div className="p-3 pb-[calc(7rem+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                  {children}
+                </div>
               </div>
               <div
                 className="hidden w-12 shrink-0 bg-fill bg-repeat-y lg:block"

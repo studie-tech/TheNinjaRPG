@@ -68,7 +68,7 @@ import {
 } from "@/libs/rendering/scenes/combat";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { showMutationToast } from "@/libs/toast";
-import { getTutorialBattleReturnPage } from "@/libs/tutorial";
+import { getTutorialBattleReturnPage, isTutorialActive } from "@/libs/tutorial";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { isStaffRole } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
@@ -536,8 +536,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       // Check for quest updates
       if (data.updatedQuestIds && data.updatedQuestIds.length > 0) {
-        // Ignore popup for tutorial step
-        if (currentStep?.title !== "Capture Target") {
+        // The tutorial claims its own quest rewards from the assistant panel
+        if (!isTutorialActive(userData)) {
           // Show popup for consecutive quests
           data.updatedQuestIds.forEach((questId) => {
             const quest = userData?.userQuests?.find((q) => q.questId === questId);

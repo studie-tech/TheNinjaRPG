@@ -36,7 +36,7 @@ function testMocks() {
     disable: vi.fn(async () => ({ success: true, message: "Saved" })),
     updateUser: vi.fn(async (patch: UserPatch) => { await updateUserCache(testMocks().client, key, patch); }),
     rewardHook: vi.fn(),
-    step: { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" },
+    step: { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" },
     next: vi.fn(), stepNumber: 0, visible: true,
   };
   return globals.__tutorialAssistantMocks;
@@ -53,8 +53,8 @@ vi.mock("@/app/_trpc/client", () => ({ api: {
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 vi.mock("@/utils/routing", () => ({ usePublicPathname: () => "/profile" }));
 vi.mock("@/hooks/tutorial", () => {
-  const step = { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" };
-  return { TUTORIAL_STEPS: [step], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, currentStepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next }) };
+  const step = { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" };
+  return { TUTORIAL_STEPS: [step], TUTORIAL_CHAPTERS: [{ id: "student", title: "A New Student" }], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, stepNumber: testMocks().stepNumber, isAssistantVisible: testMocks().visible, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next, handleNextStepAsync: vi.fn(async () => {}), completeTutorialAction: vi.fn(async () => {}) }) };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
 vi.mock("@/layout/Logbook", () => ({ LogbookEntry: () => null, useCheckRewards: () => {
@@ -69,6 +69,8 @@ const componentSpies: { mockRestore: () => void }[] = [];
 let close: (() => void) | undefined;
 const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
 const customEvent = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
+// The assistant re-places Lemu's portrait whenever its dock resizes.
+const resizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 beforeEach(() => {
   componentSpies.push(vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({
     data: mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData,
@@ -94,8 +96,9 @@ beforeEach(() => {
   mocks.disable.mockResolvedValue({ success: true, message: "Saved" });
   mocks.stepNumber = 0;
   mocks.visible = true;
-  mocks.step = { id: "welcome", title: "Welcome", description: "Welcome", page: "/profile" };
+  mocks.step = { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" };
   Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: () => 0 });
+  Object.defineProperty(globalThis, "ResizeObserver", { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } });
 });
 
 describe("TutorialAssistant highlight activation", () => {
@@ -140,6 +143,8 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "CustomEvent");
   if (animationFrame) Object.defineProperty(globalThis, "requestAnimationFrame", animationFrame);
   else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
+  if (resizeObserver) Object.defineProperty(globalThis, "ResizeObserver", resizeObserver);
+  else Reflect.deleteProperty(globalThis, "ResizeObserver");
 });
 const renderAssistant = () => render(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
 
@@ -175,8 +180,8 @@ it("lets Activity controls handle Enter and arrow keys without advancing the les
   expect(mocks.next).toHaveBeenCalledTimes(1);
 });
 const confirmDisable = (view: ReturnType<typeof renderAssistant>) => {
-  fireEvent.click(view.getByRole("button", { name: "Disable tutorial" }));
-  fireEvent.click(view.getByRole("button", { name: "Skip Tutorial" }));
+  fireEvent.click(view.getByRole("button", { name: "Skip tutorial" }));
+  fireEvent.click(view.getByRole("button", { name: "Skip tutorial" }));
 };
 const observe = (queryFn: () => Promise<ReturnType<typeof profile>>) => {
   const observer = new QueryObserver(mocks.client, { queryKey: key, staleTime: Infinity, queryFn });
@@ -191,7 +196,7 @@ describe("TutorialAssistant account boundary", () => {
     expect(mocks.rewardHook).not.toHaveBeenCalled();
     route.mockRestore();
     view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
-    expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
     expect(mocks.rewardHook).toHaveBeenCalled();
   });
   it("does not mount login-required reward hooks for signed-out visitors", () => {
@@ -209,7 +214,7 @@ describe("TutorialAssistant account boundary", () => {
     mocks.client.setQueryData(key, profile());
     view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     expect(mocks.rewardHook).toHaveBeenCalled();
-    expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
 
     mocks.rewardHook.mockClear();
     mocks.client.removeQueries({ queryKey: key });
@@ -226,7 +231,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     confirmDisable(view);
     await waitFor(() => expect(view.getByText("We couldn't turn off the tutorial. Your progress is unchanged; please try again.")).toBeTruthy());
     expect(mocks.updateUser).not.toHaveBeenCalled();
-    fireEvent.click(view.getByRole("button", { name: "Skip Tutorial" }));
+    fireEvent.click(view.getByRole("button", { name: "Skip tutorial" }));
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
     expect(mocks.disable).toHaveBeenCalledTimes(2);
   });
@@ -274,8 +279,9 @@ describe("TutorialAssistant disable reconciliation", () => {
     await act(async () => { resolve({ success: true, message: "Saved" }); });
     expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(300, "other"));
     expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(view.queryByRole("button", { name: "Skip Tutorial" })).toBeNull();
-    expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
+    // The account switch closes the confirmation; only the panel's skip control remains.
+    expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
   });
 });
 

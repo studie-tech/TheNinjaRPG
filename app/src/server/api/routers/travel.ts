@@ -16,6 +16,8 @@ import {
   ROBBING_VILLAGE_PRESTIGE_GAIN,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+  TUTORIAL_STARTER_QUEST_ID,
   UserStatuses,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
@@ -596,18 +598,23 @@ export const travelRouter = createTRPCRouter({
         map as unknown as GlobalMapData,
       );
       const endTime = secondsFromNow(travelTime);
-      // Tutorial arrivals keep the active objective in sight; other arrivals use the map center.
-      const tutorialTarget = isTutorialActive(user)
-        ? user.questData
-            ?.flatMap((quest) => quest.goals)
-            .find(
-              (goal) =>
-                !goal.done &&
-                goal.sector === input.sector &&
-                goal.longitude !== undefined &&
-                goal.latitude !== undefined,
-            )
-        : undefined;
+      // Players being onboarded (in the tutorial, or students on the road to Genin)
+      // land beside their active onboarding objective; other arrivals use the map
+      // center. Only the onboarding quests count: their objectives are never hidden,
+      // whereas landing beside another quest's goal could reveal a hidden location.
+      const tutorialTarget =
+        isTutorialActive(user) || user.rank === "STUDENT"
+          ? user.questData
+              ?.filter((quest) => ONBOARDING_QUEST_IDS.has(quest.id))
+              .flatMap((quest) => quest.goals)
+              .find(
+                (goal) =>
+                  !goal.done &&
+                  goal.sector === input.sector &&
+                  goal.longitude !== undefined &&
+                  goal.latitude !== undefined,
+              )
+          : undefined;
       const destination =
         (tutorialTarget?.longitude !== undefined &&
         tutorialTarget?.latitude !== undefined
@@ -1174,6 +1181,12 @@ export const travelRouter = createTRPCRouter({
       }
     }),
 });
+
+/** Quests whose objectives guide where onboarding players land after global travel. */
+const ONBOARDING_QUEST_IDS = new Set([
+  TUTORIAL_STARTER_QUEST_ID,
+  TUTORIAL_GENIN_EXAM_QUEST_ID,
+]);
 
 /**
  * Resolve whether a move targets the adjacent sector: the destination lies

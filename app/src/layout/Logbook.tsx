@@ -881,7 +881,7 @@ export const useCheckRewards = () => {
   const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
 
   // Tutorial step
-  const { currentStep, handleNextStepAsync } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
 
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
@@ -940,12 +940,13 @@ export const useCheckRewards = () => {
         const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
         // Reconcile other views without holding reward feedback or the collection loader.
         void Promise.allSettled([questRefresh]);
+        // Claim steps move on once the tracker shows the reward collected.
         if (
-          currentStep?.title === "Academy Dialog Option" &&
-          variables?.nextObjectiveId
+          variables?.nextObjectiveId &&
+          currentStep?.relatedValue === variables.questId
         ) {
           await questRefresh;
-          await handleNextStepAsync();
+          await completeTutorialAction("questDialog");
         }
       },
     });

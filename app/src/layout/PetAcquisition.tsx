@@ -267,7 +267,11 @@ export function PetAcquisition() {
     return <Loader explanation="The Bondkeepers are preparing today's choices..." />;
   if (error || !data)
     return (
-      <ContentBox title="Meet your companion" initialBreak>
+      <ContentBox
+        id="tutorial-pet-acquisition"
+        title="Meet your companion"
+        initialBreak
+      >
         <p role="alert" className="mb-3 text-red-600">
           {error?.message ?? "Today's companions could not be loaded."}
         </p>
@@ -309,7 +313,7 @@ export function PetAcquisition() {
     (pet.generationStatus !== "GENERATING" || canRetry);
 
   return (
-    <ContentBox title="Meet your companion" initialBreak>
+    <ContentBox id="tutorial-pet-acquisition" title="Meet your companion" initialBreak>
       {message && (
         <p
           role="alert"

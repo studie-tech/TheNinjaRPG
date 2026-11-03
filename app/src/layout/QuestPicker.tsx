@@ -14,10 +14,9 @@ import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { LogbookEntry, useCheckRewards } from "@/layout/Logbook";
+import { LogbookEntry } from "@/layout/Logbook";
 import { PetTaskDispatch } from "@/layout/PetTasks";
 import { QuestTeams } from "@/layout/QuestTeams";
-import { getActiveObjective } from "@/libs/objectives";
 import { isPetTaskContract } from "@/libs/pets/tasks";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";
 import { formatQuestEntryCost } from "@/libs/questRun";
@@ -70,7 +69,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
   });
 
   // Tutorial step
-  const { currentStep, handleNextStepAsync } = useTutorialStep();
+  const { currentStep } = useTutorialStep();
 
   // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
@@ -100,50 +99,9 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       const profileApplied = await updateUser(data, {
         revision: context?.userRevision,
       });
-      if (data.success && currentStep?.title === "Genin Exam") {
-        await handleNextStepAsync();
-      }
       await updateQuestStart(data, context.quests, profileApplied);
     },
   });
-
-  // Rewards check hook
-  const { checkRewards } = useCheckRewards();
-
-  // Handle certain tutorial syncronization steps
-  useEffect(() => {
-    // If we're on the dialog option of a quest which we don't have access to, then proceed the tutorial
-    if (
-      currentStep?.title === "Academy Dialog Option" &&
-      currentStep?.relatedValue &&
-      currentStep?.hideDialog &&
-      quests !== undefined
-    ) {
-      const quest = quests.find((q) => q.id === currentStep?.relatedValue);
-      if (!quest) {
-        console.log("Quest not found, proceeding to next step in tutorial");
-        void handleNextStepAsync();
-      }
-    }
-
-    // If we're instructed to take a quest, but we already have it, proceed the tutorial
-    if (
-      currentStep?.elementIds?.find((id) => id.startsWith("tutorial-take-quest-")) &&
-      currentStep?.relatedValue &&
-      userData?.userQuests?.find(
-        (uq) => uq.questId === currentStep?.relatedValue && !uq.endAt,
-      )
-    ) {
-      const quest = quests?.find((q) => q.id === currentStep?.relatedValue);
-      const tracker = userData?.questData?.find((q) => q.id === quest?.id);
-      if (quest && tracker) {
-        const activeObjective = getActiveObjective(quest, tracker);
-        if (activeObjective?.task !== "dialog") {
-          void checkRewards({ questId: currentStep?.relatedValue as string });
-        }
-      }
-    }
-  }, [currentStep, userData, quests]);
 
   // Default active tab
   useEffect(() => {

@@ -202,6 +202,7 @@ import {
   settleQueuedTraining,
 } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
+import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
@@ -3064,6 +3065,16 @@ export const initiateBattle = async (
 
   // Hand requested users' turns to their own AI profile (auto combat). Gated on
   // AutoCombatBattleTypes so callers cannot enable it for unsupported battles.
+  // The tutorial's fights teach manual control, so a player still in the
+  // tutorial fights them by hand whatever their stored default or the caller says.
+  const tutorialGuidedUserIds = users
+    .filter((u) =>
+      isTutorialGuidedBattle(u, {
+        opponentIds: info.targetIds,
+        questId: info.questBattleSource?.questId,
+      }),
+    )
+    .map((u) => u.userId);
   const autoCombatUserIds = [
     ...(info.autoCombatUserIds ?? []),
     ...(info.autoCombatFromDefaults
@@ -3071,7 +3082,7 @@ export const initiateBattle = async (
           .filter((u) => !u.isAi && u.defaultAutoCombat && userIds.includes(u.userId))
           .map((u) => u.userId)
       : []),
-  ];
+  ].filter((userId) => !tutorialGuidedUserIds.includes(userId));
   if (
     autoCombatUserIds.length &&
     (AutoCombatBattleTypes.includes(battleType) ||

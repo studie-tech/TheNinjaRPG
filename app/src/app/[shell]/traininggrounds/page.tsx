@@ -180,12 +180,11 @@ export default function Training() {
   const trainingSections = getTrainingSections(showSenseiSystem);
 
   // Tutorial steps select the panel containing their highlighted action.
-  const activeSection =
-    focusJutsuTraining || currentStep?.title === "Jutsu Training"
-      ? "Jutsu"
-      : currentStep?.title === "Training"
-        ? "Stats"
-        : section;
+  const activeSection = focusJutsuTraining
+    ? "Jutsu"
+    : currentStep?.advanceOn === "trainStats"
+      ? "Stats"
+      : section;
 
   // Every user-driven section change is remembered, including Radix keyboard navigation and
   // the shortcut links below, which bypass the NavTabs click handler.
@@ -574,7 +573,7 @@ const StatsTraining: React.FC<
   const needsCaptcha = showCaptcha && captcha?.svg !== null;
 
   // Tutorial management hook
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { completeTutorialAction } = useTutorialStep();
 
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
@@ -591,9 +590,7 @@ const StatsTraining: React.FC<
         ]);
         if (result.success) {
           sendGTMEvent({ event: "stats_training" });
-          if (currentStep?.title === "Training") {
-            handleNextStep();
-          }
+          void completeTutorialAction("trainStats");
         }
       },
       onError: async () => {
@@ -1176,7 +1173,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   });
 
   // Tutorial management hook
-  const { currentStep, handleNextStep } = useTutorialStep();
+  const { currentStep, completeTutorialAction } = useTutorialStep();
   const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
 
   const { data: tutorialJutsu } = api.jutsu.get.useQuery(
@@ -1197,8 +1194,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data, { revision: context.revision });
-          if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
-            handleNextStep();
+          if (variables.jutsuId === TUTORIAL_JUTSU_ID) {
+            void completeTutorialAction("trainJutsu");
           }
         }
         await updateTraining(result, context.training);

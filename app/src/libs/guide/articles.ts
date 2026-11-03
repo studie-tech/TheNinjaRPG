@@ -79,11 +79,11 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
       ),
       h2("Create your ninja"),
       p(
-        `Register and pick a name, appearance and starter village. The five core villages are ${villageList}. You begin as a Student in Horizon's academy; the tutorial will walk you through profile, stats, the arena and travel before the Genin exam.`,
+        `Register and pick a name, appearance and starter village. The five core villages are ${villageList}. You begin as a Student in Horizon's academy, where Lemu walks you through the Academy Trials before the Genin exam.`,
       ),
       h2("The academy tutorial"),
       p(
-        `Lemu guides you through your profile, assigning experience, a dummy fight in the ${link("/battlearena", "battle arena")}, ${link("/traininggrounds", "training grounds")}, the item shop, a practise mission on the globe, and a tour of village buildings. You can skip steps, but finishing the flow unlocks the Genin exam in the academy.`,
+        `The Academy Trials are the in-game tutorial. Lemu teaches you to fight by hand against a dummy in the ${link("/battlearena", "battle arena")}, then has you learn your first jutsu at the ${link("/traininggrounds", "training grounds")}, buy shuriken and ramen, and travel the globe to rescue a runaway pup. Returning it to the Bondkeeper Sanctuary on Wake Island earns you a free companion, and graduating starts the Road to Genin quest. Each trial grants the experience for your next level, so you reach level 5, the Genin exam requirement, by the end.`,
       ),
       h2("Train and spend ryo"),
       ul([
@@ -378,7 +378,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
         "Then: fire tagged jutsu in the order you would click them.",
       ]),
       p(
-        `The AI cannot break targeting rules. A ground or self jutsu will not fire on an opponent-targeted action. During the tutorial you can press Take control to fight manually — see ${link("/guide/combat", "combat")}.`,
+        `The AI cannot break targeting rules. A ground or self jutsu will not fire on an opponent-targeted action. Switch AI control off below the battlefield to fight manually at any time — see ${link("/guide/combat", "combat")}.`,
       ),
     ].join(""),
   },

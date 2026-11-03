@@ -245,7 +245,9 @@ export const registerRouter = createTRPCRouter({
         buttonSfxOn: input.buttonSfxOn ?? true,
         isBanned: sanctions.some((match) => match.sanction === "BAN"),
         isSilenced: sanctions.some((match) => match.sanction === "SILENCE"),
-        ...(reminder ? { earnedExperience: 10000 } : {}),
+        // Experience is earned through the Academy Trials rather than handed out
+        // up front; an email-reminder signup keeps its promised bonus.
+        earnedExperience: reminder ? 10000 : 0,
       } satisfies typeof userData.$inferInsert;
 
       // INSERT SELECT publishes flags only with durable cases and unchanged sources.
