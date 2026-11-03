@@ -2492,16 +2492,13 @@ export const updateRewards = async (info: {
       rank: rewards.reward_rank,
     });
   }
-  // Update rewards for readability. `droppedGatheringItems` is surfaced so the quest
-  // claim caller (the only updateRewards caller with hydrated userQuests) can credit
-  // the herbs_gathered tracker by the number of gathered drops.
+  // Update rewards for readability
   return {
     items: itemsToInsert,
     titles,
     jutsus,
     bloodlines,
     badges,
-    droppedGatheringItems,
     sageModes: rolledSageMode ? [rolledSageMode] : [],
   };
 };
@@ -2594,7 +2591,7 @@ export const restrictedNewQuestEdgeError = async (
 export const fetchUncompletedQuests = async (
   client: DrizzleClient,
   user: UserData,
-  type: QuestType,
+  type: BootstrapQuestType,
 ) => {
   const availableLetters = availableQuestLetterRanks(user.rank);
   const now = new Date().toISOString();
@@ -3437,11 +3434,11 @@ export const upsertQuestEntry = async (
 export const insertNextQuest = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
-  type: QuestType,
+  type: BootstrapQuestType,
 ) => {
   const history = await fetchUncompletedQuests(client, user, type);
-  const nextQuest = history?.[0];
-  if (nextQuest && nextQuest.questType !== "hunting") {
+  const nextQuest = history[0];
+  if (nextQuest) {
     const logEntry = await upsertQuestEntry(client, user, nextQuest, "system");
     return { ...logEntry.entry, quest: nextQuest };
   }
@@ -4833,3 +4830,6 @@ export const runRewardTasks =
     for (const task of tasks) results.push(await task());
     return results as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
   };
+
+/** Quest types the user fetch bootstraps automatically. */
+type BootstrapQuestType = Extract<QuestType, "tier" | "exam">;

@@ -1365,7 +1365,7 @@ export const updateWarForUpdateRewards4 = (
 export const selectQuestForFetchUncompletedQuests = (
   client: Pick<DrizzleClient, "select">,
   user: import("@/drizzle/schema").UserData,
-  type: QuestType,
+  type: Extract<QuestType, "tier" | "exam">,
   now: string,
   availableLetters: import("@/drizzle/schema").BloodlineRank[],
 ) =>
@@ -1380,9 +1380,7 @@ export const selectQuestForFetchUncompletedQuests = (
       and(
         eq(quest.questType, type),
         ...questLevelFilters(user.level),
-        ...(type === "daily"
-          ? []
-          : [lte(quest.requiredFarmingLevel, getFarmingLevel(user.farmingExperience))]),
+        lte(quest.requiredFarmingLevel, getFarmingLevel(user.farmingExperience)),
         or(isNull(quest.startsAt), lte(quest.startsAt, now)),
         or(isNull(quest.endsAt), gte(quest.endsAt, now)),
         ...(availableLetters.length > 0
