@@ -756,10 +756,9 @@ export const userItemToAction = (
 ) => {
   const item = getItem(battle, useritem.itemId);
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
-  // AI users can never earn item XP, so their gear keeps character-level scaling
-  // (bosses stay tuned to the pre-item-level formulas). For players the item's
-  // ownership level applies; legacy in-progress battles may lack it, hence ?? 1.
-  const level = user.isAi ? (user.level ?? 1) : (useritem.level ?? 1);
+  // AI users can never earn item XP, so their gear keeps character-level scaling.
+  // For players the item's ownership level applies.
+  const level = user.isAi ? (user.level ?? 1) : useritem.level;
   return {
     id: item.id,
     name: useritem.variantName ?? item.name,

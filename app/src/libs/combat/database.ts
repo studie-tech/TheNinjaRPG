@@ -1364,8 +1364,7 @@ export const updateUser = async (
           item.maxDurability > 0
         ) {
           // Reduce durability by 50, ensuring it doesn't go below 0
-          const currentDurability = ui.durability ?? item.maxDurability;
-          ui.durability = Math.max(0, currentDurability - 50);
+          ui.durability = Math.max(0, ui.durability - 50);
         }
       });
     }
@@ -1744,7 +1743,7 @@ export const combatEnergyRecoverySql = (
   const regeneration =
     (userId ? snapshot?.extraState.energyRegeneration?.[userId] : undefined) ??
     userData.regeneration;
-  // Legacy or orphaned battles lack gear metadata; do not erase stored Energy.
+  // Orphaned battles released by the cleaner have no snapshot; do not erase stored Energy.
   const capacity =
     (userId ? snapshot?.extraState.energyCapacity?.[userId] : undefined) ??
     sql`GREATEST(${userData.maxEnergy}, ${userData.curEnergy})`;
