@@ -108,11 +108,11 @@ export default function Reports() {
   return (
     <ContentBox
       title="Reports"
-      subtitle={userData?.role === "USER" ? "Your reports" : "Overview"}
+      subtitle={userData.role === "USER" ? "Your reports" : "Overview"}
       topRightContent={
         <div>
           <div className="flex flex-col items-start">
-            {userData && isStaffRole(userData.role) && (
+            {isStaffRole(userData.role) && (
               <div className="flex w-full flex-row items-center gap-1">
                 <Link href="/reports/statistics">
                   <Button id="report-statistics" hoverText="Staff Activity Overview">
