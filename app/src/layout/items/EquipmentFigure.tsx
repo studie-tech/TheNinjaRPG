@@ -88,11 +88,11 @@ export function EquipmentFigure({
               pos,
               userItem
                 ? cn(
-                    "border-solid bg-white/90",
+                    "border-solid bg-white shadow-sm",
                     rarityBorderClass[userItem.item.rarity],
                   )
-                : "border-slate-500 border-dashed bg-slate-200/80 text-slate-700",
-              "hover:border-black hover:bg-slate-300",
+                : "border-slate-400 border-dashed bg-white/85 text-slate-600",
+              "hover:border-slate-700 hover:bg-white",
               slot === activeSlot && "ring-4 ring-primary/60",
               isTarget && "border-orange-500 bg-orange-100 ring-4 ring-orange-400/60",
               isDimmed && "opacity-40",
