@@ -275,36 +275,6 @@ export const formatTimeAgo = (date: Date) => {
 };
 
 /**
- * Combines a calendar date with a UTC HH:MM time string into a Date object.
- * The date components are taken from the **local** representation of `date`
- * (year/month/day as the user sees them), and the time is interpreted as UTC
- * hours/minutes. Using local components avoids off-by-one-day errors for users
- * in non-UTC timezones where a local-midnight Date has a different UTC date.
- * @param date - A Date whose local year/month/day is used
- * @param timeHHMM - A time string in "HH:MM" format (UTC)
- * @returns A new Date representing that local date + UTC time
- */
-export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
-  if (!/^\d{1,2}:\d{2}$/.test(timeHHMM)) {
-    throw new TypeError(
-      `combineUTCDateTime: invalid time format "${timeHHMM}" — expected HH:MM`,
-    );
-  }
-  const [hhStr = "00", mmStr = "00"] = timeHHMM.split(":");
-  const hh = parseInt(hhStr, 10);
-  const mm = parseInt(mmStr, 10);
-  if (!Number.isFinite(hh) || hh < 0 || hh > 23) {
-    throw new TypeError(`combineUTCDateTime: hours out of range (${hh})`);
-  }
-  if (!Number.isFinite(mm) || mm < 0 || mm > 59) {
-    throw new TypeError(`combineUTCDateTime: minutes out of range (${mm})`);
-  }
-  return new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hh, mm, 0, 0),
-  );
-};
-
-/**
  * Check if two dates are on the same day (UTC-based comparison)
  */
 export const isSameDay = (date1: Date, date2: Date): boolean => {
