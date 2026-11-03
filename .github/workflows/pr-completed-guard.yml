@@ -18,7 +18,7 @@ permissions:
   statuses: read
 
 concurrency:
-  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.issue.number || github.event.check_run.head_sha || github.event.sha || github.sha }}
+  group: pr-completed-guard-${{ github.event.pull_request.number || github.event.check_run.head_sha || github.event.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -54,52 +54,18 @@ jobs:
             ];
             const FAILING_STATUS_STATES = ["failure", "error"];
 
-            // Determine which PRs to evaluate based on the triggering event
-            let prNumbers = [];
-            let headSha = null;
-
-            if (
-              context.eventName === "pull_request" &&
-              context.payload.action === "labeled"
-            ) {
-              if (context.payload.label.name !== LABEL_NAME) {
-                core.info(
-                  `Label "${context.payload.label.name}" is not "${LABEL_NAME}". Skipping.`,
-                );
-                return;
-              }
+            // The job-level `if` already admits only relevant events. PR and
+            // review events carry their PR; check_run/status events carry no PR
+            // context, so resolve open PRs whose current head matches the commit
+            // the check ran against.
+            let prNumbers;
+            if (context.payload.pull_request) {
               prNumbers = [context.payload.pull_request.number];
-            } else if (
-              context.eventName === "pull_request_review" ||
-              context.eventName === "pull_request_review_comment"
-            ) {
-              prNumbers = [context.payload.pull_request.number];
-            } else if (context.eventName === "check_run") {
-              const run = context.payload.check_run;
-              if (run.name === SELF_CHECK_NAME) {
-                core.info("Ignoring this workflow's own check run.");
-                return;
-              }
-              if (!FAILING_CHECK_CONCLUSIONS.includes(run.conclusion)) {
-                core.info(
-                  `Check "${run.name}" concluded "${run.conclusion}". Not a failure. Skipping.`,
-                );
-                return;
-              }
-              headSha = run.head_sha;
-            } else if (context.eventName === "status") {
-              if (!FAILING_STATUS_STATES.includes(context.payload.state)) {
-                core.info(
-                  `Status "${context.payload.context}" is "${context.payload.state}". Not a failure. Skipping.`,
-                );
-                return;
-              }
-              headSha = context.payload.sha;
-            }
-
-            // check_run/status events carry no PR context; resolve open PRs
-            // whose current head matches the commit the check ran against
-            if (headSha) {
+            } else {
+              const headSha =
+                context.eventName === "check_run"
+                  ? context.payload.check_run.head_sha
+                  : context.payload.sha;
               const { data: prs } =
                 await github.rest.repos.listPullRequestsAssociatedWithCommit({
                   owner: context.repo.owner,
@@ -115,11 +81,6 @@ jobs:
                 );
                 return;
               }
-            }
-
-            if (prNumbers.length === 0) {
-              core.info("Could not determine PR number(s). Skipping.");
-              return;
             }
 
             for (const prNumber of prNumbers) {
