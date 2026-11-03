@@ -527,14 +527,9 @@ export const homeRouter = createTRPCRouter({
             .length || 0;
         const maxMaterials = getHomeStorageBucketCapacity(
           "materials",
-          user,
           targetHome.storage,
         );
-        const maxCooking = getHomeStorageBucketCapacity(
-          "cooking",
-          user,
-          targetHome.storage,
-        );
+        const maxCooking = getHomeStorageBucketCapacity("cooking", targetHome.storage);
         if (storedNormalItems > targetHome.storage) {
           return errorResponse(
             `You need to remove some items from storage first (max ${targetHome.storage})`,
@@ -620,9 +615,7 @@ export const homeRouter = createTRPCRouter({
         const storedInBucket =
           storedItems.filter((ui) => getHomeStorageBucket(ui.item) === homeBucket)
             .length || 0;
-        if (
-          storedInBucket >= getHomeStorageBucketCapacity(homeBucket, user, homeStorage)
-        ) {
+        if (storedInBucket >= getHomeStorageBucketCapacity(homeBucket, homeStorage)) {
           return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
       }

@@ -124,21 +124,19 @@ export const calcMaxMaterials = (user: UserData) => {
   }
 };
 
-/**
- * Calculates the maximum number of materials that can be stored in a house.
- * Based on home storage capacity - 10, minimum 0.
- *
- * @param user - The user data.
- * @param homeStorage - The storage capacity of the home.
- * @returns The maximum number of materials that can be stored in house.
- */
-export const calcMaxHouseMaterials = (_user: UserData, homeStorage: number) => {
-  return Math.max(0, homeStorage - 10);
-};
+/** Home storage slots that do not extend the materials and cooking buckets. */
+const HOUSE_SPECIAL_ITEMS_OFFSET = 10;
 
 /**
- * Calculates the maximum number of cooking items for a user.
- * Mirrors materials: base 25 + federal bonus + purchased extra slots.
+ * Maximum number of materials, and separately of cooking items, a house can store:
+ * home storage capacity minus a fixed offset, minimum 0.
+ */
+export const calcMaxHouseSpecialItems = (homeStorage: number) =>
+  Math.max(0, homeStorage - HOUSE_SPECIAL_ITEMS_OFFSET);
+
+/**
+ * Calculates the maximum number of cooking items for a user:
+ * base slots + federal bonus + purchased extra slots.
  */
 export const calcMaxCookingItems = (user: UserData) => {
   const status = getUserFederalStatus(user);
@@ -152,14 +150,6 @@ export const calcMaxCookingItems = (user: UserData) => {
     default:
       return COOKING_BASE_SLOTS + user.extraItemSlots;
   }
-};
-
-/**
- * Calculates the maximum number of cooking items that can be stored in a house.
- * Based on home storage capacity - 10, minimum 0 (same formula as materials).
- */
-export const calcMaxHouseCookingItems = (_user: UserData, homeStorage: number) => {
-  return Math.max(0, homeStorage - 10);
 };
 
 /** Carried inventory backpack bucket. Dedicated types take priority over event. */
@@ -237,16 +227,14 @@ export const getInventoryBucketFullMessage = (bucket: InventoryBucket): string =
 
 export const getHomeStorageBucketCapacity = (
   bucket: HomeStorageBucket,
-  user: UserData,
   homeStorage: number,
 ): number => {
   switch (bucket) {
     case "furniture":
       return HOME_FURNITURE_STORAGE_CAPACITY;
     case "cooking":
-      return calcMaxHouseCookingItems(user, homeStorage);
     case "materials":
-      return calcMaxHouseMaterials(user, homeStorage);
+      return calcMaxHouseSpecialItems(homeStorage);
     case "normal":
       return homeStorage;
   }

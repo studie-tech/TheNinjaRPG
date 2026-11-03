@@ -3190,7 +3190,6 @@ export const itemRouter = createTRPCRouter({
           storedCount >=
           getHomeStorageBucketCapacity(
             homeBucket,
-            user,
             HomeTypeDetails[user.homeType].storage,
           )
         ) {
