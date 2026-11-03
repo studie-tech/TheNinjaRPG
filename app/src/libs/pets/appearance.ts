@@ -346,20 +346,11 @@ export const downloadPetImage = async (imageUrl: string, signal: AbortSignal) =>
   return Buffer.concat(chunks, total);
 };
 
-/** Bound decoding, identify the actual image format and fail closed on unsafe/absent moderation. */
+/** Fail closed on unsafe moderation of the normalized WebP sprite. */
 const checkModeration = async (image: Buffer, signal: AbortSignal) => {
   signal.throwIfAborted();
-  if (image.byteLength > MAX_PET_IMAGE_BYTES)
-    throw new Error("The generated image is too large");
-  const metadata = await sharp(image, {
-    limitInputPixels: MAX_PET_IMAGE_PIXELS,
-  }).metadata();
-  if (!metadata.format || !["jpeg", "png", "webp"].includes(metadata.format))
-    throw new Error("The generated image has an unsupported format");
-  // Fresh uploads may not yet be reachable by OpenAI. Send the bytes already
-  // downloaded by this server, with the MIME type detected from their contents.
-  const dataUrl = `data:image/${metadata.format};base64,${image.toString("base64")}`;
+  // Fresh uploads may not yet be reachable by OpenAI, so send the sprite bytes inline.
+  const dataUrl = `data:image/webp;base64,${image.toString("base64")}`;
   const result = await classifyNsfwImage(dataUrl, true, signal);
-  if (!result || result.isNsfw)
-    throw new Error("The generated image did not pass content review");
+  if (result.isNsfw) throw new Error("The generated image did not pass content review");
 };
