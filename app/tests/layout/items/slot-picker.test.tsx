@@ -112,3 +112,10 @@ it("disables equip and unequip while a change is saving", () => {
   expect((screen.getByRole("button", { name: "Unequip" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByRole("region", { name: "Hand slot" }).getAttribute("aria-busy")).toBe("true");
 });
+
+it("keeps each row's art inside its box", () => {
+  renderPicker();
+  // Item art positions itself absolutely; its box must be the containing block.
+  const art = screen.getByText("Raijin Tanto art").parentElement;
+  expect(art?.className).toContain("relative");
+});

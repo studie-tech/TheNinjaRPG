@@ -174,7 +174,7 @@ export function SlotPicker({
 
 function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
   return (
-    <span className="h-11 w-11 shrink-0">
+    <span className="relative h-11 w-11 shrink-0">
       <ContentImage
         image={applyActiveVariant(userItem as UserItemWithVariants).image}
         alt={userItem.item.name}

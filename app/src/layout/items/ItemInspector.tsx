@@ -28,7 +28,6 @@ import { ITEM_LEVEL_CAP, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
 import Confirm from "@/layout/Confirm";
-import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import {
   ItemDurabilityRepairActions,
@@ -181,14 +180,6 @@ export function ItemInspector({
         )}
       </div>
       <div className="flex items-center gap-3">
-        <span className="h-16 w-16 shrink-0">
-          <ContentImage
-            image={applyActiveVariant(useritem as UserItemWithVariants).image}
-            alt={useritem.item.name}
-            rarity={useritem.item.rarity}
-            className="h-16 w-16"
-          />
-        </span>
         <div className="min-w-0">
           <h2 className="font-bold text-foreground text-lg">{useritem.item.name}</h2>
           {equippedIn && (
@@ -250,73 +241,6 @@ export function ItemInspector({
           )}
         </div>
       )}
-      <div>
-        {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
-          <p>
-            - Need {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)} XP
-            more to level
-          </p>
-        )}
-      </div>
-      <ItemWithEffects
-        item={{
-          ...applyActiveVariant(useritem as UserItemWithVariants),
-          imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
-          curDurability: useritem.durability,
-          level: useritem.level,
-          experience: useritem.experience,
-        }}
-        key={useritem.id}
-        showStatistic="item"
-        showEvolutions
-      />
-      {!useritem.item.canBeImbued &&
-        useritem.equipped === "NONE" &&
-        useritem.imbuements.some(
-          (imbuement) =>
-            !imbuement.craftingFinishedAt ||
-            new Date(imbuement.craftingFinishedAt) <= new Date(),
-        ) && (
-          <div className="mb-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-            <p className="text-destructive text-sm">
-              Imbuing is disabled on this item. Remove imbuements to return the crystals
-              to your inventory.
-            </p>
-            {useritem.imbuements
-              .filter(
-                (imbuement) =>
-                  !imbuement.craftingFinishedAt ||
-                  new Date(imbuement.craftingFinishedAt) <= new Date(),
-              )
-              .map((imbuement) => (
-                <Confirm
-                  key={imbuement.id}
-                  title="Remove Imbuement"
-                  proceed_label="Remove & Return Crystal"
-                  button={
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={isLoading}
-                      className="w-full justify-start"
-                    >
-                      <Gem className="mr-2 h-4 w-4" />
-                      Remove {imbuement.item.name}
-                    </Button>
-                  }
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    removeImbuement({ userItemImbuementId: imbuement.id });
-                  }}
-                >
-                  <p>
-                    Remove <b>{imbuement.item.name}</b> from <b>{useritem.item.name}</b>
-                    ? The crystal will be returned to your inventory.
-                  </p>
-                </Confirm>
-              ))}
-          </div>
-        )}
       {!isLoading && (
         <div className="flex flex-row flex-wrap items-center gap-2">
           {useritem.equipped === "NONE" &&
@@ -494,6 +418,73 @@ export function ItemInspector({
           </Confirm>
         </div>
       )}
+      <div>
+        {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
+          <p>
+            - Need {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)} XP
+            more to level
+          </p>
+        )}
+      </div>
+      <ItemWithEffects
+        item={{
+          ...applyActiveVariant(useritem as UserItemWithVariants),
+          imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
+          curDurability: useritem.durability,
+          level: useritem.level,
+          experience: useritem.experience,
+        }}
+        key={useritem.id}
+        showStatistic="item"
+        showEvolutions
+      />
+      {!useritem.item.canBeImbued &&
+        useritem.equipped === "NONE" &&
+        useritem.imbuements.some(
+          (imbuement) =>
+            !imbuement.craftingFinishedAt ||
+            new Date(imbuement.craftingFinishedAt) <= new Date(),
+        ) && (
+          <div className="mb-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+            <p className="text-destructive text-sm">
+              Imbuing is disabled on this item. Remove imbuements to return the crystals
+              to your inventory.
+            </p>
+            {useritem.imbuements
+              .filter(
+                (imbuement) =>
+                  !imbuement.craftingFinishedAt ||
+                  new Date(imbuement.craftingFinishedAt) <= new Date(),
+              )
+              .map((imbuement) => (
+                <Confirm
+                  key={imbuement.id}
+                  title="Remove Imbuement"
+                  proceed_label="Remove & Return Crystal"
+                  button={
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={isLoading}
+                      className="w-full justify-start"
+                    >
+                      <Gem className="mr-2 h-4 w-4" />
+                      Remove {imbuement.item.name}
+                    </Button>
+                  }
+                  onAccept={(e) => {
+                    e.preventDefault();
+                    removeImbuement({ userItemImbuementId: imbuement.id });
+                  }}
+                >
+                  <p>
+                    Remove <b>{imbuement.item.name}</b> from <b>{useritem.item.name}</b>
+                    ? The crystal will be returned to your inventory.
+                  </p>
+                </Confirm>
+              ))}
+          </div>
+        )}
       {isMerging && <Loader explanation="Merging" />}
       {isConsuming && <Loader explanation="Using" />}
       {isSelling && <Loader explanation="Selling" />}

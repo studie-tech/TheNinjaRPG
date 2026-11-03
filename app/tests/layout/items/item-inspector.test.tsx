@@ -148,3 +148,12 @@ it("keeps the inspector open when Escape cancels one of its confirmations", () =
   });
   expect(onClose).not.toHaveBeenCalled();
 });
+
+it("puts the actions before the long effects card", () => {
+  renderInspector();
+  const equipButton = screen.getByRole("button", { name: /^Equip$/ });
+  const effects = screen.getByText("Item effects");
+  // The effects card repeats the name and art, so the panel leads with what can be done.
+  expect(equipButton.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByText("Twin Fang Blade art")).toBeNull();
+});
