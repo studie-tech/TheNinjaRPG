@@ -7,7 +7,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
 import { createGlobeScene, type GlobeSceneState } from "@/libs/rendering/scenes/globe";
-import type { GlobalMapData, GlobalTile } from "@/libs/sector-map/world-types";
+import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
 
@@ -26,7 +26,7 @@ interface MapProps {
   autoRotate?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
-  onTileClick?: (sector: number, tile: GlobalTile | undefined) => void;
+  onTileClick?: (sector: number) => void;
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
@@ -82,11 +82,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         onError,
         state: current.current.state,
         onHover: (sector) => setHoverSector(sector),
-        onClick: (sector) =>
-          current.current.props.onTileClick?.(
-            sector,
-            current.current.state.map.tiles[sector],
-          ),
+        onClick: (sector) => current.current.props.onTileClick?.(sector),
       });
       if (!signal.aborted) instance.updateState(current.current.state);
       return instance;

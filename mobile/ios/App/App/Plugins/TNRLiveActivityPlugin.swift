@@ -16,7 +16,6 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "TNRLiveActivity"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "update", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "end", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "endKind", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "endAll", returnType: CAPPluginReturnPromise),
@@ -96,25 +95,6 @@ public class TNRLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                     data: ["activityId": activity.id, "pushToken": token]
                 )
             }
-        }
-    }
-
-    @objc func update(_ call: CAPPluginCall) {
-        guard let activityId = call.getString("activityId") else {
-            call.reject("activityId is required")
-            return
-        }
-        guard let state = contentState(from: call) else {
-            call.reject("endsAtEpochMs is required")
-            return
-        }
-        guard let activity = Self.activity(with: activityId) else {
-            call.reject("No such activity")
-            return
-        }
-        Task {
-            await activity.update(.init(state: state, staleDate: state.endsAt))
-            call.resolve()
         }
     }
 
