@@ -99,9 +99,6 @@ export const pvpRankRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Guard
-      if (!user) {
-        return errorResponse("User not found");
-      }
       if (rewards.length === 0) {
         return errorResponse("No unclaimed season rewards");
       }

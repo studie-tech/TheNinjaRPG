@@ -68,21 +68,19 @@ export const bountyRouter = createTRPCRouter({
         listBountyForBoard(ctx.drizzle, input, limit, offset),
       ]);
 
-      const canSeeHiddenInfo = currentUser
-        ? canSeeHiddenBountyInfo(currentUser.role)
-        : false;
+      const canSeeHiddenInfo = canSeeHiddenBountyInfo(currentUser.role);
 
       // Transform results and filter based on permissions
       const transformedResults = results
         .filter((bountyItem) => {
           // Staff and syndicate users can see all bounties
-          if (canSeeHiddenInfo || currentUser?.villageId === VILLAGE_SYNDICATE_ID) {
+          if (canSeeHiddenInfo || currentUser.villageId === VILLAGE_SYNDICATE_ID) {
             return true;
           }
 
           // For other users, hide bounties where the target is from the same village
           const targetVillageId = bountyItem.target?.villageId;
-          const userVillageId = currentUser?.villageId;
+          const userVillageId = currentUser.villageId;
           const isCreator = bountyItem.creatorUserId === userId;
 
           // Show if user is the creator, or if target is from a different village
@@ -127,7 +125,6 @@ export const bountyRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, targetUserId),
       ]);
       // Guards
-      if (!creator || !target) return errorResponse("User not found");
       if (RANKS_RESTRICTED_FROM_PVP.includes(target.rank))
         return errorResponse("Target too low rank for PvP");
       if (amountRyo < BOUNTY_MIN_AMOUNT)
@@ -179,7 +176,6 @@ export const bountyRouter = createTRPCRouter({
       if (target.userId !== curBounty.targetUserId)
         return errorResponse("Target user does not match bounty");
       const hunter = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!hunter) return errorResponse("User not found");
       if (RANKS_RESTRICTED_FROM_PVP.includes(hunter.rank))
         return errorResponse("Your rank cannot engage in PvP");
       if (curSignups?.find((c) => c.hunterUserId === ctx.userId))

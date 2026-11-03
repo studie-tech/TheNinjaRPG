@@ -181,7 +181,6 @@ export const clanRouter = createTRPCRouter({
       const clanVillage = fetchedClan?.village;
       // Guards
       if (!fetchedClan) return errorResponse("Faction not found");
-      if (!user) return errorResponse("User not found");
       if (fetchedClan.bank < HIDEOUT_COST) return errorResponse("Not enough ryo");
       if (user.clanId !== input.clanId) return errorResponse("User not in clan");
       if (villages.find((v) => v.sector === input.sector)) {
@@ -235,7 +234,6 @@ export const clanRouter = createTRPCRouter({
       const clanHideout = fetchedClan?.village;
       // Guards
       if (!fetchedClan) return errorResponse("Faction not found");
-      if (!user) return errorResponse("User not found");
       if (!clanHideout) return errorResponse("Clan village not found");
       if (!user.isOutlaw)
         return errorResponse("Only outlaw factions can have strongholds");
@@ -310,7 +308,6 @@ export const clanRouter = createTRPCRouter({
       ]);
       // Guards
       if (!fetchedClan) return errorResponse("Faction not found");
-      if (!user) return errorResponse("User not found");
       if (!user.isOutlaw) return errorResponse("Only outlaws can donate to faction");
       if (user.clanId !== input.clanId) return errorResponse("User not in faction");
       if (user.reputationPoints < input.reputationPoints) {
@@ -449,11 +446,10 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
+      const locationLabel = user.isOutlaw ? "syndicate" : "village";
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (!fetchedClan.leaderId) return errorResponse("No leader currently");
       if (user.clanId) return errorResponse(`Already in a ${groupLabel}`);
       if (
@@ -492,7 +488,7 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Guards
       if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
       // Secondary fetch using user's clanId (resilient to leader changes)
@@ -549,8 +545,8 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
+      const locationLabel = user.isOutlaw ? "syndicate" : "village";
       // Guards
       if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
       // Secondary fetches using user's clanId (resilient to leader changes)
@@ -651,10 +647,9 @@ export const clanRouter = createTRPCRouter({
       // Derived
       const villageId = villageData?.id;
       const structure = villageData?.structures.find((s) => s.route === "/clanhall");
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
+      const locationLabel = user.isOutlaw ? "syndicate" : "village";
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!villageData) return errorResponse(`${locationLabel} not found`);
       if (!structure) return errorResponse(`${groupLabel} hall not found`);
       if (clanWithName)
@@ -707,11 +702,10 @@ export const clanRouter = createTRPCRouter({
           findHistoricalAvatarByImage(ctx.drizzle, input),
           checkForBadWords(input.name),
         ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
+      const locationLabel = user.isOutlaw ? "syndicate" : "village";
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (!image) return errorResponse("Image not found");
       if (!image.avatar) return errorResponse("Image not found");
       if (clanWithName && clanWithName.id !== fetchedClan.id) {
@@ -759,11 +753,10 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
 
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (fetchedClan.leaderId !== user.userId)
         return errorResponse(`Not ${groupLabel} leader`);
       if (!user.isOutlaw) return errorResponse(`Only factions can set colors`);
@@ -826,7 +819,7 @@ export const clanRouter = createTRPCRouter({
           : undefined,
       ]);
       const member = input.memberId === ctx.userId ? user : otherMember;
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
@@ -839,7 +832,6 @@ export const clanRouter = createTRPCRouter({
         fetchedClan.village?.type ?? "",
       );
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!member) return errorResponse("Member not found");
       if (member.userId === user.userId) return errorResponse("Not yourself");
       if (isMemberLeader)
@@ -944,10 +936,9 @@ export const clanRouter = createTRPCRouter({
       const isMemberAssassin = checkAssassin(input.memberId, clanData);
       const canEdit = canEditClans(user.role);
       const isYourself = ctx.userId === input.memberId;
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Guards
       if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (!member) return errorResponse("Member not found");
       if (!isLeader && !isColeader && !canEdit) return errorResponse(`Not allowed`);
       if (isMemberLeader)
@@ -1002,10 +993,9 @@ export const clanRouter = createTRPCRouter({
       const isMemberColeader = checkCoLeader(input.memberId, fetchedClan);
       const isMemberLeader = input.memberId === fetchedClan?.leaderId;
       const canEdit = canEditClans(user.role);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (!member) return errorResponse("Member not found");
       if (isMemberLeader && !canEdit)
         return errorResponse(`Cannot kick ${groupLabel} leader`);
@@ -1080,13 +1070,12 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const isLeader = fetchedClan?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, fetchedClan);
       const leaderLike = isLeader || isCoLeader;
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (user.isBanned) return errorResponse("User is banned");
       if (user.isSilenced) return errorResponse("User is silenced");
@@ -1112,12 +1101,12 @@ export const clanRouter = createTRPCRouter({
         fetchClan(ctx.drizzle, input.clanId),
         fetchVillage(ctx.drizzle, input.villageId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
-      const locationLabel = user?.isOutlaw ? "syndicate" : "village";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
+      const locationLabel = user.isOutlaw ? "syndicate" : "village";
       // Guards
       if (!village)
         return errorResponse(
-          user?.isOutlaw ? "Syndicate not found" : "Village not found",
+          user.isOutlaw ? "Syndicate not found" : "Village not found",
         );
       if (!user.clanId)
         return errorResponse(`Must be within the ${groupLabel} to challenge`);
@@ -1228,7 +1217,7 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const isLeader = clanData?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, clanData);
@@ -1238,7 +1227,6 @@ export const clanRouter = createTRPCRouter({
       const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
       const cost = config.baseCost + currentLevel * config.perLevelCost;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!clanData) return errorResponse(`${groupLabel} not found`);
       if (config.factionOnly && !user.isOutlaw) {
         return errorResponse("Only available for factions");
@@ -1283,13 +1271,12 @@ export const clanRouter = createTRPCRouter({
         fetchClan(ctx.drizzle, input.clanId),
         findUserById(ctx.drizzle, input.nomineeId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const isLeader = clanData?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, clanData);
       const leaderLike = isLeader || isCoLeader;
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!clanData) return errorResponse(`${groupLabel} not found`);
       if (!nominee) return errorResponse("Nominee not found");
       if (user.clanId !== clanData.id) return errorResponse(`Not in the ${groupLabel}`);
@@ -1355,13 +1342,12 @@ export const clanRouter = createTRPCRouter({
         fetchClan(ctx.drizzle, input.targetClanId),
         fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const isLeader = challenger?.leaderId === user.userId;
       const isCoLeader = checkCoLeader(ctx.userId, challenger);
       const leaderLike = isLeader || isCoLeader;
       // Guards
-      if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
       if (!challenger) return errorResponse("Challenger not found");
       if (!defender) return errorResponse("Defender not found");
@@ -1442,9 +1428,8 @@ export const clanRouter = createTRPCRouter({
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
         fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!clanBattleData) return errorResponse(`${groupLabel} battle not found`);
       if (clanBattleData.battleId)
         return errorResponse(`${groupLabel} battle already started`);
@@ -1527,12 +1512,11 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const queued = clanBattleData?.queue.some((q) => q.userId === user.userId);
       const battleId = input.clanBattleId;
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!clanBattleData) return errorResponse(`${groupLabel} battle not found`);
       if (user.status !== "QUEUED") return errorResponse(`Not queued in ${battleId}`);
       if (!queued) return errorResponse("Not in the queue");
@@ -1563,7 +1547,7 @@ export const clanRouter = createTRPCRouter({
         fetchClan(ctx.drizzle, input.clanId),
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
       const queued = clanBattleData?.queue.some((q) => q.userId === input.targetId);
       const battleId = input.clanBattleId;
@@ -1662,9 +1646,8 @@ export const clanRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
       ]);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!clanBattleData) return errorResponse(`${groupLabel} battle not found`);
       if (clanBattleData.battleId) return errorResponse("Battle already initiated");
       if (
@@ -1804,11 +1787,10 @@ export const clanRouter = createTRPCRouter({
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const canEdit = canEditClans(user.role);
-      const groupLabel = user?.isOutlaw ? "faction" : "clan";
+      const groupLabel = user.isOutlaw ? "faction" : "clan";
 
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      if (!user) return errorResponse("User not found");
       if (!isLeader && !canEdit)
         return errorResponse("Only leader or staff can clear leadership");
       if (fetchedClan.villageId !== user.villageId && isLeader)

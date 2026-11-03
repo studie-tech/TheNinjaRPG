@@ -156,10 +156,9 @@ export const shrineRouter = createTRPCRouter({
       if (targetSector.shrineLevel >= SHRINE_MAX_LEVEL) {
         return errorResponse(`Shrine level cannot exceed ${SHRINE_MAX_LEVEL}`);
       }
-      if (user?.village?.kageId !== user.userId) {
+      if (user.village?.kageId !== user.userId) {
         return errorResponse("Only the Kage can upgrade shrines");
       }
-      if (!user.village) return errorResponse("Village not found");
       if (user.village.tokens < SHRINE_UPGRADE_COST) {
         return errorResponse(
           `Need ${SHRINE_UPGRADE_COST.toLocaleString()} tokens to upgrade shrine`,
@@ -482,9 +481,6 @@ export const shrineRouter = createTRPCRouter({
         findVillageForGetBoostTemplate(ctx.drizzle, input),
       ]);
 
-      if (!user) {
-        throw serverError("NOT_FOUND", "User not found");
-      }
       if (!targetVillage) {
         throw serverError("NOT_FOUND", "Village not found");
       }

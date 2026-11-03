@@ -217,7 +217,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
       ]);
-      if (!actor || actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
+      if (actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
         return [];
       }
       return historic;
@@ -469,7 +469,6 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
       ]);
       // Guards
-      if (!actor || !target) return errorResponse("User not found");
       if (actor.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canRemoveBloodlineFromPool(actor.role)) return errorResponse("Unauthorized");
@@ -575,7 +574,6 @@ export const bloodlineRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Bloodline does not exist");
-      if (!user) return errorResponse("User does not exist");
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete bloodline");
       }
@@ -934,7 +932,6 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
       ]);
-      if (!user) return errorResponse("User not found");
       // Guard
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");

@@ -1282,7 +1282,7 @@ export const profileRouter = createTRPCRouter({
         return errorResponse(
           "This AI is used by a hunting contract. Remove the target first.",
         );
-      if (ai?.isAi) {
+      if (ai.isAi) {
         const rejected = await deleteUser(ctx.drizzle, ai.userId);
         if (rejected) return rejected;
         await outdateProposalsFor(
@@ -2283,7 +2283,7 @@ export const profileRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForGetSeichiSilverForStaff(ctx.drizzle, input),
       ]);
-      if (!actor || actor.isBanned || !canEditSeichiSilver(actor.role)) return 0;
+      if (actor.isBanned || !canEditSeichiSilver(actor.role)) return 0;
       return target?.seichiSilver ?? 0;
     }),
   // Adjust Seichi Silver for a user (staff only)
@@ -2297,7 +2297,6 @@ export const profileRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.userId),
       ]);
       // Guards
-      if (!actor || !target) return errorResponse("User not found");
       if (actor.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canEditSeichiSilver(actor.role)) {
@@ -2351,10 +2350,6 @@ export const profileRouter = createTRPCRouter({
       ]);
 
       // Guards
-      if (!awarder || !target) {
-        return errorResponse("User not found");
-      }
-
       if (awarder.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canAwardExperience(awarder)) {

@@ -79,7 +79,7 @@ export const logsRouter = createTRPCRouter({
       return {
         data: entries.map((entry) => ({
           ...entry,
-          changes: (entry.changes as string[])?.map((change) => {
+          changes: (entry.changes as string[]).map((change) => {
             bloodlines.forEach((b) => {
               change = change.replace(b.id, `${b.id} - ${b.name}`);
             });

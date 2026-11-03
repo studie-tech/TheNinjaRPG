@@ -592,8 +592,6 @@ export const raidsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         findMpvpBattleUserForReadyToQueue(ctx.drizzle, ctx),
       ]);
-      // Guard
-      if (!user) return errorResponse("User not found");
       // Validation does not change the profile; reconcile only a mismatched activity status.
       const reject = (message: string) => ({
         ...errorResponse(message),

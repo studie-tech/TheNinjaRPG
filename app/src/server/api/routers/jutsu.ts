@@ -2031,7 +2031,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchUserReskins(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const curReskins = userReskins?.length || 0;
+      const curReskins = userReskins.length;
       const maxReskins = user.extraReskinSlots + RESKIN_LIMIT;
       const existingReskin = userReskins.find((r) => r.jutsuId === input.jutsuId);
       // Guards

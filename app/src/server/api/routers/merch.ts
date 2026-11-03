@@ -114,7 +114,7 @@ export const merchRouter = createTRPCRouter({
       (await cookies()).delete(CART_COOKIE);
       return errorResponse("Your bag has expired. Please add your items again.");
     }
-    if (!cart?.totalQuantity)
+    if (!cart.totalQuantity)
       return errorResponse("Your bag is empty. Add something you love first.");
     // Refresh the checkout URL rather than reusing a stale link from an earlier render.
     if (!isShopifyCheckoutUrl(cart.checkoutUrl))

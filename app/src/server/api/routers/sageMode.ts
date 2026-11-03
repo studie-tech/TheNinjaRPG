@@ -166,7 +166,6 @@ export const sageModeRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Sage Mode does not exist");
-      if (!user) return errorResponse("User does not exist");
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete sage mode");
       }

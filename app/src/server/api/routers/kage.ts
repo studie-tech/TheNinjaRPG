@@ -94,11 +94,10 @@ export const kageRouter = createTRPCRouter({
       ]);
       // Guards
       if (!elder) return errorResponse("No elder found");
-      if (!user) return errorResponse("User not found");
       if (!uVillage) return errorResponse("Village not found");
       if (uVillage.type !== "VILLAGE") return errorResponse("Only for villages");
       if (user.villageId !== villageId) return errorResponse("Wrong village");
-      if (user.userId !== uVillage?.kageId) return errorResponse("Not kage");
+      if (user.userId !== uVillage.kageId) return errorResponse("Not kage");
       // Update
       await updateVillageForResignKage(ctx.drizzle, elder, {
         villageId: user.villageId,
@@ -121,7 +120,7 @@ export const kageRouter = createTRPCRouter({
         listActionLogForSendKagePrestige(ctx.drizzle, ctx, input),
       ]);
       // Derived
-      const previousSent = records?.reduce((acc, curr) => acc + curr.relatedValue, 0);
+      const previousSent = records.reduce((acc, curr) => acc + curr.relatedValue, 0);
       // Guards
       if (user.rank !== "ELDER") return errorResponse("Must be an elder");
       if (user.villageId !== kage.villageId) return errorResponse("Wrong village");
@@ -186,7 +185,7 @@ export const kageRouter = createTRPCRouter({
           ctx,
           {
             userId: user.userId,
-            village: { name: user?.village?.name, kageId: user?.village?.kageId },
+            village: { name: user.village.name, kageId: user.village.kageId },
           },
           input,
         ),
@@ -247,7 +246,6 @@ export const kageRouter = createTRPCRouter({
       const lockout = isHideoutOrStronghold ? KAGE_DELAY_SECS : 0;
 
       // Guards
-      if (!user) return errorResponse("User not found");
       if (!userVillage) return errorResponse("Village not found");
       if (!structure) return errorResponse("Structure not found");
       if (isHideoutOrStronghold && !clanData) return errorResponse("Faction not found");

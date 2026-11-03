@@ -1983,7 +1983,7 @@ export const questsRouter = createTRPCRouter({
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      if (!user || !canEditQuests(user.role)) {
+      if (!canEditQuests(user.role)) {
         return errorResponse("Not authorized to delete user quests");
       }
       if (!targetUser.user) {

@@ -768,7 +768,6 @@ export const warRouter = createTRPCRouter({
         fetchActiveWar(ctx.drizzle, input.warId),
       ]);
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!activeWar) return errorResponse("War not found");
       if (!canAdministrateWars(user.role)) {
         return errorResponse("You are not authorized to end wars");

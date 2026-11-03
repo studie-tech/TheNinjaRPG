@@ -94,7 +94,7 @@ export const applicationsRouter = createTRPCRouter({
         fetchApplication({ client: ctx.drizzle, applicationId: input.id }),
       ]);
       // Guards
-      if (!user || !app) return null;
+      if (!app) return null;
       const isOwner = app.applicantUserId === user.userId;
       const canViewAll = canViewAllApplications(user.role);
       if (!isOwner && !canViewAll) return null;
@@ -170,7 +170,6 @@ export const applicationsRouter = createTRPCRouter({
       ]);
 
       // Guards
-      if (!user) return errorResponse("Not allowed");
       if (!canDeleteStaffApplication(user.role)) return errorResponse("Not allowed");
       if (!app) return errorResponse("Application not found");
       if (app.state !== "PENDING")
