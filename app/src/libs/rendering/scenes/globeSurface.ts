@@ -1,24 +1,7 @@
 import type { LinearColor } from "@/libs/rendering/color";
-import type {
-  GlobalMapData,
-  GlobalPoint,
-  GlobalTile,
-} from "@/libs/sector-map/world-types";
+import type { GlobalMapData, GlobalPoint } from "@/libs/sector-map/world-types";
 
 type Point3 = { x: number; y: number; z: number };
-
-/** Quads per sector edge, falling back to a flat quad without a color field. */
-const sectorVisualScale = (hexasphere: GlobalMapData, tile: GlobalTile) =>
-  hexasphere.visualScale && tile.vc?.length === (hexasphere.visualScale + 1) ** 2
-    ? hexasphere.visualScale
-    : 1;
-
-const FALLBACK_TERRAIN_COLORS: Record<number, number> = {
-  0: 0x3f9ed9,
-  1: 0x3cc164,
-  2: 0xe7cd89,
-  3: 0xe8f6f8,
-};
 
 /** Evenly spaced points along one sector edge, as flat xyz triples. */
 const interpolateEdge = (
@@ -52,19 +35,12 @@ export const buildGlobeSurfaceData = (
   const tiles = hexasphere.tiles;
   const radius = hexasphere.radius / 3;
 
-  // Size the buffers up front: a sector contributes (scale + 1)^2 vertices and
-  // scale^2 quads, and sectors without a proper quad boundary contribute none.
-  const scales = new Int32Array(tiles.length);
-  let vertexTotal = 0;
-  let indexTotal = 0;
-  for (let sector = 0; sector < tiles.length; sector++) {
-    const tile = tiles[sector];
-    if (!tile || tile.b.length !== 4) continue;
-    const scale = sectorVisualScale(hexasphere, tile);
-    scales[sector] = scale;
-    vertexTotal += (scale + 1) ** 2;
-    indexTotal += scale * scale * 6;
-  }
+  // Every sector is a quad subdivided into scale^2 cells, so it contributes
+  // (scale + 1)^2 vertices and scale^2 quads.
+  const scale = hexasphere.visualScale;
+  const stride = scale + 1;
+  const vertexTotal = tiles.length * stride * stride;
+  const indexTotal = tiles.length * scale * scale * 6;
 
   const positions = new Float32Array(vertexTotal * 3);
   const colors = new Float32Array(vertexTotal * 3);
@@ -74,16 +50,14 @@ export const buildGlobeSurfaceData = (
   let indexCursor = 0;
 
   for (let sector = 0; sector < tiles.length; sector++) {
-    const scale = scales[sector];
     const tile = tiles[sector];
-    if (!scale || !tile) continue;
+    if (!tile) continue;
     const [nw, ne, se, sw] = tile.b as [
       GlobalPoint,
       GlobalPoint,
       GlobalPoint,
       GlobalPoint,
     ];
-    const stride = scale + 1;
     const base = vertexCursor;
     const tint = sectorTint?.(sector) ?? null;
 
@@ -110,8 +84,7 @@ export const buildGlobeSurfaceData = (
         positions[offset + 1] = (py / length) * radius;
         positions[offset + 2] = (pz / length) * radius;
 
-        const packed =
-          tile.vc?.[y * stride + x] ?? FALLBACK_TERRAIN_COLORS[tile.t] ?? 0x3cc164;
+        const packed = tile.vc[y * stride + x] ?? 0;
         const red = ((packed >> 16) & 0xff) / 255;
         const green = ((packed >> 8) & 0xff) / 255;
         const blue = (packed & 0xff) / 255;
@@ -144,7 +117,7 @@ export const buildGlobeSurfaceData = (
   return { positions, colors, indices, vertexRanges };
 };
 
-/** Bilinear cap RGB in [0, 1] from a point's direction; missing data or points below cap latitude return null. */
+/** Bilinear cap RGB in [0, 1] from a point's direction; points below cap latitude return null. */
 export const samplePolarCapColor = (
   hexasphere: GlobalMapData,
   point: Point3,
@@ -153,14 +126,6 @@ export const samplePolarCapColor = (
   const columns = hexasphere.polarCapColumns;
   const latitudeLimit = hexasphere.latitudeLimit;
   const packedCaps = hexasphere.polarCapColors;
-  if (!rows || !columns || latitudeLimit === undefined || !packedCaps) return null;
-  const expectedLength = (rows + 1) * (columns + 1);
-  if (
-    packedCaps.north.length !== expectedLength ||
-    packedCaps.south.length !== expectedLength
-  ) {
-    return null;
-  }
 
   const length = Math.hypot(point.x, point.y, point.z) || 1;
   const latitude = (Math.asin(point.y / length) * 180) / Math.PI;

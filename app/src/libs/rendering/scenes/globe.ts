@@ -154,7 +154,7 @@ export const createGlobeScene = async (options: {
     const controls = createGlobeControls(
       game,
       camera,
-      { ...limits, latitude: ((map.latitudeLimit ?? 65) * Math.PI) / 180 },
+      { ...limits, latitude: (map.latitudeLimit * Math.PI) / 180 },
       (x, y) => {
         const sector = pick(x, y);
         highlightSector(sector);

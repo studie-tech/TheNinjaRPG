@@ -6,7 +6,15 @@ const cacheKey = "hexasphere_map_cache";
 const cacheVersion = "v21-horizon-near-wake";
 const map: GlobalMapData = {
   radius: 300,
-  tiles: [{ b: [{ x: 1, y: 0, z: 0 }], c: { x: 1, y: 0, z: 0 }, t: 1 }],
+  projection: "cylindrical",
+  visualScale: 1,
+  polarCapColumns: 1,
+  polarCapRows: 1,
+  polarCapColors: { north: [0, 0, 0, 0], south: [0, 0, 0, 0] },
+  columns: 1,
+  rows: 1,
+  latitudeLimit: 65,
+  tiles: [{ b: [{ x: 1, y: 0, z: 0 }], c: { x: 1, y: 0, z: 0 }, t: 1, vc: [0, 0, 0, 0] }],
 };
 const realFetch = globalThis.fetch;
 
