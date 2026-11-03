@@ -65,7 +65,7 @@ describe("prebaked village assets", () => {
     const view = new Texture({ source: original.source, frame: new Rectangle(frame.x, frame.y, frame.width, frame.height), orig: new Rectangle(orig.x, orig.y, orig.width, orig.height) });
     const atlas = texture(16, 8), emission = texture(4, 4), world = new Container(), cleanups: (() => void)[] = [];
     const game = { renderer: { resolution: 1 }, assets: { texture: async (path: string) => path === metadata.atlas ? atlas : emission },
-      visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, signal: new AbortController().signal, isDisposed: () => false,
+      visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, signal: new AbortController().signal, isDisposed: () => false, invalidate: () => {},
       own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;
     try {
       const lighting = createBakedVillageLighting(game, world), building = new Sprite(view); building.anchor.set(.5); world.addChild(lighting.container, building);
@@ -73,8 +73,16 @@ describe("prebaked village assets", () => {
       await new Promise(resolve => setTimeout(resolve, 0));
       lighting.update({ x: 0, y: -.5, z: .866, day: 0 }, { minX: -10000, maxX: 10000, minY: -10000, maxY: 10000 });
       expect(building.children).toHaveLength(1); expect(building.children[0]?.visible).toBe(true);
-      const glow = lighting.container.children.find(child => child.label === "baked-village-glow"); expect(glow?.children).toHaveLength(1);
-      release(); expect(building.children).toHaveLength(0); expect(glow?.children).toHaveLength(0);
+      expect(lighting.container.children.some(child => child.label === "baked-village-glow")).toBe(false);
+      lighting.update({ x: 1, y: 0, z: 1, day: 1 }, { minX: -10000, maxX: 10000, minY: -10000, maxY: 10000 });
+      const shadow = lighting.container.children.find(child => child.label === "baked-village-ground")!.children[0] as Sprite;
+      shadow.updateLocalTransform();
+      const matrix = shadow.localTransform.clone(), direction = shadow.texture;
+      lighting.update({ x: .7, y: .7, z: .6, day: 1 }, { minX: -10000, maxX: 10000, minY: -10000, maxY: 10000 });
+      shadow.updateLocalTransform();
+      expect(shadow.texture).not.toBe(direction);
+      expect(shadow.localTransform).toEqual(matrix);
+      release(); expect(building.children).toHaveLength(0);
     } finally { world.destroy({ children: true }); for (const cleanup of cleanups) cleanup(); view.destroy(false); original.destroy(true); atlas.destroy(true); emission.destroy(true); canvas.mockRestore(); }
   });
 });

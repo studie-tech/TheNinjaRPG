@@ -8,7 +8,6 @@ import {
 } from "pixi.js";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import { createSceneAssets, textureOpaqueFrame } from "@/libs/rendering/assets";
-import { hasBakedShadow } from "@/libs/rendering/bakedShadowAtlas";
 import { worldLighting } from "@/libs/rendering/color";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
@@ -332,13 +331,7 @@ export const createWorldSprites = async (
       if (
         description.light &&
         worldShadows?.kind !== "physical" &&
-        !(
-          worldShadows &&
-          worldShadows.kind === "baked" &&
-          sprite instanceof Sprite &&
-          hasBakedShadow(sprite.texture, description) &&
-          description.shadowCaster === "building"
-        )
+        worldShadows?.kind !== "baked"
       ) {
         if (!lights) {
           lights = new Container({
@@ -348,9 +341,7 @@ export const createWorldSprites = async (
           lights.alpha = 0;
           container.addChildAt(lights, shadows ? 1 : 0);
         }
-        lightTexture ??= createPixelLightTexture({
-          smooth: worldShadows?.kind === "baked",
-        });
+        lightTexture ??= createPixelLightTexture();
         light = new Sprite(lightTexture);
         light.anchor.set(0.5);
         light.position.set(characterFoot?.x ?? description.x, footY);

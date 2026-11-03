@@ -78,3 +78,26 @@ describe("baked character shadow transitions", () => {
     } finally { world.destroy({ children: true }); for (const cleanup of cleanups) cleanup(); canvas.mockRestore(); }
   });
 });
+
+it("adds artwork-shaped local scenery shadows lazily and releases emissive fixtures without destroying shared art", () => {
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  const world = new Container(), cleanups: (() => void)[] = [];
+  const game = { renderer: { resolution: 1 }, signal: new AbortController().signal, visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
+    own: (fn: () => void) => cleanups.push(fn), isDisposed: () => false } as unknown as GameRenderer;
+  try {
+    const lighting = createBakedVillageLighting(game, world); world.addChild(lighting.container);
+    const tree = new Sprite(Texture.WHITE); tree.anchor.set(.5); tree.width = 20; tree.height = 40; world.addChild(tree);
+    const releaseTree = lighting.register(tree, { id: "tree", kind: "decoration", image: "fixture-tree", size: 40, x: 0, y: 0, groundY: 0, shadowCaster: "conifer" }, [], undefined, world);
+    const lamp = new Sprite(Texture.WHITE); lamp.position.set(30, 0); lamp.width = 20; lamp.height = 40; world.addChild(lamp);
+    const releaseLamp = lighting.register(lamp, { id: "lamp", kind: "structure", image: "fixture-lamp", size: 40, x: 30, y: 0, groundY: 0, light: 1, shadowCaster: "column" });
+    const ground = lighting.container.children.find(child => child.label === "baked-village-local-ground")!;
+    const view = { minX: -100, maxX: 100, minY: -100, maxY: 100 };
+    lighting.update({ x: 0, y: 1, z: 1, day: 1 }, view); expect(ground.visible).toBe(false); expect(ground.isRenderGroup).toBe(true);
+    lighting.update({ x: 0, y: 1, z: 1, day: 0 }, view);
+    const local = ground.children.filter(child => child.label === "baked-scenery-local-shadow") as Sprite[];
+    expect(local).toHaveLength(2); expect(local[0]!.texture).toBe(tree.texture); expect(local[0]!.visible).toBe(true);
+    releaseLamp(); lighting.update({ x: 0, y: 1, z: 1, day: 0 }, view);
+    expect(local.every(shadow => !shadow.visible)).toBe(true);
+    releaseTree(); expect(local.every(shadow => shadow.destroyed)).toBe(true); expect(Texture.WHITE.destroyed).toBe(false);
+  } finally { world.destroy({ children: true }); for (const fn of cleanups) fn(); canvas.mockRestore(); }
+});

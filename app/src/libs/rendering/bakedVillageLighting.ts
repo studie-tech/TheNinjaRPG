@@ -6,10 +6,17 @@ import {
   loadBakedShadowAtlas,
   shadowDirectionBlend,
 } from "@/libs/rendering/bakedShadowAtlas";
-import { createPixelLightTexture } from "@/libs/rendering/primitives/shadow";
+import {
+  createCharacterShadowPoses,
+  type ShadowPose,
+} from "@/libs/rendering/characterShadowPose";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
+import {
+  createVillageLightField,
+  type VillageLightField,
+} from "@/libs/rendering/villageLightField";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import type { worldSunlight } from "@/libs/rendering/worldSunlight";
@@ -46,12 +53,20 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     groundOrder: 2,
   });
   const ground = new Container({ label: "baked-village-ground", isRenderGroup: true });
-  const glow = new Container({ label: "baked-village-glow", isRenderGroup: true });
+  const localGround = new Container({
+    label: "baked-village-local-ground",
+    isRenderGroup: true,
+  });
   base.container.addChildAt(ground, 1);
-  base.container.addChildAt(glow, 2);
-  const lightTexture = createPixelLightTexture({ smooth: true });
-  const characterTexture = characterShadowTexture();
+  base.container.addChildAt(localGround, 1);
+  const poses = createCharacterShadowPoses();
+  let lightField: VillageLightField | null = null;
   const buildings = new Set<Building>();
+  const scenery = new Set<{
+    source: Sprite;
+    shadows: Sprite[];
+    selected: WeightedLight[];
+  }>();
   const characters = new Map<Container, Character>();
   const fixtures = new Set<Fixture>();
   const atlases = new Map<string, Promise<BakedShadowAtlas>>();
@@ -70,12 +85,12 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     cache.set(node, matrix);
     return matrix;
   };
-  const pair = () =>
+  const pair = (target = ground) =>
     Array.from({ length: 2 }, () => {
       const sprite = new Sprite(Texture.EMPTY);
       sprite.tint = 0x14202a;
       sprite.visible = false;
-      ground.addChild(sprite);
+      target.addChild(sprite);
       return sprite;
     });
   const place = (
@@ -84,7 +99,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     x: number,
     y: number,
     opacity: number,
-    length = 1,
   ) => {
     const atlas = building.atlas;
     if (!atlas) return;
@@ -103,21 +117,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       const source = building.source,
         m = building.transform,
         height = building.height;
-      const angle = Math.atan2(y, x),
-        delta = angle - (direction * Math.PI) / 4;
-      const c = Math.cos(delta),
-        s = Math.sin(delta),
-        ux = Math.cos(angle),
-        uy = Math.sin(angle);
-      const ratio = Math.max(0.25, Math.min(1.8, length)) - 1;
-      const a = 1 + ratio * ux * ux,
-        b = (ratio * ux * uy) / 2,
-        cc = ratio * ux * uy * 2,
-        d = 1 + ratio * uy * uy;
-      const aa = a * c + (cc * s) / 2,
-        bb = b * c + (d * s) / 2,
-        ac = -a * s * 2 + cc * c,
-        bd = -b * s * 2 + d * c;
       const sx = (atlas.width * height) / sprite.texture.width,
         sy = (-atlas.height * height) / sprite.texture.height;
       const foot = m.apply({
@@ -134,16 +133,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         m.d * source.texture.orig.height * source.anchor.y -
         atlas.minY * height -
         foot.y;
-      sprite.setFromMatrix(
-        new Matrix(
-          aa * sx,
-          bb * sx,
-          ac * sy,
-          bd * sy,
-          foot.x + aa * tx + ac * ty,
-          foot.y + bb * tx + bd * ty,
-        ),
-      );
+      sprite.setFromMatrix(new Matrix(sx, 0, 0, sy, foot.x + tx, foot.y + ty));
       sprite.alpha = opacity * weight;
     }
   };
@@ -154,34 +144,72 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     character,
     owner,
   ) => {
-    if (character) {
-      let record = characters.get(character);
+    if (character || description.shadowCaster === "character") {
+      const root = character ?? source;
+      let record = characters.get(root);
       if (!record) {
         // A sun silhouette and two lamp silhouettes overlap through twilight.
         const shadows = Array.from({ length: 3 }, () => {
-          const sprite = new Sprite(characterTexture);
-          sprite.anchor.set(0.025, 0.5);
+          const sprite = new Sprite(Texture.EMPTY);
+          sprite.label = "baked-character-shadow";
           sprite.tint = 0x0d1520;
           ground.addChild(sprite);
           return sprite;
         });
-        record = { root: character, shadows, references: 0, selected: [], key: "" };
-        characters.set(character, record);
+        record = {
+          root,
+          shadows,
+          parts: new Set(),
+          pose: null,
+          nextPoseAt: 0,
+          selected: [],
+          key: "",
+          foot: {
+            x: 0,
+            y: character ? 28 / 64 : source.texture.orig.height * (1 - source.anchor.y),
+          },
+        };
+        characters.set(root, record);
       }
-      record.references++;
+      record.parts.add(source);
       const current = record;
       return Object.assign(
         () => {
-          if (--current.references === 0) {
+          current.parts.delete(source);
+          current.nextPoseAt = 0;
+          if (!current.parts.size) {
             for (const shadow of current.shadows) shadow.destroy();
-            characters.delete(character);
+            if (current.pose) current.pose.users--;
+            characters.delete(root);
           }
         },
         { ready: Promise.resolve() },
       );
     }
-    const fallback = base.register(source, description, textures, character, owner);
-    if (description.light && description.shadowCaster !== "character") {
+    let fallback = base.register(source, description, textures, character, owner);
+    if (
+      owner &&
+      description.shadowCaster &&
+      !description.small &&
+      !hasBakedShadow(source.texture, description)
+    ) {
+      const record = {
+        source,
+        shadows: [] as Sprite[],
+        selected: [] as WeightedLight[],
+      };
+      scenery.add(record);
+      dirty = true;
+      const baseRelease = fallback;
+      const release = () => {
+        scenery.delete(record);
+        for (const shadow of record.shadows) shadow.destroy();
+        dirty = true;
+        baseRelease();
+      };
+      fallback = Object.assign(release, { ready: fallback.ready });
+    }
+    if (description.light) {
       const fixture = { source, description, light: null } as Fixture;
       fixtures.add(fixture);
       dirty = true;
@@ -219,8 +247,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       height: 0,
       atlas: null,
       sun: pair(),
-      lamps: [pair(), pair()],
-      glow: null,
+      lamps: [pair(localGround), pair(localGround)],
       emission: null,
       selected: [],
       active: true,
@@ -251,12 +278,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         emission.alpha = 0;
         source.addChild(emission);
         building.emission = emission;
-        const pool = new Sprite(lightTexture);
-        pool.anchor.set(0.5);
-        pool.tint = 0xffa24d;
-        pool.blendMode = "add";
-        glow.addChild(pool);
-        building.glow = pool;
         dirty = true;
         game.invalidate();
       })
@@ -275,7 +296,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         for (const sprite of [...building.sun, ...building.lamps.flat()])
           sprite.destroy();
         building.emission?.destroy();
-        building.glow?.destroy();
         dirty = true;
         for (const fixture of fixtures)
           if (fixture.source === source) fixtures.delete(fixture);
@@ -287,11 +307,12 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     disposed = true;
     for (const atlas of owned) atlas.destroy();
     owned.clear();
-    lightTexture.destroy(true);
-    characterTexture.destroy(true);
+    poses.destroy();
+    lightField?.texture.destroy(true);
     buildings.clear();
     characters.clear();
     fixtures.clear();
+    scenery.clear();
   });
   return {
     ...base,
@@ -320,7 +341,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       const groundArt = base.container.children.find(
         (child) => child.label === "travel-ground-art",
       );
-      const order = [terrain, groundArt, projected, ground, glow].filter(
+      const order = [terrain, groundArt, projected, localGround, ground].filter(
         (child): child is Container => !!child,
       );
       for (const [index, child] of order.entries())
@@ -379,8 +400,26 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             foot.y,
           );
         }
+        for (const record of scenery) {
+          const m = origin(record.source, matrices);
+          const foot = m.apply({
+            x: 0,
+            y: record.source.texture.orig.height * (1 - record.source.anchor.y),
+          });
+          record.selected = strongestShadowLights(
+            lights.filter((l) => l.owner !== record.source),
+            foot.x,
+            foot.y,
+          );
+        }
+        const previousField = lightField;
+        lightField = createVillageLightField(lights);
+        base.setWarmField(lightField);
+        previousField?.texture.destroy(true);
       }
       const night = game.visualEffects.localLights ? 1 - light.day : 0;
+      localGround.visible = game.visualEffects.shadows && night > 0;
+      localGround.alpha = night;
       const sun = smoothSun ?? light;
       const nextStaticKey = [
         Math.round(sun.x * 512),
@@ -395,7 +434,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         Math.ceil(view.maxX / 32),
         Math.ceil(view.maxY / 32),
       ].join(":");
-      if (changed || staticKey !== nextStaticKey)
+      if (changed || staticKey !== nextStaticKey) {
         for (const building of buildings) {
           if (!building.atlas || building.source.destroyed) continue;
           const h = building.height,
@@ -416,51 +455,110 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             sun.x,
             sun.y,
             alpha * (game.visualEffects.sunlight ? light.day : 0),
-            Math.hypot(sun.x, sun.y) / Math.max(0.35, sun.z) / 1.25,
           );
           const foot = building.transform.apply({
             x: 0,
             y: building.source.texture.orig.height * (1 - building.source.anchor.y),
           });
-          for (const [i, lamps] of building.lamps.entries()) {
-            const selected = building.selected[i];
-            place(
-              building,
-              lamps,
-              (selected?.light.x ?? foot.x) - foot.x,
-              ((selected?.light.y ?? foot.y) - foot.y) * 2,
-              alpha * night * (selected?.weight ?? 0),
-              selected
-                ? Math.hypot(
-                    selected.light.x - foot.x,
-                    (selected.light.y - foot.y) * 2,
-                  ) /
-                    Math.max(h * 0.3, selected.light.height) /
-                    1.25
-                : 1,
-            );
-          }
+          if (changed)
+            for (const [i, lamps] of building.lamps.entries()) {
+              const selected = building.selected[i];
+              place(
+                building,
+                lamps,
+                (selected?.light.x ?? foot.x) - foot.x,
+                ((selected?.light.y ?? foot.y) - foot.y) * 2,
+                0.3 * (selected?.weight ?? 0),
+              );
+            }
           if (building.emission) {
             building.emission.visible = visible && night > 0;
             building.emission.alpha = night;
           }
-          if (building.glow) {
-            building.glow.visible = visible && night > 0;
-            building.glow.position.set(foot.x, foot.y);
-            building.glow.width = h * 2.6;
-            building.glow.height = h * 1.3;
-            building.glow.alpha = night * 0.48;
-          }
         }
+        if (changed)
+          for (const record of scenery) {
+            if (record.source.destroyed || !record.source.parent) continue;
+            const m = origin(record.source, matrices),
+              texture = record.source.texture;
+            const height = Math.hypot(m.c, m.d) * texture.orig.height;
+            const foot = m.apply({
+              x: 0,
+              y: texture.orig.height * (1 - record.source.anchor.y),
+            });
+            if (!record.shadows.length && record.selected.length) {
+              record.shadows = pair(localGround);
+              for (const shadow of record.shadows) {
+                shadow.texture = texture;
+                shadow.anchor.set(record.source.anchor.x, 1);
+                shadow.label = "baked-scenery-local-shadow";
+              }
+            }
+            for (const [i, shadow] of record.shadows.entries()) {
+              const selected = record.selected[i];
+              shadow.visible = !!selected;
+              if (!shadow.visible || !selected) continue;
+              const dx = foot.x - selected.light.x,
+                dy = (foot.y - selected.light.y) * 2,
+                distance = Math.hypot(dx, dy) || 1;
+              const reach = Math.min(
+                1.6,
+                distance / Math.max(height * 0.5, selected.light.height),
+              );
+              shadow.setFromMatrix(
+                new Matrix(
+                  m.a,
+                  0,
+                  ((-dx / distance) * reach * height) / texture.orig.height,
+                  ((-dy / distance) * reach * height) / (2 * texture.orig.height),
+                  foot.x,
+                  foot.y,
+                ),
+              );
+              shadow.alpha = selected.weight * 0.24;
+            }
+          }
+      }
       staticKey = nextStaticKey;
+      const now = performance.now();
       for (const record of characters.values()) {
         if (record.root.destroyed || !record.root.parent) continue;
         const m = origin(record.root, matrices),
           height = Math.hypot(m.c, m.d);
-        const foot = m.apply({ x: 0, y: 28 / 64 });
+        const foot = m.apply(record.foot);
+        if (
+          !boundsOverlap(
+            {
+              minX: foot.x - height * 3,
+              maxX: foot.x + height * 3,
+              minY: foot.y - height * 3,
+              maxY: foot.y + height * 3,
+            },
+            view,
+          )
+        ) {
+          for (const shadow of record.shadows) shadow.visible = false;
+          record.key = "";
+          continue;
+        }
+        if (now >= record.nextPoseAt) {
+          record.nextPoseAt = now + 150;
+          const pose = poses.capture(record.root, [...record.parts]);
+          if (pose !== record.pose) {
+            if (record.pose) record.pose.users--;
+            record.pose = pose;
+            if (pose) pose.users++;
+          }
+        }
+        const pose = record.pose;
+        if (!pose) {
+          for (const shadow of record.shadows) shadow.visible = false;
+          continue;
+        }
         const characterKey = [
           foot.x,
           foot.y,
+          pose.texture.uid,
           night,
           game.visualEffects.shadows,
           game.visualEffects.sunlight,
@@ -496,48 +594,31 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
           }
           sprite.visible = game.visualEffects.shadows && strength > 0.001;
           if (!sprite.visible) continue;
-          sprite.position.copyFrom(foot);
-          sprite.rotation = Math.atan2(dy, dx);
-          sprite.width = length;
-          sprite.height = height * 0.24;
+          const directionLength = Math.hypot(dx, dy * 2) || 1;
+          const ux = dx / directionLength,
+            uy = (dy * 2) / directionLength;
+          const pixelX = pose.width / pose.texture.orig.width,
+            pixelY = pose.height / pose.texture.orig.height;
+          sprite.texture = pose.texture;
+          sprite.anchor.set(
+            (record.foot.x - pose.minX) / pose.width,
+            (record.foot.y - pose.minY) / pose.height,
+          );
+          sprite.setFromMatrix(
+            new Matrix(
+              -uy * height * pixelX,
+              (ux * height * pixelX) / 2,
+              -ux * length * pixelY,
+              (-uy * length * pixelY) / 2,
+              foot.x,
+              foot.y,
+            ),
+          );
           sprite.alpha = strength * 0.3;
         }
       }
     },
   };
-};
-
-const characterShadowTexture = () => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 48;
-  const context = canvas.getContext("2d");
-  if (!context) return createPixelLightTexture({ smooth: true });
-  const fade = context.createLinearGradient(0, 0, 128, 0);
-  fade.addColorStop(0, "white");
-  fade.addColorStop(1, "rgba(255,255,255,0.55)");
-  context.fillStyle = fade;
-  context.beginPath();
-  context.moveTo(2, 24);
-  context.lineTo(54, 15);
-  context.lineTo(96, 19);
-  context.lineTo(96, 29);
-  context.lineTo(54, 33);
-  context.closePath();
-  context.fill();
-  context.beginPath();
-  context.ellipse(108, 24, 12, 8, 0, 0, Math.PI * 2);
-  context.fill();
-  context.lineWidth = 6;
-  context.strokeStyle = fade;
-  context.lineCap = "round";
-  context.beginPath();
-  context.moveTo(65, 17);
-  context.lineTo(84, 8);
-  context.moveTo(65, 31);
-  context.lineTo(84, 40);
-  context.stroke();
-  return Texture.from(canvas);
 };
 
 export type VillageLight = {
@@ -562,7 +643,6 @@ type Building = {
   sun: Sprite[];
   lamps: Sprite[][];
   emission: Sprite | null;
-  glow: Sprite | null;
   selected: WeightedLight[];
   active: boolean;
   fallback: () => void;
@@ -571,7 +651,10 @@ type Character = {
   key: string;
   root: Container;
   shadows: Sprite[];
-  references: number;
+  parts: Set<Sprite>;
+  pose: ShadowPose | null;
+  nextPoseAt: number;
+  foot: { x: number; y: number };
   selected: WeightedLight[];
 };
 

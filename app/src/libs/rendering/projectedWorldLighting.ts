@@ -6,7 +6,7 @@ import {
   Matrix,
   Rectangle,
   Sprite,
-  type Texture,
+  Texture,
   UniformGroup,
 } from "pixi.js";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
@@ -14,6 +14,7 @@ import { worldLighting } from "@/libs/rendering/color";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
+import type { VillageLightField } from "@/libs/rendering/villageLightField";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import type { worldSunlight } from "@/libs/rendering/worldSunlight";
 import type { WorldWind } from "@/libs/rendering/worldWind";
@@ -37,10 +38,20 @@ export const createProjectedWorldLighting = (
     },
     { isStatic: true },
   );
+  const warmMapping = new UniformGroup(
+    {
+      uWarmU: { value: new Float32Array(3), type: "vec3<f32>" },
+      uWarmV: { value: new Float32Array(3), type: "vec3<f32>" },
+    },
+    { isStatic: true },
+  );
+  const previousWarmWorld = new Matrix(),
+    warmInverse = new Matrix();
+  let warmMappingDirty = true;
   const filter = new Filter({
     glProgram: GlProgram.from({ vertex, fragment }),
     resolution: game.renderer.resolution ?? 1,
-    resources: { night },
+    resources: { night, warmMapping, uWarmMap: Texture.EMPTY.source },
   });
   filter.enabled = false;
   container.filters = [filter];
@@ -49,6 +60,7 @@ export const createProjectedWorldLighting = (
   let previousDirection = "";
   let viewport: WorldBounds | null = null;
   let order = 0;
+  let warmField: VillageLightField | null = null;
   game.own(() => {
     records.clear();
     filter.destroy();
@@ -56,6 +68,11 @@ export const createProjectedWorldLighting = (
   return {
     kind: "projected" as const,
     container,
+    setWarmField: (field: VillageLightField | null) => {
+      warmField = field;
+      warmMappingDirty = true;
+      filter.resources.uWarmMap = (field?.texture ?? Texture.EMPTY).source;
+    },
     invalidate: () => {
       dirty = true;
     },
@@ -102,6 +119,21 @@ export const createProjectedWorldLighting = (
     ) => {
       const shade = game.visualEffects.dayNight ? 1 - light.day : 0;
       const localNight = game.visualEffects.localLights ? 1 - light.day : 0;
+      if (warmField) {
+        world.updateLocalTransform();
+        const next = world.localTransform;
+        if (warmMappingDirty || !previousWarmWorld.equals(next)) {
+          warmMappingDirty = false;
+          previousWarmWorld.copyFrom(next);
+          const m = warmInverse.copyFrom(next).invert(),
+            b = warmField.bounds;
+          const w = b.maxX - b.minX,
+            h = b.maxY - b.minY;
+          warmMapping.uniforms.uWarmU.set([m.a / w, m.c / w, (m.tx - b.minX) / w]);
+          warmMapping.uniforms.uWarmV.set([m.b / h, m.d / h, (m.ty - b.minY) / h]);
+          warmMapping.update();
+        }
+      }
       filter.enabled = shade > 0 || localNight > 0;
       if (
         night.uniforms.uNight !== shade ||
@@ -242,18 +274,24 @@ const projectedBounds = (source: Sprite, matrix: Matrix): WorldBounds => {
 const vertex = `precision highp float;
 attribute vec2 aPosition;
 varying vec2 vTextureCoord;
+varying vec2 vScreenPosition;
 uniform vec4 uInputSize;
 uniform vec4 uOutputFrame;
 uniform vec4 uOutputTexture;
 void main() {
   vec2 p = aPosition * uOutputFrame.zw + uOutputFrame.xy;
+  vScreenPosition = p;
   gl_Position = vec4(p.x * 2.0 / uOutputTexture.x - 1.0,
     p.y * 2.0 * uOutputTexture.z / uOutputTexture.y - uOutputTexture.z, 0.0, 1.0);
   vTextureCoord = aPosition * uOutputFrame.zw * uInputSize.zw;
 }`;
 const fragment = `precision mediump float;
 varying vec2 vTextureCoord;
+varying vec2 vScreenPosition;
 uniform sampler2D uTexture;
+uniform sampler2D uWarmMap;
+uniform vec3 uWarmU;
+uniform vec3 uWarmV;
 uniform float uNight;
 uniform float uLocalNight;
 uniform vec3 uAmbient;
@@ -266,6 +304,12 @@ void main() {
   float warm = smoothstep(0.18, 0.5, emission.r - emission.b) * smoothstep(0.1, 0.4, emission.g - emission.b) * smoothstep(0.02, 0.18, emission.r - emission.g);
   vec3 moon = color * vec3(0.62, 0.68, 0.76);
   vec3 lit = mix(color, moon, uNight) + warm * uLocalNight * (min(vec3(1.0), mix(color * 1.6, base * 1.25, uWarmSource)) - moon);
+  if (uWarmSource > 0.5 && uLocalNight > 0.0) {
+    vec3 screenPoint = vec3(vScreenPosition, 1.0);
+    vec2 warmUV = vec2(dot(uWarmU, screenPoint), dot(uWarmV, screenPoint));
+    float field = texture2D(uWarmMap, warmUV).r * step(0.0, warmUV.x) * step(warmUV.x, 1.0) * step(0.0, warmUV.y) * step(warmUV.y, 1.0);
+    lit += base * vec3(0.52, 0.34, 0.13) * field * uLocalNight;
+  }
   gl_FragColor = vec4(min(vec3(1.0), lit) * source.a, source.a);
 }`;
 
