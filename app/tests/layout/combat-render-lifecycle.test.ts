@@ -1,9 +1,14 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
+import { createStore } from "jotai";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";
+import { maskBattle } from "@/libs/combat/util";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
+import { userBattleAtom } from "@/utils/UserContext";
+import { makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
 
 afterEach(cleanup);
 const source = readFileSync(join(import.meta.dirname, "../../src/layout/Combat.tsx"), "utf8");
@@ -13,6 +18,23 @@ const sourceBetween = (start: string, end: string) => {
   return source.slice(from, to);
 };
 const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as { transformSync(source: string): string };
+
+it("keeps shared battle state when the battlefield scene unmounts", () => {
+  const effects = sourceBetween("  useEffect(() => {\n    combat.scene.current?.refresh();", "\n  useEffect(() => {\n    lastHoverKeyRef.current = null;");
+  const runEffects = new Function("scope", `with (scope) { ${transpiler.transformSync(effects)} }`);
+  const store = createStore();
+  const battle = maskBattle(makeCompleteBattle(), "player-0");
+  store.set(userBattleAtom, battle);
+  const hook = renderHook(() => runEffects({
+    useEffect, combat: { scene: { current: null }, isReady: true },
+    battleState: { battle }, props: {}, gameAssets: [], userData: undefined,
+    isPageActive: true, config: {}, lightingPreviewDate: null, weatherPreview: null,
+    showDayNightMapOverlays: false,
+    setBattleAtom: (value: typeof battle | undefined) => store.set(userBattleAtom, value),
+  }));
+  hook.unmount();
+  expect(store.get(userBattleAtom)).toBe(battle);
+});
 
 it.each(["Won", "Lost", "Fled", "Draw"])("releases the canvas loop while %s rewards remain held", async () => {
   const callbacks = new Map<number, FrameRequestCallback>();

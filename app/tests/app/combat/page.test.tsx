@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
+import { Suspense } from "react";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as preferences from "@/hooks/combat";
@@ -13,6 +14,8 @@ import * as userContext from "@/utils/UserContext";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import * as combatSettings from "@/layout/UserCombatSettings";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
@@ -24,6 +27,7 @@ const scene = vi.spyOn(dynamic, "default").mockReturnValue(
   }) as never,
 );
 const { default: CombatPage } = await import("@/app/[shell]/combat/page");
+const { default: BattleLog } = await import("@/app/[shell]/battlelog/[battleid]/page");
 scene.mockRestore();
 
 type Response = RouterOutputs["combat"]["getBattle"];
@@ -33,12 +37,13 @@ const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
   getDefaultStore().set(userContext.combatActionIdAtom, undefined);
+  getDefaultStore().set(userContext.userBattleAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   vi.restoreAllMocks();
 });
 
-const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}) => {
+const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}, spectate = false) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
   let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [] };
@@ -55,9 +60,11 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: profile }) as never);
-  vi.spyOn(preferences, "useCombatPreferences").mockReturnValue({
+  vi.spyOn(userContext, "useUserData").mockImplementation(() => ({ data: profile, timeDiff: 0 }) as never);
+  let combatConfig = {
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
-  } as never);
+  };
+  vi.spyOn(preferences, "useCombatPreferences").mockImplementation(() => combatConfig as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
   vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({
     ...resolveHotkeys(null, null), hasJutsuLoadout: false, hasItemLoadout: false,
@@ -67,19 +74,62 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
     useUtils: () => utils,
     combat: {
       getBattleEntries: { useQuery: () => ({ data: [], isFetching: false }) },
+      getBattleHistoryEntry: { useQuery: () => ({ data: undefined }) },
       getBattle: { useQuery: (input: { battleId?: string | null }, options: object) => useQuery({
         ...options, queryKey: ["combat", input.battleId], queryFn: () => read(input.battleId!),
       }) },
       toggleAutoCombat: { useMutation: () => ({ mutate: toggleAutoCombat, isPending: false }) },
     },
   });
-  const tree = () => <QueryClientProvider client={queryClient}><CombatPage /></QueryClientProvider>;
+  const params = Promise.resolve({ battleid: battleId! });
+  const tree = () => <QueryClientProvider client={queryClient}><Suspense fallback={null}>{spectate ? <BattleLog params={params} /> : <CombatPage />}</Suspense></QueryClientProvider>;
   const view = render(tree());
-  return { view, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeBattle: (id: string | null) => {
+  return { view, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeLayout: (next: Partial<typeof combatConfig>) => {
+    combatConfig = { ...combatConfig, ...next };
+    view.rerender(tree());
+  }, changeBattle: (id: string | null) => {
     profile = { ...profile, battleId: id, status: id ? "BATTLE" : "AWAKE" };
     view.rerender(tree());
   } };
 };
+
+it("retains the shared battle across focus and viewport layout changes and clears it on page exit", async () => {
+  const viewport = vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: "layout-switch", usersState: [makeUser({ userId: "player" })] });
+  const read = vi.fn(async () => ({ battle, result: null }) as unknown as Response);
+  const { view, changeLayout } = mount(battle.id, read, { battleFocus: true });
+  const desktopScene = await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  const shared = store.get(userContext.userBattleAtom);
+  expect(shared?.id).toBe(battle.id);
+  viewport.mockReturnValue(false);
+  changeLayout({});
+  const mobileScene = view.getByText(`Active battle ${battle.id}`);
+  expect(mobileScene).not.toBe(desktopScene);
+  expect(store.get(userContext.userBattleAtom)).toBe(shared);
+  changeLayout({ battleFocus: false });
+  expect(view.getByText(`Active battle ${battle.id}`)).not.toBe(mobileScene);
+  expect(store.get(userContext.userBattleAtom)).toBe(shared);
+  expect(read).toHaveBeenCalledTimes(1);
+  view.unmount();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
+
+it("clears shared combat handler snapshots on spectator exit without publishing the viewed battle", async () => {
+  const battle = makeCompleteBattle({ id: "spectated", usersState: [makeUser({ userId: "player" })] });
+  let mounted!: ReturnType<typeof mount>;
+  await act(async () => {
+    mounted = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response, {}, true);
+  });
+  const { view } = mounted;
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  act(() => store.set(userContext.userBattleAtom, battle as unknown as NonNullable<Response["battle"]>));
+  view.unmount();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
 
 it("starts asset loading before mounting each new battle scene, preserving the query input order", async () => {
   const resolvers = new Map<string, (value: Response) => void>();

@@ -67,6 +67,13 @@ export default function CombatPage() {
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
+  // Shared battle state survives battlefield layout remounts until this page leaves.
+  useEffect(
+    () => () => {
+      setBattleAtom(undefined);
+    },
+    [setBattleAtom],
+  );
   const utils = api.useUtils();
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =

@@ -1121,13 +1121,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     lightingPreviewDate,
     weatherPreview,
   ]);
-  useEffect(
-    () => () => {
-      void setBattleAtom(undefined);
-    },
-    [setBattleAtom],
-  );
-
   useEffect(() => {
     lastHoverKeyRef.current = null;
     setHoveredEffect(null);
