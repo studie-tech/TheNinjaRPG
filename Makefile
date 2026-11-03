@@ -87,7 +87,6 @@ clean: # Clean all local application installation folders
 	@echo "${YELLOW}Cleaning local installation folders${RESET}"
 	rm -rf ./app/node_modules
 	rm -rf ./app/.next
-	rm -rf ./app/.turbo
 
 .PHONY: reset
 reset: clean install # Clean and reinstall all dependencies
