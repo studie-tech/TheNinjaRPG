@@ -9,43 +9,32 @@ import {
 const seed = (
   patch: Partial<Parameters<typeof buildFarmCollectionState>[0][number]> = {},
 ): Parameters<typeof buildFarmCollectionState>[0][number] => ({
-  isFarmSeed: true,
-  hidden: false,
   farmYieldItemId: "crop-carrot",
   farmMinLevel: 1,
-  farmGrowTimeSeconds: 60,
   ...patch,
 });
 
 const crop = (
   id: string,
   name: string,
-  hidden = false,
 ): Parameters<typeof buildFarmCollectionState>[1][number] => ({
   id,
   name,
   image: `/${id}.png`,
-  hidden,
 });
 
 describe("farm collection catalog", () => {
-  it("includes eligible crops once, excludes hidden/invalid entries, and sorts by level then name", () => {
+  it("includes each crop once, skips yields without a seed, and sorts by level then name", () => {
     const harvestedAt = new Date("2026-08-01T12:00:00.000Z");
     const result = buildFarmCollectionState(
       [
         seed({ farmYieldItemId: "crop-carrot", farmMinLevel: 5 }),
         seed({ farmYieldItemId: "crop-carrot", farmMinLevel: 2 }),
         seed({ farmYieldItemId: "crop-apple", farmMinLevel: 2 }),
-        seed({ farmYieldItemId: "crop-hidden-seed", hidden: true }),
-        seed({ farmYieldItemId: "crop-invalid", farmGrowTimeSeconds: 0 }),
-        seed({ farmYieldItemId: "crop-hidden-yield" }),
       ],
       [
         crop("crop-carrot", "Carrot"),
         crop("crop-apple", "Apple"),
-        crop("crop-hidden-seed", "Hidden seed crop"),
-        crop("crop-invalid", "Invalid crop"),
-        crop("crop-hidden-yield", "Hidden yield", true),
         crop("unreferenced", "Unreferenced"),
       ],
       [{ itemId: "crop-carrot", firstHarvestedAt: harvestedAt }],

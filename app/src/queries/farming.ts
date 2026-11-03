@@ -770,13 +770,7 @@ export const listItemForGetFarmCollectionState = (
       isNotNull(item.farmYieldItemId),
       gt(item.farmGrowTimeSeconds, 0),
     ),
-    columns: {
-      isFarmSeed: true,
-      hidden: true,
-      farmYieldItemId: true,
-      farmMinLevel: true,
-      farmGrowTimeSeconds: true,
-    },
+    columns: { farmYieldItemId: true, farmMinLevel: true },
   });
 
 /** Build the `item` listing for `getFarmCollectionState`, using predicates on `id` and `hidden`. */
@@ -786,7 +780,7 @@ export const listItemForGetFarmCollectionState2 = (
 ) =>
   client.query.item.findMany({
     where: and(inArray(item.id, yieldItemIds), eq(item.hidden, false)),
-    columns: { id: true, name: true, image: true, hidden: true },
+    columns: { id: true, name: true, image: true },
   });
 
 /**
