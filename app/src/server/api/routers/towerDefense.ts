@@ -42,13 +42,11 @@ import {
   insertTowerDefenseClaimReceiptForClaimCompletedRun,
   insertTowerDefenseRunForClaimCompletedRun,
   insertUserTowerDefenseUpgradeForPurchasePermanentUpgrade,
-  listTowerDefenseCharacterForGetAllCharacterNames,
   listTowerDefenseCharacterForGetAssetConfigs,
   listTowerDefenseCharacterForGetCharacters,
   listTowerDefenseCharacterForInitiateSecureSession,
   listTowerDefenseCharacterForInitiateSecureSession2,
   listTowerDefenseRunForGetLeaderboard,
-  listTowerDefenseRunForGetRunHistory,
   listTowerDefenseUpgradeForGetUpgrades,
   listTowerDefenseUpgradeForInitiateSecureSession,
   listUserTowerDefenseUpgradeForGetUserUpgrades,
@@ -236,30 +234,6 @@ export const towerDefenseRouter = createTRPCRouter({
         playerCharactersDb,
         isGuest: true,
       });
-    }),
-
-  /**
-   * Get past runs with pagination (for leaderboards)
-   */
-  getRunHistory: protectedProcedure
-    .meta({
-      mcp: { description: "Get user's tower defense run history" },
-    })
-    .use(ratelimitMiddleware)
-    .input(
-      z.object({
-        cursor: z.string().optional(),
-        limit: z.number().min(1).max(50).prefault(10),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const runs = await listTowerDefenseRunForGetRunHistory(ctx.drizzle, ctx, input);
-
-      const hasMore = runs.length > input.limit;
-      const items = hasMore ? runs.slice(0, -1) : runs;
-      const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
-
-      return { items, nextCursor };
     }),
 
   /**
@@ -547,29 +521,6 @@ export const towerDefenseRouter = createTRPCRouter({
     }),
 
   /**
-   * Get all character names for dropdowns
-   */
-  getAllCharacterNames: publicProcedure
-    .meta({ mcp: { description: "Get tower defense character names" } })
-    .input(
-      z
-        .object({
-          isPlayer: z.boolean().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ ctx, input }) => {
-      const whereClause =
-        input?.isPlayer !== undefined
-          ? eq(towerDefenseCharacter.isPlayer, input.isPlayer)
-          : undefined;
-      return await listTowerDefenseCharacterForGetAllCharacterNames(
-        ctx.drizzle,
-        whereClause,
-      );
-    }),
-
-  /**
    * Create a new character definition
    */
   createCharacter: protectedProcedure
@@ -837,34 +788,6 @@ export const towerDefenseRouter = createTRPCRouter({
           `Failed to process zip: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
-    }),
-
-  /**
-   * Update asset config animation settings
-   */
-  updateAssetConfig: protectedProcedure
-    .use(ratelimitMiddleware)
-    .input(
-      z.object({
-        characterId: z.string(),
-        assetConfig: characterAssetConfigSchema,
-      }),
-    )
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const user = await findUserRoleById(ctx.drizzle, ctx.userId);
-
-      if (!user || !canChangeContent(user.role)) {
-        return errorResponse("Not allowed to update asset config");
-      }
-
-      await updateTowerDefenseCharacterAssets(
-        ctx.drizzle,
-        input.assetConfig,
-        input.characterId,
-      );
-
-      return { success: true, message: "Asset config updated" };
     }),
 
   // ============================================

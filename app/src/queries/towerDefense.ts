@@ -1,7 +1,7 @@
 /**
  * Database access for tower defense; authorization and transaction scopes stay in callers.
  */
-import { and, asc, desc, eq, gte, lt, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   towerDefenseCharacter,
@@ -70,21 +70,6 @@ export const listTowerDefenseCharacterForInitiateSecureSession2 = (
 ) =>
   client.query.towerDefenseCharacter.findMany({
     where: eq(towerDefenseCharacter.isPlayer, true),
-  });
-
-/** Build the `towerDefenseRun` listing for `getRunHistory`, using predicates on `userId` and `id`. */
-export const listTowerDefenseRunForGetRunHistory = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userId: string },
-  input: { cursor?: undefined | string; limit: number },
-) =>
-  client.query.towerDefenseRun.findMany({
-    where: and(
-      eq(towerDefenseRun.userId, ctx.userId),
-      input.cursor ? lt(towerDefenseRun.id, input.cursor) : undefined,
-    ),
-    orderBy: [desc(towerDefenseRun.startedAt)],
-    limit: input.limit + 1,
   });
 
 /** Build the `towerDefenseRun` listing for `getLeaderboard`, using predicates on `status`. */
@@ -233,17 +218,6 @@ export const findTowerDefenseCharacterForGetCharacter = (
 ) =>
   client.query.towerDefenseCharacter.findFirst({
     where: eq(towerDefenseCharacter.id, input.id),
-  });
-
-/** Build the `towerDefenseCharacter` listing for `getAllCharacterNames`, using the configured predicates. */
-export const listTowerDefenseCharacterForGetAllCharacterNames = (
-  client: Pick<DrizzleClient, "query">,
-  whereClause: undefined | SQL<unknown>,
-) =>
-  client.query.towerDefenseCharacter.findMany({
-    columns: { id: true, name: true, isPlayer: true },
-    where: whereClause,
-    orderBy: [asc(towerDefenseCharacter.name)],
   });
 
 /** Build the `towerDefenseCharacter` insert for `createCharacter`. */
