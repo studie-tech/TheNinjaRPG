@@ -500,6 +500,8 @@ export const combatRouter = createTRPCRouter({
     .input(
       z.object({
         battleId: z.string(),
+        // Client cache keys only: a new battle version or the arrival of the result
+        // re-reads the settled log.
         refreshKey: z.number().optional(),
         checkBattle: z.boolean().optional(),
         limit: z.number().optional(),
