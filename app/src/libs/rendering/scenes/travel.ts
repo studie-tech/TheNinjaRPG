@@ -5,6 +5,7 @@ import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createMapControls } from "@/libs/rendering/mapControls";
@@ -46,6 +47,7 @@ import {
   sampleWorldWind,
 } from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
+import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
@@ -104,7 +106,13 @@ export const createTravelScene = async (options: {
     actorGroundLayer.label = "travel-actor-ground";
     depthLayer.label = "travel-depth";
     uiLayer.label = "travel-overlay";
-    const shadows = createProjectedWorldLighting(game, world);
+    const bakedVillage =
+      options.getSnapshot().sector ===
+      WORLD_LANDMARKS.find((village) => village.name === "Akikaze")?.sector;
+    const bakedLighting = bakedVillage
+      ? createBakedVillageLighting(game, world)
+      : undefined;
+    const shadows = bakedLighting ?? createProjectedWorldLighting(game, world);
     const lightingLayer = shadows.container;
     const weather = createWorldWeather(game, options.lightLayout);
     const sceneryBounds = new WeakMap<Container, WorldBounds>();
@@ -827,6 +835,7 @@ export const createTravelScene = async (options: {
         snapshot.brightness,
       );
       // World lighting excludes the canvas UI and the actors' identity markers.
+      bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));
       if (viewport)
         shadows.update(worldSunlight(snapshot.lightDate, 60_000), viewport, breeze);
       for (const rendered of sectors.values()) {

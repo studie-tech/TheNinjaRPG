@@ -19,7 +19,11 @@ import type { worldSunlight } from "@/libs/rendering/worldSunlight";
 import type { WorldWind } from "@/libs/rendering/worldWind";
 
 /** Ground silhouettes share artwork textures; one color pass supplies ambient light to the lit world. */
-export const createProjectedWorldLighting = (game: GameRenderer, world: Container) => {
+export const createProjectedWorldLighting = (
+  game: GameRenderer,
+  world: Container,
+  options: { restoreWarmWindows?: boolean; groundOrder?: number } = {},
+) => {
   const container = new Container({ label: "projected-world" });
   const ground = new Container({ label: "projected-shadows", isRenderGroup: true });
   ground.sortableChildren = true;
@@ -27,7 +31,9 @@ export const createProjectedWorldLighting = (game: GameRenderer, world: Containe
   const night = new UniformGroup(
     {
       uNight: { value: 0, type: "f32" },
+      uLocalNight: { value: 0, type: "f32" },
       uAmbient: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" },
+      uWarmSource: { value: Number(options.restoreWarmWindows ?? false), type: "f32" },
     },
     { isStatic: true },
   );
@@ -94,10 +100,15 @@ export const createProjectedWorldLighting = (game: GameRenderer, world: Containe
       view: WorldBounds,
       _breeze?: WorldWind,
     ) => {
-      const shade = game.visualEffects.lighting ? 1 - light.day : 0;
-      filter.enabled = shade > 0;
-      if (night.uniforms.uNight !== shade) {
+      const shade = game.visualEffects.dayNight ? 1 - light.day : 0;
+      const localNight = game.visualEffects.localLights ? 1 - light.day : 0;
+      filter.enabled = shade > 0 || localNight > 0;
+      if (
+        night.uniforms.uNight !== shade ||
+        night.uniforms.uLocalNight !== localNight
+      ) {
         night.uniforms.uNight = shade;
+        night.uniforms.uLocalNight = localNight;
         const brightness =
           WORLD_DAY_BRIGHTNESS -
           shade * (WORLD_DAY_BRIGHTNESS - WORLD_NIGHT_BRIGHTNESS);
@@ -113,10 +124,14 @@ export const createProjectedWorldLighting = (game: GameRenderer, world: Containe
         view.maxY - view.minY,
       );
       ground.visible =
-        game.visualEffects.lighting && game.visualEffects.shadows && light.day > 0;
+        game.visualEffects.sunlight && game.visualEffects.shadows && light.day > 0;
       // Terrain draws first; silhouettes stay below scenery, routes and actor contact markers.
-      if (container.children[1] !== ground && container.children.length > 1)
-        container.setChildIndex(ground, 1);
+      const groundOrder = options.groundOrder ?? 1;
+      if (
+        container.children[groundOrder] !== ground &&
+        container.children.length > groundOrder
+      )
+        container.setChildIndex(ground, groundOrder);
       ground.alpha = light.day;
       // Hidden sunlight defers pose work and silhouette allocation until visible.
       if (!ground.visible) return;
@@ -240,13 +255,18 @@ const fragment = `precision mediump float;
 varying vec2 vTextureCoord;
 uniform sampler2D uTexture;
 uniform float uNight;
+uniform float uLocalNight;
 uniform vec3 uAmbient;
+uniform float uWarmSource;
 void main() {
   vec4 source = texture2D(uTexture, vTextureCoord);
-  vec3 color = source.rgb / max(source.a, 0.0001) * uAmbient;
-  float warm = smoothstep(0.18, 0.5, color.r - color.b) * smoothstep(0.1, 0.4, color.g - color.b) * smoothstep(0.02, 0.18, color.r - color.g);
+  vec3 base = source.rgb / max(source.a, 0.0001);
+  vec3 color = base * uAmbient;
+  vec3 emission = mix(color, base, uWarmSource);
+  float warm = smoothstep(0.18, 0.5, emission.r - emission.b) * smoothstep(0.1, 0.4, emission.g - emission.b) * smoothstep(0.02, 0.18, emission.r - emission.g);
   vec3 moon = color * vec3(0.62, 0.68, 0.76);
-  gl_FragColor = vec4(mix(color, mix(moon, min(vec3(1.0), color * 1.6), warm), uNight) * source.a, source.a);
+  vec3 lit = mix(color, moon, uNight) + warm * uLocalNight * (min(vec3(1.0), mix(color * 1.6, base * 1.25, uWarmSource)) - moon);
+  gl_FragColor = vec4(min(vec3(1.0), lit) * source.a, source.a);
 }`;
 
 export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLighting>;

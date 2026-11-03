@@ -8,6 +8,7 @@ import {
 } from "pixi.js";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import { createSceneAssets, textureOpaqueFrame } from "@/libs/rendering/assets";
+import { hasBakedShadow } from "@/libs/rendering/bakedShadowAtlas";
 import { worldLighting } from "@/libs/rendering/color";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
@@ -58,6 +59,8 @@ export const createWorldSprites = async (
   worldShadows?: WorldShadows,
   staticScenery = false,
 ) => {
+  const simpleLighting =
+    worldShadows?.kind === "projected" || worldShadows?.kind === "baked";
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const views: Texture[] = [];
@@ -307,7 +310,7 @@ export const createWorldSprites = async (
       ) {
         if (!shadows) {
           shadows = new Container({
-            isRenderGroup: staticScenery && worldShadows?.kind === "projected",
+            isRenderGroup: staticScenery && simpleLighting,
           });
           shadows.label = "scenery-shadows";
           container.addChildAt(shadows, 0);
@@ -326,25 +329,35 @@ export const createWorldSprites = async (
         shadows.addChild(shadow);
       }
       let light: Sprite | undefined;
-      if (description.light && worldShadows?.kind !== "physical") {
+      if (
+        description.light &&
+        worldShadows?.kind !== "physical" &&
+        !(
+          worldShadows &&
+          worldShadows.kind === "baked" &&
+          sprite instanceof Sprite &&
+          hasBakedShadow(sprite.texture, description) &&
+          description.shadowCaster === "building"
+        )
+      ) {
         if (!lights) {
           lights = new Container({
-            isRenderGroup: staticScenery && worldShadows?.kind === "projected",
+            isRenderGroup: staticScenery && simpleLighting,
           });
           lights.label = "scenery-lights";
           lights.alpha = 0;
           container.addChildAt(lights, shadows ? 1 : 0);
         }
-        lightTexture ??= createPixelLightTexture();
+        lightTexture ??= createPixelLightTexture({
+          smooth: worldShadows?.kind === "baked",
+        });
         light = new Sprite(lightTexture);
         light.anchor.set(0.5);
         light.position.set(characterFoot?.x ?? description.x, footY);
         light.width =
           description.size *
           description.light *
-          (worldShadows?.kind === "projected" && description.shadowCaster === "building"
-            ? 2.2
-            : 1);
+          (simpleLighting && description.shadowCaster === "building" ? 2.2 : 1);
         light.height = light.width * 0.5;
         light.tint = 0xffaa52;
         light.blendMode = "add";
@@ -437,7 +450,7 @@ export const createWorldSprites = async (
     setRenderable: (value: boolean) => {
       if (container.renderable === value) return;
       container.renderable = value;
-      if (!staticScenery || worldShadows?.kind !== "projected") return;
+      if (!staticScenery || !simpleLighting) return;
       for (const group of [shadows, lights, flatGround]) {
         if (!group) continue;
         if (value) group.enableRenderGroup();
@@ -472,7 +485,7 @@ export const createWorldSprites = async (
       attached = { ...layers, offsetY };
       worldShadows?.invalidate();
       if (flatGround) flatGround.zIndex = -offsetY;
-      const retainGround = staticScenery && worldShadows?.kind === "projected";
+      const retainGround = staticScenery && simpleLighting;
       if (retainGround) {
         if (shadows) layers.ground?.attach(shadows);
         if (lights) layers.ground?.attach(lights);
@@ -509,11 +522,11 @@ export const createWorldSprites = async (
       lastBrightness = brightness;
       const { night, tint } = worldLighting(brightness);
       if (lights) {
-        lights.alpha = night * (worldShadows?.kind === "projected" ? 0.8 : 0.3);
+        lights.alpha = night * (simpleLighting ? 0.8 : 0.3);
         // Zero-opacity emitters must leave the draw list, including actor scopes without scenery animation.
         lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
       }
-      if (worldShadows?.kind === "projected") {
+      if (simpleLighting) {
         // Shared ambient uniforms keep fades independent of the number of loaded sprites.
         if (shadows) shadows.alpha = 1 - night * 0.75;
         return;
@@ -597,7 +610,7 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
-      if (staticScenery && worldShadows?.kind === "projected") {
+      if (staticScenery && simpleLighting) {
         // Fixed scenery owns retained effect groups; viewport culling already mirrors each child's renderability.
         if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
         if (lights)
@@ -624,7 +637,7 @@ export const createWorldSprites = async (
             if (
               attached.ground &&
               pixels <=
-                (worldShadows?.kind === "projected"
+                (simpleLighting
                   ? WORLD_DETAIL.projectedGroundPixels
                   : WORLD_DETAIL.groundLightingPixels[0])
             ) {

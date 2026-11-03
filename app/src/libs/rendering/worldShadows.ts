@@ -15,6 +15,7 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
+import type { BakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
@@ -1793,7 +1794,8 @@ export type WorldShadowShape =
   | "column";
 export type WorldShadows =
   | ReturnType<typeof createWorldShadows>
-  | ProjectedWorldLighting;
+  | ProjectedWorldLighting
+  | BakedVillageLighting;
 type Caster = {
   character?: Container;
   sceneryOwner?: Container;
