@@ -9,12 +9,22 @@ export const CombatElementalSealNotice = ({
   battle: ReturnedBattle;
   userId: string | undefined;
 }) => {
-  if (!getUserElementalSeal(userId, battle.usersEffects)) return null;
+  const hasElementalSeal = !!getUserElementalSeal(userId, battle.usersEffects);
 
   return (
-    <p role="status" className="bg-muted rounded-md border px-3 py-2 text-sm">
-      <strong>Elemental Seal is active.</strong> Affected elemental jutsu are hidden
-      until the seal ends.
+    <p
+      role="status"
+      aria-atomic="true"
+      className={
+        hasElementalSeal ? "bg-muted rounded-md border px-3 py-2 text-sm" : "sr-only"
+      }
+    >
+      {hasElementalSeal && (
+        <>
+          <strong>Elemental Seal is active.</strong> Affected elemental jutsu are hidden
+          until the seal ends.
+        </>
+      )}
     </p>
   );
 };

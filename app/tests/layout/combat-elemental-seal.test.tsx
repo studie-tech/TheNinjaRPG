@@ -55,8 +55,10 @@ it("explains a PvE loadout disappearing under a seal and restores it when the se
       .map((action) => action.name);
   const notice = () => <CombatElementalSealNotice battle={battle} userId="caster" />;
   const view = render(notice());
+  const status = view.getByRole("status");
   expect(jutsuNames()).toEqual(names);
-  expect(view.queryByRole("status")).toBeNull();
+  expect(status.textContent).toBe("");
+  expect(status.getAttribute("aria-atomic")).toBe("true");
 
   const seal = makeEffect("elementalseal", { rounds: 2 }, {
     targetId: "caster", castThisRound: false,
@@ -64,6 +66,7 @@ it("explains a PvE loadout disappearing under a seal and restores it when the se
   battle.usersEffects = [seal];
   view.rerender(notice());
   expect(jutsuNames()).toEqual([]);
+  expect(view.getByRole("status")).toBe(status);
   expect(view.getByRole("status").textContent).toContain("until the seal ends");
   expect(battle.usersState[0]!.jutsus.map((entry) => entry.jutsuId)).toEqual(names);
 
@@ -71,7 +74,8 @@ it("explains a PvE loadout disappearing under a seal and restores it when the se
   battle.round += 2;
   view.rerender(notice());
   expect(jutsuNames()).toEqual(names);
-  expect(view.queryByRole("status")).toBeNull();
+  expect(view.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe("");
 });
 
 it("follows the controlled actor and waits until a newly cast seal takes effect", () => {
@@ -81,10 +85,10 @@ it("follows the controlled actor and waits until a newly cast seal takes effect"
   });
   battle.usersEffects = [seal];
   const view = render(<CombatElementalSealNotice battle={battle} userId="summon" />);
-  expect(view.queryByRole("status")).toBeNull();
+  expect(view.getByRole("status").textContent).toBe("");
   seal.castThisRound = false;
   view.rerender(<CombatElementalSealNotice battle={battle} userId="summon" />);
-  expect(view.getByRole("status")).toBeTruthy();
+  expect(view.getByRole("status").textContent).toContain("Elemental Seal is active.");
   view.rerender(<CombatElementalSealNotice battle={battle} userId="caster" />);
-  expect(view.queryByRole("status")).toBeNull();
+  expect(view.getByRole("status").textContent).toBe("");
 });
