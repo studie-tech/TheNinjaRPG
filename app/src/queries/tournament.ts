@@ -96,7 +96,7 @@ export const insertTournamentForCreateTournament = (
   input: import("@/validators/tournament").TournamentCreateSchema,
 ) => client.insert(tournament).values(input);
 
-/** Build the `tournamentMatch` update for `joinTournament`, setting `userId1` and `userId2`, using predicates on `id`. */
+/** Build the `tournamentMatch` update for `joinTournament`, claiming `userId2` only while it is still empty. */
 export const updateTournamentMatchForJoinTournament = (
   client: Pick<DrizzleClient, "update">,
   user: { userId: string },
@@ -104,11 +104,10 @@ export const updateTournamentMatchForJoinTournament = (
 ) =>
   client
     .update(tournamentMatch)
-    .set({
-      userId1: sql`CASE WHEN ${tournamentMatch.userId1} IS NULL THEN ${user.userId} ELSE ${tournamentMatch.userId1} END`,
-      userId2: sql`CASE WHEN ${tournamentMatch.userId2} IS NULL THEN ${user.userId} ELSE ${tournamentMatch.userId2} END`,
-    })
-    .where(eq(tournamentMatch.id, availableMatch.id));
+    .set({ userId2: user.userId })
+    .where(
+      and(eq(tournamentMatch.id, availableMatch.id), isNull(tournamentMatch.userId2)),
+    );
 
 /** Build the `tournamentMatch` insert for `joinTournament`. */
 export const insertTournamentMatchForJoinTournament = (

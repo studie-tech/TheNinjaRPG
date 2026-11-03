@@ -1003,9 +1003,6 @@ export const staffRouter = createTRPCRouter({
       if (!canDeleteReferral(user.role)) {
         return errorResponse("You don't have permission to delete referrals");
       }
-      if (!target) {
-        return errorResponse("Target user not found");
-      }
       if (!target.recruiterId) {
         return errorResponse("User has no recruiter to delete");
       }

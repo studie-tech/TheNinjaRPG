@@ -50,8 +50,7 @@ const TOURNAMENT_FINALIZATION_INCOMPLETE =
 
 export const tournamentRouter = createTRPCRouter({
   ...eventTournamentProcedures,
-  // Advances rounds and finalizes payouts via syncTournamentState before each read so clients
-  // need not call syncTournament separately (authenticated tRPC; not edge-cacheable like static GET).
+  // Advances rounds and pays finals via syncTournamentState before every read; keep it off edge caches.
   getTournament: protectedProcedure
     .meta({
       mcp: {
@@ -65,18 +64,6 @@ export const tournamentRouter = createTRPCRouter({
       const data = await fetchTournament(ctx.drizzle, input.tournamentId);
       return data?.type === "CLAN" ? data : null;
     }),
-  syncTournament: protectedProcedure
-    .meta({
-      mcp: {
-        description:
-          "Synchronize tournament progression (also runs when loading tournament details)",
-      },
-    })
-    .input(z.object({ tournamentId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      return await syncTournamentState(ctx.drizzle, input.tournamentId);
-    }),
   createTournament: protectedProcedure
     .meta({ mcp: { description: "Create a new tournament" } })
     .input(tournamentCreateSchema)
@@ -88,27 +75,20 @@ export const tournamentRouter = createTRPCRouter({
         fetchClan(ctx.drizzle, input.id),
         fetchTournament(ctx.drizzle, input.id),
       ]);
-      // General guards
-      if (!user) return errorResponse("User not found");
+      // Guards
       if (tournamentData) return errorResponse("Tournament already exists found.");
-      // Specific guards & updates
-      if (input.type === "CLAN") {
-        if (!clanData) return errorResponse("Clan not found.");
-        const isLeader = user.userId === clanData?.leaderId;
-        const isColeader = checkCoLeader(user.userId, clanData);
-        if (!isLeader && !isColeader) return errorResponse("Must be leader");
-        const prize = clanData.bank;
-        input.rewards = ObjectiveReward.parse({ reward_money: prize });
-        // Take only the prize read above; deposits made since stay in the bank
-        if (prize > 0) {
-          const debit = await updateClanForCreateTournament(
-            ctx.drizzle,
-            clanData,
-            prize,
-          );
-          if (debit.rowsAffected === 0) {
-            return errorResponse("Clan treasury changed, try again");
-          }
+      if (!clanData) return errorResponse("Clan not found.");
+      const isLeader = user.userId === clanData.leaderId;
+      const isColeader = checkCoLeader(user.userId, clanData);
+      if (!isLeader && !isColeader) return errorResponse("Must be leader");
+      // Update
+      const prize = clanData.bank;
+      input.rewards = ObjectiveReward.parse({ reward_money: prize });
+      // Take only the prize read above; deposits made since stay in the bank
+      if (prize > 0) {
+        const debit = await updateClanForCreateTournament(ctx.drizzle, clanData, prize);
+        if (debit.rowsAffected === 0) {
+          return errorResponse("Clan treasury changed, try again");
         }
       }
       // Insert tournament
@@ -129,23 +109,26 @@ export const tournamentRouter = createTRPCRouter({
       ]);
       // Derived
       const matches = tournamentData?.matches ?? [];
-      // General guards
-      if (!user) return errorResponse("User not found");
+      // Guards
       if (!tournamentData) return errorResponse("Tournament not found.");
       if (tournamentData.type === "EVENT")
         return errorResponse("Use the event tournament page");
       if (matches.find((m) => [m.userId1, m.userId2].includes(user.userId))) {
         return errorResponse("User already in tournament.");
       }
-      // Specific guards
-      if (tournamentData.type === "CLAN") {
-        if (!clanData) return errorResponse("Clan not found.");
-        if (user.clanId !== clanData.id) return errorResponse("User not in clan.");
-      }
+      if (!clanData) return errorResponse("Clan not found.");
+      if (user.clanId !== clanData.id) return errorResponse("User not in clan.");
       // Mutate
-      const availableMatch = matches.find((m) => !m.userId1 || !m.userId2);
+      const availableMatch = matches.find((m) => !m.userId2);
       if (availableMatch) {
-        await updateTournamentMatchForJoinTournament(ctx.drizzle, user, availableMatch);
+        const joined = await updateTournamentMatchForJoinTournament(
+          ctx.drizzle,
+          user,
+          availableMatch,
+        );
+        if (joined.rowsAffected === 0) {
+          return errorResponse("That slot was just taken. Try again");
+        }
       } else {
         await insertTournamentMatchForJoinTournament(
           ctx.drizzle,
@@ -169,7 +152,6 @@ export const tournamentRouter = createTRPCRouter({
         fetchTournament(ctx.drizzle, input.tournamentId),
       ]);
       // General guards
-      if (!user) return errorResponse("User not found");
       if (!matchData) return errorResponse("Match not found.");
       if (!tournamentData) return errorResponse("Tournament not found.");
       if (tournamentData.type === "EVENT")
@@ -177,7 +159,7 @@ export const tournamentRouter = createTRPCRouter({
       if (tournamentData.round !== matchData.round) {
         return errorResponse("Match not in current round.");
       }
-      if (matchData?.tournamentId !== input.tournamentId) {
+      if (matchData.tournamentId !== input.tournamentId) {
         return errorResponse("Match not in tournament.");
       }
       if (![matchData.userId1, matchData.userId2].includes(user.userId)) {
@@ -187,7 +169,7 @@ export const tournamentRouter = createTRPCRouter({
       await updateUserDataForJoinMatch(ctx.drizzle, matchData);
       // Start the battle
       let result: Awaited<ReturnType<typeof initiateBattle>> | undefined;
-      if (matchData.userId1 && matchData.userId2) {
+      if (matchData.userId2) {
         result = await initiateBattle(
           {
             userIds: [matchData.userId2],
