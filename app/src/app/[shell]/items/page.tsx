@@ -278,7 +278,7 @@ export default function MyItems() {
 
   // Calculate items needing repair and which kits will be used
   const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
-  const repairKits = getRepairKits(userItems, userData ?? {});
+  const repairKits = getRepairKits(userItems, userData);
   const isCrafter = userData.occupation === "CRAFTING";
   const totalRyoRepairCost = itemsNeedingRepair.reduce(
     (total, useritem) => total + calcItemRepairCost(useritem),
@@ -948,7 +948,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       consumption: prepareConsumptionUpdate(),
     }),
     onSuccess: async (data, variables, context) => {
-      finishItemConsumeRequest(userData?.userId ?? "", variables.userItemId);
+      finishItemConsumeRequest(userData.userId, variables.userItemId);
       if (data.success && "rewards" in data && data.rewards) {
         showRewardToast(
           data.notifications ?? [],
@@ -1215,9 +1215,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                     Eat meal
                   </Button>
                 }
-                onAccept={() =>
-                  consume(getItemConsumeInput(userData?.userId ?? "", useritem))
-                }
+                onAccept={() => consume(getItemConsumeInput(userData.userId, useritem))}
               >
                 <p>
                   Eat one <b>{useritem.item.name}</b>? Its effect lasts{" "}
@@ -1341,7 +1339,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   variant="info"
                   disabled={isConsuming}
                   onClick={() =>
-                    consume(getItemConsumeInput(userData?.userId ?? "", useritem))
+                    consume(getItemConsumeInput(userData.userId, useritem))
                   }
                 >
                   <Cookie className="mr-2 h-5 w-5" />
@@ -1893,6 +1891,7 @@ const Equip: React.FC<EquipProps> = (props) => {
   const canAssignHotkey =
     item && item.quantity > 0 && !NonActionItemTypes.includes(item.itemType);
   const hotkey = item && props.hotkeys?.[item.itemId];
+  const showsLevel = !!item && showsItemLevelBadge(item);
   return (
     <button
       type="button"
@@ -1924,16 +1923,14 @@ const Equip: React.FC<EquipProps> = (props) => {
             </kbd>
           )}
           {/* Durability bar */}
-          {item.maxDurability !== undefined &&
-            item.durability !== undefined &&
-            typeof item.durability === "number" && (
-              <DurabilityBar
-                currentDurability={item.durability}
-                maxDurability={item.maxDurability}
-                position="top-right"
-                size="medium"
-              />
-            )}
+          {item.maxDurability > 0 && (
+            <DurabilityBar
+              currentDurability={item.durability}
+              maxDurability={item.maxDurability}
+              position="top-right"
+              size="medium"
+            />
+          )}
           {item.masteryWarning && (
             <div
               className="absolute top-0 left-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 text-red-600"
@@ -1942,11 +1939,11 @@ const Equip: React.FC<EquipProps> = (props) => {
               <AlertTriangle className="h-4 w-4" aria-label={item.masteryWarning} />
             </div>
           )}
-          {!showsItemLevelBadge(item) && item.quantity > 1 ? (
+          {!showsLevel && item.quantity > 1 ? (
             <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
               {item.quantity}
             </div>
-          ) : showsItemLevelBadge(item) ? (
+          ) : showsLevel ? (
             <div className="absolute bottom-0 left-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 font-bold text-black">
               {item.level}
             </div>
