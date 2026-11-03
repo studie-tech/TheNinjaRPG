@@ -145,95 +145,86 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           <ItemHelper item={form.getValues() as unknown as ZodItemType} />
         }
       >
-        {!item && <p>Could not find this item</p>}
-        {item && (
-          <>
-            <fieldset disabled={isUpdating || isFurnitureMeasuring}>
-              <LpcEquipmentFields
-                control={form.control}
-                className="grid-cols-1 gap-1 md:grid-cols-2 [&>div]:p-2"
-                item={{
-                  ...item,
-                  name: itemName,
-                  itemType,
-                  slot: itemSlot,
-                  weaponType: itemWeaponType,
-                }}
-              />
-            </fieldset>
-            <EditContent
-              schema={ItemValidatorRawSchema}
-              form={form as unknown as UseFormReturn<ZodItemType, any>}
-              formData={formData}
-              showSubmit={props.canSave}
-              buttonTxt="Save to Database"
-              type="item"
-              relationId={item.id}
-              allowImageUpload={props.canSave}
-              onAccept={async (values) => {
-                if (!isFurnitureMeasuring) await handleItemSubmit(values);
-              }}
-              submitLoading={isUpdating || isFurnitureMeasuring}
-              submitLoadingText={
-                isFurnitureMeasuring ? "Measuring furniture" : "Saving"
-              }
-            />
-            {isFurniture && (
-              <Controller
-                control={form.control}
-                name="furnitureData.views"
-                render={({ field }) => (
-                  <FurnitureViewsEditor
-                    id={item.id}
-                    name={itemName}
-                    description={itemDescription}
-                    image={furnitureImage || ""}
-                    width={Number(furnitureData?.width ?? DEFAULT_FURNITURE_DATA.width)}
-                    groundAnchor={Number(
-                      furnitureData?.groundAnchor ??
-                        DEFAULT_FURNITURE_DATA.groundAnchor,
-                    )}
-                    geometry={
-                      furnitureGeometrySchema.safeParse(furnitureData?.geometry).data
-                    }
-                    useFullFootprint={
-                      Boolean(furnitureData?.isFloor) ||
-                      furnitureData?.action === "sleep"
-                    }
-                    views={(field.value ?? {}) as FurnitureViews}
-                    onViewsChange={field.onChange}
-                    onMeasurementPendingChange={setIsFurnitureMeasuring}
-                    onBaseChange={(change) => {
-                      if (change.image !== undefined)
-                        form.setValue("image", change.image, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        });
-                      const { image: _image, ...framing } = change;
-                      if (Object.keys(framing).length > 0)
-                        form.setValue(
-                          "furnitureData",
-                          { ...form.getValues("furnitureData"), ...framing },
-                          { shouldDirty: true, shouldValidate: true },
-                        );
-                    }}
-                    canEdit={props.canSave}
-                    disabled={isUpdating}
-                  />
+        <fieldset disabled={isUpdating || isFurnitureMeasuring}>
+          <LpcEquipmentFields
+            control={form.control}
+            className="grid-cols-1 gap-1 md:grid-cols-2 [&>div]:p-2"
+            item={{
+              ...item,
+              name: itemName,
+              itemType,
+              slot: itemSlot,
+              weaponType: itemWeaponType,
+            }}
+          />
+        </fieldset>
+        <EditContent
+          schema={ItemValidatorRawSchema}
+          form={form as unknown as UseFormReturn<ZodItemType, any>}
+          formData={formData}
+          showSubmit={props.canSave}
+          buttonTxt="Save to Database"
+          type="item"
+          relationId={item.id}
+          allowImageUpload={props.canSave}
+          onAccept={async (values) => {
+            if (!isFurnitureMeasuring) await handleItemSubmit(values);
+          }}
+          submitLoading={isUpdating || isFurnitureMeasuring}
+          submitLoadingText={isFurnitureMeasuring ? "Measuring furniture" : "Saving"}
+        />
+        {isFurniture && (
+          <Controller
+            control={form.control}
+            name="furnitureData.views"
+            render={({ field }) => (
+              <FurnitureViewsEditor
+                id={item.id}
+                name={itemName}
+                description={itemDescription}
+                image={furnitureImage || ""}
+                width={Number(furnitureData?.width ?? DEFAULT_FURNITURE_DATA.width)}
+                groundAnchor={Number(
+                  furnitureData?.groundAnchor ?? DEFAULT_FURNITURE_DATA.groundAnchor,
                 )}
+                geometry={
+                  furnitureGeometrySchema.safeParse(furnitureData?.geometry).data
+                }
+                useFullFootprint={
+                  Boolean(furnitureData?.isFloor) || furnitureData?.action === "sleep"
+                }
+                views={(field.value ?? {}) as FurnitureViews}
+                onViewsChange={field.onChange}
+                onMeasurementPendingChange={setIsFurnitureMeasuring}
+                onBaseChange={(change) => {
+                  if (change.image !== undefined)
+                    form.setValue("image", change.image, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  const { image: _image, ...framing } = change;
+                  if (Object.keys(framing).length > 0)
+                    form.setValue(
+                      "furnitureData",
+                      { ...form.getValues("furnitureData"), ...framing },
+                      { shouldDirty: true, shouldValidate: true },
+                    );
+                }}
+                canEdit={props.canSave}
+                disabled={isUpdating}
               />
             )}
-            <div className="mt-2 flex justify-end">
-              <SuggestChange
-                entityType="ITEM"
-                entityId={item.id}
-                getData={() => form.getValues()}
-                label={props.canSave ? "Suggest instead" : "Suggest a change"}
-              />
-            </div>
-          </>
+          />
         )}
-        {item && props.canSave && (
+        <div className="mt-2 flex justify-end">
+          <SuggestChange
+            entityType="ITEM"
+            entityId={item.id}
+            getData={() => form.getValues()}
+            label={props.canSave ? "Suggest instead" : "Suggest a change"}
+          />
+        </div>
+        {props.canSave && (
           <ItemVariantsEditor
             item={item}
             furnitureData={
@@ -348,24 +339,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
     null,
   );
   const [showForm, setShowForm] = React.useState(false);
-  const deletingVariantIdsRef = React.useRef<Set<string>>(new Set());
-  const [deletingVariantIds, setDeletingVariantIds] = React.useState<
-    ReadonlySet<string>
-  >(() => new Set());
   const variantOperationInFlightRef = React.useRef(false);
-  const [variantOperationPending, setVariantOperationPending] = React.useState(false);
   const [isFurnitureMeasuring, setIsFurnitureMeasuring] = React.useState(false);
-
-  const setVariantDeleting = (variantId: string, deleting: boolean) => {
-    const next = new Set(deletingVariantIdsRef.current);
-    if (deleting) {
-      next.add(variantId);
-    } else {
-      next.delete(variantId);
-    }
-    deletingVariantIdsRef.current = next;
-    setDeletingVariantIds(next);
-  };
 
   const { data: variants } = api.item.getItemVariants.useQuery({ itemId });
   const { data: unlockItems } = api.item.getAllNames.useQuery();
@@ -395,7 +370,6 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
     },
     onSettled: () => {
       variantOperationInFlightRef.current = false;
-      setVariantOperationPending(false);
     },
   });
 
@@ -409,33 +383,20 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
         ]);
       }
     },
-    onSettled: (_result, _error, variables) => {
-      setVariantDeleting(variables.variantId, false);
+    onSettled: () => {
       variantOperationInFlightRef.current = false;
-      setVariantOperationPending(false);
     },
   });
 
+  const variantOperationPending = upsert.isPending || remove.isPending;
+  const deletingVariantId = remove.isPending ? remove.variables?.variantId : undefined;
+
   const deleteVariant = (variantId: string) => {
     // mutate() updates React state asynchronously, so guard duplicate activations with
-    // a ref before starting the request. Other variant rows remain independently usable.
-    if (
-      variantOperationInFlightRef.current ||
-      deletingVariantIdsRef.current.has(variantId)
-    ) {
-      return;
-    }
+    // a ref before starting the request.
+    if (variantOperationInFlightRef.current) return;
     variantOperationInFlightRef.current = true;
-    setVariantOperationPending(true);
-    setVariantDeleting(variantId, true);
-    try {
-      remove.mutate({ variantId });
-    } catch (error) {
-      variantOperationInFlightRef.current = false;
-      setVariantOperationPending(false);
-      setVariantDeleting(variantId, false);
-      throw error;
-    }
+    remove.mutate({ variantId });
   };
 
   const form = useForm<VariantFormInput, unknown, ZodItemVariantType>({
@@ -482,22 +443,15 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
     (data) => {
       if (variantOperationInFlightRef.current || isFurnitureMeasuring) return;
       variantOperationInFlightRef.current = true;
-      setVariantOperationPending(true);
-      try {
-        upsert.mutate({
-          itemId,
-          variant: {
-            ...data,
-            requiredItemId:
-              data.costType === "VARIANT_TOKEN" ? data.requiredItemId : null,
-            furnitureData: isFurniture ? data.furnitureData : null,
-          },
-        });
-      } catch (error) {
-        variantOperationInFlightRef.current = false;
-        setVariantOperationPending(false);
-        throw error;
-      }
+      upsert.mutate({
+        itemId,
+        variant: {
+          ...data,
+          requiredItemId:
+            data.costType === "VARIANT_TOKEN" ? data.requiredItemId : null,
+          furnitureData: isFurniture ? data.furnitureData : null,
+        },
+      });
     },
     (errors) => showFormErrorsToast(errors),
   );
@@ -522,7 +476,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
           </thead>
           <tbody>
             {variants.map((v) => {
-              const isDeleting = deletingVariantIds.has(v.id);
+              const isDeleting = deletingVariantId === v.id;
               return (
                 <tr
                   key={v.id}
@@ -841,13 +795,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
             <div className="flex gap-2">
               <Button
                 type="submit"
-                disabled={
-                  variantOperationPending ||
-                  isFurnitureMeasuring ||
-                  (editingVariant?.id
-                    ? deletingVariantIds.has(editingVariant.id)
-                    : false)
-                }
+                disabled={variantOperationPending || isFurnitureMeasuring}
               >
                 {isFurnitureMeasuring
                   ? "Measuring furniture"
@@ -858,12 +806,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                disabled={
-                  variantOperationPending ||
-                  (editingVariant?.id
-                    ? deletingVariantIds.has(editingVariant.id)
-                    : false)
-                }
+                disabled={variantOperationPending}
                 onClick={() => {
                   setShowForm(false);
                   setEditingVariant(null);
