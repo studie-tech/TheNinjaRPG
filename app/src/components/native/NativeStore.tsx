@@ -66,10 +66,7 @@ export default function NativeStore() {
   const [bindingRetry, setBindingRetry] = useState(0);
   const bindingGeneration = useRef(0);
   const recentGeneration = useRef(0);
-  const [recentBaseline, setRecentBaseline] = useState<{
-    userId: string;
-    newestId: string | undefined;
-  } | null>(null);
+  const [baselineAccountId, setBaselineAccountId] = useState<string | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [unsettledAttempts, setUnsettledAttempts] = useState<StorePurchaseLock[]>([]);
   const unsettledAttemptsRef = useRef<StorePurchaseLock[]>([]);
@@ -344,9 +341,8 @@ export default function NativeStore() {
     refreshProfile,
   ]);
 
-  // `recent` is the before-checkout watermark used to tell this attempt's receipt from a
-  // terminal receipt already in the list. Refetch it for each signed-in account and keep
-  // checkout closed until that account's baseline has actually completed.
+  // Refetch `recent` for each signed-in account and keep checkout closed until that
+  // account's receipt list has loaded once.
   useEffect(() => {
     const generation = ++recentGeneration.current;
     const accountId = player?.userId;
@@ -356,7 +352,7 @@ export default function NativeStore() {
       .then(({ data, error }) => {
         if (generation !== recentGeneration.current) return;
         if (!data) throw error ?? new Error("Could not verify recent purchases");
-        setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+        setBaselineAccountId(accountId);
       })
       .catch((error: unknown) => {
         if (generation !== recentGeneration.current) return;
@@ -368,9 +364,8 @@ export default function NativeStore() {
       if (generation === recentGeneration.current) recentGeneration.current += 1;
     };
   }, [isNativeShell, player?.userId, refetchRecent]);
-  const purchaseBaseline =
-    recentBaseline?.userId === player?.userId ? recentBaseline : null;
-  const hasRecentBaseline = purchaseBaseline !== null;
+  const hasRecentBaseline =
+    baselineAccountId !== null && baselineAccountId === player?.userId;
 
   /** QueryClient defaults may keep purchase data fresh forever; invalidate first. */
   const fetchRecentFresh = useCallback(
@@ -393,7 +388,7 @@ export default function NativeStore() {
       );
       return;
     }
-    setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+    setBaselineAccountId(accountId);
   };
 
   // A grant can be retried after the initial wait ends. Keep pending products disabled
@@ -403,13 +398,6 @@ export default function NativeStore() {
     if (!hasPendingPurchase || !accountId) return;
     const timer = window.setInterval(() => {
       void refetchRecent().then(({ data }) => {
-        if (data) {
-          setRecentBaseline((current) =>
-            current?.userId === accountId
-              ? { userId: accountId, newestId: data[0]?.id }
-              : current,
-          );
-        }
         if (data && !data.some(isPendingStorePurchase)) {
           void refreshProfile();
         }
@@ -455,10 +443,7 @@ export default function NativeStore() {
       if (data && observation === "pending") {
         observation = storePurchaseReconciliation(data, attempt);
       }
-      return {
-        newestId: data?.[0]?.id,
-        status: finalStorePurchaseResult(observation),
-      };
+      return { status: finalStorePurchaseResult(observation) };
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -588,7 +573,6 @@ export default function NativeStore() {
 
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt, assertCurrent?: () => void) => {
-      let newestId: string | undefined;
       let observation = storeRestoreReconciliation([], attempt);
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -601,14 +585,12 @@ export default function NativeStore() {
           )
         ).flat();
         assertCurrent?.();
-        newestId = matching[0]?.id ?? newestId;
         observation = storeRestoreReconciliation(matching, attempt);
         if (observation === "reconciled") break;
       }
-      const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
+      await Promise.all([refetchRecent(), refreshProfile()]);
       assertCurrent?.();
-      newestId = data?.[0]?.id ?? newestId;
-      return { newestId, status: finalStoreRestoreResult(observation) };
+      return { status: finalStoreRestoreResult(observation) };
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -621,7 +603,7 @@ export default function NativeStore() {
     if (
       !available?.bound ||
       available.userId !== player?.userId ||
-      !purchaseBaseline ||
+      !hasRecentBaseline ||
       !attemptsHydrated
     )
       return;
@@ -642,8 +624,6 @@ export default function NativeStore() {
       ]);
       assertCurrentCheckout();
       if (!visibleRows) throw new Error("Could not verify recent purchases");
-      const previousNewestId = visibleRows[0]?.id;
-      setRecentBaseline({ userId: accountId, newestId: previousNewestId });
       const {
         outcome: result,
         postPurchaseCustomerInfo,
@@ -809,11 +789,6 @@ export default function NativeStore() {
             "The charge is still being verified. This item will stay locked until reconciliation finishes.",
         });
       }
-      setRecentBaseline((current) =>
-        current?.userId === accountId
-          ? { userId: accountId, newestId: settlement.newestId }
-          : current,
-      );
     } catch (error) {
       if (checkoutGeneration === bindingGeneration.current) {
         showMutationToast({
@@ -863,11 +838,6 @@ export default function NativeStore() {
           assertCurrentRestore,
         );
         assertCurrentRestore();
-        setRecentBaseline((current) =>
-          current?.userId === accountId
-            ? { userId: accountId, newestId: result.newestId }
-            : current,
-        );
         showMutationToast({
           success: result.status === "reconciled",
           message:
@@ -879,15 +849,8 @@ export default function NativeStore() {
         });
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
-        const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
+        await Promise.all([refetchRecent(), refreshProfile()]);
         assertCurrentRestore();
-        if (data) {
-          setRecentBaseline((current) =>
-            current?.userId === accountId
-              ? { userId: accountId, newestId: data[0]?.id }
-              : current,
-          );
-        }
         showMutationToast({
           success: true,
           message: "No previous purchases found for this store account.",
