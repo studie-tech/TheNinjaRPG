@@ -1801,7 +1801,7 @@ export const listJutsuForComputeUserContentChanges = (
   newJutsuIds: string[],
 ) =>
   client.query.jutsu.findMany({
-    where: inArray(jutsu.id, oldJutsuIds.concat(newJutsuIds).concat(["non-empty"])),
+    where: inArray(jutsu.id, oldJutsuIds.concat(newJutsuIds)),
     columns: { id: true, name: true },
   });
 
@@ -1812,7 +1812,7 @@ export const listItemForComputeUserContentChanges = (
   newItemIds: string[],
 ) =>
   client.query.item.findMany({
-    where: inArray(item.id, oldItemIds.concat(newItemIds).concat(["non-empty"])),
+    where: inArray(item.id, oldItemIds.concat(newItemIds)),
     columns: { id: true, name: true },
   });
 

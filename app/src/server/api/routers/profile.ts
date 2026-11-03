@@ -623,16 +623,8 @@ export const profileRouter = createTRPCRouter({
       const targetName = target.username;
       // Mutate
       if (!entry) {
-        const result = await insertUserBlackListForToggleBlacklistEntry(
-          ctx.drizzle,
-          ctx,
-          input,
-        );
-        if (result.rowsAffected === 0) {
-          return { success: false, message: `Failed to add ${targetName}` };
-        } else {
-          return { success: true, message: `Added ${targetName} to blacklist` };
-        }
+        await insertUserBlackListForToggleBlacklistEntry(ctx.drizzle, ctx, input);
+        return { success: true, message: `Added ${targetName} to blacklist` };
       } else {
         await deleteUserBlackListForToggleBlacklistEntry(ctx.drizzle, entry);
         return { success: true, message: `Removed ${targetName} from blacklist` };
