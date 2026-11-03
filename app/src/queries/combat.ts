@@ -75,7 +75,6 @@ import {
   raidParticipation,
   rankedPvpQueue,
   type SectorType,
-  sageMode,
   territoryWar,
   tournament,
   tournamentMatch,
@@ -795,15 +794,6 @@ export const listJutsuForInitiateBattle3 = (
             ),
         ),
       ),
-  });
-
-/** Build the `sageMode` listing for `initiateBattle`, using predicates on `id`. */
-export const listSageModeForInitiateBattle = (
-  client: Pick<DrizzleClient, "query">,
-  missingSageIds: string[],
-) =>
-  client.query.sageMode.findMany({
-    where: inArray(sageMode.id, missingSageIds),
   });
 
 /** Build the `battle` insert for `createBattle`. */

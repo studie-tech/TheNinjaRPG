@@ -220,7 +220,6 @@ import {
   listJutsuForInitiateBattle2,
   listJutsuForInitiateBattle3,
   listRaidParticipationForInitiateBattle,
-  listSageModeForInitiateBattle,
   listTournamentForInitiateBattle,
   listUserDataForInitiateBattle,
   listUserDataForProcessUsersForBattle,
@@ -2569,24 +2568,6 @@ export const initiateBattle = async (
   const leftSideUserCount = [...userIds, ...allyAiIds].filter((id) =>
     fetchedUsers.some((u) => u.userId === id),
   ).length;
-
-  // Ensure SageMode row is present when sageModeId is set (relation can be null if stale)
-  const missingSageIds = [
-    ...new Set(
-      users
-        .filter((u) => u.sageModeId && !u.sageMode)
-        .map((u) => u.sageModeId as string),
-    ),
-  ];
-  if (missingSageIds.length > 0) {
-    const sageRows = await listSageModeForInitiateBattle(client, missingSageIds);
-    const byId = Object.fromEntries(sageRows.map((m) => [m.id, m]));
-    for (const u of users) {
-      if (!u.sageModeId || u.sageMode) continue;
-      const row = byId[u.sageModeId];
-      if (row) u.sageMode = row;
-    }
-  }
 
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
