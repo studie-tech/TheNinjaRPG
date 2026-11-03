@@ -62,10 +62,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("shared ramen menu", () => {
-  it("uses village.buyFood and the shared user revision update in a kitchen", async () => {
-    const view = render(<RamenShop.RamenMenu image="/kitchen.webp" />);
-    expect(view.getByAltText("Kitchen").getAttribute("src")).toBe("/kitchen.webp");
+describe("ramen menu", () => {
+  it("uses village.buyFood and the shared user revision update", async () => {
+    const view = render(<RamenShop.RamenMenu />);
     await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
     expect(purchase).toHaveBeenCalledWith({ ramen: "small" });
     expect(prepareUserUpdate).toHaveBeenCalledTimes(1);

@@ -36,22 +36,15 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
       padding={false}
       initialBreak={props.initialBreak}
     >
-      <RamenMenu
-        image={props.showImage ? IMG_RAMEN_WELCOME : undefined}
-        imageAlt="Ramen shop"
-      />
+      <RamenMenu showImage={props.showImage} />
     </ContentBox>
   );
 };
 
 export default RamenShop;
 
-/** Shared food menu for village counters and home kitchens, using the same purchase flow. */
-export const RamenMenu = ({
-  image,
-  imageAlt = "Kitchen",
-  imageClassName = "w-full",
-}: RamenMenuProps) => {
+/** Food menu of the ramen shop, optionally under its welcome banner. */
+export const RamenMenu = ({ showImage }: RamenMenuProps) => {
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { completeTutorialAction } = useTutorialStep();
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -83,13 +76,13 @@ export const RamenMenu = ({
 
   return (
     <>
-      {image && (
+      {showImage && (
         <Image
-          alt={imageAlt}
-          src={image}
+          alt="Ramen shop"
+          src={IMG_RAMEN_WELCOME}
           width={512}
           height={221}
-          className={imageClassName}
+          className="w-full"
         />
       )}
       {purchaseError && (
@@ -132,10 +125,7 @@ export const RamenMenu = ({
 };
 
 type RamenMenuProps = {
-  image?: string;
-  imageAlt?: string;
-  /** Kitchens use a compact illustration while public counters retain their full-width banner. */
-  imageClassName?: string;
+  showImage?: boolean;
 };
 
 interface MenuEntryProps {
