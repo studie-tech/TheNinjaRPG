@@ -410,7 +410,7 @@ export const RankedLoadoutSelector: React.FC = () => {
         setIsOpen(false);
         setSelectedJutsu((current) => (current?.id === targetId ? undefined : current));
       }
-      void utils.pvpRank.getRankedLoadout.invalidate().catch(() => undefined);
+      void utils.pvpRank.getRankedLoadout.invalidate();
       return true;
     } catch (error) {
       // Ordinary tRPC errors are already owned by the global mutation handler.

@@ -1427,9 +1427,7 @@ export const useTowerDefense = (userId?: string) => {
     setGameState(initialGameState);
 
     if (userId) {
-      void utils.towerDefense.getUserUpgrades.invalidate().catch((error) => {
-        console.error("[useTowerDefense] Failed to refresh upgrades:", error);
-      });
+      void utils.towerDefense.getUserUpgrades.invalidate();
     }
     returnToLobbyInFlightRef.current = false;
     setIsReturningToLobby(false);

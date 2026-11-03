@@ -71,13 +71,7 @@ export default function Reports() {
       clearedReportIdsRef.current.add(variables.object_id);
       setClearedReportIds((current) => [...current, variables.object_id]);
 
-      try {
-        await utils.reports.getAll.invalidate();
-      } catch {
-        // Invalidation normally refetches active report lists. Retry with an explicit
-        // authoritative read if that cache operation itself fails.
-        await utils.reports.getAll.refetch().catch(() => undefined);
-      }
+      await utils.reports.getAll.invalidate();
     },
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });

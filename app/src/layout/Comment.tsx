@@ -80,7 +80,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         // this exact delete action back.
         props.onDeleted?.(variables.id);
         setEditing(false);
-        void utils.comments.getConversationComments.invalidate().catch(() => undefined);
+        void utils.comments.getConversationComments.invalidate();
       }
     },
     onError: (error) => {

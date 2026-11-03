@@ -526,7 +526,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         // refreshing so a failed refetch can never offer the mutation again.
         setReviewComplete(true);
         setDialogOpen(false);
-        void utils.linkPromotion.getLinkPromotions.invalidate().catch(() => undefined);
+        void utils.linkPromotion.getLinkPromotions.invalidate();
       }
     },
     onError: (error) => {

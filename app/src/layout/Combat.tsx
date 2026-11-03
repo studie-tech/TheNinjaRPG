@@ -667,7 +667,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               message: data.message,
             });
           }
-          void utils.combat.getBattle.invalidate().catch(() => undefined);
+          void utils.combat.getBattle.invalidate();
         }
       } else {
         showMutationToast({
