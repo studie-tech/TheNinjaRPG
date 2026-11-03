@@ -2249,7 +2249,6 @@ const NameChange: React.FC = () => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           data.userPatch?.username !== undefined &&
             data.userPatch.reputationPoints !== undefined
@@ -2259,7 +2258,7 @@ const NameChange: React.FC = () => {
               }
             : undefined,
           { revision },
-        ).catch(() => undefined);
+        );
       }
     },
   });
@@ -2409,7 +2408,6 @@ const TavernColors: React.FC = () => {
           input.target === "username"
             ? data.userPatch?.tavernUsernameColor
             : data.userPatch?.tavernTitleColor;
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           color !== undefined
             ? {
@@ -2419,9 +2417,9 @@ const TavernColors: React.FC = () => {
               }
             : undefined,
           { revision, delta: data.userDelta },
-        ).catch(() => undefined);
+        );
       } else {
-        await updateUser(undefined, { revision }).catch(() => undefined);
+        await updateUser(undefined, { revision });
       }
     },
   });
@@ -2593,7 +2591,6 @@ const ChangeGender: React.FC = () => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           data.userPatch?.gender !== undefined &&
             data.userPatch.reputationPoints !== undefined
@@ -2603,7 +2600,7 @@ const ChangeGender: React.FC = () => {
               }
             : undefined,
           { revision },
-        ).catch(() => undefined);
+        );
       }
     },
   });
