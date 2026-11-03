@@ -96,11 +96,9 @@ export const listStaffApplicationForList = (
   client.query.staffApplication.findMany({
     where: and(
       ...baseConds,
-      ...(input.username && usernameIds.length > 0
+      ...(input.username
         ? [inArray(staffApplication.applicantUserId, usernameIds)]
-        : input.username
-          ? [eq(staffApplication.applicantUserId, "__none__")] // force no results
-          : []),
+        : []),
     ),
     with: {
       applicant: {

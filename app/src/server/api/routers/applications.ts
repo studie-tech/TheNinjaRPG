@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { StaffApprovalGroup } from "@/drizzle/constants";
-import { StaffApplicationTargetRoles, StaffApprovalGroups } from "@/drizzle/constants";
+import { StaffApprovalGroups } from "@/drizzle/constants";
 import { staffApplication } from "@/drizzle/schema";
 import {
   deleteStaffApplicationForDelete,
@@ -29,7 +29,6 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import {
-  canApproveApplications,
   canDeleteStaffApplication,
   canViewAllApplications,
   getApprovalGroup,
@@ -59,9 +58,6 @@ export const applicationsRouter = createTRPCRouter({
       // Guards
       const applicationRestriction = getBanOrSilenceRestriction(user);
       if (applicationRestriction) return errorResponse(applicationRestriction);
-      if (!StaffApplicationTargetRoles.includes(input.targetRole)) {
-        return errorResponse("Invalid target role");
-      }
       if (existingRow) {
         return errorResponse("Application already pending");
       }
@@ -110,10 +106,21 @@ export const applicationsRouter = createTRPCRouter({
     .input(listApplicationsInfiniteSchema)
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ?? 0;
-      const limit = input.limit ?? 30;
+      const limit = input.limit;
       const skip = currentCursor * limit;
 
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, usernameIds] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        // Resolve username -> userIds
+        input.username
+          ? selectUserDataForList(ctx.drizzle, { username: input.username }).then(
+              (rows) => rows.map((r) => r.userId),
+            )
+          : Promise.resolve([]),
+      ]);
+      if (input.username && usernameIds.length === 0) {
+        return { data: [], nextCursor: null };
+      }
       const canViewAll = canViewAllApplications(user.role);
 
       // If onlyMine or user cannot view all applications, constrain to self
@@ -127,13 +134,6 @@ export const applicationsRouter = createTRPCRouter({
           : []),
       ];
 
-      // Resolve username -> userIds
-      const usernameIds = input.username
-        ? (await selectUserDataForList(ctx.drizzle, { username: input.username })).map(
-            (r) => r.userId,
-          )
-        : [];
-
       // Fetch with relation and username filter using inArray on applicantUserId
       const results = await listStaffApplicationForList(
         ctx.drizzle,
@@ -146,9 +146,7 @@ export const applicationsRouter = createTRPCRouter({
 
       // Attach current user's vote (if any) to each application
       const enriched = results.map((app) => {
-        const myApproval = Array.isArray(app.approvals)
-          ? app.approvals.find((a) => a.approverUserId === user.userId)
-          : undefined;
+        const myApproval = app.approvals.find((a) => a.approverUserId === user.userId);
         return {
           ...app,
           myVote: myApproval?.state ?? null,
@@ -196,12 +194,11 @@ export const applicationsRouter = createTRPCRouter({
       if (!app) return errorResponse("No application found");
       if (app.state === "APPROVED")
         return errorResponse("Application already approved");
-      if (!canApproveApplications(user.role))
+      const approvalGroup = getApprovalGroup(user.role);
+      if (!approvalGroup)
         return errorResponse("Only approval staff can approve applications");
 
       // Update: record approval (upsert)
-      const approvalGroup = getApprovalGroup(user.role);
-      if (!approvalGroup) return errorResponse("No approval group found for user role");
       await insertStaffApplicationApprovalForApprove(
         ctx.drizzle,
         app,
@@ -239,12 +236,7 @@ export const applicationsRouter = createTRPCRouter({
     }),
 
   reject: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        reason: z.string().min(1).max(2000).optional(),
-      }),
-    )
+    .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -254,12 +246,10 @@ export const applicationsRouter = createTRPCRouter({
       ]);
       // Guards
       if (!app) return errorResponse("No application found");
-      if (!canApproveApplications(user.role))
-        return errorResponse("Only approval staff can reject applications");
-      // Mutate: record rejection (upsert)
       const rejectionGroup = getApprovalGroup(user.role);
       if (!rejectionGroup)
-        return errorResponse("No approval group found for user role");
+        return errorResponse("Only approval staff can reject applications");
+      // Mutate: record rejection (upsert)
       await Promise.all([
         insertStaffApplicationApprovalForReject(ctx.drizzle, app, user, rejectionGroup),
         updateStaffApplicationForReject(ctx.drizzle, app),
