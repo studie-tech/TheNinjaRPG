@@ -15,10 +15,9 @@ import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 
 /**
- * Full-window battle screen: the layout's header, sidebars and phone navigation
- * step aside so the battlefield, both teams, every action and the log fit on one
- * screen without scrolling. Rendered into the document body above the layout;
- * popovers, toasts and the tutorial still open on top of it.
+ * Full-window battlefield, fighters, actions and history above the game layout.
+ * Desktop panels fit the viewport; phones scroll when the field and usable action
+ * space need more height. Popovers, toasts and tutorials can open above this portal.
  */
 export function BattleFocusView({
   battle,
@@ -161,7 +160,7 @@ export function BattleFocusView({
       </aside>
     </div>
   ) : (
-    <div className="flex h-full flex-col gap-[6px] p-[6px]">
+    <div className="flex h-full flex-col gap-[6px] overflow-y-auto overscroll-contain p-[6px]">
       <div className="flex shrink-0 items-center gap-[6px]">{exitButton}</div>
       <div className="shrink-0">{timer}</div>
       <div className="grid shrink-0 grid-cols-2 gap-[6px]">
@@ -175,14 +174,26 @@ export function BattleFocusView({
           />
         )}
       </div>
+      {/* Limit the field's height without distorting its grid on short screens. */}
       <div className="shrink-0">
         <div
-          className={cn(fieldRatio === undefined && "max-h-[50dvh] overflow-y-auto")}
+          className={cn(
+            "mx-auto w-full",
+            fieldRatio === undefined && "max-h-[50dvh] overflow-y-auto",
+          )}
+          style={
+            fieldRatio === undefined
+              ? undefined
+              : { maxWidth: `calc(50dvh / ${fieldRatio})` }
+          }
         >
           {field}
         </div>
       </div>
-      <Tabs defaultValue="actions" className="flex min-h-0 flex-1 flex-col">
+      <Tabs
+        defaultValue="actions"
+        className="flex min-h-[12rem] flex-1 shrink-0 flex-col"
+      >
         <TabsList className="grid w-full shrink-0 grid-cols-3">
           <TabsTrigger value="actions" className="gap-[4px] text-[12px]">
             <Swords className="h-[14px] w-[14px]" aria-hidden />

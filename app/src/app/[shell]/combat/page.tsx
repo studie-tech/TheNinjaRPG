@@ -48,6 +48,7 @@ const Combat = dynamic(loadCombat, {
   loading: () => <Loader explanation="Loading Battlefield" />,
 });
 
+/** Keeps battle state, handover and hotkeys shared between focus and game layouts. */
 export default function CombatPage() {
   // State
   const router = useRouter();
@@ -457,57 +458,60 @@ export default function CombatPage() {
   ]);
 
   /** Focus uses compact icons while retaining action selection and editable hotkeys. */
-  const renderActions = useCallback((focus = false) => {
-    if (!isInBattle || !battle || isAutoCombatActive) return null;
-    return (
-      <div
-        className={cn("flex flex-col gap-1", results && "opacity-50")}
-        inert={!!results}
-      >
-        <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
-        <ActionSelector
-          showInfoIcon={true}
-          items={actions}
-          currentRound={battle.round}
-          className="p-1"
-          showBgColor={true}
-          eagerImages={true}
-          showLabels={!focus && showActionLabels}
-          selectedId={actionId}
-          combatMode={true}
-          userActionPoints={user?.actionPoints}
-          battle={battle}
-          userId={controlledActorId}
-          gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
-          aspectRatioClass={focus ? "aspect-square" : actionAspect}
-          onClick={handleActionClick}
-          hotkeys={hotkeys.byAction}
-          onAssignHotkey={(item) =>
-            setHotkeyTarget({
-              id: item.id,
-              name: item.name,
-              kind: item.type === "item" ? "item" : "jutsu",
-            })
-          }
-        />
-      </div>
-    );
-  }, [
-    userId,
-    isInBattle,
-    battle,
-    isAutoCombatActive,
-    results,
-    actions,
-    showActionLabels,
-    actionId,
-    user?.actionPoints,
-    controlledActorId,
-    actionGridClass,
-    actionAspect,
-    handleActionClick,
-    hotkeys.byAction,
-  ]);
+  const renderActions = useCallback(
+    (focus = false) => {
+      if (!isInBattle || !battle || isAutoCombatActive) return null;
+      return (
+        <div
+          className={cn("flex flex-col gap-1", results && "opacity-50")}
+          inert={!!results}
+        >
+          <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
+          <ActionSelector
+            showInfoIcon={true}
+            items={actions}
+            currentRound={battle.round}
+            className="p-1"
+            showBgColor={true}
+            eagerImages={true}
+            showLabels={!focus && showActionLabels}
+            selectedId={actionId}
+            combatMode={true}
+            userActionPoints={user?.actionPoints}
+            battle={battle}
+            userId={controlledActorId}
+            gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
+            aspectRatioClass={focus ? "aspect-square" : actionAspect}
+            onClick={handleActionClick}
+            hotkeys={hotkeys.byAction}
+            onAssignHotkey={(item) =>
+              setHotkeyTarget({
+                id: item.id,
+                name: item.name,
+                kind: item.type === "item" ? "item" : "jutsu",
+              })
+            }
+          />
+        </div>
+      );
+    },
+    [
+      userId,
+      isInBattle,
+      battle,
+      isAutoCombatActive,
+      results,
+      actions,
+      showActionLabels,
+      actionId,
+      user?.actionPoints,
+      controlledActorId,
+      actionGridClass,
+      actionAspect,
+      handleActionClick,
+      hotkeys.byAction,
+    ],
+  );
 
   const renderTimeline = useCallback(() => {
     if (!config.showTimeline || !battle) return null;
@@ -677,7 +681,7 @@ export default function CombatPage() {
             <>
               {renderActions(true)}
               {actionId && !results && !isAutoCombatActive && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-[11px]">
                   <span className="text-green-700">Green</span>: affected ·{" "}
                   <span className="text-red-500">Red</span>: not affected ·{" "}
                   <span className="text-blue-500">Blue</span>: move
