@@ -2,14 +2,9 @@
 
 import {
   AlertTriangle,
-  ArrowDownToLine,
   CircleDollarSign,
   CircleFadingArrowUp,
-  Cookie,
-  Gem,
-  Merge,
   Shirt,
-  Split,
   Undo2,
   Wrench,
   Zap,
@@ -25,13 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { NumberInput } from "@/components/ui/number-input";
-import {
-  getEquippedInventory,
-  getInventoryQuantities,
-  getSoldInventory,
-} from "@/deltas/item";
 import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
@@ -45,9 +33,7 @@ import type {
   UserItemWithRelations,
   UserItemWithVariants,
 } from "@/drizzle/schema";
-import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useItemActions } from "@/hooks/useItemActions";
-import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -59,17 +45,21 @@ import { LoadoutHotkeysPanel, useHotkeyAssignment } from "@/layout/HotkeyControl
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import { ItemInspector } from "@/layout/items/ItemInspector";
+import {
+  ItemDurabilityRepairActions,
+  RepairModalWrapper,
+} from "@/layout/items/ItemRepair";
+import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import { applyActiveVariant } from "@/libs/combat/util";
-import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
   byItemName,
   calcItemRepairCost,
-  calcItemSellingPrice,
   calcMaxCookingItems,
   calcMaxEventItems,
   calcMaxItems,
@@ -77,25 +67,16 @@ import {
   countsTowardInventoryStorage,
   getInventoryBucket,
   isEquippableUserItem,
-  nonCombatConsume,
-  partitionImbuementsForItemTransfer,
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
-import {
-  finishItemConsumeRequest,
-  getItemConsumeErrorMessage,
-  getItemConsumeInput,
-} from "@/libs/itemConsumption";
 import { gearMissingMastery } from "@/libs/mastery";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
-import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
+import { showMutationToast } from "@/libs/toast";
+import { remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { displayCostType } from "@/validators/item";
 
 /** Carried inventory, equipment loadouts, and item actions across capacity buckets. */
 export default function MyItems() {
@@ -656,232 +637,6 @@ export default function MyItems() {
 }
 
 /**
- * Repair Item Selection Modal Component
- */
-type SetIsOpenType = React.Dispatch<React.SetStateAction<boolean>>;
-
-interface RepairItemModalProps {
-  isOpen: boolean;
-  setIsOpen: SetIsOpenType;
-  targetItem: UserItemWithRelations;
-  repairItems: UserItemWithRelations[];
-  onSelectRepairItem: (repairItemId: string, targetItemId: string) => void;
-  isPending?: boolean;
-}
-
-function RepairItemSelectionModal({
-  isOpen,
-  setIsOpen,
-  targetItem,
-  repairItems,
-  onSelectRepairItem,
-  isPending = false,
-}: RepairItemModalProps) {
-  if (!isOpen || !targetItem) return null;
-
-  return (
-    <Modal
-      title="Select Repair Item"
-      isOpen={isOpen}
-      setIsOpen={setIsOpen}
-      isValid={false}
-    >
-      <div className="space-y-4">
-        <div>
-          <p className="mb-2 text-muted-foreground text-sm">
-            Repairing: <strong>{targetItem.item.name}</strong>
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Durability: {targetItem.durability} / {targetItem.item.maxDurability}
-          </p>
-        </div>
-        {repairItems.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            You don&apos;t have any repair items in your inventory.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {repairItems.map((repairItem) => {
-              const repairEffect = repairItem.item.effects.find(
-                (e) => e.type === "repair",
-              );
-              const repairAmount = Math.floor(repairEffect?.power || 0);
-              const newDurability = Math.min(
-                targetItem.durability + repairAmount,
-                targetItem.item.maxDurability,
-              );
-              const actualRepair = newDurability - targetItem.durability;
-              return (
-                <button
-                  type="button"
-                  key={repairItem.id}
-                  className={`w-full rounded-lg border p-3 text-left transition-colors ${isPending ? "cursor-not-allowed bg-slate-50 opacity-50" : "cursor-pointer hover:bg-slate-100"}`}
-                  disabled={isPending}
-                  onClick={() => {
-                    if (!isPending) {
-                      onSelectRepairItem(repairItem.id, targetItem.id);
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-3">
-                    <ContentImage
-                      image={repairItem.item.image}
-                      alt={repairItem.item.name}
-                      className="h-12 w-12"
-                    />
-                    <div className="flex-1">
-                      <h4 className="font-semibold">{repairItem.item.name}</h4>
-                      <p className="text-muted-foreground text-sm">
-                        Quantity: {repairItem.quantity}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      {isPending ? (
-                        <p className="font-medium text-muted-foreground text-sm">
-                          Repairing
-                        </p>
-                      ) : (
-                        <>
-                          <p className="font-medium text-green-600 text-sm">
-                            +{actualRepair} Durability
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {targetItem.durability} → {newDurability} /{" "}
-                            {targetItem.item.maxDurability}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-/**
- * Shared Repair Modal Wrapper Component
- * Handles the repair item selection modal with mutation logic
- */
-interface RepairModalWrapperProps {
-  useritem: UserItemWithRelations | undefined;
-  repairItems: UserItemWithRelations[];
-  isRepairModalOpen: boolean;
-  setIsRepairModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  onRepairItem: (params: { repairItemId: string; targetItemId: string }) => void;
-  isPending?: boolean;
-}
-
-function RepairModalWrapper({
-  useritem,
-  repairItems,
-  isRepairModalOpen,
-  setIsRepairModalOpen,
-  onRepairItem,
-  isPending = false,
-}: RepairModalWrapperProps) {
-  if (!useritem) return null;
-
-  return (
-    <RepairItemSelectionModal
-      isOpen={isRepairModalOpen}
-      setIsOpen={setIsRepairModalOpen}
-      targetItem={useritem}
-      repairItems={repairItems}
-      onSelectRepairItem={(repairItemId, targetItemId) => {
-        onRepairItem({
-          repairItemId,
-          targetItemId,
-        });
-      }}
-      isPending={isPending}
-    />
-  );
-}
-
-/**
- * Shared per-item durability repair actions (kit + ryo).
- * Used by both Backpack and Character item-details modals.
- */
-interface ItemDurabilityRepairActionsProps {
-  useritem: UserItemWithRelations;
-  userData: NonNullable<UserWithRelations>;
-  repairItemsCount: number;
-  onOpenRepairModal: () => void;
-  onRepairWithRyo: (userItemId: string) => void;
-  isRepairingWithRyo?: boolean;
-}
-
-function ItemDurabilityRepairActions({
-  useritem,
-  userData,
-  repairItemsCount,
-  onOpenRepairModal,
-  onRepairWithRyo,
-  isRepairingWithRyo = false,
-}: ItemDurabilityRepairActionsProps) {
-  if (
-    useritem.item.itemType === "FURNITURE" ||
-    useritem.durability >= useritem.item.maxDurability ||
-    useritem.item.maxDurability <= 0
-  ) {
-    return null;
-  }
-
-  const isCrafter = userData.occupation === "CRAFTING";
-  const ryoRepairCost = calcItemRepairCost(useritem);
-  const canAffordItemRyoRepair = userData.money >= ryoRepairCost;
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        onClick={onOpenRepairModal}
-        disabled={repairItemsCount === 0}
-      >
-        <Wrench className="mr-2 h-5 w-5" />
-        Use Repair Item
-      </Button>
-      {isCrafter && (
-        <Confirm
-          title="Repair with Ryo"
-          proceed_label={
-            canAffordItemRyoRepair && !isRepairingWithRyo
-              ? `Repair for ${ryoRepairCost.toLocaleString()} ryo`
-              : null
-          }
-          isValid={canAffordItemRyoRepair && !isRepairingWithRyo}
-          button={
-            <Button variant="outline" disabled={isRepairingWithRyo}>
-              <CircleDollarSign className="mr-2 h-5 w-5" />
-              Repair with Ryo
-            </Button>
-          }
-          onAccept={(e) => {
-            e.preventDefault();
-            onRepairWithRyo(useritem.id);
-          }}
-        >
-          <p>
-            Repair <strong>{useritem.item.name}</strong> for{" "}
-            <strong>{ryoRepairCost.toLocaleString()} ryo</strong>?
-            {!canAffordItemRyoRepair && (
-              <span className="mt-2 block text-red-600">
-                You only have {userData.money.toLocaleString()} ryo.
-              </span>
-            )}
-          </p>
-        </Confirm>
-      )}
-    </>
-  );
-}
-
-/**
  * Backpack Screen
  */
 interface BackpackProps {
@@ -896,60 +651,14 @@ interface BackpackProps {
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
   const { useritems, allUserItems, userData } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // State
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
     undefined,
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
-  const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
-  const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
-  const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
-    undefined,
-  );
-
-  const {
-    merge,
-    consume,
-    sell,
-    equip,
-    splitStack,
-    repairWithKit: mutateRepairItem,
-    repairWithRyo: mutateRepairWithRyo,
-    evolve: evolveItem,
-    removeImbuement,
-    isPending: isLoading,
-    isMerging,
-    isConsuming,
-    isSelling,
-    isEquipping,
-    isEvolving,
-    isSplitting,
-    isUsingRepairItem,
-    isRepairingWithRyo,
-  } = useItemActions({
-    userData,
-    useritem,
-    onDone: () => {
-      setIsOpen(false);
-      setUserItem(undefined);
-      setIsSplitDialogOpen(false);
-      setQuantityToKeep(Number.NaN);
-      setIsRepairModalOpen(false);
-    },
-  });
-
-  const { data: availableEvolutions } = api.item.getEvolutions.useQuery(
-    { itemId: useritem?.itemId ?? "" },
-    { enabled: !!useritem?.itemId && isOpen, staleTime: 5 * 60 * 1000 },
-  );
 
   // Derived
-  const structures = userData?.village?.structures;
-  const isMeal = useritem?.item.itemType === "MEAL";
-  const canEatMeal = !isLoading && userData.status === "AWAKE" && !userData.battleId;
   const items = useritems
     ?.map((useritem) => ({
       ...applyActiveVariant(useritem as UserItemWithVariants),
@@ -957,25 +666,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     }))
     .sort(byItemName);
   const itemBadges = userItemActionBadges(useritems);
-  const sellPrice = calcItemSellingPrice(userData, useritem, structures);
-  const repairItems = getRepairKits(allUserItems, userData).map(
-    ({ userItem }) => userItem,
-  );
-
-  // Split stack handler
-  const handleSplitStack = () => {
-    if (!useritem) return;
-    const quantity = quantityToKeep;
-    if (
-      !Number.isInteger(quantity) ||
-      quantity < 1 ||
-      quantity >= useritem.quantity ||
-      !useritem.item.canStack
-    ) {
-      return;
-    }
-    splitStack({ userItemId: useritem.id, quantityToKeep: quantity });
-  };
 
   return (
     <>
@@ -1008,377 +698,17 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           isValid={false}
-          isLoading={isMeal && isLoading}
-          footerClassName={
-            isMeal
-              ? "flex-row items-center justify-between gap-2 sm:justify-between"
-              : undefined
-          }
-          footerExtra={
-            // Explain replacement when confirming a meal, keeping inventory controls compact.
-            isMeal && (
-              <Confirm
-                title={`Eat ${useritem.item.name}?`}
-                proceed_label="Eat meal"
-                proceed_loading_label="Eating…"
-                disabled={isLoading}
-                confirmDisabled={!canEatMeal}
-                isLoading={isConsuming}
-                keepOpenOnAccept
-                button={
-                  <Button variant="info" disabled={isLoading}>
-                    <Cookie className="mr-2 h-5 w-5" />
-                    Eat meal
-                  </Button>
-                }
-                onAccept={() => consume(getItemConsumeInput(userData.userId, useritem))}
-              >
-                <p>
-                  Eat one <b>{useritem.item.name}</b>? Its effect lasts{" "}
-                  {useritem.item.mealDurationSeconds} seconds.
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  Eating the same meal extends its duration; another meal replaces it.
-                  You must be awake and out of combat.
-                </p>
-              </Confirm>
-            )
-          }
         >
-          <div>
-            {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
-              <p>
-                - Need{" "}
-                {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)} XP
-                more to level
-              </p>
-            )}
-          </div>
-          <ItemWithEffects
-            item={{
-              ...applyActiveVariant(useritem as UserItemWithVariants),
-              imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
-              curDurability: useritem.durability,
-              level: useritem.level,
-              experience: useritem.experience,
+          <ItemInspector
+            userItem={useritem}
+            allUserItems={allUserItems}
+            userData={userData}
+            onClose={() => {
+              setIsOpen(false);
+              setUserItem(undefined);
             }}
-            key={useritem.id}
-            showStatistic="item"
-            showEvolutions
           />
-          {!useritem.item.canBeImbued &&
-            useritem.equipped === "NONE" &&
-            useritem.imbuements.some(
-              (imbuement) =>
-                !imbuement.craftingFinishedAt ||
-                new Date(imbuement.craftingFinishedAt) <= new Date(),
-            ) && (
-              <div className="mb-2 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-                <p className="text-destructive text-sm">
-                  Imbuing is disabled on this item. Remove imbuements to return the
-                  crystals to your inventory.
-                </p>
-                {useritem.imbuements
-                  .filter(
-                    (imbuement) =>
-                      !imbuement.craftingFinishedAt ||
-                      new Date(imbuement.craftingFinishedAt) <= new Date(),
-                  )
-                  .map((imbuement) => (
-                    <Confirm
-                      key={imbuement.id}
-                      title="Remove Imbuement"
-                      proceed_label="Remove & Return Crystal"
-                      button={
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={isLoading}
-                          className="w-full justify-start"
-                        >
-                          <Gem className="mr-2 h-4 w-4" />
-                          Remove {imbuement.item.name}
-                        </Button>
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        removeImbuement({ userItemImbuementId: imbuement.id });
-                      }}
-                    >
-                      <p>
-                        Remove <b>{imbuement.item.name}</b> from{" "}
-                        <b>{useritem.item.name}</b>? The crystal will be returned to
-                        your inventory.
-                      </p>
-                    </Confirm>
-                  ))}
-              </div>
-            )}
-          {!isLoading && (
-            <div className="flex flex-row flex-wrap items-center gap-2">
-              {useritem.equipped === "NONE" &&
-                useritem.item.itemType !== "FURNITURE" &&
-                useritem.item.itemType !== "MEAL" && (
-                  <Button
-                    variant="info"
-                    onClick={() => equip({ userItemId: useritem.id })}
-                  >
-                    <Shirt className="mr-2 h-5 w-5" />
-                    Equip
-                  </Button>
-                )}
-              {useritem.item.canStack && (
-                <>
-                  <Button
-                    variant={isMeal ? "outline" : "info"}
-                    onClick={() => merge({ itemId: useritem.itemId })}
-                  >
-                    <Merge className="mr-2 h-5 w-5" />
-                    Merge Stacks
-                  </Button>
-                  {useritem.quantity > 1 && (
-                    <Button
-                      variant={isMeal ? "outline" : "info"}
-                      onClick={() => {
-                        setIsSplitDialogOpen(true);
-                        setQuantityToKeep(Number.NaN);
-                      }}
-                    >
-                      <Split className="mr-2 h-5 w-5" />
-                      Split Stack
-                    </Button>
-                  )}
-                </>
-              )}
-              {!isMeal && nonCombatConsume(useritem.item, userData) && (
-                <Button
-                  variant="info"
-                  disabled={isConsuming}
-                  onClick={() =>
-                    consume(getItemConsumeInput(userData.userId, useritem))
-                  }
-                >
-                  <Cookie className="mr-2 h-5 w-5" />
-                  Consume
-                </Button>
-              )}
-              <ItemDurabilityRepairActions
-                useritem={useritem}
-                userData={userData}
-                repairItemsCount={repairItems.length}
-                onOpenRepairModal={() => setIsRepairModalOpen(true)}
-                onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
-                isRepairingWithRyo={isRepairingWithRyo}
-              />
-              {((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0 && (
-                <Button
-                  variant="info"
-                  onClick={() => {
-                    const withVariants = useritem as UserItemWithVariants;
-                    if (withVariants.item.variants?.length) {
-                      setVariantItem(withVariants);
-                    }
-                  }}
-                >
-                  Variants
-                </Button>
-              )}
-              {availableEvolutions?.map((evo) => {
-                const isStillCrafting =
-                  !!useritem.craftingFinishedAt &&
-                  useritem.craftingFinishedAt > new Date();
-                const { remove: imbuementsLost } = partitionImbuementsForItemTransfer(
-                  useritem.imbuements,
-                  evo,
-                );
-                const canEvolve =
-                  userData.status === "AWAKE" &&
-                  useritem.level >= ITEM_LEVEL_CAP &&
-                  useritem.quantity === 1 &&
-                  !useritem.isInAuction &&
-                  !isStillCrafting &&
-                  meetsEvolutionStatRequirements(evo, userData) &&
-                  hasRequiredLevel(userData.level, evo.requiredLevel) &&
-                  (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
-                return (
-                  <Confirm
-                    key={evo.id}
-                    title={`Evolve to ${evo.name}`}
-                    confirmDisabled={!canEvolve}
-                    button={
-                      <Button
-                        id={`evolve-${evo.id}`}
-                        variant="secondary"
-                        disabled={isLoading}
-                      >
-                        <CircleFadingArrowUp className="mr-2 h-5 w-5" />
-                        Evolve
-                      </Button>
-                    }
-                    onAccept={(e) => {
-                      e.preventDefault();
-                      if (!canEvolve) return;
-                      evolveItem({
-                        userItemId: useritem.id,
-                        evolutionItemId: evo.id,
-                      });
-                    }}
-                  >
-                    <p>
-                      Evolve <b>{useritem.item.name}</b> into <b>{evo.name}</b>?
-                    </p>
-                    <p className="mt-2 text-muted-foreground text-sm">
-                      This replaces your current item. The evolved item starts at level
-                      1 and can be leveled to {ITEM_LEVEL_CAP} through PvP. Durability
-                      is capped to the new item&apos;s max.
-                    </p>
-                    {imbuementsLost.length > 0 && (
-                      <p className="text-destructive text-sm">
-                        Warning: the following imbuement
-                        {imbuementsLost.length === 1 ? "" : "s"} cannot transfer to this
-                        evolution and will be removed:{" "}
-                        <b>
-                          {imbuementsLost
-                            .map((imb) => imb.item?.name ?? "Unknown crystal")
-                            .join(", ")}
-                        </b>
-                      </p>
-                    )}
-                    {userData.status !== "AWAKE" && (
-                      <p className="text-destructive text-sm">
-                        Must be awake to evolve an item (current:{" "}
-                        {userData.status.toLowerCase()}).
-                      </p>
-                    )}
-                    {useritem.level < ITEM_LEVEL_CAP && (
-                      <p className="text-destructive text-sm">
-                        Required Item Level: <b>{ITEM_LEVEL_CAP}</b> (current:{" "}
-                        {useritem.level})
-                      </p>
-                    )}
-                    {useritem.quantity !== 1 && (
-                      <p className="text-destructive text-sm">
-                        Split the stack to a single item before evolving.
-                      </p>
-                    )}
-                    {isStillCrafting && (
-                      <p className="text-destructive text-sm">
-                        Cannot evolve an item that is still crafting.
-                      </p>
-                    )}
-                    {evo.requiredLevel > 1 && (
-                      <p className="text-sm">
-                        Required Character Level: <b>{evo.requiredLevel}</b>
-                      </p>
-                    )}
-                  </Confirm>
-                );
-              })}
-              <div className="grow"></div>
-              <Confirm
-                title="Security Confirmation"
-                proceed_label="Submit"
-                button={
-                  useritem.item.isEventItem || !useritem.item.inShop ? (
-                    <Button id="sell" variant="destructive">
-                      <ArrowDownToLine className="mr-2 h-5 w-5" />
-                      Drop Item
-                    </Button>
-                  ) : (
-                    <Button id="sell" variant="destructive">
-                      <CircleDollarSign className="mr-2 h-5 w-5" />
-                      Sell Item [{Math.floor(sellPrice)} ryo]
-                    </Button>
-                  )
-                }
-                onAccept={() => sell({ userItemId: useritem.id })}
-              >
-                Are you absolutely sure you wish to remove this item from your
-                inventory?
-              </Confirm>
-            </div>
-          )}
-          {isMerging && <Loader explanation="Merging" />}
-          {isConsuming && <Loader explanation="Using" />}
-          {isSelling && <Loader explanation="Selling" />}
-          {isEquipping && <Loader explanation="Equipping" />}
-          {isEvolving && <Loader explanation="Evolving" />}
-          {isRepairingWithRyo && <Loader explanation="Repairing" />}
         </Modal>
-      )}
-      {isSplitDialogOpen && useritem && (
-        <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Split Stack</DialogTitle>
-              <DialogDescription>
-                How many items do you want to keep in this stack? The rest will be moved
-                to a new stack.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="quantity">Quantity to Keep</Label>
-              <NumberInput
-                id="quantity"
-                min="1"
-                max={useritem.quantity - 1}
-                value={quantityToKeep}
-                onValueChange={setQuantityToKeep}
-                placeholder={`1-${useritem.quantity - 1}`}
-                className="mt-2"
-              />
-              <p className="mt-2 text-muted-foreground text-sm">
-                Current stack: {useritem.quantity} items
-              </p>
-              {Number.isInteger(quantityToKeep) && quantityToKeep > 0 && (
-                <p className="mt-1 text-muted-foreground text-sm">
-                  New stack will have: {useritem.quantity - quantityToKeep} items
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsSplitDialogOpen(false);
-                  setQuantityToKeep(Number.NaN);
-                }}
-                disabled={isSplitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSplitStack}
-                disabled={
-                  isSplitting ||
-                  !quantityToKeep ||
-                  !Number.isInteger(quantityToKeep) ||
-                  quantityToKeep < 1 ||
-                  quantityToKeep >= useritem.quantity
-                }
-              >
-                {isSplitting ? "Splitting" : "Split Stack"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-      {/* Repair Item Selection Modal */}
-      <RepairModalWrapper
-        useritem={useritem}
-        repairItems={repairItems}
-        isRepairModalOpen={isRepairModalOpen}
-        setIsRepairModalOpen={setIsRepairModalOpen}
-        onRepairItem={mutateRepairItem}
-        isPending={isUsingRepairItem}
-      />
-      {/* Variant Modal */}
-      {variantItem && (
-        <ItemVariantModal
-          userItem={variantItem}
-          allUserItems={allUserItems}
-          onClose={() => setVariantItem(undefined)}
-        />
       )}
     </>
   );
@@ -1735,227 +1065,6 @@ const Equip: React.FC<EquipProps> = (props) => {
         <p className="opacity-100">{props.txt}</p>
       )}
     </button>
-  );
-};
-
-/**
- * Variant Modal for browsing, purchasing, and selecting item variants
- */
-interface ItemVariantModalProps {
-  userItem: UserItemWithVariants;
-  allUserItems: UserItemWithRelations[] | undefined;
-  onClose: () => void;
-}
-
-const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
-  userItem,
-  allUserItems,
-  onClose,
-}) => {
-  const utils = api.useUtils();
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
-  const [isOpen, setIsOpen] = useState(true);
-  const variants = userItem.item.variants ?? [];
-  const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
-    enabled: variants.some((variant) => Boolean(variant.requiredItemId)),
-  });
-
-  const { data: unlockedVariants } = api.item.getUserUnlockedVariants.useQuery({
-    itemId: userItem.item.id,
-  });
-  // Until the unlock list resolves, unlockedIds is empty — gate locked actions on
-  // this so an already-owned variant never briefly renders a Buy / Use Token button.
-  const unlockStatusLoaded = unlockedVariants !== undefined;
-  const unlockedIds = new Set(unlockedVariants?.map((u) => u.variantId) ?? []);
-
-  // Match the server's carried, non-auctioned and finished-crafting checks.
-  const variantTokens =
-    allUserItems?.filter(
-      (ui) =>
-        isEquippableUserItem(ui) &&
-        ui.item.effects.some((e) => e.type === "unlockitemvariant"),
-    ) ?? [];
-
-  const purchase = api.item.purchaseVariant.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _variables, revision) => {
-      showMutationToast(result);
-      if (result.success) {
-        await Promise.all([
-          utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          updateUser(undefined, { revision, delta: result.userDelta }),
-        ]);
-      }
-    },
-  });
-
-  const consumeToken = api.item.consumeVariantToken.useMutation({
-    onSuccess: async (result) => {
-      showMutationToast(result);
-      if (result.success) {
-        setIsOpen(false);
-        onClose();
-        await Promise.all([
-          utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          utils.item.getUserItemsWithVariants.invalidate(),
-        ]);
-      }
-    },
-  });
-
-  const select = api.item.selectVariant.useMutation({
-    onSuccess: async (result) => {
-      showMutationToast(result);
-      if (result.success) {
-        // One selection changes inventory labels, the profile preview and the public sector recipe.
-        await Promise.all([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.profile.getUser.invalidate(),
-          utils.travel.getSectorData.invalidate(),
-        ]);
-        setIsOpen(false);
-        onClose();
-      }
-    },
-  });
-
-  const activeVariantId = userItem.activeVariantId;
-
-  const handleClose: React.Dispatch<React.SetStateAction<boolean>> = (value) => {
-    const nextOpen = typeof value === "function" ? value(isOpen) : value;
-    setIsOpen(nextOpen);
-    if (!nextOpen) onClose();
-  };
-
-  return (
-    <Modal
-      title={`Variants — ${userItem.item.name}`}
-      isOpen={isOpen}
-      setIsOpen={handleClose}
-      isValid={false}
-    >
-      <p className="mb-4 text-muted-foreground text-sm">
-        Purchase and select a variant to change how this item appears.
-      </p>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {/* Base look */}
-        <button
-          type="button"
-          className={`cursor-pointer rounded border p-2 ${!activeVariantId ? "ring-2 ring-primary" : ""}`}
-          onClick={() => select.mutate({ userItemId: userItem.id, variantId: null })}
-        >
-          <Image
-            src={userItem.item.image}
-            alt="Base"
-            width={80}
-            height={80}
-            className="mx-auto rounded"
-          />
-          <p className="mt-1 text-center font-medium text-xs">Base (Free)</p>
-          {!activeVariantId && (
-            <p className="text-center text-primary text-xs">Active</p>
-          )}
-        </button>
-
-        {variants.map((v) => {
-          const isUnlocked = unlockedIds.has(v.id);
-          const isActive = activeVariantId === v.id;
-          const needsToken = v.costType === "VARIANT_TOKEN";
-          const matchingToken = variantTokens.find(
-            (token) =>
-              (!v.requiredItemId || token.item.id === v.requiredItemId) &&
-              token.item.effects.some(
-                (effect) =>
-                  effect.type === "unlockitemvariant" &&
-                  (!effect.variantId || effect.variantId === v.id),
-              ),
-          );
-          const tokenActionLabel = matchingToken
-            ? `Use ${matchingToken.item.name}`
-            : `Need ${itemNames?.find((entry) => entry.id === v.requiredItemId)?.name ?? "compatible token"}`;
-          // Preview the same discounted prestige amount guarded and charged by the server.
-          const purchaseCost =
-            v.costType === "VILLAGE_PRESTIGE" && userData
-              ? getVillageLoyaltyShopCost(v.cost, userData)
-              : v.cost;
-
-          return (
-            <div
-              key={v.id}
-              className={`rounded border p-2 ${isActive ? "ring-2 ring-primary" : ""} ${!isUnlocked ? "opacity-60" : "cursor-pointer"}`}
-            >
-              <Image
-                src={v.image}
-                alt={v.name}
-                width={80}
-                height={80}
-                className="mx-auto rounded"
-              />
-              <p className="mt-1 text-center font-medium text-xs">{v.name}</p>
-              {v.description && (
-                <div
-                  className="mt-0.5 text-center text-muted-foreground text-xs"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: content is sanitized server-side before storage
-                  dangerouslySetInnerHTML={{ __html: v.description }}
-                />
-              )}
-
-              {isUnlocked ? (
-                isActive ? (
-                  <p className="text-center text-primary text-xs">Active</p>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-1 w-full"
-                    onClick={() =>
-                      select.mutate({ userItemId: userItem.id, variantId: v.id })
-                    }
-                    disabled={select.isPending}
-                  >
-                    Select
-                  </Button>
-                )
-              ) : !unlockStatusLoaded ? (
-                <Button size="sm" variant="outline" className="mt-1 w-full" disabled>
-                  …
-                </Button>
-              ) : needsToken ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-1 w-full"
-                  disabled={!matchingToken || consumeToken.isPending}
-                  onClick={() => {
-                    const token = matchingToken;
-                    if (token) {
-                      consumeToken.mutate({
-                        tokenUserItemId: token.id,
-                        variantId: v.id,
-                      });
-                    }
-                  }}
-                >
-                  <span className="min-w-0 truncate" title={tokenActionLabel}>
-                    {tokenActionLabel}
-                  </span>
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-1 w-full"
-                  onClick={() => purchase.mutate({ variantId: v.id })}
-                  disabled={purchase.isPending}
-                >
-                  {`Buy: ${purchaseCost.toLocaleString()} ${displayCostType(v.costType)}`}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Modal>
   );
 };
 
