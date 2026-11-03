@@ -343,7 +343,7 @@ describeWithDatabase("auction bid atomicity", () => {
     const state = await saved();
     expect(state.listing.status).toBe("SOLD");
     expect(state.users.rival?.bank).toBe(1000);
-    expect(state.users.seller?.bank).toBe(1050);
+    expect(state.users.seller?.bank).toBe(1045);
     expect(state.bids).toHaveLength(1);
     expect(state.bids[0]).toMatchObject({ amount: 50, status: "WON" });
   });
@@ -409,7 +409,7 @@ describeWithDatabase("auction bid atomicity", () => {
     const state = await saved();
     expect(state.listing.status).toBe("SOLD");
     expect(state.users.bidder?.bank).toBe(950);
-    expect(state.users.seller?.bank).toBe(1100);
+    expect(state.users.seller?.bank).toBe(1090);
     expect(state.bids[0]).toMatchObject({ amount: 100, status: "WON" });
   });
 

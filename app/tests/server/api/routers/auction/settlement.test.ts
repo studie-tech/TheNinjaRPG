@@ -50,14 +50,14 @@ describeWithDatabase("auction settlement", () => {
       ]);
       expect(results.filter((result) => result.success)).toHaveLength(1);
       expect(results.filter((result) => !result.success)).toHaveLength(1);
-      expect(await balances(balance)).toEqual({ seller: 1100, winner: 900, loser: 1000 });
+      expect(await balances(balance)).toEqual({ seller: 1090, winner: 900, loser: 1000 });
       expect((await db.select().from(auctionListing))[0]).toMatchObject({ status: "SOLD", buyerId: "winner" });
       expect((await db.select().from(userItem))[0]).toMatchObject({ userId: "winner", isInAuction: false, activeVariantId: null, storedAtHome: false, homeX: null, homeY: null, homeRotation: 0 });
       expect((await db.select().from(auctionBid).where(eq(auctionBid.id, "winning-bid")))[0]?.status).toBe("WON");
       expect((await db.select().from(auctionBid).where(eq(auctionBid.id, "losing-bid")))[0]?.status).toBe("REFUNDED");
       expect(queuePush).toHaveBeenCalledTimes(1);
       expect((await completeAuctionInternal(db, "auction")).success).toBe(false);
-      expect(await balances(balance)).toEqual({ seller: 1100, winner: 900, loser: 1000 });
+      expect(await balances(balance)).toEqual({ seller: 1090, winner: 900, loser: 1000 });
     });
 
     it(`settles a single bid using one guarded statement in ${currency}`, async () => {
@@ -68,9 +68,45 @@ describeWithDatabase("auction settlement", () => {
       expect(recorded.result.success).toBe(true);
       expect(recorded.statements.filter((statement) => /^\s*UPDATE/i.test(statement))).toHaveLength(1);
       expect(recorded.statements.some((statement) => /^(begin|start transaction)/i.test(statement.trim()))).toBe(false);
-      expect(await balances(balance)).toEqual({ seller: 1100, winner: 900, loser: 930 });
+      expect(await balances(balance)).toEqual({ seller: 1090, winner: 900, loser: 930 });
       expect((await db.select().from(userItem))[0]).toMatchObject({ userId: "winner", isInAuction: false, activeVariantId: null, storedAtHome: false });
       expect(queuePush).toHaveBeenCalledTimes(1);
+    });
+
+    for (const withRefunds of [false, true]) {
+      it.each([[19, 17], [99, 89], [1000, 900]])(`rounds down the ${currency} seller payout with refunds=${withRefunds} at %i`, async (amount, payout) => {
+        await seedAuction(currency);
+        const db = await getTestDatabase();
+        await db.update(auctionBid).set({ amount }).where(eq(auctionBid.id, "winning-bid"));
+        if (withRefunds) {
+          await db.update(auctionBid).set({ amount: 1 }).where(eq(auctionBid.id, "losing-bid"));
+        } else {
+          await db.delete(auctionBid).where(eq(auctionBid.id, "losing-bid"));
+        }
+        expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
+        expect(await balances(balance)).toEqual({ seller: 1000 + payout!, winner: 900, loser: withRefunds ? 931 : 930 });
+        expect((await db.select().from(auctionBid).where(eq(auctionBid.id, "winning-bid")))[0]).toMatchObject({ amount, status: "WON" });
+      });
+    }
+
+    it(`settles a one-unit ${currency} sale with zero seller proceeds`, async () => {
+      await seedAuction(currency);
+      const db = await getTestDatabase();
+      await db.delete(auctionBid).where(eq(auctionBid.id, "losing-bid"));
+      await db.update(auctionBid).set({ amount: 1 }).where(eq(auctionBid.id, "winning-bid"));
+      expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
+      expect(await balances(balance)).toEqual({ seller: 1000, winner: 900, loser: 930 });
+      expect((await db.select().from(userItem))[0]).toMatchObject({ userId: "winner", isInAuction: false });
+    });
+
+    it(`taxes a direct ${currency} buyout without changing the buyer charge`, async () => {
+      await seedAuction(currency, false, false);
+      const db = await getTestDatabase();
+      await db.update(auctionListing).set({ listingType: "DIRECT", targetUserId: "winner", buyoutPrice: 99 }).where(eq(auctionListing.id, "auction"));
+      const buyer = await callerFor(auctionRouter, "winner");
+      expect((await buyer.placeBid({ auctionId: "auction", amount: 99 })).success).toBe(true);
+      expect(await balances(balance)).toEqual({ seller: 1089, winner: 801, loser: 930 });
+      expect((await db.select().from(auctionListing))[0]).toMatchObject({ currentPrice: 99, status: "SOLD", buyerId: "winner" });
     });
 
     it(`rolls back a first-bid buyout INSERT, debit and log when ${currency} delivery fails`, async () => {
@@ -94,7 +130,7 @@ describeWithDatabase("auction settlement", () => {
       const recorded = await recordQueries(() => buyer.placeBid({ auctionId: "auction", amount: 150 }));
       expect(recorded.result.success).toBe(true);
       expect(recorded.statements.some((statement) => /^(begin|start transaction)/i.test(statement.trim()))).toBe(true);
-      expect(await balances(balance)).toEqual({ seller: 1150, winner: 750, loser: 930 });
+      expect(await balances(balance)).toEqual({ seller: 1135, winner: 750, loser: 930 });
       expect((await db.select().from(auctionListing))[0]).toMatchObject({ status: "SOLD", buyerId: "winner" });
       expect((await db.select().from(auctionBid))[0]).toMatchObject({ amount: 150, status: "WON" });
       expect(queuePush).toHaveBeenCalledTimes(1);
@@ -125,7 +161,7 @@ describeWithDatabase("auction settlement", () => {
       expect(results.filter((result) => result.success)).toHaveLength(1);
       const [listing] = await db.select().from(auctionListing);
       expect(listing?.status).toBe("SOLD");
-      expect(await balances(balance)).toEqual({ seller: 1000 + listing!.currentPrice, winner: 1000 - listing!.currentPrice, loser: 930 });
+      expect(await balances(balance)).toEqual({ seller: 1000 + Math.floor(listing!.currentPrice * 90 / 100), winner: 1000 - listing!.currentPrice, loser: 930 });
       expect(queuePush).toHaveBeenCalledTimes(1);
     });
 
@@ -145,7 +181,7 @@ describeWithDatabase("auction settlement", () => {
       expect((await db.select().from(auctionBid)).every((bid) => bid.status === "ACTIVE")).toBe(true);
       expect(queuePush).not.toHaveBeenCalled();
       expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
-      expect(await balances(balance)).toEqual({ seller: 1100, winner: 900, loser: 1000 });
+      expect(await balances(balance)).toEqual({ seller: 1090, winner: 900, loser: 1000 });
     });
 
     it(`rolls back the buyout debit, bid and log if ${currency} delivery fails`, async () => {
@@ -189,8 +225,8 @@ describeWithDatabase("auction settlement", () => {
       const [listing] = await db.select().from(auctionListing);
       expect(listing?.status).toBe("SOLD");
       expect(await balances(balance)).toEqual(listing?.buyerId === "winner"
-        ? { seller: 1150, winner: 850, loser: 1000 }
-        : { seller: 1180, winner: 1000, loser: 820 });
+        ? { seller: 1135, winner: 850, loser: 1000 }
+        : { seller: 1162, winner: 1000, loser: 820 });
       expect(queuePush).toHaveBeenCalledTimes(1);
     });
 
@@ -203,7 +239,7 @@ describeWithDatabase("auction settlement", () => {
         completeAuctionInternal(db, "auction"),
       ]);
       expect(results.filter((result) => result.success)).toHaveLength(1);
-      expect(await balances(balance)).toEqual({ seller: 1150, winner: 900, loser: 1000 });
+      expect(await balances(balance)).toEqual({ seller: 1135, winner: 900, loser: 1000 });
       expect(queuePush).toHaveBeenCalledTimes(1);
     });
   }
@@ -313,7 +349,7 @@ describeWithDatabase("auction settlement", () => {
     await insertUsers([{ userId: "refund-74", username: "Refund74", bank: 0 }]);
     expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
     const delivered = await balances("bank");
-    expect(delivered.seller).toBe(1100);
+    expect(delivered.seller).toBe(1090);
     for (let index = 0; index < 75; index++) expect(delivered[`refund-${index}`]).toBe(index + 1);
     expect(queuePush).toHaveBeenCalledTimes(1);
   });
@@ -355,7 +391,7 @@ describeWithDatabase("auction settlement", () => {
     });
     expect((await completeAuctionInternal(retrying, "auction")).success).toBe(true);
     expect(attempts).toBe(2);
-    expect(await balances("bank")).toEqual({ seller: 1100, winner: 900, loser: 1000 });
+    expect(await balances("bank")).toEqual({ seller: 1090, winner: 900, loser: 1000 });
     expect(queuePush).toHaveBeenCalledTimes(1);
   });
 
@@ -368,7 +404,7 @@ describeWithDatabase("auction settlement", () => {
     }]));
     const buyer = callerForDatabase(auctionRouter, "loser", expired);
     expect((await buyer.placeBid({ auctionId: "auction", amount: 150 })).success).toBe(false);
-    expect(await balances("bank")).toEqual({ seller: 1100, winner: 900, loser: 1000 });
+    expect(await balances("bank")).toEqual({ seller: 1090, winner: 900, loser: 1000 });
     expect((await db.select().from(auctionListing))[0]).toMatchObject({ status: "SOLD", buyerId: "winner" });
     expect(queuePush).toHaveBeenCalledTimes(1);
   });

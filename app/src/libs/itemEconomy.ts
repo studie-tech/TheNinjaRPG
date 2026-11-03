@@ -1,6 +1,13 @@
-import type { TradeableCurrencyType } from "@/drizzle/constants";
+import {
+  AUCTION_SALES_TAX_PERCENT,
+  type TradeableCurrencyType,
+} from "@/drizzle/constants";
 import type { Item, ItemPurchaseCounter } from "@/drizzle/schema";
 import { getItemPurchasePeriodStart } from "@/utils/time";
+
+/** Net seller credit for auction and direct sales in either currency, rounded down. */
+export const getAuctionSellerPayout = (salePrice: number) =>
+  Math.floor((salePrice * (100 - AUCTION_SALES_TAX_PERCENT)) / 100);
 
 export const getAuctionPriceError = (
   item: Pick<Item, "canBeTraded" | "auctionMinPrice" | "auctionMaxPrice">,
