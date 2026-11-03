@@ -36,6 +36,7 @@ import {
   fetchPublicQuestLocations,
   validateMapLocationTiles,
 } from "@/server/utils/mapLocations";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   buildSectorWindowLayout,
   fetchPublishedSectorMaps,
@@ -308,7 +309,8 @@ export const worldMapRouter = createTRPCRouter({
           now,
           ctx,
         );
-      } catch {
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
         return errorResponse(
           "A newer version was saved at the same time. Please reload and try again.",
         );
@@ -394,7 +396,8 @@ export const worldMapRouter = createTRPCRouter({
           ctx,
           input,
         );
-      } catch {
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
         return errorResponse(
           "Another version was published at the same time. Please retry.",
         );
