@@ -38,11 +38,7 @@ export const BattleHistoryTable = ({
     .flatMap((page) => page.data)
     .map((entry) => ({
       id: String(entry.id),
-      attackerUsername: entry.attacker?.username || "Deleted User",
-      attackerUserId: entry.attacker?.userId || "Deleted User",
       attackerAvatar: entry.attacker?.avatar || IMG_AVATAR_DEFAULT,
-      defenderUsername: entry.defender?.username || "Deleted User",
-      defenderUserId: entry.defender?.userId || "Deleted User",
       defenderAvatar: entry.defender?.avatar || IMG_AVATAR_DEFAULT,
       battleId: entry.battleId,
       battleType: entry.battleType || "Unknown",
