@@ -1,14 +1,19 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
-import { Maximize2 } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoBattleTypes, ManualStartBattleTypes } from "@/drizzle/constants";
-import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import {
+  type CombatLayoutComponentId,
+  useAutoCombatSetting,
+  useCombatPreferences,
+} from "@/hooks/combat";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
@@ -41,6 +46,7 @@ import {
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
+import type { StatSchemaType } from "@/validators/combat";
 
 const loadCombat = () => import("@/layout/Combat");
 const Combat = dynamic(loadCombat, {
@@ -59,6 +65,13 @@ export default function CombatPage() {
   const [activeTab, setActiveTab] = useState<string>("actions");
   const [autoCombatError, setAutoCombatError] = useState<string>();
   const [hotkeyTarget, setHotkeyTarget] = useState<HotkeyTarget | null>(null);
+  const arenaHealInFlightRef = useRef(false);
+  const arenaStartInFlightRef = useRef(false);
+  const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
+    "statDistribution",
+    undefined,
+  );
+  const [autoCombat] = useAutoCombatSetting();
 
   // Download and evaluate the scene while the battle query is in flight.
   useEffect(() => {
@@ -124,6 +137,20 @@ export default function CombatPage() {
     itemLoadoutId: sessionBattleUser?.itemLoadout,
   });
   const isAutoCombatActive = !!sessionBattleUser?.isAutoCombat;
+  const arenaOpponentId = battle?.usersState.find(
+    (u) => u.userId !== userId && !u.isSummon && u.isAi,
+  )?.controllerId;
+  const needsArenaHealing =
+    !!userData &&
+    !!results &&
+    (results.curHealth < userData.maxHealth ||
+      results.curStamina < userData.maxStamina ||
+      results.curChakra < userData.maxChakra);
+  const canAffordArenaHealing = (userData?.money ?? 0) >= 500;
+  const canHealFromCurrentStatus = userData?.status === "AWAKE";
+  const showNextMatch =
+    results?.outcome === "Won" &&
+    (battle?.battleType === "ARENA" || battle?.battleType === "TRAINING");
   const visibleTab =
     isAutoCombatActive && activeTab === "actions"
       ? config.showTimeline
@@ -239,6 +266,150 @@ export default function CombatPage() {
     return availableUserActions(battleState?.battle, controlledActorId);
   }, [versionId, controlledActorId]);
 
+  // A successful arena heal is a paid, one-shot action for the current finished
+  // battle. The page owns settlement and pending requests so battlefield layout
+  // remounts cannot expose another charge or a duplicate battle start.
+  const arenaHealBattleKey = battle?.id ?? "finished-arena";
+  const [arenaHealSettledBattleId, setArenaHealSettledBattleId] = useState<
+    string | null
+  >(null);
+  const hasSettledArenaHeal = arenaHealSettledBattleId === arenaHealBattleKey;
+
+  // Mutation for healing before starting another arena fight
+  const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
+    api.combat.battleArenaHeal.useMutation({
+      onSuccess: (data) => {
+        if (data.success) {
+          setArenaHealSettledBattleId(arenaHealBattleKey);
+          if (arenaOpponentId) {
+            handleStartArenaBattle("post-heal");
+          } else {
+            showMutationToast(data);
+          }
+        } else {
+          showMutationToast(data);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaHealInFlightRef.current = false;
+      },
+    });
+
+  // Mutation for starting a fight
+  const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
+    api.combat.startArenaBattle.useMutation({
+      onSuccess: (result) => {
+        if (result.success && result.battleId) {
+          setBattleAtom(undefined);
+          // The finished battle and its result stay in place until the next battle
+          // loads, so the battlefield keeps its reserved size and nothing turns live.
+          void updateUser({
+            status: "BATTLE",
+            battleId: result.battleId,
+            updatedAt: new Date(),
+          });
+          void utils.combat.getBattle.invalidate();
+        } else {
+          showMutationToast(result);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaStartInFlightRef.current = false;
+      },
+    });
+
+  const handleStartArenaBattle = (source: "repeat" | "post-heal") => {
+    if (
+      arenaStartInFlightRef.current ||
+      isStartingArenaBattle ||
+      (source === "repeat" && isArenaHealPending) ||
+      !arenaOpponentId
+    ) {
+      return;
+    }
+    arenaStartInFlightRef.current = true;
+    startArenaBattle({
+      aiId: arenaOpponentId,
+      stats: battle?.battleType === "TRAINING" ? statDistribution : undefined,
+      autoCombat,
+    });
+  };
+
+  const handleArenaHealAndGo = () => {
+    if (
+      arenaHealInFlightRef.current ||
+      isArenaHealPending ||
+      isStartingArenaBattle ||
+      hasSettledArenaHeal ||
+      !needsArenaHealing ||
+      !canAffordArenaHealing ||
+      !canHealFromCurrentStatus
+    ) {
+      return;
+    }
+    arenaHealInFlightRef.current = true;
+    battleArenaHealAndGo();
+  };
+
+  const arenaActions = showNextMatch &&
+    arenaOpponentId &&
+    (!currentStep || !userData?.tutorialOn) && (
+      <div className="space-y-2">
+        <Button
+          id="return"
+          className="w-full"
+          disabled={isArenaHealPending || isStartingArenaBattle}
+          aria-busy={isStartingArenaBattle}
+          aria-live="polite"
+          onClick={() => handleStartArenaBattle("repeat")}
+        >
+          {isStartingArenaBattle && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          )}
+          {isStartingArenaBattle ? "Starting" : "Go Again"}
+        </Button>
+
+        <Button
+          id="heal-return"
+          className="w-full"
+          disabled={
+            isArenaHealPending ||
+            isStartingArenaBattle ||
+            hasSettledArenaHeal ||
+            !needsArenaHealing ||
+            !canAffordArenaHealing ||
+            !canHealFromCurrentStatus
+          }
+          aria-busy={isArenaHealPending || isStartingArenaBattle}
+          aria-live="polite"
+          onClick={handleArenaHealAndGo}
+        >
+          {(isArenaHealPending || (hasSettledArenaHeal && isStartingArenaBattle)) && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          )}
+          {isArenaHealPending
+            ? "Healing"
+            : hasSettledArenaHeal && isStartingArenaBattle
+              ? "Starting"
+              : hasSettledArenaHeal
+                ? "Healed — use Go Again"
+                : !canHealFromCurrentStatus
+                  ? "Healing unavailable"
+                  : !needsArenaHealing
+                    ? "Already fully healed"
+                    : !canAffordArenaHealing
+                      ? "Need 500 Ryo to heal"
+                      : "Heal and Go Again (-500 Ryo)"}
+        </Button>
+      </div>
+    );
+
   // Battle scene. Pass the CONTROLLED actor (self, or the piloted summon on its
   // turn) so Combat does not have to re-derive it from the same battle object.
   // Depend on battleState so isPending / result reach Combat; do not depend on
@@ -255,6 +426,7 @@ export default function CombatPage() {
           setBattleState={setBattleState}
           config={config}
           endTurnKey={hotkeys.byAction.wait}
+          arenaActions={arenaActions}
         />
       )
     );
@@ -267,6 +439,7 @@ export default function CombatPage() {
     config.resourceBarsVisibility,
     actions,
     hotkeys.byAction.wait,
+    arenaActions,
   ]);
 
   // Battle hotkeys select actions by id. A bound action that is unavailable

@@ -1,10 +1,10 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
-import { Suspense } from "react";
+import { type ReactNode, Suspense } from "react";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as preferences from "@/hooks/combat";
@@ -16,14 +16,15 @@ import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as combatSettings from "@/layout/UserCombatSettings";
+import * as toast from "@/libs/toast";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
 const scene = vi.spyOn(dynamic, "default").mockReturnValue(
-  (({ battleState }: { battleState: BattleState }) => {
+  (({ battleState, arenaActions }: { battleState: BattleState; arenaActions?: ReactNode }) => {
     loadingEvents.push(`scene:${battleState.battle?.id}`);
-    return <p>{battleState.result ? "Finished battle result" : `Active battle ${battleState.battle?.id}`}</p>;
+    return <><p>{battleState.result ? "Finished battle result" : `Active battle ${battleState.battle?.id}`}</p>{arenaActions}</>;
   }) as never,
 );
 const { default: CombatPage } = await import("@/app/[shell]/combat/page");
@@ -43,13 +44,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}, spectate = false) => {
+const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}, spectate = false, arena: { heal?: () => Promise<{ success: boolean; message: string }>; start?: () => Promise<{ success: boolean; message: string; battleId?: string }> } = {}) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
-  let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [] };
+  let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [], money: 2000, curHealth: 50, curStamina: 50, curChakra: 50, maxHealth: 100, maxStamina: 100, maxChakra: 100 };
   const refetchProfile = vi.fn(async () => undefined);
   const push = vi.fn();
   const toggleAutoCombat = vi.fn();
+  const heal = vi.fn(arena.heal ?? (async () => ({ success: false, message: "Unused heal" })));
+  const start = vi.fn(arena.start ?? (async () => ({ success: false, message: "Daily arena limit reached" })));
+  const mutationToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   const prefetchAssets = vi.fn(async ({ ids }: { ids: string[] }) => {
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
@@ -64,6 +68,7 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
   let combatConfig = {
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
   };
+  vi.spyOn(preferences, "useAutoCombatSetting").mockReturnValue([false, vi.fn()]);
   vi.spyOn(preferences, "useCombatPreferences").mockImplementation(() => combatConfig as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
   vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({
@@ -78,13 +83,18 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
       getBattle: { useQuery: (input: { battleId?: string | null }, options: object) => useQuery({
         ...options, queryKey: ["combat", input.battleId], queryFn: () => read(input.battleId!),
       }) },
+      battleArenaHeal: { useMutation: (options: object) => useMutation({ ...options, mutationFn: heal }) },
+      startArenaBattle: { useMutation: (options: object) => useMutation({ ...options, mutationFn: start }) },
       toggleAutoCombat: { useMutation: () => ({ mutate: toggleAutoCombat, isPending: false }) },
     },
   });
   const params = Promise.resolve({ battleid: battleId! });
   const tree = () => <QueryClientProvider client={queryClient}><Suspense fallback={null}>{spectate ? <BattleLog params={params} /> : <CombatPage />}</Suspense></QueryClientProvider>;
   const view = render(tree());
-  return { view, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeLayout: (next: Partial<typeof combatConfig>) => {
+  return { view, heal, start, mutationToast, changeProfile: (values: Partial<typeof profile>) => {
+    profile = { ...profile, ...values };
+    view.rerender(tree());
+  }, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeLayout: (next: Partial<typeof combatConfig>) => {
     combatConfig = { ...combatConfig, ...next };
     view.rerender(tree());
   }, changeBattle: (id: string | null) => {
@@ -114,6 +124,58 @@ it("retains the shared battle across focus and viewport layout changes and clear
   expect(read).toHaveBeenCalledTimes(1);
   view.unmount();
   expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
+
+it.each(["settled", "healing", "starting"] as const)("retains arena heal protection across viewport and focus remounts while %s", async (phase) => {
+  const viewport = vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: `heal-${phase}`, battleType: "ARENA", usersState: [
+    makeUser({ userId: "player" }), makeUser({ userId: "opponent", isAi: true, controllerId: "arena-opponent" }),
+  ] });
+  let finishHeal!: () => void;
+  let finishStart!: () => void;
+  const { view, heal, start, mutationToast, changeLayout, changeProfile } = mount(battle.id, async () => ({
+    battle, result: { outcome: "Won", curHealth: 50, curStamina: 50, curChakra: 50 },
+  }) as unknown as Response, { battleFocus: true }, false, {
+    heal: async () => {
+      if (phase === "healing") await new Promise<void>((resolve) => { finishHeal = resolve; });
+      changeProfile({ money: 1500, curHealth: 100, curStamina: 100, curChakra: 100 });
+      return { success: true, message: "Healed" };
+    },
+    start: async () => {
+      if (phase === "starting") await new Promise<void>((resolve) => { finishStart = resolve; });
+      return { success: false, message: "Daily arena limit reached" };
+    },
+  });
+  await view.findByText("Finished battle result");
+  changeProfile({ status: "AWAKE", battleId: null });
+  fireEvent.click(view.getByRole("button", { name: "Heal and Go Again (-500 Ryo)" }));
+  if (phase === "healing") await waitFor(() => expect(heal).toHaveBeenCalledTimes(1));
+  else await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+  if (phase === "settled") await view.findByRole("button", { name: "Healed — use Go Again" });
+  const desktopResult = view.getByText("Finished battle result");
+  viewport.mockReturnValue(false);
+  changeLayout({});
+  expect(view.getByText("Finished battle result")).not.toBe(desktopResult);
+  const mobileResult = view.getByText("Finished battle result");
+  changeLayout({ battleFocus: false });
+  expect(view.getByText("Finished battle result")).not.toBe(mobileResult);
+  const healButton = view.container.querySelector<HTMLButtonElement>("#heal-return")!;
+  expect(healButton.disabled).toBe(true);
+  fireEvent.click(healButton);
+  if (phase !== "settled") {
+    const repeatButton = view.container.querySelector<HTMLButtonElement>("#return")!;
+    expect(repeatButton.disabled).toBe(true);
+    fireEvent.click(repeatButton);
+    await act(async () => phase === "healing" ? finishHeal() : finishStart());
+  }
+  await waitFor(() => expect(mutationToast).toHaveBeenCalledWith({ success: false, message: "Daily arena limit reached" }));
+  expect(heal).toHaveBeenCalledTimes(1);
+  expect(start).toHaveBeenCalledTimes(1);
+  expect(view.getByRole("button", { name: "Healed — use Go Again" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(view.getByRole("button", { name: "Go Again" }));
+  await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+  expect(heal).toHaveBeenCalledTimes(1);
 });
 
 it("clears shared combat handler snapshots on spectator exit without publishing the viewed battle", async () => {
