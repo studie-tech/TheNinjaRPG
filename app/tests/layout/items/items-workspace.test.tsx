@@ -192,6 +192,8 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   // A modal sheet above every layout's navigation, not a panel inside the page.
   const sheet = screen.getByRole("dialog");
   expect(sheet.contains(screen.getByRole("region", { name: "Inspecting Raijin Tanto" }))).toBe(true);
+  // Size containment would collapse a content-sized bottom sheet to its padding.
+  expect(sheet.style.contain).toBe("layout paint");
   expect(document.querySelector("[data-items-panel]")).toBeNull();
 });
 

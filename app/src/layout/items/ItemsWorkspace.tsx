@@ -306,6 +306,9 @@ export function ItemsWorkspace({
           <SheetContent
             side="bottom"
             className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            // The sheet's strict containment would ignore the panel's height; keep it
+            // content-sized up to the maximum.
+            style={{ contain: "layout paint" }}
           >
             <SheetTitle className="sr-only">{panelTitle}</SheetTitle>
             {panel}
