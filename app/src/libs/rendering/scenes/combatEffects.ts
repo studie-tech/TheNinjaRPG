@@ -17,6 +17,12 @@ import { isObjectChainVisible } from "@/libs/rendering/visibility";
 import type { BarrierTagType } from "@/validators/combat";
 
 /**
+ * Terrain mesh order for static ground artwork: above flat faces (4) and their edges (5),
+ * below the combat grid outlines (5.5), so it draws on the ground plane under fighters.
+ */
+export const COMBAT_GROUND_EFFECT_Z_INDEX = 5.25;
+
+/**
  * Static artwork stays below targeting and fighters; clips and meters stay above.
  * Effects keep identity through hidden/depleted states and retire their leases on expiry.
  */

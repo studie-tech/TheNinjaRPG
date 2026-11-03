@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, Container, Texture, UniformGroup } from "pixi.js";
+import type { GameAsset } from "@/drizzle/schema";
+import type { GroundEffect } from "@/libs/combat/types";
 import { getBattlefieldHeightRatio } from "@/libs/combat/util";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
@@ -17,10 +19,10 @@ beforeEach(() => {
 afterEach(() => { for (const dispose of cleanups.splice(0)) dispose(); vi.restoreAllMocks(); });
 
 /** Exercise actual scene transforms and gestures without a GPU or network textures. */
-const setup = async (zoom = 2, lightLayout = true) => {
+const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: GroundEffect[]; assets?: GameAsset[] } = {}) => {
   const user = makeBattleUser("camera-user", { isAi: true, isOriginal: true, longitude: 6, latitude: 5 });
-  const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10, background: lightLayout ? "ground" : "ocean" });
-  let snapshot = { battle, userId: user.userId, actions: [], timeDiff: 0, assets: [], requestedIds: new Set(), active: true, sound: false, volume: 0, showGridNumbers: false, inspect: true } as unknown as CombatSceneSnapshot;
+  const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10, background: lightLayout ? "ground" : "ocean", groundEffects: extra.groundEffects ?? [] });
+  let snapshot = { battle, userId: user.userId, actions: [], timeDiff: 0, assets: extra.assets ?? [], requestedIds: new Set(), active: true, sound: false, volume: 0, showGridNumbers: false, inspect: true } as unknown as CombatSceneSnapshot;
   const height = 390 * getBattlefieldHeightRatio(12, 10), canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, height);
   const listeners = new window.AbortController(), owned = new Set<() => void>();
@@ -79,6 +81,28 @@ describe("combat camera gestures", () => {
     expect(world.getChildIndex(ground)).toBeLessThan(world.getChildIndex(depth.parent!));
     const hud = fighter.getChildByLabel("combat-health")!;
     expect(world.getChildIndex(hud.parentRenderLayer!)).toBeGreaterThan(world.getChildIndex(ground));
+  });
+  it("draws static ground effect artwork on the ground plane beneath fighters and grid outlines", async () => {
+    const effect = { id: "static-ground", type: "visual", longitude: 6, latitude: 5, power: 100, staticAssetPath: "static-art" } as GroundEffect;
+    const assets = [{ id: "static-art", image: "https://example.com/static-art.png" }] as unknown as GameAsset[];
+    const { world, user, tick } = await setup(2, true, { groundEffects: [effect], assets });
+    await new Promise((resolve) => setTimeout(resolve, 0)); tick();
+    const art = world.getChildByLabel(effect.id, true)!;
+    expect(art.getChildByLabel("static", true)).toBeTruthy();
+    const effectsGround = art.parent!, terrain = world.children[0] as Container;
+    // Shares the terrain's ground plane: above flat land faces and edges, below grid outlines.
+    expect(effectsGround.parent).toBe(terrain);
+    const outlines = terrain.children.filter((child) => child.label === "combat-grid-outlines").map((child) => child.zIndex);
+    expect(effectsGround.zIndex).toBeGreaterThan(5);
+    expect(effectsGround.zIndex).toBeLessThan(Math.max(...outlines));
+    // And renders before the painter-sorted layer that holds the fighters' artwork.
+    const fighter = world.getChildByLabel(user.userId, true)!;
+    const depth = fighter.getChildByLabel("combat-art")!.parentRenderLayer!;
+    const ground = effectsGround.parentRenderLayer;
+    if (ground) {
+      expect(ground.parent).toBe(depth.parent);
+      expect(ground.parent!.getChildIndex(ground)).toBeLessThan(depth.parent!.getChildIndex(depth));
+    } else expect(world.getChildIndex(terrain)).toBeLessThan(world.getChildIndex(depth.parent!));
   });
   it("places recessed targeting strokes between water and higher opaque land faces", async () => {
     const { world } = await setup(2, false);
