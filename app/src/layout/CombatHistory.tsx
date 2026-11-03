@@ -16,7 +16,6 @@ import Loader from "./Loader";
 
 interface CombatHistoryProps {
   battleId: string;
-  asc?: boolean;
   battleVersion?: number;
   battleRound?: number;
   results?: CombatResult | null;
@@ -24,7 +23,7 @@ interface CombatHistoryProps {
 
 const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // State
-  const { battleId, battleVersion, battleRound, results, asc } = props;
+  const { battleId, battleVersion, battleRound, results } = props;
   const { data: userData } = useRequiredUserData();
   const [openRounds, setOpenRounds] = useState<number[]>([]);
 
@@ -81,8 +80,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   // Get keys of the groups map, and reverse sort them
   const sortedGroups =
-    groups &&
-    new Map([...groups.entries()].sort((a, b) => (asc ? a[0] - b[0] : b[0] - a[0])));
+    groups && new Map([...groups.entries()].sort((a, b) => b[0] - a[0]));
 
   // Create the history
   const history: React.ReactNode[] = [];
