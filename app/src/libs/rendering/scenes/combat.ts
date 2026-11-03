@@ -31,7 +31,10 @@ import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer, type GameFrame } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
-import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
+import {
+  COMBAT_GROUND_EFFECT_Z_INDEX,
+  createCombatEffects,
+} from "@/libs/rendering/scenes/combatEffects";
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
@@ -143,6 +146,10 @@ export const createCombatScene = async (options: {
       { ground: groundLayer, world: depthLayer, ui: uiLayer },
     );
     const effects = createCombatEffects(game, data.grid, options.play);
+    // Static ground artwork lies on the hex surface: above flat faces, below grid outlines,
+    // and (via the lit ground layer) beneath fighters and upright scenery.
+    effects.ground.zIndex = COMBAT_GROUND_EFFECT_Z_INDEX;
+    terrain.container.addChild(effects.ground);
     for (const tile of data.grid) {
       if (!tile.name) continue;
       const text = new Text({
@@ -165,7 +172,6 @@ export const createCombatScene = async (options: {
       terrain.container,
       art.container,
       lightingLayer,
-      effects.ground,
       weather.container,
       uiLayer,
       actors.container,
