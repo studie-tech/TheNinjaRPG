@@ -1202,7 +1202,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         await updateTraining(undefined, context?.training ?? prepareTrainingUpdate());
       },
       onSettled: () => {
-        document.body.style.cursor = "default";
         setIsOpen(false);
         setJutsu(undefined);
       },
@@ -1219,7 +1218,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         ]);
       },
       onSettled: () => {
-        document.body.style.cursor = "default";
         setIsOpen(false);
         setJutsu(undefined);
       },
