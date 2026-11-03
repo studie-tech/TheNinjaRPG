@@ -1,6 +1,6 @@
 import { Pusher } from "@/libs/pusher";
 import { reassignPendingAnbuRequestsOnPromotion } from "@/queries/anbu";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 import * as nativePush from "@/server/utils/push/defer";
@@ -58,44 +58,8 @@ describe("ANBU request squad identity", () => {
   });
 
   it("matches requests by relatedId even when receiverId is stale", () => {
-    expect(
-      isAnbuRequestForSquad(
-        { relatedId: "squad-1", receiverId: "old-leader" },
-        "squad-1",
-        "new-leader",
-      ),
-    ).toBe(true);
-    expect(
-      isAnbuRequestForSquad(
-        { relatedId: "squad-other", receiverId: "new-leader" },
-        "squad-1",
-        "new-leader",
-      ),
-    ).toBe(false);
-  });
-
-  it("matches legacy requests without relatedId via current leader receiverId", () => {
-    expect(
-      isAnbuRequestForSquad(
-        { relatedId: null, receiverId: "leader-1" },
-        "squad-1",
-        "leader-1",
-      ),
-    ).toBe(true);
-    expect(
-      isAnbuRequestForSquad(
-        { relatedId: null, receiverId: "other-leader" },
-        "squad-1",
-        "leader-1",
-      ),
-    ).toBe(false);
-    expect(
-      isAnbuRequestForSquad(
-        { relatedId: null, receiverId: "leader-1" },
-        "squad-1",
-        null,
-      ),
-    ).toBe(false);
+    expect(isAnbuRequestForSquad({ relatedId: "squad-1" }, "squad-1")).toBe(true);
+    expect(isAnbuRequestForSquad({ relatedId: "squad-other" }, "squad-1")).toBe(false);
   });
 
   it("resolves the squad from relatedId after a leader change", async () => {
@@ -132,46 +96,12 @@ describe("ANBU request squad identity", () => {
     expect(result?.leaderId).not.toBe("old-leader");
   });
 
-  it("falls back to receiverId for legacy requests without relatedId", async () => {
-    const squad = {
-      id: "squad-1",
-      leaderId: "old-leader",
-      villageId: "village-1",
-      members: [],
-    };
-    const expectedWhere = describeSql(eq(anbuSquad.leaderId, "old-leader"));
-    const findFirst = vi.fn().mockImplementation((args: { where: unknown }) => {
-      // Only succeed when looking up by leader id (legacy path)
-      if (describeSql(args.where) !== expectedWhere) {
-        return Promise.resolve(null);
-      }
-      return Promise.resolve(squad);
-    });
-    const client = {
-      query: {
-        anbuSquad: { findFirst },
-      },
-    };
-
-    const result = await fetchSquadForAnbuRequest(client as never, {
-      relatedId: null,
-      receiverId: "old-leader",
-    });
-
-    expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(expectedWhere);
-    expect(result).toEqual<typeof squad>(squad);
-  });
-
-  it("reassigns pending requests to the new leader and sets relatedId on promotion", async () => {
+  it("reassigns the squad's pending requests to the new leader on promotion", async () => {
     const expectedWhere = describeSql(
       and(
         eq(userRequest.type, "ANBU"),
         eq(userRequest.status, "PENDING"),
-        or(
-          eq(userRequest.relatedId, "squad-1"),
-          and(isNull(userRequest.relatedId), eq(userRequest.receiverId, "old-leader")),
-        ),
+        eq(userRequest.relatedId, "squad-1"),
       ),
     );
     const where = vi.fn().mockResolvedValue({ rowsAffected: 2 });
@@ -180,40 +110,20 @@ describe("ANBU request squad identity", () => {
       update: vi.fn().mockReturnValue({ set }),
     };
 
-    await reassignPendingAnbuRequestsOnPromotion(
-      client as never,
-      "squad-1",
-      "old-leader",
-      "new-leader",
-    );
+    await reassignPendingAnbuRequestsOnPromotion(client as never, "squad-1", "new-leader");
 
     expect(client.update).toHaveBeenCalledWith(userRequest);
-    expect(set).toHaveBeenCalledWith({
-      receiverId: "new-leader",
-      relatedId: "squad-1",
-    });
+    expect(set).toHaveBeenCalledWith({ receiverId: "new-leader" });
     expect(where).toHaveBeenCalledTimes(1);
     expect(describeSql(where.mock.calls[0]?.[0])).toBe(expectedWhere);
   });
 
-  it("anchors relatedId without changing receiverId when there is no successor", async () => {
-    const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-    const set = vi.fn().mockReturnValue({ where });
-    const client = {
-      update: vi.fn().mockReturnValue({ set }),
-    };
+  it("keeps the stored receiver when there is no successor", async () => {
+    const client = { update: vi.fn() };
 
-    await reassignPendingAnbuRequestsOnPromotion(
-      client as never,
-      "squad-1",
-      "old-leader",
-      null,
-    );
+    await reassignPendingAnbuRequestsOnPromotion(client as never, "squad-1", null);
 
-    expect(set).toHaveBeenCalledWith({ relatedId: "squad-1" });
-    expect(set).not.toHaveBeenCalledWith(
-      expect.objectContaining({ receiverId: expect.anything() }),
-    );
+    expect(client.update).not.toHaveBeenCalled();
   });
 });
 

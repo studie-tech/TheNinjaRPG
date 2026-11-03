@@ -3,7 +3,7 @@
  */
 
 import type { SQL } from "drizzle-orm";
-import { and, count, eq, exists, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, eq, exists, gt, gte, isNull, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   ANBU_ESPIONAGE_POINTS_COST,
@@ -21,11 +21,11 @@ import { secondsFromNow } from "@/utils/time";
 
 /**
  * Resolves the user who should be notified when an applicant cancels a join
- * request. Requests linked to a squad use its current leader; legacy requests
- * and leaderless squads fall back to the receiver stored on the request.
+ * request: the linked squad's current leader, or the receiver stored on the
+ * request when no leader can be resolved.
  *
  * @param client - The Drizzle client used for the minimal leader lookup.
- * @param request - The request's durable squad link and legacy receiver.
+ * @param request - The request's squad link and stored receiver.
  * @returns The user ID that should receive the ANBU update event.
  */
 export const fetchAnbuRequestNotificationTarget = async (
@@ -246,18 +246,6 @@ export const fetchSquad = async (client: DrizzleClient, squadId: string) => {
       leaderOrder: true,
     },
     where: eq(anbuSquad.id, squadId),
-  });
-};
-
-/**
- * Fetches a squad's scalar state by leader ID without loading relations.
- * @param client - The Drizzle client instance.
- * @param leaderId - The ID of the squad leader.
- * @returns - A promise that resolves to the squad details.
- */
-export const fetchSquadByLeader = async (client: DrizzleClient, leaderId: string) => {
-  return await client.query.anbuSquad.findFirst({
-    where: eq(anbuSquad.leaderId, leaderId),
   });
 };
 
@@ -560,44 +548,27 @@ export const releaseAnbuCapacity = async (client: DrizzleClient, squadId: string
     .where(eq(anbuSquad.id, squadId));
 
 /**
- * Repairs pending request routing after a squad leadership change. Every
- * matching request receives the durable squad ID, and requests are redirected
- * to the successor when one exists. Leaderless squads retain the old receiver
- * only as a notification fallback.
+ * Redirects a squad's pending join requests to its new leader. Leaderless
+ * squads keep the old receiver as a notification fallback.
  *
  * @param client - The Drizzle client used to update pending requests.
- * @param squadId - The durable squad ID to attach to matching requests.
- * @param oldLeaderId - The former leader used to identify unlinked legacy requests.
+ * @param squadId - The squad whose pending requests are redirected.
  * @param newLeaderId - The successor who should receive requests, or null when leaderless.
- * @returns The result of the pending-request update.
  */
 export const reassignPendingAnbuRequestsOnPromotion = async (
   client: DrizzleClient,
   squadId: string,
-  oldLeaderId: string | null,
   newLeaderId: string | null,
 ) => {
-  return await client
+  if (!newLeaderId) return;
+  await client
     .update(userRequest)
-    .set({
-      ...(newLeaderId ? { receiverId: newLeaderId } : {}),
-      relatedId: squadId,
-    })
+    .set({ receiverId: newLeaderId })
     .where(
       and(
         eq(userRequest.type, "ANBU"),
         eq(userRequest.status, "PENDING"),
-        or(
-          eq(userRequest.relatedId, squadId),
-          ...(oldLeaderId
-            ? [
-                and(
-                  isNull(userRequest.relatedId),
-                  eq(userRequest.receiverId, oldLeaderId),
-                ),
-              ]
-            : []),
-        ),
+        eq(userRequest.relatedId, squadId),
       ),
     );
 };
