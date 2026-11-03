@@ -21,11 +21,11 @@ import { secondsFromNow } from "@/utils/time";
 
 /**
  * Resolves the user who should be notified when an applicant cancels a join
- * request: the linked squad's current leader, or the receiver stored on the
- * request when no leader can be resolved.
+ * request. Requests use their squad's current leader; leaderless squads fall
+ * back to the receiver stored on the request.
  *
  * @param client - The Drizzle client used for the minimal leader lookup.
- * @param request - The request's squad link and stored receiver.
+ * @param request - The request's durable squad link and stored receiver.
  * @returns The user ID that should receive the ANBU update event.
  */
 export const fetchAnbuRequestNotificationTarget = async (

@@ -15,7 +15,6 @@ import {
   createAnbuRequest,
   fetchSquadForAnbuRequest,
   getAnbuRequests,
-  isAnbuRequestForSquad,
   promoteAnbuLeader,
   rejectAnbuRequest,
   removeFromSquad,
@@ -57,11 +56,6 @@ describe("ANBU request squad identity", () => {
     vi.clearAllMocks();
   });
 
-  it("matches requests by relatedId even when receiverId is stale", () => {
-    expect(isAnbuRequestForSquad({ relatedId: "squad-1" }, "squad-1")).toBe(true);
-    expect(isAnbuRequestForSquad({ relatedId: "squad-other" }, "squad-1")).toBe(false);
-  });
-
   it("resolves the squad from relatedId after a leader change", async () => {
     const squad = {
       id: "squad-1",
@@ -83,13 +77,25 @@ describe("ANBU request squad identity", () => {
       },
     };
 
-    const result = await fetchSquadForAnbuRequest(client as never, { relatedId: "squad-1" });
+    // Stale receiver from before promoteMember reassignment
+    const request = { relatedId: "squad-1", receiverId: "old-leader" };
+    const result = await fetchSquadForAnbuRequest(client as never, request);
 
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(expectedWhere);
     expect(result).toEqual<typeof squad>(squad);
     expect(result?.leaderId).toBe("new-leader");
     expect(result?.leaderId).not.toBe("old-leader");
+  });
+
+  it("resolves no squad for a request without relatedId", async () => {
+    const findFirst = vi.fn();
+    const client = { query: { anbuSquad: { findFirst } } };
+
+    await expect(
+      fetchSquadForAnbuRequest(client as never, { relatedId: null }),
+    ).resolves.toBeUndefined();
+    expect(findFirst).not.toHaveBeenCalled();
   });
 
   it("reassigns the squad's pending requests to the new leader on promotion", async () => {
@@ -114,7 +120,7 @@ describe("ANBU request squad identity", () => {
     expect(describeSql(where.mock.calls[0]?.[0])).toBe(expectedWhere);
   });
 
-  it("keeps the stored receiver when there is no successor", async () => {
+  it("keeps pending requests unchanged when there is no successor", async () => {
     const client = { update: vi.fn() };
 
     await reassignPendingAnbuRequestsOnPromotion(client as never, "squad-1", null);
@@ -289,14 +295,20 @@ describe("ANBU router request permissions and concurrency", () => {
       id: "own-2",
       relatedId: "squad-2",
     };
-    const squadRequest = { ...ownForThisSquad, id: "managed-1" };
+    // Received by the applicant as a former leader of the squad, but sent by someone else.
+    const squadRequest = {
+      ...ownForThisSquad,
+      id: "managed-1",
+      senderId: "other-applicant",
+      receiverId: "applicant",
+    };
     fetchRequestsMock.mockImplementation(
       async (_client, _types, _seconds, id, relatedId) =>
-        (relatedId
-          ? [squadRequest]
-          : id
-            ? [ownForThisSquad, ownForOtherSquad]
-            : []) as never,
+        [squadRequest, ownForThisSquad, ownForOtherSquad].filter(
+          (request) =>
+            (!relatedId || request.relatedId === relatedId) &&
+            (!id || request.senderId === id || request.receiverId === id),
+        ) as never,
     );
 
     fetchActorMock.mockResolvedValueOnce({
@@ -307,7 +319,7 @@ describe("ANBU router request permissions and concurrency", () => {
         ctx: { drizzle: client, userId: "actor" },
         input: { squadId: "squad-1" },
       } as never),
-    ).resolves.toEqual<Array<typeof squadRequest>>([squadRequest]);
+    ).resolves.toEqual<Array<typeof squadRequest>>([squadRequest, ownForThisSquad]);
     expect(fetchRequestsMock).toHaveBeenCalledTimes(1);
     expect(fetchRequestsMock).toHaveBeenLastCalledWith(
       client,
@@ -332,6 +344,7 @@ describe("ANBU router request permissions and concurrency", () => {
       ["ANBU"],
       3600 * 12,
       "applicant",
+      "squad-1",
     );
   });
 

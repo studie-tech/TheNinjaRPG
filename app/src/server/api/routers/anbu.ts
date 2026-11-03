@@ -705,11 +705,9 @@ export async function getAnbuRequests(args: {
       ["ANBU"],
       3600 * 12,
       ctx.userId,
+      squadId,
     );
-    return ownRequests.filter(
-      (request) =>
-        request.senderId === ctx.userId && isAnbuRequestForSquad(request, squadId),
-    );
+    return ownRequests.filter((request) => request.senderId === ctx.userId);
   }
   return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
 }
@@ -1049,27 +1047,17 @@ const getConvenienceStatus = (
 };
 
 /**
- * Determines whether an ANBU join request belongs to a squad.
- *
- * @param request - The request's squad link.
- * @param squadId - The squad being matched.
- * @returns Whether the request belongs to the supplied squad.
- */
-export const isAnbuRequestForSquad = (
-  request: { relatedId: string | null },
-  squadId: string,
-) => request.relatedId === squadId;
-
-/**
- * Fetches the squad targeted by an ANBU join request.
+ * Fetches the squad targeted by an ANBU join request through its durable
+ * related ID.
  *
  * @param client - The Drizzle client used to fetch the squad.
- * @param request - The request's squad link.
- * @returns The matching squad, or null when the request links no squad.
+ * @param request - The request's durable squad link.
+ * @returns The matching squad, or undefined when no squad can be resolved.
  */
 export const fetchSquadForAnbuRequest = async (
   client: DrizzleClient,
   request: { relatedId: string | null },
-) => (request.relatedId ? await fetchSquadSummary(client, request.relatedId) : null);
+) =>
+  request.relatedId ? await fetchSquadSummary(client, request.relatedId) : undefined;
 
 export type AnbuRouter = inferRouterOutputs<typeof anbuRouter>;
