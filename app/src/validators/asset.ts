@@ -23,13 +23,3 @@ export const gameAssetValidator = z.object({
 
 export type ZodGameAssetType = z.output<typeof gameAssetValidator>;
 export type ZodGameAssetInput = z.input<typeof gameAssetValidator>;
-
-/** Reusable listing filters; pagination and sort envelopes remain in their router. */
-export const gameAssetSchema = z.object({
-  name: z.string().optional(),
-  type: z.enum(GameAssetTypes).optional(),
-  tags: z.array(z.string()).optional(),
-  folder: z.string().optional(),
-});
-
-export type GameAssetSchema = z.infer<typeof gameAssetSchema>;

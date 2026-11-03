@@ -17,14 +17,7 @@ import {
 import { nanoid } from "nanoid";
 import type { GameAssetType } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import {
-  actionLog,
-  contentTag,
-  gameAsset,
-  gameAssetTag,
-  item,
-  itemVariant,
-} from "@/drizzle/schema";
+import { actionLog, gameAsset, item, itemVariant } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { ZodGameAssetType } from "@/validators/asset";
 
@@ -96,15 +89,6 @@ export const listGameAssetForGetAllNames = (
     where: input.type ? eq(gameAsset.type, input.type) : ne(gameAsset.type, "LPC"),
   });
 
-/** Build the `gameAssetTag` distinct selection for `getAllGameAssetContentTagNames`. */
-export const selectDistinctGameAssetTagForGetAllGameAssetContentTagNames = (
-  client: Pick<DrizzleClient, "selectDistinct">,
-) =>
-  client
-    .selectDistinct({ name: contentTag.name })
-    .from(gameAssetTag)
-    .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id));
-
 /** Count all nonempty folders, optionally within one media type, without pagination. */
 export const selectGameAssetForGetAllFolders = (
   client: Pick<DrizzleClient, "select">,
@@ -135,7 +119,6 @@ export const selectGameAssetForGetAll = (
   input: {
     name?: undefined | string;
     type?: GameAssetType | undefined;
-    tags?: undefined | string[];
     nameTokens?: undefined | string[];
     folder?: undefined | string;
     includeAnimations?: boolean;
@@ -148,8 +131,6 @@ export const selectGameAssetForGetAll = (
   client
     .select({ ...getTableColumns(gameAsset) })
     .from(gameAsset)
-    .leftJoin(gameAssetTag, eq(gameAsset.id, gameAssetTag.assetId))
-    .leftJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id))
     .where(
       and(
         ...(input.name ? [like(gameAsset.name, `%${input.name}%`)] : []),
@@ -158,7 +139,6 @@ export const selectGameAssetForGetAll = (
           : input.includeAnimations
             ? []
             : [ne(gameAsset.type, "ANIMATION"), ne(gameAsset.type, "LPC")]),
-        ...(input.tags ? [inArray(contentTag.name, input.tags)] : []),
         ...(input.nameTokens
           ? input.nameTokens.map((t) => like(gameAsset.name, `%${t}%`))
           : []),
@@ -168,7 +148,6 @@ export const selectGameAssetForGetAll = (
           : []),
       ),
     )
-    .groupBy(gameAsset.id)
     .orderBy(
       input.sort === "newest"
         ? desc(gameAsset.createdAt)

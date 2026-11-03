@@ -21,7 +21,6 @@ import {
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
   listLpcAssets,
-  selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
   selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
   updateGameAssetForUpdate,
@@ -37,7 +36,7 @@ import {
 } from "@/server/api/trpc";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
-import { gameAssetSchema, gameAssetValidator } from "@/validators/asset";
+import { gameAssetValidator } from "@/validators/asset";
 import { lpcLayoutValidator, lpcSheetValidator } from "@/validators/lpcAsset";
 import { idSchema } from "@/validators/misc";
 
@@ -127,15 +126,6 @@ export const gameAssetRouter = createTRPCRouter({
       // Return
       return assets;
     }),
-  getAllGameAssetContentTagNames: publicProcedure
-    .meta({
-      mcp: { description: "Get all game asset content tag names" },
-    })
-    .query(async ({ ctx }) => {
-      return await selectDistinctGameAssetTagForGetAllGameAssetContentTagNames(
-        ctx.drizzle,
-      );
-    }),
   getAllFolders: publicProcedure
     .meta({ mcp: { description: "Get all game asset folders" } })
     .input(z.object({ type: z.enum(GameAssetTypes).optional() }).nullish())
@@ -146,7 +136,10 @@ export const gameAssetRouter = createTRPCRouter({
   getAll: publicProcedure
     .meta({ mcp: { description: "Get all game assets with filtering" } })
     .input(
-      gameAssetSchema.extend({
+      z.object({
+        name: z.string().optional(),
+        type: z.enum(GameAssetTypes).optional(),
+        folder: z.string().optional(),
         cursor: z.number().int().min(0).nullish(),
         limit: z.number().int().min(1).max(500),
         nameTokens: z.array(z.string()).optional(),
