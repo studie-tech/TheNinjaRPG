@@ -20,7 +20,8 @@ import {
   migrateStorePurchaseTransfers,
   reconcileStorePurchaseOwner,
   reconcileFederalStatuses,
-  revokeFederalStatus,
+  type RevocationScope,
+  revokeFederalStatus as persistRevocation,
   setFederalStatusWithStoreFloor,
   type StoreTransfer,
   transferStorePurchases as persistStoreTransfer,
@@ -44,9 +45,11 @@ const db = () => getTestDatabase();
 
 const transferStorePurchases = (
   client: Parameters<typeof persistStoreTransfer>[0],
-  transfer: Omit<StoreTransfer, "eventId"> & { eventId?: string },
+  transfer: Omit<StoreTransfer, "eventId" | "isSandbox"> &
+    Partial<Pick<StoreTransfer, "eventId" | "isSandbox">>,
 ) =>
   persistStoreTransfer(client, {
+    isSandbox: false,
     ...transfer,
     eventId:
       transfer.eventId ??
@@ -57,6 +60,28 @@ const transferStorePurchases = (
         transfer.occurredAt.toISOString(),
       ].join(":"),
   });
+
+/** An Apple production expiry as the webhook delivers it; a redelivery repeats its event id. */
+const revokeFederalStatus = (
+  client: Parameters<typeof persistRevocation>[0],
+  userId: string,
+  scope: Omit<RevocationScope, "eventId" | "store" | "isSandbox"> &
+    Partial<Pick<RevocationScope, "eventId" | "store" | "isSandbox">>,
+) => {
+  const store = scope.store ?? "APPLE";
+  return persistRevocation(client, userId, {
+    isSandbox: false,
+    ...scope,
+    store,
+    eventId:
+      scope.eventId ??
+      [
+        scope.transactionId ?? scope.productId ?? "all",
+        store,
+        scope.occurredAt.toISOString(),
+      ].join(":"),
+  });
+};
 
 const statusOf = async (): Promise<FederalStatus> => {
   const database = await db();
@@ -385,6 +410,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       productId: "tnr_federal_gold",
       expirationAt: new Date(Date.now() + 30 * DAY),
       transactionId,
+      isSandbox: false,
     });
 
     expect(await statusOf()).toBe("GOLD");
@@ -520,6 +546,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         store: "APPLE",
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() - 2 * MINUTE),
+        isSandbox: false,
       }),
     ).resolves.toBeUndefined();
   });
@@ -542,6 +569,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         store: "APPLE",
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() + DAY),
+        isSandbox: false,
       }),
     ).rejects.toThrow(/No live receipt to extend/);
   });
@@ -556,6 +584,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         store: "APPLE",
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() + DAY),
+        isSandbox: false,
       }),
     ).rejects.toThrow(/No live receipt to extend/);
   });
@@ -572,6 +601,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       store: "APPLE",
       productId: "tnr_federal_gold",
       expirationAt: new Date(Date.now() - DAY),
+      isSandbox: false,
     });
     const receipt = await database.query.storePurchase.findFirst({
       columns: { expiresAt: true },
@@ -1128,6 +1158,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       productId: "tnr_federal_gold",
       expirationAt: extendedUntil,
       transactionId,
+      isSandbox: false,
     });
     const fallbackExtension = new Date(Date.now() + 2 * DAY);
     await extendStoreSubscription(database, {
@@ -1135,6 +1166,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       store: "APPLE",
       productId: "tnr_federal_gold",
       expirationAt: fallbackExtension,
+      isSandbox: false,
     });
     const extended = await database.query.storePurchase.findFirst({
       columns: { userId: true, expiresAt: true },

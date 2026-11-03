@@ -464,6 +464,7 @@ describeWithDatabase("staff user-id rename", () => {
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() + 86_400_000),
         transactionId: "delayed-deleted-extension",
+        isSandbox: false,
       }),
     ).resolves.toBeUndefined();
   });
@@ -740,6 +741,7 @@ describeWithDatabase("staff user-id rename", () => {
       productId: "tnr_federal_gold",
       transactionId: "renewal-in-window",
       expirationAt: new Date(now + 46 * DAY),
+      isSandbox: false,
     });
     await expect(
       grantStorePurchase(database, {
@@ -796,9 +798,11 @@ describeWithDatabase("staff user-id rename", () => {
     await deleteUser(database, OLD_USER_ID);
     // No transaction id, the shape that used to land under the tombstone string.
     await revokeFederalStatus(database, OLD_USER_ID, {
+      eventId: "expiry-window",
       occurredAt: new Date(now),
       productId: "tnr_federal_gold",
       store: "APPLE",
+      isSandbox: false,
     });
     const created = await registerAgain(OLD_USER_ID, "expiry-window", "Lapsed");
     expect(created.success).toBe(true);
