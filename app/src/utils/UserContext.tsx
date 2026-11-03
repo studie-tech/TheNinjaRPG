@@ -351,8 +351,9 @@ export const useUserDataRef = (
   const client = useQueryClient();
   const key = getQueryKey(api.profile.getUser, undefined, "query");
   const hash = hashKey(key);
+  const cache = client.getQueryCache();
   const read = () =>
-    client.getQueryData<{ userData: UserWithRelations }>(key)?.userData;
+    cache.get<{ userData: UserWithRelations }>(hash)?.state.data?.userData;
   const user = useRef(read());
   const changed = useRef(onChange);
   changed.current = onChange;
@@ -365,10 +366,15 @@ export const useUserDataRef = (
       changed.current?.(next, previous);
     };
     update();
-    return client.getQueryCache().subscribe((event) => {
-      if (event.query.queryHash === hash) update();
+    return cache.subscribe((event) => {
+      // Observer bookkeeping does not change the cached profile.
+      if (
+        event.query.queryHash === hash &&
+        (event.type === "updated" || event.type === "added" || event.type === "removed")
+      )
+        update();
     });
-  }, [client, hash]);
+  }, [cache, hash]);
   return user;
 };
 

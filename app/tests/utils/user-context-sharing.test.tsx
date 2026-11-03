@@ -120,6 +120,27 @@ const mount = (initial = snapshot(), children: ReactNode = null, observeFull = t
 };
 
 describe("profile context structural sharing", () => {
+  it("keeps imperative profile readers idle during observer bookkeeping while publishing updates and removal", async () => {
+    let latest: ReturnType<typeof useUserDataRef> | undefined;
+    const changed = vi.fn();
+    const Scene = () => { latest = useUserDataRef(changed); return null; };
+    const test = mount(snapshot(), <Scene />, false);
+    await test.settle(async () => {});
+    const cache = test.queryClient.getQueryCache();
+    const query = cache.find({ queryKey: key, exact: true })!;
+    const lookup = vi.spyOn(cache, "get");
+    await test.settle(async () => {
+      for (let index = 0; index < 36; index++) cache.notify({ type: "observerResultsUpdated", query });
+    });
+    expect(lookup).not.toHaveBeenCalled();
+    expect(changed).not.toHaveBeenCalled();
+    await test.settle(() => updateUserCache(test.queryClient, key, { longitude: 10, latitude: 9 }));
+    expect(latest?.current).toMatchObject({ longitude: 10, latitude: 9 });
+    expect(changed).toHaveBeenCalledTimes(1);
+    await test.settle(async () => { cache.remove(query); });
+    expect(latest?.current).toBeUndefined();
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
   it("keeps the reward calendar idle during movement while publishing streak and claim state", async () => {
     const streakKey: typeof key = [["activityStreak", "getUserStreaks"], { type: "query" }];
     const initialStreak = { streaks: [], activeRecurringConfig: { id: "daily", name: "Daily rewards", totalDays: 1, rewards: [] } };
