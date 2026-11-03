@@ -18,7 +18,7 @@ import {
   showTrainingCapcha,
 } from "@/libs/captcha";
 
-import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { fetchDmgConfig, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 
 import {
@@ -215,15 +215,6 @@ export const miscRouter = createTRPCRouter({
         success: true,
         message: `Global tavern ${input.enabled ? "enabled" : "disabled"}`,
       };
-    }),
-  getActivePlayers24h: publicProcedure
-    .meta({
-      mcp: { description: "Get active players in last 24 hours" },
-    })
-    .output(z.number())
-    .query(async ({ ctx }) => {
-      const setting = await getGameSetting(ctx.drizzle, "hourly-active-players");
-      return setting.value;
     }),
   setEventGameSetting: protectedProcedure
     .input(changeSettingSchema)
