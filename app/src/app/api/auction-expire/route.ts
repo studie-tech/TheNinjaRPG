@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import { listAuctionListingForGET } from "@/queries/auction";
@@ -13,9 +12,6 @@ const TIMER_NAME = `${ENDPOINT_NAME}-0.083m`;
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action
-  await cookies();
 
   // Check 5-minute timer lock to prevent abuse
   const response = await lockWithGameTimer(drizzleDB, TIMER_NAME, 5 * 60_000);

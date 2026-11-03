@@ -1,7 +1,6 @@
 import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/hourly-maintainance/route";
 import { bounty, bountyContribution, bountySignup, gameSetting, userData } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
@@ -104,7 +103,6 @@ describeWithDatabase("Bounty expiry", () => {
   beforeEach(async () => {
     await resetTables(bounty, bountyContribution, bountySignup, gameSetting, userData);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({
       ...timerClaimFixture(), isNewHour: true, response: Response.json(null),
     } as never));

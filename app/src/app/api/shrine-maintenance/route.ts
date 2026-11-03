@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import {
   SHRINE_BOOST_COST,
   SHRINE_BOOST_DURATION_HOURS,
@@ -45,9 +44,6 @@ type ShrineMaintenanceDb = Pick<DrizzleClient, "select" | "update" | "delete">;
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer - run once per minute
   const minuteCheck = await lockWithMinuteTimer(drizzleDB, ENDPOINT_NAME);

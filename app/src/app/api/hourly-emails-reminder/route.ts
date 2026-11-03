@@ -1,6 +1,5 @@
 import sgMail from "@sendgrid/mail";
 import * as Sentry from "@sentry/nextjs";
-import { cookies } from "next/headers";
 import { env } from "@/env/server.mjs";
 import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
 import { SITE_URL } from "@/libs/seo";
@@ -18,9 +17,6 @@ const ENDPOINT_NAME = "hourly-emails-reminder";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Connect to SendGrid
   sgMail.setApiKey(env.SENDGRID_API_KEY || "");

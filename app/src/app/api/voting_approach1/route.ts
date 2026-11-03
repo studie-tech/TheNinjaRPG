@@ -1,11 +1,8 @@
-import { cookies } from "next/headers";
 import { handleEndpointError } from "@/libs/gamesettings";
 import { updateUserVoteForHandleVote } from "@/queries/profile";
 import { drizzleDB } from "@/server/db";
 
 export async function POST(request: Request) {
-  await cookies();
-
   // https://topwebgames.com/game/theninja-rpg-core4/vote?incentive=testSecret-topwebgames&test=true&alwaysReward=true
   // https://apexwebgaming.net/details/theninja-rpg-core4/vote?incentive=testSecret-apexWebGaming&test=true&alwaysReward=true
 
@@ -32,8 +29,6 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  await cookies();
-
   // https://www.top100arena.com/listing/101116/vote?incentive=testSecret-top100arena
   // https://mmohub.com/site/1054/vote/testSecret-mmohub
   // https://www.arena-top100.com/index.php?a=in&u=Terriator&incentive=testSecret-arenaTop100

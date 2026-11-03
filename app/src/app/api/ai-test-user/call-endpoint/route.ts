@@ -15,8 +15,6 @@ import { drizzleDB } from "@/server/db";
 import { authenticateAiTestUserRequest } from "@/server/utils/aiTestUser";
 import { aiTestUserCallEndpointRequestSchema } from "@/validators/ai-test-user";
 
-export const dynamic = "force-dynamic";
-
 export async function POST(request: Request) {
   const authError = authenticateAiTestUserRequest(
     request,

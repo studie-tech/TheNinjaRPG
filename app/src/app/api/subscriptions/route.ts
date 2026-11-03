@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { handleEndpointError } from "@/libs/gamesettings";
 import {
   listPaypalSubscriptionForGET,
@@ -17,9 +16,6 @@ import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Create context and caller
   try {

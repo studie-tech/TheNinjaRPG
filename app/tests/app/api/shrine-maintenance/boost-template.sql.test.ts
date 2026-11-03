@@ -1,6 +1,5 @@
 import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/shrine-maintenance/route";
 import {
   MAP_RESERVED_SECTORS,
@@ -34,7 +33,6 @@ describeWithDatabase("shrine boost template reserve locks", () => {
   beforeEach(async () => {
     await resetTables(mpvpBattleUser, mpvpBattleQueue, warCamp, war, sector, village);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(
       vi.spyOn(gamesettings, "lockWithMinuteTimer").mockImplementation(async () => ({
         ...timerClaimFixture(),

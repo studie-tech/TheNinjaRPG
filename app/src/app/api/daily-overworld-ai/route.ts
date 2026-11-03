@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
 import {
   resolveOverworldPosition,
@@ -22,9 +21,6 @@ const ENDPOINT_NAME = "daily-overworld-ai";
 export const GET = async (request: Request) => {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // Touch a dynamic API so Next.js does not statically cache this GET handler
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

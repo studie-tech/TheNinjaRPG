@@ -15,9 +15,6 @@ import {
   aiTestUserResponseSchema,
 } from "@/validators/ai-test-user";
 
-// Prevent Vercel from caching this endpoint — every call mutates external state
-export const dynamic = "force-dynamic";
-
 export async function POST(request: Request) {
   const authError = authenticateAiTestUserRequest(request);
   if (authError) return authError;

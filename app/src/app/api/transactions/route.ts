@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { cookies } from "next/headers";
 import { stripePayment } from "@/drizzle/schema";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import {
@@ -23,9 +22,6 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const response = await lockWithGameTimer(

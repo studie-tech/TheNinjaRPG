@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { handleEndpointError, lockWithWeeklyTimer } from "@/libs/gamesettings";
 import { updateAnbuSquadForGET } from "@/queries/anbu";
 import { updateUserDataForWeeklyPvpReset as updateUserDataForGET } from "@/queries/pvprank";
@@ -11,9 +10,6 @@ const ENDPOINT_NAME = "weekly-pvp";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithWeeklyTimer(drizzleDB, ENDPOINT_NAME);

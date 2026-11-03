@@ -1,4 +1,3 @@
-import * as nextHeaders from "next/headers";
 import * as gameSettings from "@/libs/gamesettings";
 import * as quests from "@/routers/quests";
 import {
@@ -123,7 +122,6 @@ describe("daily-quest cron", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(nextHeaders, "cookies").mockResolvedValue(undefined as never);
     vi.spyOn(gameSettings, "lockWithDailyTimer").mockImplementation(mocks.lock);
     vi.spyOn(gameSettings, "handleEndpointError").mockImplementation(mocks.handleError);
     vi.spyOn(quests, "upsertQuestEntries").mockImplementation(mocks.upsertQuestEntries);

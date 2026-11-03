@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { findUserDataForGET } from "@/queries/profile";
 import { drizzleDB } from "@/server/db";
 
@@ -40,9 +40,6 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
-
   const cors = await corsHeaders();
 
   try {
