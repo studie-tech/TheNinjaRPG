@@ -1,5 +1,0 @@
-[core]
-max_budget_per_task = 50.0
-
-[llm]
-disable_vision = true
