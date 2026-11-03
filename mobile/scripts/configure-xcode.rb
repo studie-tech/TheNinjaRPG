@@ -45,7 +45,7 @@ set_setting(app, "CODE_SIGN_ENTITLEMENTS", "App/App.entitlements")
 set_setting(app, "PRODUCT_BUNDLE_IDENTIFIER", BUNDLE_ID)
 set_setting(app, "TNR_APP_GROUP", APP_GROUP)
 set_setting(app, "IPHONEOS_DEPLOYMENT_TARGET", APP_DEPLOYMENT_TARGET)
-# The widget extension is Swift 5.9+ syntax; keep both targets on the same toolchain.
+# Swift language mode 5 for both targets; the sources need a Swift 5.9+ compiler.
 set_setting(app, "SWIFT_VERSION", "5.0")
 
 # --- Widget extension target -----------------------------------------------------------
@@ -131,16 +131,6 @@ end
 
 sync_resource(project, app, APP_TARGET, "App", "PrivacyInfo.xcprivacy")
 sync_resource(project, widget, WIDGET_TARGET, WIDGET_TARGET, "PrivacyInfo.xcprivacy")
-
-# Widget assets
-widget_assets = File.join(File.dirname(PROJECT_PATH), WIDGET_TARGET, "Assets.xcassets")
-if Dir.exist?(widget_assets)
-  group = project.main_group.find_subpath(WIDGET_TARGET, true)
-  ref = group.files.find { |f| f.path == "Assets.xcassets" } || group.new_file("Assets.xcassets")
-  unless widget.resources_build_phase.files_references.include?(ref)
-    widget.resources_build_phase.add_file_reference(ref)
-  end
-end
 
 # --- Clean up what new_target adds ---------------------------------------------------------
 
