@@ -871,7 +871,7 @@ export const CurseTag = z.object({
   ...PowerAttributes,
   type: z.literal("curse").prefault("curse"),
   description: msg(
-    "Store half the percentage of enemy damage dealt and half of enemy damage received as healing. Heals once on natural expiration; removal discards stored healing. Uses actual HP damage and cannot revive. Healing increases and decreases do not modify storage or payout.",
+    "Store half the percentage of enemy damage dealt and half of enemy damage received as healing. Heals once on natural expiration; removal discards stored healing. Uses actual HP damage and cannot revive. Healing increases and decreases apply at payout before the maximum-HP cap; stored healing is unchanged. While active, disables the holder's Lifesteal, Absorb, and Vamp conversions.",
   ),
   calculation: z.literal("percentage").prefault("percentage"),
   rounds: z.coerce.number().int().min(1).max(100).prefault(3),

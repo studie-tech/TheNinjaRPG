@@ -157,7 +157,7 @@ describe("Curse", () => {
     expect(user(battle).curHealth).toBe(5000);
     expect(effect.curseState.storedHealing).toBe(0);
   });
-  it("ignores healing increases at payout", () => {
+  it("applies healing increases at payout", () => {
     const effect = mark();
     effect.curseState = { storedHealing: 500, activatedRound: 1 };
     const boost = makeEffect(
@@ -167,7 +167,7 @@ describe("Curse", () => {
     );
     const battle = scenario([effect, boost]);
     settleCurse(effect, user(battle), battle.usersEffects);
-    expect(user(battle).curHealth).toBe(5500);
+    expect(user(battle).curHealth).toBe(5750);
   });
   it("does not accumulate on its casting action", () => {
     const effect = mark();
@@ -320,7 +320,7 @@ it("starts accumulating on the next action within the same round", () => {
 });
 
 it.each(["increaseheal", "decreaseheal"] as const)(
-  "keeps stored healing and expiration payout unchanged by %s",
+  "keeps storage unchanged and applies %s to expiration payout",
   (type) => {
     const modifier = makeEffect(
       type,
@@ -339,11 +339,11 @@ it.each(["increaseheal", "decreaseheal"] as const)(
     expect(stored(battle)).toBe(500);
     const health = user(battle).curHealth;
     expire(battle);
-    expect(user(battle).curHealth - health).toBe(500);
+    expect(user(battle).curHealth - health).toBe(type === "increaseheal" ? 750 : 250);
   },
 );
 
-it("restores exactly the displayed fractional stored healing on expiration", () => {
+it("applies healing reduction to fractional storage on expiration", () => {
   const effect = mark();
   effect.curseState = { storedHealing: 759.52, activatedRound: 1 };
   const reduction = makeEffect(
@@ -352,11 +352,160 @@ it("restores exactly the displayed fractional stored healing on expiration", () 
     { creatorId: "attacker", targetId: "attacker", createdRound: 1 },
   );
   const battle = scenario([effect, reduction]);
-  const displayed = stored(battle).toFixed(2);
+  const expected = (stored(battle) * 0.7).toFixed(2);
   const health = user(battle).curHealth;
   const transition = expire(battle);
-  expect((user(battle).curHealth - health).toFixed(2)).toBe(displayed);
+  expect((user(battle).curHealth - health).toFixed(2)).toBe(expected);
   expect(
-    transition.expiredEffects.some((e) => e.txt.includes(`restores ${displayed} HP`)),
+    transition.expiredEffects.some((e) => e.txt.includes(`restores ${expected} HP`)),
   ).toBe(true);
 });
+
+it("applies decreaseheal before capping Curse at missing HP", () => {
+  const effect = mark();
+  effect.curseState = { storedHealing: 500, activatedRound: 1 };
+  const reduction = makeEffect(
+    "decreaseheal",
+    { power: 50, calculation: "percentage", rounds: 3 },
+    { creatorId: "attacker", targetId: "attacker", createdRound: 1 },
+  );
+  const battle = scenario([effect, reduction]);
+  user(battle).curHealth = 9600;
+  settleCurse(effect, user(battle), battle.usersEffects);
+  expect(user(battle).curHealth).toBe(9850);
+});
+
+it.each(["lifesteal", "absorb", "vamp"] as const)(
+  "disables %s for the Curse holder and resumes it after expiry",
+  (type) => {
+    const conversion = () =>
+      makeEffect(
+        type,
+        { power: 40, calculation: "percentage", rounds: type === "vamp" ? 0 : 3 },
+        {
+          id: `conversion-${type}`,
+          creatorId: "attacker",
+          targetId: "attacker",
+          targetType: "user",
+          createdRound: type === "vamp" ? 3 : 1,
+          isNew: type === "vamp",
+        },
+      );
+    const attack = () => (type === "absorb" ? hit("defender", "attacker") : hit());
+    const baseline = applyEffects(scenario([attack()]), "attacker").newBattle;
+    const enabled = applyEffects(
+      scenario([attack(), conversion()]),
+      "attacker",
+    ).newBattle;
+    expect(user(enabled).curHealth).toBeGreaterThan(user(baseline).curHealth);
+    const blocked = applyEffects(
+      scenario([mark(), attack(), conversion()]),
+      "attacker",
+    ).newBattle;
+    expect(user(blocked).curHealth).toBe(user(baseline).curHealth);
+    const expired = mark();
+    expired.rounds = 0;
+    const resumed = applyEffects(
+      scenario([expired, attack(), conversion()]),
+      "attacker",
+    ).newBattle;
+    expect(user(resumed).curHealth).toBe(user(enabled).curHealth);
+  },
+);
+
+it("blocks all Absorb pools while Curse is active", () => {
+  const absorb = makeEffect(
+    "absorb",
+    {
+      power: 60,
+      calculation: "percentage",
+      poolsAffected: ["Health", "Chakra", "Stamina"],
+      rounds: 3,
+    },
+    {
+      creatorId: "attacker",
+      targetId: "attacker",
+      targetType: "user",
+      createdRound: 1,
+    },
+  );
+  const battle = scenario([mark(), hit("defender", "attacker"), absorb]);
+  user(battle).curChakra = 10;
+  user(battle).curStamina = 10;
+  const result = applyEffects(battle, "attacker").newBattle;
+  expect(user(result).curHealth).toBe(4000);
+  expect(user(result).curChakra).toBe(10);
+  expect(user(result).curStamina).toBe(10);
+});
+
+it("blocks Vamp on Curse's casting action", () => {
+  const effect = mark();
+  effect.createdRound = 3;
+  effect.isNew = true;
+  const vamp = makeEffect(
+    "vamp",
+    { power: 40, rounds: 0 },
+    {
+      creatorId: "attacker",
+      targetId: "attacker",
+      targetType: "user",
+      createdRound: 3,
+      isNew: true,
+    },
+  );
+  const battle = applyEffects(scenario([effect, hit(), vamp]), "attacker").newBattle;
+  expect(user(battle).curHealth).toBe(5000);
+});
+
+it("does not block the opponent's Lifesteal", () => {
+  const lifesteal = makeEffect(
+    "lifesteal",
+    { power: 40, rounds: 3 },
+    {
+      creatorId: "defender",
+      targetId: "defender",
+      targetType: "user",
+      createdRound: 1,
+    },
+  );
+  const battle = applyEffects(
+    scenario([mark(), hit("defender", "attacker"), lifesteal]),
+    "attacker",
+  ).newBattle;
+  expect(user(battle, "defender").curHealth).toBeGreaterThan(5000);
+});
+
+it.each(["clear", "seal"] as const)(
+  "allows Lifesteal after Curse is disabled by %s",
+  (type) => {
+    const effect = mark();
+    if (type === "seal") effect.fromType = "bloodline";
+    const removal = makeEffect(
+      type,
+      { power: 100, rounds: type === "seal" ? 3 : 0 },
+      {
+        creatorId: "defender",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: type === "clear" ? 3 : 1,
+        isNew: type === "clear",
+      },
+    );
+    const lifesteal = makeEffect(
+      "lifesteal",
+      { power: 40, rounds: 3 },
+      {
+        creatorId: "attacker",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: 1,
+        fromType: "armor",
+      },
+    );
+    const battle = applyEffects(
+      scenario([effect, removal, hit(), lifesteal]),
+      "attacker",
+    ).newBattle;
+    expect(user(battle).curHealth).toBeGreaterThan(5000);
+  },
+);

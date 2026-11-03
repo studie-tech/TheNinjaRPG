@@ -884,6 +884,19 @@ export const applyEffects = (
     );
   });
 
+  // Resolve Curse after activation, Clear, and seals; conversion effects resume when it ends.
+  const curseHolders = new Set(
+    newUsersEffects
+      .filter(
+        (effect) =>
+          effect.type === "curse" &&
+          effect.curseState &&
+          !effect.curseState.settled &&
+          isEffectEnabled(effect, newUsersEffects),
+      )
+      .map((effect) => effect.targetId),
+  );
+
   // Apply consequences to users
   Array.from(consequences.values())
     // Before collapsing consequences, we process each consequence indicidually
@@ -1065,7 +1078,7 @@ export const applyEffects = (
           // Intentional: this can trigger on killing blows (no target.curHealth > 0 guard).
           // Fills the shared leech budget first; lifesteal later takes whatever remains.
           const rawVampHeal = c.vampHeal ?? 0;
-          if (rawVampHeal > 0 && user.curHealth > 0) {
+          if (rawVampHeal > 0 && user.curHealth > 0 && !curseHolders.has(user.userId)) {
             const vampHeal = Math.min(
               Math.floor(rawVampHeal),
               leechBudget - leechConsumed,
@@ -1245,6 +1258,7 @@ export const applyEffects = (
         if (
           c.lifesteal_hp !== undefined &&
           c.lifesteal_hp >= 0 &&
+          !curseHolders.has(user.userId) &&
           target.curHealth > 0 &&
           user.curHealth > 0
         ) {
@@ -1260,7 +1274,12 @@ export const applyEffects = (
             });
           }
         }
-        if (c.absorb_hp !== undefined && c.absorb_hp >= 0 && target.curHealth > 0) {
+        if (
+          c.absorb_hp !== undefined &&
+          c.absorb_hp >= 0 &&
+          target.curHealth > 0 &&
+          !curseHolders.has(target.userId)
+        ) {
           // Use pre-shield damage for the 60% cap calculation to avoid shield interference
           const preShieldDamage = c.preShieldDamage ?? 0;
           const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
@@ -1272,7 +1291,11 @@ export const applyEffects = (
             color: "green",
           });
         }
-        if (c.absorb_sp !== undefined && c.absorb_sp >= 0) {
+        if (
+          c.absorb_sp !== undefined &&
+          c.absorb_sp >= 0 &&
+          !curseHolders.has(target.userId)
+        ) {
           target.curStamina += c.absorb_sp;
           target.curStamina = Math.min(cap(target, "Stamina"), target.curStamina);
           actionEffects.push({
@@ -1280,7 +1303,11 @@ export const applyEffects = (
             color: "green",
           });
         }
-        if (c.absorb_cp !== undefined && c.absorb_cp >= 0) {
+        if (
+          c.absorb_cp !== undefined &&
+          c.absorb_cp >= 0 &&
+          !curseHolders.has(target.userId)
+        ) {
           target.curChakra += c.absorb_cp;
           target.curChakra = Math.min(cap(target, "Chakra"), target.curChakra);
           actionEffects.push({
