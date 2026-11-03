@@ -69,29 +69,27 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
       backDisabled={isUpdating}
       noRightAlign={true}
     >
-      <>
-        <EditContent
-          schema={BadgeValidator}
-          form={form}
-          formData={formData}
-          showSubmit={props.canSave}
-          buttonTxt="Save to Database"
-          type="badge"
-          relationId={badge.id}
-          allowImageUpload={props.canSave}
-          onAccept={handleBadgeSubmit}
-          submitLoading={isUpdating}
-          submitLoadingText="Saving"
+      <EditContent
+        schema={BadgeValidator}
+        form={form}
+        formData={formData}
+        showSubmit={props.canSave}
+        buttonTxt="Save to Database"
+        type="badge"
+        relationId={badge.id}
+        allowImageUpload={props.canSave}
+        onAccept={handleBadgeSubmit}
+        submitLoading={isUpdating}
+        submitLoadingText="Saving"
+      />
+      <div className="mt-2 flex justify-end">
+        <SuggestChange
+          entityType="BADGE"
+          entityId={badge.id}
+          getData={() => form.getValues()}
+          label={props.canSave ? "Suggest instead" : "Suggest a change"}
         />
-        <div className="mt-2 flex justify-end">
-          <SuggestChange
-            entityType="BADGE"
-            entityId={badge.id}
-            getData={() => form.getValues()}
-            label={props.canSave ? "Suggest instead" : "Suggest a change"}
-          />
-        </div>
-      </>
+      </div>
     </ContentBox>
   );
 };
