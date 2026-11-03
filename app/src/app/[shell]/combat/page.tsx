@@ -960,5 +960,4 @@ export default function CombatPage() {
 }
 
 /** Battle focus packs every action into one grid of icons that wraps as needed. */
-const FOCUS_ACTION_GRID =
-  "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1 max-lg:grid-cols-6";
+const FOCUS_ACTION_GRID = "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1";
