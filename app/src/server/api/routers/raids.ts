@@ -449,9 +449,6 @@ export const raidsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query - parallel fetch
       const [user, questData, titleError] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -491,9 +488,6 @@ export const raidsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query
       const [user, titleError] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -528,9 +522,6 @@ export const raidsRouter = createTRPCRouter({
     .input(z.object({ thresholdId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
@@ -849,7 +840,7 @@ export const raidsRouter = createTRPCRouter({
 
       if (statusResult.rowsAffected === 0) {
         // Rollback - clean up newly created team if status update fails
-        if (createdNewTeam && teamId) {
+        if (createdNewTeam) {
           await deleteUnclaimedBattleQueue(ctx.drizzle, teamId);
         }
         return errorResponse("Failed to update status - you may already be in a queue");
@@ -1382,9 +1373,7 @@ export const checkAndCleanupExpiredRaid = async (
       deleteMpvpBattleQueueForCheckAndCleanupExpiredRaid(client, raidId),
       // Drop chat memberships for all queued users on this raid so they lose
       // access once cleanup yanks them out of the queue.
-      ...(userIds.length > 0
-        ? [purgeRaidChatMembership(client, raidChatConversationId, userIds)]
-        : []),
+      purgeRaidChatMembership(client, raidChatConversationId, userIds),
       ...(userIds.length > 0
         ? [updateUserDataForCheckAndCleanupExpiredRaid(client, userIds)]
         : []),
