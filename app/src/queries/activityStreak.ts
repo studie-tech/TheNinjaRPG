@@ -444,45 +444,6 @@ export const deleteActivityStreakConfigForDeleteConfig = (
   input: { id: string },
 ) => client.delete(activityStreakConfig).where(eq(activityStreakConfig.id, input.id));
 
-/**
- * Build the `activityStreakConfig` update for `toggleConfigActive`, setting `isActive`
- * and `updatedAt`, using predicates on `streakType`.
- */
-export const updateActivityStreakConfigForToggleConfigActive = (
-  client: Pick<DrizzleClient, "update">,
-) =>
-  client
-    .update(activityStreakConfig)
-    .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(activityStreakConfig.streakType, "RECURRING"));
-
-/**
- * Build the `activityStreakConfig` update for `toggleConfigActive`, setting `isActive`
- * and `updatedAt`, using predicates on `id`.
- */
-export const updateActivityStreakConfigForToggleConfigActive2 = (
-  client: Pick<DrizzleClient, "update">,
-  input: { id: string },
-) =>
-  client
-    .update(activityStreakConfig)
-    .set({ isActive: true, updatedAt: new Date() })
-    .where(eq(activityStreakConfig.id, input.id));
-
-/**
- * Build the `activityStreakConfig` update for `toggleConfigActive`, setting `isActive`
- * and `updatedAt`, using predicates on `id`.
- */
-export const updateActivityStreakConfigForToggleConfigActive3 = (
-  client: Pick<DrizzleClient, "update">,
-  config: { isActive: false | true },
-  input: { id: string },
-) =>
-  client
-    .update(activityStreakConfig)
-    .set({ isActive: !config.isActive, updatedAt: new Date() })
-    .where(eq(activityStreakConfig.id, input.id));
-
 /** Insert the configured streak-day rewards with generated row IDs after the caller has saved the configuration. */
 export const createRewardsForConfig = async (
   client: DrizzleClient,

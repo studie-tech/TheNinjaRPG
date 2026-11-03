@@ -310,10 +310,6 @@ export const AiRule = z
     });
   });
 
-export const createAiProfileSchema = z.object({
-  userId: z.string(),
-  rules: z.array(AiRule),
-});
 export const updateAiProfileSchema = z.object({
   id: z.string(),
   rules: z.array(AiRule),

@@ -40,17 +40,7 @@ export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: stri
 };
 
 import { inArray, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { item, jutsu, quest, userData } from "@/drizzle/schema";
-
-/** Build the `aiProfile` insert for `createAiProfile`. */
-export const insertAiProfileForCreateAiProfile = (
-  client: Pick<DrizzleClient, "insert">,
-  input: { userId: string; rules: import("@/validators/ai").AiRuleType[] },
-) =>
-  client
-    .insert(aiProfile)
-    .values({ id: nanoid(), userId: input.userId, rules: input.rules });
 
 /** Build the `jutsu` listing for `updateAiProfile`, using predicates on `id`. */
 export const listJutsuForUpdateAiProfile = (

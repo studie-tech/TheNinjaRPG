@@ -672,17 +672,6 @@ export const auctionRouter = createTRPCRouter({
       };
     }),
 
-  // Complete auction (transfer userItem to winner)
-  completeAuction: protectedProcedure
-    .meta({ mcp: { description: "Complete expired auction" } })
-    .input(z.object({ auctionId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const { auctionId } = input;
-
-      return completeAuctionInternal(ctx.drizzle, auctionId);
-    }),
-
   // Cancel listing (seller only, no bids — atomic guard so a race cannot cancel after a bid)
   cancelAuction: protectedProcedure
     .meta({
@@ -731,19 +720,18 @@ export const auctionRouter = createTRPCRouter({
     }),
 });
 
-/** Settle expiration and buyout through the same atomic listing claim. */
+/** Settle an expired listing through the atomic listing claim that buyouts share. */
 export const completeAuctionInternal = async (
   drizzle: DrizzleClient,
   auctionId: string,
-  winnerId?: string,
 ) => {
   try {
     const auction = await fetchAuctionListing(drizzle, auctionId);
     if (!auction) return throwAuctionSettlementConflict("Auction not found");
     const settlement = await retryOnDeadlock(() =>
       auction.bids.length < 2
-        ? settleAuctionWithoutRefunds(drizzle, auction, winnerId)
-        : drizzle.transaction((tx) => settleAuction(tx, auctionId, winnerId)),
+        ? settleAuctionWithoutRefunds(drizzle, auction)
+        : drizzle.transaction((tx) => settleAuction(tx, auctionId)),
     );
     notifyAuctionSettlement(drizzle, settlement);
     return settlement;
