@@ -3091,7 +3091,8 @@ export const alignBattle = (
       if (
         !battle.usersState.some(
           (u) => !areBattleAllies(u, holder) && stillInBattle(u, battle.usersEffects),
-        )
+        ) &&
+        !battle.extraState.encounter?.pendingWaves.length
       ) {
         if (effect.curseState) {
           effect.curseState.storedHealing = 0;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { accumulateCurseConsequence, accumulateCurseDamage } from "@/libs/combat/curse";
+import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { applyEffects } from "@/libs/combat/process";
 import { curse, settleCurse } from "@/libs/combat/tags";
 import { alignBattle, applyPoolAdjustmentsToBase } from "@/libs/combat/util";
@@ -429,6 +430,35 @@ it("includes residual damage and returned Parry damage", () => {
   );
   const battle = applyEffects(scenario([mark(), hit(), parry]), "attacker").newBattle;
   expect(stored(battle)).toBe(250);
+});
+
+it("pays expiry healing before the next encounter wave spawns", () => {
+  const effect = mark();
+  effect.curseState = { storedHealing: 500, activatedRound: 1 };
+  const battle = scenario([effect]);
+  battle.width = 8;
+  battle.height = 8;
+  user(battle).curHealth = 3000;
+  user(battle, "defender").curHealth = 0;
+  battle.extraState.encounter = {
+    wave: 1,
+    waveStartedRound: 1,
+    pendingWaves: [{
+      users: [makeBattleUser("next-enemy")],
+      effects: [],
+      delayRounds: 0,
+    }],
+  };
+
+  const transition = expire(battle);
+  expect(transition.progressRound).toBe(true);
+  expect(advanceEncounterWave(battle)).toBe(true);
+  expect(user(battle, "next-enemy").curHealth).toBeGreaterThan(0);
+  expect(user(battle).curHealth).toBe(3500);
+  expect(effect.curseState).toMatchObject({ storedHealing: 0, settled: true });
+  expect(
+    transition.expiredEffects.some((e) => e.txt.includes("restores 500.00 HP")),
+  ).toBe(true);
 });
 
 it("does not pay at battle end", () => {
