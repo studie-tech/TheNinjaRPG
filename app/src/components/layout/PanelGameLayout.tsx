@@ -40,7 +40,6 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     handleRightSidebarClick,
     shownNotifications,
     showMobileNotifications,
-    mobileNotificationCount,
     mobileNavConfig,
     location,
     variantClasses,
@@ -96,7 +95,6 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
               <MobileNotificationsPopover
                 notifications={shownNotifications}
                 variant={props.variant}
-                count={mobileNotificationCount}
               />
             )}
           </div>

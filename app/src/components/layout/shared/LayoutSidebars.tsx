@@ -422,7 +422,7 @@ interface RightSideBarProps {
   location?: NavBarDropdownLink;
 }
 
-export const RightSideBar: React.FC<RightSideBarProps> = ({
+const RightSideBar: React.FC<RightSideBarProps> = ({
   variant,
   notifications,
   systems,

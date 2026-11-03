@@ -81,15 +81,10 @@ const renderProps = (
   children: <p>Page content</p>,
   variant,
   userData: undefined,
-  isClerkLoaded: true,
   isSignedInLayout: true,
-  isAnonymousLayout: false,
   pathname: "/profile",
   navbarMenuItems: [],
-  navbarMenuItemsLeft: [],
-  navbarMenuItemsRight: [],
   shownNotifications: [],
-  systems: [],
   location: undefined,
   leftSideBarOpen: false,
   onLeftSideBarOpenChange: () => {},
@@ -107,7 +102,6 @@ const renderProps = (
   imageset: { navbar: "/navbar.webp", handsign: "/handsign.webp", wallpaper: "/wall.webp" },
   variantClasses: layoutVariantClasses[variant],
   showMobileNotifications: false,
-  mobileNotificationCount: 0,
 });
 
 const setSwapped = (swapped: boolean) =>

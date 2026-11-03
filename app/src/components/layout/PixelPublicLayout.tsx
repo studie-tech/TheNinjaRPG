@@ -6,7 +6,7 @@ import ReactDOM from "react-dom";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 
-export interface LayoutProps {
+interface LayoutProps {
   children: React.ReactNode;
 }
 

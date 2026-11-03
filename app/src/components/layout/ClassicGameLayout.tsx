@@ -43,16 +43,12 @@ import type { GameLayoutRenderProps } from "./shared/layoutTypes";
 import { isClerkElement } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
-export { SideBannerTitle } from "./shared/LayoutSidebars";
-export { getImageSet } from "./shared/layoutVariants";
-
 export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
   isSignedInLayout,
   pathname,
-  navbarMenuItemsLeft,
-  navbarMenuItemsRight,
+  navbarMenuItems,
   shownNotifications,
   location,
   leftSideBarOpen,
@@ -71,9 +67,10 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   imageset,
   variantClasses,
   showMobileNotifications,
-  mobileNotificationCount,
 }) => {
   const { swapSides } = useActivityDock();
+  const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
+  const navbarMenuItemsRight = navbarMenuItems.slice(3);
   return (
     <div className="absolute top-0 bottom-0 w-full md:relative">
       <div
@@ -370,7 +367,6 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             <MobileNotificationsPopover
               notifications={shownNotifications}
               variant="default"
-              count={mobileNotificationCount}
             />
           )}
         </div>

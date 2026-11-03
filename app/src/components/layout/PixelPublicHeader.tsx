@@ -9,7 +9,7 @@ import Link from "@/layout/Link";
 import PixelPublicMenuDropdown from "@/layout/PixelPublicMenuDropdown";
 import { cn } from "@/libs/shadui";
 
-export interface PixelPublicHeaderLink {
+interface PixelPublicHeaderLink {
   href: string;
   name: string;
 }

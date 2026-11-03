@@ -36,7 +36,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
   isSignedInLayout,
-  isAnonymousLayout,
   pathname,
   navbarMenuItems,
   shownNotifications,
@@ -54,9 +53,9 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   handleRightSidebarClick,
   variantClasses,
   showMobileNotifications,
-  mobileNotificationCount,
 }) => {
   const { swapSides } = useActivityDock();
+  const isAnonymousLayout = !isSignedInLayout;
   return (
     <div
       className="tnr-pixel-game absolute top-0 bottom-0 w-full md:relative"
@@ -188,7 +187,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     <MobileNotificationsPopover
                       notifications={shownNotifications}
                       variant="pixel"
-                      count={mobileNotificationCount}
                     />
                   )}
                 </div>

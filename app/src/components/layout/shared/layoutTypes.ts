@@ -24,15 +24,10 @@ export interface GameLayoutRenderProps {
   children: React.ReactNode;
   variant: GameLayoutVariant;
   userData?: LayoutUserData | null;
-  isClerkLoaded: boolean;
   isSignedInLayout: boolean;
-  isAnonymousLayout: boolean;
   pathname: string;
   navbarMenuItems: NavBarDropdownLink[];
-  navbarMenuItemsLeft: NavBarDropdownLink[];
-  navbarMenuItemsRight: NavBarDropdownLink[];
-  shownNotifications?: NavBarDropdownLink[];
-  systems: NavBarDropdownLink[];
+  shownNotifications: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
   leftSideBarOpen: boolean;
   onLeftSideBarOpenChange: (open: boolean) => void;
@@ -50,7 +45,6 @@ export interface GameLayoutRenderProps {
   imageset: LayoutImageSet;
   variantClasses: GameLayoutVariantClasses;
   showMobileNotifications: boolean;
-  mobileNotificationCount: number;
 }
 
 export type GameLayoutRenderer = React.FC<GameLayoutRenderProps>;
