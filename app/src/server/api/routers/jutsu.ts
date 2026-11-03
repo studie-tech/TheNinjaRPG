@@ -2821,10 +2821,10 @@ export const selectJutsuLoadout = async (
   loadouts: JutsuLoadout[],
   userjutsus: UserJutsuWithRelations[],
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
-  // Optional validator: when supplied, saved jutsuIds are filtered to those still
-  // equippable. The jutsu-management path passes full canUseJutsu validation;
-  // combat checks bloodline items and effective masteries against its battle state.
-  validateLoadout?: (jutsuIds: string[]) => ComputedJutsuLoadout,
+  // Filters saved jutsuIds to those still equippable. The jutsu-management path
+  // passes full canUseJutsu validation; combat checks bloodline items and
+  // effective masteries against its battle state.
+  validateLoadout: (jutsuIds: string[]) => ComputedJutsuLoadout,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so
   // a downgraded user can't reach an out-of-range loadout by guessing its
@@ -2841,9 +2841,7 @@ export const selectJutsuLoadout = async (
   // CASE), jutsu eligibility derives entirely from the just-fetched snapshot
   // (ownership + canUseJutsu + caps), and no external subsystem mutates it
   // mid-request, so JS-side validation here needs no write-time re-check.
-  const { equipIds, invalidJutsus } = validateLoadout
-    ? validateLoadout(loadout.jutsuIds)
-    : { equipIds: loadout.jutsuIds, invalidJutsus: [] as string[] };
+  const { equipIds, invalidJutsus } = validateLoadout(loadout.jutsuIds);
 
   // Update the active pointer and every equipped row in one multi-table UPDATE.
   // Keeping these writes in a single statement closes the window where
