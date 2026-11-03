@@ -6,7 +6,6 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
 import QueueLengthFiltering, {
   getFilter,
   useFiltering,
@@ -15,15 +14,7 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
-interface QueueLengthHistogramProps {
-  title?: string;
-  subtitle?: string;
-}
-
-export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
-  title = "Queue Lengths",
-  subtitle = "Distribution of queue wait times",
-}) => {
+export const QueueLengthHistogram: React.FC = () => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const filteringState = useFiltering();
   const filter = getFilter(filteringState);
@@ -33,16 +24,15 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
   const { data: queueLengthData } = api.data.getQueueLengthStatistics.useQuery(filter);
 
   // Mutations
-  const { mutate: clearAllQueueLengths, isPending: isClearing } =
-    api.data.clearAllQueueLengths.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) {
-          // Invalidate the queue length statistics query to refresh the data
-          await utils.data.getQueueLengthStatistics.invalidate();
-        }
-      },
-    });
+  const { mutate: clearAllQueueLengths } = api.data.clearAllQueueLengths.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        // Invalidate the queue length statistics query to refresh the data
+        await utils.data.getQueueLengthStatistics.invalidate();
+      }
+    },
+  });
 
   const utils = api.useUtils();
 
@@ -162,8 +152,8 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
 
   return (
     <ContentBox
-      title={title}
-      subtitle={subtitle}
+      title="Queue Lengths"
+      subtitle="Distribution of queue wait times"
       topRightContent={
         <div className="flex items-center gap-2">
           <QueueLengthFiltering state={filteringState} />
@@ -182,15 +172,9 @@ export const QueueLengthHistogram: React.FC<QueueLengthHistogramProps> = ({
                 clearAllQueueLengths();
               }}
             >
-              {isClearing ? (
-                <Loader explanation="Clearing data" />
-              ) : (
-                <>
-                  Are you sure you want to clear all queue length data? This action
-                  cannot be undone and will reset all queue length statistics. This
-                  action will be logged for future audit and review.
-                </>
-              )}
+              Are you sure you want to clear all queue length data? This action cannot
+              be undone and will reset all queue length statistics. This action will be
+              logged for future audit and review.
             </Confirm>
           )}
         </div>

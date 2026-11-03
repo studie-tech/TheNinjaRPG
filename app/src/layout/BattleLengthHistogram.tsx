@@ -10,20 +10,11 @@ import BattleLengthFiltering, {
 } from "@/layout/BattleLengthFiltering";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
-interface BattleLengthHistogramProps {
-  title?: string;
-  subtitle?: string;
-}
-
-export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
-  title = "Battle Lengths",
-  subtitle = "Distribution of battle durations",
-}) => {
+export const BattleLengthHistogram: React.FC = () => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const filteringState = useFiltering();
   const filter = getFilter(filteringState);
@@ -34,16 +25,15 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
     api.data.getBattleLengthStatistics.useQuery(filter);
 
   // Mutations
-  const { mutate: clearAllBattleLengths, isPending: isClearing } =
-    api.data.clearAllBattleLengths.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) {
-          // Invalidate the battle length statistics query to refresh the data
-          await utils.data.getBattleLengthStatistics.invalidate();
-        }
-      },
-    });
+  const { mutate: clearAllBattleLengths } = api.data.clearAllBattleLengths.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success) {
+        // Invalidate the battle length statistics query to refresh the data
+        await utils.data.getBattleLengthStatistics.invalidate();
+      }
+    },
+  });
 
   const utils = api.useUtils();
 
@@ -163,8 +153,8 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
 
   return (
     <ContentBox
-      title={title}
-      subtitle={subtitle}
+      title="Battle Lengths"
+      subtitle="Distribution of battle durations"
       topRightContent={
         <div className="flex items-center gap-2">
           <BattleLengthFiltering state={filteringState} />
@@ -183,15 +173,9 @@ export const BattleLengthHistogram: React.FC<BattleLengthHistogramProps> = ({
                 clearAllBattleLengths();
               }}
             >
-              {isClearing ? (
-                <Loader explanation="Clearing data" />
-              ) : (
-                <>
-                  Are you sure you want to clear all battle length data? This action
-                  cannot be undone and will reset all battle length statistics. This
-                  action will be logged for future audit and review.
-                </>
-              )}
+              Are you sure you want to clear all battle length data? This action cannot
+              be undone and will reset all battle length statistics. This action will be
+              logged for future audit and review.
             </Confirm>
           )}
         </div>

@@ -8,14 +8,7 @@ import RankedRankDistributionFiltering, {
   useFiltering,
 } from "@/layout/RankedRankDistributionFiltering";
 
-interface RankedRankDistributionHistogramProps {
-  title?: string;
-  subtitle?: string;
-}
-
-export const RankedRankDistributionHistogram: React.FC<
-  RankedRankDistributionHistogramProps
-> = ({ title = "Rank Distribution", subtitle = "Players across ranked ranks" }) => {
+export const RankedRankDistributionHistogram: React.FC = () => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const filteringState = useFiltering();
   const filter = getFilter(filteringState);
@@ -108,8 +101,8 @@ export const RankedRankDistributionHistogram: React.FC<
 
   return (
     <ContentBox
-      title={title}
-      subtitle={subtitle}
+      title="Rank Distribution"
+      subtitle="Players across ranked ranks"
       topRightContent={
         <div className="flex items-center gap-2">
           <RankedRankDistributionFiltering state={filteringState} />
