@@ -41,7 +41,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
     });
 
   const { mutate: mutateRepairAll, isPending: isRepairingAll } =
-    repairAllWithKits().useMutation({
+    repairAllWithKits.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
@@ -301,6 +301,6 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   );
 }
 
-// Alias the procedure so its action name is not interpreted as a React hook; read on use,
-// not at import, so the module loads even where the client is replaced.
-const repairAllWithKits = () => api.item.useRepairAll;
+// Alias the procedure so its action name is not interpreted as a React hook. Optional
+// access lets the module load where tests replace the client without this router.
+const repairAllWithKits = api.item?.useRepairAll;
