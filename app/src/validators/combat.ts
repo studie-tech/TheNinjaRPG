@@ -306,7 +306,6 @@ export const PotencyTagTypes = [
   "drain",
   "poison",
 ] as const;
-export type PotencyTagType = (typeof PotencyTagTypes)[number];
 
 const PotencyAttributes = {
   ...BaseAttributes,
@@ -476,8 +475,6 @@ export const TimeCompressionTag = z.object({
   calculation: z.enum(["static", "percentage"]).prefault("percentage"),
 });
 
-export type TimeCompressionTagType = z.infer<typeof TimeCompressionTag>;
-
 export const TimeDilationTag = z.object({
   ...BaseAttributes,
   ...IncludeStats,
@@ -487,8 +484,6 @@ export const TimeDilationTag = z.object({
   rounds: z.coerce.number().int().min(1).max(20).prefault(1),
   calculation: z.enum(["static", "percentage"]).prefault("percentage"),
 });
-
-export type TimeDilationTagType = z.infer<typeof TimeDilationTag>;
 
 export const RedirectionTag = z.object({
   ...BaseAttributes,
@@ -502,7 +497,6 @@ export const RedirectionTag = z.object({
   calculation: z.enum(["static"]).prefault("static"),
   direction: z.enum(["push", "pull"]).prefault("pull"),
 });
-export type RedirectionTagType = z.infer<typeof RedirectionTag>;
 
 export const IncreaseRangeTag = z.object({
   ...BaseAttributes,
@@ -649,7 +643,6 @@ export const DamageTag = z.object({
   allowBloodlineDamageIncrease: z.coerce.boolean().prefault(true),
   allowBloodlineDamageDecrease: z.coerce.boolean().prefault(true),
 });
-export type DamageTagType = z.infer<typeof DamageTag>;
 
 /** Reuse damage authoring controls; combat resolves the caster's element at runtime. */
 export const ElementalDamageTag = DamageTag.omit({ elements: true }).extend({
@@ -665,7 +658,6 @@ export const CopyTag = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
   rounds: z.coerce.number().int().min(1).max(10).prefault(3),
 });
-export type CopyTagType = z.infer<typeof CopyTag>;
 
 export const MirrorTag = z.object({
   ...BaseAttributes,
@@ -675,7 +667,6 @@ export const MirrorTag = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
   rounds: z.coerce.number().int().min(1).max(10).prefault(3),
 });
-export type MirrorTagType = z.infer<typeof MirrorTag>;
 
 export const PierceTag = z.object({
   ...BaseAttributes,
@@ -689,7 +680,6 @@ export const PierceTag = z.object({
   allowBloodlineDamageIncrease: z.coerce.boolean().prefault(true),
   allowBloodlineDamageDecrease: z.coerce.boolean().prefault(true),
 });
-export type PierceTagType = z.infer<typeof PierceTag>;
 
 export const DebuffPreventTag = z.object({
   ...BaseAttributes,
@@ -747,7 +737,6 @@ export const VampTag = z.object({
   ),
   calculation: z.enum(["percentage"]).prefault("percentage"),
 });
-export type VampTagType = z.infer<typeof VampTag>;
 
 export const ConsumeTag = z.object({
   ...BaseAttributes,
@@ -761,7 +750,6 @@ export const ConsumeTag = z.object({
   shieldRounds: z.coerce.number().int().min(1).max(100).prefault(3),
   target: z.enum(BaseTagTargets).optional().prefault("SELF"),
 });
-export type ConsumeTagType = z.infer<typeof ConsumeTag>;
 
 export const SiphonTag = ConsumeTag.extend({
   type: z.literal("siphon").prefault("siphon"),
@@ -770,7 +758,6 @@ export const SiphonTag = ConsumeTag.extend({
   ),
   rounds: z.coerce.number().int().min(1).max(100).prefault(3),
 });
-export type SiphonTagType = z.infer<typeof SiphonTag>;
 
 export const DisarmTag = z.object({
   ...BaseAttributes,
@@ -778,7 +765,6 @@ export const DisarmTag = z.object({
   type: z.literal("disarm").prefault("disarm"),
   description: msg("Prevents using WEAPON items in battle and hides them"),
 });
-export type DisarmTagType = z.infer<typeof DisarmTag>;
 
 export const DrainTag = z.object({
   ...BaseAttributes,
@@ -790,7 +776,6 @@ export const DrainTag = z.object({
   rounds: z.coerce.number().int().min(1).max(10).prefault(3),
   poolsAffected: z.array(z.enum(PoolTypes)).prefault(["Chakra", "Stamina", "Health"]),
 });
-export type DrainTagType = z.infer<typeof DrainTag>;
 
 export const PoisonTag = z.object({
   ...BaseAttributes,
@@ -802,7 +787,6 @@ export const PoisonTag = z.object({
   rounds: z.coerce.number().int().min(1).max(10).prefault(3),
   poolsAffected: z.array(z.enum(PoolTypes)).prefault(["Health", "Chakra", "Stamina"]),
 });
-export type PoisonTagType = z.infer<typeof PoisonTag>;
 
 export const ShieldTag = z.object({
   ...BaseAttributes,
@@ -821,7 +805,6 @@ export const FinalStandTag = z.object({
   power: z.coerce.number().min(0).max(100).prefault(100),
   powerPerLevel: z.coerce.number().min(0).max(1).prefault(0),
 });
-export type FinalStandTagType = z.infer<typeof FinalStandTag>;
 
 export const MoveTag = z.object({
   ...BaseAttributes,
@@ -829,8 +812,6 @@ export const MoveTag = z.object({
   type: z.literal("move").prefault("move"),
   description: msg("Move on the battlefield"),
 });
-
-export type MoveTagType = z.infer<typeof MoveTag>;
 
 export const MovePreventTag = z.object({
   ...BaseAttributes,
@@ -893,7 +874,6 @@ export const WoundTag = z.object({
   calculation: z.enum(["percentage"]).prefault("percentage"),
   rounds: z.coerce.number().int().min(1).max(20).prefault(1),
 });
-export type WoundTagType = z.infer<typeof WoundTag>;
 
 export const DiffuseTag = z.object({
   ...BaseAttributes,
@@ -1007,14 +987,12 @@ export const NonCombatConsumeRewardTag = z
         ctx.addIssue({ ...issue, path: ["weightedCache", ...issue.path] });
     }
   });
-export type NonCombatConsumeRewardTagType = z.infer<typeof NonCombatConsumeRewardTag>;
 
 export const RepairTag = z.object({
   ...BaseAttributes,
   type: z.literal("repair").prefault("repair"),
   description: msg("Repair an item's durability by the power amount"),
 });
-export type RepairTagType = z.infer<typeof RepairTag>;
 
 export const SealPreventTag = z.object({
   ...BaseAttributes,
@@ -1039,16 +1017,12 @@ export const StealthTag = z.object({
   ),
 });
 
-export type StealthTagType = z.infer<typeof StealthTag>;
-
 export const ElementalSealTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("elementalseal").prefault("elementalseal"),
   description: msg("Seals the target's ability to use all elemental 60 AP jutsu"),
 });
-
-export type ElementalSealTagType = z.infer<typeof ElementalSealTag>;
 
 export const StunPreventTag = z.object({
   ...BaseAttributes,
@@ -1068,7 +1042,6 @@ export const ImmunityTag = z.object({
   rounds: z.coerce.number().int().min(1).max(20).prefault(2),
   calculation: z.enum(["static"]).prefault("static"),
 });
-export type ImmunityTagType = z.infer<typeof ImmunityTag>;
 
 export const StunTag = z.object({
   ...BaseAttributes,
@@ -1203,7 +1176,6 @@ export const UnlockItemVariantTag = z.object({
   description: msg("Unlocks a token-locked item variant when used on an item"),
   variantId: z.string().trim().nullable().prefault(null),
 });
-export type UnlockItemVariantTagType = z.infer<typeof UnlockItemVariantTag>;
 
 /******************** */
 /** UNIONS OF TAGS   **/
