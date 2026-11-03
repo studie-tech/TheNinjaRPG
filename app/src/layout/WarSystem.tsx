@@ -646,12 +646,10 @@ export const WarMap: React.FC<{
       </div>
       {villages && globe && (
         <GlobalMap
-          intersection={true}
           highlights={villages}
           userLocation={true}
           showOwnership={true}
           focusSector={focusSector}
-          focusSectorLabel="Target"
           onTileClick={(sector) => {
             if (!canDeclareWar) {
               showMutationToast({ success: false, message: "You are not the leader" });

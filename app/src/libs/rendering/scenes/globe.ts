@@ -156,7 +156,6 @@ export const createGlobeScene = async (options: {
       camera,
       { ...limits, latitude: ((map.latitudeLimit ?? 65) * Math.PI) / 180 },
       (x, y) => {
-        if (!state.intersection) return;
         const sector = pick(x, y);
         highlightSector(sector);
         if (sector !== null) options.onClick(sector);
@@ -312,8 +311,7 @@ export const createGlobeScene = async (options: {
       const key = pointer
         ? `${pointer.x},${pointer.y},${camera.longitude},${camera.latitude},${camera.distance}`
         : "";
-      if (state.intersection && pointer && key !== lastPickKey)
-        highlightSector(pick(pointer.x, pointer.y));
+      if (pointer && key !== lastPickKey) highlightSector(pick(pointer.x, pointer.y));
       else if (!pointer && lastPickKey && !controls.isInteracting())
         highlightSector(null);
       lastPickKey = key;
@@ -339,7 +337,6 @@ export type GlobeSceneState = {
   userLocation?: boolean;
   showOwnership?: boolean;
   autoRotate: boolean;
-  intersection: boolean;
   isTravelStep: boolean;
   focusSector?: number | null;
   questSectors: number[];

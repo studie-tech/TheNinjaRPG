@@ -20,16 +20,13 @@ interface MapProps {
     avatarLight: string | null;
   }[];
   userLocation?: boolean;
-  intersection: boolean;
   hexasphere: GlobalMapData;
   showOwnership?: boolean;
   /** Slowly spin the globe while the user is idle (default on) */
   autoRotate?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
-  focusSectorLabel?: string;
-  onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
-  onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
+  onTileClick?: (sector: number, tile: GlobalTile | undefined) => void;
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
@@ -70,7 +67,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     showOwnership,
     ownership: ownershipData,
     autoRotate: props.autoRotate ?? true,
-    intersection: props.intersection,
     isTravelStep: currentStep?.advanceOn === "travelArrive",
     focusSector: props.focusSector,
     questSectors,
@@ -85,17 +81,11 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         signal,
         onError,
         state: current.current.state,
-        onHover: (sector) => {
-          setHoverSector(sector);
-          const tile =
-            sector === null ? null : (current.current.state.map.tiles[sector] ?? null);
-          if (sector !== null && tile)
-            current.current.props.onTileHover?.(sector, tile);
-        },
+        onHover: (sector) => setHoverSector(sector),
         onClick: (sector) =>
           current.current.props.onTileClick?.(
             sector,
-            current.current.state.map.tiles[sector] ?? null,
+            current.current.state.map.tiles[sector],
           ),
       });
       if (!signal.aborted) instance.updateState(current.current.state);
@@ -153,7 +143,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           {props.focusSector !== undefined && props.focusSector !== null && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-purple-500">⬢</span>{" "}
-              {props.focusSectorLabel || "Target"}
+              Target
             </li>
           )}
         </ul>

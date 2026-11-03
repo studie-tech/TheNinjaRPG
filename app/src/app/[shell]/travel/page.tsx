@@ -856,18 +856,13 @@ function Travel() {
       villages &&
       globe && (
         <GlobalMap
-          intersection={true}
           highlights={villages}
           usersHighlighted={trackedBounties}
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
           focusSector={focusSector}
-          focusSectorLabel="Target"
-          onTileClick={(sector) => {
-            if (sector === null) return;
-            initiateTravelToSector(sector);
-          }}
+          onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
         />
       )

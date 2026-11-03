@@ -55,14 +55,11 @@ export const ManualWorldEditor: React.FC = () => {
         {!mapError && !globe && <Loader explanation="Loading the world map" />}
         {globe && (
           <GlobalMap
-            intersection={true}
             hexasphere={globe}
             highlights={villages}
             actionExplanation="Click a sector to edit its map"
             onTileClick={(sector) => {
-              if (sector !== null) {
-                router.push(`/manual/world/sector-maps?sector=${sector}`);
-              }
+              router.push(`/manual/world/sector-maps?sector=${sector}`);
             }}
           />
         )}
