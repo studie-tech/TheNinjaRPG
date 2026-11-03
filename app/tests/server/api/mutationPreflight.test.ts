@@ -137,6 +137,8 @@ describe("self-guarded Pyramid mutations", () => {
 });
 
 describe("combat deferred rate limit", () => {
+  /** Run penalty transactions against the same partial client. */
+  const withTx = (db: Record<string, unknown>) => { const client: Record<string, unknown> = { ...db, transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client) }; return client; };
   const balance = { money: 1_234_500, bank: 987_654_321 };
   const logInsert = () => () => ({ values: async () => ({ rowsAffected: 1 }) });
   /** `fineSlot` answers the per-user fine cooldown claim (SET NX): "OK" = claimed, null = cooling down. */
@@ -161,7 +163,7 @@ describe("combat deferred rate limit", () => {
     mockLimiter(() => { limiterStarted.resolve(); return limiter.promise; });
     const read = vi.fn(async () => { battleStarted.resolve(); return undefined; });
     let finished = false;
-    const result = caller(combatRouter, { query: { battle: { findFirst: read } } }).performAction({ battleId: "missing", version: 0 }).then((value) => { finished = true; return value; });
+    const result = caller(combatRouter, withTx({ query: { battle: { findFirst: read } } })).performAction({ battleId: "missing", version: 0 }).then((value) => { finished = true; return value; });
     await Promise.all([limiterStarted.promise, battleStarted.promise]);
     expect(finished).toBe(false);
     limiter.resolve([59, 60]);
@@ -175,7 +177,7 @@ describe("combat deferred rate limit", () => {
     const penalty = vi.fn(async () => ({ rowsAffected }));
     const update = vi.fn(() => ({ set: () => ({ where: penalty }) }));
     // Any processing of this sentinel would throw; rate limiting must finish first.
-    const api = caller(combatRouter, { query: { battle: { findFirst: async () => ({}) }, userData: { findFirst: async () => balance } }, update, insert: logInsert() });
+    const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => ({}) }, userData: { findFirst: async () => balance } }, update, insert: logInsert() }));
     await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
     expect(update).toHaveBeenCalledTimes(1);
     expect(penalty).toHaveBeenCalledTimes(1);
@@ -184,7 +186,7 @@ describe("combat deferred rate limit", () => {
 
   it("observes a limiter failure even if the first battle read rejects", async () => {
     mockLimiter(async () => ({ error: "ERR limiter unavailable" }));
-    const api = caller(combatRouter, { query: { battle: { findFirst: async () => { throw new Error("battle read failed"); } } } });
+    const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => { throw new Error("battle read failed"); } } } }));
     await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toThrow("limiter unavailable");
   });
 
@@ -192,7 +194,7 @@ describe("combat deferred rate limit", () => {
     mockLimiter(async () => [-1, 60]);
     const read = vi.fn(async () => undefined);
     const penalty = vi.fn(async () => ({ rowsAffected: 1 }));
-    const api = caller(combatRouter, { query: { battle: { findFirst: read }, userData: { findFirst: async () => balance } }, update: () => ({ set: () => ({ where: penalty }) }), insert: logInsert() });
+    const api = caller(combatRouter, withTx({ query: { battle: { findFirst: read }, userData: { findFirst: async () => balance } }, update: () => ({ set: () => ({ where: penalty }) }), insert: logInsert() }));
     await expect(api.performAction({ battleId: 42 } as never)).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
     expect(read).not.toHaveBeenCalled();
     expect(penalty).toHaveBeenCalledTimes(1);
@@ -201,7 +203,7 @@ describe("combat deferred rate limit", () => {
   it("limits a query without a money penalty", async () => {
     mockLimiter(async () => [-1, 60]);
     const update = vi.fn(() => { throw new Error("Unexpected penalty write"); });
-    const api = caller(miscRouter, { update });
+    const api = caller(miscRouter, withTx({ update }));
     await expect(api.getCaptcha()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message: QUERY_RATE_LIMIT_MESSAGE });
     expect(update).not.toHaveBeenCalled();
   });
@@ -211,7 +213,7 @@ describe("combat deferred rate limit", () => {
     const penalty = vi.fn(async () => ({ rowsAffected: 1 }));
     const set = vi.fn(() => ({ where: penalty }));
     const values = vi.fn(async () => ({ rowsAffected: 1 }));
-    const api = caller(miscRouter, { query: { userData: { findFirst: async () => balance } }, update: () => ({ set }), insert: () => ({ values }) });
+    const api = caller(miscRouter, withTx({ query: { userData: { findFirst: async () => balance } }, update: () => ({ set }), insert: () => ({ values }) }));
     const message = rateLimitFineMessage({ moneyFine: 12_345, bankFine: 9_876_543 });
     expect(message).toContain("fined 12,345 ryo (pocket) and 9,876,543 ryo (bank)");
     await expect(api.refreshCaptcha()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message });
@@ -228,7 +230,7 @@ describe("combat deferred rate limit", () => {
     const penalty = vi.fn(async () => ({ rowsAffected: 1 }));
     const set = vi.fn(() => ({ where: penalty }));
     const insert = vi.fn(() => { throw new Error("Unexpected action log"); });
-    const api = caller(miscRouter, { query: { userData: { findFirst: async () => balance } }, update: () => ({ set }), insert });
+    const api = caller(miscRouter, withTx({ query: { userData: { findFirst: async () => balance } }, update: () => ({ set }), insert }));
     await expect(api.refreshCaptcha()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message: rateLimitFineMessage(null) });
     expect(Object.keys((set.mock.calls[0] as unknown[])[0] as object)).toEqual(["movedTooFastCount"]);
     expect(insert).not.toHaveBeenCalled();

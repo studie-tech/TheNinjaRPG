@@ -252,7 +252,7 @@ const claimRateLimitFineSlot = async (userId: string) => {
  * recorded in ActionLog (for staff). Returns null when no fine was taken.
  */
 const penalizeRateLimitViolation = async (
-  client: Pick<DrizzleClient, "query" | "update" | "insert">,
+  client: Pick<DrizzleClient, "query" | "transaction">,
   userId: string,
   path: string,
 ) => {
@@ -266,26 +266,30 @@ const penalizeRateLimitViolation = async (
   const fined = await claimRateLimitFineSlot(userId);
   const moneyFine = fined ? rateLimitFine(user.money) : 0;
   const bankFine = fined ? rateLimitFine(user.bank) : 0;
-  const result = await updateUserDataForEnforceRateLimit(client, {
-    userId,
-    moneyFine,
-    bankFine,
-  });
-  if (result.rowsAffected === 0) {
-    throw new TRPCError({
-      message: `User not found for rate limit penalty`,
-      code: "NOT_FOUND",
-    });
-  }
-  if (!fined) return null;
-  if (moneyFine > 0 || bankFine > 0) {
-    await insertActionLogForEnforceRateLimit(client, {
+  // The debit and its audit row commit together: a failed ActionLog insert must not
+  // leave an unrecorded fine on the account.
+  await client.transaction(async (tx) => {
+    const result = await updateUserDataForEnforceRateLimit(tx, {
       userId,
-      path,
       moneyFine,
       bankFine,
     });
-  }
+    if (result.rowsAffected === 0) {
+      throw new TRPCError({
+        message: `User not found for rate limit penalty`,
+        code: "NOT_FOUND",
+      });
+    }
+    if (moneyFine > 0 || bankFine > 0) {
+      await insertActionLogForEnforceRateLimit(tx, {
+        userId,
+        path,
+        moneyFine,
+        bankFine,
+      });
+    }
+  });
+  if (!fined) return null;
   return { moneyFine, bankFine };
 };
 
