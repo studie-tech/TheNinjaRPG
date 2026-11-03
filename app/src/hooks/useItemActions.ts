@@ -178,7 +178,7 @@ export const useItemActions = ({
     });
 
   const { mutate: repairWithKit, isPending: isUsingRepairItem } =
-    repairWithKitProcedure.useMutation({
+    repairWithKitProcedure().useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
@@ -263,5 +263,6 @@ export const useItemActions = ({
   };
 };
 
-// Alias the procedure so its action name is not interpreted as a React hook.
-const repairWithKitProcedure = api.item.useRepairItem;
+// Alias the procedure so its action name is not interpreted as a React hook; read on use,
+// not at import, so the module loads even where the client is replaced.
+const repairWithKitProcedure = () => api.item.useRepairItem;
