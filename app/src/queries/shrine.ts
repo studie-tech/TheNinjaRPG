@@ -36,9 +36,9 @@ import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import {
   boostInactivePredicate,
-  mergeActiveBoostsExpression,
   setActiveBoostExpression,
   setShrineSettingsKeyExpression,
+  upsertActiveBoostsExpression,
 } from "@/server/utils/shrine";
 
 /** Build the `sector` listing for `runShrineMaintenance`, using predicates on `nextMaintainanceDueDate`. */
@@ -111,7 +111,7 @@ export const updateVillageForRunShrineBoostTick = (
   client
     .update(village)
     .set({
-      shrineSettings: mergeActiveBoostsExpression({ removeKeys: [], upserts }),
+      shrineSettings: upsertActiveBoostsExpression(upserts),
       tokens: sql`${village.tokens} - ${totalCost}`,
     })
     .where(

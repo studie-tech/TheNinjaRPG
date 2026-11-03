@@ -269,7 +269,7 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
   // Group activations by village so each row takes a single UPDATE instead of
   // one round-trip per boost type. MySQL serializes writes to the same row, so a
   // village whose template activates several types in one slot would otherwise
-  // pay N sequential round-trips. mergeActiveBoostsExpression upserts all of a
+  // pay N sequential round-trips. upsertActiveBoostsExpression upserts all of a
   // village's keys in one JSON_SET, and the token + per-type
   // boostInactivePredicate guards keep the write idempotent: a retried tick can
   // never double-deduct tokens or overwrite a still-live boost.
