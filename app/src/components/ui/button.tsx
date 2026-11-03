@@ -185,13 +185,4 @@ const Button = ({
 };
 Button.displayName = "Button";
 
-interface ForwardRefButtonProps extends ButtonProps {
-  ref?: React.Ref<HTMLButtonElement>;
-}
-
-const ForwardRefButton = ({ ref, ...props }: ForwardRefButtonProps) => (
-  <button {...props} ref={ref} />
-);
-ForwardRefButton.displayName = "ForwardRefButton";
-
-export { Button, buttonVariants, ForwardRefButton };
+export { Button, buttonVariants };
