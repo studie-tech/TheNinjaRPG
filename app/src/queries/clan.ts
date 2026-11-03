@@ -624,19 +624,6 @@ export const updateClanForDemoteMember = (
   clanData: { id: string },
 ) => client.update(clan).set(updateData).where(eq(clan.id, clanData.id));
 
-/** Build the `clan` update for `kickMember`, setting `leaderId`, using predicates on `id`. */
-export const updateClanForKickMember = (
-  client: Pick<DrizzleClient, "update">,
-  user: { userId: string },
-  fetchedClan: { id: string },
-) =>
-  client
-    .update(clan)
-    .set({
-      leaderId: user.userId, // Promote the kicker to leader
-    })
-    .where(eq(clan.id, fetchedClan.id));
-
 /**
  * Build the `clan` update for `convertPointsToRyo`, setting `points` and `bank`,
  * including predicates on `id`, `points`, `leaderId`.

@@ -93,7 +93,6 @@ import {
   updateClanForDemoteMember,
   updateClanForEditClan,
   updateClanForInstantJoinAndLead,
-  updateClanForKickMember,
   updateClanForNominateElder,
   updateClanForPromoteMember,
   updateClanForPurchaseBoost,
@@ -1003,10 +1002,6 @@ export const clanRouter = createTRPCRouter({
       if (!isLeader && !isColeader && !canEdit) return errorResponse("Not allowed");
       if (!isLeader && isMemberColeader && !canEdit)
         return errorResponse(`Only ${groupLabel} leader can kick`);
-      // If the leader is being kicked, promote the kicker to leader
-      if (isMemberLeader && canEdit) {
-        await updateClanForKickMember(ctx.drizzle, user, fetchedClan);
-      }
       // Mutate
       const membership = await removeFromClan(ctx.drizzle, fetchedClan, member, [
         `Kicked by ${user.username}`,
