@@ -44,7 +44,6 @@ export const findDiscordLinkForGetStatus = (
       discordUsername: true,
       linkedAt: true,
       tokenSource: true,
-      isPrimary: true,
       syncError: true,
     },
     where: eq(discordLink.userId, ctx.userId),
