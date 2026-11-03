@@ -424,7 +424,7 @@ const cellSignature = (cell: CellSpec) => {
  * "x") in the exact shape normalizeTiledSectorMap consumes. The embedded
  * tileset is deduped by cell signature, and layer data gids are tileId + 1
  * (Tiled reserves gid 0 for empty). Anchors and decorations are point objects
- * whose gridX/gridY properties pin the exact tile for the importer.
+ * on the hex under their pixel position.
  */
 export const buildTiledJson = (options: GeneratorOptions) => {
   const { width, height } = options;
@@ -470,8 +470,7 @@ export const buildTiledJson = (options: GeneratorOptions) => {
     }
   }
 
-  // Anchor point objects; pixel coordinates use the odd-q stagger layout,
-  // and gridX/gridY properties pin the exact tile for the importer.
+  // Anchor point objects; pixel coordinates use the odd-q stagger layout.
 
   const anchorObjects = anchors.map((anchor, index) => ({
     id: index + 1,
@@ -483,10 +482,6 @@ export const buildTiledJson = (options: GeneratorOptions) => {
     width: 0,
     height: 0,
     ...hexTileToPixel(anchor.x, anchor.y),
-    properties: [
-      { name: "gridX", type: "int", value: anchor.x },
-      { name: "gridY", type: "int", value: anchor.y },
-    ],
   }));
 
   // Scenery baked as first-class Tiled objects so the content team can add,
@@ -517,8 +512,6 @@ export const buildTiledJson = (options: GeneratorOptions) => {
     height: 0,
     ...hexTileToPixel(placement.x, placement.y),
     properties: [
-      { name: "gridX", type: "int", value: placement.x },
-      { name: "gridY", type: "int", value: placement.y },
       { name: "assetKey", type: "string", value: placement.assetKey },
       { name: "scale", type: "float", value: placement.scale },
       { name: "offsetX", type: "float", value: placement.offsetX },

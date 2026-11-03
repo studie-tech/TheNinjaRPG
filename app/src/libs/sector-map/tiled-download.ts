@@ -360,10 +360,10 @@ const fetchDecorationSprites = async (
 /**
  * Turn the map's decoration point-objects into Tiled tile-objects backed by a
  * bundled collection-of-images tileset, so every tree and rock is VISIBLE in
- * the editor. Purely cosmetic for the game: the importer keeps reading the
- * assetKey/gridX/gridY properties and ignores gid/width/height, so the
- * round-trip stays lossless. Creators can also drag NEW decorations straight
- * from the tileset palette (the tileset tile carries the assetKey property).
+ * the editor. The importer uses gid and height to inherit each tile's class and
+ * assetKey, ground the sprite and derive its scale, so the round-trip stays
+ * lossless. Creators can also drag NEW decorations straight from the tileset
+ * palette (the tileset tile carries the assetKey property).
  */
 export const addDecorationTileset = (
   map: Record<string, unknown>,

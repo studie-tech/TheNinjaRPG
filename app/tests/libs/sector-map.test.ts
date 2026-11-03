@@ -874,7 +874,7 @@ describe("creator-added terrain and decorations", () => {
     });
   });
 
-  it("snaps hand-moved point objects (no gridX/gridY) to the hex under them", () => {
+  it("snaps hand-moved point objects to the hex under them", () => {
     const moved = { id: 4, name: "spawn.village", type: "anchor", x: toPixelX(3), y: toPixelY(3, 1) };
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
