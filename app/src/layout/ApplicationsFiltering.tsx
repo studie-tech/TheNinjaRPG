@@ -11,8 +11,6 @@ import {
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { canViewAllApplications } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 
 interface ApplicationsFilteringProps {
   state: ApplicationsFilteringState;
@@ -27,7 +25,6 @@ const makeApplicationsFilteringSchema = () =>
         label: "Username",
         type: "text",
         defaultValue: "",
-        filterKey: "username",
       },
       {
         id: "state",
@@ -37,8 +34,6 @@ const makeApplicationsFilteringSchema = () =>
         includeNone: true,
         emptyValues: ["None"],
         options: toOptions(StaffApplicationStates),
-        filterKey: "state",
-        normalizeForFilter: (v: string) => (v === "None" ? undefined : v),
       },
       {
         id: "targetRole",
@@ -48,15 +43,12 @@ const makeApplicationsFilteringSchema = () =>
         includeNone: true,
         emptyValues: ["None"],
         options: toOptions(StaffApplicationTargetRoles),
-        filterKey: "targetRole",
-        normalizeForFilter: (v: string) => (v === "None" ? undefined : v),
       },
       {
         id: "onlyMine",
         label: "Only My Applications",
         type: "tri-state",
         defaultValue: undefined,
-        filterKey: "onlyMine",
         // Treat true as onlyMine, false as not-only-mine filter (omit), undefined => omit
         normalizeForFilter: (v: boolean | undefined) => (v ? true : undefined),
       },
@@ -64,14 +56,10 @@ const makeApplicationsFilteringSchema = () =>
   });
 
 const ApplicationsFiltering: React.FC<ApplicationsFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
-  const canViewAll = userData?.role ? canViewAllApplications(userData.role) : false;
-  const context = { role: userData?.role, canViewAll };
   return (
     <ContentFiltering
       schema={makeApplicationsFilteringSchema()}
       state={props.state.cf}
-      context={context}
       triggerButtonId="filter-applications"
     />
   );
