@@ -1434,7 +1434,6 @@ export const combatRouter = createTRPCRouter({
       // Merge every static lookup map the reprocessing produced (jutsus, items,
       // and the aiProfiles/bloodlines of newly loaded summon templates) so new
       // actions and summons resolve during battle.
-      userBattle.extraState = userBattle.extraState || {};
       userBattle.extraState.preBattleGearModifiers =
         userBattle.extraState.preBattleGearModifiers || {};
       mergeExtraState(userBattle.extraState, extraState);
@@ -2686,7 +2685,7 @@ export const initiateBattle = async (
     if (user.isBanned) return { success: false, message: `${user.username} is banned` };
 
     // Force defender village id
-    if (info?.forceDefenderVillageId && targetIds.includes(user.userId)) {
+    if (info.forceDefenderVillageId && targetIds.includes(user.userId)) {
       user.villageId = info.forceDefenderVillageId;
     }
 
@@ -2855,17 +2854,17 @@ export const initiateBattle = async (
     }
 
     // Scale targets
-    if (info?.scaleTarget && i >= leftSideUserCount && users[0]) {
+    if (info.scaleTarget && i >= leftSideUserCount && users[0]) {
       user.level = users[0].level;
       scaleUserStats(user, user.isAi ? "ai" : "player");
     }
 
     // Manually Assign Stats
-    if (info?.targetStatDistribution && i >= leftSideUserCount) {
-      manuallyAssignUserStats(user, info?.targetStatDistribution);
+    if (info.targetStatDistribution && i >= leftSideUserCount) {
+      manuallyAssignUserStats(user, info.targetStatDistribution);
     }
-    if (info?.userStatDistribution && userIds.includes(user.userId)) {
-      manuallyAssignUserStats(user, info?.userStatDistribution);
+    if (info.userStatDistribution && userIds.includes(user.userId)) {
+      manuallyAssignUserStats(user, info.userStatDistribution);
     }
 
     // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
@@ -2875,17 +2874,7 @@ export const initiateBattle = async (
     capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
 
     // Add achievements to users for tracking
-    // Ensure userQuests and completedQuests are initialized for mockAchievementHistoryEntries
-    if (!user.userQuests) user.userQuests = [];
-    if (!user.completedQuests) user.completedQuests = [];
-    const userForAchievements = {
-      ...user,
-      userQuests: user.userQuests,
-      completedQuests: user.completedQuests,
-    };
-    user.userQuests.push(
-      ...mockAchievementHistoryEntries(achievements, userForAchievements),
-    );
+    user.userQuests.push(...mockAchievementHistoryEntries(achievements, user));
   }
 
   // Check immunity on defenders
@@ -3119,7 +3108,7 @@ export const initiateBattle = async (
       if (boss) {
         raidInitialBossHp = raidBossCurrent;
         // Set boss maxHealth first (use higher of AI max and raid max), then curHealth
-        const raidMaxHp = raidQuest?.raidBossMaxHealth ?? boss.maxHealth;
+        const raidMaxHp = raidQuest.raidBossMaxHealth ?? boss.maxHealth;
         boss.maxHealth = Math.max(boss.maxHealth, raidMaxHp);
         boss.curHealth = Math.min(boss.maxHealth, raidBossCurrent);
         // Set chakra and stamina equal to max health for raid bosses
@@ -3132,9 +3121,7 @@ export const initiateBattle = async (
   }
 
   // Starting ground effects
-  const groundAssets = assets.filter(
-    (a) => a.onInitialBattleField && a.type === "STATIC",
-  );
+  const groundAssets = assets.filter((a) => a.type === "STATIC");
   for (let col = 0; col < gridSize.width; col++) {
     for (let row = 0; row < gridSize.height; row++) {
       // Ignore the spots where we placed users
@@ -3174,7 +3161,7 @@ export const initiateBattle = async (
   const activeUser = usersState
     .sort((a, b) => b.initiative - a.initiative)
     .filter((u) => u.curHealth > 0);
-  const activeUserId = attackerFirst ? users?.[0]?.userId : activeUser?.[0]?.userId;
+  const activeUserId = attackerFirst ? users[0]?.userId : activeUser[0]?.userId;
 
   // When to start the battle
   const startTime = !PvpBattleTypes.includes(battleType)
@@ -4020,10 +4007,6 @@ export const processUsersForBattle = async (
       user.level = getEffectiveLevel(user);
     }
 
-    // Store original location
-    user.originalLongitude = user.longitude;
-    user.originalLatitude = user.latitude;
-
     // Default locaton
     if (hide) {
       user.longitude = 0;
@@ -4294,35 +4277,25 @@ export const processUsersForBattle = async (
     // in userJutsuToAction to ensure each user sees their own reskin.
     // user.userSkills was cleared for storage above; gates read the captured skills.
     const gateUser = { ...user, userSkills: requirementSkills };
-    const processedJutsus = user.jutsus
-      .map((userjutsu) => ({
-        ...userjutsu,
-        lastUsedRound: userjutsu.lastUsedRound,
-        originalCooldown: userjutsu.originalCooldown,
-      }))
-      .filter((userjutsu) => {
-        // Not if no jutsu
-        if (!userjutsu.jutsu) {
-          return false;
-        }
-        if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
-          return false;
-        }
-        // Shared with the combat lobby so loadout switches never keep jutsu dropped here.
-        if (
-          battleJutsuGateFailure(userjutsu.jutsu, gateUser, battleType, gateMasteries)
-        ) {
-          return false;
-        }
-        // Add summons to list only for jutsus that survived every gate above
-        const effects = userjutsu.jutsu.effects as UserEffect[];
-        effects
-          .filter((e) => e.type === "summon")
-          .forEach((e) => {
-            if ("aiId" in e) addSummon(e.aiId);
-          });
-        return true;
-      });
+    const processedJutsus = user.jutsus.filter((userjutsu) => {
+      if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
+        return false;
+      }
+      // Shared with the combat lobby so loadout switches never keep jutsu dropped here.
+      if (
+        battleJutsuGateFailure(userjutsu.jutsu, gateUser, battleType, gateMasteries)
+      ) {
+        return false;
+      }
+      // Add summons to list only for jutsus that survived every gate above
+      const effects = userjutsu.jutsu.effects as UserEffect[];
+      effects
+        .filter((e) => e.type === "summon")
+        .forEach((e) => {
+          if ("aiId" in e) addSummon(e.aiId);
+        });
+      return true;
+    });
     user.jutsus = processedJutsus;
 
     // Add basic actions to user for tracking cooldowns
@@ -4343,9 +4316,7 @@ export const processUsersForBattle = async (
     // Determine equipped keystone item name for quick display later
     const keystoneItem = user.items.find(
       (useritem) =>
-        useritem.item &&
-        useritem.item.itemType === "KEYSTONE" &&
-        useritem.equipped === "KEYSTONE",
+        useritem.item.itemType === "KEYSTONE" && useritem.equipped === "KEYSTONE",
     );
     user.keystoneName = keystoneItem?.item.name ?? null;
     user.keystoneItem = keystoneItem?.item ?? null;
@@ -4354,7 +4325,6 @@ export const processUsersForBattle = async (
     const items: ProcessedItem[] = [];
     user.items
       .filter((ui) => {
-        if (!ui.item) return false;
         if (!fitsBattle(ui.item.battleUsageType)) return false;
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
         if (
@@ -4401,7 +4371,6 @@ export const processUsersForBattle = async (
         ) {
           // Add item effects to user (only if user has required bloodline)
           if (
-            ui.item.effects &&
             ui.equipped !== "NONE" &&
             (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId)
           ) {
@@ -4445,11 +4414,6 @@ export const processUsersForBattle = async (
       });
     user.items = items;
 
-    // Base values
-    user.fledBattle = false;
-    user.leftBattle = false;
-    user.moneyStolen = 0;
-
     // Roll initiative
     user.initiative = rollInitiative(user, users, user.village?.sector);
 
@@ -4459,7 +4423,6 @@ export const processUsersForBattle = async (
     );
 
     // Check if we are in ally village or not
-    user.allyVillage = false;
     if (!ownSector) {
       const sector = info.villages.find((v) => v.sector === user.sector);
       if (sector) {
@@ -4572,18 +4535,16 @@ export const processUsersForBattle = async (
   }
 
   // Compute initial durability before conversion (needs item.item access)
-  const initialDurability: Record<string, Record<string, number>> = {};
-  usersState.forEach((user) => {
-    initialDurability[user.userId] = {};
-    const userDurability = initialDurability[user.userId];
-    user.items.forEach(
-      (item: { id: string; durability: number; item?: { maxDurability?: number } }) => {
-        if (item.item?.maxDurability && item.item.maxDurability > 0 && userDurability) {
-          userDurability[item.id] = item.durability;
-        }
-      },
-    );
-  });
+  const initialDurability = Object.fromEntries(
+    usersState.map((user) => [
+      user.userId,
+      Object.fromEntries(
+        user.items
+          .filter((ui) => ui.item.maxDurability > 0)
+          .map((ui) => [ui.id, ui.durability]),
+      ),
+    ]),
+  );
 
   // Build extraState from all users
   const extraState: ExtraState = {
@@ -4596,9 +4557,9 @@ export const processUsersForBattle = async (
     villages: {},
     anbuSquads: {},
     keystoneItems: {},
-    wars: {},
+    wars: Object.fromEntries(info.wars.map((w) => [w.id, w])),
     aiProfiles: {},
-    relations: {},
+    relations: Object.fromEntries(info.relations.map((r) => [r.id, r])),
     clans: {},
     userQuests: {},
     completedQuests: {},
@@ -4606,20 +4567,6 @@ export const processUsersForBattle = async (
     bounties: {},
     bountySignups: {},
   };
-
-  // Add wars to extraState
-  for (const w of info.wars) {
-    if (!extraState.wars[w.id]) {
-      extraState.wars[w.id] = w;
-    }
-  }
-
-  // Add relations to extraState
-  for (const r of info.relations) {
-    if (!extraState.relations[r.id]) {
-      extraState.relations[r.id] = r;
-    }
-  }
 
   // Add default AI profile
   extraState.aiProfiles.Default = info.defaultProfile;
@@ -4727,8 +4674,8 @@ export const processUsersForBattle = async (
       experience: uj.experience,
       equipped: uj.equipped,
       origin: "user" as const,
-      lastUsedRound: uj.lastUsedRound ?? -(uj.jutsu?.cooldown ?? 0),
-      originalCooldown: uj.originalCooldown ?? uj.jutsu?.cooldown ?? 0,
+      lastUsedRound: uj.lastUsedRound,
+      originalCooldown: uj.originalCooldown,
       reskinId: uj.reskinId ?? null,
       linkedReskinId: uj.linkedReskin?.id ?? null,
     }));
@@ -4754,8 +4701,8 @@ export const processUsersForBattle = async (
         experience: ui.experience,
         durability: ui.durability,
         equipped: ui.equipped,
-        lastUsedRound: ui.lastUsedRound ?? -(ui.item?.cooldown ?? 0),
-        originalCooldown: ui.originalCooldown ?? ui.item?.cooldown ?? 0,
+        lastUsedRound: ui.lastUsedRound,
+        originalCooldown: ui.originalCooldown,
         dropChancePerc: ui.dropChancePerc,
         imbuementEffects: ui.imbuementEffects ?? [],
         activeVariantId: ui.activeVariantId ?? null,
