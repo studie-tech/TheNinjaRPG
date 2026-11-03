@@ -2430,15 +2430,10 @@ interface TabComponentProps {
 }
 
 const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
-  const { data: currentUser } = useUserData();
-  const canSeeSecrets = currentUser && canSeeSecretData(currentUser.role);
-
   const { data: reports, isPending } = api.reports.getUserReports.useQuery(
     { userId },
-    { enabled: isActive && !!canSeeSecrets },
+    { enabled: isActive },
   );
-
-  if (!canSeeSecrets) return null;
 
   return (
     <ContentBox
@@ -2477,15 +2472,10 @@ const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
 };
 
 const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
-  const { data: currentUser } = useUserData();
-  const canSeeIpsPerm = currentUser && canSeeIps(currentUser.role);
-
   const { data: historicalIps, isPending } = api.staff.getUserHistoricalIps.useQuery(
     { userId },
-    { enabled: isActive && !!canSeeIpsPerm },
+    { enabled: isActive },
   );
-
-  if (!canSeeIpsPerm) return null;
 
   return (
     <ContentBox
@@ -2524,15 +2514,10 @@ const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => 
 };
 
 const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
-  const { data: currentUser } = useUserData();
-  const canSeeEvents = currentUser && canSeeActivityEvents(currentUser.role);
-
   const { data: activityEvents, isPending } = api.staff.getUserActivityEvents.useQuery(
     { userId },
-    { enabled: isActive && !!canSeeEvents },
+    { enabled: isActive },
   );
-
-  if (!canSeeEvents) return null;
 
   return (
     <ContentBox
@@ -2565,15 +2550,10 @@ const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) =>
 };
 
 const BloodlineHistoryTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
-  const { data: currentUser } = useUserData();
-  const canSeeSecrets = currentUser && canSeeSecretData(currentUser.role);
-
   const { data: bloodlineHistory, isPending } = api.logs.getBloodlineHistory.useQuery(
     { userId },
-    { enabled: isActive && !!canSeeSecrets },
+    { enabled: isActive },
   );
-
-  if (!canSeeSecrets) return null;
 
   return (
     <ContentBox
