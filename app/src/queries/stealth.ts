@@ -57,8 +57,6 @@ export const listUserDataForUseSensory = (
       longitude: true,
       latitude: true,
       sector: true,
-      avatar: true,
-      avatarLight: true,
       location: true,
       villageId: true,
       battleId: true,
