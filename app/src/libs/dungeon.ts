@@ -42,7 +42,7 @@ export const dungeonBattleOutcome = (battle: CompleteBattle, now = Date.now()) =
   if (now >= state.expiresAt)
     state.failedReason = "The one-hour dungeon deadline expired.";
   const humans = battle.usersState.filter((u) => !u.isAi && !u.isSummon);
-  const alive = humans.filter((u) => stillInBattle(u, battle.usersEffects));
+  const alive = humans.filter((u) => stillInBattle(u));
   // The current round is still playable; only completed rounds can count as missed.
   const inactive = alive.find(
     (u) =>
@@ -54,9 +54,7 @@ export const dungeonBattleOutcome = (battle: CompleteBattle, now = Date.now()) =
   if (alive.length === 0) return "wipe";
   if (
     !battle.extraState.encounter?.pendingWaves.length &&
-    !battle.usersState.some(
-      (u) => u.direction === "right" && stillInBattle(u, battle.usersEffects),
-    )
+    !battle.usersState.some((u) => u.direction === "right" && stillInBattle(u))
   )
     return "won";
   return null;

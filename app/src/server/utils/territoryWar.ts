@@ -54,16 +54,13 @@ export const territoryWarAwards = (battle: CompleteBattle) => {
       user.isAi ||
       user.isSummon ||
       user.fledBattle ||
-      !stillInBattle(user, battle.usersEffects)
+      !stillInBattle(user)
     )
       continue;
     const opponents = battle.usersState.filter(
       (target) => !target.isSummon && !areBattleAllies(user, target),
     );
-    if (
-      !opponents.length ||
-      opponents.some((target) => stillInBattle(target, battle.usersEffects))
-    )
+    if (!opponents.length || opponents.some((target) => stillInBattle(target)))
       continue;
     const defeated = opponents.filter(
       (target) =>

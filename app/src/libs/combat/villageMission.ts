@@ -32,7 +32,7 @@ export const claimVillageMissionCombatEvents = (
       entry.direction !== user.direction &&
       !entry.isAi &&
       !entry.isSummon &&
-      wasDefeated(entry, battle.usersEffects),
+      wasDefeated(entry),
   ).length;
   if (kills === 0) return {};
   user.villageMissionPvpCredited = true;

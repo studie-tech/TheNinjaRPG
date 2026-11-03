@@ -141,9 +141,7 @@ import {
 const isRaidBossDefeated = (battle: CompleteBattle) =>
   battle.battleType === "RAID" &&
   battle.usersState.some((u) => u.isAi && !u.isSummon) &&
-  battle.usersState.every(
-    (u) => !u.isAi || u.isSummon || !stillInBattle(u, battle.usersEffects),
-  );
+  battle.usersState.every((u) => !u.isAi || u.isSummon || !stillInBattle(u));
 
 /**
  * Claim the battle version; return cleanup to run alongside independent reward writes.
@@ -210,15 +208,15 @@ export const updateBattle = async (
     !!result &&
     newBattle.battleType === "RAID" &&
     humanFighters.length > 0 &&
-    humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects));
+    humanFighters.every((u) => !stillInBattle(u));
   const territoryGuardianEnded =
     !!result &&
     newBattle.battleType === "TERRITORY_WAR" &&
     // A guardian encounter ends for the whole roster on either side's defeat.
     (newBattle.usersState
       .filter((u) => u.isAi && !u.isSummon)
-      .every((u) => !stillInBattle(u, newBattle.usersEffects)) ||
-      humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects)));
+      .every((u) => !stillInBattle(u)) ||
+      humanFighters.every((u) => !stillInBattle(u)));
   const battleOver =
     !!result &&
     (result.friendsLeft + result.targetsLeft === 0 ||
@@ -546,11 +544,7 @@ const completeKageDefense = async (
   const match = curBattle.extraState.kageMatch;
   const participants = getKageChallengeParticipants(curBattle);
   if (!match || !participants) return;
-  const won = didKageChallengerWin(
-    participants.challenger,
-    participants.kage,
-    curBattle.usersEffects,
-  );
+  const won = didKageChallengerWin(participants.challenger, participants.kage);
   await updateKageDefendedChallengesForCompleteKageDefense(
     client,
     won,
@@ -576,11 +570,7 @@ export const updateKage = async (
   if (!participants) return;
   const { challenger, kage } = participants;
 
-  const challengerDidWin = didKageChallengerWin(
-    challenger,
-    kage,
-    curBattle.usersEffects,
-  );
+  const challengerDidWin = didKageChallengerWin(challenger, kage);
 
   // Lost items for both sides
   const deleteItems = [
@@ -1334,7 +1324,7 @@ export const updateUser = async (
             !teammate.isAi &&
             !teammate.leftBattle &&
             !teammate.fledBattle &&
-            stillInBattle(teammate, curBattle.usersEffects) &&
+            stillInBattle(teammate) &&
             areBattleAllies(teammate, user),
         ),
       },

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
 import { makeBattleUser } from "./helpers/battleScenario";
-import type { BattleUserState, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState } from "@/libs/combat/types";
 
 // Two independent caps: one of each CREATURE (so different summon jutsus can
 // coexist, as they did pre-PR), and one PILOTED summon overall (each piloted
@@ -10,7 +10,6 @@ import type { BattleUserState, UserEffect } from "@/libs/combat/types";
 const DEMON = "ai-demon";
 const TIGER = "ai-tiger";
 const P = "p1";
-const noEffects: UserEffect[] = [];
 
 const player = () => makeBattleUser(P, { curHealth: 100 });
 
@@ -43,7 +42,7 @@ const spawned = (
   });
 
 const reason = (state: BattleUserState[], aiId: string, wantsPilot: boolean) =>
-  summonCastBlockedReason(state, P, aiId, wantsPilot, noEffects);
+  summonCastBlockedReason(state, P, aiId, wantsPilot);
 
 describe("per-creature cap", () => {
   it("allows the first cast of a creature", () => {

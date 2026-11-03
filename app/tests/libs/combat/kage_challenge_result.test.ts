@@ -10,7 +10,7 @@ describe("Kage challenge outcome", () => {
     });
     const kage = makeBattleUser("kage", { isAggressor: false, curHealth: 100 });
 
-    expect(didKageChallengerWin(challenger, kage, [])).toBe(false);
+    expect(didKageChallengerWin(challenger, kage)).toBe(false);
   });
 
   it("transfers the position only when the challenger survives", () => {
@@ -20,7 +20,7 @@ describe("Kage challenge outcome", () => {
     });
     const kage = makeBattleUser("kage", { isAggressor: false, curHealth: 0 });
 
-    expect(didKageChallengerWin(challenger, kage, [])).toBe(true);
+    expect(didKageChallengerWin(challenger, kage)).toBe(true);
   });
 
   it("does not count a draw or a fleeing challenger as a win", () => {
@@ -35,8 +35,8 @@ describe("Kage challenge outcome", () => {
     });
     const standingKage = makeBattleUser("standing-kage");
 
-    expect(didKageChallengerWin(defeatedChallenger, defeatedKage, [])).toBe(false);
-    expect(didKageChallengerWin(fleeingChallenger, standingKage, [])).toBe(false);
+    expect(didKageChallengerWin(defeatedChallenger, defeatedKage)).toBe(false);
+    expect(didKageChallengerWin(fleeingChallenger, standingKage)).toBe(false);
   });
 });
 

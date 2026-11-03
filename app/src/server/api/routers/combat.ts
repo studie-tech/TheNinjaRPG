@@ -672,7 +672,7 @@ export const combatRouter = createTRPCRouter({
             !u.isSummon &&
             u.isAutoCombat &&
             !u.leftBattle &&
-            stillInBattle(u, battle.usersEffects),
+            stillInBattle(u),
         );
         const maxActions =
           AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
@@ -765,7 +765,6 @@ export const combatRouter = createTRPCRouter({
               action,
               actor,
               newBattle.usersState,
-              newBattle.usersEffects,
             );
             if (summonBlocked) {
               return { updateClient: false, notification: summonBlocked };

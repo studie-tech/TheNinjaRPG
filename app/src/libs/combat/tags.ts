@@ -3309,7 +3309,6 @@ export const summon = (
         user.userId,
         effect.aiId,
         wantsPilot,
-        userEffects,
       );
       if (blocked) {
         effect.rounds = 0;

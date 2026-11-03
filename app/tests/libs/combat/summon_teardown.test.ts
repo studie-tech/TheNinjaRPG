@@ -281,7 +281,7 @@ describe("orphan cleanup vs clone lifecycle", () => {
     // The creator flees. Orphan cleanup must leave the clone in place.
     const cloner = pass1.usersState.find((u) => u.userId === PLAYER_ID);
     if (cloner) cloner.fledBattle = true;
-    expect(spliceOrphanedSummons(pass1.usersState, pass1.usersEffects)).toEqual([]);
+    expect(spliceOrphanedSummons(pass1.usersState)).toEqual([]);
     expect(pass1.usersState.some((u) => u.userId === spawned?.userId)).toBe(true);
 
     // The ally's next action still resolves.

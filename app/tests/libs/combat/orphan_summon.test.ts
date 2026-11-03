@@ -4,7 +4,7 @@ import {
   spliceOrphanedSummons,
   hasLiveSummon,
 } from "@/libs/combat/summon";
-import type { BattleUserState, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState } from "@/libs/combat/types";
 
 // Minimal fixture: only the fields the helpers read.
 const mk = (over: Partial<BattleUserState>): BattleUserState =>
@@ -18,38 +18,37 @@ const mk = (over: Partial<BattleUserState>): BattleUserState =>
     ...over,
   }) as unknown as BattleUserState;
 
-const noEffects: UserEffect[] = [];
 
 describe("isOrphanedSummon", () => {
   const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true });
 
   it("not orphaned when controller is alive and present", () => {
     const controller = mk({ userId: "p1", controllerId: "p1" });
-    expect(isOrphanedSummon(summon, [summon, controller], noEffects)).toBe(false);
+    expect(isOrphanedSummon(summon, [summon, controller])).toBe(false);
   });
 
   it("orphaned when controller is dead (curHealth 0)", () => {
     const controller = mk({ userId: "p1", controllerId: "p1", curHealth: 0 });
-    expect(isOrphanedSummon(summon, [summon, controller], noEffects)).toBe(true);
+    expect(isOrphanedSummon(summon, [summon, controller])).toBe(true);
   });
 
   it("orphaned when controller fled", () => {
     const controller = mk({ userId: "p1", controllerId: "p1", fledBattle: true });
-    expect(isOrphanedSummon(summon, [summon, controller], noEffects)).toBe(true);
+    expect(isOrphanedSummon(summon, [summon, controller])).toBe(true);
   });
 
   it("orphaned when controller LEFT (leftBattle) -- stillInBattle ignores this", () => {
     const controller = mk({ userId: "p1", controllerId: "p1", leftBattle: true });
-    expect(isOrphanedSummon(summon, [summon, controller], noEffects)).toBe(true);
+    expect(isOrphanedSummon(summon, [summon, controller])).toBe(true);
   });
 
   it("orphaned when controller is gone from usersState", () => {
-    expect(isOrphanedSummon(summon, [summon], noEffects)).toBe(true);
+    expect(isOrphanedSummon(summon, [summon])).toBe(true);
   });
 
   it("never orphans a non-summon entity", () => {
     const notSummon = mk({ userId: "p2", controllerId: "missing", isSummon: false });
-    expect(isOrphanedSummon(notSummon, [notSummon], noEffects)).toBe(false);
+    expect(isOrphanedSummon(notSummon, [notSummon])).toBe(false);
   });
 
   it("never orphans a clone, even when its creator is gone", () => {
@@ -63,8 +62,8 @@ describe("isOrphanedSummon", () => {
       isOriginal: false,
     });
     const deadCreator = mk({ userId: "p1", controllerId: "p1", curHealth: 0 });
-    expect(isOrphanedSummon(clone, [clone, deadCreator], noEffects)).toBe(false);
-    expect(isOrphanedSummon(clone, [clone], noEffects)).toBe(false);
+    expect(isOrphanedSummon(clone, [clone, deadCreator])).toBe(false);
+    expect(isOrphanedSummon(clone, [clone])).toBe(false);
   });
 });
 
@@ -74,7 +73,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 100 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual([]);
     expect(state).toHaveLength(2);
   });
@@ -84,7 +83,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -94,7 +93,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", fledBattle: true }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -104,7 +103,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 100, leftBattle: true }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
@@ -114,7 +113,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["enemy"]);
   });
@@ -125,7 +124,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
       mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
     ];
-    spliceOrphanedSummons(state, noEffects);
+    spliceOrphanedSummons(state);
     expect(state.map((u) => u.userId)).toEqual(["u1", "enemy"]);
   });
 
@@ -134,7 +133,7 @@ describe("spliceOrphanedSummons", () => {
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),
       mk({ userId: "u2", controllerId: "u1", isSummon: false, curHealth: 100 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual([]);
     expect(state).toHaveLength(2);
   });
@@ -145,26 +144,26 @@ describe("hasLiveSummon one-per-controller cap", () => {
 
   it("true while a live summon for the controller exists (blocks 2nd cast)", () => {
     const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true });
-    expect(hasLiveSummon([player, summon], "p1", noEffects)).toBe(true);
+    expect(hasLiveSummon([player, summon], "p1")).toBe(true);
   });
 
   it("false when no summon exists (allows first cast)", () => {
-    expect(hasLiveSummon([player], "p1", noEffects)).toBe(false);
+    expect(hasLiveSummon([player], "p1")).toBe(false);
   });
 
   it("false once the prior summon is dead (allows re-summon)", () => {
     const dead = mk({ userId: "s1", controllerId: "p1", isSummon: true, curHealth: 0 });
-    expect(hasLiveSummon([player, dead], "p1", noEffects)).toBe(false);
+    expect(hasLiveSummon([player, dead], "p1")).toBe(false);
   });
 
   it("false once the prior summon has left (allows re-summon)", () => {
     const left = mk({ userId: "s1", controllerId: "p1", isSummon: true, leftBattle: true });
-    expect(hasLiveSummon([player, left], "p1", noEffects)).toBe(false);
+    expect(hasLiveSummon([player, left], "p1")).toBe(false);
   });
 
   it("ignores a live summon owned by a different controller", () => {
     const other = mk({ userId: "s2", controllerId: "p2", isSummon: true });
-    expect(hasLiveSummon([player, other], "p1", noEffects)).toBe(false);
+    expect(hasLiveSummon([player, other], "p1")).toBe(false);
   });
 
   it("ignores a live clone (isSummon + isOriginal=false) so summon and clone coexist", () => {
@@ -174,7 +173,7 @@ describe("hasLiveSummon one-per-controller cap", () => {
       isSummon: true,
       isOriginal: false,
     });
-    expect(hasLiveSummon([player, clone], "p1", noEffects)).toBe(false);
+    expect(hasLiveSummon([player, clone], "p1")).toBe(false);
   });
 
   it("still caps when a real summon and a clone are both live for the controller", () => {
@@ -185,6 +184,6 @@ describe("hasLiveSummon one-per-controller cap", () => {
       isSummon: true,
       isOriginal: false,
     });
-    expect(hasLiveSummon([player, summon, clone], "p1", noEffects)).toBe(true);
+    expect(hasLiveSummon([player, summon, clone], "p1")).toBe(true);
   });
 });

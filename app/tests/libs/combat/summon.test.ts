@@ -8,7 +8,7 @@ import {
 } from "@/libs/combat/summon";
 import { maskBattle } from "@/libs/combat/util";
 import type { Battle } from "@/drizzle/schema";
-import type { BattleUserState, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState } from "@/libs/combat/types";
 
 const mk = (over: Partial<BattleUserState>): BattleUserState =>
   ({
@@ -22,7 +22,6 @@ const mk = (over: Partial<BattleUserState>): BattleUserState =>
     ...over,
   }) as unknown as BattleUserState;
 
-const noEffects: UserEffect[] = [];
 const player = mk({ userId: "p1", controllerId: "p1" });
 
 describe("isSummonTemplate / isActiveSummon", () => {
@@ -59,15 +58,15 @@ describe("isSummonTemplate / isActiveSummon", () => {
 describe("isLiveSummon", () => {
   it("alive active summon with present controller is live", () => {
     const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 50 });
-    expect(isLiveSummon(s, [player, s], noEffects)).toBe(true);
+    expect(isLiveSummon(s, [player, s])).toBe(true);
   });
   it("dead active summon is not live", () => {
     const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 0 });
-    expect(isLiveSummon(s, [player, s], noEffects)).toBe(false);
+    expect(isLiveSummon(s, [player, s])).toBe(false);
   });
   it("left-battle summon is not live", () => {
     const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 50, leftBattle: true });
-    expect(isLiveSummon(s, [player, s], noEffects)).toBe(false);
+    expect(isLiveSummon(s, [player, s])).toBe(false);
   });
 });
 
@@ -109,7 +108,7 @@ describe("spliceOrphanedSummons determinism", () => {
       mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
       mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
     ];
-    const removed = spliceOrphanedSummons(state, noEffects).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
     expect(removed).toEqual(["s1"]);
     expect(state.map((u) => u.userId)).toEqual(["u1", "enemy"]);
   });

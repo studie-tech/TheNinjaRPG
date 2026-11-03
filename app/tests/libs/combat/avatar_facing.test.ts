@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getFacingDirection } from "@/libs/combat/util";
 import type { ReturnedUserState } from "@/libs/combat/types";
-import type { UserEffect } from "@/libs/combat/types";
 
 /** Minimal battle user for facing checks. */
 const user = (overrides: Partial<ReturnedUserState>): ReturnedUserState =>
@@ -61,14 +60,6 @@ describe("getFacingDirection", () => {
     expect(getFacingDirection(ai, [ai, dead, fled, alive], "right")).toBe("left");
   });
 
-  it("routes liveness through the effect-adjusted pool when effects are given", () => {
-    const ai = user({ userId: "ai", direction: "right", longitude: 5 });
-    const downed = user({ userId: "p1", direction: "left", longitude: 2, curHealth: 0 });
-    // No pool-adjusting effect for p1 → effectively at 0 health → fallback wins
-    expect(getFacingDirection(ai, [ai, downed], "right", [] as UserEffect[])).toBe(
-      "right",
-    );
-  });
 
   it("breaks distance ties on userId so the pick is stable across frames", () => {
     const ai = user({ userId: "ai", direction: "right", longitude: 5, latitude: 5 });

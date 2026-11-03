@@ -216,11 +216,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battleState.battle ?? null);
   const aggro = useMemo(
-    () =>
-      getAggroDisplay(
-        battleState.battle?.usersState ?? [],
-        battleState.battle?.usersEffects,
-      ),
+    () => getAggroDisplay(battleState.battle?.usersState ?? []),
     [battleState.battle],
   );
 
@@ -834,7 +830,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           !user.isSummon &&
           user.isAutoCombat &&
           !user.leftBattle &&
-          stillInBattle(user, battleState.battle?.usersEffects),
+          stillInBattle(user),
       ));
 
   // Hidden manual battles catch up on resume; keep driving auto combat in the

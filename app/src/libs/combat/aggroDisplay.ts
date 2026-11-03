@@ -1,11 +1,11 @@
 import { stillInBattle } from "./actions";
-import type { ReturnedUserState, UserEffect } from "./types";
+import type { ReturnedUserState } from "./types";
 import { wantsHumanActionSet } from "./util";
 
 /** Compare a side's threat only when an active opposing NPC can act on it. */
-export const getAggroDisplay = (users: ReturnedUserState[], effects?: UserEffect[]) => {
+export const getAggroDisplay = (users: ReturnedUserState[]) => {
   const active = users.filter(
-    (user) => !user.hidden && !user.leftBattle && stillInBattle(user, effects),
+    (user) => !user.hidden && !user.leftBattle && stillInBattle(user),
   );
   const npcSides = new Set(
     active.filter((user) => !wantsHumanActionSet(user)).map((user) => user.direction),

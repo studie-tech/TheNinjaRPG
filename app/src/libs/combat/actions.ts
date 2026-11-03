@@ -60,7 +60,6 @@ import {
   findBarrier,
   getActionAffectedTiles,
   getBarriersBetween,
-  getEffectiveCurPool,
   getEffectStackKey,
   getItem,
   getJutsu,
@@ -1653,18 +1652,11 @@ export const getActionPointCost = (
 
 /**
  * Figure out if user is still live and well in battle (not fled, not dead, etc.)
- * When effects are provided, uses effective health (accounting for pool buffs/debuffs).
- * Accepts minimal shape when effects is omitted (e.g. ProcessingBattleUser in combat router).
+ * Stored current health already includes pool buffs/debuffs.
  */
 export const stillInBattle = (
-  user: ReturnedUserState | Pick<ReturnedUserState, "curHealth" | "fledBattle">,
-  effects?: UserEffect[],
-) => {
-  const health = effects
-    ? getEffectiveCurPool(user as ReturnedUserState, effects, "Health")
-    : user.curHealth;
-  return health > 0 && !user.fledBattle;
-};
+  user: Pick<ReturnedUserState, "curHealth" | "fledBattle">,
+) => user.curHealth > 0 && !user.fledBattle;
 
 /**
  * Calculate (based on current time), which user is currently the one to perform a move
@@ -1678,9 +1670,7 @@ export const calcActiveUser = (
   const syncedTime = Date.now() - timeDiff;
   const mseconds = syncedTime - new Date(battle.roundStartAt).getTime();
   const secondsLeft = COMBAT_SECONDS - mseconds / 1000;
-  const usersInBattle = battle.usersState.filter((u) =>
-    stillInBattle(u, battle.usersEffects),
-  );
+  const usersInBattle = battle.usersState.filter((u) => stillInBattle(u));
   const inBattleuserIds = usersInBattle.map((u) => u.userId);
   let activeUserId = battle.activeUserId ? battle.activeUserId : userId;
   let progressRound = false;

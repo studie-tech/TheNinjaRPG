@@ -155,7 +155,7 @@ describe("summon() template lookup", () => {
     // Round progression runs orphan cleanup. The hidden clone-source template
     // (curHealth 0, controllerId = aiId with no matching combatant) must NOT be
     // spliced, or every future re-cast loses its template.
-    spliceOrphanedSummons(usersState, userEffects);
+    spliceOrphanedSummons(usersState);
 
     // The summon disappears (dies / expires), clearing the one-per-controller cap.
     const spawned = usersState.find(
@@ -176,7 +176,7 @@ describe("spliceOrphanedSummons vs the clone-source template", () => {
     const template = mkTemplate(); // isSummon, controllerId = aiId, curHealth 0
     const usersState = [mkPlayer(), template];
 
-    spliceOrphanedSummons(usersState, []);
+    spliceOrphanedSummons(usersState);
 
     expect(usersState).toContain(template);
   });
@@ -192,7 +192,7 @@ describe("spliceOrphanedSummons vs the clone-source template", () => {
     } as unknown as BattleUserState;
     const usersState = [mkPlayer(), liveOrphan];
 
-    const removed = spliceOrphanedSummons(usersState, []).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(usersState).map((u) => u.userId);
 
     expect(removed).toContain("s9");
     expect(usersState).not.toContain(liveOrphan);

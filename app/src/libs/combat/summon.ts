@@ -1,7 +1,7 @@
 import { AutoBattleTypes } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
-import type { BattleUserState, CombatAction, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState, CombatAction } from "@/libs/combat/types";
 
 /** The combatant that owns this summon, or null. Only meaningful when
  *  u.isSummon is already known true (templates point controllerId at the
@@ -41,9 +41,7 @@ export const isActiveSummon = (
 export const isLiveSummon = (
   u: BattleUserState,
   usersState: BattleUserState[],
-  effects: UserEffect[],
-): boolean =>
-  isActiveSummon(u, usersState) && stillInBattle(u, effects) && !u.leftBattle;
+): boolean => isActiveSummon(u, usersState) && stillInBattle(u) && !u.leftBattle;
 
 /** A clone (e.g. shadow-clone jutsu) reuses isSummon for battlefield placement
  *  and orphan cleanup, but is NOT the controller's summon: it must not trip the
@@ -60,11 +58,10 @@ export const isClone = (u: Pick<BattleUserState, "isSummon" | "isOriginal">): bo
 export const liveSummonsOf = (
   usersState: BattleUserState[],
   controllerId: string,
-  effects: UserEffect[],
 ): BattleUserState[] =>
   usersState.filter(
     (u) =>
-      isLiveSummon(u, usersState, effects) &&
+      isLiveSummon(u, usersState) &&
       !isClone(u) &&
       !u.petId &&
       u.controllerId === controllerId,
@@ -76,8 +73,7 @@ export const liveSummonsOf = (
 export const hasLiveSummon = (
   usersState: BattleUserState[],
   controllerId: string,
-  effects: UserEffect[],
-): boolean => liveSummonsOf(usersState, controllerId, effects).length > 0;
+): boolean => liveSummonsOf(usersState, controllerId).length > 0;
 
 /** Why a summon cast must be refused, or null when it may proceed.
  *
@@ -94,9 +90,8 @@ export const summonCastBlockedReason = (
   controllerId: string,
   sourceAiId: string,
   wantsPilot: boolean,
-  effects: UserEffect[],
 ): string | null => {
-  const live = liveSummonsOf(usersState, controllerId, effects);
+  const live = liveSummonsOf(usersState, controllerId);
   const duplicate = live.find((u) => u.summonSourceId === sourceAiId);
   if (duplicate) return `${duplicate.username} is already summoned`;
   if (wantsPilot && live.some((u) => u.isPiloted)) {
@@ -116,7 +111,6 @@ export const summonActionBlockedReason = (
   action: Pick<CombatAction, "effects">,
   actor: Pick<BattleUserState, "userId" | "isAi">,
   usersState: BattleUserState[],
-  effects: UserEffect[],
 ): string | null => {
   for (const tag of action.effects) {
     if (tag.type !== "summon") continue;
@@ -125,7 +119,6 @@ export const summonActionBlockedReason = (
       actor.userId,
       tag.aiId,
       shouldPilotSummon(actor, tag.playerControlled),
-      effects,
     );
     if (reason) return reason;
   }
@@ -174,13 +167,12 @@ export const isSummonActionCastable = (
 export const isOrphanedSummon = (
   summon: BattleUserState,
   usersState: BattleUserState[],
-  effects: UserEffect[],
 ): boolean => {
   if (!isActiveSummon(summon, usersState)) return false;
   if (isClone(summon)) return false;
-  if (!stillInBattle(summon, effects)) return false;
+  if (!stillInBattle(summon)) return false;
   const controller = summonController(summon, usersState);
-  return !controller || !stillInBattle(controller, effects) || !!controller.leftBattle;
+  return !controller || !stillInBattle(controller) || !!controller.leftBattle;
 };
 
 /** Splice out orphaned summons, in place. Classifies against a pre-mutation
@@ -190,10 +182,9 @@ export const isOrphanedSummon = (
  *  up entries that are no longer in usersState. */
 export const spliceOrphanedSummons = (
   usersState: BattleUserState[],
-  effects: UserEffect[],
 ): BattleUserState[] => {
   const snapshot = [...usersState];
-  const orphans = snapshot.filter((u) => isOrphanedSummon(u, snapshot, effects));
+  const orphans = snapshot.filter((u) => isOrphanedSummon(u, snapshot));
   if (orphans.length === 0) return [];
   const orphanIds = new Set(orphans.map((u) => u.userId));
   const survivors = snapshot.filter((u) => !orphanIds.has(u.userId));

@@ -127,7 +127,7 @@ describe("owned pets in combat", () => {
     expect(battle.usersState[0]?.items).toHaveLength(1);
     expect(getTurnControl(actor!, "owner")).toEqual({ isUserTurn: false, isAITurn: true });
     expect(resolveDamageCreditUser(battle.usersState, actor!)?.userId).toBe("owner");
-    expect(hasLiveSummon(battle.usersState, "owner", [])).toBe(false);
+    expect(hasLiveSummon(battle.usersState, "owner")).toBe(false);
   });
 
   it("starts with its own threat and credits pet damage threat separately from owner quest damage", () => {
@@ -700,7 +700,7 @@ describe("owned pets in combat", () => {
   it("retreats with its defeated owner while retaining the frozen settlement identity", () => {
     const battle = scenario(); add(battle);
     battle.usersState[0]!.curHealth = 0;
-    expect(spliceOrphanedSummons(battle.usersState, []).map((u) => u.petId)).toEqual(["pet-1"]);
+    expect(spliceOrphanedSummons(battle.usersState).map((u) => u.petId)).toEqual(["pet-1"]);
     expect(battle.usersState.some((u) => u.petId)).toBe(false);
     expect(battle.extraState.petIdsByOwner).toEqual({ owner: "pet-1" });
   });

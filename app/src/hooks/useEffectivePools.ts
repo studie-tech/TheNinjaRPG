@@ -39,11 +39,11 @@ export const useEffectivePools = ({
     // If we have a battleUser, use effective pool calculations (handles undefined effects)
     if (battleUser) {
       return {
-        curHealth: getEffectiveCurPool(battleUser, usersEffects, "Health"),
+        curHealth: getEffectiveCurPool(battleUser, "Health"),
         maxHealth: getEffectiveMaxPool(battleUser, usersEffects, "Health"),
-        curChakra: getEffectiveCurPool(battleUser, usersEffects, "Chakra"),
+        curChakra: getEffectiveCurPool(battleUser, "Chakra"),
         maxChakra: getEffectiveMaxPool(battleUser, usersEffects, "Chakra"),
-        curStamina: getEffectiveCurPool(battleUser, usersEffects, "Stamina"),
+        curStamina: getEffectiveCurPool(battleUser, "Stamina"),
         maxStamina: getEffectiveMaxPool(battleUser, usersEffects, "Stamina"),
       };
     }

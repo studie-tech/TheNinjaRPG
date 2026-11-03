@@ -156,7 +156,7 @@ export const performAIaction = (
     const origin = findHex(grid, user);
     // Prepare living combatants once from the state after earlier actions.
     const combatants = nextBattle.usersState
-      .filter((u) => stillInBattle(u, nextBattle.usersEffects))
+      .filter((u) => stillInBattle(u))
       .map((u) => ({ ...u, hex: findHex(grid, u) }));
     const enemies = combatants.filter((u) => !areBattleAllies(u, user));
     const allies = combatants.filter((u) => areBattleAllies(u, user));
@@ -200,7 +200,7 @@ export const performAIaction = (
             ? (target.enmity ?? 0)
             : metric === "max"
               ? getEffectiveMaxPool(target, nextBattle.usersEffects, "Health")
-              : getEffectiveCurPool(target, nextBattle.usersEffects, "Health");
+              : getEffectiveCurPool(target, "Health");
         if (!best) return candidate;
         return (
           highest
@@ -386,7 +386,7 @@ export const performAIaction = (
         const target = getTarget(condition);
         switch (condition.type) {
           case "health_below": {
-            const curHealth = getEffectiveCurPool(user, effects, "Health");
+            const curHealth = getEffectiveCurPool(user, "Health");
             const maxHealth = getEffectiveMaxPool(user, effects, "Health");
             return (curHealth / maxHealth) * 100 < condition.value;
           }
@@ -417,7 +417,7 @@ export const performAIaction = (
           case "does_not_have_summon":
             // Same predicate as the one-per-controller cap in summon(), so the
             // AI's re-summon gate can never drift from what blocks the cast.
-            return !hasLiveSummon(nextBattle.usersState, user.userId, effects);
+            return !hasLiveSummon(nextBattle.usersState, user.userId);
           case "has_effect": {
             if (condition.threshold === 0) return true;
             const userEffects = nextBattle.usersEffects.filter(
