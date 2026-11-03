@@ -3643,12 +3643,7 @@ export const commitQuestObjectiveRewards = async (info: {
     : undefined;
   if (user.petTask && user.petTask.questId === userQuest?.questId && !petTask)
     return { outcome: "state_changed" };
-  if (
-    petTask &&
-    (!user.petTask ||
-      JSON.stringify(user.petTask) !== JSON.stringify(petTask) ||
-      !isPetTaskAttempt(petTask, userQuest))
-  )
+  if (petTask && !isPetTaskAttempt(petTask, userQuest))
     return { outcome: "state_changed" };
   if (userQuest?.id === `party-${user.questPartyId}`) {
     // Helpers keep their original completion receipt; this also covers bound NPC objectives.
