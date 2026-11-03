@@ -91,13 +91,12 @@ export const realizeTag = <T extends BattleEffect>(props: {
   tag: T;
   user: RealizeTagUser;
   actionId: string;
-  target?: RealizeTagUser | undefined;
   level: number | undefined;
   round?: number;
   barrierAbsorb?: number;
   battle?: Battle; // Make battle optional since it's not always needed
 }): T => {
-  const { user, target, level, round, barrierAbsorb, battle } = props;
+  const { user, level, round, barrierAbsorb, battle } = props;
   // Passive effects also enter here without passing through action selection or insertion.
   const tag = resolveElementalDamage(props.tag, user) as T;
   if ("rounds" in tag || tag.type === "increaseaggro" || tag.type === "decreaseaggro") {
@@ -124,9 +123,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     if (tag.curHealth > tag.maxHealth) {
       tag.curHealth = tag.maxHealth;
     }
-  }
-  if (target) {
-    tag.targetHighestGenerals = target.highestGenerals;
   }
   if (battle && "rounds" in tag) {
     tag.createdRound = battle.round; // Use battle round if available
@@ -1568,14 +1564,12 @@ export const damageUser = (
       ...(instant
         ? {
             damage: damage,
-            rawDamage: rawDamage,
             baseDamageForModifiers: damage,
           }
         : {}),
       ...(residual
         ? {
             residual: damage,
-            rawResidual: rawDamage,
             baseDamageForModifiers: damage,
           }
         : {}),
@@ -3393,7 +3387,6 @@ export const summon = (
               tag: bloodlineEffect as BattleEffect,
               user: newAi,
               actionId: "initial",
-              target: newAi,
               level: newAi.level,
               round: battle.round,
               battle,
@@ -3411,7 +3404,6 @@ export const summon = (
             tag: aiEffect as BattleEffect,
             user: newAi,
             actionId: "initial",
-            target: newAi,
             level: newAi.level,
             round: battle.round,
             battle,

@@ -164,9 +164,9 @@ describe("battle response privacy", () => {
   it("keeps visible effects while stripping private sources and unused asset hints", () => {
     const battle = battleWithLoadouts();
     battle.extraState.jutsus["foe-jutsu"]!.effects = [VisualTag.parse({appearAnimation:"uncast-animation", appearSfx:"uncast-sound"})];
-    battle.usersEffects = [makeEffect("visual", {appearAnimation:"visible-animation"}, {creatorId:"foe", targetId:"me", fromType:"armor", actionId:"secret-armor", highestGenerals:["speed"], targetHighestGenerals:["strength"]})];
+    battle.usersEffects = [makeEffect("visual", {appearAnimation:"visible-animation"}, {creatorId:"foe", targetId:"me", fromType:"armor", actionId:"secret-armor", highestGenerals:["speed"]})];
     const masked = maskBattle(battle,"me");
-    expect(masked.usersEffects[0]).toMatchObject({actionId:"hidden", appearAnimation:"visible-animation", targetHighestGenerals:["strength"]});
+    expect(masked.usersEffects[0]).toMatchObject({actionId:"hidden", appearAnimation:"visible-animation"});
     expect(masked.usersEffects[0]).not.toHaveProperty("highestGenerals");
     expect(masked.extraState.textureAssets).toContain("visible-animation");
     expect(masked.extraState.textureAssets).not.toContain("uncast-animation");

@@ -116,7 +116,6 @@ export const addPetsToBattle = (info: {
             const realized = realizeTag({
               tag: structuredClone(effect) as UserEffect,
               user: actor,
-              target: actor,
               actionId: skill.id,
               level: actor.level,
             });
@@ -164,7 +163,6 @@ export const addPetsToBattle = (info: {
         const realized = realizeTag({
           tag: structuredClone(effect) as UserEffect,
           user: creator,
-          target,
           actionId: sourceId,
           level: creator.level,
         });
@@ -281,7 +279,6 @@ const createPetBattleUser = (
     statsMultiplier: 1,
     poolsMultiplier: 1,
     money: 0,
-    originalMoney: 0,
     medicalExperience: 0,
     sageMasteryExperience: 0,
     bloodlineId: null,

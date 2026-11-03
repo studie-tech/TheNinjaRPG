@@ -25,7 +25,7 @@ const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
     actionPoints: 100, effects: [], jutsus: [], items: [], basicActions: [],
     round: 0, direction: "left", isAggressor: false, rank: "JONIN",
     highestGenerals: [], iAmHere: true, level: 60,
-    originalLevel: 60, originalMoney: 0, originalLongitude: 0, originalLatitude: 0,
+    originalLevel: 60, originalLongitude: 0, originalLatitude: 0,
     isOriginal: true, usedGenerals: {}, usedStats: {}, moneyStolen: 0,
     allyVillage: false, usedActions: [], usedTagTypes: [], initiative: 0,
     relationIds: [],

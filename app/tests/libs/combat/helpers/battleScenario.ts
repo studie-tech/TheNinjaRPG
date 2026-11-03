@@ -97,7 +97,6 @@ const battleUserNumberDefaults = {
   actionPoints: 100,
   round: 1,
   originalLevel: 100,
-  originalMoney: 0,
   originalLongitude: 0,
   originalLatitude: 0,
   moneyStolen: 0,

@@ -1065,7 +1065,6 @@ export const insertAction = (info: {
               tag: tag as UserEffect,
               user: user,
               actionId: action.id,
-              target: user,
               level: action.level,
               round: battle.round,
               barrierAbsorb: totalAbsorb,
@@ -1115,7 +1114,6 @@ export const insertAction = (info: {
             tag: tag as UserEffect,
             user: user,
             actionId: action.id,
-            target: target,
             level: action.level,
             round: battle.round,
             barrierAbsorb: totalAbsorb,
@@ -1207,7 +1205,6 @@ export const insertAction = (info: {
           const effect = realizeTag({
             tag: structuredClone(tag) as UserEffect,
             user,
-            target,
             actionId: skillId,
             level: user.level,
             round: battle.round,

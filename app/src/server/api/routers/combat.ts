@@ -3910,7 +3910,6 @@ export const processUsersForBattle = async (
       round: 0,
       iAmHere: false,
       originalLevel: inputUser.level,
-      originalMoney: inputUser.money,
       originalLongitude: inputUser.longitude,
       originalLatitude: inputUser.latitude,
       actionPoints: 100,
@@ -4167,7 +4166,6 @@ export const processUsersForBattle = async (
         }) as UserEffect,
         user,
         actionId: "elemental-mastery",
-        target: user,
         level: user.level,
       });
       realized.isNew = false;
@@ -4189,7 +4187,6 @@ export const processUsersForBattle = async (
           tag: effect as UserEffect,
           user,
           actionId: user.bloodline?.id ?? "initial",
-          target: user,
           level: user.level,
         });
         realized.isNew = false;
@@ -4244,7 +4241,6 @@ export const processUsersForBattle = async (
                 tag: effect as UserEffect,
                 user: user,
                 actionId: userSkill.skillId,
-                target: user,
                 level: user.level,
               });
               realized.isNew = false;
@@ -4283,7 +4279,6 @@ export const processUsersForBattle = async (
             tag: titleCombatTag(effect) as UserEffect,
             user,
             actionId: owned.titleId,
-            target: user,
             level: 0,
           });
           realized.isNew = false;
@@ -4306,7 +4301,6 @@ export const processUsersForBattle = async (
           tag: { ...effect, rounds: undefined, powerPerLevel: 0 } as UserEffect,
           user,
           actionId: buff.id,
-          target: user,
           level: 0,
         });
         realized.isNew = false;
@@ -4326,7 +4320,6 @@ export const processUsersForBattle = async (
           tag: effect as UserEffect,
           user: user,
           actionId: "initial",
-          target: user,
           level: user.level,
         });
         realized.isNew = false;
@@ -4458,7 +4451,6 @@ export const processUsersForBattle = async (
                 tag: effect,
                 user: user,
                 actionId: ui.itemId,
-                target: user,
                 // AI gear can never earn item XP; keep character-level scaling
                 // for AI so boss/raid content is not silently nerfed to level 1.
                 level: user.isAi ? user.level : ui.level,
@@ -4893,7 +4885,6 @@ export const processUsersForBattle = async (
           tag: structuredClone(effect),
           user: creator,
           actionId: pending.skillId,
-          target,
           level: pending.level,
         });
         realized.isNew = false;

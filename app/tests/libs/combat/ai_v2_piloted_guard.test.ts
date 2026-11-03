@@ -44,7 +44,6 @@ const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
     highestGenerals: [],
     iAmHere: true,
     originalLevel: 1,
-    originalMoney: 0,
     originalLongitude: 1,
     originalLatitude: 1,
     isOriginal: false,

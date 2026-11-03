@@ -84,7 +84,6 @@ describe("opening quest effects", () => {
     const action = realizeTag({
       tag: getTagSchema("flee").parse({ power: 100 }) as UserEffect,
       user: player,
-      target: player,
       level: 0,
       actionId: "flee",
       round: 1,

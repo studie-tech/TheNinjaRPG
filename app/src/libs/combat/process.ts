@@ -2587,7 +2587,6 @@ function realizeSageTags(props: {
       tag,
       user,
       actionId,
-      target: user,
       level,
       round: battle.round,
       battle,

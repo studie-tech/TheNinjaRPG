@@ -1793,7 +1793,6 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           effects: definition.effects.map((effect) => {
             const masked = { ...effect } as BattleEffect;
             delete masked.highestGenerals;
-            delete masked.targetHighestGenerals;
             return masked;
           }),
         },
@@ -1920,8 +1919,6 @@ const maskBattleEffects = <T extends BattleEffect>(
     .map((effect) => {
       const masked = { ...effect };
       if (!controlledIds.has(effect.creatorId)) delete masked.highestGenerals;
-      if (!("targetId" in effect && controlledIds.has(String(effect.targetId))))
-        delete masked.targetHighestGenerals;
       return {
         ...masked,
         // Passive modifiers are visible in the effects panel; their equipment and

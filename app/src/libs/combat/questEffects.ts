@@ -38,7 +38,6 @@ export const addQuestStartingEffects = (
     const effect = realizeTag({
       tag: { ...structuredClone(raw), target: "SELF" } as UserEffect,
       user: player,
-      target: player,
       level: player.level,
       actionId,
     });

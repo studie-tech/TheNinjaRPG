@@ -42,7 +42,7 @@ describe("timed meal and raid effects", () => {
     const live = Date.now() + 60000;
     const buffs = [statBuff("meal", 150, live, { calculation: "static" }), statBuff("raid", 200, live)]
       .map((tag) => ({
-        ...realizeTag({ tag, user, actionId: tag.id, target: user, level: 0 }),
+        ...realizeTag({ tag, user, actionId: tag.id, level: 0 }),
         isNew: false,
         castThisRound: false,
       }));
