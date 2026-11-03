@@ -171,12 +171,9 @@ export const GlobalAudioProvider: React.FC<{
     return 0.8;
   };
 
-  const [buttonSfxOn, setButtonSfxOn] = useState<boolean>(() =>
-    isClient ? getInitialButtonSfxState() : true,
-  );
-  const [sfxVolume, setSfxVolume] = useState<number>(() =>
-    isClient ? getInitialSfxVolumeState() : 0.8,
-  );
+  // Post-mount effects load the saved values
+  const [buttonSfxOn, setButtonSfxOn] = useState<boolean>(true);
+  const [sfxVolume, setSfxVolume] = useState<number>(0.8);
 
   // Battle, event, bloodline, outlaw or village theme (see getBackgroundMusicSrc)
   const musicSrc = getBackgroundMusicSrc(
@@ -411,9 +408,7 @@ export const useGameSettings = (
   const getInitialSfxState = (): boolean => {
     return getAudioPreference("sfxOn", userData?.sfxOn);
   };
-  const [sfxOn, setSfxOn] = useState<boolean>(() =>
-    isClient ? getInitialSfxState() : true,
-  );
+  const [sfxOn, setSfxOn] = useState<boolean>(true);
 
   // Light layout preference state
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>(
@@ -544,9 +539,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   }, [lightLayout, initialLightLayout, isClassicLayout]);
 
   const handleRefreshPage = () => {
-    if (typeof window !== "undefined") {
-      window.location.reload();
-    }
+    window.location.reload();
   };
 
   const handleMusicToggle = async (checked: boolean) => {
