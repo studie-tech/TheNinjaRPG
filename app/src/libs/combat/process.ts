@@ -1501,7 +1501,7 @@ export const applySingleEffect = (
   instantConsumeIds?: Set<string>,
 ) => {
   if (effect.timedBuffExpiresAt && effect.timedBuffExpiresAt <= Date.now()) return;
-  // Derive damage config from battle state (with fallback for older battles)
+  // Derive damage config from battle state
   const config = battle.extraState.dmgConfig ?? defaultDmgConfig;
   // Destructure
   const { usersState, usersEffects, round } = battle;
@@ -2460,14 +2460,14 @@ export const computeDamagePacket = (
   damage = Math.max(minDamage, damage - totalStaticReduction);
 
   const keystoneIncPoints =
-    (attackerGear.incDamageGivenFromKeystone ?? 0) +
-    (defenderGear.incDamageTakenFromKeystone ?? 0) +
+    attackerGear.incDamageGivenFromKeystone +
+    defenderGear.incDamageTakenFromKeystone +
     elementalPoints(modifierLists.elementalKeystoneIncreases);
   damage *= 1 + keystoneIncPoints / 100;
 
   const keystoneDrPoints =
-    (defenderGear.drTakenFromKeystone ?? 0) +
-    (attackerGear.drGivenFromKeystone ?? 0) +
+    defenderGear.drTakenFromKeystone +
+    attackerGear.drGivenFromKeystone +
     elementalPoints(modifierLists.elementalKeystoneReductions, true);
   if (!ctx.ignoreDamageReduction) {
     damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
@@ -2738,8 +2738,7 @@ function applyActivateSageMode(
 /**
  * After a round advances: once `sageModeExpiresRound` (activation round +
  * `activationRounds`) has elapsed, queue lasting `afterEffects` and resolve
- * instant ones immediately. Falls back to "any lasting sage buff still active"
- * when expiry was never tracked. Also prunes spent active/exhaustion auras.
+ * instant ones immediately. Also prunes spent active/exhaustion auras.
  *
  * Instant after-effects cannot wait for the next `applyEffects` actor — they
  * are queued with `isNew=false` and would be dropped if that actor is not the sage.
@@ -2759,16 +2758,7 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
     // The active window is duration-driven: honor the full `activationRounds` window via
     // `sageModeExpiresRound` even when no lasting buff remains (a mode whose active effects
     // are all instant would otherwise collapse into exhaustion the next round).
-    if (u.sageModeExpiresRound != null) {
-      if (battle.round < u.sageModeExpiresRound) return;
-    } else {
-      // Fallback for battle state activated before `sageModeExpiresRound` was tracked:
-      // stay active while any lasting sage buff is still present.
-      const activeSageFx = battle.usersEffects.filter(
-        (e) => e.fromType === "sageMode" && e.targetId === u.userId,
-      );
-      if (activeSageFx.some((e) => isEffectActive(e))) return;
-    }
+    if (battle.round < (u.sageModeExpiresRound ?? 0)) return;
 
     const sageModeId = u.sageModeId;
     const sageMode: SageMode | undefined = sageModeId

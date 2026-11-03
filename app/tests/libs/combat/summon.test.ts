@@ -31,7 +31,7 @@ describe("isSummonTemplate / isActiveSummon", () => {
     expect(isSummonTemplate(t, [player, t])).toBe(true);
     expect(isActiveSummon(t, [player, t])).toBe(false);
   });
-  it("legacy template (no flag, curHealth 0, controller absent) -> template", () => {
+  it("unflagged dead summon whose controller left -> template", () => {
     const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: undefined, curHealth: 0 });
     expect(isSummonTemplate(t, [player, t])).toBe(true);
   });
@@ -71,7 +71,7 @@ describe("isLiveSummon", () => {
   });
 });
 
-describe("legacy fallback (no isSummonTemplate flag)", () => {
+describe("unflagged summons", () => {
   it("classifies a flag-less curHealth-0 controller-less summon as a template", () => {
     const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: undefined, curHealth: 0 });
     expect(isSummonTemplate(t, [player, t])).toBe(true);

@@ -14,9 +14,9 @@ export const summonController = (
 
 /** The hidden clone-source template, not a battlefield entity.
  *  Primary signal: the explicit isSummonTemplate flag (set at load, cleared on
- *  spawn). A dead summon whose controller is no longer a combatant (a creature
- *  summoned by a summon that has since left) is hidden the same way. curHealth<=0
- *  is required so an ALIVE orphaned summon is not misread as a template. */
+ *  spawn). A dead summon (curHealth<=0) whose controller has left the battle is
+ *  treated the same way, so its corpse stays hidden. curHealth<=0 is required so
+ *  an ALIVE orphaned summon is not misread as a template. */
 export const isSummonTemplate = (
   u: Pick<
     BattleUserState,
