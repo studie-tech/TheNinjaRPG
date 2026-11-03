@@ -129,7 +129,11 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
                   />
                 </TooltipProvider>
               )}
-              <UserCombatSettings config={config} userData={userData} />
+              <UserCombatSettings
+                config={config}
+                userData={userData}
+                supportsBattleFocus={false}
+              />
             </div>
           }
         />

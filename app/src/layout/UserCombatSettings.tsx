@@ -33,6 +33,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   config,
   userData,
   autoCombatControl,
+  supportsBattleFocus = true,
 }) => {
   const { sfxOn, setSfxEnabled, lightLayout, setLightLayout } =
     useGameSettings(userData);
@@ -46,6 +47,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   const [initialLightLayout] = React.useState(lightLayout);
   const lightLayoutChanged = lightLayout !== initialLightLayout;
   const resourceBarsId = React.useId();
+  const battleFocus = supportsBattleFocus && config.battleFocus;
 
   return (
     <Popover>
@@ -125,7 +127,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 checked={config.showGridNumbers}
                 onCheckedChange={config.toggleGridNumbers}
               />
-              {!config.battleFocus && (
+              {!battleFocus && (
                 <SettingsToggle
                   label="Small action icons"
                   description="Hide labels and fit more per row"
@@ -149,14 +151,16 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </TabsContent>
           <TabsContent value="layout" className="space-y-3 pt-2">
             <p className="text-base font-semibold">Combat layout</p>
-            <SettingsToggle
-              label="Battle focus"
-              description="Full-window battlefield with compact actions, log and timeline"
-              checked={config.battleFocus}
-              onCheckedChange={config.setBattleFocus}
-            />
+            {supportsBattleFocus && (
+              <SettingsToggle
+                label="Battle focus"
+                description="Full-window battlefield with compact actions, log and timeline"
+                checked={battleFocus}
+                onCheckedChange={config.setBattleFocus}
+              />
+            )}
             {/* Focus always exposes history; desktop can swap it with the actions. */}
-            {config.battleFocus && (
+            {battleFocus && (
               <div className="hidden lg:block">
                 <SettingsToggle
                   label="Swap actions and log"
@@ -167,7 +171,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
               </div>
             )}
             <div className="divide-border/50 divide-y">
-              {!config.battleFocus && (
+              {!battleFocus && (
                 <>
                   <SettingsToggle
                     label="Show battle log"
@@ -187,10 +191,10 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 label="Show basic actions"
                 description="Include basic actions in the timeline"
                 checked={config.showBasicActions}
-                disabled={!config.battleFocus && !config.showTimeline}
+                disabled={!battleFocus && !config.showTimeline}
                 onCheckedChange={config.toggleBasicActions}
               />
-              {!config.battleFocus && (
+              {!battleFocus && (
                 <SettingsToggle
                   label="Use tabs"
                   description="Group actions, timeline and log in tabs"
@@ -199,7 +203,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 />
               )}
             </div>
-            {!config.battleFocus && (
+            {!battleFocus && (
               <div className="space-y-2 border-t pt-3">
                 <div className="flex min-h-8 items-center justify-between gap-2">
                   <p className="text-sm font-medium">Panel order</p>
@@ -276,6 +280,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
 
 interface UserCombatSettingsProps {
   config: CombatPreferences;
+  /** Embedded viewers keep their layout controls without changing the saved live preference. */
+  supportsBattleFocus?: boolean;
   /** The page owns the mutation and checks whether the battle permits switching control. */
   autoCombatControl?: React.ReactNode;
   userData?: UserWithRelations | null;

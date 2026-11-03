@@ -7,7 +7,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AutoBattleTypes, ManualStartBattleTypes } from "@/drizzle/constants";
+import {
+  AutoBattleTypes,
+  BATTLE_ARENA_HEAL_COST,
+  ManualStartBattleTypes,
+} from "@/drizzle/constants";
 import {
   type CombatLayoutComponentId,
   useAutoCombatSetting,
@@ -159,7 +163,7 @@ export default function CombatPage() {
     (results.curHealth < userData.maxHealth ||
       results.curStamina < userData.maxStamina ||
       results.curChakra < userData.maxChakra);
-  const canAffordArenaHealing = (userData?.money ?? 0) >= 500;
+  const canAffordArenaHealing = (userData?.money ?? 0) >= BATTLE_ARENA_HEAL_COST;
   const canHealFromCurrentStatus = userData?.status === "AWAKE";
   const showNextMatch =
     results?.outcome === "Won" &&
@@ -299,11 +303,9 @@ export default function CombatPage() {
       onSuccess: (data) => {
         if (data.success) {
           setArenaHealSettledBattleId(arenaHealBattleKey);
-          if (arenaOpponentId) {
-            handleStartArenaBattle("post-heal");
-          } else {
-            showMutationToast(data);
-          }
+        }
+        if (data.success && arenaOpponentId) {
+          handleStartArenaBattle("post-heal");
         } else {
           showMutationToast(data);
         }
@@ -422,8 +424,8 @@ export default function CombatPage() {
                   : !needsArenaHealing
                     ? "Already fully healed"
                     : !canAffordArenaHealing
-                      ? "Need 500 Ryo to heal"
-                      : "Heal and Go Again (-500 Ryo)"}
+                      ? `Need ${BATTLE_ARENA_HEAL_COST} Ryo to heal`
+                      : `Heal and Go Again (-${BATTLE_ARENA_HEAL_COST} Ryo)`}
         </Button>
       </div>
     );
@@ -712,29 +714,36 @@ export default function CombatPage() {
     ],
   );
 
-  const renderTimeline = useCallback(() => {
-    if (!config.showTimeline || !battle) return null;
-    return (
-      <CombatTimeline
-        battleId={battle.id}
-        battle={battle}
-        battleVersion={battle.version}
-        showBasicActions={config.showBasicActions}
-      />
-    );
-  }, [config.showTimeline, config.showBasicActions, battle]);
+  // Focus keeps history available independently of the embedded layout preferences.
+  const renderTimeline = useCallback(
+    (focus = false) => {
+      if ((!focus && !config.showTimeline) || !battle) return null;
+      return (
+        <CombatTimeline
+          battleId={battle.id}
+          battle={battle}
+          battleVersion={battle.version}
+          showBasicActions={config.showBasicActions}
+        />
+      );
+    },
+    [config.showTimeline, config.showBasicActions, battle],
+  );
 
-  const renderBattleLog = useCallback(() => {
-    if (!config.showBattleLog || !battle) return null;
-    return (
-      <CombatHistory
-        battleId={battle.id}
-        battleVersion={battle.version}
-        battleRound={battle.round}
-        results={results}
-      />
-    );
-  }, [config.showBattleLog, battle, results]);
+  const renderBattleLog = useCallback(
+    (focus = false) => {
+      if ((!focus && !config.showBattleLog) || !battle) return null;
+      return (
+        <CombatHistory
+          battleId={battle.id}
+          battleVersion={battle.version}
+          battleRound={battle.round}
+          results={results}
+        />
+      );
+    },
+    [config.showBattleLog, battle, results],
+  );
 
   // Component renderer based on ID
   const renderComponent = useCallback(
@@ -891,22 +900,8 @@ export default function CombatPage() {
             </>
           }
           autoControl={renderAutoControl()}
-          log={
-            <CombatHistory
-              battleId={battle.id}
-              battleVersion={battle.version}
-              battleRound={battle.round}
-              results={results}
-            />
-          }
-          timeline={
-            <CombatTimeline
-              battleId={battle.id}
-              battle={battle}
-              battleVersion={battle.version}
-              showBasicActions={config.showBasicActions}
-            />
-          }
+          log={renderBattleLog(true)}
+          timeline={renderTimeline(true)}
           onShowLayout={() => config.setBattleFocus(false)}
         />
         {hotkeyDialog}

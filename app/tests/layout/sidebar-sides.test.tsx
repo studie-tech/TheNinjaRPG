@@ -200,8 +200,8 @@ describe("Classic light layout", () => {
 });
 
 describe("game settings categories", () => {
-  const CombatSettingsProbe = () => <UserCombatSettings config={useCombatPreferences()} />;
-  const renderSettings = (withCombat = false) => {
+  const CombatSettingsProbe = ({ supportsBattleFocus }: { supportsBattleFocus: boolean }) => <UserCombatSettings config={useCombatPreferences()} supportsBattleFocus={supportsBattleFocus} />;
+  const renderSettings = (withCombat = false, supportsBattleFocus = true) => {
     // useLocalStorage syncs same-page readers with the DOM's own CustomEvent.
     for (const key of browserGlobals) {
       Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
@@ -216,7 +216,7 @@ describe("game settings categories", () => {
       <LayoutContextProvider value="17-obsidian-council" isPixelLanding={false}>
         <GlobalAudioProvider>
           <GameSettingsPanel />
-          {withCombat && <CombatSettingsProbe />}
+          {withCombat && <CombatSettingsProbe supportsBattleFocus={supportsBattleFocus} />}
         </GlobalAudioProvider>
       </LayoutContextProvider>,
     );
@@ -290,5 +290,27 @@ describe("game settings categories", () => {
     expect(dialog.queryByText("Timeline")).toBeNull();
     expect(dialog.queryByText("Battle Log")).toBeNull();
     expect(dialog.getByText("Battlefield")).toBeTruthy();
+  });
+
+  it("keeps embedded viewer controls available while preserving the live focus preference", () => {
+    localStorage.setItem("combatBattleFocus", "true");
+    const view = renderSettings(true, false);
+    fireEvent.click(view.getByRole("button", { name: "Open combat settings" }));
+    const dialog = within(view.getByRole("dialog", { name: "Combat settings" }));
+    expect(dialog.getByRole("switch", { name: "Small action icons" })).toBeTruthy();
+    fireEvent.mouseDown(dialog.getByRole("tab", { name: "Layout" }), { button: 0, ctrlKey: false });
+    expect(dialog.queryByRole("switch", { name: "Battle focus" })).toBeNull();
+    expect(dialog.queryByRole("switch", { name: "Swap actions and log" })).toBeNull();
+    expect(dialog.getByText("Panel order")).toBeTruthy();
+    fireEvent.click(dialog.getByRole("switch", { name: "Show timeline" }));
+    expect(dialog.getByRole("switch", { name: "Show basic actions" }).hasAttribute("disabled")).toBe(true);
+    expect(localStorage.getItem("combatBattleFocus")).toBe("true");
+    view.unmount();
+
+    const liveView = renderSettings(true);
+    fireEvent.click(liveView.getByRole("button", { name: "Open combat settings" }));
+    const liveDialog = within(liveView.getByRole("dialog", { name: "Combat settings" }));
+    expect(liveDialog.getByRole("switch", { name: "Battle focus" }).getAttribute("aria-checked")).toBe("true");
+    expect(liveDialog.queryByText("Panel order")).toBeNull();
   });
 });
