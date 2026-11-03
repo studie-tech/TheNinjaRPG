@@ -114,7 +114,7 @@ export const auctionRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const {
         cursor,
-        limit = 20,
+        limit,
         itemName,
         sellerSearch,
         listingType,
@@ -271,17 +271,8 @@ export const auctionRouter = createTRPCRouter({
       if (user.level < AUCTION_HOUSE_MIN_LEVEL) {
         return errorResponse(auctionHouseLevelMessage);
       }
-      if (userItemData.equipped !== "NONE") {
-        return errorResponse("Item is currently equipped");
-      }
-      if (userItemData.isInAuction) {
-        return errorResponse("Item is already in auction");
-      }
       if (!userItemData.item.canBeTraded) {
         return errorResponse("Item is not tradable");
-      }
-      if (buyoutPrice && buyoutPrice <= startingPrice) {
-        return errorResponse("Buyout price must be greater than starting price");
       }
 
       // Validate the recipient before splitting any of the sender's inventory.
@@ -324,12 +315,8 @@ export const auctionRouter = createTRPCRouter({
           );
         }
 
-        // If quantity equals the full stack, use the existing item
-        if (quantity === userItemData.quantity) {
-          // Use the existing item, no splitting needed
-          auctionUserItemId = userItemId;
-        } else {
-          // Use the convenience method to split the stack
+        // A partial stack is split off; the full stack is listed as is
+        if (quantity < userItemData.quantity) {
           const quantityToKeep = userItemData.quantity - quantity;
           const result = await splitItemStack(
             ctx.drizzle,
