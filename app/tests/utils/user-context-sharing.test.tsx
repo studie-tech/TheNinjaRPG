@@ -2,16 +2,19 @@ import * as clerk from "@clerk/nextjs";
 import {
   QueryClient,
   QueryClientProvider,
+  useMutation,
   useQuery,
   type UseQueryOptions,
 } from "@tanstack/react-query";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type ContextType, type ReactNode, useContext } from "react";
+import { type ContextType, type ReactNode, Profiler, useContext } from "react";
 import * as client from "@/app/_trpc/client";
+import { ActivityStreakPanel } from "@/layout/ActivityStreakPanel";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
+import * as mutationToast from "@/libs/toast";
 import { UserContextProvider, useUserDataRef, selectUserWithoutPosition, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";
@@ -59,7 +62,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const mount = (initial = snapshot(), children: ReactNode = null, observeFull = true) => {
+const mount = (initial = snapshot(), children: ReactNode = null, observeFull = true, extraApi: Record<string, unknown> = {}) => {
   let providerRenders = 0;
   let response = initial;
   const queryClient = new QueryClient({
@@ -81,6 +84,7 @@ const mount = (initial = snapshot(), children: ReactNode = null, observeFull = t
         },
       },
     },
+    ...extraApi,
   });
   const seen: ReturnType<typeof useUserData>[] = [];
   const Consumer = () => {
@@ -116,6 +120,40 @@ const mount = (initial = snapshot(), children: ReactNode = null, observeFull = t
 };
 
 describe("profile context structural sharing", () => {
+  it("keeps the reward calendar idle during movement while publishing streak and claim state", async () => {
+    const streakKey: typeof key = [["activityStreak", "getUserStreaks"], { type: "query" }];
+    const initialStreak = { streaks: [], activeRecurringConfig: { id: "daily", name: "Daily rewards", totalDays: 1, rewards: [] } };
+    let finishClaim!: (result: { success: false; message: string }) => void;
+    const claimResponse = new Promise<{ success: false; message: string }>(resolve => { finishClaim = resolve; });
+    const activityStreak = {
+      getUserStreaks: { useQuery: () => useQuery({ queryKey: streakKey, queryFn: async () => initialStreak, initialData: initialStreak }) },
+      getAvailablePasses: { useQuery: () => useQuery({ queryKey: ["test-streak-passes"], queryFn: async () => [], initialData: [] }) },
+      claimStreakDay: { useMutation: (options: Parameters<typeof useMutation>[0]) => useMutation({ ...options, mutationFn: () => claimResponse }) },
+      purchaseEventPass: { useMutation: (options: Parameters<typeof useMutation>[0]) => useMutation({ ...options, mutationFn: async () => ({ success: false }) }) },
+    };
+    vi.spyOn(trpc, "getQueryKey").mockImplementation((procedure: unknown, ..._params: unknown[]) => procedure === activityStreak.getUserStreaks ? streakKey : key);
+    const toast = vi.spyOn(mutationToast, "showMutationToast").mockImplementation(() => {});
+    const rendered = vi.fn();
+    const test = mount(snapshot(), <Profiler id="streak-calendar" onRender={rendered}><ActivityStreakPanel /></Profiler>, false, { activityStreak });
+    await test.settle(async () => {});
+    expect(screen.getByText("Daily rewards")).toBeTruthy();
+    rendered.mockClear();
+    for (const longitude of [8, 9, 10])
+      await test.settle(() => updateUserCache(test.queryClient, key, { longitude, latitude: 9, updatedAt: new Date(BASE + longitude) }));
+    expect(test.read().userData).toMatchObject({ longitude: 10, latitude: 9 });
+    expect(rendered).not.toHaveBeenCalled();
+    await test.settle(async () => {
+      test.queryClient.setQueryData(streakKey, { ...initialStreak, activeRecurringConfig: { ...initialStreak.activeRecurringConfig, name: "Updated rewards" } });
+    });
+    expect(screen.getByText("Updated rewards")).toBeTruthy();
+    expect(rendered).toHaveBeenCalled();
+    await test.settle(async () => { fireEvent.click(screen.getByRole("button", { name: /^Claim$/ })); });
+    expect(screen.getByRole("button", { name: "Claiming..." }).hasAttribute("disabled")).toBe(true);
+    const rejection = { success: false as const, message: "Reward is not ready" };
+    await test.settle(async () => { finishClaim(rejection); await claimResponse; });
+    expect(screen.getByRole("button", { name: /^Claim$/ }).hasAttribute("disabled")).toBe(false);
+    expect(toast).toHaveBeenCalledWith(rejection);
+  });
   it("keeps session services and selected UI idle while imperative position readers stay current", async () => {
     let renders = 0;
     let latest: ReturnType<typeof useUserDataRef> | undefined;
