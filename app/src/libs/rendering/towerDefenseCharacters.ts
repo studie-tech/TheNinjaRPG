@@ -1,10 +1,9 @@
-import {
-  type CharacterAssetConfig,
-  HEAVY_ENEMY_ASSET_CONFIG,
-  LIGHT_ENEMY_ASSET_CONFIG,
-  PLAYER_ASSET_CONFIG,
-} from "@/libs/rendering/characterAssets";
-import type { CharacterAssetConfig as DbCharacterAssetConfig } from "@/validators/towerDefense";
+import type { CharacterAssetConfig } from "@/validators/towerDefense";
+
+/** Scale used until a character's database config, and its own scale, is registered. */
+const DEFAULT_SCALE_FACTOR = 2.8;
+
+type CharacterAssets = { config?: CharacterAssetConfig; scaleFactor: number };
 
 const enemyAssetConfigCache = new Map<
   string,
@@ -21,29 +20,15 @@ let playerAssetConfigCache: {
 } | null = null;
 
 /**
- * Convert a database asset config (with full URLs) to the rendering format.
- * Database configs don't have basePath since they use absolute URLs.
- */
-const convertDbConfigToAnimatorConfig = (
-  dbConfig: DbCharacterAssetConfig,
-): CharacterAssetConfig => {
-  return {
-    ...dbConfig,
-    basePath: "", // Not used when URLs are absolute
-  };
-};
-
-/**
  * Register an enemy asset config from the database.
  * Called when enemy definitions are loaded.
  */
 export const registerEnemyAssetConfig = (
   enemyType: string,
-  config: DbCharacterAssetConfig,
+  config: CharacterAssetConfig,
   scaleFactor: number,
 ): void => {
-  const animatorConfig = convertDbConfigToAnimatorConfig(config);
-  enemyAssetConfigCache.set(enemyType, { config: animatorConfig, scaleFactor });
+  enemyAssetConfigCache.set(enemyType, { config, scaleFactor });
 };
 
 /**
@@ -58,11 +43,10 @@ export const clearEnemyAssetConfigCache = (): void => {
  * Called when a game session starts with a selected player character.
  */
 export const registerPlayerAssetConfig = (
-  config: DbCharacterAssetConfig,
+  config: CharacterAssetConfig,
   scaleFactor: number,
 ): void => {
-  const animatorConfig = convertDbConfigToAnimatorConfig(config);
-  playerAssetConfigCache = { config: animatorConfig, scaleFactor };
+  playerAssetConfigCache = { config, scaleFactor };
 };
 
 /**
@@ -72,38 +56,10 @@ export const clearPlayerAssetConfigCache = (): void => {
   playerAssetConfigCache = null;
 };
 
-/**
- * Get the current player's asset config.
- * Falls back to default PLAYER_ASSET_CONFIG if none registered.
- */
-export const getPlayerAssetConfig = (): {
-  config: CharacterAssetConfig;
-  scaleFactor: number;
-} => {
-  if (playerAssetConfigCache) {
-    return playerAssetConfigCache;
-  }
-  // Fallback to default hardcoded player config
-  return { config: PLAYER_ASSET_CONFIG, scaleFactor: 2.8 };
-};
+/** The current player's asset config; absent until one is registered. */
+export const getPlayerAssetConfig = (): CharacterAssets =>
+  playerAssetConfigCache ?? { scaleFactor: DEFAULT_SCALE_FACTOR };
 
-/**
- * Get the asset config for an enemy type.
- * First checks the dynamic cache (database configs), then falls back to hardcoded.
- */
-export const getEnemyAssetConfig = (
-  enemyType: string,
-): { config: CharacterAssetConfig; scaleFactor: number } => {
-  // Check cache first (database configs)
-  const cachedConfig = enemyAssetConfigCache.get(enemyType);
-  if (cachedConfig) {
-    return cachedConfig;
-  }
-
-  // Fallback to hardcoded configs for backwards compatibility
-  const isHeavy = enemyType === "heavy";
-  return {
-    config: isHeavy ? HEAVY_ENEMY_ASSET_CONFIG : LIGHT_ENEMY_ASSET_CONFIG,
-    scaleFactor: isHeavy ? 3.2 : 2.8,
-  };
-};
+/** The asset config for an enemy type; absent until its database config is registered. */
+export const getEnemyAssetConfig = (enemyType: string): CharacterAssets =>
+  enemyAssetConfigCache.get(enemyType) ?? { scaleFactor: DEFAULT_SCALE_FACTOR };
