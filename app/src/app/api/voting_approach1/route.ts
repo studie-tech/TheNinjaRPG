@@ -4,7 +4,6 @@ import { drizzleDB } from "@/server/db";
 
 export async function POST(request: Request) {
   // https://topwebgames.com/game/theninja-rpg-core4/vote?incentive=testSecret-topwebgames&test=true&alwaysReward=true
-  // https://apexwebgaming.net/details/theninja-rpg-core4/vote?incentive=testSecret-apexWebGaming&test=true&alwaysReward=true
 
   try {
     const { searchParams } = new URL(request.url);
@@ -12,10 +11,8 @@ export async function POST(request: Request) {
     const incentive =
       (data.get("incentive") as string) ||
       (data.get("uid") as string) ||
-      searchParams.get("incentive") ||
-      searchParams.get("param") ||
-      searchParams.get("userid");
-    const [secret, siteId] = incentive?.split("-") ?? [];
+      queryIncentive(searchParams);
+    const [secret, siteId] = incentive.split("-");
 
     if (!secret || !siteId) {
       return Response.json(`Invalid incentive: ${incentive}`, { status: 400 });
@@ -29,21 +26,14 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  // https://www.top100arena.com/listing/101116/vote?incentive=testSecret-top100arena
   // https://mmohub.com/site/1054/vote/testSecret-mmohub
   // https://www.arena-top100.com/index.php?a=in&u=Terriator&incentive=testSecret-arenaTop100
-  // https://www.xtremetop100.com/in.php?site=1132291230&secret=testSecret&siteid=xtremeTop100
-  // https://browsermmorpg.com/vote.php?id=925&incentive=testSecret-browserMmorpg
 
   try {
     // For getting search params
     const { searchParams } = new URL(request.url);
-    const incentive =
-      searchParams.get("incentive") ||
-      searchParams.get("param") ||
-      searchParams.get("userid") ||
-      "";
-    let [secret, siteId] = incentive?.split("-") ?? [];
+    const incentive = queryIncentive(searchParams);
+    let [secret, siteId] = incentive.split("-");
 
     // Sometimes the secret and siteid are in the url
     if (!secret || !siteId) {
@@ -61,6 +51,13 @@ export async function GET(request: Request) {
     return await handleEndpointError(cause);
   }
 }
+
+/** The `secret-siteId` incentive from the query-string aliases the vote sites use. */
+const queryIncentive = (searchParams: URLSearchParams) =>
+  searchParams.get("incentive") ||
+  searchParams.get("param") ||
+  searchParams.get("userid") ||
+  "";
 
 async function handleVote(secret: string, siteId: string) {
   const now = new Date();

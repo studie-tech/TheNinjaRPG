@@ -151,21 +151,20 @@ export const updateUserVoteForHandleVote = (
   siteId: string,
   now: Date,
   secret: string,
-) =>
-  client
+) => {
+  const site = VOTE_POSTBACK_SITES[siteId];
+  return client
     .update(userVote)
-    .set({
-      ...(siteId === "topWebGames" ? { topWebGames: true } : {}), // in review
-      ...(siteId === "top100arena" ? { top100Arena: true } : {}),
-      ...(siteId === "mmohub" ? { mmoHub: true } : {}),
-      ...(siteId === "arenaTop100" ? { arenaTop100: true } : {}),
-      ...(siteId === "xtremeTop100" ? { xtremeTop100: true } : {}), // No postbacks received
-      ...(siteId === "topOnlineMmorpg" ? { topOnlineMmorpg: true } : {}), // Cannot register
-      ...(siteId === "browserMmorpg" ? { browserMmorpg: true } : {}), // Pending approval?
-      ...(siteId === "apexWebGaming" ? { apexWebGaming: true } : {}), // in review
-      lastVoteAt: now,
-    })
+    .set({ ...(site ? { [site]: true } : {}), lastVoteAt: now })
     .where(eq(userVote.secret, secret));
+};
+
+/** Postback site ids, as the vote sites send them, mapped to their UserVote column. */
+const VOTE_POSTBACK_SITES: Record<string, (typeof ACTIVE_VOTING_SITES)[number]> = {
+  mmohub: "mmoHub",
+  arenaTop100: "arenaTop100",
+  topWebGames: "topWebGames",
+};
 
 /**
  * Fetch a user by id
