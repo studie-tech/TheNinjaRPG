@@ -70,40 +70,29 @@ const staticEntries = (): SitemapEntry[] =>
   }));
 
 const manualEntries = async (): Promise<SitemapEntry[]> => {
-  const now = new Date();
   const [bloodlines, jutsus, items] = await Promise.all([
     selectBloodlineForManualEntries(drizzleDB),
     selectJutsuForManualEntries(drizzleDB),
     selectItemForManualEntries(drizzleDB),
   ]);
+  const toEntry = (prefix: string) => (row: { id: string; updatedAt: Date }) => ({
+    url: absoluteUrl(`${prefix}/${row.id}`),
+    lastModified: row.updatedAt,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  });
   return [
-    ...bloodlines.map((row) => ({
-      url: absoluteUrl(`/manual/bloodline/${row.id}`),
-      lastModified: row.updatedAt ?? now,
-      changeFrequency: "monthly" as const,
-      priority: 0.6,
-    })),
-    ...jutsus.map((row) => ({
-      url: absoluteUrl(`/manual/jutsu/${row.id}`),
-      lastModified: row.updatedAt ?? now,
-      changeFrequency: "monthly" as const,
-      priority: 0.6,
-    })),
-    ...items.map((row) => ({
-      url: absoluteUrl(`/manual/item/${row.id}`),
-      lastModified: row.updatedAt ?? now,
-      changeFrequency: "monthly" as const,
-      priority: 0.6,
-    })),
+    ...bloodlines.map(toEntry("/manual/bloodline")),
+    ...jutsus.map(toEntry("/manual/jutsu")),
+    ...items.map(toEntry("/manual/item")),
   ];
 };
 
 const guideEntries = async (): Promise<SitemapEntry[]> => {
-  const now = new Date();
   const articles = await selectGuideArticleForGuideEntries(drizzleDB);
   return articles.map((row) => ({
     url: absoluteUrl(`/guide/${row.slug}`),
-    lastModified: row.updatedAt ?? now,
+    lastModified: row.updatedAt,
     changeFrequency: "monthly" as const,
     priority: row.slug === "getting-started" ? 0.8 : 0.6,
   }));
@@ -111,7 +100,6 @@ const guideEntries = async (): Promise<SitemapEntry[]> => {
 
 /** Include only discussions whose entire board hierarchy permits public reading. */
 const forumEntries = async (): Promise<SitemapEntry[]> => {
-  const now = new Date();
   const [context, allThreads] = await Promise.all([
     getForumContext(drizzleDB),
     selectForumThreadForForumEntries(drizzleDB, MAX_THREADS),
@@ -121,13 +109,13 @@ const forumEntries = async (): Promise<SitemapEntry[]> => {
   return [
     ...boards.map((row) => ({
       url: absoluteUrl(`/forum/${row.id}`),
-      lastModified: row.updatedAt ?? now,
+      lastModified: row.updatedAt,
       changeFrequency: "daily" as const,
       priority: 0.5,
     })),
     ...threads.map((row) => ({
       url: absoluteUrl(`/forum/${row.boardId}/${row.id}`),
-      lastModified: row.updatedAt ?? now,
+      lastModified: row.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.4,
     })),
@@ -143,11 +131,10 @@ const forumEntries = async (): Promise<SitemapEntry[]> => {
  * profile routes answer `noindex` -- see @/libs/profileIndexing.
  */
 const profileEntries = async (): Promise<SitemapEntry[]> => {
-  const now = new Date();
   const profiles = await selectUserDataForProfileEntries(drizzleDB, MAX_PROFILES);
   return profiles.map((row) => ({
     url: absoluteUrl(`/username/${encodeURIComponent(row.username)}`),
-    lastModified: row.updatedAt ?? now,
+    lastModified: row.updatedAt,
     changeFrequency: "weekly" as const,
     priority: 0.3,
   }));
