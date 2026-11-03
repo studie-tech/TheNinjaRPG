@@ -38,6 +38,7 @@ import type {
   EntityStore,
   GameMode,
   HexPosition,
+  HitEvent,
   HudValues,
   RuntimeState,
   TowerDefenseEnemy,
@@ -55,39 +56,30 @@ import {
 } from "@/validators/towerDefense";
 
 // ============================================================================
-// MODULE-LEVEL HUD STORE (Global Singleton)
-// Uses global/window storage to survive Hot Module Replacement
+// MODULE-LEVEL HUD STORE
 // ============================================================================
 type HudStore = {
   subscribe: (listener: () => void) => () => void;
-  getSnapshot: () => number;
   getValues: () => HudValues;
   update: (newValues: Partial<HudValues>) => void;
   reset: () => void;
 };
 
-// Global key for the store
-const HUD_STORE_KEY = "__TOWER_DEFENSE_HUD_STORE__" as const;
-
-// Declare global type for TypeScript
-declare global {
-  var __TOWER_DEFENSE_HUD_STORE__: HudStore | undefined;
-}
+const INITIAL_HUD_VALUES: HudValues = {
+  score: 0,
+  currentWave: 0,
+  waveInProgress: false,
+  maxHealth: TD_PLAYER_BASE_HEALTH,
+  enemyCount: 0,
+  playerHealth: 0,
+  abilities: [],
+  activeUpgrades: {},
+  inRunCurrency: 0,
+};
 
 const createHudStore = (): HudStore => {
   const listeners = new Set<() => void>();
-  let version = 0;
-  let values: HudValues = {
-    score: 0,
-    currentWave: 0,
-    waveInProgress: false,
-    maxHealth: TD_PLAYER_BASE_HEALTH,
-    enemyCount: 0,
-    playerHealth: 0,
-    abilities: [],
-    activeUpgrades: {},
-    inRunCurrency: 0,
-  };
+  let values: HudValues = INITIAL_HUD_VALUES;
 
   return {
     subscribe: (listener: () => void) => {
@@ -96,28 +88,15 @@ const createHudStore = (): HudStore => {
         listeners.delete(listener);
       };
     },
-    getSnapshot: () => version,
     getValues: () => values,
     update: (newValues: Partial<HudValues>) => {
       values = { ...values, ...newValues };
-      version++;
       listeners.forEach((l) => {
         l();
       });
     },
     reset: () => {
-      values = {
-        score: 0,
-        currentWave: 0,
-        waveInProgress: false,
-        maxHealth: TD_PLAYER_BASE_HEALTH,
-        enemyCount: 0,
-        playerHealth: 0,
-        abilities: [],
-        activeUpgrades: {},
-        inRunCurrency: 0,
-      };
-      version++;
+      values = INITIAL_HUD_VALUES;
       listeners.forEach((l) => {
         l();
       });
@@ -125,29 +104,12 @@ const createHudStore = (): HudStore => {
   };
 };
 
-// TRUE GLOBAL SINGLETON: Survives HMR and module reloading
-// This ensures all imports get the same store instance
-const getHudStore = (): HudStore => {
-  if (typeof globalThis !== "undefined") {
-    if (!globalThis[HUD_STORE_KEY]) {
-      globalThis[HUD_STORE_KEY] = createHudStore();
-    }
-    return globalThis[HUD_STORE_KEY];
-  }
-  // Fallback for environments without globalThis
-  return createHudStore();
-};
-
-const hudStore = getHudStore();
-
-export type { HudValues };
-// Export for use in page.tsx
-export { hudStore };
+const hudStore = createHudStore();
 
 /**
  * Custom hook that subscribes to the HUD store using useSyncExternalStore.
  * PERFORMANCE: useSyncExternalStore is more efficient than useState/useEffect:
- * - Only triggers re-renders when getSnapshot() returns a different value
+ * - Only triggers re-renders when getValues() returns a different value
  * - React batches updates more efficiently
  * - Designed specifically for external stores
  * - Does NOT cause parent component re-renders
@@ -164,10 +126,7 @@ export const useHudStoreValues = (): HudValues => {
   );
 };
 
-/**
- * Game state interface - maintains compatibility with rendering components
- */
-
+/** UI state for the page's lobby, overlays and run metadata; HUD values live in hudStore. */
 const initialGameState = towerDefenseGameStateSchema.parse({
   mode: "lobby",
   runId: null,
@@ -175,20 +134,10 @@ const initialGameState = towerDefenseGameStateSchema.parse({
   currentWave: 0,
   score: 0,
   state: null,
-  enemies: [], // NOTE: This is kept empty - actual enemies are in entitiesRef
-  projectiles: [], // NOTE: This is kept empty - actual projectiles are in entitiesRef
-  abilities: [],
-  waveStartTime: 0,
   waveInProgress: false,
-  isSubmitting: false,
   error: null,
-  playerHitEvents: [],
-  enemyHitEvents: [],
   finalPointsEarned: null,
-  playerBonuses: getDefaultPlayerBonuses(),
-  maxHealth: TD_PLAYER_BASE_HEALTH,
   existingSession: null,
-  enemyCount: 0, // PERFORMANCE: Synced at throttled 10fps rate for HUD display
 });
 
 // COST OPTIMIZATION: Extended EntityStore to include enemy spawn data
@@ -343,8 +292,7 @@ export const useTowerDefense = (userId?: string) => {
   const utils = api.useUtils();
 
   // Hit events refs (also don't need to trigger re-renders)
-  const playerHitEventsRef = useRef<TowerDefenseGameState["playerHitEvents"]>([]);
-  const enemyHitEventsRef = useRef<TowerDefenseGameState["enemyHitEvents"]>([]);
+  const playerHitEventsRef = useRef<HitEvent[]>([]);
 
   // PERFORMANCE: Track mode in a ref to avoid calling setGameState just to read current state
   const currentModeRef = useRef<GameMode>("lobby");
@@ -381,7 +329,6 @@ export const useTowerDefense = (userId?: string) => {
     sessionIdRef.current = null;
     completedRunRef.current = null;
     playerHitEventsRef.current = [];
-    enemyHitEventsRef.current = [];
   }, []);
 
   /**
@@ -670,11 +617,7 @@ export const useTowerDefense = (userId?: string) => {
             score: state.score,
             state: newState,
             waveInProgress: state.waveInProgress,
-            waveStartTime: Number(state.waveStartTime),
-            maxHealth: state.playerMaxHealth,
             existingSession: null,
-            abilities: newAbilities,
-            playerBonuses: newBonuses,
           }));
           // ALSO sync HUD store for mode changes (so InRunUpgrades gets initial values)
           syncHudStore();
@@ -782,18 +725,6 @@ export const useTowerDefense = (userId?: string) => {
   const deleteEnemyFromStore = useCallback((enemyId: bigint) => {
     const store = entitiesRef.current;
     const id = `enemy-${enemyId}`;
-    const deleted = store.enemies.get(id);
-    if (deleted) {
-      // Add hit event
-      enemyHitEventsRef.current = [
-        ...enemyHitEventsRef.current,
-        {
-          id: `hit-${id}-${Date.now()}`,
-          position: deleted.position,
-          timestamp: Date.now(),
-        },
-      ];
-    }
     store.enemies.delete(id);
     // Also delete spawn data
     store.enemySpawns.delete(id);
@@ -839,7 +770,6 @@ export const useTowerDefense = (userId?: string) => {
     store.enemiesVersion++;
     store.projectilesVersion++;
     playerHitEventsRef.current = [];
-    enemyHitEventsRef.current = [];
     // Clear runtime enemy count
     runtimeStateRef.current.enemyCount = 0;
   }, []);
@@ -1067,9 +997,6 @@ export const useTowerDefense = (userId?: string) => {
       setGameState((prev) => ({
         ...prev,
         seed: secureSession.seed,
-        abilities: [secureSession.ability],
-        playerBonuses: secureSession.playerBonuses,
-        maxHealth: secureSession.params.playerMaxHealth,
         state: initialState,
       }));
 
@@ -1131,7 +1058,6 @@ export const useTowerDefense = (userId?: string) => {
         seed: sessionToResume.seed,
         currentWave: sessionToResume.wave,
         score: sessionToResume.score,
-        maxHealth: sessionToResume.maxHealth,
         state: initialState,
         existingSession: null,
       }));
@@ -1233,7 +1159,6 @@ export const useTowerDefense = (userId?: string) => {
       clearEntityStore();
       setGameState((prev) => ({
         ...prev,
-        waveStartTime: Date.now(),
       }));
       await connectionRef.current.startWave(sessionId);
     } catch (error) {
@@ -1311,13 +1236,6 @@ export const useTowerDefense = (userId?: string) => {
       }));
     }
   }, [utils, resetGameRefs, userId]);
-
-  /**
-   * Submit wave (auto-handled by SpacetimeDB, provided for interface compatibility)
-   */
-  const submitWave = useCallback(async () => {
-    await startWave();
-  }, [startWave]);
 
   // Mutation for claiming completed runs
   const claimRunMutation = api.towerDefense.claimCompletedRun.useMutation();
@@ -1443,7 +1361,7 @@ export const useTowerDefense = (userId?: string) => {
   /**
    * Update function - called by animation loop
    * With SpacetimeDB, game logic runs server-side, so this only handles
-   * visual cleanup (hit events) - now in refs, no React re-renders.
+   * visual cleanup of hit events held in refs, without React re-renders.
    */
   const update = useCallback((_deltaTime: number) => {
     const now = Date.now();
@@ -1452,37 +1370,6 @@ export const useTowerDefense = (userId?: string) => {
     playerHitEventsRef.current = playerHitEventsRef.current.filter(
       (e) => now - e.timestamp < TD_HIT_EVENT_DURATION_MS,
     );
-    enemyHitEventsRef.current = enemyHitEventsRef.current.filter(
-      (e) => now - e.timestamp < TD_HIT_EVENT_DURATION_MS,
-    );
-  }, []);
-
-  /**
-   * Get current entities directly from refs.
-   * PERFORMANCE: This doesn't trigger re-renders - animation loop can call this freely.
-   * COST OPTIMIZATION: Projectile progress is recomputed each call based on clientSpawnTime
-   */
-  const getEntities = useCallback(() => {
-    const store = entitiesRef.current;
-    const now = Date.now();
-
-    // COST OPTIMIZATION: Recompute projectile progress client-side
-    // Server only sends spawn/delete events, progress computed locally from clientSpawnTime
-    const projectilesWithProgress = store.projectilesArray.map((p) => {
-      const proj = p as TowerDefenseProjectileWithSpawn;
-      const elapsed = (now - proj.clientSpawnTime) / 1000;
-      const distance = calculateHexDistance(p.origin, p.target);
-      const progress =
-        distance > 0 ? Math.min((elapsed * TD_PROJECTILE_SPEED) / distance, 1.0) : 1.0;
-      return { ...p, progress };
-    });
-
-    return {
-      enemies: store.enemiesArray,
-      projectiles: projectilesWithProgress,
-      playerHitEvents: playerHitEventsRef.current,
-      enemyHitEvents: enemyHitEventsRef.current,
-    };
   }, []);
 
   return {
@@ -1491,13 +1378,10 @@ export const useTowerDefense = (userId?: string) => {
     upgradesData,
     upgradeDefinitions,
 
-    // NOTE: hudStore is now exported at module level - import { hudStore } from "@/hooks/useTowerDefense"
-
     // PERFORMANCE: Direct ref access for animation loop
     entitiesRef,
     runtimeStateRef, // Runtime state for animation loop (always current)
     playerHitEventsRef,
-    getEntities,
 
     // Actions
     startRun,
@@ -1505,7 +1389,6 @@ export const useTowerDefense = (userId?: string) => {
     startWave,
     throwShuriken,
     update,
-    submitWave,
     abandonRun,
     returnToLobby,
     clearError,
@@ -1515,8 +1398,6 @@ export const useTowerDefense = (userId?: string) => {
 
     // Loading states
     isStarting: gameState.mode === "connecting",
-    isSubmitting: gameState.isSubmitting,
-    isAbandoning: false,
     isReturningToLobby,
     isClaimingRewards:
       isReturningToLobby &&

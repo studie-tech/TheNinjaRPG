@@ -79,7 +79,7 @@ const TowerDefensePage: React.FC = () => {
     resumeRun,
     throwShuriken,
     update,
-    submitWave,
+    startWave,
     abandonRun,
     returnToLobby,
     clearError,
@@ -87,11 +87,9 @@ const TowerDefensePage: React.FC = () => {
     cancelExistingSession,
     checkForExistingSession,
     isStarting,
-    isSubmitting,
     isReturningToLobby,
     isClaimingRewards,
     isGuest,
-    // NOTE: hudStore is now imported at module level from "@/hooks/useTowerDefense"
     // PERFORMANCE: Direct refs to avoid React re-renders
     entitiesRef,
     runtimeStateRef,
@@ -396,20 +394,18 @@ const TowerDefensePage: React.FC = () => {
                 Wave {gameState.currentWave} Complete!
               </h2>
               <p className="mt-3 text-muted-foreground">
-                {gameState.enemyCount === 0
-                  ? "All enemies defeated!"
-                  : "Preparing next wave..."}
+                All enemies defeated!
               </p>
               <div className="mt-6 flex justify-center gap-4">
                 <Button
-                  onClick={submitWave}
-                  disabled={isSubmitting || gameState.waveInProgress}
+                  onClick={startWave}
+                  disabled={gameState.waveInProgress}
                   size="lg"
                 >
                   <SkipForward className="mr-2 h-4 w-4" />
-                  {isSubmitting ? "Submitting..." : "Next Wave"}
+                  Next Wave
                 </Button>
-                <Button variant="outline" onClick={abandonRun} disabled={isSubmitting}>
+                <Button variant="outline" onClick={abandonRun}>
                   <Home className="mr-2 h-4 w-4" />
                   Abandon Run
                 </Button>
@@ -539,7 +535,6 @@ const TowerDefensePage: React.FC = () => {
               activeTab={upgradeTab}
               onTabChange={setUpgradeTab}
               onInRunPurchase={purchaseInRunUpgrade}
-              isPurchasing={isSubmitting}
             />
           </div>
         )}
@@ -701,7 +696,6 @@ interface InRunUpgradesWrapperProps {
   activeTab: TowerDefenseUpgradeCategory | undefined;
   onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
   onInRunPurchase: (upgradeId: string) => void;
-  isPurchasing: boolean;
 }
 
 const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
@@ -710,7 +704,6 @@ const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
   activeTab,
   onTabChange,
   onInRunPurchase,
-  isPurchasing,
 }: InRunUpgradesWrapperProps) {
   // Use custom hook that subscribes via useSyncExternalStore
   const values = useHudStoreValues();
@@ -725,7 +718,6 @@ const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
       onTabChange={onTabChange}
       inRunUpgrades={values.activeUpgrades}
       onInRunPurchase={onInRunPurchase}
-      isPurchasing={isPurchasing}
     />
   );
 });

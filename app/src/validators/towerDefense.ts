@@ -151,18 +151,9 @@ export const towerDefenseGameStateSchema = z.object({
   currentWave: z.int().min(0),
   score: z.int().min(0),
   state: towerDefenseStateSchema.nullable(),
-  enemies: z.array(towerDefenseEnemySchema),
-  projectiles: z.array(towerDefenseProjectileSchema),
-  abilities: z.array(towerDefenseAbilitySchema),
-  waveStartTime: z.number().min(0),
   waveInProgress: z.boolean(),
-  isSubmitting: z.boolean(),
   error: z.string().nullable(),
-  playerHitEvents: z.array(hitEventSchema),
-  enemyHitEvents: z.array(hitEventSchema),
   finalPointsEarned: z.int().nullable(),
-  playerBonuses: playerBonusesSchema,
-  maxHealth: z.int().min(1),
   existingSession: z
     .object({
       id: z.string(),
@@ -174,7 +165,6 @@ export const towerDefenseGameStateSchema = z.object({
       maxHealth: z.int().min(1),
     })
     .nullable(),
-  enemyCount: z.int().min(0),
 });
 export type TowerDefenseGameState = z.infer<typeof towerDefenseGameStateSchema>;
 
