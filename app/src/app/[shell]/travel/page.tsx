@@ -57,6 +57,7 @@ import {
   MAP_SECTOR_ID_MIN,
   MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MAX_TRAVEL_PINS,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   VILLAGE_LEAVE_REQUIRED_RANK,
@@ -1268,7 +1269,7 @@ function Travel() {
                     variant="outline"
                     disabled={
                       !pinLabel.trim() ||
-                      pins.length >= 20 ||
+                      pins.length >= MAX_TRAVEL_PINS ||
                       userData.status !== "AWAKE"
                     }
                     onClick={() => {

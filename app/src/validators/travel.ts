@@ -3,6 +3,7 @@ import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
   MAX_PVP_BRACKET,
+  MAX_TRAVEL_PINS,
 } from "@/drizzle/constants";
 
 export const sectorIdSchema = z.coerce
@@ -52,7 +53,6 @@ export const travelPinSchema = travelLocationSchema.extend({
   latitude: z.number().int().nonnegative(),
   label: z.string().trim().min(1).max(40),
 });
-export const travelPinsSchema = z.array(travelPinSchema).max(20);
 export type TravelPin = z.infer<typeof travelPinSchema>;
 
 /** Reads stored pins one by one, so a single stale or invalid pin does not drop the rest. */
@@ -62,4 +62,4 @@ export const parseTravelPins = (stored: unknown): TravelPin[] =>
       const parsed = travelPinSchema.safeParse(entry);
       return parsed.success ? [parsed.data] : [];
     })
-    .slice(0, 20);
+    .slice(0, MAX_TRAVEL_PINS);
