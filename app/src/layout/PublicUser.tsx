@@ -1487,7 +1487,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               {MAX_PVP_BRACKET}
             </p>
             {canSeeSecrets && <p>Unclaimed Exp: {visibleEarnedExperience}</p>}
-            <p>Experience for lvl: ---</p>
             <p>
               PVE Fights: {`${profile.pveFights} (+${profile.battleHistory.length})`}
             </p>
