@@ -31,7 +31,7 @@ export const createQueryMetricsTracker = (
   const knownMutations = new Set<string>();
   const settling = new Map<Mutation<unknown, unknown, unknown, unknown>, string>();
   const completedThisTurn = new Set<string>();
-  let completionTimer: ReturnType<typeof setTimeout> | undefined;
+  let clearScheduled = false;
   let scope: QueryAttribution | undefined;
 
   // This is observed mutation context, not proof of causality: a timer can run while
@@ -70,7 +70,7 @@ export const createQueryMetricsTracker = (
       return originalHooks.onError?.(...args);
     },
   };
-  const unsubscribeMutations = mutationCache.subscribe((event) => {
+  mutationCache.subscribe((event) => {
     if (event.type === "removed") {
       settling.delete(event.mutation);
       return;
@@ -82,12 +82,15 @@ export const createQueryMetricsTracker = (
     if (!path) return;
     // Include the caller's continuation immediately after await mutateAsync(), then expire.
     completedThisTurn.add(path);
-    completionTimer ??= setTimeout(() => {
-      completedThisTurn.clear();
-      completionTimer = undefined;
-    }, 0);
+    if (!clearScheduled) {
+      clearScheduled = true;
+      setTimeout(() => {
+        completedThisTurn.clear();
+        clearScheduled = false;
+      }, 0);
+    }
   });
-  const unsubscribeQueries = client.getQueryCache().subscribe((event) => {
+  client.getQueryCache().subscribe((event) => {
     if (event.type !== "updated" || !trpcPathFromKey(event.query.queryKey)) return;
     const { query, action } = event;
     if (action.type === "invalidate") {
@@ -165,14 +168,6 @@ export const createQueryMetricsTracker = (
     },
     noteMutation: (path: string) => {
       knownMutations.add(path);
-    },
-    dispose: () => {
-      unsubscribeQueries();
-      unsubscribeMutations();
-      clearTimeout(completionTimer);
-      mutationCache.config = originalHooks;
-      client.invalidateQueries = invalidate;
-      client.refetchQueries = refetch;
     },
   };
 };

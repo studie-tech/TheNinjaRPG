@@ -45,7 +45,7 @@ const setup = (fetch?: (url: RequestInfo | URL, init?: RequestInit) => Promise<R
       mutationKey: [path.split(".")], networkMode: "always", mutationFn: async () => ({}), ...handlers,
     });
   };
-  close.push(() => { tracker.dispose(); client.unmount(); client.clear(); });
+  close.push(() => { client.unmount(); client.clear(); });
   return { client, tracker, trpc, query, mutation, requests, count };
 };
 
