@@ -47,11 +47,8 @@ type RankedLoadoutSaveKind =
   | "equip-consumable";
 
 interface RankedLoadoutSaveSnapshot {
-  requestId: number;
   userId: string;
-  seasonId: string | null;
   loadoutId: string;
-  expectedUpdatedAt: Date;
   kind: RankedLoadoutSaveKind;
   targetId: string | null;
   loadout: RankedLoadoutSchema;
@@ -307,7 +304,6 @@ export const RankedLoadoutSelector: React.FC = () => {
 
   // Ensure user is in village
   const { userData, access } = useRequireInVillage("/battlearena");
-  const { data: currentSeason } = api.pvpRank.getCurrentSeason.useQuery();
 
   // Track which tab is active
   const [activeTab, setActiveTab] = useState<"weapons" | "consumables" | "jutsu">(
@@ -363,7 +359,6 @@ export const RankedLoadoutSelector: React.FC = () => {
   const updateLoadout = api.pvpRank.updateRankedLoadout.useMutation({
     meta: { handlesTransportError: true },
   });
-  const saveSequenceRef = useRef(0);
   const saveRef = useRef<RankedLoadoutSaveSnapshot | null>(null);
   const [pendingSave, setPendingSave] = useState<RankedLoadoutSaveSnapshot | null>(
     null,
@@ -378,11 +373,8 @@ export const RankedLoadoutSelector: React.FC = () => {
     if (!rankedLoadout || !userData || saveRef.current) return false;
 
     const snapshot: RankedLoadoutSaveSnapshot = {
-      requestId: ++saveSequenceRef.current,
       userId: userData.userId,
-      seasonId: currentSeason?.id ?? null,
       loadoutId: rankedLoadout.id,
-      expectedUpdatedAt: rankedLoadout.updatedAt,
       kind,
       targetId,
       loadout,

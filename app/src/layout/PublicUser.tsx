@@ -187,7 +187,6 @@ interface PublicUserComponentProps {
 }
 
 type ReputationAwardTarget = {
-  requestId: string;
   users: Array<{ userId: string; username: string }>;
   reputationAmount: number;
   moneyAmount: number;
@@ -196,7 +195,6 @@ type ReputationAwardTarget = {
 };
 
 type ExperienceAwardTarget = {
-  requestId: string;
   userId: string;
   username: string;
   earnedExperienceBefore: number;
@@ -348,19 +346,15 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     userId: string;
     username: string;
     expectedStatus: UserStatus;
-    expectedBattleId: string | null;
-    requestId: string;
   } | null>(null);
   const [forceAwakePending, setForceAwakePending] = useState(false);
-  const [committedForceAwake, setCommittedForceAwake] = useState<{
-    userId: string;
-    requestId: string;
-  } | null>(null);
+  const [committedForceAwakeUserId, setCommittedForceAwakeUserId] = useState<
+    string | null
+  >(null);
   const forceAwakeRequestRef = useRef<typeof forceAwakeTarget>(null);
   const [avatarUpdateTarget, setAvatarUpdateTarget] = useState<{
     userId: string;
     username: string;
-    expectedAvatar: string | null;
   } | null>(null);
   const [avatarUpdatePending, setAvatarUpdatePending] = useState(false);
   const [committedAvatarUpdate, setCommittedAvatarUpdate] = useState<{
@@ -633,7 +627,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       if (!data.success) return;
 
       // Suppress a second intervention before any cache refresh can return stale profile data.
-      setCommittedForceAwake({ userId: target.userId, requestId: target.requestId });
+      setCommittedForceAwakeUserId(target.userId);
       setShowForceAwakeModal(false);
       setForceAwakeTarget(null);
       setForceAwakeReason("");
@@ -692,20 +686,16 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     }
 
     // Capture the exact target and amount, and block another award if the outcome is unknown.
-    const target =
-      experienceAwardTarget ??
-      ({
-        requestId: crypto.randomUUID(),
-        userId: experienceAwardSource.userId,
-        username: experienceAwardSource.username,
-        earnedExperienceBefore: experienceAwardSource.earnedExperience,
-        amount: data.amount,
-      } satisfies ExperienceAwardTarget);
+    const target: ExperienceAwardTarget = {
+      userId: experienceAwardSource.userId,
+      username: experienceAwardSource.username,
+      earnedExperienceBefore: experienceAwardSource.earnedExperience,
+      amount: data.amount,
+    };
 
     experienceAwardRequestRef.current = target;
     setExperienceAwardTarget(target);
     setExperienceAwardPending(true);
-    if (!experienceAwardTarget) setExperienceAwardNeedsRetry(false);
 
     try {
       const result = await awardExperience.mutateAsync({
@@ -736,8 +726,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         utils.profile.getPublicUser.invalidate({ userId: target.userId }),
       ]);
     } catch {
-      // The global mutation handler emits the transport toast once. Preserve the immutable
-      // request so the UI can block another award until the outcome is verified.
+      // The global mutation handler emits the transport toast once. An unconfirmed response
+      // blocks further awards until the profile is refreshed.
       if (experienceAwardRequestRef.current === target) {
         setExperienceAwardNeedsRetry(true);
       }
@@ -764,26 +754,19 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const handleAwardSubmit = form.handleSubmit(async (data) => {
     if (awardRequestRef.current || completedAward) return;
 
-    // A transport failure retries this exact immutable request. Changing its recipients or value
-    // and minting another key could double an award whose successful response was lost.
-    const target =
-      awardTarget ??
-      ({
-        requestId: crypto.randomUUID(),
-        users: watchedUsers.map((user) => ({
-          userId: user.userId,
-          username: user.username,
-        })),
-        reputationAmount: data.reputationAmount ?? 0,
-        moneyAmount: data.moneyAmount ?? 0,
-        reason: data.reason,
-        profileReputationBefore:
-          watchedUsers.some((user) => user.userId === profile?.userId) && profile
-            ? profile.reputationPoints
-            : null,
-      } satisfies ReputationAwardTarget);
-
-    if (!awardTarget) setAwardNeedsRetry(false);
+    const target: ReputationAwardTarget = {
+      users: watchedUsers.map((user) => ({
+        userId: user.userId,
+        username: user.username,
+      })),
+      reputationAmount: data.reputationAmount ?? 0,
+      moneyAmount: data.moneyAmount ?? 0,
+      reason: data.reason,
+      profileReputationBefore:
+        watchedUsers.some((user) => user.userId === profile?.userId) && profile
+          ? profile.reputationPoints
+          : null,
+    };
 
     if (
       target.users.length === 0 ||
@@ -826,8 +809,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         utils.misc.getAllAwards.invalidate(),
       ]);
     } catch {
-      // The shared tRPC handler owns the single error toast. Regardless of the exact transport
-      // shape, preserve this key and snapshot: the response may have been lost after commit.
+      // The shared tRPC handler owns the single error toast. The response may have been lost
+      // after commit, so an unconfirmed award blocks further awards until the profile is refreshed.
       if (awardRequestRef.current === target) setAwardNeedsRetry(true);
     } finally {
       if (awardRequestRef.current === target) {
@@ -1415,7 +1398,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
             )}
             {userData && canUnstuckVillage(userData.role) ? (
               <>
-                {committedForceAwake?.userId !== profile.userId && (
+                {committedForceAwakeUserId !== profile.userId && (
                   <TooltipProvider delayDuration={50}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1429,8 +1412,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               userId: profile.userId,
                               username: profile.username,
                               expectedStatus: profile.status,
-                              expectedBattleId: null,
-                              requestId: crypto.randomUUID(),
                             });
                             setForceAwakeReason("");
                             setShowForceAwakeModal(true);
@@ -1623,7 +1604,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                             setAvatarUpdateTarget({
                               userId: profile.userId,
                               username: profile.username,
-                              expectedAvatar: profile.avatar,
                             })
                           }
                         >
@@ -2006,7 +1986,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               <p>
                 Target ID: <code>{forceAwakeTarget.userId}</code>
               </p>
-              <p>Battle: {forceAwakeTarget.expectedBattleId ?? "none"}</p>
             </div>
 
             <div className="space-y-2">
@@ -2749,7 +2728,6 @@ interface BadgesTabProps {
 }
 
 type BadgeAssignmentSnapshot = {
-  requestId: string;
   userId: string;
   username: string;
   badgeId: string;
@@ -2758,13 +2736,11 @@ type BadgeAssignmentSnapshot = {
 };
 
 type BadgeRemovalSnapshot = {
-  requestId: string;
   userId: string;
   username: string;
   badgeId: string;
   badgeName: string;
   badgeImage: string;
-  assignmentCreatedAt: Date;
   assignmentKey: string;
 };
 
@@ -2862,7 +2838,6 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
     if (!selectedBadge) return;
 
     setAssignment({
-      requestId: crypto.randomUUID(),
       userId,
       username,
       badgeId: selectedBadge.id,
@@ -2949,13 +2924,11 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
       return;
 
     setRemoval({
-      requestId: crypto.randomUUID(),
       userId,
       username,
       badgeId: entry.badgeId,
       badgeName: entry.badge.name,
       badgeImage: entry.badge.image,
-      assignmentCreatedAt: entry.createdAt,
       assignmentKey: badgeAssignmentKey(entry.badgeId, entry.createdAt),
     });
     setRemovalNeedsRetry(false);
@@ -3332,11 +3305,7 @@ interface RemoveReferralButtonProps {
 
 interface ReferralRemovalRequest {
   userId: string;
-  expectedUsername: string;
   expectedRecruiterId: string;
-  expectedRecruiterUsername: string;
-  expectedRecruiterCount: number;
-  requestId: string;
 }
 
 const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
@@ -3357,16 +3326,10 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
 
   const handleRemove = async () => {
     if (inFlightRef.current) return;
-    const request =
-      retryRequest ??
-      ({
-        userId: recruit.userId,
-        expectedUsername: recruit.username,
-        expectedRecruiterId: recruiterId,
-        expectedRecruiterUsername: recruiterUsername,
-        expectedRecruiterCount: recruiterCount,
-        requestId: crypto.randomUUID(),
-      } satisfies ReferralRemovalRequest);
+    const request: ReferralRemovalRequest = {
+      userId: recruit.userId,
+      expectedRecruiterId: recruiterId,
+    };
 
     // Mutation state updates after this event. Claim the exact relationship synchronously so a
     // double click cannot submit two destructive requests in the same tick.
