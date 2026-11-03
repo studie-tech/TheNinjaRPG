@@ -106,12 +106,6 @@ export const storePurchaseReconciliation = (
   return matching.grantedAt !== null ? "credited" : "rejected";
 };
 
-/** Backwards-compatible predicate for callers which only need a terminal check. */
-export const hasSettledStorePurchase = (
-  recent: StorePurchaseSettlement[],
-  attempt: StorePurchaseAttempt,
-): boolean => storePurchaseReconciliation(recent, attempt) !== "pending";
-
 export interface NativePurchaseHistory {
   transactionId: string;
   productId: string;
