@@ -2,7 +2,7 @@
 
 import { ExternalLink, ImageOff, Loader2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "@/layout/Image";
@@ -23,14 +23,8 @@ type ConceptEmotion = "like" | "love" | "laugh";
 const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   const { data: user } = useUserData();
   const utils = api.useUtils();
-  const requestIdRef = useRef(0);
-  const inFlightRef = useRef<{ imageId: string; requestId: number } | null>(null);
-  const currentImageIdRef = useRef(imageId);
-  currentImageIdRef.current = imageId;
-  const [pendingEmotion, setPendingEmotion] = useState<{
-    imageId: string;
-    type: ConceptEmotion;
-  } | null>(null);
+  const inFlightRef = useRef(false);
+  const [pendingEmotion, setPendingEmotion] = useState<ConceptEmotion | null>(null);
 
   // Fetch the concept art image
   const {
@@ -42,53 +36,25 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
     { staleTime: 60000 }, // Cache for 1 minute
   );
 
-  // Keep each embedded card's request ownership tied to the art it rendered. A
-  // delayed response from an old identity may refresh that old cache entry, but
-  // must never clear or overwrite the pending state of a newly rendered embed.
   const emotion = api.conceptart.toggleEmotion.useMutation();
 
-  useEffect(() => {
-    if (inFlightRef.current?.imageId !== imageId) {
-      inFlightRef.current = null;
-    }
-    setPendingEmotion((pending) => (pending?.imageId === imageId ? pending : null));
-  }, [imageId]);
+  const toggleEmotion = async (type: ConceptEmotion) => {
+    if (!user || inFlightRef.current) return;
 
-  const toggleEmotion = async (type: ConceptEmotion, targetImageId: string) => {
-    if (!user || inFlightRef.current?.imageId === targetImageId) return;
-
-    const requestId = ++requestIdRef.current;
-    inFlightRef.current = { imageId: targetImageId, requestId };
-    setPendingEmotion({ imageId: targetImageId, type });
-
+    inFlightRef.current = true;
+    setPendingEmotion(type);
     try {
-      const result = await emotion.mutateAsync({ imageId: targetImageId, type });
-      if (currentImageIdRef.current === targetImageId) {
-        showMutationToast(result);
-      }
-      if (result.success) {
-        await Promise.allSettled([
-          utils.conceptart.get.invalidate({ id: targetImageId }),
-        ]);
-      }
+      const result = await emotion.mutateAsync({ imageId, type });
+      showMutationToast(result);
+      if (result.success) await utils.conceptart.get.invalidate({ id: imageId });
     } catch (error) {
-      if (currentImageIdRef.current === targetImageId) {
-        showMutationToast({
-          success: false,
-          message: error instanceof Error ? error.message : "Could not update reaction",
-        });
-      }
+      showMutationToast({
+        success: false,
+        message: error instanceof Error ? error.message : "Could not update reaction",
+      });
     } finally {
-      const activeRequest = inFlightRef.current;
-      if (
-        activeRequest?.imageId === targetImageId &&
-        activeRequest.requestId === requestId
-      ) {
-        inFlightRef.current = null;
-        setPendingEmotion((pending) =>
-          pending?.imageId === targetImageId ? null : pending,
-        );
-      }
+      inFlightRef.current = false;
+      setPendingEmotion(null);
     }
   };
 
@@ -126,7 +92,7 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
   const hasLaugh = image?.likes?.find(
     (like) => like.userId === user?.userId && like.type === "laugh",
   );
-  const isEmotionPending = pendingEmotion?.imageId === image.id;
+  const isEmotionPending = pendingEmotion !== null;
 
   return (
     <div className="my-2 inline-block max-w-[256px] overflow-hidden rounded-lg border border-slate-600 bg-slate-800/50">
@@ -168,20 +134,20 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             type="button"
             className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLike ? "bg-slate-700" : ""}`}
             disabled={isEmotionPending}
-            aria-busy={pendingEmotion?.type === "like"}
+            aria-busy={pendingEmotion === "like"}
             aria-pressed={!!hasLike}
             aria-label={
-              pendingEmotion?.type === "like"
+              pendingEmotion === "like"
                 ? "Updating"
                 : `${hasLike ? "Remove" : "Add"} heart reaction`
             }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void toggleEmotion("like", image.id);
+              void toggleEmotion("like");
             }}
           >
-            {pendingEmotion?.type === "like" && (
+            {pendingEmotion === "like" && (
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             )}
             ❤️ {image.n_likes}
@@ -190,20 +156,20 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             type="button"
             className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLove ? "bg-slate-700" : ""}`}
             disabled={isEmotionPending}
-            aria-busy={pendingEmotion?.type === "love"}
+            aria-busy={pendingEmotion === "love"}
             aria-pressed={!!hasLove}
             aria-label={
-              pendingEmotion?.type === "love"
+              pendingEmotion === "love"
                 ? "Updating"
                 : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
             }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void toggleEmotion("love", image.id);
+              void toggleEmotion("love");
             }}
           >
-            {pendingEmotion?.type === "love" && (
+            {pendingEmotion === "love" && (
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             )}
             👍 {image.n_loves}
@@ -212,20 +178,20 @@ const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
             type="button"
             className={`flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent ${hasLaugh ? "bg-slate-700" : ""}`}
             disabled={isEmotionPending}
-            aria-busy={pendingEmotion?.type === "laugh"}
+            aria-busy={pendingEmotion === "laugh"}
             aria-pressed={!!hasLaugh}
             aria-label={
-              pendingEmotion?.type === "laugh"
+              pendingEmotion === "laugh"
                 ? "Updating"
                 : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
             }
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void toggleEmotion("laugh", image.id);
+              void toggleEmotion("laugh");
             }}
           >
-            {pendingEmotion?.type === "laugh" && (
+            {pendingEmotion === "laugh" && (
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             )}
             🤣 {image.n_laugh}
