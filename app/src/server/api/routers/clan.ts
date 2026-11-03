@@ -122,7 +122,6 @@ import {
   incrementUserMoney,
   refundUserReputationPoints,
 } from "@/queries/profile";
-import { deleteQueueById } from "@/queries/raids";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
@@ -1897,7 +1896,6 @@ export const removeFromClan = async (
       ? [
           deleteClanForRemoveFromClan(client, clanData),
           updateUserDataForRemoveFromClan2(client, clanData, userId),
-          deleteQueueById(client, clanData.id),
         ]
       : [
           updateClanForRemoveFromClan(client, updateData, clanData),
