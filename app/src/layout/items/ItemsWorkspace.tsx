@@ -106,6 +106,9 @@ export function ItemsWorkspace({
   const choosable = canChangeContent(userData.role)
     ? userItems
     : userItems.filter((ui) => !ui.item.hidden);
+  const choosableBag = canChangeContent(userData.role)
+    ? bagItems
+    : bagItems.filter((ui) => !ui.item.hidden);
 
   // Panels sit beside the figure when there is room, else in a bottom sheet above the
   // layout's own navigation.
@@ -207,7 +210,6 @@ export function ItemsWorkspace({
           }}
           onClose={closeView}
           isPending={isEquipping}
-          showClose={!isNarrow}
         />
       )}
       {inspected && (
@@ -219,7 +221,6 @@ export function ItemsWorkspace({
           onClose={closeView}
           onSetHotkey={setHotkey}
           masteryWarning={masteryWarning(inspected)}
-          showClose={!isNarrow}
         />
       )}
     </>
@@ -243,7 +244,7 @@ export function ItemsWorkspace({
           selected={phoneTab === "backpack"}
           onSelect={() => setPhoneTab("backpack")}
         >
-          Backpack
+          Backpack · {choosableBag.length}
         </PhoneTab>
       </div>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
@@ -312,6 +313,8 @@ export function ItemsWorkspace({
         <Sheet open={hasPanel} onOpenChange={(open) => !open && closeView()}>
           <SheetContent
             side="bottom"
+            // The panels draw their own close button beside "← Backpack".
+            showCloseButton={false}
             className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none"
             // Focus the sheet itself so the close button does not open with a focus ring.
             onOpenAutoFocus={(event) => {

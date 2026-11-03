@@ -35,14 +35,14 @@ import { useRequiredUserData } from "@/utils/UserContext";
 /** Carried inventory, equipment loadouts, and item actions across capacity buckets. */
 export default function MyItems() {
   // State
-  const availableTabs = ["normal", "event", "materials", "cooking"];
+  const availableTabs = ["all", "normal", "event", "materials", "cooking"];
   const {
     data: userData,
     prepareUserUpdate,
     updateUser,
     timeDiff,
   } = useRequiredUserData();
-  const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
+  const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("all");
   const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
   const buyItemSlotInFlight = useRef(false);
 
@@ -163,28 +163,36 @@ export default function MyItems() {
             bag={activeTab}
             backpackStatus={
               <div className="flex items-center gap-1">
-                <BagCapacity
-                  used={
-                    (activeTab === "normal"
-                      ? normalItemCount
-                      : activeTab === "event"
-                        ? eventItemCount
-                        : activeTab === "materials"
-                          ? materialsItemCount
-                          : cookingItemCount) ?? 0
-                  }
-                  max={
-                    activeTab === "normal"
-                      ? maxNormalItems
-                      : activeTab === "event"
-                        ? maxEventItems
-                        : activeTab === "materials"
-                          ? maxMaterials
-                          : maxCookingItems
-                  }
-                />
+                {activeTab === "all" ? (
+                  <BagCapacity
+                    used={normalItemCount ?? 0}
+                    max={maxNormalItems}
+                    bag="Gear"
+                  />
+                ) : (
+                  <BagCapacity
+                    used={
+                      (activeTab === "normal"
+                        ? normalItemCount
+                        : activeTab === "event"
+                          ? eventItemCount
+                          : activeTab === "materials"
+                            ? materialsItemCount
+                            : cookingItemCount) ?? 0
+                    }
+                    max={
+                      activeTab === "normal"
+                        ? maxNormalItems
+                        : activeTab === "event"
+                          ? maxEventItems
+                          : activeTab === "materials"
+                            ? maxMaterials
+                            : maxCookingItems
+                    }
+                  />
+                )}
                 {/* Purchased slots extend the Gear bag only. */}
-                {activeTab === "normal" && (
+                {(activeTab === "normal" || activeTab === "all") && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -203,19 +211,34 @@ export default function MyItems() {
             }
             bagTabs={
               <BagTabs
-                bags={availableTabs}
+                bags={[
+                  {
+                    value: "all",
+                    count:
+                      (normalItemCount ?? 0) +
+                      (eventItemCount ?? 0) +
+                      (materialsItemCount ?? 0) +
+                      (cookingItemCount ?? 0),
+                  },
+                  { value: "normal", count: normalItemCount ?? 0 },
+                  { value: "event", count: eventItemCount ?? 0 },
+                  { value: "materials", count: materialsItemCount ?? 0 },
+                  { value: "cooking", count: cookingItemCount ?? 0 },
+                ]}
                 active={activeTab}
                 onChange={setActiveTab}
               />
             }
             bagItems={
-              (activeTab === "normal"
-                ? normalItems
-                : activeTab === "event"
-                  ? eventItems
-                  : activeTab === "materials"
-                    ? materialsItems
-                    : cookingItems
+              (activeTab === "all"
+                ? availableItems
+                : activeTab === "normal"
+                  ? normalItems
+                  : activeTab === "event"
+                    ? eventItems
+                    : activeTab === "materials"
+                      ? materialsItems
+                      : cookingItems
               )?.filter((ui) => ui.equipped === "NONE") ?? []
             }
           />

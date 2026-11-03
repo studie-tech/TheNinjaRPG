@@ -62,8 +62,6 @@ interface ItemInspectorProps {
   onSetHotkey?: (userItem: UserItemWithRelations) => void;
   /** Why the item does not work in battle while equipped, if it does not. */
   masteryWarning?: string;
-  /** Hidden where the surrounding sheet has its own close button. */
-  showClose?: boolean;
 }
 
 /**
@@ -78,7 +76,6 @@ export function ItemInspector({
   onClose,
   onSetHotkey,
   masteryWarning,
-  showClose = true,
 }: ItemInspectorProps) {
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
@@ -184,17 +181,15 @@ export function ItemInspector({
           ← Backpack
         </Button>
         <div className="grow" />
-        {showClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Close inspector"
-            className="h-9 w-9"
-            onClick={onClose}
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Close inspector"
+          className="h-9 w-9"
+          onClick={onClose}
+        >
+          <X className="h-5 w-5" />
+        </Button>
       </div>
       <div className="flex items-start gap-3">
         <span className="relative h-16 w-16 shrink-0">

@@ -8,6 +8,7 @@ import { cn } from "@/libs/shadui";
 const BAG_STORAGE_KEY = "backpackSelection";
 
 const BAG_LABELS: Record<string, string> = {
+  all: "All",
   normal: "Gear",
   event: "Event",
   materials: "Materials",
@@ -15,17 +16,17 @@ const BAG_LABELS: Record<string, string> = {
 };
 
 interface BagTabsProps {
-  bags: string[];
+  bags: { value: string; count: number }[];
   active: string;
   onChange: (bag: string) => void;
 }
 
-/** The inventory's bags as a segmented control; the chosen bag is remembered. */
+/** The inventory's bags with their item counts; the chosen bag is remembered. */
 export function BagTabs({ bags, active, onChange }: BagTabsProps) {
   // Read after mount so server and client render the same first tab.
   const restore = useEffectEvent(() => {
     const stored = safeLocalStorageGetItem(BAG_STORAGE_KEY);
-    if (stored && stored !== active && bags.includes(stored)) {
+    if (stored && stored !== active && bags.some((bag) => bag.value === stored)) {
       onChange(stored);
     }
   });
@@ -40,16 +41,16 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
       className="flex max-w-full gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5"
     >
       {bags.map((bag) => {
-        const selected = bag === active;
+        const selected = bag.value === active;
         return (
           <button
-            key={bag}
+            key={bag.value}
             type="button"
             role="tab"
             aria-selected={selected}
             onClick={() => {
-              safeLocalStorageSetItem(BAG_STORAGE_KEY, bag);
-              onChange(bag);
+              safeLocalStorageSetItem(BAG_STORAGE_KEY, bag.value);
+              onChange(bag.value);
             }}
             className={cn(
               "h-8 shrink-0 rounded-md px-3 text-sm",
@@ -58,7 +59,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {BAG_LABELS[bag] ?? bag}
+            {BAG_LABELS[bag.value] ?? bag.value} · {bag.count}
           </button>
         );
       })}
@@ -70,7 +71,17 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
  * Used and total slots of the open bag. Only purchases, home withdrawals and crafting
  * check the limit, so rewards and drops can push a bag past it.
  */
-export function BagCapacity({ used, max }: { used: number; max: number }) {
+export function BagCapacity({
+  used,
+  max,
+  bag,
+}: {
+  used: number;
+  max: number;
+  /** Names the bag when the count is shown outside it, e.g. on the All tab. */
+  bag?: string;
+}) {
+  const slots = bag ? `${bag} bag slots` : "bag slots";
   const over = used - max;
   return (
     <span
@@ -86,12 +97,13 @@ export function BagCapacity({ used, max }: { used: number; max: number }) {
       )}
     >
       <span aria-hidden="true">
+        {bag ? `${bag} ` : ""}
         {used} / {max}
       </span>
       <span className="sr-only">
         {over > 0
-          ? `${used} of ${max} bag slots used, ${over} over the limit`
-          : `${used} of ${max} bag slots used`}
+          ? `${used} of ${max} ${slots} used, ${over} over the limit`
+          : `${used} of ${max} ${slots} used`}
       </span>
     </span>
   );

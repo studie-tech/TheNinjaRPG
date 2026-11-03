@@ -12,20 +12,26 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-const bags = ["normal", "event", "materials", "cooking"];
+const bags = [
+  { value: "all", count: 58 },
+  { value: "normal", count: 16 },
+  { value: "event", count: 2 },
+  { value: "materials", count: 31 },
+  { value: "cooking", count: 9 },
+];
 
-it("names each bag and marks the open one", () => {
+it("names each bag with its item count and marks the open one", () => {
   render(<BagTabs bags={bags} active="normal" onChange={vi.fn()} />);
   const tabs = screen.getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["Gear", "Event", "Materials", "Cooking"]);
-  expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
-  expect(tabs[1]?.getAttribute("aria-selected")).toBe("false");
+  expect(tabs.map((tab) => tab.textContent)).toEqual(["All · 58", "Gear · 16", "Event · 2", "Materials · 31", "Cooking · 9"]);
+  expect(tabs[1]?.getAttribute("aria-selected")).toBe("true");
+  expect(tabs[0]?.getAttribute("aria-selected")).toBe("false");
 });
 
 it("switches bags and remembers the choice", () => {
   const onChange = vi.fn();
   render(<BagTabs bags={bags} active="normal" onChange={onChange} />);
-  fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Materials · 31" }));
   expect(onChange).toHaveBeenCalledWith("materials");
   expect(window.localStorage.getItem("backpackSelection")).toBe("materials");
 });
@@ -53,4 +59,10 @@ it("explains a bag over its limit", () => {
   expect(capacity.getAttribute("title")).toBe(
     "Rewards and drops can go past the limit. Until you are back under it, you cannot buy items or take them out of your home.",
   );
+});
+
+it("names the bag it counts when shown outside that bag", () => {
+  render(<BagCapacity used={4} max={20} bag="Gear" />);
+  expect(screen.getByText("Gear 4 / 20").getAttribute("aria-hidden")).toBe("true");
+  expect(screen.getByText("4 of 20 Gear bag slots used")).toBeDefined();
 });

@@ -24,8 +24,6 @@ interface SlotPickerProps {
   onClose: () => void;
   /** An equip or unequip is saving; the buttons wait for it. */
   isPending?: boolean;
-  /** Hidden where the surrounding sheet has its own close button. */
-  showClose?: boolean;
 }
 
 /**
@@ -42,7 +40,6 @@ export function SlotPicker({
   onShowInBackpack,
   onClose,
   isPending = false,
-  showClose = true,
 }: SlotPickerProps) {
   const label =
     EQUIPMENT_LAYOUT.find((entry) => entry.slot === slot)?.label ?? slotName(slot);
@@ -73,17 +70,15 @@ export function SlotPicker({
             {candidates.length === 1 ? "1 item fits" : `${candidates.length} items fit`}
           </p>
         </div>
-        {showClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Close slot picker"
-            onClick={onClose}
-            className="h-9 w-9"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Close slot picker"
+          onClick={onClose}
+          className="h-9 w-9"
+        >
+          <X className="h-5 w-5" />
+        </Button>
       </div>
 
       {current && (

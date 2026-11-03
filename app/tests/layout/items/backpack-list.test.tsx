@@ -120,3 +120,11 @@ it("marks the selected card", () => {
   renderList({ selectedId: "Worn Vest" });
   expect(screen.getByRole("button", { name: /Worn Vest/ }).getAttribute("aria-current")).toBe("true");
 });
+
+it("shows gear level in the card's text instead of a badge on its art", () => {
+  renderList();
+  const card = screen.getByRole("button", { name: /^Worn Vest/ });
+  expect(card.textContent).toContain("Common · Chest · Lv 1");
+  // Items without levels keep the plain line.
+  expect(screen.getByRole("button", { name: /^Healing Salve/ }).textContent).not.toContain("Lv");
+});

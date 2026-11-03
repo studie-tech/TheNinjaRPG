@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -181,7 +181,7 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   renderWorkspace();
   const [equipmentTab, backpackTab] = screen.getAllByRole("tab");
   expect(equipmentTab?.getAttribute("aria-selected")).toBe("true");
-  expect(backpackTab?.textContent).toBe("Backpack");
+  expect(backpackTab?.textContent).toBe("Backpack · 2");
   act(() => {
     fireEvent.click(backpackTab!);
   });
@@ -261,6 +261,7 @@ it("keeps hidden items out of the slot picker for players", () => {
   });
   expect(screen.queryByRole("button", { name: "Equip Secret Blade" })).toBeNull();
   expect(screen.queryByRole("button", { name: /^Secret Blade/ })).toBeNull();
+  expect(screen.getAllByRole("tab")[1]?.textContent).toBe("Backpack · 1");
 });
 
 it("shows the bag's capacity beside the backpack heading and its tabs below", () => {
@@ -280,4 +281,23 @@ it("opens the phone sheet with focus on the sheet, not its close button", () => 
     fireEvent.click(card("Raijin Tanto"));
   });
   expect(document.activeElement === screen.getByRole("dialog")).toBe(true);
+});
+
+it("puts the phone sheet's close button in the panel's own top bar", () => {
+  containerWidth = 390;
+  vi.spyOn(inspector, "ItemInspector").mockImplementation(({ userItem }) => (
+    <section aria-label={`Inspecting ${userItem.item.name}`}>
+      <button type="button">Close inspector</button>
+    </section>
+  ));
+  renderWorkspace();
+  act(() => {
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+  });
+  act(() => {
+    fireEvent.click(card("Raijin Tanto"));
+  });
+  const sheet = screen.getByRole("dialog");
+  // One close button, beside "← Backpack", instead of the sheet's own above it.
+  expect(within(sheet).getAllByRole("button", { name: /close/i }).map((b) => b.textContent)).toEqual(["Close inspector"]);
 });

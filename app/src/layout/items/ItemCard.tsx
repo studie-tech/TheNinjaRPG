@@ -65,11 +65,6 @@ export function ItemCard({
             size="medium"
           />
         )}
-        {showsItemLevelBadge(item) && (
-          <span className="absolute bottom-0 left-0 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-red-600 bg-slate-200 px-0.5 font-bold text-[10px] text-black">
-            {userItem.level}
-          </span>
-        )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold text-sm">{look.name}</span>
@@ -80,6 +75,7 @@ export function ItemCard({
           )}
         >
           {rarityLabel[item.rarity]} · {slotLabel(userItem)}
+          {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
         </span>
       </span>
       {detail && (
