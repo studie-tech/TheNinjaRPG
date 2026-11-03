@@ -46,6 +46,7 @@ import type {
   UserItemWithVariants,
 } from "@/drizzle/schema";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
+import { useItemActions } from "@/hooks/useItemActions";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -909,215 +910,36 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     undefined,
   );
 
-  // tRPC utility
-  const utils = api.useUtils();
-
-  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
-    useInventoryCacheUpdate();
-
-  // Handler for when mutations are settled
-  const onSettled = () => {
-    setIsOpen(false);
-    setUserItem(undefined);
-  };
-
-  // Mutations
-  const { mutate: merge, isPending: isMerging } = api.item.mergeStacks.useMutation({
-    onMutate: prepareInventoryUpdate,
-    onSuccess: async (data, _input, snapshot) => {
-      showMutationToast(data);
-      await updateInventory(
-        data.success
-          ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
-          : undefined,
-        snapshot,
-      );
+  const {
+    merge,
+    consume,
+    sell,
+    equip,
+    splitStack,
+    repairWithKit: mutateRepairItem,
+    repairWithRyo: mutateRepairWithRyo,
+    evolve: evolveItem,
+    removeImbuement,
+    isPending: isLoading,
+    isMerging,
+    isConsuming,
+    isSelling,
+    isEquipping,
+    isEvolving,
+    isSplitting,
+    isUsingRepairItem,
+    isRepairingWithRyo,
+  } = useItemActions({
+    userData,
+    useritem,
+    onDone: () => {
+      setIsOpen(false);
+      setUserItem(undefined);
+      setIsSplitDialogOpen(false);
+      setQuantityToKeep(Number.NaN);
+      setIsRepairModalOpen(false);
     },
-    onError: async (error) => {
-      showMutationToast({
-        success: false,
-        message: error.message,
-        variant: "destructive",
-      });
-      await invalidateInventory();
-    },
-    onSettled,
   });
-
-  const { prepareConsumptionUpdate, updateConsumption } =
-    useItemConsumptionCacheUpdate();
-  const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
-      userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
-    }),
-    onSuccess: async (data, variables, context) => {
-      finishItemConsumeRequest(userData.userId, variables.userItemId);
-      if (data.success && "rewards" in data && data.rewards) {
-        showRewardToast(
-          data.notifications ?? [],
-          data.rewards,
-          data.message,
-          false,
-          undefined,
-          undefined,
-          data.cacheRewards,
-          data.petRewards,
-        );
-      } else {
-        let message = data.message || "Consume failed";
-        if ("notifications" in data && data.notifications) {
-          for (const notification of data.notifications || []) {
-            message += `\n${notification}`;
-          }
-        }
-        showMutationToast({ success: data.success, message });
-      }
-      if (data.success) {
-        // The action is complete; keep reconciliation off the dialog's pending path.
-        void Promise.allSettled([
-          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
-            updateConsumption(data, context.consumption, profileApplied),
-          ),
-        ]);
-      } else if (useritem?.item.itemType === "MEAL") {
-        // A rejected snapshot must refresh the next modal's quantity and account state.
-        await Promise.all([
-          utils.profile.getUser.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
-        ]);
-      }
-    },
-    onError: async (error, _input, context) => {
-      const message = getItemConsumeErrorMessage(error, useritem?.item);
-      if (message) showMutationToast({ success: false, message });
-      await updateUser(undefined);
-      await updateConsumption(
-        undefined,
-        context?.consumption ?? prepareConsumptionUpdate(),
-        false,
-      );
-    },
-    onSettled,
-  });
-
-  const { mutate: sell, isPending: isSelling } = api.item.sellUserItem.useMutation({
-    onMutate: prepareInventoryUpdate,
-    onSuccess: async (data, input, context) => {
-      showMutationToast(data);
-      if (data.success) {
-        await updateInventory(
-          (rows) => getSoldInventory(rows, input.userItemId),
-          context,
-        );
-      }
-    },
-    onError: async (error) => {
-      // A local handler replaces the provider's default toast; report before recovery reads.
-      showMutationToast({
-        success: false,
-        message: error.message,
-        variant: "destructive",
-      });
-      await invalidateInventory();
-    },
-    onSettled,
-  });
-
-  const { mutate: equip, isPending: isEquipping } = api.item.toggleEquip.useMutation({
-    onMutate: prepareInventoryUpdate,
-    onSuccess: async (data, _input, context) => {
-      showMutationToast(data);
-      if (data.success) {
-        await updateInventory(
-          (rows) => getEquippedInventory(rows, data.equipmentChanges),
-          context,
-        );
-      }
-    },
-    onError: async (error) => {
-      // The write may have committed before the error; show feedback and recover both views.
-      showMutationToast({
-        success: false,
-        message: error.message,
-        variant: "destructive",
-      });
-      await invalidateInventory();
-    },
-    onSettled,
-  });
-
-  const { mutate: splitStack, isPending: isSplitting } =
-    api.item.splitStack.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.item.getUserItemsWithVariants.invalidate();
-          setIsSplitDialogOpen(false);
-          setQuantityToKeep(Number.NaN);
-        }
-      },
-      onSettled,
-    });
-
-  const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
-    repairWithKit.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          setIsRepairModalOpen(false);
-          setIsOpen(false);
-          setUserItem(undefined);
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
-    api.item.repair.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          onSettled();
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: evolveItem, isPending: isEvolving } = api.item.evolveItem.useMutation(
-    {
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            utils.item.getEvolutions.invalidate(),
-            utils.item.getItemLoadouts.invalidate(),
-          ]);
-        }
-      },
-      onSettled,
-    },
-  );
-
-  const { mutate: removeImbuement, isPending: isRemovingImbuement } =
-    api.occupation.removeImbuement.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.item.getUserItemsWithVariants.invalidate();
-        }
-      },
-      onSettled,
-    });
 
   const { data: availableEvolutions } = api.item.getEvolutions.useQuery(
     { itemId: useritem?.itemId ?? "" },
@@ -1126,16 +948,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   // Derived
   const structures = userData?.village?.structures;
-  const isLoading =
-    isMerging ||
-    isConsuming ||
-    isSelling ||
-    isEquipping ||
-    isSplitting ||
-    isUsingRepairItem ||
-    isEvolving ||
-    isRemovingImbuement ||
-    isRepairingWithRyo;
   const isMeal = useritem?.item.itemType === "MEAL";
   const canEatMeal = !isLoading && userData.status === "AWAKE" && !userData.battleId;
   const items = useritems
@@ -1638,9 +1450,6 @@ const Character: React.FC<CharacterProps> = (props) => {
     ({ userItem }) => userItem,
   );
 
-  // tRPC utility
-  const utils = api.useUtils();
-
   // Open modal for equipping
   const act = (slot: ItemSlot) => {
     setSlot(slot);
@@ -1653,56 +1462,23 @@ const Character: React.FC<CharacterProps> = (props) => {
     }
   };
 
-  // Mutations
-  const { mutate: equip, isPending: isEquipping } = api.item.toggleEquip.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        void Promise.allSettled([
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
-      }
-    },
-    onSettled: () => {
+  const {
+    equip,
+    isEquipping,
+    repairWithKit: mutateRepairItem,
+    isUsingRepairItem,
+    repairWithRyo: mutateRepairWithRyo,
+    isRepairingWithRyo,
+  } = useItemActions({
+    userData,
+    useritem,
+    onDone: () => {
       setIsOpen(false);
       setShowItemDetails(false);
       setUserItem(undefined);
+      setIsRepairModalOpen(false);
     },
   });
-
-  const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
-    repairWithKit.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          setIsRepairModalOpen(false);
-          setShowItemDetails(false);
-          setUserItem(undefined);
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
-    api.item.repair.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          setShowItemDetails(false);
-          setUserItem(undefined);
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
-          ]);
-        }
-      },
-    });
 
   // Placement of equip boxes
   const l = "left-[10%] ";
@@ -2185,6 +1961,3 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
 
 // Alias the procedure so its action name is not interpreted as a React hook.
 const repairAllWithKits = api.item.useRepairAll;
-
-// Alias the procedure so its action name is not interpreted as a React hook.
-const repairWithKit = api.item.useRepairItem;
