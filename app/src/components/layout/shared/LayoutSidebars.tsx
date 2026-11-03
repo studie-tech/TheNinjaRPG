@@ -337,7 +337,8 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   onThemeToggle,
 }) => {
   return (
-    <div className="flex flex-row items-center">
+    // A `data-stacked-icons` container shows the buttons as a column.
+    <div className="flex flex-row items-center in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
       {isSignedIn && (
         <span
           data-sidebar-keep-open="true"
@@ -356,7 +357,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         </span>
       )}
       <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
-        <Bell className="mx-1 ml-2 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
+        <Bell className="mx-1 ml-2 in-data-stacked-icons:ml-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
       <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
         <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />

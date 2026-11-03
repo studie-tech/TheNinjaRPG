@@ -188,7 +188,10 @@ describe("Classic light layout", () => {
           signedInIcons={<button type="button">Game settings</button>}
         />,
       );
-      expect(view.getAllByRole("button", { name: "Game settings" })).toHaveLength(1);
+      const settings = view.getAllByRole("button", { name: "Game settings" });
+      expect(settings).toHaveLength(1);
+      // Without the banner, the buttons stack down the page edge.
+      expect(!!settings[0]?.closest("[data-stacked-icons]")).toBe(lightLayout);
       expect(
         view.getByRole("button", { name: lightLayout ? "Show Layout" : "Hide Layout" }),
       ).toBeDefined();

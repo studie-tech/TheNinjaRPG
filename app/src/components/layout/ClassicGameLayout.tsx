@@ -141,11 +141,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             </button>
             {/* The banner that holds account, alerts and settings is hidden, so they
                 stack down the page edge instead of covering the sidebar heading. */}
-            {lightLayout && (
-              <div className="[&>div]:flex-col [&>div]:gap-1.5 [&>div_*]:mx-0">
-                {signedInIcons}
-              </div>
-            )}
+            {lightLayout && <div data-stacked-icons>{signedInIcons}</div>}
           </div>
         </div>
         {!lightLayout && (
