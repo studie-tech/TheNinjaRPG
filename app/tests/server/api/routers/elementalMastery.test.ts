@@ -17,7 +17,7 @@ const assign = async (element: BasicElement, amount: number) =>
   (await callerFor(profileRouter, ID)).useUnusedExperiencePoints({ [element]: amount });
 const readUser = async () => (await (await getTestDatabase()).select().from(userData).where(eq(userData.userId, ID)))[0]!;
 const patch = async (data: Partial<typeof userData.$inferInsert>) => (await getTestDatabase()).update(userData).set(data).where(eq(userData.userId, ID));
-const session = async (element: "Wind" = "Wind") => ({ stat: element, startedAt: (await readUser()).elementalTrainingStartedAt! });
+const session = async () => ({ stat: "Wind" as const, startedAt: (await readUser()).elementalTrainingStartedAt! });
 
 describeWithDatabase("elemental mastery guarded progression", () => {
   beforeEach(async () => {
@@ -86,7 +86,6 @@ describeWithDatabase("elemental mastery guarded progression", () => {
 
   it("guards concurrent XP spending and rejects overspending", async () => {
     await patch({ earnedExperience: 100 });
-    const caller = await api();
     expect((await assign("Wind", 101)).success).toBe(false);
     const results = await Promise.all([assign("Wind", 100), assign("Earth", 100)]);
     expect(results.filter(result => result.success)).toHaveLength(1);

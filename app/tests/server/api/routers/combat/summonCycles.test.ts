@@ -80,10 +80,8 @@ describe("summon preload cycles", () => {
     expect(run.reads).toEqual(["B"]);
   });
 
-  it.each([
-    { edges: { A: ["B"], B: ["C"], C: ["A"] }, roots: ["A"] },
-  ])("rejects longer recursive cycles: $roots", async ({ edges, roots }) => {
-    const run = preload(edges, roots);
+  it("rejects a longer recursive cycle", async () => {
+    const run = preload({ A: ["B"], B: ["C"], C: ["A"] }, ["A"]);
     await expect(run.process()).rejects.toThrow(/cyclic summon/i);
     expect(run.reads.length).toBeLessThanOrEqual(2);
   });

@@ -4,7 +4,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { questHistory, userData } from "@/drizzle/schema";
 import { QuestTracker } from "@/validators/objectives";
 import { upsertQuestEntries } from "../../../../../src/server/api/routers/quests";
-import { insertUsers } from "../../../../setup/factories";
+import { insertQuestHistory, insertUsers } from "../../../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 /**
@@ -101,16 +101,9 @@ describeWithDatabase("bulk daily reset against a real MySQL", () => {
       { userId: "hasrow", questData: [tracker("q_b", true)] },
       { userId: "norow", questData: [] },
     ]);
-    await database
-      .insert(questHistory)
-      .values({
-        id: "h1",
-        userId: "hasrow",
-        questId: "q_b",
-        questType: "daily",
-        completed: 1,
-        endAt: new Date(),
-      } as never);
+    await insertQuestHistory([
+      { id: "h1", userId: "hasrow", questId: "q_b", questType: "daily", completed: 1, endAt: new Date() },
+    ]);
 
     await reset("q_b", ["hasrow", "norow"]);
 

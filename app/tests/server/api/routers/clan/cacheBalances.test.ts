@@ -216,7 +216,6 @@ describeWithDatabase("clan mutation cache balances", () => {
 
   for (const endpoint of ["toBank", "clanDonate"] as const) {
     it(`${endpoint} keeps profile refreshes for a pending energy queue`, async () => {
-      const db = await getTestDatabase();
       await queueEnergy("clan-cache-user", [{ stat: "offence", energy: 10 }]);
       const caller = await callerFor(clanRouter, "clan-cache-user");
       const result = await (endpoint === "toBank"

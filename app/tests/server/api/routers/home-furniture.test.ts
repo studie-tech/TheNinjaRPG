@@ -5,7 +5,7 @@ import { item, itemVariant, userData, userHome, userItem, userRequest, userItemV
 import { homeRouter } from "@/server/api/routers/home";
 import { itemRouter } from "@/server/api/routers/item";
 import { createStarterHomeItems } from "@/server/utils/homeFurniture";
-import { type HomeFurniture, clampHomeFurniturePlacement } from "@/libs/home";
+import { clampHomeFurniturePlacement } from "@/libs/home";
 import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
 import type { HomePlacement } from "@/validators/home";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";

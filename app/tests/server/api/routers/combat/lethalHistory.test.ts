@@ -75,7 +75,7 @@ describeWithDatabase("lethal combat history", () => {
         return Reflect.get(target, key, receiver);
       },
     });
-    const actor = await callerForDatabase(combatRouter, route === "performAction" ? "killer" : "victim", delayed);
+    const actor = callerForDatabase(combatRouter, route === "performAction" ? "killer" : "victim", delayed);
     const observer = await callerFor(combatRouter, route === "performAction" ? "victim" : "killer");
     const pending = route === "performAction"
       ? actor.performAction({ battleId: snapshot.id, version: snapshot.version,

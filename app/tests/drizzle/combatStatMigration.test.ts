@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, expect, it } from "bun:test";
-import { describeWithDatabase, runRawSql } from "../setup/testDatabase";
+import { describeWithDatabase, getTestDatabase, runRawSql } from "../setup/testDatabase";
 import { sql } from "drizzle-orm";
-import { getTestDatabase } from "../setup/testDatabase";
 
 const migration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0056_unified_combat_stats_masteries.sql"), "utf8");
 const backfill = migration.slice(migration.indexOf("UPDATE `UserData`\nSET"), migration.indexOf("ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining`"));

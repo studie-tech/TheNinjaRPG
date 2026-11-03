@@ -1,6 +1,5 @@
 import { and, eq, gt } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
-import { getUserCaps } from "@/drizzle/constants";
 import {
   item,
   jutsu,

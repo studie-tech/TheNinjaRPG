@@ -1,5 +1,5 @@
 import { makeAiUser as mkUser } from "./helpers/aiScenario";
-import { describe, it, expect, vi } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { ActionUseSpecificJutsu } from "@/validators/ai";

@@ -99,12 +99,11 @@ describeWithDatabase("combat lobby jutsu gates", () => {
     await resetTables(battle, aiProfile, userJutsu, jutsuLoadout, jutsu, userData);
     // JONIN (9) + gold federal (3) + 2 extra slots + 1 base = 15 equip slots.
     await insertUsers([{
-      userId: USER, username: USER, rank: "GENIN", level: 20, federalStatus: "GOLD",
+      userId: USER, username: USER, rank: "JONIN", level: 20, federalStatus: "GOLD",
       extraJutsuSlots: 2, isOutlaw: true, ninjutsuMastery: 100,
       // Keep Fire locked when profile maintenance runs between equip operations.
       primaryElement: "Water", secondaryElement: "Wind",
     }]);
-    await (await getTestDatabase()).update(userData).set({ rank: "JONIN" }).where(eq(userData.userId, USER));
     await (await getTestDatabase()).insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
     await seedJutsu();
   });
