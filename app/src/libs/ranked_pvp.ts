@@ -23,7 +23,8 @@ import { getJutsuCapFlags, getJutsuCategoryDef, RANKED_JUTSU_CAPS } from "@/libs
  * @returns Player's rank
  */
 export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
-  // Sannin rank requires being Legend (900+ LP) AND in top 10 Legend players
+  // Sannin requires Legend LP (RANKED_LEGEND_LP_REQUIREMENT) and a place among the
+  // RANKED_SANNIN_TOP_PLAYERS highest Legend players
   if (
     lp >= RANKED_LEGEND_LP_REQUIREMENT &&
     topPlayersLP.length >= RANKED_SANNIN_TOP_PLAYERS &&
@@ -31,14 +32,7 @@ export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
   ) {
     return "Sannin";
   }
-  // Find the highest division the player qualifies for
-  let highestDivision: RankedRank = "Wood";
-  for (const division of RANKED_DIVISIONS) {
-    if (lp >= division.rankedLp) {
-      highestDivision = division.name;
-    }
-  }
-  return highestDivision;
+  return getDivision(lp).name;
 }
 
 /**
@@ -47,18 +41,7 @@ export function getRankedRank(lp: number, topPlayersLP: number[]): RankedRank {
  * @returns K-factor for Elo calculation
  */
 export function getKFactor(lp: number): number {
-  // Find all divisions the player qualifies for (LP >= division requirement)
-  const qualifyingDivisions = RANKED_DIVISIONS.filter(
-    (division) => lp >= division.rankedLp,
-  );
-  // Sort by LP requirement descending to get highest qualifying division
-  const sortedDivisions = qualifyingDivisions.sort((a, b) => b.rankedLp - a.rankedLp);
-  // Return K-factor from highest qualifying division, or Wood division, or default 32
-  return (
-    sortedDivisions?.[0]?.kFactor ??
-    RANKED_DIVISIONS.find((division) => division.name === "Wood")?.kFactor ??
-    32
-  );
+  return getDivision(lp).kFactor;
 }
 
 /**
@@ -251,4 +234,13 @@ export const validateItemLoadout = (items: Item[]) => {
   }
 
   return { check, message };
+};
+
+/** Highest division whose LP requirement the player meets; Unranked starts at 0 LP. */
+const getDivision = (lp: number) => {
+  let division: (typeof RANKED_DIVISIONS)[number] = RANKED_DIVISIONS[0];
+  for (const candidate of RANKED_DIVISIONS) {
+    if (lp >= candidate.rankedLp) division = candidate;
+  }
+  return division;
 };
