@@ -338,10 +338,10 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(results.filter((result) => result.success)).toHaveLength(1);
     const balances = { reputationPoints: results[0]!.success ? 200 - PET_COLLECTION_SLOT_COST : 200, seichiSilver: results[1]!.success ? 0 : PET_SEICHI_SILVER_COST };
     expect(await readOwner(database)).toMatchObject({ petSlots: PET_MAX_COLLECTION_SLOTS, ...balances });
-    expect((await caller.unlockSlot()).success).toBe(false);
+    expect((await caller.unlockSlot({ currency: "REPUTATION" })).success).toBe(false);
     expect(await readOwner(database)).toMatchObject(balances);
     await database.update(userData).set({ petSlots: 1, reputationPoints: PET_COLLECTION_SLOT_COST - 1 }).where(eq(userData.userId, userId));
-    expect((await caller.unlockSlot()).success).toBe(false);
+    expect((await caller.unlockSlot({ currency: "REPUTATION" })).success).toBe(false);
     expect((await readOwner(database))?.petSlots).toBe(1);
   });
 
@@ -389,7 +389,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(await caller.getPet()).toMatchObject({ permanentSlots: 6, slots: 9, canAcquire: false });
     const before = await readOwner(database);
     expect((await caller.acquirePet(input)).success).toBe(false);
-    expect((await caller.unlockSlot()).success).toBe(false);
+    expect((await caller.unlockSlot({ currency: "REPUTATION" })).success).toBe(false);
     expect(await readOwner(database)).toEqual(before);
   });
 
@@ -631,7 +631,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     const before = await readOwner(database);
     const caller = callerForDatabase(petsRouter, userId, database);
     const results = await Promise.all([
-      caller.unlockSlot(), caller.acquirePet(input), caller.activatePet({ petId: "parked" }),
+      caller.unlockSlot({ currency: "REPUTATION" }), caller.acquirePet(input), caller.activatePet({ petId: "parked" }),
       caller.releasePet({ petId }), caller.rankUp({ petId }),
       caller.updateAbilities({ petId, jutsuIds: [], skillIds: [] }), caller.assignExperience({ petId, ...stats }),
       caller.updatePet({ petId, battleEnabled: false }), caller.updateAiConfig({ petId, rules: [], includeDefaultRules: false }),
@@ -1523,7 +1523,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
 
 const adoptionInput = async (database: DrizzleClient) => {
   const data = await callerForDatabase(petsRouter, userId, database).getPet();
-  return { name: "Kumo", gender: "MALE" as const, dayKey: data.dayKey, speciesId: data.options.species[0]!.id, paletteIndex: data.options.palettes[0]!.index, characteristicIndex: data.options.characteristics[0]!.index, auraIndex: data.options.auras[0]!.index };
+  return { currency: "REPUTATION" as const, name: "Kumo", gender: "MALE" as const, dayKey: data.dayKey, speciesId: data.options.species[0]!.id, paletteIndex: data.options.palettes[0]!.index, characteristicIndex: data.options.characteristics[0]!.index, auraIndex: data.options.auras[0]!.index };
 };
 
 const readyPet = async (database: DrizzleClient, overrides: Partial<typeof userPet.$inferInsert> = {}) => {

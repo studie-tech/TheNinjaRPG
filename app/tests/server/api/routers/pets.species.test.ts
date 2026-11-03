@@ -40,7 +40,7 @@ describeWithDatabase("Authored species in companion flows", () => {
     expect(view.unavailableReason).toContain("not offering new companions");
     const owner = await database.query.userData.findFirst();
     expect((await caller.acquirePet({
-      name: "Miso", gender: "FEMALE", dayKey: view.dayKey, speciesId: "missing",
+      currency: "REPUTATION", name: "Miso", gender: "FEMALE", dayKey: view.dayKey, speciesId: "missing",
       paletteIndex: view.options.palettes[0]!.index,
       characteristicIndex: view.options.characteristics[0]!.index,
       auraIndex: view.options.auras[0]!.index,
@@ -93,7 +93,7 @@ describeWithDatabase("Authored species in companion flows", () => {
       return property === "query" ? { ...target.query, petSpecies: speciesQueries } : Reflect.get(target, property, receiver);
     } });
     expect((await callerForDatabase(petsRouter, ownerId, raced).acquirePet({
-      name: "Miso", gender: "FEMALE", dayKey: view.dayKey, speciesId: species.id,
+      currency: "REPUTATION", name: "Miso", gender: "FEMALE", dayKey: view.dayKey, speciesId: species.id,
       paletteIndex: view.options.palettes[0]!.index,
       characteristicIndex: view.options.characteristics[0]!.index,
       auraIndex: view.options.auras[0]!.index,

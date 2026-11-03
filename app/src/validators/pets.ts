@@ -14,9 +14,9 @@ import { createStatSchema } from "@/validators/combat";
 
 /** Address a saved companion; authorization is resolved from the authenticated owner. */
 export const petSelectionSchema = z.object({ petId: z.string().min(1).max(191) });
-/** Purchases debit only the chosen balance; existing callers default to reputation. */
+/** Purchases debit only the chosen balance. */
 export const petPaymentSchema = z.object({
-  currency: z.enum(PetPaymentCurrencies).default("REPUTATION"),
+  currency: z.enum(PetPaymentCurrencies),
 });
 /** Include the displayed stack quantity so a changed meal stack must be refreshed before consumption. */
 export const feedPetSchema = petSelectionSchema.extend({

@@ -104,7 +104,7 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 export const petsRouter = createTRPCRouter({
   /** Buy collection capacity and debit its price in one account update. */
   unlockSlot: protectedProcedure
-    .input(petPaymentSchema.optional())
+    .input(petPaymentSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchPetOwner(ctx.drizzle, ctx.userId);
@@ -115,11 +115,7 @@ export const petsRouter = createTRPCRouter({
         );
       if (user.petSlots >= PET_MAX_COLLECTION_SLOTS)
         return errorResponse("Your companion collection has all available slots.");
-      const payment = getPetPayment(
-        user,
-        input?.currency ?? "REPUTATION",
-        PET_COLLECTION_SLOT_COST,
-      );
+      const payment = getPetPayment(user, input.currency, PET_COLLECTION_SLOT_COST);
       if (payment.balance < payment.cost)
         return errorResponse(
           `A collection slot costs ${payment.cost} ${payment.label}.`,
