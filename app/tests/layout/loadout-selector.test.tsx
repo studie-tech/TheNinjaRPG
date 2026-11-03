@@ -42,6 +42,8 @@ it("renames the selected loadout from the pencil beside the dropdown", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rename Loadout 2" }));
   });
   const input = screen.getByRole("textbox", { name: "Rename Loadout 2" }) as HTMLInputElement;
+  // An unnamed loadout shows the name it goes by.
+  expect(input.placeholder).toBe("Loadout 2");
   act(() => {
     fireEvent.change(input, { target: { value: "  Arena  " } });
     fireEvent.keyDown(input, { key: "Enter" });

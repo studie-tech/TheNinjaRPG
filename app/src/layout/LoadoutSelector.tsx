@@ -293,6 +293,7 @@ function RenameInput({
       // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
       autoFocus
       aria-label={`Rename ${name}`}
+      placeholder={name}
       defaultValue={defaultValue}
       maxLength={LOADOUT_NAME_MAX_LENGTH}
       className={`w-full rounded border bg-background px-2 py-1 text-sm ${className ?? ""}`}
