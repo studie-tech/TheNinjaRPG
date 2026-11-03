@@ -2756,7 +2756,7 @@ export const claimDailyQuestSlot = async (
  * not. The overworld-NPC flow filters its pool to these so a mis-pooled type can never
  * reach assignQuestToUser, throw, and strand a player's NPC-quest claim.
  */
-export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
+const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
   "special",
   "mastery",
   "story",
@@ -2780,7 +2780,7 @@ export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
  * enforced by {@link questUiAccessBlockMessage} for UI and companion starts.
  * NPC starts cannot bypass those acquisition requirements.
  */
-export const OVERWORLD_GATED_QUEST_TYPES: QuestType[] = [
+const OVERWORLD_GATED_QUEST_TYPES: QuestType[] = [
   "special",
   "story",
   "hunting",
@@ -2794,7 +2794,7 @@ export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: QuestType[] =
   ASSIGNABLE_QUEST_TYPES.filter((type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type));
 
 /** Every path that creates or restarts a quest history row must declare its origin. */
-export type QuestAcquisitionSource =
+type QuestAcquisitionSource =
   | "item"
   | "ui"
   | "pet_task"
@@ -4607,7 +4607,7 @@ const prepareOverworldBindings = async (
  * run together. Packages keep their original cards while child rewards supply lookup ids.
  * Offers that no longer parse are skipped rather than failing the list.
  */
-export const resolveRewardChoiceDisplays = async (
+const resolveRewardChoiceDisplays = async (
   client: DrizzleClient,
   user: Pick<UserData, "userId" | "sageModeId" | "masteryRanks">,
   rows: {
@@ -4750,7 +4750,7 @@ export const resolveRewardChoiceDisplays = async (
  * so a tracker write committed meanwhile is never overwritten. Returns false when the snapshot
  * moved and nothing was written.
  */
-export const advanceRewardChoiceTrackers = async (
+const advanceRewardChoiceTrackers = async (
   client: DrizzleClient,
   userId: string,
   rewards: GetRewardResult,
