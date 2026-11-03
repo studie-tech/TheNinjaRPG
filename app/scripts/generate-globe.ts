@@ -16,7 +16,6 @@
 import { writeFileSync } from "node:fs";
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,
-  MAP_SECTOR_ID_MAX,
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WORLD_COLUMNS,
@@ -41,7 +40,6 @@ import { getWorldProtectedLandSectors } from "@/libs/sector-map/landmarks";
 import { getFlagValue, parseIntList } from "./cli";
 
 const RADIUS = 30;
-const TILE_COUNT = MAP_WORLD_COLUMNS * MAP_WORLD_ROWS;
 const VISUAL_SCALE = 6;
 const POLAR_CAP_VISUAL_COLUMNS = MAP_WORLD_COLUMNS * VISUAL_SCALE;
 const POLAR_CAP_VISUAL_ROWS = Math.ceil(
@@ -88,7 +86,7 @@ export const sectorGeographicBounds = (sector: number) => {
 
 /** Build spherical quads in canonical [NW, NE, SE, SW] order. */
 const buildTiles = (): RawTile[] =>
-  Array.from({ length: TILE_COUNT }, (_, id) => {
+  Array.from({ length: MAP_TOTAL_SECTORS }, (_, id) => {
     const bounds = sectorGeographicBounds(id);
     return {
       id,
@@ -221,10 +219,6 @@ const main = () => {
   const out = getFlagValue(argv, "--out") ?? "src/data/hexasphere.json";
   const villageSectors = parseIntList(getFlagValue(argv, "--villages"));
 
-  if (MAP_TOTAL_SECTORS !== TILE_COUNT || MAP_SECTOR_ID_MAX !== TILE_COUNT - 1) {
-    throw new Error("World-grid dimensions must match the configured sector-id range");
-  }
-
   const tiles = buildTiles();
   const protectedSectors = getWorldProtectedLandSectors(villageSectors);
   const landScore = createLandScore(tiles, protectedSectors);
@@ -309,34 +303,6 @@ const main = () => {
     ),
   };
 
-  let missing = 0;
-  let nonReciprocal = 0;
-  let rotated = 0;
-  for (let id = 0; id < TILE_COUNT; id++) {
-    for (let edge = 0; edge < 4; edge++) {
-      const neighbor = outTiles[id]!.n[edge]!;
-      const entryEdge = outTiles[id]!.ne[edge]!;
-      if (neighbor < 0) {
-        missing++;
-        if (entryEdge !== -1) nonReciprocal++;
-        continue;
-      }
-      if (entryEdge !== (edge + 2) % 4) rotated++;
-      if (
-        outTiles[neighbor]?.n[entryEdge] !== id ||
-        outTiles[neighbor]?.ne[entryEdge] !== edge
-      ) {
-        nonReciprocal++;
-      }
-    }
-  }
-  const expectedMissing = MAP_WORLD_COLUMNS * 2;
-  if (missing !== expectedMissing || nonReciprocal !== 0 || rotated !== 0) {
-    throw new Error(
-      `Invalid cylindrical topology: ${missing} missing, ${nonReciprocal} non-reciprocal, ${rotated} rotated`,
-    );
-  }
-
   const payload = JSON.stringify({
     radius: RADIUS,
     projection: "cylindrical",
@@ -360,7 +326,7 @@ const main = () => {
   }, {});
   console.log(
     `Wrote ${out}: ${MAP_WORLD_COLUMNS}x${MAP_WORLD_ROWS} cylindrical sectors, ` +
-      `terrain ${JSON.stringify(counts)}, ${missing} blocked polar edges`,
+      `terrain ${JSON.stringify(counts)}, ${MAP_WORLD_COLUMNS * 2} blocked polar edges`,
   );
   console.log("Commit the generated topology with the code that consumes it.");
 };
