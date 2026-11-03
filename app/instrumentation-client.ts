@@ -86,9 +86,7 @@ Sentry.init({
     "https://reactjs.org/docs/error-decoder.html?invariant=425", // There was an error while hydrating...
     "Can't find variable: __firefox__", // Firefox/iOS browser extension error
     /window\.__firefox__/, // Firefox/Brave browser extension errors (e.g., YouTube quality extensions)
-    /undefined is not an object \(evaluating 'window\.__firefox__\..*'\)/, // iOS browser extension error (Brave/Firefox) - extensions inject __firefox__ object that may be undefined
     "Failed to load chunk", // New deployment
-    /ChunkLoadError.*Failed to load chunk/, // Next.js chunk loading errors during deployments (captures both exception and console format)
     "Invalid call to runtime.sendMessage()", // Browser extension error, not from our app
     "zoid destroyed", // PayPal SDK cleanup errors - occur when users navigate away while PayPal buttons are initializing
     "Target window is closed", // PayPal SDK postrobot error - occurs when user closes popup before transaction completes
@@ -200,9 +198,6 @@ Sentry.init({
     }
     if (isUserscriptError(event)) {
       return null; // Drop userscript errors from browser extensions
-    }
-    if (isUserscriptErrorFromBreadcrumbs(event)) {
-      return null; // Drop userscript errors (breadcrumb-based fallback for ambiguous stack frames)
     }
     if (isGoogleApiLoaderError(event)) {
       return null; // Drop Google Maps API loader errors (network/CDN failures)
@@ -1518,63 +1513,6 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
- * Fallback check for userscript errors when stack frames are ambiguous.
- * Uses console breadcrumbs combined with error patterns to identify userscript errors.
- *
- * This is a defensive layer for edge cases where:
- * - Multiple exception values have varying structures
- * - Some exception values lack userscript frames
- * - Stack traces are incomplete due to CORS or timing
- *
- * Requires ALL conditions:
- * 1. Console breadcrumb from userscript (e.g., "[Persistent Keybinds]")
- * 2. Single-letter variable error pattern (e.g., "d is not defined")
- * 3. Stack evidence that the exception still points to userscript code and not app code
- *
- * This conservative approach minimizes false positives while catching edge cases.
- *
- * UX note: Same as isUserscriptError - these errors do not affect application
- * functionality for users without the userscript installed.
- */
-const isUserscriptErrorFromBreadcrumbs = (event: Sentry.ErrorEvent): boolean => {
-  const breadcrumbs = event.breadcrumbs ?? [];
-  const exceptionValues = event.exception?.values ?? [];
-
-  // Check for userscript console breadcrumbs
-  const hasUserscriptBreadcrumb = checkHasUserscriptBreadcrumb(breadcrumbs);
-
-  if (!hasUserscriptBreadcrumb) {
-    return false;
-  }
-
-  // Check if any exception has a single-letter variable error
-  const hasSingleLetterVarError = checkHasSingleLetterVarError(exceptionValues);
-
-  if (!hasSingleLetterVarError) {
-    return false;
-  }
-
-  // Require stack evidence that the error still points back to a userscript.
-  // Console breadcrumbs alone are not enough because minified production bundles
-  // can also throw single-letter variable errors like "d is not defined".
-  const hasUserscriptStackEvidence = exceptionValues.some((exception) =>
-    hasUserscriptStackSignal(exception.stacktrace?.frames ?? []),
-  );
-
-  if (!hasUserscriptStackEvidence) {
-    return false;
-  }
-
-  // If any exception value includes meaningful app execution frames, treat it as
-  // a real application error instead of suppressing it as a userscript issue.
-  const hasAppCodeFrames = exceptionValues.some((exception) =>
-    hasMeaningfulAppCodeFrame(exception.stacktrace?.frames ?? []),
-  );
-
-  return !hasAppCodeFrames;
-};
-
-/**
  * Check if an error is from the Google Maps JS API loader (@googlemaps/js-api-loader).
  * These errors occur when the Google Maps script fails to load due to network issues,
  * ad blockers, or Google CDN outages. The loader retries internally and then rejects
@@ -1717,7 +1655,7 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
  * - Console breadcrumb contains "ChunkLoadError" or "Failed to load chunk"
  * - Minimal or no stack trace (console logs don't generate stack traces)
  *
- * Note: The ignoreErrors regex at line 52 catches most ChunkLoadError exceptions.
+ * Note: The "Failed to load chunk" ignoreErrors entry catches most ChunkLoadError exceptions.
  * This function provides defense-in-depth for the console breadcrumb variant
  * that bypasses ignoreErrors pattern matching.
  *
@@ -2075,10 +2013,7 @@ const hasMeaningfulAppCodeFrame = (
   });
 };
 
-/**
- * Shared utility to check if breadcrumbs contain userscript console logs.
- * Extracted to avoid duplication across multiple userscript detection functions.
- */
+/** Check if breadcrumbs contain userscript console logs. */
 const checkHasUserscriptBreadcrumb = (
   breadcrumbs: Array<Sentry.Breadcrumb>,
 ): boolean => {
@@ -2108,9 +2043,8 @@ const isSingleLetterVarErrorMessage = (message: string): boolean => {
 };
 
 /**
- * Shared utility to check if exception values contain single-letter variable errors.
+ * Check if exception values contain single-letter variable errors.
  * These errors are typical of minified userscripts (e.g., "d is not defined").
- * Extracted to avoid duplication across multiple userscript detection functions.
  */
 const checkHasSingleLetterVarError = (
   exceptionValues: Array<{ value?: string }>,
