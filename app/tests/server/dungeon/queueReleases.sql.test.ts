@@ -243,7 +243,7 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
       };
     }});
     const delayed=new Proxy(db,{get(target,key,receiver){return key==="query"?{...target.query,mpvpBattleQueue:queue}:Reflect.get(target,key,receiver);}});
-    expect((await checkAndCleanupExpiredRaid(delayed,"raid")).wasExpired).toBe(true);
+    await checkAndCleanupExpiredRaid(delayed,"raid");
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();
     expect(await db.query.mpvpBattleUser.findFirst()).toBeUndefined();
     const owner=await db.query.userData.findFirst({where:eq(userData.userId,"member")});

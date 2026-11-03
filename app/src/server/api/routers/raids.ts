@@ -1300,11 +1300,8 @@ export const raidsRouter = createTRPCRouter({
  * raids that have actually expired and have sectors that still need cleanup.
  *
  * @param client - The drizzle database client
- * @returns The number of sectors returned to neutral ownership
  */
-export const cleanupExpiredExclusiveRaids = async (
-  client: DrizzleClient,
-): Promise<number> => {
+export const cleanupExpiredExclusiveRaids = async (client: DrizzleClient) => {
   const now = new Date();
 
   // Find all expired exclusive raids where boss is not defeated
@@ -1328,11 +1325,9 @@ export const cleanupExpiredExclusiveRaids = async (
     .filter((s): s is number => s !== null);
 
   // Delete all sectors in parallel
-  const results = await Promise.all(
+  await Promise.all(
     sectorsToClean.map((sectorNum) => deleteSectorByNumber(client, sectorNum)),
   );
-
-  return results.filter((r) => r.rowsAffected > 0).length;
 };
 
 /**
@@ -1342,20 +1337,17 @@ export const cleanupExpiredExclusiveRaids = async (
  *
  * @param client - The drizzle database client
  * @param raidId - The quest ID of the raid to check
- * @returns Object indicating if the raid was expired and cleaned up
  */
 export const checkAndCleanupExpiredRaid = async (
   client: DrizzleClient,
   raidId: string,
-): Promise<{ wasExpired: boolean; sectorCleaned: boolean }> => {
+) => {
   const now = new Date();
 
   // Match both time-expired and boss-defeated raids
   const raid = await findQuestForCheckAndCleanupExpiredRaid(client, raidId, now);
 
-  if (!raid) {
-    return { wasExpired: false, sectorCleaned: false };
-  }
+  if (!raid) return;
 
   // Clean up only queued/claiming teams — skip teams already in an active battle
   const queuedTeams = await listMpvpBattleQueueForCheckAndCleanupExpiredRaid(
@@ -1389,13 +1381,10 @@ export const checkAndCleanupExpiredRaid = async (
       const raidSector = (objective as RaidObjectiveType).sector;
       if (raidSector !== null && raidSector !== undefined) {
         // Delete sector - returns it to neutral ownership (syndicate)
-        const result = await deleteSectorByNumber(client, raidSector);
-        return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+        await deleteSectorByNumber(client, raidSector);
       }
     }
   }
-
-  return { wasExpired: true, sectorCleaned: false };
 };
 
 const rollbackJoinRaidQueue = async ({
