@@ -377,10 +377,10 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const boostSettings = user.village?.shrineSettings?.activeBoosts;
   const activeBoosts = Object.entries(boostSettings || {})
     .map(([boostType, expiry]) => {
-      const secondsLeft = expiry ? new Date(expiry).getTime() - nowMs : 0;
-      return { boostType, secondsLeft };
+      const msLeft = expiry ? new Date(expiry).getTime() - nowMs : 0;
+      return { boostType, msLeft };
     })
-    .filter(({ secondsLeft }) => secondsLeft > 0);
+    .filter(({ msLeft }) => msLeft > 0);
   // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
   const boostPercentage =
     level3Shrines > 0
@@ -401,10 +401,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
         <CardContent>
           {activeBoosts.length > 0 ? (
             <div className="space-y-2">
-              {activeBoosts.map(({ boostType, secondsLeft }, i) => {
-                const timeLeft = getTimeLeftStr(
-                  ...getDaysHoursMinutesSeconds(secondsLeft),
-                );
+              {activeBoosts.map(({ boostType, msLeft }, i) => {
+                const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
 
                 return (
                   <div
@@ -767,12 +765,10 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
                   const isOverdue = dueDate <= new Date();
 
-                  const secondsToNextPayment = dueDate
-                    ? dueDate.getTime() - Date.now()
-                    : 0;
+                  const msToNextPayment = dueDate.getTime() - Date.now();
 
                   const nextPaymentAt = getTimeLeftStr(
-                    ...getDaysHoursMinutesSeconds(secondsToNextPayment),
+                    ...getDaysHoursMinutesSeconds(msToNextPayment),
                   );
 
                   return (
@@ -1040,9 +1036,6 @@ const BoostTemplateGrid = ({
   };
 
   const fillAllDay = (day: number, boosts: string[]) => {
-    // Defense in depth: the UI disables Fill Day when boosts is empty, but never let a
-    // future caller silently wipe a day by passing an empty list.
-    if (boosts.length === 0) return;
     setLocalTemplate((prev) => {
       const filtered = prev.filter((e) => e.dayOfWeek !== day);
       const newEntries: BoostTemplateEntry[] = [];
