@@ -167,3 +167,12 @@ export const rankSlotCandidates = <T extends UserItemWithRelations>(
         Number(!!a.blockedReason) - Number(!!b.blockedReason) ||
         byRarityThenDurability(a.userItem, b.userItem),
     );
+
+/** Slots a dragged item can land on: where it fits, except its own slot and refused ones. */
+export const dropTargetsFor = <T extends UserItemWithRelations>(
+  userItem: T,
+  getBlockedReason: (userItem: T, slot: ItemSlot) => string | null,
+): ItemSlot[] =>
+  fittingSlots(userItem.item).filter(
+    (slot) => slot !== userItem.equipped && !getBlockedReason(userItem, slot),
+  );

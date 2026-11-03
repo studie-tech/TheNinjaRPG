@@ -28,6 +28,8 @@ interface EquipmentFigureProps {
   hotkeys?: Record<string, string>;
   onSlotClick: (slot: ItemSlot) => void;
   onDropItem: (userItemId: string, slot: ItemSlot) => void;
+  /** Called with equipped gear a drag starts on, and with null when it ends. */
+  onDragItem?: (userItem: UserItemWithRelations | null) => void;
   /** Wraps each tile, e.g. in a context menu. */
   wrapTile?: (
     slot: ItemSlot,
@@ -48,6 +50,7 @@ export function EquipmentFigure({
   hotkeys,
   onSlotClick,
   onDropItem,
+  onDragItem,
   wrapTile,
 }: EquipmentFigureProps) {
   return (
@@ -73,6 +76,17 @@ export function EquipmentFigure({
             }
             aria-current={slot === activeSlot ? "true" : undefined}
             onClick={() => onSlotClick(slot)}
+            draggable={!!userItem && !!onDragItem}
+            onDragStart={
+              userItem && onDragItem
+                ? (event) => {
+                    event.dataTransfer.setData(USER_ITEM_DRAG_TYPE, userItem.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    onDragItem(userItem);
+                  }
+                : undefined
+            }
+            onDragEnd={onDragItem ? () => onDragItem(null) : undefined}
             onDragOver={(event) => {
               if (!isTarget) return;
               event.preventDefault();

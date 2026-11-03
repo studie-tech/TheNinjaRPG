@@ -109,3 +109,16 @@ it("drop calls onDropItem with the slot", () => {
   fireEvent.drop(slotOf("HEAD"), { dataTransfer: { getData: () => "Raijin Tanto" } });
   expect(onDropItem.mock.calls).toEqual([["Raijin Tanto", "HAND_2"]]);
 });
+
+it("lets equipped gear be dragged to another slot", () => {
+  const onDragItem = vi.fn();
+  const setData = vi.fn();
+  renderFigure({ onDragItem });
+  expect(slotOf("HAND_1").getAttribute("draggable")).toBe("true");
+  expect(slotOf("HEAD").getAttribute("draggable")).not.toBe("true");
+  fireEvent.dragStart(slotOf("HAND_1"), { dataTransfer: { setData, effectAllowed: "" } });
+  expect(setData).toHaveBeenCalledWith(USER_ITEM_DRAG_TYPE, "Shadowsteel Katana");
+  expect(onDragItem).toHaveBeenCalledWith(items[0]);
+  fireEvent.dragEnd(slotOf("HAND_1"));
+  expect(onDragItem).toHaveBeenLastCalledWith(null);
+});

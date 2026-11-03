@@ -3,6 +3,7 @@ import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import {
   backpackFilterChips,
+  dropTargetsFor,
   filterBackpack,
   fittingSlots,
   rankSlotCandidates,
@@ -153,5 +154,13 @@ describe("slot rules", () => {
     expect(candidates.find((c) => c.userItem.id === "OtherHand")?.equippedIn).toBe("HAND_2");
     expect(candidates.find((c) => c.userItem.id === "Epic60")?.equippedIn).toBeNull();
     expect(candidates.at(-1)?.blockedReason).toBe("Needs 500 Taijutsu");
+  });
+
+  it("drops onto fitting slots other than its own and never onto blocked ones", () => {
+    const worn = userItem({ id: "Katana", equipped: "HAND_1" });
+    expect(dropTargetsFor(worn, () => null)).toEqual(["HAND_2"]);
+    const loose = userItem({ id: "Tanto" });
+    expect(dropTargetsFor(loose, (_ui, slot) => (slot === "HAND_2" ? "Needs 500 Bukijutsu" : null))).toEqual(["HAND_1"]);
+    expect(dropTargetsFor(userItem({ id: "Ore", itemType: "MATERIAL", slot: "NONE" }), () => null)).toEqual([]);
   });
 });
