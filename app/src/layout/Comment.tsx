@@ -36,8 +36,7 @@ interface UserReportCommentProps extends PostProps {
   comment: UserReportComment;
 }
 export const CommentOnReport: React.FC<UserReportCommentProps> = (props) => {
-  const [editing, setEditing] = useState(false);
-  return <BaseComment {...props} editing={editing} setEditing={setEditing} />;
+  return <BaseComment {...props} editing={false} setEditing={() => {}} />;
 };
 
 /**

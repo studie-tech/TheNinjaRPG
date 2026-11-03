@@ -41,9 +41,10 @@ type CombatTimelineProps = {
   battleId: string;
   battle?: ReturnedBattle | null;
   battleVersion?: number;
-  pageSize?: number;
   showBasicActions?: boolean;
 };
+
+const TIMELINE_PAGE_SIZE = 5;
 
 const effectColors: Record<ActionEffect["color"], string> = {
   red: "bg-red-100 text-red-500",
@@ -74,14 +75,13 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
   battleId,
   battle,
   battleVersion,
-  pageSize = 5,
   showBasicActions = true,
 }) => {
   const [selected, setSelected] = useState<{
     entry: BattleAction;
     actionItem: GenericObject;
   } | null>(null);
-  const [limit, setLimit] = useState(pageSize);
+  const [limit, setLimit] = useState(TIMELINE_PAGE_SIZE);
   const [userFilter, setUserFilter] = useLocalStorage<UserFilter>(
     "timeline-user-filter",
     "all",
@@ -104,8 +104,8 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
 
   // Reset limit when battle version or filter changes
   useEffect(
-    () => setLimit(pageSize),
-    [battleVersion, pageSize, userFilter, showBasicActions],
+    () => setLimit(TIMELINE_PAGE_SIZE),
+    [battleVersion, userFilter, showBasicActions],
   );
 
   const { data: entries, isFetching } = api.combat.getBattleEntries.useQuery(
@@ -200,12 +200,12 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
   // Auto-scroll to right only when new entries appear (not when loading older)
   useEffect(() => {
     const grewAtEnd =
-      resolvedEntries.length > prevCountRef.current && limit === pageSize;
+      resolvedEntries.length > prevCountRef.current && limit === TIMELINE_PAGE_SIZE;
     if (scrollContainerRef.current && grewAtEnd) {
       scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
     }
     prevCountRef.current = resolvedEntries.length;
-  }, [resolvedEntries.length, limit, pageSize]);
+  }, [resolvedEntries.length, limit]);
 
   return (
     <div className="relative space-y-3 rounded-lg border bg-slate-100 p-3">
@@ -270,7 +270,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
             size="icon"
             variant="ghost"
             className="shrink-0 rounded-full border bg-slate-200 shadow-sm hover:bg-slate-300"
-            onClick={() => setLimit((l) => l + pageSize)}
+            onClick={() => setLimit((l) => l + TIMELINE_PAGE_SIZE)}
             disabled={!hasMoreOlder || isFetching}
             aria-label="Load older actions"
           >

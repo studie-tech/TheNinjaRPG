@@ -261,7 +261,7 @@ export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
 
             {renderJutsuInformation()}
             {renderJutsuDescriptionWarnings(jutsu)}
-            {renderJutseRelations(jutsu, injectorData)}
+            {renderJutsuRelations(injectorData)}
             {jutsu.effects && renderEffectsTips(jutsu.effects as ZodAllTags[])}
             {jutsu.effects &&
               renderEffectsGraphicsWarning(jutsu.effects as ZodAllTags[])}
@@ -1309,10 +1309,7 @@ const renderJutsuInformation = () => {
   );
 };
 
-const renderJutseRelations = (
-  _jutsu: DeepPartial<ZodJutsuType>,
-  relations?: JutsuRelations,
-) => {
+const renderJutsuRelations = (relations?: JutsuRelations) => {
   if (!relations) return null;
 
   const {
@@ -1384,16 +1381,14 @@ const renderJutseRelations = (
           {config.data.map((ref) => (
             <div key={ref.id} className="flex items-center justify-between text-sm">
               <span>{ref.name}</span>
-              {config.route && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => window.open(`${config.route}/${ref.id}`, "_blank")}
-                >
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => window.open(`${config.route}/${ref.id}`, "_blank")}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </Button>
             </div>
           ))}
         </div>
