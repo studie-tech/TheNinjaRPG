@@ -27,14 +27,11 @@ describe("shared monthly reset allowance", () => {
   it.each([ ["NONE", 1], ["NORMAL", 1], ["SILVER", 1], ["GOLD", 2] ] as const)("gives %s supporters %i free resets", (federalStatus, expected) => {
     expect(getFreeResetAmount({ federalStatus, staffAccount: false } as UserData)).toBe(expected);
   });
-  it("counts a claimed reset before its log is written", () => {
+  it("counts the resets persisted for the current month", () => {
     const month = new Date().toISOString().slice(0, 7);
-    expect(getMonthlyResetState({ monthlySkillResets: { month, count: 2 } } as UserData, 1).count).toBe(2);
-  });
-  it("preserves existing monthly reset logs after migration", () => {
-    expect(getMonthlyResetState({ monthlySkillResets: { month: "", count: 0 } } as UserData, 1).count).toBe(1);
+    expect(getMonthlyResetState({ monthlySkillResets: { month, count: 2 } } as UserData).count).toBe(2);
   });
   it("starts a new allowance when the month changes", () => {
-    expect(getMonthlyResetState({ monthlySkillResets: { month: "2000-01", count: 2 } } as UserData, 0).count).toBe(0);
+    expect(getMonthlyResetState({ monthlySkillResets: { month: "2000-01", count: 2 } } as UserData).count).toBe(0);
   });
 });

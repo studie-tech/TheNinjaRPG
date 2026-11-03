@@ -38,7 +38,6 @@ import {
   insertSkillTreeFolderForCreateFolder,
   insertSkillTreeForCreate,
   insertUserSkillForPurchaseSkill,
-  listActionLogForFetchMonthlyResets,
   listItemForDelete,
   listJutsuForDelete,
   listSkillTreeFolderForGetAllFolders,
@@ -67,7 +66,6 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUserFederalStatus } from "@/utils/paypal";
 import {
@@ -534,13 +532,10 @@ export const skillTreeRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data
-      const [updatedUser, monthlyResets] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchMonthlyResets(ctx.drizzle, ctx.userId),
-      ]);
+      const updatedUser = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
       const { user } = updatedUser;
       // Guard
       if (!user) return errorResponse("User not found");
@@ -548,7 +543,7 @@ export const skillTreeRouter = createTRPCRouter({
       // Determine if this reset should be free (GOLD supporters get first two per month free)
       const federalStatus = getUserFederalStatus(user);
       const freeResets = getFreeResetAmount(user);
-      const resetState = getMonthlyResetState(user, monthlyResets.length);
+      const resetState = getMonthlyResetState(user);
       const freeResetsUsed = resetState.count;
       const hasFreeResetAvailable = freeResetsUsed < freeResets;
       const isStaffFreeReset = isStaffMember(user);
@@ -627,18 +622,15 @@ export const skillTreeRouter = createTRPCRouter({
     })
     .query(async ({ ctx }) => {
       // Query
-      const [{ user }, monthlyResets] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchMonthlyResets(ctx.drizzle, ctx.userId),
-      ]);
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
       // Guard
       if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
       // Derived
       const freeResets = getFreeResetAmount(user);
-      const freeResetsUsed = getMonthlyResetState(user, monthlyResets.length).count;
+      const freeResetsUsed = getMonthlyResetState(user).count;
       const freeResetsRemaining = Math.max(0, freeResets - freeResetsUsed);
       const isFree = freeResetsRemaining > 0 || isStaffMember(user);
       // Return
@@ -954,30 +946,6 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
 const SKILL_RESET_STAFF_RELATED_MSG = "Free reset for staff member";
 
 /**
- * Fetch the number of monthly resets for a user
- * @param client - The database client
- * @param userId - The user ID
- * @returns The number of monthly resets for the user
- */
-export const fetchMonthlyResets = async (client: DrizzleClient, userId: string) => {
-  const now = new Date();
-  const startOfMonth = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0),
-  );
-  const startOfNextMonth = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
-  );
-  const results = await listActionLogForFetchMonthlyResets(
-    client,
-    userId,
-    SKILL_RESET_STAFF_RELATED_MSG,
-    startOfMonth,
-    startOfNextMonth,
-  );
-  return results;
-};
-
-/**
  * Get the free reset amount for a user
  * @param user - The user
  * @returns The free reset amount
@@ -1001,14 +969,11 @@ export const isSkillVisible = (
   includeHidden: boolean,
 ) => includeHidden || (!skill.hidden && !skill.folder?.hidden);
 
-/** Include pre-migration logs while persisting claims before their audit log is written. */
-export const getMonthlyResetState = (user: UserData, loggedCount: number) => {
+/** Free resets claimed this UTC month, persisted by the guarded reset UPDATE. */
+export const getMonthlyResetState = (user: UserData) => {
   const month = getUtcMonthKey();
   return {
     month,
-    count: Math.max(
-      loggedCount,
-      user.monthlySkillResets?.month === month ? user.monthlySkillResets.count : 0,
-    ),
+    count: user.monthlySkillResets?.month === month ? user.monthlySkillResets.count : 0,
   };
 };
