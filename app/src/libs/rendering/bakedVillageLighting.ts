@@ -352,6 +352,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       if (dirty) {
         dirty = false;
         lights = [];
+        const radiance: VillageLight[] = [];
         for (const fixture of fixtures) {
           if (fixture.source.destroyed || !fixture.source.parent) continue;
           const m = origin(fixture.source, matrices),
@@ -369,21 +370,35 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
                 { x: 0, y: 0, height: 0 },
               )
             : { x: 0.5, y: 0.65, height: 0.3 };
-          const point = m.apply({
-            x:
-              (average.x - fixture.source.anchor.x) * fixture.source.texture.orig.width,
-            y:
-              (average.y - fixture.source.anchor.y) *
-              fixture.source.texture.orig.height,
-          });
-          fixture.light = {
-            x: point.x,
-            y: point.y - average.height * height,
-            height: average.height * height,
-            reach: height * (d.shadowCaster === "building" ? 2.5 : 1.8),
-            owner: fixture.source,
+          const groundLight = (
+            emitter: typeof average,
+            reach: number,
+          ): VillageLight => {
+            const point = m.apply({
+              x:
+                (emitter.x - fixture.source.anchor.x) *
+                fixture.source.texture.orig.width,
+              y:
+                (emitter.y - fixture.source.anchor.y) *
+                fixture.source.texture.orig.height,
+            });
+            return {
+              x: point.x,
+              y: point.y - emitter.height * height,
+              height: emitter.height * height,
+              reach,
+              owner: fixture.source,
+            };
           };
+          fixture.light = groundLight(
+            average,
+            height * (d.shadowCaster === "building" ? 2.5 : 1.8),
+          );
           lights.push(fixture.light);
+          radiance.push(fixture.light);
+          // Authored windows add entrance pools to the cached map without adding live shadow sources.
+          for (const emitter of emitters ?? [])
+            radiance.push(groundLight(emitter, height * 1.3));
         }
         for (const building of buildings) {
           building.transform.copyFrom(origin(building.source, matrices));
@@ -413,7 +428,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
           );
         }
         const previousField = lightField;
-        lightField = createVillageLightField(lights);
+        lightField = createVillageLightField(radiance);
         base.setWarmField(lightField);
         previousField?.texture.destroy(true);
       }

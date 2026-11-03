@@ -11,9 +11,9 @@ it("rasterizes broad radiance once per source set and ignores invalid fixtures",
   try {
     expect(createVillageLightField([{ x: NaN, y: 0, height: 1, reach: 20 }])).toBeNull();
     const field = createVillageLightField([{ x: 20, y: 40, height: 10, reach: 100 }])!;
-    expect(field.bounds).toEqual({ minX: -80, maxX: 120, minY: -10, maxY: 90 });
+    expect(field.bounds).toEqual({ minX: -105, maxX: 145, minY: -22.5, maxY: 102.5 });
     expect([field.texture.width, field.texture.height]).toEqual([768, 384]);
-    expect(context.fillRect).toHaveBeenCalledTimes(1); field.texture.destroy(true);
+    expect(context.fillRect).toHaveBeenCalledTimes(2); field.texture.destroy(true);
   } finally { canvas.mockRestore(); }
 });
 
@@ -35,6 +35,11 @@ it("keeps light-map UVs anchored in the world through camera pan and zoom and ho
     }
     game.visualEffects.localLights = false;
     lighting.update({ x: 0, y: 1, z: 1, day: 0 }, { minX: 0, minY: 0, maxX: 100, maxY: 100 });
+    expect(uniforms.uLocalNight).toBe(0);
+    game.visualEffects.localLights = true;
+    lighting.update({ x: 0, y: 1, z: 1, day: .5 }, { minX: 0, minY: 0, maxX: 100, maxY: 100 });
+    expect(uniforms.uLocalNight).toBe(.75);
+    lighting.update({ x: 0, y: 1, z: 1, day: 1 }, { minX: 0, minY: 0, maxX: 100, maxY: 100 });
     expect(uniforms.uLocalNight).toBe(0);
     lighting.setWarmField(null); expect(filter.resources.uWarmMap).toBe(Texture.EMPTY.source);
   } finally { world.destroy({ children: true }); for (const fn of cleanup) fn(); texture.destroy(true); }

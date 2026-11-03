@@ -8,4 +8,5 @@ export const WORLD_DETAIL = {
   routeCornerSamples: 3,
   routeMotes: 12,
   routeMoteSpacing: 1.1,
+  travelCharacters: 20,
 };

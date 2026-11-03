@@ -122,8 +122,8 @@ describe("travel actor artwork loading", () => {
     const users = Array.from({ length: 80 }, (_, i) => player(i, { longitude: i % 10, latitude: Math.floor(i / 10) }));
     actors.sync(snapshot(users));
     const roots = actors.container.children.filter(root => root.label?.startsWith("user:"));
-    expect(roots).toHaveLength(80);
-    const move = (offset: number) => actors.animate(frame, new Map(roots.map((root, i) => [users[i]!.userId, { x: i * 100, y: i * 40 + offset, direction: null, facing: 1 }])));
+    expect(roots).toHaveLength(20);
+    const move = (offset: number) => actors.animate(frame, new Map(roots.map((root, i) => [root.label.slice("user:".length), { x: i * 100, y: i * 40 + offset, direction: null, facing: 1 }])));
     move(0); const keys = roots.map(root => root.zIndex);
     stage.renderGroup!.structureDidChange = false;
     move(1);
@@ -233,13 +233,16 @@ describe("travel actor artwork loading", () => {
     expect(root.y).not.toBe(arrived.y);
   });
 
-  it("keeps 100 pending actors visible and pickable at their own body positions", async () => {
+  it("caps pending characters at twenty and keeps their bodies pickable without adding singleton badges", async () => {
     const pending = holdCharacters();
     const { actors, grid, depth, snapshot } = fixture();
     actors.sync(snapshot(Array.from({ length: 100 }, (_, index) => player(index))));
-    expect(pending.create).toHaveBeenCalledTimes(100);
-    expect(actors.container.children).toHaveLength(100);
-    for (const root of actors.container.children) {
+    expect(pending.create).toHaveBeenCalledTimes(20);
+    expect(actors.container.children).toHaveLength(20);
+    const bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(actors.container.children.filter(root => root.label.startsWith("count:"))).toHaveLength(0);
+    for (const root of bodies) {
       const index = Number(root.label.slice("user:loading-".length));
       const tile = grid.getHex({ col: index % 10, row: Math.floor(index / 10) })!;
       const body = root.children.find((child) => child.label === "avatar");
@@ -252,6 +255,67 @@ describe("travel actor artwork loading", () => {
     }
     pending.release(); await settle();
     expect(actors.container.children.every((root) => !root.children.some((child) => child.label === "avatar"))).toBe(true);
+  });
+
+  it("retains the viewer, promotes real movement, ignores activity-only updates and preserves full crowd totals", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    let users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: 4, latitude: 4, updatedAt: new Date(i) }));
+    users.push(player(99, { userId: "viewer", longitude: 4, latitude: 4, updatedAt: new Date(0) }));
+    actors.sync(snapshot(users));
+    const bodies = () => actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(20);
+    expect(bodies().some(root => root.label === "user:viewer")).toBe(true);
+    expect(bodies().some(root => root.label === "user:loading-0")).toBe(false);
+    const original = bodies();
+    users = users.map(user => user.userId === "loading-0" ? { ...user, updatedAt: new Date(999999), curHealth: 10 } : user);
+    actors.sync(snapshot(users));
+    expect(bodies()).toEqual(original);
+    users = users.map(user => user.userId === "loading-0" ? { ...user, latitude: 5 } : user);
+    actors.sync(snapshot(users));
+    expect(bodies()).toHaveLength(20);
+    expect(bodies().some(root => root.label === "user:loading-0")).toBe(true);
+    expect(bodies().some(root => root.label === "user:viewer")).toBe(true);
+    const totals: string[] = [];
+    const visit = (root: Container) => { if (root instanceof Text) totals.push(root.text); for (const child of root.children) visit(child); };
+    for (const root of actors.container.children) if (root.label.startsWith("count:")) visit(root);
+    expect(totals).toEqual(["30"]);
+  });
+
+  it("fills the screen from its own crowd instead of reserving slots for recently active offscreen users", () => {
+    holdCharacters();
+    const { actors, grid, snapshot } = fixture();
+    const users = Array.from({ length: 40 }, (_, i) => player(i, {
+      longitude: i < 20 ? 1 : 8, latitude: i < 20 ? 1 : 8, updatedAt: new Date(i),
+    }));
+    const tile = grid.getHex({ col: 1, row: 1 })!;
+    actors.setViewport({ minX: -tile.center.x, maxX: -tile.center.x + 1, minY: -tile.center.y, maxY: -tile.center.y + 1 });
+    actors.sync(snapshot(users));
+    let bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(bodies.every(root => Number(root.label.slice("user:loading-".length)) < 20)).toBe(true);
+    const next = grid.getHex({ col: 8, row: 8 })!;
+    actors.setViewport({ minX: -next.center.x, maxX: -next.center.x + 1, minY: -next.center.y, maxY: -next.center.y + 1 });
+    bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(bodies.every(root => Number(root.label.slice("user:loading-".length)) >= 20)).toBe(true);
+  });
+
+  it("orders a batch of movement edges by their published clock instead of the source array", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: 4, latitude: 5 }));
+    users.push(player(99, { userId: "viewer", longitude: 4, latitude: 5 }));
+    const source = snapshot(users);
+    source.motionSteps = new Map(users.slice(0, 21).map((user, i) => [user.userId, {
+      from: { sector: 724, x: 4, y: 4 }, to: { sector: 724, x: 4, y: 5 },
+      startedAt: 100 - i, direction: "north" as const, facing: 1 as const,
+    }]));
+    actors.sync(source);
+    const ids = actors.container.children.filter(root => root.label.startsWith("user:")).map(root => root.label);
+    expect(ids).toHaveLength(20);
+    expect(ids).toContain("user:viewer");
+    for (let i = 0; i < 19; i++) expect(ids).toContain(`user:loading-${i}`);
   });
 
   it("atomically replaces the placeholder at the retained foot, scale and current position", async () => {

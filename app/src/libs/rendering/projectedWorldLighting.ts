@@ -118,7 +118,10 @@ export const createProjectedWorldLighting = (
       _breeze?: WorldWind,
     ) => {
       const shade = game.visualEffects.dayNight ? 1 - light.day : 0;
-      const localNight = game.visualEffects.localLights ? 1 - light.day : 0;
+      // Village lamps reach useful ground brightness during dusk, before full night arrives.
+      const localNight = game.visualEffects.localLights
+        ? 1 - (options.restoreWarmWindows ? light.day * light.day : light.day)
+        : 0;
       if (warmField) {
         world.updateLocalTransform();
         const next = world.localTransform;
@@ -308,7 +311,7 @@ void main() {
     vec3 screenPoint = vec3(vScreenPosition, 1.0);
     vec2 warmUV = vec2(dot(uWarmU, screenPoint), dot(uWarmV, screenPoint));
     float field = texture2D(uWarmMap, warmUV).r * step(0.0, warmUV.x) * step(warmUV.x, 1.0) * step(0.0, warmUV.y) * step(warmUV.y, 1.0);
-    lit += base * vec3(0.52, 0.34, 0.13) * field * uLocalNight;
+    lit += base * vec3(0.80, 0.48, 0.15) * field * uLocalNight;
   }
   gl_FragColor = vec4(min(vec3(1.0), lit) * source.a, source.a);
 }`;
