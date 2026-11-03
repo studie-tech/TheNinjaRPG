@@ -1,25 +1,9 @@
 import type { FederalStatus } from "@/drizzle/constants";
 import {
-  JUTSU_MAX_BARRIER_EQUIPPED,
-  JUTSU_MAX_EVENT_EQUIPPED,
-  JUTSU_MAX_FORBIDDEN_EQUIPPED,
-  JUTSU_MAX_HEAL_EQUIPPED,
-  JUTSU_MAX_PIERCE_EQUIPPED,
-  JUTSU_MAX_RESIDUAL_EQUIPPED,
-  JUTSU_MAX_SHIELD_EQUIPPED,
-  JUTSU_MAX_STUN_EQUIPPED,
   JUTSU_TRANSFER_FREE_AMOUNT,
   JUTSU_TRANSFER_FREE_GOLD,
   JUTSU_TRANSFER_FREE_NORMAL,
   JUTSU_TRANSFER_FREE_SILVER,
-  RANKED_LOADOUT_MAX_BARRIER_JUTSUS,
-  RANKED_LOADOUT_MAX_HEAL_JUTSUS,
-  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
-  RANKED_LOADOUT_MAX_SHIELD_JUTSUS,
-  RANKED_LOADOUT_MAX_STUN_JUTSUS,
-  RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
 } from "@/drizzle/constants";
 import type { Jutsu, UserJutsuWithRelations } from "@/drizzle/schema";
 import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
@@ -27,6 +11,8 @@ import type { MasteryStatSource } from "@/libs/mastery";
 import { calcJutsuEquipLimit, canUseJutsu } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
+import { tagTypes } from "@/validators/combat";
+import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
 /**
  * Get the number of free jutsu level transfers based on the federal status
@@ -71,7 +57,7 @@ type JutsuCapMatchInput = Pick<Jutsu, "effects" | "jutsuType">;
  * All jutsu category predicates (normal equip + ranked-only). Single definition of
  * what counts as residual / heal / poison / etc. so equip and ranked caps stay aligned.
  */
-export const JUTSU_CATEGORY_DEFS = [
+const namedCategories = [
   {
     key: "isResidual",
     label: "residual",
@@ -125,6 +111,12 @@ export const JUTSU_CATEGORY_DEFS = [
       jutsu.effects.some((e) => e.type === "poison"),
   },
   {
+    key: "isParry",
+    label: "parry",
+    matches: (jutsu: JutsuCapMatchInput) =>
+      jutsu.effects.some((e) => e.type === "parry"),
+  },
+  {
     key: "isIncreaseCost",
     label: "increasecost",
     matches: (jutsu: JutsuCapMatchInput) =>
@@ -137,6 +129,30 @@ export const JUTSU_CATEGORY_DEFS = [
       jutsu.effects.some((e) => e.type === "summon"),
   },
 ] as const;
+
+export const JUTSU_CATEGORY_DEFS: {
+  key: string;
+  label: string;
+  matches: (jutsu: JutsuCapMatchInput) => boolean;
+}[] = [
+  ...namedCategories,
+  ...tagTypes
+    .filter(
+      (tag) =>
+        !namedCategories.some(
+          (def) =>
+            def.label === tag ||
+            (tag === "pierce" && def.key === "isPierce") ||
+            (tag === "increasepoolcost" && def.key === "isIncreaseCost"),
+        ),
+    )
+    .map((tag) => ({
+      key: tag,
+      label: tag,
+      matches: (jutsu: JutsuCapMatchInput) =>
+        jutsu.effects.some((effect) => effect.type === tag),
+    })),
+];
 
 export type JutsuCapFlagKey = (typeof JUTSU_CATEGORY_DEFS)[number]["key"];
 export type JutsuCapFlags = Record<JutsuCapFlagKey, boolean>;
@@ -154,113 +170,72 @@ export const getJutsuCapFlags = (jutsu: JutsuCapMatchInput): JutsuCapFlags =>
     JUTSU_CATEGORY_DEFS.map((def) => [def.key, def.matches(jutsu)]),
   ) as JutsuCapFlags;
 
-/**
- * Normal equip caps. Subset of JUTSU_CATEGORY_DEFS enforced outside ranked.
- * Loadout / toggleEquip / startTraining / SQL CAS all loop this table.
- */
-export const JUTSU_EQUIP_CAPS = [
-  {
-    key: "isResidual",
-    max: JUTSU_MAX_RESIDUAL_EQUIPPED,
-    countAlias: "residual_cnt",
-    sql: { kind: "residual" as const },
-  },
-  {
-    key: "isPierce",
-    max: JUTSU_MAX_PIERCE_EQUIPPED,
-    countAlias: "pierce_cnt",
-    sql: { kind: "effect" as const, effectType: "pierce" },
-  },
-  {
-    key: "isEvent",
-    max: JUTSU_MAX_EVENT_EQUIPPED,
-    countAlias: "event_cnt",
-    sql: { kind: "jutsuType" as const, jutsuType: "EVENT" },
-  },
-  {
-    key: "isForbidden",
-    max: JUTSU_MAX_FORBIDDEN_EQUIPPED,
-    countAlias: "forbidden_cnt",
-    sql: { kind: "jutsuType" as const, jutsuType: "FORBIDDEN" },
-  },
-  {
-    key: "isBarrier",
-    max: JUTSU_MAX_BARRIER_EQUIPPED,
-    countAlias: "barrier_cnt",
-    sql: { kind: "effect" as const, effectType: "barrier" },
-  },
-  {
-    key: "isStun",
-    max: JUTSU_MAX_STUN_EQUIPPED,
-    countAlias: "stun_cnt",
-    sql: { kind: "effect" as const, effectType: "stun" },
-  },
-  {
-    key: "isShield",
-    max: JUTSU_MAX_SHIELD_EQUIPPED,
-    countAlias: "shield_cnt",
-    sql: { kind: "effect" as const, effectType: "shield" },
-  },
-  {
-    key: "isHeal",
-    max: JUTSU_MAX_HEAL_EQUIPPED,
-    countAlias: "heal_cnt",
-    sql: { kind: "effect" as const, effectType: "heal" },
-  },
-] as const satisfies readonly {
-  key: JutsuCapFlagKey;
+export type JutsuEquipCap = {
+  key: string;
   max: number;
   countAlias: string;
   sql:
     | { kind: "residual" }
     | { kind: "effect"; effectType: string }
     | { kind: "jutsuType"; jutsuType: string };
-}[];
+};
 
-export type JutsuEquipCap = (typeof JUTSU_EQUIP_CAPS)[number];
-export type JutsuCapCounts = Record<JutsuEquipCap["key"], number>;
+/** Resolve the applicable limits; null explicitly means unlimited. */
+export const buildJutsuEquipCaps = (
+  rules: JutsuEquipLimit[],
+  mode: "ranked" | "unranked",
+): JutsuEquipCap[] =>
+  rules.flatMap((rule, index) => {
+    const max = mode === "ranked" ? rule.rankedMaxEquipped : rule.unrankedMaxEquipped;
+    if (max === null) return [];
+    const special = rule.category;
+    const tag =
+      special === "increasepoolcost"
+        ? "increasecost"
+        : special === "pierce"
+          ? "piercing"
+          : special;
+    const def = JUTSU_CATEGORY_DEFS.find(
+      (entry) => entry.label === special || entry.label === tag,
+    );
+    if (!def) throw new Error("Unknown equip limit category");
+    return [
+      {
+        key: def.key,
+        max,
+        countAlias: `cap_${index}`,
+        sql:
+          special === "residual"
+            ? { kind: "residual" as const }
+            : special === "event" || special === "forbidden"
+              ? { kind: "jutsuType" as const, jutsuType: special.toUpperCase() }
+              : {
+                  kind: "effect" as const,
+                  effectType: special,
+                },
+      },
+    ];
+  });
 
-/**
- * Ranked loadout category caps. Predicates come from getJutsuCapFlags /
- * JUTSU_CATEGORY_DEFS; only the max values differ (or match equip for event/forbidden).
- */
-export const RANKED_JUTSU_CAPS = [
-  { key: "isResidual", max: RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS },
-  { key: "isPoison", max: RANKED_LOADOUT_MAX_POISON_JUTSUS },
-  { key: "isIncreaseCost", max: RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS },
-  { key: "isSummon", max: RANKED_LOADOUT_MAX_SUMMON_JUTSUS },
-  { key: "isBarrier", max: RANKED_LOADOUT_MAX_BARRIER_JUTSUS },
-  { key: "isStun", max: RANKED_LOADOUT_MAX_STUN_JUTSUS },
-  { key: "isShield", max: RANKED_LOADOUT_MAX_SHIELD_JUTSUS },
-  { key: "isHeal", max: RANKED_LOADOUT_MAX_HEAL_JUTSUS },
-  { key: "isEvent", max: JUTSU_MAX_EVENT_EQUIPPED },
-  { key: "isForbidden", max: JUTSU_MAX_FORBIDDEN_EQUIPPED },
-] as const satisfies readonly { key: JutsuCapFlagKey; max: number }[];
+export type JutsuCapCounts = Record<string, number>;
 
-/** Ranked select-UI warnings (subset of RANKED_JUTSU_CAPS shown when picking a jutsu). */
-export const RANKED_JUTSU_SELECT_WARNINGS = [
-  "isResidual",
-  "isPoison",
-  "isIncreaseCost",
-  "isHeal",
-] as const satisfies readonly JutsuCapFlagKey[];
-
-const emptyCapCounts = (): JutsuCapCounts =>
-  Object.fromEntries(JUTSU_EQUIP_CAPS.map((cap) => [cap.key, 0])) as JutsuCapCounts;
+const emptyCapCounts = (caps: JutsuEquipCap[]): JutsuCapCounts =>
+  Object.fromEntries(caps.map((cap) => [cap.key, 0])) as JutsuCapCounts;
 
 /** True when any normal-equip capped category flag is set (e.g. force-unequip on evolution). */
-export const hasAnyJutsuEquipCap = (flags: JutsuCapFlags) =>
-  JUTSU_EQUIP_CAPS.some((cap) => flags[cap.key]);
+export const hasAnyJutsuEquipCap = (flags: JutsuCapFlags, caps: JutsuEquipCap[]) =>
+  caps.some((cap) => flags[cap.key]);
 
 /** Equipped counts per normal-equip capped category. */
 export const countEquippedByCap = (
   equippedJutsus: { jutsu: JutsuCapMatchInput }[],
+  caps: JutsuEquipCap[],
 ): JutsuCapCounts => {
-  const counts = emptyCapCounts();
+  const counts = emptyCapCounts(caps);
   for (const uj of equippedJutsus) {
     const flags = getJutsuCapFlags(uj.jutsu);
-    for (const cap of JUTSU_EQUIP_CAPS) {
-      if (flags[cap.key]) counts[cap.key] += 1;
+    for (const cap of caps) {
+      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
     }
   }
   return counts;
@@ -270,17 +245,16 @@ export const countEquippedByCap = (
 export const canEquipUnderCaps = (
   flags: JutsuCapFlags,
   equippedCounts: JutsuCapCounts,
-) =>
-  JUTSU_EQUIP_CAPS.every((cap) => !flags[cap.key] || equippedCounts[cap.key] < cap.max);
+  caps: JutsuEquipCap[],
+) => caps.every((cap) => !flags[cap.key] || (equippedCounts[cap.key] ?? 0) < cap.max);
 
 /** First exceeded normal-equip cap for error messaging, if any. */
 export const findExceededJutsuEquipCap = (
   flags: JutsuCapFlags,
   equippedCounts: JutsuCapCounts,
+  caps: JutsuEquipCap[],
 ): (JutsuEquipCap & { label: string }) | undefined => {
-  const cap = JUTSU_EQUIP_CAPS.find(
-    (c) => flags[c.key] && equippedCounts[c.key] >= c.max,
-  );
+  const cap = caps.find((c) => flags[c.key] && (equippedCounts[c.key] ?? 0) >= c.max);
   if (!cap) return undefined;
   return { ...cap, label: getJutsuCategoryDef(cap.key).label };
 };
@@ -295,6 +269,7 @@ type JutsuLoadoutValidationInput = Pick<UserJutsuWithRelations, "jutsuId" | "jut
  * Optional exclusion callbacks expose categories while retaining string diagnostics.
  */
 export const computeJutsuLoadoutCapAssignments = (args: {
+  caps: JutsuEquipCap[];
   jutsuIds: string[];
   userjutsus: JutsuLoadoutValidationInput[];
   maxEquip: number;
@@ -303,10 +278,10 @@ export const computeJutsuLoadoutCapAssignments = (args: {
   ) => string | Pick<JutsuLoadoutExclusion, "message" | "reason"> | undefined;
   onExcluded?: (entry: JutsuLoadoutExclusion) => void;
 }): ComputedJutsuLoadout => {
-  const { jutsuIds, userjutsus, maxEquip, validateJutsu } = args;
+  const { jutsuIds, userjutsus, maxEquip, validateJutsu, caps } = args;
   const equipIds: string[] = [];
   const invalidJutsus: string[] = [];
-  const counts = emptyCapCounts();
+  const counts = emptyCapCounts(caps);
   /** Keep existing selection messages and sharing's structured exclusions in sync. */
   const exclude = (
     jutsuId: string,
@@ -343,8 +318,8 @@ export const computeJutsuLoadoutCapAssignments = (args: {
       exclude(jutsuId, `${userJutsu.jutsu.name}: equip limit reached`, "equip-limit");
       continue;
     }
-    for (const cap of JUTSU_EQUIP_CAPS) {
-      if (flags[cap.key] && counts[cap.key] >= cap.max) {
+    for (const cap of caps) {
+      if (flags[cap.key] && (counts[cap.key] ?? 0) >= cap.max) {
         exclude(
           jutsuId,
           `${userJutsu.jutsu.name}: ${getJutsuCategoryDef(cap.key).label} jutsu limit reached`,
@@ -355,8 +330,8 @@ export const computeJutsuLoadoutCapAssignments = (args: {
     }
 
     equipIds.push(jutsuId);
-    for (const cap of JUTSU_EQUIP_CAPS) {
-      if (flags[cap.key]) counts[cap.key] += 1;
+    for (const cap of caps) {
+      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
     }
   }
 
@@ -375,6 +350,7 @@ export const computeJutsuLoadoutCapAssignments = (args: {
  * loaded; the slim combat battle-state does not carry those relations.
  */
 export const computeJutsuLoadoutAssignments = (args: {
+  caps: JutsuEquipCap[];
   jutsuIds: string[];
   userjutsus: UserJutsuWithRelations[];
   user: NonNullable<UserWithRelations>;
@@ -387,6 +363,7 @@ export const computeJutsuLoadoutAssignments = (args: {
     jutsuIds,
     userjutsus,
     maxEquip: calcJutsuEquipLimit(user),
+    caps: args.caps,
     onExcluded: args.onExcluded,
     validateJutsu: ({ jutsu }) => {
       if (jutsu.hidden && !canChangeContent(user.role)) {

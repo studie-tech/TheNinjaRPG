@@ -1,6 +1,8 @@
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
+import { jutsuEquipLimit } from "@/drizzle/schema";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { RANKED_LOADOUT_MAX_HEAL_JUTSUS } from "@/drizzle/constants";
+
 import {
   item,
   jutsu,
@@ -23,7 +25,7 @@ import {
 
 const USER = "ranked-cleanup-user";
 const FAVORITE_HEAL_IDS = Array.from(
-  { length: RANKED_LOADOUT_MAX_HEAL_JUTSUS },
+  { length: 3 },
   (_, index) => `favorite-heal-${index}`,
 );
 const loadout = (jutsuIds: string[], weaponIds: string[] = []) => ({
@@ -40,6 +42,7 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
+      jutsuEquipLimit,
       rankedPvpQueue,
       rankedLoadout,
       rankedSeason,
@@ -51,6 +54,7 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
       { userId: USER, username: USER, rank: "JONIN", status: "AWAKE", rankedLp: 100 },
     ]);
     const db = await getTestDatabase();
+    await db.insert(jutsuEquipLimit).values(equipLimitFixture);
     await db.insert(jutsu).values(
       [
         ...["usable", "usable-two", ...FAVORITE_HEAL_IDS].map((id) => ({

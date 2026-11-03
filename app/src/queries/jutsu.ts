@@ -5,7 +5,7 @@ import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import { jutsu, jutsuLoadout, jutsuReskin, userData } from "@/drizzle/schema";
 import type { JutsuEquipCap } from "@/libs/jutsu";
-import { JUTSU_EQUIP_CAPS } from "@/libs/jutsu";
+
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
@@ -1361,6 +1361,7 @@ export const updateUserJutsuForRollbackEquipIfOverCap = (
 
   maxEquip: number,
   flags: import("@/libs/jutsu").JutsuCapFlags,
+  caps: JutsuEquipCap[],
 ) =>
   client
     .update(userJutsu)
@@ -1370,7 +1371,7 @@ export const updateUserJutsuForRollbackEquipIfOverCap = (
         eq(userJutsu.id, userJutsuId),
         eq(userJutsu.userId, userId),
         eq(userJutsu.equipped, true),
-        equipCapRollbackGuardSql(userId, maxEquip, flags),
+        equipCapRollbackGuardSql(userId, maxEquip, flags, caps),
       ),
     );
 
@@ -1385,6 +1386,7 @@ export const updateUserJutsuForTryEquipUserJutsuAtomically = (
 
   maxEquip: number,
   flags: import("@/libs/jutsu").JutsuCapFlags,
+  caps: JutsuEquipCap[],
 ) =>
   client
     .update(userJutsu)
@@ -1394,7 +1396,7 @@ export const updateUserJutsuForTryEquipUserJutsuAtomically = (
         eq(userJutsu.id, userJutsuId),
         eq(userJutsu.userId, userId),
         eq(userJutsu.equipped, false),
-        equipCapUnderGuardSql(userId, maxEquip, flags),
+        equipCapUnderGuardSql(userId, maxEquip, flags, caps),
       ),
     );
 
@@ -1595,9 +1597,10 @@ const equipCapRollbackGuardSql = (
   userId: string,
   maxEquip: number,
   flags: JutsuCapFlags,
+  caps: JutsuEquipCap[],
 ) => {
   const parts = [equippedRankExceedsCapSql(userId, maxEquip)];
-  for (const cap of JUTSU_EQUIP_CAPS) {
+  for (const cap of caps) {
     if (flags[cap.key]) {
       parts.push(
         equippedRankExceedsCapSql(userId, cap.max, equipCapCategorySql(cap, "j_rank")),
@@ -1612,16 +1615,17 @@ const equipCapUnderGuardSql = (
   userId: string,
   maxEquip: number,
   flags: JutsuCapFlags,
+  caps: JutsuEquipCap[],
 ) => {
   const parts = [sql`c.total < ${maxEquip}`];
-  for (const cap of JUTSU_EQUIP_CAPS) {
+  for (const cap of caps) {
     if (flags[cap.key]) {
       parts.push(sql`${sql.raw(`c.${cap.countAlias}`)} < ${cap.max}`);
     }
   }
   return sql`(
     SELECT ${sql.join(parts, sql` AND `)}
-    FROM ${equippedCapCountsDerivedSql(userId)} AS c
+    FROM ${equippedCapCountsDerivedSql(userId, caps)} AS c
   )`;
 };
 
@@ -1652,15 +1656,15 @@ const equipCapCategorySql = (cap: JutsuEquipCap, alias: string) => {
 };
 
 /** Materialize all equipped-jutsu cap counts in one pass so UPDATE guards avoid MySQL ERROR 1093. */
-const equippedCapCountsDerivedSql = (userId: string) => {
-  const sumCols = JUTSU_EQUIP_CAPS.map(
+const equippedCapCountsDerivedSql = (userId: string, caps: JutsuEquipCap[]) => {
+  const sumCols = caps.map(
     (cap) =>
       sql`COALESCE(SUM(CASE WHEN ${equipCapCategorySql(cap, "j_cap")} THEN 1 ELSE 0 END), 0) AS ${sql.raw(cap.countAlias)}`,
   );
   return sql`(
     SELECT
-      COUNT(*) AS total,
-      ${sql.join(
+      COUNT(*) AS total
+      ${sumCols.length ? sql`,` : sql``} ${sql.join(
         sumCols,
         sql`,
       `,

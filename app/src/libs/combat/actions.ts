@@ -26,7 +26,6 @@ import {
   PET_BATTLE_CONFIG,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
-  SHARED_COOLDOWN_ROUNDS,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import {
@@ -72,7 +71,6 @@ import {
   isUserImmobilized,
   isUserStealthed,
   isUserSummonPrevented,
-  tagHasSharedCooldown,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
@@ -460,13 +458,10 @@ export const getActiveBasicActions = (
     const ba = Object.values(active).find((a) => a.id === aid);
     if (ba) {
       // A basic-action GCD must remain a full shared lock even under cooldown reductions.
-      const hasSharedCooldown = tracking?.some(
+      const sharedCooldown = tracking?.find(
         (action) => action.id === aid && action.cooldown !== undefined,
       );
-      ba.cooldown = Math.max(
-        hasSharedCooldown ? SHARED_COOLDOWN_ROUNDS : 0,
-        ba.cooldown + mod,
-      );
+      ba.cooldown = Math.max(sharedCooldown?.cooldown ?? 0, ba.cooldown + mod);
     }
   });
 
@@ -1454,7 +1449,7 @@ export const performBattleAction = (props: {
  *
  * The performed action restarts its own base cooldown, dropping any GCD override it
  * carried. Every other action sharing one of its shared-cooldown tags is then locked
- * for SHARED_COOLDOWN_ROUNDS, unless it is already locked for longer. "Longer" is
+ * for the longest matching tag duration, unless it is already locked for longer. "Longer" is
  * judged against the effective cooldown, including a previous GCD override and
  * active basic-action modifiers, as availableUserActions enforces.
  */
@@ -1464,12 +1459,17 @@ export const applyActionCooldowns = (
   action: CombatAction,
 ) => {
   const { round } = battle;
-  const sharedTags = new Set<string>(
-    action.effects.filter((effect) => tagHasSharedCooldown(effect)).map((e) => e.type),
-  );
-  const sharesCooldown = (effects: { type: string }[]) =>
-    effects.some((e) => sharedTags.has(e.type));
-  const applyGcd = !!action.cooldown && action.cooldown > 0 && sharedTags.size > 0;
+  const config = battle.extraState.sharedCooldowns ?? {};
+  const sharedTags = new Set<string>(action.effects.map((effect) => effect.type));
+  const sharedRounds = (effects: { type: string }[]) =>
+    effects.reduce(
+      (longest, effect) =>
+        sharedTags.has(effect.type)
+          ? Math.max(longest, config[effect.type] ?? 0)
+          : longest,
+      0,
+    );
+  const applyGcd = !!action.cooldown && action.cooldown > 0;
   // Mirrors availableUserActions, which treats a falsy lastUsedRound as never used
   const lockedFor = (lastUsedRound: number, cooldown: number) =>
     lastUsedRound ? lastUsedRound + cooldown - round : 0;
@@ -1480,10 +1480,11 @@ export const applyActionCooldowns = (
     if (uj.jutsuId === action.id && action.type === "jutsu") {
       uj.lastUsedRound = round;
       uj.originalCooldown = jutsu.cooldown;
-    } else if (applyGcd && sharesCooldown(jutsu.effects)) {
-      if (lockedFor(uj.lastUsedRound, uj.originalCooldown) < SHARED_COOLDOWN_ROUNDS) {
+    } else if (applyGcd && sharedRounds(jutsu.effects) > 0) {
+      const rounds = sharedRounds(jutsu.effects);
+      if (lockedFor(uj.lastUsedRound, uj.originalCooldown) < rounds) {
         uj.lastUsedRound = round;
-        uj.originalCooldown = SHARED_COOLDOWN_ROUNDS;
+        uj.originalCooldown = rounds;
       }
     }
   });
@@ -1496,11 +1497,12 @@ export const applyActionCooldowns = (
       ui.originalCooldown = item.cooldown;
     } else if (
       applyGcd &&
-      sharesCooldown([...item.effects, ...(ui.imbuementEffects ?? [])])
+      sharedRounds([...item.effects, ...(ui.imbuementEffects ?? [])]) > 0
     ) {
-      if (lockedFor(ui.lastUsedRound, ui.originalCooldown) < SHARED_COOLDOWN_ROUNDS) {
+      const rounds = sharedRounds([...item.effects, ...(ui.imbuementEffects ?? [])]);
+      if (lockedFor(ui.lastUsedRound, ui.originalCooldown) < rounds) {
         ui.lastUsedRound = round;
-        ui.originalCooldown = SHARED_COOLDOWN_ROUNDS;
+        ui.originalCooldown = rounds;
       }
     }
   });
@@ -1511,16 +1513,17 @@ export const applyActionCooldowns = (
       if (!tracking) return;
       tracking.lastUsedRound = round;
       delete tracking.cooldown;
-    } else if (applyGcd && sharesCooldown(ba.effects)) {
+    } else if (applyGcd && sharedRounds(ba.effects) > 0) {
+      const rounds = sharedRounds(ba.effects);
       const lastUsedRound = tracking?.lastUsedRound ?? ba.lastUsedRound ?? 0;
       const cooldown = ba.cooldown;
-      if (lockedFor(lastUsedRound, cooldown) < SHARED_COOLDOWN_ROUNDS) {
+      if (lockedFor(lastUsedRound, cooldown) < rounds) {
         if (!tracking) {
           tracking = { id: ba.id, lastUsedRound };
           user.basicActions.push(tracking);
         }
         tracking.lastUsedRound = round;
-        tracking.cooldown = SHARED_COOLDOWN_ROUNDS;
+        tracking.cooldown = rounds;
       }
     }
   });

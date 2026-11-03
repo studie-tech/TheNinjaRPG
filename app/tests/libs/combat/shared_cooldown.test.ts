@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { SHARED_COOLDOWN_ROUNDS } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   applyActionCooldowns,
@@ -23,6 +22,7 @@ import {
  * be performed, then applyActionCooldowns (via performBattleAction) once it is.
  */
 
+const SHARED_COOLDOWN_ROUNDS = 3;
 const USER = "player";
 
 type SharedTag = "clearprevent" | "debuffprevent" | "clear";
@@ -84,6 +84,7 @@ const makeGcdBattle = (jutsus: Jutsu[], items: Item[] = []) => {
     lastUsedRound: ba.lastUsedRound ?? 0,
   }));
   return makeInjectBattle(user, {
+    sharedCooldowns: {"barrier": 3, "buffprevent": 3, "cleanse": 3, "cleanseprevent": 3, "clear": 3, "clearprevent": 3, "consume": 3, "siphon": 3, "debuffprevent": 3, "drain": 3, "increasepoolcost": 3, "moveprevent": 3, "pierce": 3, "poison": 3, "seal": 3, "stun": 3, "summon": 3, "vamp": 3},
     jutsus: Object.fromEntries(jutsus.map((j) => [j.id, j])),
     items: Object.fromEntries(items.map((i) => [i.id, i])),
   });
@@ -111,6 +112,48 @@ const usableRounds = (battle: CompleteBattle, actionId: string, from: number, to
   });
 
 describe("global cooldown", () => {
+  it("uses the configured basic-action lock under cooldown reduction", () => {
+    const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")]);
+    battle.extraState.sharedCooldowns = { clear: 5 };
+    battle.usersEffects.push(makeEffect("decreasecooldown", { power: 12, rounds: 20, actionsAffected: ["clear"] }, { targetId: USER }));
+    perform(battle, 1, "rip");
+    expect(usableRounds(battle, "clear", 1, 7)).toEqual([6, 7]);
+  });
+
+  it("applies a custom duration through an item's imbuement", () => {
+    const item = sharedConsumable("potion", 8, []);
+    const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")], [item]);
+    battle.extraState.sharedCooldowns = { clear: 4 };
+    battle.usersState[0]!.items[0]!.imbuementEffects = [makeEffect("clear", { rounds: 2 })];
+    perform(battle, 1, "rip");
+    expect(usableRounds(battle, item.id, 1, 6)).toEqual([5, 6]);
+  });
+
+  it("uses different durations for configured tags", () => {
+    const battle = makeGcdBattle([sharedJutsu("a", 5, "clear"), sharedJutsu("b", 8, "clear")]);
+    battle.extraState.sharedCooldowns = { clear: 5 };
+    perform(battle, 1, "a");
+    expect(usableRounds(battle, "b", 1, 7)).toEqual([6, 7]);
+  });
+
+  it("uses the longest matching tag, ignoring tags only on the source", () => {
+    const a = sharedJutsu("a", 5, "clear");
+    a.effects.push(makeTag("clearprevent", { rounds: 2 }), makeTag("debuffprevent", { rounds: 2 }));
+    const b = sharedJutsu("b", 8, "clear");
+    b.effects.push(makeTag("clearprevent", { rounds: 2 }));
+    const battle = makeGcdBattle([a, b]);
+    battle.extraState.sharedCooldowns = { clear: 2, clearprevent: 5, debuffprevent: 10 };
+    perform(battle, 1, "a");
+    expect(usableRounds(battle, "b", 1, 7)).toEqual([6, 7]);
+  });
+
+  it("does not lock tags removed from configuration", () => {
+    const battle = makeGcdBattle([sharedJutsu("a", 5, "clear"), sharedJutsu("b", 8, "clear")]);
+    battle.extraState.sharedCooldowns = {};
+    perform(battle, 1, "a");
+    expect(usable(battle, "b")).toBe(true);
+  });
+
   it("locks every other shared action for the GCD after one is used", () => {
     const battle = makeGcdBattle([
       sharedJutsu("a", 5, "clearprevent"),

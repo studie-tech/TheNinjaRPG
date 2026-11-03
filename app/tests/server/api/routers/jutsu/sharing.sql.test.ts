@@ -1,3 +1,5 @@
+import { jutsuEquipLimit } from "@/drizzle/schema";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
@@ -13,6 +15,8 @@ const text = exportJutsuLoadout(["sharing-b", "sharing-a"]);
 
 describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
   beforeEach(async () => {
+    await resetTables(jutsuEquipLimit);
+    await (await getTestDatabase()).insert(jutsuEquipLimit).values(equipLimitFixture);
     await resetTables(jutsuLoadout, userJutsu, jutsu, userData);
     await insertUsers([{ userId: USER, username: USER, rank: "GENIN", level: 20, federalStatus: "GOLD", isOutlaw: true }]);
     const database = await getTestDatabase();

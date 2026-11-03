@@ -1,3 +1,5 @@
+import { combatSharedCooldown, jutsuEquipLimit } from "@/drizzle/schema";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { afterEach, expect, it, vi } from "bun:test";
 import { getTableColumns } from "drizzle-orm";
 import { battle, item, userData, userItem } from "@/drizzle/schema";
@@ -60,6 +62,8 @@ it.each([true, false])(
           ? { id: "Default", rules: [], includeDefaultRules: false } : undefined,
       }) }),
       select: () => ({ from: (table: object) => {
+        if (table === combatSharedCooldown) return { orderBy: async () => [] };
+        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimitFixture };
         const builder = {
           innerJoin: () => builder,
           where: () => builder,

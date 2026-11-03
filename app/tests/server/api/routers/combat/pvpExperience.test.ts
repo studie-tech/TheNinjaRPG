@@ -1,3 +1,5 @@
+import { combatSharedCooldown, jutsuEquipLimit } from "@/drizzle/schema";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getTableColumns, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
@@ -40,6 +42,8 @@ const startBattle = async (battleType: BattleType, repeats: number, defenderAi =
       findFirst: async () => key === "aiProfile" ? { id: "Default", rules: [], includeDefaultRules: false } : undefined,
     }) }),
     select: () => ({ from: (table: object) => {
+        if (table === combatSharedCooldown) return { orderBy: async () => [] };
+        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimitFixture };
       const rows = table === battleHistory ? [{ count: repeats }] : table === userData ? [{ average: 0 }] : [];
       const builder = {
         innerJoin: () => builder,

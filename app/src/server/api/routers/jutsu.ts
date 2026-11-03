@@ -41,6 +41,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
+import type { JutsuEquipCap } from "@/libs/jutsu";
 import {
   type ComputedJutsuLoadout,
   canEquipUnderCaps,
@@ -192,6 +193,7 @@ import {
   updateUserJutsuForUpdateReskin,
   updateUserJutsuForUpdateReskin2,
 } from "@/queries/jutsu";
+import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import {
   debitUserMoney,
   fetchLoadoutUser,
@@ -497,7 +499,8 @@ export const jutsuRouter = createTRPCRouter({
       // toggleEquip. Note this makes the mutation no longer read-only on the user
       // row: fetchUpdatedUser may persist the usual throttled regen/quest
       // maintenance (never money/XP/loadout state).
-      const [loadouts, data, userjutsus] = await Promise.all([
+      const [caps, loadouts, data, userjutsus] = await Promise.all([
+        fetchJutsuEquipCaps(ctx.drizzle),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
@@ -515,7 +518,13 @@ export const jutsuRouter = createTRPCRouter({
         userjutsus,
         user,
         (jutsuIds) =>
-          computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user, masteries }),
+          computeJutsuLoadoutAssignments({
+            caps,
+            jutsuIds,
+            userjutsus,
+            user,
+            masteries,
+          }),
       );
       const loadout = loadouts.find((loadout) => loadout.id === id);
       const progression =
@@ -833,6 +842,7 @@ export const jutsuRouter = createTRPCRouter({
         allLoadouts,
         conflictingReskin,
         queuedJutsuIds,
+        caps,
       ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
@@ -840,6 +850,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         findJutsuReskinForEvolveJutsu(ctx.drizzle, ctx, input),
         fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
+        fetchJutsuEquipCaps(ctx.drizzle),
       ]);
       const { user } = snapshot;
       // Guards
@@ -895,7 +906,7 @@ export const jutsuRouter = createTRPCRouter({
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
       const isRestrictedEquipType =
-        hasAnyJutsuEquipCap(evolutionCapFlags) ||
+        hasAnyJutsuEquipCap(evolutionCapFlags, caps) ||
         !hasRequiredSkill(evolutionJutsu, user);
       // Single compare-and-swap update that applies every userJutsu-row change at once:
       // - jutsuId/level/experience/finishTraining — the evolution itself
@@ -1323,7 +1334,8 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, fetchedJutsus, students] = await Promise.all([
+      const [caps, data, info, fetchedJutsus, students] = await Promise.all([
+        fetchJutsuEquipCaps(ctx.drizzle),
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
@@ -1345,7 +1357,7 @@ export const jutsuRouter = createTRPCRouter({
       const equippedJutsus = userjutsus.filter((uj) => uj.equipped);
       const curEquip = equippedJutsus.length;
       const maxEquip = calcJutsuEquipLimit(user);
-      const equippedCapCounts = countEquippedByCap(equippedJutsus);
+      const equippedCapCounts = countEquippedByCap(equippedJutsus, caps);
 
       if (!info) return errorResponse("Jutsu not found");
       if (!canTrainJutsu(info, user, masteries) && !info.parentJutsuId)
@@ -1498,7 +1510,7 @@ export const jutsuRouter = createTRPCRouter({
           hasRequiredSkill(info, user) &&
           curEquip < maxEquip &&
           checkJutsuBloodlineItem(info, user.items) &&
-          canEquipUnderCaps(capFlags, equippedCapCounts);
+          canEquipUnderCaps(capFlags, equippedCapCounts, caps);
 
         const newUserJutsuId = nanoid();
         // onDuplicateKeyUpdate no-op (`id = id`) absorbs unique-index races. PlanetScale
@@ -1563,6 +1575,7 @@ export const jutsuRouter = createTRPCRouter({
                 userJutsuId: newUserJutsuId,
                 maxEquip,
                 flags: capFlags,
+                caps,
               })
             : undefined,
         ]);
@@ -1737,7 +1750,8 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [userjutsus, data, loadouts] = await Promise.all([
+      const [caps, userjutsus, data, loadouts] = await Promise.all([
+        fetchJutsuEquipCaps(ctx.drizzle),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -1756,7 +1770,7 @@ export const jutsuRouter = createTRPCRouter({
       const curJutsuFlags = userjutsuObj
         ? getJutsuCapFlags(userjutsuObj.jutsu)
         : undefined;
-      const equippedCapCounts = countEquippedByCap(equippedJutsus);
+      const equippedCapCounts = countEquippedByCap(equippedJutsus, caps);
       const newEquippedState = !isEquipped;
       const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
       let canProjectLoadout = false;
@@ -1782,7 +1796,11 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You cannot equip more jutsu");
       }
       if (!isEquipped && curJutsuFlags) {
-        const exceeded = findExceededJutsuEquipCap(curJutsuFlags, equippedCapCounts);
+        const exceeded = findExceededJutsuEquipCap(
+          curJutsuFlags,
+          equippedCapCounts,
+          caps,
+        );
         if (exceeded) {
           return errorResponse(
             `You cannot equip more than ${exceeded.max} ${exceeded.label} jutsu`,
@@ -1800,6 +1818,7 @@ export const jutsuRouter = createTRPCRouter({
           userJutsuId: input.userJutsuId,
           maxEquip,
           flags: getJutsuCapFlags(userjutsuObj.jutsu),
+          caps,
         });
         if (equipResult === "already-equipped") {
           return errorResponse(
@@ -2387,7 +2406,8 @@ const prepareJutsuLoadoutImport = async (
   if (!parsed.success)
     return errorResponse("Invalid or unsupported jutsu loadout text");
   const jutsuIds = parsed.data.jutsuIds;
-  const [loadouts, data, userjutsus, content] = await Promise.all([
+  const [caps, loadouts, data, userjutsus, content] = await Promise.all([
+    fetchJutsuEquipCaps(client),
     fetchJutsuLoadouts(client, userId),
     fetchUpdatedUser({ client, userId }),
     fetchUserJutsus(client, userId),
@@ -2403,6 +2423,7 @@ const prepareJutsuLoadoutImport = async (
   if (!destination.ok) return errorResponse(destination.message);
   const loadout = destination.loadout;
   const preview = computeJutsuLoadoutPreview({
+    caps,
     jutsuIds,
     userjutsus,
     user,
@@ -2879,15 +2900,19 @@ export const rollbackEquipIfOverCap = async (args: {
   userJutsuId: string;
   maxEquip: number;
   flags: JutsuCapFlags;
+  caps: JutsuEquipCap[];
 }): Promise<boolean> => {
-  const { client, userId, userJutsuId, maxEquip, flags } = args;
-  const rollback = await updateUserJutsuForRollbackEquipIfOverCap(
-    client,
-    userJutsuId,
-    userId,
-
-    maxEquip,
-    flags,
+  const { client, userId, userJutsuId, maxEquip, flags, caps } = args;
+  // Retry cleanup independently so a committed equip still receives its overflow check.
+  const rollback = await retryOnDeadlock(async () =>
+    updateUserJutsuForRollbackEquipIfOverCap(
+      client,
+      userJutsuId,
+      userId,
+      maxEquip,
+      flags,
+      caps,
+    ),
   );
   return rollback.rowsAffected === 0;
 };
@@ -2910,16 +2935,19 @@ export const tryEquipUserJutsuAtomically = async (args: {
   userJutsuId: string;
   maxEquip: number;
   flags: JutsuCapFlags;
+  caps: JutsuEquipCap[];
 }): Promise<TryEquipUserJutsuResult> => {
-  const { client, userId, userJutsuId, maxEquip, flags } = args;
+  const { client, userId, userJutsuId, maxEquip, flags, caps } = args;
 
-  const result = await updateUserJutsuForTryEquipUserJutsuAtomically(
-    client,
-    userJutsuId,
-    userId,
-
-    maxEquip,
-    flags,
+  const result = await retryOnDeadlock(async () =>
+    updateUserJutsuForTryEquipUserJutsuAtomically(
+      client,
+      userJutsuId,
+      userId,
+      maxEquip,
+      flags,
+      caps,
+    ),
   );
   if (result.rowsAffected !== 1) {
     // Distinguish double-click / concurrent equip from a genuine cap rejection.
@@ -2933,6 +2961,7 @@ export const tryEquipUserJutsuAtomically = async (args: {
     userJutsuId,
     maxEquip,
     flags,
+    caps,
   });
   return kept ? "equipped" : "cap-reached";
 };

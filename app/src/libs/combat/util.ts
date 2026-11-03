@@ -39,7 +39,6 @@ import {
   PVP_KILL_TOKEN_REWARD_ASSASSIN,
   PvpBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
-  SHARED_COOLDOWN_TAGS,
   STREAK_LEVEL_DIFF,
   WAR_HEALTH_ANBU_RECOVER,
   WAR_HEALTH_ANBU_REMOVE,
@@ -934,13 +933,6 @@ export const reconcileLobbyPools = (
     originalPools.curStamina,
     getEffectiveMaxPool(user, effects, "Stamina"),
   );
-};
-
-/**
- * Check if a single tag is a shared cooldown tag
- */
-export const tagHasSharedCooldown = (effect: { type: string }) => {
-  return SHARED_COOLDOWN_TAGS.some((tag) => effect.type === tag);
 };
 
 /**

@@ -14,7 +14,11 @@ import {
   RANKED_STREAK_BONUS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu, UserData } from "@/drizzle/schema";
-import { getJutsuCapFlags, getJutsuCategoryDef, RANKED_JUTSU_CAPS } from "@/libs/jutsu";
+import {
+  getJutsuCapFlags,
+  getJutsuCategoryDef,
+  type JutsuEquipCap,
+} from "@/libs/jutsu";
 
 /**
  * Determine player rank based on LP and top players
@@ -121,7 +125,7 @@ export const getRankedRadius = (secondsInQueue: number): number => {
  * @param jutsus - The jutsu loadout to validate
  * @returns An object with a check flag and a message if the loadout is invalid
  */
-export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
+export const validateJutsuLoadout = (jutsus: Jutsu[], caps: JutsuEquipCap[]) => {
   const skillGatedJutsu = jutsus.find((jutsu) => jutsu.requiredSkillId);
   if (skillGatedJutsu) {
     return {
@@ -150,7 +154,7 @@ export const validateJutsuLoadout = (jutsus: Jutsu[]) => {
   let message = "";
 
   const flagged = jutsus.map((jutsu) => getJutsuCapFlags(jutsu));
-  for (const cap of RANKED_JUTSU_CAPS) {
+  for (const cap of caps) {
     const count = flagged.filter((flags) => flags[cap.key]).length;
     if (count > cap.max) {
       check = false;

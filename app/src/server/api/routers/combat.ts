@@ -143,7 +143,7 @@ import {
 import type { CoopEncounter } from "@/libs/coop";
 import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
-import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   anonymousSpriteAppearance,
@@ -1229,6 +1229,10 @@ export const combatRouter = createTRPCRouter({
             user,
             (jutsuIds) =>
               computeJutsuLoadoutCapAssignments({
+                caps: buildJutsuEquipCaps(
+                  data.jutsuEquipLimits,
+                  userBattle.battleType === "RANKED_PVP" ? "ranked" : "unranked",
+                ),
                 jutsuIds,
                 userjutsus,
                 maxEquip: calcJutsuEquipLimit(user),
@@ -1967,7 +1971,16 @@ export const initiateBattle = async (
   // Use Promise.all to fetch all independent data in parallel
   const [
     territoryWarEvent,
-    { defaultProfile, activeWars, settings, villages, relations, dmgConfig },
+    {
+      defaultProfile,
+      activeWars,
+      settings,
+      villages,
+      relations,
+      dmgConfig,
+      sharedCooldowns,
+      jutsuEquipLimits,
+    },
     assets,
     achievements,
     preloadedUsers,
@@ -3375,6 +3388,26 @@ export const initiateBattle = async (
     );
     if (entry) entry.entryPaid = true;
   }
+  const equipCaps = buildJutsuEquipCaps(
+    jutsuEquipLimits,
+    battleType === "RANKED_PVP" ? "ranked" : "unranked",
+  );
+  for (const participant of usersState) {
+    if (participant.isAi) continue;
+    const selected = participant.jutsus.filter((entry) => entry.equipped);
+    const accepted = computeJutsuLoadoutCapAssignments({
+      caps: equipCaps,
+      jutsuIds: selected.map((entry) => entry.jutsuId),
+      userjutsus: selected.flatMap((entry) => {
+        const definition = extraState.jutsus[entry.jutsuId];
+        return definition ? [{ jutsuId: entry.jutsuId, jutsu: definition }] : [];
+      }),
+      maxEquip: selected.length,
+    }).equipIds;
+    participant.jutsus = participant.jutsus.filter(
+      (entry) => !entry.equipped || accepted.includes(entry.jutsuId),
+    );
+  }
   /**
    * Persist the preloaded battle and return the participant claim and any settled failure.
    * Dungeon floors, first payments, event launches and hunts await their transaction's writes.
@@ -3400,6 +3433,7 @@ export const initiateBattle = async (
         energyCapacity,
         injectableJutsus,
         dmgConfig,
+        sharedCooldowns,
         settings,
         initialDurability,
         info,

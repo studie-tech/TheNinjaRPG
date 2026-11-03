@@ -247,7 +247,7 @@ it("does not change damage with zero power", () => {
   expect(hp(run([hit(), defense(0)]), "defender")).toBe(hp(run([hit()]), "defender"));
 });
 
-it("parries piercing hits", () => {
+it.each([30, 100])("does not parry piercing hits at %i percent power", (power) => {
   const pierce = makeEffect(
     "pierce",
     { power: 1000, calculation: "static", rounds: 0 },
@@ -261,9 +261,60 @@ it("parries piercing hits", () => {
     },
   );
   const incoming = 10000 - hp(run([pierce]), "defender");
-  const result = run([pierce, defense(30)]);
+  const result = run([pierce, defense(power)]);
+  expect(incoming).toBeGreaterThan(0);
+  expect(10000 - hp(result, "defender")).toBeCloseTo(incoming);
+  expect(hp(result, "attacker")).toBe(10000);
+  const mixed = run([hit(), pierce, defense(power)]);
+  const direct = 10000 - hp(run([hit()]), "defender");
+  expect(10000 - hp(mixed, "defender")).toBeCloseTo(
+    incoming + direct * (1 - power / 100),
+  );
+  expect(10000 - hp(mixed, "attacker")).toBeCloseTo(direct * power / 100);
+});
+
+it("parries damage despite an earlier Buff Prevent", () => {
+  const effect = defense(30);
+  effect.createdRound = 2;
+  const prevent = makeEffect(
+    "buffprevent",
+    { power: 100, rounds: 5 },
+    {
+      creatorId: "attacker",
+      targetId: "defender",
+      targetType: "user",
+      createdRound: 1,
+      isNew: false,
+    },
+  );
+  const incoming = 10000 - hp(run([hit()]), "defender");
+  const result = run([hit(), effect, prevent]);
+
   expect(10000 - hp(result, "defender")).toBeCloseTo(incoming * 0.7);
   expect(10000 - hp(result, "attacker")).toBeCloseTo(incoming * 0.3);
+  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(true);
+});
+
+it("can still be cleared before damage is parried", () => {
+  const effect = defense(100);
+  effect.fromType = "jutsu";
+  const clear = makeEffect(
+    "clear",
+    { power: 100, rounds: 0 },
+    {
+      creatorId: "attacker",
+      targetId: "defender",
+      targetType: "user",
+      createdRound: 3,
+      isNew: true,
+    },
+  );
+  const incoming = 10000 - hp(run([hit()]), "defender");
+  const result = run([hit(), effect, clear]);
+
+  expect(10000 - hp(result, "defender")).toBeCloseTo(incoming);
+  expect(hp(result, "attacker")).toBe(10000);
+  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(false);
 });
 
 it("splits a 1000 incoming hit into 700 received and 300 returned", () => {

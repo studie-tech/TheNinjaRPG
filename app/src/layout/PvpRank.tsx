@@ -26,10 +26,9 @@ import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import {
+  buildJutsuEquipCaps,
   getJutsuCapFlags,
   getJutsuCategoryDef,
-  RANKED_JUTSU_CAPS,
-  RANKED_JUTSU_SELECT_WARNINGS,
 } from "@/libs/jutsu";
 import { validateItemLoadout, validateJutsuLoadout } from "@/libs/ranked_pvp";
 import { showMutationToast } from "@/libs/toast";
@@ -292,6 +291,8 @@ export const RankedArenaMain: React.FC = () => {
  * @returns The ranked loadout selector component
  */
 export const RankedLoadoutSelector: React.FC = () => {
+  const limitsQuery = api.misc.getJutsuEquipLimits.useQuery();
+  const caps = buildJutsuEquipCaps(limitsQuery.data ?? [], "ranked");
   // Router for forwarding
   const utils = api.useUtils();
 
@@ -626,7 +627,7 @@ export const RankedLoadoutSelector: React.FC = () => {
       const newJutsuLoadout = processedJutsu.filter((j) =>
         [...loadoutJutsus, jutsu.id].includes(j.id),
       );
-      const jutsuCheck = validateJutsuLoadout(newJutsuLoadout);
+      const jutsuCheck = validateJutsuLoadout(newJutsuLoadout, caps);
       if (!jutsuCheck.check) {
         showMutationToast({
           success: false,
@@ -961,11 +962,11 @@ export const RankedLoadoutSelector: React.FC = () => {
               </Button>
             </div>
             {!loadoutJutsus.includes(selectedJutsu.id) &&
-              RANKED_JUTSU_SELECT_WARNINGS.map((key) => {
+              caps.map((cap) => {
+                const key = cap.key;
                 const flags = getJutsuCapFlags(selectedJutsu);
                 if (!flags[key]) return null;
-                const cap = RANKED_JUTSU_CAPS.find((c) => c.key === key);
-                if (!cap) return null;
+
                 const label = getJutsuCategoryDef(key).label;
                 return (
                   <div key={key} className="text-muted-foreground text-sm">

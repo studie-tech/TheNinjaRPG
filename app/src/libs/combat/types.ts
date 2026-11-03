@@ -480,6 +480,7 @@ export type ExtraState = {
   bountySignups: Record<string, CombatQueryBountySignup[]>; // controllerId -> array of bounty signups
   // Battle settings
   dmgConfig?: DmgConfig;
+  sharedCooldowns?: Record<string, number>;
   /** Per-user pre-battle gear/keystone % mods folded into the damage pipeline at battle start. */
   preBattleGearModifiers?: Record<string, PreBattleGearModifiers>;
   settings?: GameSetting[];

@@ -23,6 +23,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
+import { JutsuEquipLimitsForm } from "@/layout/JutsuEquipLimitsForm";
+import { SharedCooldownForm } from "@/layout/SharedCooldownForm";
 import { WarRulesForm } from "@/layout/WarRulesForm";
 import { dmgConfig as defaultDmgConfig } from "@/libs/combat/constants";
 import { showMutationToast } from "@/libs/toast";
@@ -110,7 +112,7 @@ export const DmgConfigDialog = () => {
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Damage Formula Config</DialogTitle>
+          <DialogTitle>Battle Config</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-3">
@@ -145,6 +147,8 @@ export const DmgConfigDialog = () => {
             </Button>
           </form>
         </Form>
+        <SharedCooldownForm />
+        <JutsuEquipLimitsForm />
         <WarRulesForm />
       </DialogContent>
     </Dialog>

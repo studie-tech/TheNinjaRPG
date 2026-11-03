@@ -1,10 +1,11 @@
+import { rankedCaps } from "../setup/jutsuEquipLimits";
 import { describe, it, expect } from "bun:test";
 import {
   calculateLpEloChange,
   getRankedRadius,
   getRankedRank,
   validateItemLoadout,
-  validateJutsuLoadout,
+  validateJutsuLoadout as validateJutsuLoadoutWithCaps,
 } from "@/libs/ranked_pvp";
 import type { Item, Jutsu } from "@/drizzle/schema";
 import {
@@ -105,6 +106,25 @@ describe("getRankedRadius", () => {
   });
 });
 
+describe("ranked jutsu category caps", () => {
+  it("allows one Parry jutsu and rejects a second", () => {
+    const parryJutsus = ["first", "second"].map((name) => ({
+      name,
+      jutsuType: "NORMAL",
+      effects: [{ type: "parry" }],
+    }) as Jutsu);
+
+    expect(validateJutsuLoadout(parryJutsus.slice(0, 1))).toEqual({
+      check: true,
+      message: "",
+    });
+    expect(validateJutsuLoadout(parryJutsus)).toEqual({
+      check: false,
+      message: "You can only equip up to 1 parry jutsu in ranked PvP",
+    });
+  });
+});
+
 describe("ranked skill-tree restrictions", () => {
   it("rejects furniture selected through a crafted ranked loadout", () => {
     const result = validateItemLoadout([
@@ -159,3 +179,5 @@ describe("ranked skill-tree restrictions", () => {
     expect(result.message).toMatch(/requires a village/);
   });
 });
+
+const validateJutsuLoadout = (jutsus: Parameters<typeof validateJutsuLoadoutWithCaps>[0]) => validateJutsuLoadoutWithCaps(jutsus, rankedCaps);

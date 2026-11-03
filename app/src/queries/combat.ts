@@ -104,6 +104,8 @@ import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
+import { fetchSharedCooldowns } from "@/queries/sharedCooldown";
 import {
   activeWarAllyWhere,
   activeWarMercenaryWhere,
@@ -153,6 +155,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     villages,
     relations,
     dmgConfig,
+    sharedCooldownRows,
+    jutsuEquipLimits,
     pvpAverage,
   ] = await Promise.all([
     // Fetch default AI profile
@@ -194,6 +198,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     client.select().from(villageAlliance),
     // Fetch damage formula config
     fetchDmgConfig(client),
+    fetchSharedCooldowns(client),
+    fetchJutsuEquipLimits(client),
     fetchPvpExperienceAverage(client),
   ]);
   return {
@@ -203,6 +209,10 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     villages,
     relations,
     dmgConfig,
+    jutsuEquipLimits,
+    sharedCooldowns: Object.fromEntries(
+      sharedCooldownRows.map(({ tag, rounds }) => [tag, rounds]),
+    ),
   };
 };
 
@@ -815,6 +825,7 @@ export const insertBattleForCreateBattle = (
   energyCapacity: { [k: string]: number },
   injectableJutsus: import("@/drizzle/schema").Jutsu[],
   dmgConfig: import("@/libs/combat/constants").DmgConfig,
+  sharedCooldowns: Record<string, number>,
   settings: import("@/drizzle/schema").GameSetting[],
   initialDurability: Record<string, Record<string, number>>,
   info: {
@@ -863,6 +874,7 @@ export const insertBattleForCreateBattle = (
         [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
       },
       dmgConfig: dmgConfig,
+      sharedCooldowns,
       settings: settings,
       initialDurability: initialDurability,
       hunting: info.hunting,

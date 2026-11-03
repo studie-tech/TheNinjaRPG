@@ -1,3 +1,5 @@
+import { jutsuEquipLimit } from "@/drizzle/schema";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { fetchBattleEssentials } from "@/queries/combat";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -95,6 +97,8 @@ const equippedIds = async () => {
 
 describeWithDatabase("combat lobby jutsu gates", () => {
   beforeEach(async () => {
+    await resetTables(jutsuEquipLimit);
+    await (await getTestDatabase()).insert(jutsuEquipLimit).values(equipLimitFixture);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(battle, aiProfile, userJutsu, jutsuLoadout, jutsu, userData);
     // JONIN (9) + gold federal (3) + 2 extra slots + 1 base = 15 equip slots.

@@ -1,6 +1,8 @@
 import type { Item, Jutsu, RankedLoadout } from "@/drizzle/schema";
+import { getJutsuCapFlags } from "@/libs/jutsu";
 import { listItemsByIds } from "@/queries/item";
 import { listJutsuByIds } from "@/queries/jutsu";
+import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import {
   findRankedLoadoutForCleanRankedProhibitedSelections,
   listUserDataForFetchSanninRankedPlayers,
@@ -38,7 +40,8 @@ const filterProhibitedRankedSelections = async (
       ...(storedLoadout.loadout.favoriteConsumableIds ?? []),
     ]),
   ];
-  const [selectedJutsus, selectedItems] = await Promise.all([
+  const [caps, selectedJutsus, selectedItems] = await Promise.all([
+    fetchJutsuEquipCaps(client, "ranked"),
     referencedJutsuIds.length > 0
       ? listJutsuByIds(client, referencedJutsuIds)
       : Promise.resolve([]),
@@ -80,6 +83,19 @@ const filterProhibitedRankedSelections = async (
       removedItemIds,
     ),
   };
+  const counts: Record<string, number> = {};
+  cleanedLoadout.jutsuIds = cleanedLoadout.jutsuIds.filter((id) => {
+    const entry = selectedJutsus.find((jutsu) => jutsu.id === id);
+    if (!entry) return false;
+    const flags = getJutsuCapFlags(entry);
+    if (caps.some((cap) => flags[cap.key] && (counts[cap.key] ?? 0) >= cap.max)) {
+      removedJutsuIds.push(id);
+      return false;
+    }
+    for (const cap of caps)
+      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
+    return true;
+  });
   // Duplicate ids change the loadout without being reported as removals.
   const hasChanges = (
     [
@@ -99,6 +115,7 @@ const filterProhibitedRankedSelections = async (
   return {
     loadout,
     hasChanges,
+    caps,
     removedJutsuIds,
     removedItemIds,
     // Favorites remain stored; only equipped rows contribute to loadout limits.
@@ -129,6 +146,7 @@ export const cleanRankedProhibitedSelections = async (
   storedLoadout: RankedLoadout,
   attempt = 0,
 ): Promise<{
+  caps: Awaited<ReturnType<typeof fetchJutsuEquipCaps>>;
   loadout: RankedLoadout;
   hasChanges: boolean;
   removedJutsuIds: string[];

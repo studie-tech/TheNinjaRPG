@@ -1892,9 +1892,6 @@ export const parry = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass)
-    return preventResponse(effect, target, "cannot be buffed");
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
@@ -1906,12 +1903,7 @@ export const parry = (
       )
         return;
       const source = usersEffects.find((e) => e.id === effectId);
-      if (
-        !source ||
-        (source.type !== "damage" &&
-          source.type !== "elementaldamage" &&
-          source.type !== "pierce")
-      )
+      if (!source || (source.type !== "damage" && source.type !== "elementaldamage"))
         return;
       consequence.parryPercentage =
         (consequence.parryPercentage ?? 0) +

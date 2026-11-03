@@ -18,6 +18,7 @@ import {
 } from "@/libs/ranked_pvp";
 import { hasRequiredRank } from "@/libs/train";
 import { listJutsuByIds } from "@/queries/jutsu";
+import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import { fetchUser, wakeQueuedUser } from "@/queries/profile";
 import {
   countRankedPvpQueueForGetRankedQueueCount,
@@ -386,7 +387,8 @@ export const pvpRankRouter = createTRPCRouter({
       };
       // Query all relevant information
       const itemIds = [...new Set([...loadout.weaponIds, ...loadout.consumableIds])];
-      const [items, jutsus, currentLoadout] = await Promise.all([
+      const [caps, items, jutsus, currentLoadout] = await Promise.all([
+        fetchJutsuEquipCaps(ctx.drizzle, "ranked"),
         itemIds.length > 0 ? listItemForUpdateRankedLoadout(ctx.drizzle, itemIds) : [],
         loadout.jutsuIds.length > 0
           ? listJutsuByIds(ctx.drizzle, loadout.jutsuIds)
@@ -404,7 +406,7 @@ export const pvpRankRouter = createTRPCRouter({
         return errorResponse("Some jutsus not found or not available in shop");
       }
       // Check loadout
-      const jutsuCheck = validateJutsuLoadout(jutsus);
+      const jutsuCheck = validateJutsuLoadout(jutsus, caps);
       const itemCheck = validateItemLoadout(items);
       if (!jutsuCheck.check || !itemCheck.check) {
         return errorResponse(jutsuCheck.message || itemCheck.message);
@@ -502,7 +504,7 @@ export const pvpRankRouter = createTRPCRouter({
         removedItemIds = cleaned.removedItemIds;
 
         // Check loadout
-        const jutsuCheck = validateJutsuLoadout(cleaned.jutsus);
+        const jutsuCheck = validateJutsuLoadout(cleaned.jutsus, cleaned.caps);
         const itemCheck = validateItemLoadout(cleaned.items);
         if (!jutsuCheck.check || !itemCheck.check) {
           return errorResponse(jutsuCheck.message || itemCheck.message);

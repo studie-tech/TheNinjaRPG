@@ -1,3 +1,5 @@
+import { jutsuEquipLimit } from "@/drizzle/schema";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { fetchBattleEssentials } from "@/queries/combat";
 import { eq } from "drizzle-orm";
 import { type BattleType, MAX_PLAYER_LEVEL, RANKED_PVP_STATS, REGEN_SECONDS } from "@/drizzle/constants";
@@ -182,6 +184,8 @@ const equippedIds = async () => {
 
 describeWithDatabase("combat lobby mastery loadouts", () => {
   beforeEach(async () => {
+    await resetTables(jutsuEquipLimit);
+    await (await getTestDatabase()).insert(jutsuEquipLimit).values(equipLimitFixture);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
           battle,

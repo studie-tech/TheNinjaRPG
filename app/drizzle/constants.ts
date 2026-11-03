@@ -266,30 +266,6 @@ export const HOSPITAL_RYO_PER_100_HP = 400;
 export const LetterRanks = ["D", "C", "B", "A", "S", "H"] as const;
 export type LetterRank = (typeof LetterRanks)[number];
 
-// List of tags that share cooldowns
-export const SHARED_COOLDOWN_TAGS = [
-  "barrier",
-  "buffprevent",
-  "cleanse",
-  "cleanseprevent",
-  "clear",
-  "clearprevent",
-  "consume",
-  "siphon",
-  "debuffprevent",
-  "drain",
-  "increasepoolcost",
-  "moveprevent",
-  "pierce",
-  "poison",
-  "seal",
-  "stun",
-  "summon",
-  "vamp",
-] as const;
-/** Rounds every action sharing a SHARED_COOLDOWN_TAGS tag is locked after one of them is used */
-export const SHARED_COOLDOWN_ROUNDS = 3;
-
 export const LOG_TYPES = [
   "ai",
   "badge",
@@ -1115,14 +1091,6 @@ export const TrainingSpeeds = [
 ] as const;
 export type TrainingSpeed = (typeof TrainingSpeeds)[number];
 
-export const JUTSU_MAX_RESIDUAL_EQUIPPED = 4;
-export const JUTSU_MAX_PIERCE_EQUIPPED = 9999;
-export const JUTSU_MAX_EVENT_EQUIPPED = 2;
-export const JUTSU_MAX_FORBIDDEN_EQUIPPED = 1;
-export const JUTSU_MAX_BARRIER_EQUIPPED = 1;
-export const JUTSU_MAX_STUN_EQUIPPED = 2;
-export const JUTSU_MAX_SHIELD_EQUIPPED = 2;
-export const JUTSU_MAX_HEAL_EQUIPPED = 3;
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -2491,16 +2459,8 @@ export const RANKED_BLOODLINE_EFFECT_MULT = 1.4;
 export const RANKED_LOADOUT_MAX_JUTSUS = 15;
 export const RANKED_LOADOUT_MAX_WEAPONS = 2;
 export const RANKED_LOADOUT_MAX_CONSUMABLES = 4;
-export const RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS = 4;
 export const RANKED_LOADOUT_MAX_POISON_ITEMS = 1;
-export const RANKED_LOADOUT_MAX_POISON_JUTSUS = 1;
 export const RANKED_LOADOUT_MAX_INCREASECOST_ITEMS = 1;
-export const RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS = 1;
-export const RANKED_LOADOUT_MAX_SUMMON_JUTSUS = 0;
-export const RANKED_LOADOUT_MAX_BARRIER_JUTSUS = 1;
-export const RANKED_LOADOUT_MAX_STUN_JUTSUS = 2;
-export const RANKED_LOADOUT_MAX_SHIELD_JUTSUS = 2;
-export const RANKED_LOADOUT_MAX_HEAL_JUTSUS = 3;
 
 // Game assets
 export const ID_ANIMATION_SMOKE = "gkYHdSzsHu";
