@@ -162,7 +162,6 @@ export default function SeasonForm({
         id: "reward_items",
         type: "db_values_with_number",
         values: items,
-        multiple: true,
         doubleWidth: true,
         label: "Reward Items [and drop chance%]",
       });
