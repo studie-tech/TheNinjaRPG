@@ -842,7 +842,15 @@ export const questRunFields = {
   isolated: z.coerce.boolean().prefault(false),
 };
 
+/** Designer coordinates keyed by objective ID, shared with everyone editing the quest. */
+export const questNodePositionsSchema = z.record(
+  z.string(),
+  z.object({ x: z.number(), y: z.number() }),
+);
+export type QuestNodePositions = z.infer<typeof questNodePositionsSchema>;
+
 export type QuestContentType = {
+  nodePositions?: QuestNodePositions;
   /** Personal-run item requirements, consumed once when the run starts. */
   entryItems?: z.infer<typeof questEntryItemsSchema>;
   /** Freeze outside recovery and restrict inventory/travel until the attempt closes. */
@@ -907,6 +915,7 @@ export const QuestValidatorRawSchema = z.object({
   questType: z.enum(QuestTypes),
   content: z.object({
     ...questRunFields,
+    nodePositions: questNodePositionsSchema.optional(),
     objectives: z.array(AllObjectives),
     reward: QuestReward,
     ...questRewardModeFields,

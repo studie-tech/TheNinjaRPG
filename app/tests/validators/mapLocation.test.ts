@@ -30,4 +30,19 @@ describe("quest structure authoring", () => {
     after.content.objectives[0]!.longitude = 12;
     expect(isQuestPresentationOnlyChange(before, after)).toBe(false);
   });
+  it("preserves designer positions through validation without invalidating quest runs", () => {
+    const before = QuestValidator.parse(draft);
+    expect(before.content.nodePositions).toBeUndefined();
+    const nodePositions = { arrival: { x: -120.5, y: 900 } };
+    const after = QuestValidator.parse({ ...before, content: { ...before.content, nodePositions } });
+    expect(after.content.nodePositions).toEqual(nodePositions);
+    expect(isQuestPresentationOnlyChange(before, after)).toBe(true);
+    after.content.objectives[0]!.longitude = 12;
+    expect(isQuestPresentationOnlyChange(before, after)).toBe(false);
+  });
+  it("rejects malformed and non-finite designer coordinates", () => {
+    for (const position of [{ x: "12", y: 0 }, { x: 0 }, { x: Infinity, y: 0 }, { x: 0, y: NaN }]) {
+      expect(QuestValidator.safeParse({ ...draft, content: { ...draft.content, nodePositions: { arrival: position } } }).success).toBe(false);
+    }
+  });
 });

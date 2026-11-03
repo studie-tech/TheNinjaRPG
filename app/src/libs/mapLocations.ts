@@ -8,7 +8,7 @@ import type { MapLocation } from "@/validators/mapLocation";
 import { mapLocationFields } from "@/validators/mapLocation";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
-/** Cosmetic map edits preserve accepted quest runs; gameplay edits retain revision checks. */
+/** Cosmetic map and designer edits preserve accepted quest runs. */
 export const isQuestPresentationOnlyChange = <
   T extends {
     hidden: boolean;
@@ -25,6 +25,7 @@ export const isQuestPresentationOnlyChange = <
     publicLocations: false,
     content: {
       ...value.content,
+      nodePositions: undefined,
       objectives: value.content.objectives.map((objective) => {
         const fields = new Set(Object.keys(mapLocationFields));
         return Object.fromEntries(

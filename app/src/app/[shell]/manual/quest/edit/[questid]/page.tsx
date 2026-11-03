@@ -24,9 +24,14 @@ import { RewardEditor } from "@/layout/RewardEditor";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
+import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { AllObjectivesType, ZodQuestFormType } from "@/validators/objectives";
+import type {
+  AllObjectivesType,
+  QuestNodePositions,
+  ZodQuestFormType,
+} from "@/validators/objectives";
 import {
   allObjectiveTasks,
   QuestFormRawSchema,
@@ -74,6 +79,7 @@ export default function ManualQuestEdit(props: {
 
   return (
     <SingleEditQuest
+      key={data.id}
       quest={data}
       refetch={refetch}
       canSave={canChangeContent(userData.role)}
@@ -95,6 +101,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     form,
     formData,
     setObjectives,
+    setNodePositions,
     handleQuestSubmit,
     getSuggestionData,
     isUpdating,
@@ -287,6 +294,8 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         </div>
       </ContentBox>
       <ObjectiveFlowGraph
+        nodePositions={currentValues.content.nodePositions}
+        setNodePositions={setNodePositions}
         consecutiveObjectives={currentValues.consecutiveObjectives}
         objectives={objectives}
         addObjectiveIcon={AddObjectiveIcon}
@@ -321,7 +330,11 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   );
 };
 
+const emptyNodePositions: QuestNodePositions = {};
+
 interface ObjectiveFlowGraphProps {
+  nodePositions?: QuestNodePositions;
+  setNodePositions: (positions: QuestNodePositions) => void;
   consecutiveObjectives?: boolean;
   objectives: AllObjectivesType[];
   addObjectiveIcon: React.ReactNode;
@@ -333,6 +346,8 @@ interface ObjectiveFlowGraphProps {
 }
 
 const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
+  nodePositions = emptyNodePositions,
+  setNodePositions,
   consecutiveObjectives,
   objectives,
   addObjectiveIcon,
@@ -344,7 +359,6 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
 }) => {
   // Cytoscape ref and event handling
   const cyRef = useRef<Core | null>(null);
-  const nodePositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const isInitialLayoutRef = useRef(true);
 
   // Tooltip state & container ref
@@ -360,7 +374,7 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
   const elements = useMemo(() => {
     const nodes: ElementDefinition[] = objectives.map((obj) => {
       const { image } = getObjectiveImage(obj);
-      const position = nodePositionsRef.current[obj.id];
+      const position = nodePositions[obj.id];
       return {
         data: {
           id: obj.id,
@@ -369,118 +383,36 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
           image,
         },
         classes: obj.id === selectedObjectiveId ? "selected" : "",
-        position: position, // Use stored position if available
+        position,
       };
     });
     const edges = buildObjectiveEdges(objectives, consecutiveObjectives ?? false);
     return [...nodes, ...edges];
-  }, [objectives, consecutiveObjectives, selectedObjectiveId]);
-
-  // Save node positions after layout
-  const saveNodePositions = (cy: Core) => {
-    cy.nodes().forEach((node) => {
-      const pos = node.position();
-      nodePositionsRef.current[node.id()] = { x: pos.x, y: pos.y };
-    });
-  };
-
-  // Helper to update graph incrementally
-  const updateGraph = (cy: Core) => {
-    // Get current node and edge IDs
-    const currentNodeIds = new Set(cy.nodes().map((n) => n.id()));
-    const currentEdgeIds = new Set(cy.edges().map((e) => e.id()));
-
-    // Get new node and edge IDs
-    const newNodeIds = new Set(objectives.map((obj) => obj.id));
-    const newEdges = consecutiveObjectives
-      ? buildObjectiveEdges(objectives, consecutiveObjectives)
-      : [];
-    const newEdgeIds = new Set(newEdges.map((e) => e.data.id).filter(Boolean));
-
-    // Remove deleted nodes
-    currentNodeIds.forEach((id) => {
-      if (!newNodeIds.has(id)) {
-        cy.getElementById(id).remove();
-        delete nodePositionsRef.current[id];
-      }
-    });
-
-    // Remove deleted edges
-    currentEdgeIds.forEach((id) => {
-      if (!newEdgeIds.has(id)) {
-        cy.getElementById(id).remove();
-      }
-    });
-
-    // Add new nodes
-    const nodesToAdd: string[] = [];
-    objectives.forEach((obj) => {
-      if (!currentNodeIds.has(obj.id)) {
-        const { image } = getObjectiveImage(obj);
-        cy.add({
-          group: "nodes",
-          data: {
-            id: obj.id,
-            label: obj.task,
-            description: obj.description ?? "",
-            image,
-          },
-        });
-        nodesToAdd.push(obj.id);
-      } else {
-        // Update existing node data
-        const node = cy.getElementById(obj.id);
-        const { image } = getObjectiveImage(obj);
-        node.data({
-          label: obj.task,
-          description: obj.description ?? "",
-          image,
-        });
-      }
-    });
-
-    // Add new edges
-    newEdges.forEach(({ data }) => {
-      if (data.id && !currentEdgeIds.has(data.id)) {
-        cy.add({ group: "edges", data });
-      }
-    });
-
-    // Only run layout for new nodes, or full layout if it's the initial render
-    if (nodesToAdd.length > 0 || isInitialLayoutRef.current) {
-      const layout = cy.layout({
-        name: "cose",
-        fit: isInitialLayoutRef.current,
-        padding: 30,
-        randomize: isInitialLayoutRef.current, // Only randomize on initial layout
-        animate: !isInitialLayoutRef.current,
-        animationDuration: 300,
-        nodeOverlap: 20,
-      });
-
-      layout.on("layoutstop", () => {
-        saveNodePositions(cy);
-        isInitialLayoutRef.current = false;
-      });
-
-      layout.run();
-    } else {
-      // Just save current positions
-      saveNodePositions(cy);
-    }
-  };
+  }, [objectives, consecutiveObjectives, selectedObjectiveId, nodePositions]);
 
   useEffect(() => {
     if (!cyRef.current) return;
     const cy = cyRef.current;
 
-    updateGraph(cy);
+    // CytoscapeComponent synchronizes nodes and edges before placement is restored.
+    const positions = restoreQuestFlowPositions(cy, nodePositions);
+    if (
+      Object.keys(positions).length !== Object.keys(nodePositions).length ||
+      Object.entries(positions).some(
+        ([id, position]) =>
+          position.x !== nodePositions[id]?.x || position.y !== nodePositions[id]?.y,
+      )
+    ) {
+      setNodePositions(positions);
+    }
+    if (isInitialLayoutRef.current && cy.nodes().nonempty()) {
+      cy.fit(undefined, 30);
+      isInitialLayoutRef.current = false;
+    }
 
-    // Setup event listeners (only once)
-    cy.removeListener("tap", "node");
-    cy.removeListener("tap");
-    cy.removeListener("mouseover", "node");
-    cy.removeListener("mouseout", "node");
+    cy.on("dragfree", "node", () => {
+      setNodePositions(getQuestFlowPositions(cy));
+    });
 
     cy.on("tap", "node", (event: EventObjectNode) => {
       const nodeId = event.target.id();
@@ -508,7 +440,19 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
     cy.on("mouseout", "node", () => {
       setTooltipData(null);
     });
-  }, [consecutiveObjectives, objectives]);
+    return () => {
+      cy.removeListener("tap");
+      cy.removeListener("mouseover", "node");
+      cy.removeListener("mouseout", "node");
+      cy.removeListener("dragfree", "node");
+    };
+  }, [
+    consecutiveObjectives,
+    objectives,
+    nodePositions,
+    setNodePositions,
+    setSelectedObjectiveId,
+  ]);
 
   return (
     <ContentBox
@@ -517,6 +461,10 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
       initialBreak={true}
       topRightContent={<div className="flex flex-row">{addObjectiveIcon}</div>}
     >
+      <p className="text-muted-foreground mb-2 text-sm">
+        Drag objectives to organize the graph, then use Save to Database to save the
+        layout for everyone who opens this quest.
+      </p>
       <div
         ref={containerRef}
         className={`relative aspect-square w-full ${
