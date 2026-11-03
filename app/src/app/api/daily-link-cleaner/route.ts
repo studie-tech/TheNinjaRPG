@@ -7,7 +7,6 @@ import {
 } from "@/queries/cleaner";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { isFetchOriginError } from "@/utils/error";
 import { isUrlAccessible, isWithinImgTag } from "@/utils/url";
 
 const ENDPOINT_NAME = "daily-link-cleaner";
@@ -83,36 +82,7 @@ export const GET = async (request: Request) => {
 
     return Response.json(`OK`);
   } catch (cause) {
-    // Type-check the error to ensure we're not silently catching programming errors
-    if (!(cause instanceof Error)) {
-      // Rollback and report all errors (expected and unexpected)
-      await timerCheck.release();
-      return await handleEndpointError(cause);
-    }
-
-    // Expected error types: database errors, network errors from URL checks
-    // Check stack trace to verify error origin before classification
-    const stack = cause.stack || "";
-    const isFetchError = isFetchOriginError(cause);
-
-    const isDatabaseError =
-      cause.name === "DrizzleError" ||
-      cause.name.includes("DatabaseError") ||
-      stack.includes("drizzle-orm");
-    const isNetworkError =
-      cause.name === "AbortError" || (cause.name === "TypeError" && isFetchError);
-
-    // If it's not an expected error type, log additional context
-    if (!isDatabaseError && !isNetworkError) {
-      console.error("[daily-link-cleaner] Unexpected error type:", {
-        name: cause.name,
-        message: cause.message,
-        stack: cause.stack,
-      });
-    }
-
-    // Rollback and report all errors (expected and unexpected)
     await timerCheck.release();
-    return await handleEndpointError(cause);
+    return handleEndpointError(cause, { endpoint: "/api/daily-link-cleaner" });
   }
 };
