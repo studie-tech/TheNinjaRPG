@@ -109,8 +109,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
           />
         }
       >
-        {!bloodline && <p>Could not find this bloodline</p>}
-        {!loading && bloodline && (
+        {!loading && (
           <>
             <EditContent
               schema={BloodlineValidator}

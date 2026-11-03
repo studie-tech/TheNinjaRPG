@@ -134,8 +134,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
           </div>
         }
       >
-        {!processedUser && <p>Could not find this AI</p>}
-        {!loading && processedUser && (
+        {!loading && (
           <>
             <div className="mb-4 flex items-center justify-between">
               <h1 className="font-bold text-2xl">Edit AI</h1>

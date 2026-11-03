@@ -33,7 +33,7 @@ import {
   SimpleObjective,
 } from "@/validators/objectives";
 
-export default function ManualBloodlineEdit(props: {
+export default function ManualQuestEdit(props: {
   params: Promise<{ questid: string }>;
 }) {
   const params = use(props.params);
@@ -234,7 +234,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         subtitle="Quest Management"
         defaultBackHref="/manual/quest"
         noRightAlign={true}
-        topRightContent={currentValues && <QuestHelper quest={currentValues} />}
+        topRightContent={<QuestHelper quest={currentValues} />}
       >
         {currentValues.questType === "village_mission" && (
           <p className="mb-4 rounded border p-3 text-sm">
@@ -248,7 +248,6 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             prerequisite restrictions do not apply; leave those restrictions empty.
           </p>
         )}
-        {!props.quest && <p>Could not find this item</p>}
         {["hunting", "gathering"].includes(currentValues.questType) && (
           <p className="mb-4 text-muted-foreground text-sm">
             Set a companion task duration to allow Hunter-rank companions to complete
@@ -257,42 +256,34 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             are not simulated. Leave the duration blank to disable tasks.
           </p>
         )}
-        {props.quest && (
-          <div className="mb-4 flex items-center justify-between">
-            <h1 className="font-bold text-2xl">Edit Quest</h1>
-          </div>
-        )}
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="font-bold text-2xl">Edit Quest</h1>
+        </div>
 
-        {props.quest && (
-          <>
-            <EditContent
-              schema={QuestFormRawSchema}
-              form={form as UseFormReturn<ZodQuestFormType>}
-              formData={formData.filter(
-                (entry) => !String(entry.id).startsWith("reward_"),
-              )}
-              showSubmit={props.canSave}
-              buttonTxt="Save to Database"
-              type="quest"
-              relationId={props.quest.id}
-              allowImageUpload={props.canSave}
-              onAccept={handleQuestSubmit}
-              submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
-              submitLoading={isUpdating}
-              submitLoadingText="Saving"
-            >
-              <RewardEditor type="quest" form={form} formData={formData} />
-            </EditContent>
-            <div className="mt-2 flex justify-end">
-              <SuggestChange
-                entityType="QUEST"
-                entityId={props.quest.id}
-                getData={getSuggestionData}
-                label={props.canSave ? "Suggest instead" : "Suggest a change"}
-              />
-            </div>
-          </>
-        )}
+        <EditContent
+          schema={QuestFormRawSchema}
+          form={form as UseFormReturn<ZodQuestFormType>}
+          formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}
+          showSubmit={props.canSave}
+          buttonTxt="Save to Database"
+          type="quest"
+          relationId={props.quest.id}
+          allowImageUpload={props.canSave}
+          onAccept={handleQuestSubmit}
+          submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
+          submitLoading={isUpdating}
+          submitLoadingText="Saving"
+        >
+          <RewardEditor type="quest" form={form} formData={formData} />
+        </EditContent>
+        <div className="mt-2 flex justify-end">
+          <SuggestChange
+            entityType="QUEST"
+            entityId={props.quest.id}
+            getData={getSuggestionData}
+            label={props.canSave ? "Suggest instead" : "Suggest a change"}
+          />
+        </div>
       </ContentBox>
       <ObjectiveFlowGraph
         consecutiveObjectives={currentValues.consecutiveObjectives}
