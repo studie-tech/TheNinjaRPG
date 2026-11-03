@@ -1188,36 +1188,13 @@ const questSuperRefine = (
         message: "Raid quests must have exactly one objective",
       });
     }
-    const objective = val.content.objectives[0];
-    const objectiveTask = objective?.task;
+    const objectiveTask = val.content.objectives[0]?.task;
     if (objectiveTask && !["open_raid", "exclusive_raid"].includes(objectiveTask)) {
       ctx.addIssue({
         code: "custom",
         message: "Raid quest objective must be 'open_raid' or 'exclusive_raid'",
       });
     }
-    // Validate opponentAIs is present in objective (handled by schema refinement, but validate here too)
-    const opponentAIs = (objective as { opponentAIs?: { ids: string[] }[] })
-      ?.opponentAIs;
-    if (!opponentAIs || opponentAIs.length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        message:
-          "Raid quest objective must have at least one boss AI (configure opponentAIs in the objective)",
-        path: ["content", "objectives", 0, "opponentAIs"],
-      });
-    }
-
-    // Both raid types require a sector number in the objective
-    const sector = (objective as { sector?: number })?.sector;
-    if (sector === null || sector === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Raids require a sector number in the objective (sector field)",
-        path: ["content", "objectives", 0, "sector"],
-      });
-    }
-
     // Validate raid-specific fields (persisted in quest table)
     if (!val.raidBossMaxHealth || val.raidBossMaxHealth < 1) {
       ctx.addIssue({
