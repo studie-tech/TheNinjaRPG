@@ -71,15 +71,12 @@ const profileTabs = [
   "Pet",
   "Achievements",
   "History",
-  "Edit Character",
+  "Settings",
   "Sharing",
 ] as const;
-const iconProfileTabs = [
-  "Achievements",
-  "History",
-  "Edit Character",
-  "Sharing",
-] as const;
+const iconProfileTabs = ["Achievements", "History", "Settings", "Sharing"] as const;
+/** Remembered tab names that now open another tab. */
+const profileTabAliases = { "Edit Character": "Settings" };
 const tutorialProfileTabs = ["Character", "Pet", ...iconProfileTabs] as const;
 type ProfileTab = (typeof profileTabs)[number];
 const profileTabValues: Record<ProfileTab, string> = {
@@ -88,7 +85,7 @@ const profileTabValues: Record<ProfileTab, string> = {
   Pet: "pet",
   Achievements: "achievements",
   History: "history",
-  "Edit Character": "edit",
+  Settings: "edit",
   Sharing: "sharing",
 };
 
@@ -162,6 +159,7 @@ export function Profile() {
             remember={userData.rememberProfileTab}
             current={urlTab || tab !== null ? activeTab : null}
             options={visibleTabs}
+            aliases={profileTabAliases}
             onChange={selectTab}
             accessibleTabs
             label="Profile sections"
@@ -186,9 +184,7 @@ export function Profile() {
               ),
               Achievements: <Trophy className="h-[20px] w-[20px]" aria-hidden="true" />,
               History: <History className="h-[20px] w-[20px]" aria-hidden="true" />,
-              "Edit Character": (
-                <Wrench className="h-[20px] w-[20px]" aria-hidden="true" />
-              ),
+              Settings: <Wrench className="h-[20px] w-[20px]" aria-hidden="true" />,
               Sharing: <Share2 className="h-[20px] w-[20px]" aria-hidden="true" />,
             }}
             iconOnlyOptions={profileTabs}

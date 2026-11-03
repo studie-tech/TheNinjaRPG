@@ -126,14 +126,27 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               loading="lazy"
             />
           </Link>
-          <button
-            type="button"
-            aria-label={lightLayout ? "Show Layout" : "Hide Layout"}
-            onClick={toggleLightLayout}
-            className="absolute top-0 right-2 hidden h-8 w-8 items-center justify-center rounded-full bg-slate-700/70 text-white hover:bg-slate-600 md:flex"
-          >
-            {lightLayout ? <Eye className="h-6 w-6" /> : <EyeOff className="h-6 w-6" />}
-          </button>
+          <div className="absolute top-0 right-2 hidden flex-col items-center gap-1 md:flex">
+            <button
+              type="button"
+              aria-label={lightLayout ? "Show Layout" : "Hide Layout"}
+              onClick={toggleLightLayout}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700/70 text-white hover:bg-slate-600"
+            >
+              {lightLayout ? (
+                <Eye className="h-6 w-6" />
+              ) : (
+                <EyeOff className="h-6 w-6" />
+              )}
+            </button>
+            {/* The banner that holds account, alerts and settings is hidden, so they
+                stack down the page edge instead of covering the sidebar heading. */}
+            {lightLayout && (
+              <div className="[&>div]:flex-col [&>div]:gap-1.5 [&>div_*]:mx-0">
+                {signedInIcons}
+              </div>
+            )}
+          </div>
         </div>
         {!lightLayout && (
           <div
