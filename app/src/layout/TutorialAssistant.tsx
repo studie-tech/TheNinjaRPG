@@ -539,15 +539,6 @@ const PlayerTutorialAssistant: React.FC<
   // Mutation to disable tutorial
   const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
   const disableTutorialLockRef = React.useRef(false);
-  const disableTutorialRequestRef = React.useRef<
-    | {
-        requestId: string;
-        userId: string;
-        tutorialStep: number;
-        expectedTutorialOn: true;
-      }
-    | undefined
-  >(undefined);
   const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
   const [disableTutorialError, setDisableTutorialError] = useState<string>();
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
@@ -556,18 +547,7 @@ const PlayerTutorialAssistant: React.FC<
     if (disableTutorialLockRef.current) return;
     if (!userData?.userId || userData.tutorialOn !== true) return;
 
-    const existingRequest = disableTutorialRequestRef.current;
-    const request =
-      existingRequest?.userId === userData.userId &&
-      existingRequest.tutorialStep === userData.tutorialStep
-        ? existingRequest
-        : {
-            requestId: crypto.randomUUID(),
-            userId: userData.userId,
-            tutorialStep: userData.tutorialStep,
-            expectedTutorialOn: true as const,
-          };
-    disableTutorialRequestRef.current = request;
+    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
     disableTutorialLockRef.current = true;
     setDisableTutorialError(undefined);
     setIsDisablingTutorial(true);
@@ -590,7 +570,6 @@ const PlayerTutorialAssistant: React.FC<
         if (tutorialIdentityRef.current.userId !== request.userId) {
           return;
         }
-        disableTutorialRequestRef.current = undefined;
         setShowCancelConfirmDialog(false);
       })
       .catch(() => {
