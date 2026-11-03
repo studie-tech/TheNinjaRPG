@@ -97,7 +97,6 @@ it("offers the backpack actions an item supports", () => {
     "Item 4 · empty",
     "Item 5 · empty",
     "Item 6 · empty",
-    "Set hotkey…",
     "Merge stacks",
     "Split stack…",
     "Variants…",
@@ -129,10 +128,15 @@ it("opens the inspector for actions with their own confirmation", () => {
   expect(onInspect).toHaveBeenCalledWith("Healing Salve");
 });
 
-it("omits set hotkey on touch-only devices", () => {
+it("offers set hotkey only for equipped items, and not on touch-only devices", () => {
+  const worn = userItem({ id: "Smoke Bomb", equipped: "ITEM_1" });
+  renderMenu(worn);
+  openMenu("Smoke Bomb");
+  expect(menuItems()).toContain("Set hotkey…");
+  cleanup();
   setFinePointer(false);
-  renderMenu(salve);
-  openMenu("Healing Salve");
+  renderMenu(worn);
+  openMenu("Smoke Bomb");
   expect(menuItems()).not.toContain("Set hotkey…");
 });
 

@@ -128,8 +128,10 @@ export function ItemInspector({
     ({ userItem }) => userItem,
   );
   const equippedIn = useritem.equipped === "NONE" ? null : useritem.equipped;
+  // Battle keys fire only for equipped items.
   const canSetHotkey =
     !!onSetHotkey &&
+    !!equippedIn &&
     useritem.quantity > 0 &&
     !NonActionItemTypes.includes(useritem.item.itemType);
 

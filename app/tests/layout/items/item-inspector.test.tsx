@@ -113,12 +113,16 @@ it("shows drop for event or non-shop items and sell otherwise", () => {
   expect(nativeButton("Drop Item")).toBeDefined();
 });
 
-it("hides set hotkey on touch-only devices and without a handler", () => {
+it("offers set hotkey for equipped items only, and hides it on touch-only devices", () => {
   const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);
   expect(screen.queryByRole("button", { name: "Set hotkey" })).toBeNull();
   view.unmount();
   const onSetHotkey = vi.fn();
+  // Battle keys fire only for equipped items.
   renderInspector({ onSetHotkey });
+  expect(screen.queryByRole("button", { name: "Set hotkey" })).toBeNull();
+  cleanup();
+  renderInspector({ onSetHotkey, userItem: userItem({ equipped: "HAND_1" }) });
   const button = screen.getByRole("button", { name: "Set hotkey" });
   expect(button.className).toContain("not-any-pointer-fine:hidden");
   fireEvent.click(button);

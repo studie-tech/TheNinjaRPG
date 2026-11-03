@@ -16,7 +16,8 @@ const BAG_LABELS: Record<string, string> = {
 };
 
 interface BagTabsProps {
-  bags: { value: string; count: number }[];
+  /** `over` marks a bag holding more than its limit. */
+  bags: { value: string; count: number; over?: boolean }[];
   active: string;
   onChange: (bag: string) => void;
 }
@@ -48,6 +49,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
             type="button"
             role="tab"
             aria-selected={selected}
+            data-over={bag.over ? "true" : undefined}
             onClick={() => {
               safeLocalStorageSetItem(BAG_STORAGE_KEY, bag.value);
               onChange(bag.value);
@@ -57,9 +59,11 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
               selected
                 ? "bg-background font-semibold text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
+              bag.over && "text-destructive hover:text-destructive",
             )}
           >
             {BAG_LABELS[bag.value] ?? bag.value} · {bag.count}
+            {bag.over && <span className="sr-only"> (over limit)</span>}
           </button>
         );
       })}
@@ -71,17 +75,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
  * Used and total slots of the open bag. Only purchases, home withdrawals and crafting
  * check the limit, so rewards and drops can push a bag past it.
  */
-export function BagCapacity({
-  used,
-  max,
-  bag,
-}: {
-  used: number;
-  max: number;
-  /** Names the bag when the count is shown outside it, e.g. on the All tab. */
-  bag?: string;
-}) {
-  const slots = bag ? `${bag} bag slots` : "bag slots";
+export function BagCapacity({ used, max }: { used: number; max: number }) {
   const over = used - max;
   return (
     <span
@@ -97,13 +91,12 @@ export function BagCapacity({
       )}
     >
       <span aria-hidden="true">
-        {bag ? `${bag} ` : ""}
         {used} / {max}
       </span>
       <span className="sr-only">
         {over > 0
-          ? `${used} of ${max} ${slots} used, ${over} over the limit`
-          : `${used} of ${max} ${slots} used`}
+          ? `${used} of ${max} bag slots used, ${over} over the limit`
+          : `${used} of ${max} bag slots used`}
       </span>
     </span>
   );

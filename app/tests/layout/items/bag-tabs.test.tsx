@@ -61,8 +61,19 @@ it("explains a bag over its limit", () => {
   );
 });
 
-it("names the bag it counts when shown outside that bag", () => {
-  render(<BagCapacity used={4} max={20} bag="Gear" />);
-  expect(screen.getByText("Gear 4 / 20").getAttribute("aria-hidden")).toBe("true");
-  expect(screen.getByText("4 of 20 Gear bag slots used")).toBeDefined();
+it("marks a bag over its limit in its tab", () => {
+  render(
+    <BagTabs
+      bags={[
+        { value: "all", count: 40 },
+        { value: "normal", count: 37, over: true },
+      ]}
+      active="all"
+      onChange={vi.fn()}
+    />,
+  );
+  const gear = screen.getByRole("tab", { name: /^Gear · 37/ });
+  expect(gear.getAttribute("data-over")).toBe("true");
+  expect(gear.textContent).toBe("Gear · 37 (over limit)");
+  expect(screen.getByRole("tab", { name: "All · 40" }).getAttribute("data-over")).toBeNull();
 });

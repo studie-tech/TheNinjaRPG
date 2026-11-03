@@ -163,13 +163,7 @@ export default function MyItems() {
             bag={activeTab}
             backpackStatus={
               <div className="flex items-center gap-1">
-                {activeTab === "all" ? (
-                  <BagCapacity
-                    used={normalItemCount ?? 0}
-                    max={maxNormalItems}
-                    bag="Gear"
-                  />
-                ) : (
+                {activeTab !== "all" && (
                   <BagCapacity
                     used={
                       (activeTab === "normal"
@@ -192,7 +186,7 @@ export default function MyItems() {
                   />
                 )}
                 {/* Purchased slots extend the Gear bag only. */}
-                {(activeTab === "normal" || activeTab === "all") && (
+                {activeTab === "normal" && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -220,10 +214,26 @@ export default function MyItems() {
                       (materialsItemCount ?? 0) +
                       (cookingItemCount ?? 0),
                   },
-                  { value: "normal", count: normalItemCount ?? 0 },
-                  { value: "event", count: eventItemCount ?? 0 },
-                  { value: "materials", count: materialsItemCount ?? 0 },
-                  { value: "cooking", count: cookingItemCount ?? 0 },
+                  {
+                    value: "normal",
+                    count: normalItemCount ?? 0,
+                    over: (normalItemCount ?? 0) > maxNormalItems,
+                  },
+                  {
+                    value: "event",
+                    count: eventItemCount ?? 0,
+                    over: (eventItemCount ?? 0) > maxEventItems,
+                  },
+                  {
+                    value: "materials",
+                    count: materialsItemCount ?? 0,
+                    over: (materialsItemCount ?? 0) > maxMaterials,
+                  },
+                  {
+                    value: "cooking",
+                    count: cookingItemCount ?? 0,
+                    over: (cookingItemCount ?? 0) > maxCookingItems,
+                  },
                 ]}
                 active={activeTab}
                 onChange={setActiveTab}

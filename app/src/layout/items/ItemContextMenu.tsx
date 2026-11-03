@@ -99,8 +99,10 @@ function ItemMenuEntries({
   const { item } = userItem;
   const inspect = () => onInspect(userItem.id);
   const equippedIn = userItem.equipped === "NONE" ? null : userItem.equipped;
+  // Battle keys fire only for equipped items.
   const canSetHotkey =
     !!onSetHotkey &&
+    !!equippedIn &&
     canSetHotkeys() &&
     userItem.quantity > 0 &&
     !NonActionItemTypes.includes(item.itemType);
