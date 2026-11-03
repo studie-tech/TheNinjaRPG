@@ -4,6 +4,7 @@
 import { and, eq, gt, gte, isNull, lt, lte, ne, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+  actionLog,
   bloodlineRolls,
   mpvpBattleQueue,
   mpvpBattleUser,
@@ -13,20 +14,55 @@ import {
   userItem,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { clampActionLogText } from "@/utils/actionLog";
 
-/** Build the `userData` update for `enforceRateLimit`, using predicates on `userId`. */
+/** Build the `userData` lookup for `enforceRateLimit`, selecting `money` and `bank`. */
+export const fetchUserDataForEnforceRateLimit = (
+  client: Pick<DrizzleClient, "query">,
+  context: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    columns: { money: true, bank: true },
+    where: eq(userData.userId, context.userId),
+  });
+
+/**
+ * Build the `userData` update for `enforceRateLimit`, using predicates on `userId`.
+ * Always counts the infraction; debits the exact (pre-computed) fines, never below 0.
+ */
 export const updateUserDataForEnforceRateLimit = (
   client: Pick<DrizzleClient, "update">,
-  context: { userId: string },
+  context: { userId: string; moneyFine: number; bankFine: number },
 ) =>
   client
     .update(userData)
     .set({
       movedTooFastCount: sql`${userData.movedTooFastCount} + 1`,
-      money: sql`GREATEST(${userData.money} * 0.99, 0)`,
-      bank: sql`GREATEST(${userData.bank} * 0.99, 0)`,
+      ...(context.moneyFine > 0
+        ? { money: sql`GREATEST(${userData.money} - ${context.moneyFine}, 0)` }
+        : {}),
+      ...(context.bankFine > 0
+        ? { bank: sql`GREATEST(${userData.bank} - ${context.bankFine}, 0)` }
+        : {}),
     })
     .where(eq(userData.userId, context.userId));
+
+/** Build the `actionLog` insert recording a `enforceRateLimit` fine so staff can see it. */
+export const insertActionLogForEnforceRateLimit = (
+  client: Pick<DrizzleClient, "insert">,
+  context: { userId: string; path: string; moneyFine: number; bankFine: number },
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: context.userId,
+    tableName: "user",
+    changes: [
+      `Rate-limit fine on ${context.path}: ${context.moneyFine} ryo from pocket, ${context.bankFine} ryo from bank`,
+    ],
+    relatedId: context.userId,
+    relatedMsg: clampActionLogText(`Rate-limit fine on ${context.path}`),
+    relatedValue: context.moneyFine + context.bankFine,
+  });
 
 /** Build the account snapshot CAS using updatedAt and caller guards; rowsAffected determines whether the claim succeeded. */
 export const updateUserDataForClaimUserSnapshot = (
