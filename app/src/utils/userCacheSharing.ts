@@ -1,5 +1,23 @@
 import { isPlainObject } from "@/utils/typeutils";
 
+const positionFields = new Set(["longitude", "latitude", "location", "updatedAt"]);
+const stationaryProfiles = new WeakMap<object, object>();
+
+/** Reuse the profile projection carried forward by immutable cache sharing. */
+export const withoutUserPosition = <T extends object>(user: T) => {
+  const cached = stationaryProfiles.get(user);
+  if (cached)
+    return cached as Omit<T, "longitude" | "latitude" | "location" | "updatedAt">;
+  const { longitude, latitude, location, updatedAt, ...profile } = user as T & {
+    longitude?: unknown;
+    latitude?: unknown;
+    location?: unknown;
+    updatedAt?: unknown;
+  };
+  stationaryProfiles.set(user, profile);
+  return profile;
+};
+
 /** Preserve equal profile branches, including Dates decoded by SuperJSON. */
 export const shareUserCache = (
   previous: unknown,
@@ -34,19 +52,27 @@ export const shareUserCache = (
   if (isShareableRecord(previous) && isShareableRecord(next)) {
     const keys = Object.keys(next);
     let equal = Object.keys(previous).length === keys.length;
+    let stationaryProfile = equal ? stationaryProfiles.get(previous) : undefined;
     let shared: Record<string, unknown> | undefined;
     for (const key of keys) {
       const own = Object.hasOwn(previous, key),
         before = own ? previous[key] : undefined;
       const nextValue = next[key];
       const value = shareUserCache(before, nextValue, depth + 1);
-      if (!own || value !== before) equal = false;
+      if (!own || value !== before) {
+        equal = false;
+        if (stationaryProfile && (!own || !positionFields.has(key)))
+          stationaryProfile = undefined;
+      }
       if (value !== nextValue) {
         shared ??= { ...next };
         shared[key] = value;
       }
     }
-    return equal ? previous : (shared ?? next);
+    const result = equal ? previous : (shared ?? next);
+    if (stationaryProfile && result !== previous)
+      stationaryProfiles.set(result, stationaryProfile);
+    return result;
   }
   return next;
 };

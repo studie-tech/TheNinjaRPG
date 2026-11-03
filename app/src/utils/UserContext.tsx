@@ -34,6 +34,7 @@ import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
 } from "@/utils/userCache";
+import { withoutUserPosition } from "@/utils/userCacheSharing";
 import { canAccessStructure } from "@/utils/village";
 
 /**
@@ -336,13 +337,8 @@ export const useUserDataSelector = <T,>(
 };
 
 /** Profile fields independent of movement and its commit timestamp. */
-export const selectUserWithoutPosition = ({
-  longitude,
-  latitude,
-  location,
-  updatedAt,
-  ...profile
-}: NonNullable<UserWithRelations>) => profile;
+export const selectUserWithoutPosition = (user: NonNullable<UserWithRelations>) =>
+  withoutUserPosition(user);
 
 /** Read current profile data inside scene callbacks without subscribing React to position changes. */
 export const useUserDataRef = (
