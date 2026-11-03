@@ -99,6 +99,7 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
     // Safari fallback: track if canPlay has been handled to avoid stale closure issues
     let canPlayHandled = false;
+    /** Share readiness updates between media events and Safari's fallback timer. */
     const markReady = () => {
       canPlayHandled = true;
       setCanPlay(true);

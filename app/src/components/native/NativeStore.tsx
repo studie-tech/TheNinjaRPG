@@ -367,6 +367,7 @@ export default function NativeStore() {
    * The SDK transaction id identifies it when available. On platforms that omit that id,
    * a fresh server baseline means only a newly-visible same-product receipt can release
    * this attempt's lock. No client clock is compared with a database timestamp.
+   * Pending grants return timed-out so the caller keeps the purchase lock for recovery.
    */
   const settleAfterPurchase = useCallback(
     async (attempt: StorePurchaseAttempt, assertCurrent?: () => void) => {
@@ -519,6 +520,10 @@ export default function NativeStore() {
     verifyPurchaseAttempt,
   ]);
 
+  /**
+   * Reconcile restored products with server receipts, then refresh account data.
+   * Return the domain status for feedback; native restore alone does not prove a grant.
+   */
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt, assertCurrent?: () => void) => {
       let observation = storeRestoreReconciliation([], attempt);

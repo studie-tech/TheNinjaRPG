@@ -37,6 +37,7 @@ export const pushToCombat = (
   router.push("/combat");
 };
 
+/** Redirect active non-awake states to their activity page and report awake availability. */
 export const useAwake = (userData: UserWithRelations) => {
   const router = useNavigationRouter();
   const pathname = usePublicPathname();

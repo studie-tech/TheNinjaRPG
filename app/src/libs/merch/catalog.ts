@@ -47,6 +47,7 @@ export const selectedMerchVariant = (
     ),
   );
 
+/** Prefer the selected variant's image, then its colour match, then the product default. */
 export const selectedMerchImage = (
   product: MerchProduct,
   selection: Record<string, string>,

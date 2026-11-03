@@ -225,6 +225,7 @@ export const getInventoryBucketFullMessage = (bucket: InventoryBucket): string =
   }
 };
 
+/** Resolve a home's per-bucket capacity from its configured storage and bucket limits. */
 export const getHomeStorageBucketCapacity = (
   bucket: HomeStorageBucket,
   homeStorage: number,

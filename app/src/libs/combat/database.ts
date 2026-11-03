@@ -1722,8 +1722,10 @@ export const updateUser = async (
   return { updatedQuestIds };
 };
 
-// Use the persisted balance/clock so delayed or repeated releases cannot replay recovery.
-// Fractional ticks preserve Energy across short fights while other pools stay frozen.
+/**
+ * Build Energy recovery from the persisted balance/clock so repeated releases cannot replay it.
+ * Fractional ticks preserve Energy across short fights while other pools stay frozen.
+ */
 export const combatEnergyRecoverySql = (
   snapshot?: CompleteBattle,
   userId?: string,

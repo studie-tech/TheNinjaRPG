@@ -23,18 +23,21 @@ export const LEMU_PORTRAIT_WAIST: Record<string, number> = {
   [IMG_URL_ASSISTANT_ALTERNATIVES[5].url]: 0.41,
 };
 
+/** Accept configured experiment arms and leave unknown assignments unassigned. */
 export const normalizeLemuVariant = (value?: string | null): LemuVariant | undefined =>
   LEMU_VARIANTS.find((variant) => variant === value);
 
 export const drawLemuVariant = (): LemuVariant =>
   LEMU_VARIANTS[Math.floor(Math.random() * LEMU_VARIANTS.length)] ?? "control";
 
+/** Resolve the assigned portrait, using the control image for missing or invalid arms. */
 export const getLemuImage = (variant?: string) => {
   const assignment = normalizeLemuVariant(variant);
   const index = LEMU_VARIANTS.indexOf(assignment ?? "control");
   return getLemuAlternative(index)?.url ?? IMG_URL_ASSISTANT;
 };
 
+/** Label configured portraits while preserving unknown assignment labels for reporting. */
 export const lemuLabel = (variant: string) => {
   const assignment = normalizeLemuVariant(variant);
   if (!assignment) return variant;

@@ -232,6 +232,7 @@ export default function OccupationCrafting() {
   // Guard
   if (userData?.occupation !== "CRAFTING") return null;
 
+  /** Submit the captured item/crystal pair once and retain its committed success marker. */
   const handleImbueItem = async () => {
     if (
       imbueInFlightRef.current ||
@@ -293,6 +294,7 @@ export default function OccupationCrafting() {
     }
   };
 
+  /** Remove the captured imbuement once while preserving a separately changed selection. */
   const handleRemoveImbuement = async () => {
     const target = removeImbuementTarget;
     if (!target || removeImbuementInFlightRef.current) return;

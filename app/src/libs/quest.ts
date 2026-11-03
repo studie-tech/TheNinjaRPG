@@ -2100,6 +2100,7 @@ export const snapQuestTargetsToReachable = (
   return changed;
 };
 
+/** Build mission-hall categories and copy for village missions or outlaw crimes. */
 export const getMissionHallSettings = (isOutlaw: boolean) => {
   const type = isOutlaw ? "crime" : "mission";
   return [

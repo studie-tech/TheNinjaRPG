@@ -2332,6 +2332,7 @@ const applyDiffuseToConsequences = ({
   }
 };
 
+/** Resolve one raw damage packet through ordered modifiers, seals and damage floors. */
 export const computeDamagePacket = (
   ctx: DamagePacketComputeContext,
 ): { damage: number } => {
@@ -2493,6 +2494,10 @@ export const computeDamagePacket = (
   return { damage: Math.max(minDamage, damage) };
 };
 
+/**
+ * Update damage consequences in place using the caller's seal and eligibility snapshots.
+ * Reuse modifier lists per attacker/defender pair within this processing pass.
+ */
 export const applyDamageModifierPipelineToConsequences = ({
   consequences,
   usersEffects,

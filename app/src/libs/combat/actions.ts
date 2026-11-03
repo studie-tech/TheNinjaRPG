@@ -949,6 +949,7 @@ export const handleInjectedJutsus = (
   return activeJutsus;
 };
 
+/** Validate a combat action and insert its costs and effects into the preloaded battle. */
 export const insertAction = (info: {
   battle: CompleteBattle;
   grid: Grid<TerrainHex>;
@@ -1369,6 +1370,7 @@ export const getTargetUser = (
  */
 export class ActionNotPossibleError extends Error {}
 
+/** Apply an action and resolve its effects entirely within the preloaded battle state. */
 export const performBattleAction = (props: {
   battle: CompleteBattle;
   action: CombatAction;

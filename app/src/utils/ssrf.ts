@@ -142,7 +142,8 @@ export async function validateUrlForSsrf(
         ? url.hostname.slice(1, -1)
         : url.hostname;
 
-    // Check IPv4 literals directly before DNS lookup
+    // URL canonicalizes alternate IPv4 forms, so Node's strict predicate is sufficient.
+    // Reject private literals before performing the DNS rebinding checks.
     if (isIPv4(hostname) && isPrivateIp(hostname)) {
       return false;
     }

@@ -1309,6 +1309,7 @@ const renderJutsuInformation = () => {
   );
 };
 
+/** Show linked jutsu content with navigation to each entity's manual editor. */
 const renderJutsuRelations = (relations?: JutsuRelations) => {
   if (!relations) return null;
 

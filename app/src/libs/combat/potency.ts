@@ -34,6 +34,7 @@ export const POTENCY_TAG_LABELS: Record<PotencyTag["affectedTag"], string> = {
   poison: "Poison",
 };
 
+/** Describe a potency tag's eligible effects, scaling units, elements and duration. */
 export const getPotencyDescription = (
   effect: PotencyTag,
   power = effect.power,

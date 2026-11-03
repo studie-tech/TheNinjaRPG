@@ -6,6 +6,7 @@ interface Pagination {
   lastElement: HTMLElement | null;
 }
 
+/** Fetch available pages as the observed last row enters the viewport. */
 export const useInfinitePagination = ({
   fetchNextPage,
   hasNextPage,

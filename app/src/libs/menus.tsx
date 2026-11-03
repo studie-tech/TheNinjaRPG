@@ -94,6 +94,7 @@ export const BUGS_NAV_LINK: NavBarDropdownLink = {
   icon: <Bug className="h-6 w-6" />,
 };
 
+/** Build game navigation from the current player state, public route and notifications. */
 export const useGameMenu = () => {
   const { data: userData } = useUserDataSelector((user) => ({
     sector: user.sector,

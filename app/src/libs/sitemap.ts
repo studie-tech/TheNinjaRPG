@@ -75,6 +75,7 @@ const manualEntries = async (): Promise<SitemapEntry[]> => {
     selectJutsuForManualEntries(drizzleDB),
     selectItemForManualEntries(drizzleDB),
   ]);
+  /** Build manual-content entries using each entity's persisted update timestamp. */
   const toEntry = (prefix: string) => (row: { id: string; updatedAt: Date }) => ({
     url: absoluteUrl(`${prefix}/${row.id}`),
     lastModified: row.updatedAt,

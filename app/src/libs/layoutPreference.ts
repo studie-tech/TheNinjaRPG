@@ -75,6 +75,7 @@ export const getLayoutExperimentAssignments = (variants: {
   return assignments;
 };
 
+/** Persist the validated layout synchronously so the next document selects its shell. */
 export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
   writeYearCookie(LAYOUT_PREFERENCE_COOKIE, layout);
 };
@@ -108,6 +109,7 @@ export const applyFontScaleCookie = () => {
   }
 };
 
+/** Accept supported layout IDs stored either directly or as JSON-encoded strings. */
 export const storedValueToLayout = (
   value?: string | null,
 ): EffectiveLayout | undefined => {

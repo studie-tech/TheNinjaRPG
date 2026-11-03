@@ -68,6 +68,7 @@ const isFeatureUnavailable = (error: unknown, feature: "vector" | "fulltext") =>
   return false;
 };
 
+/** Cache vector capability probes per client while allowing transient failures to retry. */
 export const supportsReportVectorSearch = async (client: DrizzleClient) => {
   const cached = vectorCapabilities.get(client);
   if (cached && cached.expiresAt > Date.now()) return cached.supported;

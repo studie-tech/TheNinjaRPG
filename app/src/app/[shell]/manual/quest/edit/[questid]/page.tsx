@@ -33,6 +33,7 @@ import {
   SimpleObjective,
 } from "@/validators/objectives";
 
+/** Load quest data and enforce staff access before mounting the editing form. */
 export default function ManualQuestEdit(props: {
   params: Promise<{ questid: string }>;
 }) {
