@@ -15,14 +15,9 @@ interface UseAudioOptions {
 
 interface UseAudioReturn {
   isPlaying: boolean;
-  isLoading: boolean;
-  error: string | null;
-  canPlay: boolean;
   requiresInteraction: boolean;
   enabled: boolean;
-  toggle: () => Promise<void>;
   setEnabled: (enabled: boolean, isPreferenceChange?: boolean) => Promise<void>;
-  setVolume: (volume: number) => void;
 }
 
 /**
@@ -44,11 +39,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isSourceDetached = useRef(false);
-  const cleanupRef = useRef<(() => void) | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [canPlay, setCanPlay] = useState(false);
   const [requiresInteraction, setRequiresInteraction] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(enabled);
@@ -67,7 +59,6 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
           setRequiresInteraction(true);
           throw new Error("User interaction required to play audio");
         } else {
-          setError("Failed to play audio");
           throw error;
         }
       }
@@ -93,32 +84,6 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
     audio.volume = volume;
     audio.preload = effectivePreload;
 
-    // Handle loading states
-    const handleLoadStart = () => {
-      setIsLoading(true);
-    };
-
-    const handleLoadedMetadata = () => {
-      // Metadata loaded
-    };
-
-    const handleCanPlay = () => {
-      setIsLoading(false);
-      setCanPlay(true);
-      setError(null);
-    };
-
-    const handleCanPlayThrough = () => {
-      setIsLoading(false);
-      setCanPlay(true);
-      setError(null);
-    };
-
-    const handleError = () => {
-      setIsLoading(false);
-      setError("Failed to load audio");
-    };
-
     // Handle play/pause events
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => {
@@ -134,27 +99,19 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
     // Safari fallback: track if canPlay has been handled to avoid stale closure issues
     let canPlayHandled = false;
-    const wrappedHandleCanPlay = () => {
+    const markReady = () => {
       canPlayHandled = true;
-      handleCanPlay();
+      setCanPlay(true);
     };
 
     // Safari fallback: if loading events don't fire within 5 seconds, assume ready
     const safariTimeout = setTimeout(() => {
-      if (isSafariOrIOS() && !canPlayHandled && !isSourceDetached.current) {
-        canPlayHandled = true;
-        setIsLoading(false);
-        setCanPlay(true);
-        setError(null);
-      }
+      if (isSafariOrIOS() && !canPlayHandled && !isSourceDetached.current) markReady();
     }, 5000);
 
     // Add event listeners - Safari needs both canplay and canplaythrough
-    audio.addEventListener("loadstart", handleLoadStart);
-    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
-    audio.addEventListener("canplay", wrappedHandleCanPlay); // Safari often fires this before canplaythrough
-    audio.addEventListener("canplaythrough", handleCanPlayThrough);
-    audio.addEventListener("error", handleError);
+    audio.addEventListener("canplay", markReady); // Safari often fires this before canplaythrough
+    audio.addEventListener("canplaythrough", markReady);
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
@@ -183,11 +140,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
     // Cleanup
     return () => {
       clearTimeout(safariTimeout);
-      audio.removeEventListener("loadstart", handleLoadStart);
-      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      audio.removeEventListener("canplay", wrappedHandleCanPlay);
-      audio.removeEventListener("canplaythrough", handleCanPlayThrough);
-      audio.removeEventListener("error", handleError);
+      audio.removeEventListener("canplay", markReady);
+      audio.removeEventListener("canplaythrough", markReady);
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
@@ -226,35 +180,14 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
   useEffect(() => {
     if (!requiresInteraction || !audioEnabled || !canPlay) return;
 
-    const cleanup = addUserInteractionListeners(() => {
+    return addUserInteractionListeners(() => {
       if (audioEnabled && !isPlaying && canPlay) {
         void playAudio().catch(() => {
           // User interaction failed - audio might not be supported
         });
       }
     });
-
-    cleanupRef.current = cleanup;
-    return cleanup;
   }, [requiresInteraction, audioEnabled, isPlaying, playAudio, canPlay]);
-
-  // Toggle function - this IS a user interaction, so should work on Safari
-  const toggle = useCallback(async (): Promise<void> => {
-    const newState = !audioEnabled;
-    setAudioEnabled(newState);
-
-    if (newState && canPlay) {
-      // Toggle is a user interaction, so this should work on Safari
-      try {
-        await playAudio();
-      } catch {
-        // Even user interaction failed - might be a deeper issue
-        setRequiresInteraction(true);
-      }
-    } else if (!newState) {
-      pauseAudio();
-    }
-  }, [audioEnabled, canPlay, playAudio, pauseAudio]);
 
   // Set enabled function
   const setEnabled = useCallback(
@@ -303,14 +236,6 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
     [canPlay, autoPlay, isPlaying, playAudio, src],
   );
 
-  // Set volume function
-  const setVolume = useCallback((newVolume: number): void => {
-    if (!audioRef.current) return;
-
-    const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    audioRef.current.volume = clampedVolume;
-  }, []);
-
   // Update enabled state when options change
   useEffect(() => {
     setAudioEnabled(enabled);
@@ -318,13 +243,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
   return {
     isPlaying,
-    isLoading,
-    error,
-    canPlay,
     requiresInteraction,
     enabled: audioEnabled,
-    toggle,
     setEnabled,
-    setVolume,
   };
 };

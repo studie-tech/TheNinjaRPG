@@ -51,14 +51,9 @@ beforeEach(() => {
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
     isPlaying: false,
-    isLoading: false,
-    error: null,
-    canPlay: true,
     requiresInteraction: false,
     enabled: true,
     setEnabled: vi.fn(async () => undefined),
-    toggle: vi.fn(async () => undefined),
-    setVolume: vi.fn(),
   }));
   vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
   vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);

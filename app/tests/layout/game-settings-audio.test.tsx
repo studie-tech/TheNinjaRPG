@@ -69,14 +69,9 @@ beforeEach(() => {
   // Restore hook and utility exports between suites sharing Bun's module cache.
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
     isPlaying: getAudioTestMocks().isPlaying,
-    isLoading: false,
-    error: null,
-    canPlay: true,
     requiresInteraction: false,
     enabled: getAudioTestMocks().enabled,
     setEnabled: getAudioTestMocks().setEnabled,
-    toggle: vi.fn(async () => undefined),
-    setVolume: vi.fn(),
   }));
   vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
   vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);
