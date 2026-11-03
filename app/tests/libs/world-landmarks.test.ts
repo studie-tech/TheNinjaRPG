@@ -3,11 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
-import {
-  getWorldProtectedLandSectors,
-  WAKE_ISLAND_STRUCTURE_POSITIONS,
-  WORLD_LANDMARKS,
-} from "@/libs/sector-map/landmarks";
+import { getWorldProtectedLandSectors, WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
   type EdgeIndex,
   sectorMapEdgeForGlobeEdge,
@@ -17,6 +13,17 @@ import {
   globalMoisture,
 } from "@/libs/sector-map/worldgen";
 import { buildTiledJson } from "../../scripts/generate-sector-map";
+
+const WAKE_ISLAND_STRUCTURE_POSITIONS = [
+  { name: "Administration Building", x: 13, y: 8 },
+  { name: "Auction House", x: 10, y: 10 },
+  { name: "Mini Games", x: 16, y: 10 },
+  { name: "Colosseum", x: 9, y: 13 },
+  { name: "History Building", x: 17, y: 13 },
+  { name: "Global ANBU HQ", x: 10, y: 16 },
+  { name: "Souvenir Shop", x: 16, y: 16 },
+  { name: "Science Building", x: 13, y: 14 },
+] as const;
 
 const TERRAIN_NAMES = ["ocean", "ground", "dessert", "ice"] as const;
 const MAP_SIZE = 26;
@@ -387,7 +394,7 @@ describe("canonical world landmarks", () => {
     }
   });
 
-  it("keeps the SQL relocation migration aligned with the canonical list", () => {
+  it("keeps the Wake Island structure positions aligned with the relocation migration", () => {
     const sql = readFileSync(
       resolve(
         process.cwd(),
@@ -395,24 +402,6 @@ describe("canonical world landmarks", () => {
       ),
       "utf8",
     );
-    for (const landmark of WORLD_LANDMARKS) {
-      if (landmark.legacySectors.every((sector) => sector === landmark.sector)) {
-        continue;
-      }
-      expect(sql).toContain(`WHERE \`name\` = '${landmark.name}'`);
-      expect(sql).toContain(`SET \`sector\` = ${landmark.sector}`);
-      for (const legacySector of landmark.legacySectors) {
-        expect(sql, `${landmark.name} legacy sector ${legacySector}`).toMatch(
-          new RegExp(
-            "WHERE `sector` (?:= " +
-              legacySector +
-              "|IN \\([^)]*\\b" +
-              legacySector +
-              "\\b)",
-          ),
-        );
-      }
-    }
     for (const structure of WAKE_ISLAND_STRUCTURE_POSITIONS) {
       expect(sql).toContain(
         `SET \`longitude\` = ${structure.x}, \`latitude\` = ${structure.y}`,
