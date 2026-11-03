@@ -549,6 +549,20 @@ export const applyEffects = (
     );
   });
 
+  // Instant kills precede Curse activation and seals; account only their resolved HP loss.
+  for (const [id, consequence] of consequences) {
+    if (consequence.instantKillDamage === undefined) continue;
+    accumulateCurseDamage(
+      newUsersEffects,
+      newUsersState,
+      consequence.userId,
+      consequence.targetId,
+      consequence.instantKillDamage,
+      round,
+    );
+    consequences.delete(id);
+  }
+
   // Register conversions after activation, Clear and prevention, before damage.
   usersEffects
     .filter(
@@ -1603,27 +1617,22 @@ export const applySingleEffect = (
           } else if (effect.type === "onehitkill") {
             const healthBefore = newTarget.curHealth;
             info = onehitkill(effect, getPreventionEffects(), newTarget);
-            accumulateCurseDamage(
-              usersEffects,
-              newUsersState,
-              newUser.userId,
-              newTarget.userId,
-              healthBefore - newTarget.curHealth,
-              round,
-            );
+            const healthLost = healthBefore - newTarget.curHealth;
+            if (healthLost > 0) {
+              consequences.set(effect.id, {
+                userId: newUser.userId,
+                targetId: newTarget.userId,
+                instantKillDamage: healthLost,
+              });
+            }
             // Count the HP an instant kill removes as damage dealt, so raid
             // progress (capped at the attackers' damageDealt) includes it.
             creditDamageDealt(
               resolveDamageCreditUser(newUsersState, newUser),
               newTarget,
-              healthBefore - newTarget.curHealth,
+              healthLost,
             );
-            creditDamageEnmity(
-              newUser,
-              newTarget,
-              healthBefore - newTarget.curHealth,
-              usersEffects,
-            );
+            creditDamageEnmity(newUser, newTarget, healthLost, usersEffects);
           } else if (effect.type === "rob") {
             info = rob(
               effect,

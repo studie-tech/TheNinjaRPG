@@ -657,6 +657,8 @@ export type Consequence = {
   rawDamage?: number;
   residual?: number;
   rawResidual?: number;
+  /** HP already removed by an instant kill, pending Curse accounting after passive resolution. */
+  instantKillDamage?: number;
   /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
   baseDamageForModifiers?: number;
   wound?: number;

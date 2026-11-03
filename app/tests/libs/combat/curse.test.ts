@@ -37,6 +37,19 @@ const hit = (creatorId = "attacker", targetId = "defender", power = 1250) =>
       createdRound: 3,
     },
   );
+const instantKill = (creatorId = "attacker", targetId = "defender", power = 100) =>
+  makeEffect(
+    "onehitkill",
+    { power, rounds: 0 },
+    {
+      id: `kill-${creatorId}-${targetId}`,
+      creatorId,
+      targetId,
+      targetType: "user",
+      isNew: true,
+      createdRound: 3,
+    },
+  );
 const scenario = (effects: UserEffect[]) =>
   makeCompleteBattle({
     round: 3,
@@ -111,6 +124,136 @@ describe("Curse", () => {
     const battle = scenario([mark(), hit()]);
     user(battle, "defender").curHealth = 100;
     expect(stored(applyEffects(battle, "attacker").newBattle)).toBe(25);
+  });
+  it.each(["damage", "onehitkill"] as const)(
+    "stores first-action %s HP loss for an innate Curse and pays it on expiry",
+    (type) => {
+      const effect = mark();
+      effect.createdRound = 0;
+      effect.fromType = "bloodline";
+      const damage =
+        type === "damage" ? hit("attacker", "defender", 6250) : instantKill();
+      damage.createdRound = 1;
+      const initial = scenario([effect, damage]);
+      initial.round = 1;
+      user(initial).curHealth = 3000;
+      user(initial).maxHealth = 5000;
+      initial.usersState.push(makeBattleUser("another-enemy"));
+      const battle = applyEffects(initial, "attacker").newBattle;
+      expect(user(battle, "defender").curHealth).toBe(0);
+      expect(stored(battle)).toBe(1250);
+      expect(user(battle).damageDealt).toBe(5000);
+      expect(expire(battle).progressRound).toBe(true);
+      expect(user(battle).curHealth).toBe(4250);
+    },
+  );
+  it.each(["clear", "seal", "buffprevent"] as const)(
+    "resolves %s before storing instant-kill damage",
+    (type) => {
+      const effect = mark();
+      if (type === "seal") effect.fromType = "bloodline";
+      if (type === "buffprevent") effect.createdRound = 2;
+      else effect.curseState = { storedHealing: 0, activatedRound: 1 };
+      const blocker = makeEffect(
+        type,
+        { power: 100, rounds: type === "clear" ? 0 : 3 },
+        {
+          creatorId: "defender",
+          targetId: "attacker",
+          targetType: "user",
+          createdRound: type === "buffprevent" ? 1 : 3,
+          isNew: type !== "buffprevent",
+        },
+      );
+      const battle = applyEffects(
+        scenario([effect, blocker, instantKill()]),
+        "attacker",
+      ).newBattle;
+      expect(user(battle, "defender").curHealth).toBe(0);
+      expect(effect.curseState?.storedHealing ?? 0).toBe(0);
+    },
+  );
+  it("stores an instant kill after Cleanse restores an uninitialized innate Curse", () => {
+    const effect = mark();
+    effect.fromType = "bloodline";
+    const seal = makeEffect(
+      "seal",
+      { power: 100, rounds: 3 },
+      {
+        creatorId: "defender",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: 1,
+      },
+    );
+    const cleanse = makeEffect(
+      "cleanse",
+      { power: 100, rounds: 0 },
+      { targetId: "attacker", targetType: "user", createdRound: 3, isNew: true },
+    );
+    const battle = applyEffects(
+      scenario([effect, seal, cleanse, instantKill()]),
+      "attacker",
+    ).newBattle;
+    expect(seal.rounds).toBe(0);
+    expect(stored(battle)).toBe(1250);
+  });
+  it("excludes instant kills on the casting action and collects on the next action", () => {
+    const effect = mark();
+    effect.isNew = true;
+    effect.createdRound = 3;
+    const initial = scenario([effect, instantKill()]);
+    initial.usersState.push(makeBattleUser("another-enemy", { curHealth: 700 }));
+    let battle = applyEffects(initial, "attacker").newBattle;
+    expect(stored(battle)).toBe(0);
+    battle.usersEffects.push(instantKill("attacker", "another-enemy"));
+    battle = applyEffects(battle, "attacker").newBattle;
+    expect(stored(battle)).toBe(175);
+  });
+  it.each(["missed", "prevented", "dead target"] as const)(
+    "stores no instant-kill damage for outcome: %s",
+    (outcome) => {
+      const effects = [
+        mark(),
+        instantKill("attacker", "defender", outcome === "missed" ? 0 : 100),
+      ];
+      if (outcome === "prevented") {
+        effects.push(
+          makeEffect(
+            "onehitkillprevent",
+            { power: 100, rounds: 3 },
+            {
+              creatorId: "defender",
+              targetId: "defender",
+              targetType: "user",
+              createdRound: 1,
+            },
+          ),
+        );
+      }
+      const initial = scenario(effects);
+      user(initial, "defender").curHealth = outcome === "dead target" ? 0 : 700;
+      const battle = applyEffects(initial, "attacker").newBattle;
+      expect(stored(battle)).toBe(0);
+      expect(user(battle).damageDealt).toBe(0);
+    },
+  );
+  it("attributes actual instant-kill HP loss to its source without counting a second kill", () => {
+    const initial = scenario([
+      mark(),
+      mark(50, "teammate"),
+      mark(50, "defender"),
+      instantKill(),
+      instantKill("teammate"),
+    ]);
+    initial.usersState.push(makeBattleUser("teammate", { direction: "left" }));
+    user(initial, "defender").curHealth = 700;
+    const battle = applyEffects(initial, "attacker").newBattle;
+    expect(stored(battle)).toBe(175);
+    expect(stored(battle, "defender")).toBe(175);
+    expect(stored(battle, "teammate")).toBe(0);
+    expect(user(battle).damageDealt).toBe(700);
+    expect(user(battle, "teammate").damageDealt).toBe(0);
   });
   it("discards healing when cleared", () => {
     const effect = mark();
