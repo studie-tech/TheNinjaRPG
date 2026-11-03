@@ -26,7 +26,7 @@ import {
 } from "@/queries/shrine";
 import { fetchVillages } from "@/queries/village";
 import { listActiveWarsWithRules } from "@/queries/war";
-import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { syncWarCamps } from "@/server/utils/objectiveWar";
 import {
@@ -39,7 +39,6 @@ import type { BoostTemplateEntry } from "@/validators/shrine";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
-type ShrineMaintenanceDb = Pick<DrizzleClient, "select" | "update" | "delete">;
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
@@ -252,7 +251,7 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageTokens: villageData.tokens ?? 0,
+      villageTokens: villageData.tokens,
       shrineSettings: villageData.shrineSettings,
       hasLevel3Shrine: villagesWithLevel3Shrine.has(villageData.id),
       boostCost: SHRINE_BOOST_COST,
@@ -314,14 +313,11 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
  * Deletes shrine battle lobbies that never progressed into a real battle and
  * resets users who are still marked as queued for those stale lobbies.
  */
-export async function runStaleShrineLobbyCleanup(
-  now: Date,
-  db: ShrineMaintenanceDb = drizzleDB,
-) {
+export async function runStaleShrineLobbyCleanup(now: Date) {
   const cutoff = shrineLobbyFreshAfter(now);
 
   const staleLobbies = await selectMpvpBattleQueueForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     cutoff,
   );
 
@@ -335,29 +331,29 @@ export async function runStaleShrineLobbyCleanup(
   // claimed between the SELECT above and these statements is excluded from both
   // child cleanup and parent delete (claimed rows have battleId set).
   const unclaimedSubquery = selectMpvpBattleQueueForRunStaleShrineLobbyCleanup2(
-    db,
+    drizzleDB,
     deletedQueueIds,
     cutoff,
   );
 
   const unclaimedUsersSubquery = selectMpvpBattleUserForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     unclaimedSubquery,
   );
 
   // Step 1a: reset user statuses while mpvpBattleUser rows still exist —
   // the subquery reads from mpvpBattleUser, so the UPDATE must precede the DELETE.
   const resetResult = await updateUserDataForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     unclaimedUsersSubquery,
   );
 
   // Step 1b: now safe to drop the child rows
-  await deleteMpvpBattleUserForRunStaleShrineLobbyCleanup(db, unclaimedSubquery);
+  await deleteMpvpBattleUserForRunStaleShrineLobbyCleanup(drizzleDB, unclaimedSubquery);
 
   // Step 2: parent delete with the same guard
   const deleteResult = await deleteMpvpBattleQueueForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     deletedQueueIds,
     cutoff,
   );
