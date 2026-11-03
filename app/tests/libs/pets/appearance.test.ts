@@ -349,13 +349,13 @@ describe("companion provider pipeline", () => {
   it("fails closed on download errors, empty bodies and oversized declared responses", async () => {
     const download = vi.spyOn(globalThis, "fetch");
     download.mockResolvedValueOnce(new Response("Missing upload", { status: 404 }));
-    await expect(downloadPetImage(sourceUrl)).rejects.toThrow("Could not download");
+    await expect(downloadPetImage(sourceUrl, new AbortController().signal)).rejects.toThrow("Could not download");
     download.mockResolvedValueOnce(new Response());
-    await expect(downloadPetImage(sourceUrl)).rejects.toThrow("Could not download");
+    await expect(downloadPetImage(sourceUrl, new AbortController().signal)).rejects.toThrow("Could not download");
     download.mockResolvedValueOnce(new Response(new Uint8Array(0)));
-    await expect(downloadPetImage(sourceUrl)).rejects.toThrow("empty");
+    await expect(downloadPetImage(sourceUrl, new AbortController().signal)).rejects.toThrow("empty");
     download.mockResolvedValueOnce(new Response(new Uint8Array(1), { headers: { "content-length": String(6 * 1024 * 1024) } }));
-    await expect(downloadPetImage(sourceUrl)).rejects.toThrow("too large");
+    await expect(downloadPetImage(sourceUrl, new AbortController().signal)).rejects.toThrow("too large");
   });
 
   it("cancels a streaming response that exceeds the byte budget despite an understated header", async () => {
@@ -365,7 +365,7 @@ describe("companion provider pipeline", () => {
       cancel() { cancelled = true; },
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(stream, { headers: { "content-length": "1" } }));
-    await expect(downloadPetImage(sourceUrl)).rejects.toThrow("too large");
+    await expect(downloadPetImage(sourceUrl, new AbortController().signal)).rejects.toThrow("too large");
     expect(cancelled).toBe(true);
   });
 });

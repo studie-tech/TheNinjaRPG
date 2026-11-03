@@ -69,7 +69,7 @@ describeWithDatabase("Authored species in companion flows", () => {
     expect(view.options.species).toMatchObject([{ id: species.id, ...data }]);
     expect(await database.query.userPet.findFirst()).toEqual(before);
     if (!view.pet) throw new Error("Expected the owned companion");
-    const prompt = getPetAppearancePrompt({ ...view.pet, rank: 3 });
+    const prompt = getPetAppearancePrompt({ ...view.pet, rank: 3 }, "GPT");
     expect(prompt).toContain(data.description);
     expect(prompt).not.toContain(species.description);
     expect(prompt).toContain("SAME individual animal");

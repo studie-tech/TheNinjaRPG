@@ -57,13 +57,13 @@ describe("companion sex in the appearance prompt", () => {
   it("keeps the previous unsexed prompt for companions without a saved gender", () => {
     expect(getPetSexClause(null, 1)).toBe("");
     expect(getPetSexClause(undefined, 1)).toBe("");
-    const legacy = getPetAppearancePrompt(pet);
-    expect(legacy).toBe(getPetAppearancePrompt({ ...pet, gender: null }));
+    const legacy = getPetAppearancePrompt(pet, "GPT");
+    expect(legacy).toBe(getPetAppearancePrompt({ ...pet, gender: null }, "GPT"));
     expect(legacy).not.toContain("Sex:");
   });
 
   it("asks for visible male features from rank 1 that grow with rank", () => {
-    const prompt = getPetAppearancePrompt({ ...pet, gender: "MALE" });
+    const prompt = getPetAppearancePrompt({ ...pet, gender: "MALE" }, "GPT");
     expect(prompt).toContain("Sex: MALE");
     expect(prompt).toContain("a lion has a mane");
     expect(prompt).toContain("unmistakable");
@@ -73,7 +73,7 @@ describe("companion sex in the appearance prompt", () => {
   });
 
   it("asks for the female form without male-only features", () => {
-    const prompt = getPetAppearancePrompt({ ...pet, gender: "FEMALE", rank: 7, artRank: 6, avatar: "https://example.com/pet.webp" });
+    const prompt = getPetAppearancePrompt({ ...pet, gender: "FEMALE", rank: 7, artRank: 6, avatar: "https://example.com/pet.webp" }, "GPT");
     expect(prompt).toContain("Sex: FEMALE");
     expect(prompt).toContain("a lioness has no mane");
     expect(prompt).not.toContain("Sex: MALE");

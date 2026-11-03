@@ -25,7 +25,7 @@ export const classifyPetAppearanceImage = async (
   input: {
     image: Buffer;
     previousImage?: Buffer;
-    previousRank?: number;
+    previousRank: number;
     species: string;
     identity: string;
     rank: number;
@@ -35,10 +35,7 @@ export const classifyPetAppearanceImage = async (
   signal: AbortSignal,
 ) => {
   signal.throwIfAborted();
-  const evolutionRequired =
-    !!input.previousImage &&
-    input.previousRank !== undefined &&
-    input.previousRank < input.rank;
+  const evolutionRequired = !!input.previousImage && input.previousRank < input.rank;
   const content: UserContent = [
     {
       type: "text",
@@ -47,7 +44,7 @@ export const classifyPetAppearanceImage = async (
         identity: input.identity,
         rank: input.rank,
         ...(input.sex ? { sex: input.sex } : {}),
-        previousRank: input.previousRank ?? null,
+        previousRank: input.previousRank,
         evolutionRequired,
         images: input.previousImage ? ["PREVIOUS", "CANDIDATE"] : ["CANDIDATE"],
       }),
