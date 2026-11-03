@@ -130,36 +130,6 @@ const Welcome: React.FC = () => {
               </Link>
             </div>
           </div>
-          {/* {isTreatment && (
-            <div className=" flex justify-center items-center flex-row">
-              <button
-                onClick={showPrompt}
-                className="w-1/2 cursor-pointer transition-transform hover:scale-105"
-                aria-label="Install from Play Store"
-              >
-                <Image
-                  src={IMG_PLAY_STORE_BANNER}
-                  width={258}
-                  height={100}
-                  className="w-full"
-                  alt="Screenshot from Play Store"
-                />
-              </button>
-              <button
-                onClick={showPrompt}
-                className="w-1/2 cursor-pointer transition-transform hover:scale-105"
-                aria-label="Install from App Store"
-              >
-                <Image
-                  src={IMG_APP_STORE_BANNER}
-                  width={258}
-                  height={100}
-                  className="w-full"
-                  alt="Screenshot from App Store"
-                />
-              </button>
-            </div>
-          )} */}
         </div>
       </div>
       <div className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>

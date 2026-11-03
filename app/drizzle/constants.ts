@@ -2580,10 +2580,6 @@ export const IMG_BG_DIRT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJob2ojkZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 
 // Images
-export const IMG_PLAY_STORE_BANNER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyI5pULukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.png";
-export const IMG_APP_STORE_BANNER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZOcwIVUaYQrBIUTu69nkMxWmS4ah0O7LVCp8.png";
 export const IMG_DEFAULT_PROFILE_PICTURE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ19UqON6bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
 export const IMG_OCCUPATION_GATHERING =
