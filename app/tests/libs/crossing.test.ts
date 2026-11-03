@@ -15,10 +15,7 @@ import {
   edgeLength,
   edgeParam,
   mapParam,
-  paramFlips,
-  resolveEdgeCrossing,
   resolveSectorMapEdgeCrossing,
-  seamRotation,
   sectorMapEdgeForGlobeEdge,
   type EdgeIndex,
 } from "@/libs/sector-map/crossing";
@@ -62,11 +59,7 @@ describe("crossing edge primitives", () => {
   });
 
   it("keeps aligned parameters and scales differently sized maps", () => {
-    expect(paramFlips(EDGE_NORTH, EDGE_SOUTH)).toBe(false);
-    expect(paramFlips(EDGE_EAST, EDGE_WEST)).toBe(false);
-    expect(seamRotation(EDGE_NORTH, EDGE_SOUTH)).toBe(0);
-    expect(seamRotation(EDGE_EAST, EDGE_WEST)).toBe(0);
-    expect(mapParam(2, 4, 8, false)).toBe(5);
+    expect(mapParam(2, 4, 8)).toBe(5);
     expect(
       resolveSectorMapEdgeCrossing(
         EDGE_EAST,
@@ -213,46 +206,6 @@ describe("cylindrical world topology", () => {
     expect(getSectorNeighborIds(sectorIdAt(0, 0)).north).toBe(-1);
     expect(getSectorNeighborIds(sectorIdAt(0, MAP_WORLD_ROWS - 1)).south).toBe(-1);
   });
-
-  it("round-trips every cell on every real sector edge", () => {
-    let checked = 0;
-    for (let sector = 0; sector < tiles.length; sector++) {
-      for (let edge = 0; edge < 4; edge++) {
-        const exitEdge = edge as EdgeIndex;
-        const neighbor = tiles[sector]!.n[edge]!;
-        if (neighbor < 0) continue;
-        const entryEdge = tiles[sector]!.ne[edge]! as EdgeIndex;
-        for (let parameter = 0; parameter < W; parameter++) {
-          const exit = edgeCell(exitEdge, parameter, W, H);
-          const landed = resolveEdgeCrossing(
-            exitEdge,
-            exit.x,
-            exit.y,
-            W,
-            H,
-            entryEdge,
-            W,
-            H,
-          );
-          const backEntry = tiles[neighbor]!.ne[entryEdge]! as EdgeIndex;
-          const back = resolveEdgeCrossing(
-            entryEdge,
-            landed.entryX,
-            landed.entryY,
-            W,
-            H,
-            backEntry,
-            W,
-            H,
-          );
-          expect(back.entryX).toBe(exit.x);
-          expect(back.entryY).toBe(exit.y);
-          checked++;
-        }
-      }
-    }
-    expect(checked).toBe((MAP_TOTAL_SECTORS * 4 - MAP_WORLD_COLUMNS * 2) * W);
-  }, 20_000);
 });
 
 describe("deterministic spherical climate", () => {
