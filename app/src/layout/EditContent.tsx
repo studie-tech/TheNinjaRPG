@@ -48,7 +48,6 @@ import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { CoordinateTargetingEditor } from "@/layout/CoordinateTargetingEditor";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
-import Image from "@/layout/Image";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { MethodSizeEditor } from "@/layout/MethodSizeEditor";
 import Modal from "@/layout/Modal";
@@ -114,6 +113,16 @@ export type FormDbValue = { id: string; name: string };
  */
 const hasComboboxValue = (value: unknown) =>
   value !== undefined && value !== null && value !== "";
+
+/** Effect fields edited through the game-asset picker instead of a combobox. */
+const ASSET_PICKER_FIELDS: readonly string[] = [
+  "appearAnimation",
+  "disappearAnimation",
+  "staticAnimation",
+  "staticAssetPath",
+  "appearSfx",
+  "disappearSfx",
+];
 
 export type FormEntry<K> = {
   id: K;
@@ -790,15 +799,7 @@ export const EditContent = <
                     />
                   )}
                   {(type === "str_array" ||
-                    (type === "db_values" &&
-                      ![
-                        "appearAnimation",
-                        "disappearAnimation",
-                        "staticAnimation",
-                        "staticAssetPath",
-                        "appearSfx",
-                        "disappearSfx",
-                      ].includes(id))) && (
+                    (type === "db_values" && !ASSET_PICKER_FIELDS.includes(id))) && (
                     <div className="flex min-w-0 flex-row items-end">
                       <div className="min-w-0 flex-1">
                         <FormField
@@ -1005,28 +1006,9 @@ export const EditContent = <
                           <X className="h-5 w-5 stroke-1" />
                         </Button>
                       )}
-                      {"current" in formEntry && formEntry.current && (
-                        <div className="ml-1 h-12 w-12 overflow-y-auto">
-                          <Image
-                            src={formEntry.current}
-                            alt={id}
-                            width={100}
-                            height={100}
-                            priority
-                          />
-                        </div>
-                      )}
                     </div>
                   )}
-                  {type === "db_values" &&
-                    [
-                      "appearAnimation",
-                      "disappearAnimation",
-                      "staticAnimation",
-                      "staticAssetPath",
-                      "appearSfx",
-                      "disappearSfx",
-                    ].includes(id) && (
+                  {type === "db_values" && ASSET_PICKER_FIELDS.includes(id) && (
                       <div className="flex flex-row items-start gap-3">
                         <FormField
                           control={form.control}
@@ -1696,13 +1678,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined, {
-    enabled:
-      fields.includes("staticAssetPath") ||
-      fields.includes("appearAnimation") ||
-      fields.includes("staticAnimation") ||
-      fields.includes("disappearAnimation") ||
-      fields.includes("appearSfx") ||
-      fields.includes("disappearSfx"),
+    enabled: ASSET_PICKER_FIELDS.some((field) => fields.includes(field)),
   });
 
   // Form for handling the specific tag
@@ -1716,12 +1692,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // A few fields we need to watch
   const watchType = useWatch({ control: form.control, name: "type" });
   const watchStaticPath = useWatch({ control: form.control, name: "staticAssetPath" });
-  const watchAppear = useWatch({ control: form.control, name: "appearAnimation" });
-  const watchStatic = useWatch({ control: form.control, name: "staticAnimation" });
-  const watchDisappear = useWatch({
-    control: form.control,
-    name: "disappearAnimation",
-  });
   const watchAll = useWatch({ control: form.control });
   const isDamageModifier = damageModifierTypes.includes(tag.type);
   const [hasElementFilter, setHasElementFilter] = useState(
@@ -1737,13 +1707,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     if (incomingHasElements) setHasElementFilter(true);
   }, [incomingHasElements]);
 
-  // Get images for the different animations and statics
+  // Asset options and the selected static image
   const statics = assetData?.filter((a) => a.type === "STATIC");
   const animations = assetData?.filter((a) => a.type === "ANIMATION");
   const staticImage = statics?.find((a) => a.id === watchStaticPath)?.image;
-  const appearAnimImage = animations?.find((a) => a.id === watchAppear)?.image;
-  const disappearAnimImage = animations?.find((a) => a.id === watchDisappear)?.image;
-  const staticAnimImage = animations?.find((a) => a.id === watchStatic)?.image;
 
   // When user changes type, we need to update the effects array to re-render form
   useEffect(() => {
@@ -2075,7 +2042,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: appearAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "disappearAnimation") {
         return {
@@ -2083,7 +2049,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: disappearAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "staticAnimation") {
         return {
@@ -2091,7 +2056,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: staticAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "staticAssetPath") {
         return {
