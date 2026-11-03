@@ -24,7 +24,6 @@ import {
   item,
   paypalSubscription,
   paypalTransaction,
-  paypalWebhookMessage,
   recruitmentRewards,
   storeUserIdAlias,
   userData,
@@ -33,31 +32,6 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
-
-/** PayPal webhook fields persisted by the IPN integration. */
-export type IBody = {
-  event_type: string;
-  resource: {
-    id: string;
-    state: string;
-    amount: {
-      total: string;
-      currency: string;
-    };
-  };
-};
-
-/** Build the `paypalWebhookMessage` insert for `GET`. */
-export const insertPaypalWebhookMessageForGET = (
-  client: Pick<DrizzleClient, "insert">,
-  body: IBody,
-) =>
-  client.insert(paypalWebhookMessage).values({
-    id: nanoid(),
-    rawData: body,
-    eventType: body.event_type,
-    handled: false,
-  });
 
 /** Build the `paypalSubscription` listing for `GET`, using predicates on `status`, `orderId`, `updatedAt`. */
 export const listPaypalSubscriptionForGET = (client: Pick<DrizzleClient, "query">) =>
