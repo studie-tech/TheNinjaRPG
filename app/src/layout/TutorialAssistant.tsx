@@ -1678,62 +1678,60 @@ const PlayerTutorialAssistant: React.FC<
                 {parseHtml(activeRelatedObjective.description)}
               </blockquote>
             )}
-          {isQuestOverlay &&
-            postTutorialQuest?.userQuest.quest.content.objectives &&
-            postTutorialQuest && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  {postTutorialQuest.userQuest.quest.content.objectives.map(
-                    (objective, objectiveIndex) => {
-                      const quest = postTutorialQuest.userQuest.quest;
-                      const tracker = postTutorialQuest.tracker;
-                      const allDone = isQuestComplete(quest, tracker);
-                      const activeObjective = getActiveObjective(quest, tracker);
-                      const status = tracker.goals.find((g) => g.id === objective.id);
-                      const hideIfNoRewards =
-                        objective.task === "dialog" ||
-                        (activeObjective && objective.id !== activeObjective?.id) ||
-                        (allDone && !status?.done);
-                      return (
-                        <Objective
-                          objective={objective}
-                          tracker={tracker}
-                          checkRewards={() => checkRewards({ questId: quest.id })}
-                          key={objective.id}
-                          titlePrefix={
-                            quest.consecutiveObjectives
-                              ? "Objective: "
-                              : `${objectiveIndex + 1}. `
-                          }
-                          grayedOut={
-                            !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
-                          }
-                          hideIfNoRewards={hideIfNoRewards}
-                        />
-                      );
-                    },
-                  )}
-                </div>
-                {isQuestComplete(
-                  postTutorialQuest.userQuest.quest,
-                  postTutorialQuest.tracker,
-                ) &&
-                  !postTutorialQuest.userQuest.completed &&
-                  userData?.status === "AWAKE" && (
-                    <Button
-                      onClick={() => {
-                        checkRewards({
-                          questId: postTutorialQuest.userQuest.quest.id,
-                        });
-                      }}
-                      className="w-full"
-                    >
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Collect Reward
-                    </Button>
-                  )}
-              </>
-            )}
+          {isQuestOverlay && postTutorialQuest?.userQuest.quest.content.objectives && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                {postTutorialQuest.userQuest.quest.content.objectives.map(
+                  (objective, objectiveIndex) => {
+                    const quest = postTutorialQuest.userQuest.quest;
+                    const tracker = postTutorialQuest.tracker;
+                    const allDone = isQuestComplete(quest, tracker);
+                    const activeObjective = getActiveObjective(quest, tracker);
+                    const status = tracker.goals.find((g) => g.id === objective.id);
+                    const hideIfNoRewards =
+                      objective.task === "dialog" ||
+                      (activeObjective && objective.id !== activeObjective?.id) ||
+                      (allDone && !status?.done);
+                    return (
+                      <Objective
+                        objective={objective}
+                        tracker={tracker}
+                        checkRewards={() => checkRewards({ questId: quest.id })}
+                        key={objective.id}
+                        titlePrefix={
+                          quest.consecutiveObjectives
+                            ? "Objective: "
+                            : `${objectiveIndex + 1}. `
+                        }
+                        grayedOut={
+                          !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
+                        }
+                        hideIfNoRewards={hideIfNoRewards}
+                      />
+                    );
+                  },
+                )}
+              </div>
+              {isQuestComplete(
+                postTutorialQuest.userQuest.quest,
+                postTutorialQuest.tracker,
+              ) &&
+                !postTutorialQuest.userQuest.completed &&
+                userData?.status === "AWAKE" && (
+                  <Button
+                    onClick={() => {
+                      checkRewards({
+                        questId: postTutorialQuest.userQuest.quest.id,
+                      });
+                    }}
+                    className="w-full"
+                  >
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Collect Reward
+                  </Button>
+                )}
+            </>
+          )}
         </AssistantDialog>
       )}
 

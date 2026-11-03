@@ -10,7 +10,6 @@ import {
   TUTORIAL_ITEM_ID,
   TUTORIAL_JUTSU_ID,
   TUTORIAL_STARTER_QUEST_ID,
-  TUTORIAL_STEPS_COUNT,
 } from "@/drizzle/constants";
 import {
   actionPointsAfterAction,
@@ -698,13 +697,6 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     nextLabel: "Finish",
   },
 ];
-
-// Warn if TUTORIAL_STEPS_COUNT in constants.ts is out of sync
-if (TUTORIAL_STEPS.length !== TUTORIAL_STEPS_COUNT) {
-  console.warn(
-    `⚠️ TUTORIAL_STEPS_COUNT mismatch! constants.ts has ${TUTORIAL_STEPS_COUNT}, but TUTORIAL_STEPS has ${TUTORIAL_STEPS.length} steps. Please update TUTORIAL_STEPS_COUNT in @/drizzle/constants.ts to ${TUTORIAL_STEPS.length}.`,
-  );
-}
 
 /** Steps the hands-on combat lesson replaces with live guidance once the fight is on. */
 const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "mission-find-pup"];
