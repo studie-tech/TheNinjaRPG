@@ -117,11 +117,11 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-[12rem] flex-1 items-center gap-2">
         <span className="font-bold text-muted-foreground text-xs uppercase tracking-wide">
           Loadout
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <ItemLoadoutSelector size="small" />
         </div>
       </div>
