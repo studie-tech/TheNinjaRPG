@@ -14,7 +14,6 @@ import {
   FACTION_RAID_STRUCTURE_ROUTES,
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
-  SHRINE_MAX_PER_VILLAGE,
   VILLAGE_SYNDICATE_ID,
   WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
   WAR_DECLARATION_COOLDOWN_HOURS,
@@ -964,11 +963,6 @@ export const warRouter = createTRPCRouter({
       if (activeSectorWars.length > 0) {
         return errorResponse(
           `You are already in a sector war for sector ${activeSectorWars.map((w) => w.sector).join(", ")}`,
-        );
-      }
-      if (activeSectorWars.length >= SHRINE_MAX_PER_VILLAGE) {
-        return errorResponse(
-          `You can only own ${SHRINE_MAX_PER_VILLAGE} sectors at a time`,
         );
       }
       const sectorCount = user.village.sectors.length;
