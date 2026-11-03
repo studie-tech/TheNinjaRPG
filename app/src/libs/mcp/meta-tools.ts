@@ -1,10 +1,9 @@
-import type { CallToolResult, ContentBlock, Tool } from "@modelcontextprotocol/server";
+import type { CallToolResult, Tool } from "@modelcontextprotocol/server";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import type { z } from "zod";
 import { truncateString } from "@/utils/string";
-import { isPlainObject } from "@/utils/typeutils";
-import type { ModelContextProtocolTool, TransformMcpProcedureFunction } from "./types";
+import type { ModelContextProtocolTool } from "./types";
 
 /**
  * Information about a router for discovery.
@@ -27,9 +26,8 @@ export type EndpointInfo = {
  */
 type EndpointData = {
   description: string;
-  inputSchema?: z.core.JSONSchema.JSONSchema;
+  inputSchema: z.core.JSONSchema.JSONSchema;
   pathInRouter: string[];
-  transformMcpProcedure?: TransformMcpProcedureFunction;
   isMutationEndpoint: boolean;
 };
 
@@ -46,13 +44,6 @@ export type ToolRegistry = {
  * Never add mixed-case values here - they will not match and could cause authorization bypass.
  */
 const WRITE_SCOPES = ["profile:write", "write"];
-
-// Runtime check to ensure all WRITE_SCOPES values are lowercase
-WRITE_SCOPES.forEach((scope) => {
-  if (scope !== scope.toLowerCase()) {
-    throw new Error(`WRITE_SCOPES contains non-lowercase value: ${scope}`);
-  }
-});
 
 // Meta-tool description constants
 const META_TOOL_DESC_LIST_ROUTERS =
@@ -71,7 +62,7 @@ const META_TOOL_DESC_SELECT =
 const META_TOOL_DESC_SEARCH =
   "Case-insensitive text pattern to filter the response. Only returns parts of the response where keys or string values contain this pattern.";
 const META_TOOL_DESC_MAX_LENGTH =
-  "Maximum character length of the total response. For multi-block responses, this is the combined character budget across all blocks. Response is truncated with an indicator if exceeded.";
+  "Maximum character length of the total response. Response is truncated with an indicator if exceeded.";
 
 /**
  * Build a registry from extracted MCP tools.
@@ -93,7 +84,6 @@ export function buildToolRegistry(tools: ModelContextProtocolTool[]): ToolRegist
       description: tool.description,
       inputSchema: tool.inputSchema,
       pathInRouter: tool.pathInRouter,
-      transformMcpProcedure: tool.transformMcpProcedure,
       isMutationEndpoint: tool.isMutation,
     });
   }
@@ -277,7 +267,7 @@ export const handleGetSchema = (
           {
             endpointName,
             description: endpoint.description,
-            inputSchema: endpoint.inputSchema ?? { type: "object", properties: {} },
+            inputSchema: endpoint.inputSchema,
           },
           null,
           2,
@@ -387,7 +377,7 @@ function validatePathSegment(segment: string | undefined): string | undefined {
   if (DANGEROUS_PROPS.includes(normalized)) return undefined;
 
   // Validate segment contains only safe characters
-  if (segment !== "*" && !SAFE_SEGMENT_PATTERN.test(normalized)) {
+  if (!SAFE_SEGMENT_PATTERN.test(normalized)) {
     return undefined;
   }
 
@@ -564,45 +554,6 @@ function searchObject(value: unknown, pattern: string): unknown {
 }
 
 /**
- * Apply maxLength truncation to content blocks with text fields.
- * Tracks a running character budget across all blocks to ensure the total
- * response size stays within maxLength.
- */
-function applyLengthBudgetToBlocks(
-  responseBlocks: ContentBlock[],
-  maxLength: number,
-): ContentBlock[] {
-  let remainingBudget = maxLength;
-  const truncatedBlocks: ContentBlock[] = [];
-
-  for (const block of responseBlocks) {
-    if (remainingBudget <= 0) {
-      // Budget exhausted, skip remaining blocks
-      break;
-    }
-
-    if ("text" in block && typeof block.text === "string") {
-      if (block.text.length <= remainingBudget) {
-        // Block fits within budget
-        truncatedBlocks.push(block);
-        remainingBudget -= block.text.length;
-      } else {
-        // Block needs truncation
-        truncatedBlocks.push({
-          ...block,
-          text: truncateString(block.text, remainingBudget, "...[truncated]"),
-        });
-        remainingBudget = 0;
-      }
-    } else {
-      truncatedBlocks.push(block);
-    }
-  }
-
-  return truncatedBlocks;
-}
-
-/**
  * Apply response filters (select, search, maxLength) to a raw result
  * and return the final JSON text.
  */
@@ -690,74 +641,19 @@ function resolveProcedure(trpcCaller: unknown, pathInRouter: string[]): unknown 
 }
 
 /**
- * Handle transformed endpoint response with filters.
- */
-async function handleTransformedResponse(
-  output: unknown,
-  transform: TransformMcpProcedureFunction,
-  filters?: ResponseFilters,
-) {
-  const result = await transform(output);
-
-  // Check if select/search filters are requested but can't be applied to transformed text content
-  const hasUnsupportedFilters =
-    (filters?.select && filters.select.length > 0) || filters?.search;
-
-  if (hasUnsupportedFilters) {
-    // Return warning about filter limitations for transformed endpoints
-    const warning = [
-      "Warning: select and search filters cannot be applied to transformed endpoint responses.",
-      "Only maxLength truncation is supported for these endpoints.",
-      "---",
-    ].join("\n");
-
-    const warningContent = { type: "text" as const, text: warning };
-
-    if (filters?.maxLength) {
-      // Apply maxLength only to response data blocks, exempt warning block
-      const truncatedContent = applyLengthBudgetToBlocks(result, filters.maxLength);
-      return {
-        content: [warningContent, ...truncatedContent],
-      };
-    }
-
-    return { content: [warningContent, ...result] };
-  }
-
-  if (filters?.maxLength) {
-    return {
-      content: applyLengthBudgetToBlocks(result, filters.maxLength),
-    };
-  }
-
-  return { content: result };
-}
-
-/**
  * Validate input structure against endpoint schema.
  * Returns error response if validation fails, undefined if valid.
  */
 function validateEndpointInput(
   input: Record<string, unknown> | undefined,
-  schema: z.core.JSONSchema.JSONSchema | undefined,
+  schema: z.core.JSONSchema.JSONSchema,
   endpointName: string,
 ) {
-  if (input === undefined || !schema) {
+  if (input === undefined) {
     return undefined;
   }
 
   if (schema.type === "object") {
-    if (!isPlainObject(input)) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Invalid input type for ${endpointName}: expected object, received ${typeof input}`,
-          },
-        ],
-      };
-    }
-
     if (Array.isArray(schema.required) && schema.required.length > 0) {
       const missingFields = schema.required.filter((field) => !(field in input));
       if (missingFields.length > 0) {
@@ -783,20 +679,10 @@ function validateEndpointInput(
 async function executeProcedure(
   procedure: unknown,
   input: Record<string, unknown> | undefined,
-  endpoint: EndpointData,
   endpointName: string,
   filters?: ResponseFilters,
 ) {
   try {
-    if (typeof endpoint.transformMcpProcedure === "function") {
-      const output = await (procedure as (input?: unknown) => Promise<unknown>)(input);
-      return await handleTransformedResponse(
-        output,
-        endpoint.transformMcpProcedure,
-        filters,
-      );
-    }
-
     const result = await (procedure as (input?: unknown) => Promise<unknown>)(input);
     const text = applyFilters(result, filters);
     return {
@@ -862,7 +748,7 @@ export const handleCallEndpoint = async (
   // Clients omit input for endpoints whose object schema has only optional
   // fields; tRPC still requires an object there, so send an empty one.
   const resolvedInput =
-    input === undefined && endpoint.inputSchema?.type === "object" ? {} : input;
+    input === undefined && endpoint.inputSchema.type === "object" ? {} : input;
 
   const validationError = validateEndpointInput(
     resolvedInput,
@@ -887,11 +773,5 @@ export const handleCallEndpoint = async (
     };
   }
 
-  return await executeProcedure(
-    procedure,
-    resolvedInput,
-    endpoint,
-    endpointName,
-    filters,
-  );
+  return await executeProcedure(procedure, resolvedInput, endpointName, filters);
 };
