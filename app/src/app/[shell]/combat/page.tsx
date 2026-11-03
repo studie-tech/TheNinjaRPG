@@ -422,17 +422,12 @@ export default function CombatPage() {
             />
           </div>
         )}
-        {!userData && <Loader explanation="Loading User Data" />}
         {isBattleLoading && <Loader explanation="Loading Battle Data" />}
-        {userData && !results && !userData.battleId && (
-          <p className="p-3">You are not in any battle</p>
-        )}
       </div>
     );
   }, [
     isBattleLoading,
     combat,
-    userData,
     results,
     battle,
     isAutoCombatActive,
