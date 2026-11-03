@@ -55,6 +55,7 @@ import {
   MasteryQueueKinds,
   MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
+  PARRY_MAX_PERCENTAGE,
   PVP_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -66,6 +67,7 @@ import Image from "@/layout/Image";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import StatusBar from "@/layout/StatusBar";
+import { getEffectPower } from "@/libs/combat/power";
 import { sealCheck } from "@/libs/combat/tags";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
@@ -994,6 +996,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
           const od = val.timeTracker.originalDamage || 0;
           value = -Math.floor(od * (woundPower / 100));
+        } else if (val.type === "parry" || val.type === "curse") {
+          value = Math.abs(getEffectPower(val));
         } else {
           // Standard processing for all other effects
           value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
@@ -1015,6 +1019,9 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
               val.type === "diffuse"
                 ? Math.max(found.value, value)
                 : found.value + value;
+            if (val.type === "parry") {
+              found.value = Math.min(PARRY_MAX_PERCENTAGE, found.value);
+            }
             if (val.rounds) found.rounds.push(val.rounds);
           } else {
             acc.push({
@@ -1251,7 +1258,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     </div>
   ));
 
-  const activeCurses = effects.filter(
+  const activeCurses = filteredEffects.filter(
     (effect) =>
       effect.type === "curse" &&
       effect.targetId === userId &&
@@ -1347,7 +1354,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
           <div className="mb-1 font-semibold">Curse Healing</div>
           <div>
             {effect.curseState?.storedHealing.toFixed(2)} HP stored · {effect.rounds}{" "}
-            rounds remaining
+            {effect.rounds === 1 ? "round" : "rounds"} remaining
           </div>
         </div>
       ))}
