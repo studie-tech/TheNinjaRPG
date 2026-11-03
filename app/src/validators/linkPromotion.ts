@@ -1,17 +1,7 @@
 import { z } from "zod";
 
 export const linkPromotionSchema = z.object({
-  url: z
-    .url("Please enter a valid URL (with http/https protocol)")
-    .min(1, "URL is required")
-    .refine((url) => {
-      try {
-        new URL(url);
-        return true;
-      } catch {
-        return false;
-      }
-    }, "Invalid URL format"),
+  url: z.url("Please enter a valid URL (with http/https protocol)"),
 });
 
 export const linkPromotionReviewSchema = z.object({
