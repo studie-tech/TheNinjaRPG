@@ -25,15 +25,12 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 interface InstallPromptContextType {
-  showPrompt: () => void;
   hidePrompt: () => void;
   dismissPromptLongTerm: () => void;
   isVisible: boolean;
   deferredPrompt: BeforeInstallPromptEvent | null;
   isInstalled: boolean;
   isIOS: boolean;
-  isMobile: boolean;
-  isStandalone: boolean;
 }
 
 const InstallPromptContext = createContext<InstallPromptContextType | undefined>(
@@ -47,8 +44,6 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     // Detect iOS, including iPads using desktop-class Safari's Macintosh user agent.
@@ -58,13 +53,11 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
     // Detect mobile devices (iOS or Android)
     const mobile =
       iOS || /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    setIsMobile(mobile);
 
     // Check if app is already installed (standalone mode)
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as { standalone?: boolean }).standalone === true;
-    setIsStandalone(standalone);
 
     // Already inside the native app: there is nothing to add to a home screen.
     if (isNative()) return;
@@ -106,12 +99,6 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const showPrompt = () => {
-    if (isMobile && !isStandalone && !isInstalled && !isNative()) {
-      setIsVisible(true);
-    }
-  };
-
   const hidePrompt = () => {
     setIsVisible(false);
     safeLocalStorageSetItem("pwa-install-dismissed", Date.now().toString());
@@ -125,15 +112,12 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
   return (
     <InstallPromptContext
       value={{
-        showPrompt,
         hidePrompt,
         dismissPromptLongTerm,
         isVisible,
         deferredPrompt,
         isInstalled,
         isIOS,
-        isMobile,
-        isStandalone,
       }}
     >
       {children}

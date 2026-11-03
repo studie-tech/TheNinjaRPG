@@ -12,8 +12,8 @@ const dismissPromptLongTerm = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(install, "useInstallPrompt").mockReturnValue({
-    isVisible: true, showPrompt: vi.fn(), hidePrompt, dismissPromptLongTerm, deferredPrompt: null,
-    isInstalled: false, isIOS: true, isMobile: true, isStandalone: false,
+    isVisible: true, hidePrompt, dismissPromptLongTerm, deferredPrompt: null,
+    isInstalled: false, isIOS: true,
   } as ReturnType<typeof install.useInstallPrompt>);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ currentStep: undefined } as ReturnType<typeof tutorial.useTutorialStep>);
   vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({ data: "player" } as ReturnType<typeof userContext.useUserDataSelector>);
