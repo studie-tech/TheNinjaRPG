@@ -4,7 +4,6 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
 } from "@/libs/layoutPreference";
 import {
-  isLemuExperimentEnabled,
   LEMU_EXPERIMENT,
   type LemuVariant,
   normalizeLemuVariant,
@@ -165,11 +164,7 @@ export const chooseShell = (
     layout === "default" &&
     request.pathname === "/" &&
     request.isDocument !== false;
-  if (
-    isLandingVisit &&
-    isLemuExperimentEnabled &&
-    !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))
-  ) {
+  if (isLandingVisit && !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))) {
     assigned[LEMU_EXPERIMENT] = request.draw();
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));

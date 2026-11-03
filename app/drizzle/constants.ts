@@ -1337,18 +1337,30 @@ export const IMG_URL_ASSISTANT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp" as const;
 /** Tutorial experiment alternatives, in treatment assignment order. */
 export const IMG_URL_ASSISTANT_ALTERNATIVES = [
-  // Silver blade
-  "https://ui0arpl8sm.ufs.sh/f/content-jlYDeVvWQIv0UDYJndtBn.webp",
-  // Golden hawk
-  "https://ui0arpl8sm.ufs.sh/f/content-6jMP1VF5X1Zu2wppt4vec.webp",
-  // Shadow mentor
-  "https://ui0arpl8sm.ufs.sh/f/content-NBVEXpYD8aRhwFof6jq45.webp",
-  // Copper lioness
-  "https://ui0arpl8sm.ufs.sh/f/content-2bwqugh_JdcS55ALvzfhV.webp",
-  // Tiger captain
-  "https://ui0arpl8sm.ufs.sh/f/content-r6_prvN1P_dntlkbOEJSL.webp",
-  // Moon sentinel
-  "https://ui0arpl8sm.ufs.sh/f/content-jMcyVJrtGlAclqlBlbJFR.webp",
+  {
+    label: "Silver blade",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-jlYDeVvWQIv0UDYJndtBn.webp",
+  },
+  {
+    label: "Golden hawk",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-6jMP1VF5X1Zu2wppt4vec.webp",
+  },
+  {
+    label: "Shadow mentor",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-NBVEXpYD8aRhwFof6jq45.webp",
+  },
+  {
+    label: "Copper lioness",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-2bwqugh_JdcS55ALvzfhV.webp",
+  },
+  {
+    label: "Tiger captain",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-r6_prvN1P_dntlkbOEJSL.webp",
+  },
+  {
+    label: "Moon sentinel",
+    url: "https://ui0arpl8sm.ufs.sh/f/content-jMcyVJrtGlAclqlBlbJFR.webp",
+  },
 ] as const;
 export const IMG_URL_HANDPOINTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF.webp" as const;
