@@ -1305,7 +1305,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village, sageExists, _villages] = await Promise.all([
+      const [user, target, village, sageExists] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForUpdateUser(ctx.drizzle, input),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
@@ -1314,7 +1314,6 @@ export const profileRouter = createTRPCRouter({
               data: { sageModeId: input.data.sageModeId },
             })
           : Promise.resolve(null),
-        fetchVillages(ctx.drizzle),
       ]);
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
