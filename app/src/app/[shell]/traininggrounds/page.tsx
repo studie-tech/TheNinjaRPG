@@ -744,7 +744,6 @@ const StatsTraining: React.FC<
         <EnergyTrainingQueue
           user={userData}
           availableEnergy={availableEnergy}
-          getGuess={() => ""}
           refreshCaptcha={async () => {
             await utils.misc.getCaptcha.invalidate();
           }}
