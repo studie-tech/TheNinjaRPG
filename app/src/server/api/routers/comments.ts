@@ -196,7 +196,6 @@ export const commentsRouter = createTRPCRouter({
    */
   getUserConversations: protectedProcedure
     .meta({ mcp: { description: "Get user's conversations" } })
-    .input(z.object({ selectedConvo: z.string().nullish().optional() }))
     .query(async ({ ctx }) => {
       // Query
       const [data, policies, senders] = await Promise.all([

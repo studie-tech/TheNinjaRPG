@@ -122,7 +122,7 @@ const blacklistPanel = (success: boolean) => {
   const affectedKeys = [
     getQueryKey(testApi.profile.getBlacklist, undefined, "query"),
     ...[{ convo_id: "private", limit: 10 }, { convo_title: "Global", limit: 15 }].map((input) => getQueryKey(testApi.comments.getConversationComments, input, "infinite")),
-    getQueryKey(testApi.comments.getUserConversations, { selectedConvo: "private" }, "query"),
+    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
   ];
   for (const key of affectedKeys) queryClient.setQueryData(key, []);
   getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "inbox", conversationId: "private" });
@@ -344,14 +344,14 @@ it("clears cached unread markers only after authorized reads, including messages
     }
     throw new Error(path);
   });
-  const list = renderHook(() => testApi.comments.getUserConversations.useQuery({ selectedConvo: null }), { wrapper });
+  const list = renderHook(() => testApi.comments.getUserConversations.useQuery(), { wrapper });
   await waitFor(() => expect(list.result.current.data).toHaveLength(1));
   const selected = renderHook(() => useConversation({ convo_id: "chat", refreshKey: 0 }), { wrapper });
   await waitFor(() => expect(finishRead).toBeDefined());
   expect(isConversationUnread(list.result.current.data![0]!)).toBe(true);
   await act(async () => finishRead({ data: [], convo: { id: "chat", isPublic: false, lastReadAt: at(3) }, nextCursor: null }));
   await waitFor(() => expect(isConversationUnread(list.result.current.data![0]!)).toBe(false));
-  const listKey = getQueryKey(testApi.comments.getUserConversations, { selectedConvo: null }, "query");
+  const listKey = getQueryKey(testApi.comments.getUserConversations, undefined, "query");
   await act(async () => {
     queryClient.setQueryData(listKey, [{ ...conversation("chat", "Private"), updatedAt: at(4), lastReadAt: at(3) }]);
     receive({ message: "new", fromId: "friend", commentId: "incoming" });

@@ -63,10 +63,9 @@ export const useConversationCacheUpdate = () => {
 /** Mirror the inbox counter reset performed by a successful conversation listing. */
 export function useInboxConversations() {
   const { data: userData, notifications, updateNotifications } = useUserData();
-  const result = api.comments.getUserConversations.useQuery(
-    { selectedConvo: null },
-    { enabled: !!userData },
-  );
+  const result = api.comments.getUserConversations.useQuery(undefined, {
+    enabled: !!userData,
+  });
   useEffect(() => {
     if (result.data && getInboxNews(notifications) > 0) {
       void updateNotifications(clearInboxNotifications(notifications));
