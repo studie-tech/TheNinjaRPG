@@ -358,10 +358,7 @@ export const RevenueBySourceBar: React.FC<RevenueBySourceProps> = (props) => {
 };
 
 interface QuestFunnelBarProps {
-  stepsCompleted:
-    | number[]
-    | Array<{ steps: number; deviceType: DeviceType; username?: string }>
-    | Array<{ objectives: number; deviceType: DeviceType; username?: string }>;
+  stepsCompleted: Array<{ steps: number; deviceType: DeviceType; username?: string }>;
   title: string;
   stepDescriptions?: string[];
   stepLabels?: string[];
@@ -392,27 +389,13 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
         unknown: [] as string[],
       };
 
-      if (
-        typeof stepsCompleted[0] === "object" &&
-        stepsCompleted[0] !== null &&
-        "deviceType" in stepsCompleted[0]
-      ) {
-        const dataWithDevices = stepsCompleted as Array<{
-          steps?: number;
-          objectives?: number;
-          deviceType: DeviceType;
-          username?: string;
-        }>;
-
-        dataWithDevices.forEach((item) => {
-          const itemStep = item.steps ?? item.objectives ?? 0;
-          if (itemStep === step && item.username) {
-            if (result[item.deviceType].length < 10) {
-              result[item.deviceType].push(item.username);
-            }
+      stepsCompleted.forEach((item) => {
+        if (item.steps === step && item.username) {
+          if (result[item.deviceType].length < 10) {
+            result[item.deviceType].push(item.username);
           }
-        });
-      }
+        }
+      });
 
       return result;
     },
@@ -423,229 +406,120 @@ export const QuestFunnelBar: React.FC<QuestFunnelBarProps> = ({
     const ctx = chartRef?.current?.getContext("2d");
     if (!ctx || !stepsCompleted.length) return;
 
-    // Check if we have the new format with device types
-    const hasDeviceTypes =
-      typeof stepsCompleted[0] === "object" &&
-      stepsCompleted[0] !== null &&
-      "deviceType" in stepsCompleted[0];
+    // Stacked bars by device type
+    // Find the max number of steps completed by any user
+    const maxSteps = Math.max(...stepsCompleted.map((d) => d.steps));
 
-    if (hasDeviceTypes) {
-      // New format with device types - create stacked bars
-      const dataWithDevices = stepsCompleted as Array<{
-        steps?: number;
-        objectives?: number;
-        deviceType: DeviceType;
-      }>;
+    // For each step level, count users by device type
+    const labels: string[] = [];
+    const mobileData: number[] = [];
+    const desktopData: number[] = [];
+    const unknownData: number[] = [];
 
-      // Find the max number of steps/objectives completed by any user
-      const maxSteps = Math.max(
-        ...dataWithDevices.map((d) => d.steps ?? d.objectives ?? 0),
+    for (let step = 0; step <= maxSteps; step++) {
+      labels.push(
+        stepLabels?.[step] ?? (step === 0 ? "0 steps (all)" : `${step}+ steps`),
       );
 
-      // For each step level, count users by device type
-      const labels: string[] = [];
-      const mobileData: number[] = [];
-      const desktopData: number[] = [];
-      const unknownData: number[] = [];
-
-      for (let step = 0; step <= maxSteps; step++) {
-        labels.push(
-          stepLabels?.[step] ?? (step === 0 ? "0 steps (all)" : `${step}+ steps`),
-        );
-
-        // Count users who completed at least this many steps/objectives, by device type
-        const usersAtStep = dataWithDevices.filter((d) => {
-          const count = d.steps ?? d.objectives ?? 0;
-          return count >= step;
-        });
-        mobileData.push(usersAtStep.filter((d) => d.deviceType === "mobile").length);
-        desktopData.push(usersAtStep.filter((d) => d.deviceType === "desktop").length);
-        unknownData.push(usersAtStep.filter((d) => d.deviceType === "unknown").length);
-      }
-
-      // If in dropoff mode, convert counts to dropoffs
-      if (mode === "dropoff") {
-        for (let i = 0; i < mobileData.length - 1; i++) {
-          const mobileNext = mobileData[i + 1] ?? 0;
-          const desktopNext = desktopData[i + 1] ?? 0;
-          const unknownNext = unknownData[i + 1] ?? 0;
-          mobileData[i] = (mobileData[i] ?? 0) - mobileNext;
-          desktopData[i] = (desktopData[i] ?? 0) - desktopNext;
-          unknownData[i] = (unknownData[i] ?? 0) - unknownNext;
-        }
-        // Last step has no dropoff (no next step to compare to)
-        mobileData[mobileData.length - 1] = 0;
-        desktopData[desktopData.length - 1] = 0;
-        unknownData[unknownData.length - 1] = 0;
-      }
-
-      const chart = new ChartJS(ctx, {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Mobile",
-              data: mobileData,
-              borderColor: "hsl(150 70% 45%)",
-              backgroundColor: "hsl(150 70% 60% / 0.7)",
-            },
-            {
-              label: "Desktop",
-              data: desktopData,
-              borderColor: "hsl(210 70% 45%)",
-              backgroundColor: "hsl(210 70% 60% / 0.7)",
-            },
-            {
-              label: "Unknown",
-              data: unknownData,
-              borderColor: "hsl(0 0% 45%)",
-              backgroundColor: "hsl(0 0% 60% / 0.7)",
-            },
-          ],
-        },
-        options: {
-          maintainAspectRatio: false,
-          responsive: true,
-          onClick: (_event, elements) => {
-            if (elements.length > 0 && elements[0]) {
-              const dataIndex = elements[0].index;
-              setSelectedStep({
-                step: dataIndex,
-                description: stepDescriptions?.[dataIndex],
-                usernames: getUsernamesForStep(dataIndex),
-              });
-            }
-          },
-          scales: {
-            x: { type: "category", stacked: true },
-            y: {
-              type: "linear",
-              beginAtZero: true,
-              stacked: true,
-              title: {
-                display: true,
-                text: mode === "dropoff" ? "Users Lost (Drop-off)" : "Number of Users",
-              },
-              ticks: {
-                precision: 0,
-              },
-            },
-          },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                footer: (tooltipItems) => {
-                  const dataIndex = tooltipItems[0]?.dataIndex;
-                  const lines: string[] = [];
-
-                  if (dataIndex !== undefined && stepDescriptions?.[dataIndex]) {
-                    lines.push(stepDescriptions[dataIndex]);
-                  }
-
-                  lines.push("");
-                  lines.push("Click bar to see usernames");
-
-                  return lines.join("\n");
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return () => chart.destroy();
-    } else {
-      // Legacy format - simple array of numbers
-      const stepsArray = stepsCompleted as number[];
-      const maxSteps = Math.max(...stepsArray);
-
-      const values: number[] = [];
-      const labels: string[] = [];
-
-      for (let step = 0; step <= maxSteps; step++) {
-        const count = stepsArray.filter((n) => n >= step).length;
-        values.push(count);
-        labels.push(
-          stepLabels?.[step] ?? (step === 0 ? "0 steps (all)" : `${step}+ steps`),
-        );
-      }
-
-      // If in dropoff mode, convert counts to dropoffs
-      if (mode === "dropoff") {
-        for (let i = 0; i < values.length - 1; i++) {
-          const nextValue = values[i + 1] ?? 0;
-          values[i] = (values[i] ?? 0) - nextValue;
-        }
-        // Last step has no dropoff (no next step to compare to)
-        values[values.length - 1] = 0;
-      }
-
-      const chart = new ChartJS(ctx, {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label:
-                mode === "dropoff"
-                  ? "Users lost at this step"
-                  : "Number of users remaining",
-              data: values,
-              borderColor: "hsl(210 70% 45%)",
-              backgroundColor: "hsl(210 70% 60% / 0.6)",
-            },
-          ],
-        },
-        options: {
-          maintainAspectRatio: false,
-          responsive: true,
-          onClick: (_event, elements) => {
-            if (elements.length > 0 && elements[0]) {
-              const dataIndex = elements[0].index;
-              setSelectedStep({
-                step: dataIndex,
-                description: stepDescriptions?.[dataIndex],
-                usernames: getUsernamesForStep(dataIndex),
-              });
-            }
-          },
-          scales: {
-            x: { type: "category" },
-            y: {
-              type: "linear",
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: mode === "dropoff" ? "Users Lost (Drop-off)" : "Number of Users",
-              },
-              ticks: {
-                precision: 0,
-              },
-            },
-          },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: (context) => `${context.parsed.y} users`,
-                afterLabel: (context) => {
-                  const lines: string[] = [];
-                  const desc = stepDescriptions?.[context.dataIndex];
-                  if (desc) {
-                    lines.push(desc);
-                  }
-                  lines.push("");
-                  lines.push("Click bar to see usernames");
-                  return lines.join("\n");
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return () => chart.destroy();
+      // Count users who completed at least this many steps, by device type
+      const usersAtStep = stepsCompleted.filter((d) => d.steps >= step);
+      mobileData.push(usersAtStep.filter((d) => d.deviceType === "mobile").length);
+      desktopData.push(usersAtStep.filter((d) => d.deviceType === "desktop").length);
+      unknownData.push(usersAtStep.filter((d) => d.deviceType === "unknown").length);
     }
+
+    // If in dropoff mode, convert counts to dropoffs
+    if (mode === "dropoff") {
+      for (let i = 0; i < mobileData.length - 1; i++) {
+        const mobileNext = mobileData[i + 1] ?? 0;
+        const desktopNext = desktopData[i + 1] ?? 0;
+        const unknownNext = unknownData[i + 1] ?? 0;
+        mobileData[i] = (mobileData[i] ?? 0) - mobileNext;
+        desktopData[i] = (desktopData[i] ?? 0) - desktopNext;
+        unknownData[i] = (unknownData[i] ?? 0) - unknownNext;
+      }
+      // Last step has no dropoff (no next step to compare to)
+      mobileData[mobileData.length - 1] = 0;
+      desktopData[desktopData.length - 1] = 0;
+      unknownData[unknownData.length - 1] = 0;
+    }
+
+    const chart = new ChartJS(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Mobile",
+            data: mobileData,
+            borderColor: "hsl(150 70% 45%)",
+            backgroundColor: "hsl(150 70% 60% / 0.7)",
+          },
+          {
+            label: "Desktop",
+            data: desktopData,
+            borderColor: "hsl(210 70% 45%)",
+            backgroundColor: "hsl(210 70% 60% / 0.7)",
+          },
+          {
+            label: "Unknown",
+            data: unknownData,
+            borderColor: "hsl(0 0% 45%)",
+            backgroundColor: "hsl(0 0% 60% / 0.7)",
+          },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        responsive: true,
+        onClick: (_event, elements) => {
+          if (elements.length > 0 && elements[0]) {
+            const dataIndex = elements[0].index;
+            setSelectedStep({
+              step: dataIndex,
+              description: stepDescriptions?.[dataIndex],
+              usernames: getUsernamesForStep(dataIndex),
+            });
+          }
+        },
+        scales: {
+          x: { type: "category", stacked: true },
+          y: {
+            type: "linear",
+            beginAtZero: true,
+            stacked: true,
+            title: {
+              display: true,
+              text: mode === "dropoff" ? "Users Lost (Drop-off)" : "Number of Users",
+            },
+            ticks: {
+              precision: 0,
+            },
+          },
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              footer: (tooltipItems) => {
+                const dataIndex = tooltipItems[0]?.dataIndex;
+                const lines: string[] = [];
+
+                if (dataIndex !== undefined && stepDescriptions?.[dataIndex]) {
+                  lines.push(stepDescriptions[dataIndex]);
+                }
+
+                lines.push("");
+                lines.push("Click bar to see usernames");
+
+                return lines.join("\n");
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return () => chart.destroy();
   }, [stepsCompleted, title, stepDescriptions, stepLabels, mode, getUsernamesForStep]);
 
   return (
