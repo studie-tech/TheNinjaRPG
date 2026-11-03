@@ -124,8 +124,7 @@ export const RewardChoiceModal: React.FC = () => {
       className="sm:max-w-4xl"
       isOpen={true}
       setIsOpen={(open) => {
-        const isOpen = typeof open === "function" ? open(true) : open;
-        if (!isOpen) dismiss();
+        if (!open) dismiss();
       }}
       proceed_label={
         required === 0 ? "Clear Offer" : `Claim Reward${required === 1 ? "" : "s"}`
