@@ -55,8 +55,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setReward: cf.setters.reward,
-    setQuestTypes: cf.setters.questTypes,
   };
 };
 

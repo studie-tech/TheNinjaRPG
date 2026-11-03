@@ -71,10 +71,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setBattleTypes: cf.setters.battleTypes,
-    setMinCount: cf.setters.minCount,
-    setItemTypes: cf.setters.itemTypes,
-    setBloodlineIds: cf.setters.bloodlineIds,
   };
 };
 

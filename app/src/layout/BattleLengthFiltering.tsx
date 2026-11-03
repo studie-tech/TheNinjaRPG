@@ -75,12 +75,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setBattleTypes: cf.setters.battleTypes,
-    setMinCount: cf.setters.minCount,
-    setMinWinnerLevel: cf.setters.minWinnerLevel,
-    setMaxWinnerLevel: cf.setters.maxWinnerLevel,
-    setMinLoserLevel: cf.setters.minLoserLevel,
-    setMaxLoserLevel: cf.setters.maxLoserLevel,
   };
 };
 

@@ -220,22 +220,8 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    // expose setters with the same external API
-    setName: cf.setters.name,
     setEffect: cf.setters.effect,
-    setItemType: cf.setters.itemType,
-    setRarity: cf.setters.itemRarity,
-    setSlot: cf.setters.slot,
-    setTarget: cf.setters.target,
-    setMethod: cf.setters.method,
-    setEventItems: cf.setters.eventItems,
     setOnlyInShop: cf.setters.onlyInShop,
-    setHidden: cf.setters.hidden,
-    setCanBeCrafted: cf.setters.canBeCrafted,
-    setCanBeImbued: cf.setters.canBeImbued,
-    setCanBeHunted: cf.setters.canBeHunted,
-    setCanBeGathered: cf.setters.canBeGathered,
-    setCanBeTraded: cf.setters.canBeTraded,
   };
 };
 

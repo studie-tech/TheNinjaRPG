@@ -58,7 +58,7 @@ describe("jutsu filter defaults", () => {
 
     act(() => {
       view.result.current.setRank([]);
-      view.result.current.setName("Clone");
+      view.result.current.cf.setters.name("Clone");
     });
     view.rerender();
     await waitFor(

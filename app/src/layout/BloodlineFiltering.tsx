@@ -121,14 +121,8 @@ export const useFiltering = (defaultRank: LetterRank | "None" = "None") => {
   return {
     ...cf.values,
     cf,
-    setName: cf.setters.name,
-    setClassification: cf.setters.classification,
-    setRank: cf.setters.rank,
-    setVillage: cf.setters.village,
-    setElement: cf.setters.element,
     setEffect: cf.setters.effect,
-    setStat: cf.setters.stat,
-    setHidden: cf.setters.hidden,
+    setRank: cf.setters.rank,
   };
 };
 

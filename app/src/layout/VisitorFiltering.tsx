@@ -98,10 +98,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setUtmSource: cf.setters.utmSource,
-    setDeviceType: cf.setters.deviceType,
-    setStartDate: cf.setters.startDate,
-    setEndDate: cf.setters.endDate,
   };
 };
 

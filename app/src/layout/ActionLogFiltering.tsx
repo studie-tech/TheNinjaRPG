@@ -81,9 +81,6 @@ export const useFiltering = (logType: LogType = "user") => {
   return {
     ...cf.values,
     cf,
-    setSearch: cf.setters.search,
-    setLogType: cf.setters.logtype,
-    setUsername: cf.setters.username,
   };
 };
 

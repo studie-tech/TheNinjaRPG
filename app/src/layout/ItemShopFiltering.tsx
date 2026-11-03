@@ -130,13 +130,8 @@ export const useShopFiltering = (defaultType: ItemType) => {
   return {
     ...cf.values,
     cf,
-    setEffect: cf.setters.effect,
     setName: cf.setters.name,
-    setRarity: cf.setters.itemRarity,
-    setSlot: cf.setters.slot,
     setItemType: cf.setters.itemType as React.Dispatch<React.SetStateAction<ItemType>>,
-    setBattleUsageType: cf.setters.battleUsageType,
-    setActionCostPerc: cf.setters.actionCostPerc,
   };
 };
 

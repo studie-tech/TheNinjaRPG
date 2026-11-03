@@ -87,10 +87,6 @@ export const useApplicationsFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setUsername: cf.setters.username,
-    setState: cf.setters.state,
-    setTargetRole: cf.setters.targetRole,
-    setOnlyMine: cf.setters.onlyMine,
   };
 };
 

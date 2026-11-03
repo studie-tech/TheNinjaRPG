@@ -92,10 +92,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setName: cf.setters.name,
-    setLevel: cf.setters.level,
-    setVillage: cf.setters.village,
-    setHidden: cf.setters.hidden,
   };
 };
 

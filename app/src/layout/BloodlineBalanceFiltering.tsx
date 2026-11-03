@@ -65,10 +65,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setBattleTypes: cf.setters.battleTypes,
-    setMinCount: cf.setters.minCount,
-    setBloodlineRanks: cf.setters.bloodlineRanks,
-    setStatClassifications: cf.setters.statClassifications,
   };
 };
 

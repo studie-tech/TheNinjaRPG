@@ -165,13 +165,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setSearch: cf.setters.search,
-    setStatus: cf.setters.status,
-    setCategory: cf.setters.category,
-    setPriority: cf.setters.priority,
-    setAssignedToUserId: cf.setters.assignedToUserId,
-    setCreatedByUserId: cf.setters.createdByUserId,
-    setIsPublic: cf.setters.isPublic,
   };
 };
 

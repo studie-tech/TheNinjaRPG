@@ -66,9 +66,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setSources: cf.setters.sources,
-    setStartDate: cf.setters.startDate,
-    setEndDate: cf.setters.endDate,
   };
 };
 
