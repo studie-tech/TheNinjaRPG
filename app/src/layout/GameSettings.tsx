@@ -857,7 +857,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
             className={
               triggerClassName
                 ? undefined
-                : "inline-flex rounded-full bg-blue-100 bg-opacity-80 group-hover/audio:bg-blue-300 group-hover/audio:text-black"
+                : "relative inline-flex rounded-full bg-blue-100 bg-opacity-80 group-hover/audio:bg-blue-300 group-hover/audio:text-black"
             }
           >
             {isSettingsTrigger ? (
@@ -869,6 +869,15 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
               <Volume2 className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
             ) : (
               <VolumeX className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
+            )}
+            {isSettingsTrigger && !triggerClassName && (
+              // Keeps the sound state visible on the gear; toggled by class so hydration matches.
+              <VolumeX
+                aria-hidden="true"
+                data-muted-mark
+                className={`absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-white p-[1px] text-slate-700 ring-1 ring-slate-400 ${audioEnabled ? "hidden" : ""}`}
+                suppressHydrationWarning
+              />
             )}
           </span>
         </button>
