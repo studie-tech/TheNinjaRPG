@@ -52,7 +52,7 @@ export const selectedMerchImage = (
   selection: Record<string, string>,
 ) => {
   const variant = selectedMerchVariant(product, selection);
-  const color = product.options.find((option) => /^(color|colour)$/i.test(option.name));
+  const color = product.options.find((option) => isColorOption(option.name));
   const colorVariant =
     color && selection[color.name]
       ? product.variants.find(
@@ -66,6 +66,9 @@ export const selectedMerchImage = (
       : undefined;
   return variant?.image ?? colorVariant?.image ?? preferredMerchImage(product);
 };
+
+/** Whether a product option is its colour choice. */
+export const isColorOption = (name: string) => /^(color|colour)$/i.test(name);
 
 export const preferredMerchImage = (product: MerchProduct) =>
   (["Utility Backpack", "Black Glossy Mug", "Straw Lid Water Bottle"].includes(
