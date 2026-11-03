@@ -7,9 +7,6 @@ export const AVATAR_UPLOAD_DAILY_LIMIT = 50;
 export const OCCUPATIONS = ["GATHERING", "HUNTER", "CRAFTING"] as const;
 export type OccupationType = (typeof OCCUPATIONS)[number];
 
-export const CURRENCY_TYPES = ["MONEY", "REPUTATION", "SEICHI_SILVER"] as const;
-export type CurrencyType = (typeof CURRENCY_TYPES)[number];
-
 export const VARIANT_COST_TYPES = [
   "MONEY",
   "REPUTATION",
@@ -357,12 +354,10 @@ export const ContentProposalEntityTypes = [
 export type ContentProposalEntityType = (typeof ContentProposalEntityTypes)[number];
 /** Whether a change edits an existing entity or creates a new one. */
 export const ContentProposalOperations = ["UPDATE", "CREATE"] as const;
-export type ContentProposalOperation = (typeof ContentProposalOperations)[number];
 /** TARGET entities are the ones a suggestion changes; CONTEXT entities only informed it. */
 export const ContentProposalBasisRoles = ["TARGET", "CONTEXT"] as const;
 /** Where a media candidate comes from: the asset library, Epidemic Sound or a generation. */
 export const ContentProposalMediaSources = ["CATALOG", "EPIDEMIC", "GENERATED"] as const;
-export type ContentProposalMediaSource = (typeof ContentProposalMediaSources)[number];
 /** Sounds and animations fill a field with an asset id, images with an image URL. */
 export const ContentProposalMediaKinds = ["SFX", "ANIMATION", "IMAGE"] as const;
 export type ContentProposalMediaKind = (typeof ContentProposalMediaKinds)[number];
@@ -581,7 +576,6 @@ export const UserRoles = [
 export type UserRole = (typeof UserRoles)[number];
 
 export const UserRolesWithSkillTreeAccess = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"];
-export type UserRoleWithSkillTreeAccess = (typeof UserRolesWithSkillTreeAccess)[number];
 
 // Staff Applications
 export const StaffApplicationStates = ["PENDING", "APPROVED", "REJECTED"] as const;
@@ -603,8 +597,6 @@ export const isStaffApprovalGroup = (role: UserRole): role is StaffApprovalGroup
 
 // Per-group approval decision states
 export const StaffApplicationApprovalStates = ["APPROVED", "REJECTED"] as const;
-export type StaffApplicationApprovalState =
-  (typeof StaffApplicationApprovalStates)[number];
 
 // Roles users are allowed to apply for
 export const StaffApplicationTargetRoles = [
@@ -689,7 +681,6 @@ export const PET_ABILITY_SLOTS_BY_RARITY: Record<PetRarity, number> = {
   COMMON: 2, UNCOMMON: 3, RARE: 4, EPIC: 5, LEGENDARY: 6,
 };
 export const PetRoles = ["SUPPORT", "HEALER", "ASSAULT"] as const;
-export type PetRole = (typeof PetRoles)[number];
 /** Species passives either empower both bonded actors or trigger on their enemy hits. */
 export const PetSkillTargets = ["SELF", "ENEMIES"] as const;
 /** Later supporter choices use these rarity weights; earlier choices remain shared. */
@@ -745,7 +736,6 @@ export const PET_RANKS = [
   { rank: 9, name: "Sovereign", minUserRank: "ELITE JONIN", levelCap: 80, experienceRequired: 915000 },
   { rank: 10, name: "Celestial", minUserRank: "ELITE JONIN", levelCap: 100, experienceRequired: 1620000 },
 ] as const satisfies readonly { rank: number; name: string; minUserRank: UserRank; levelCap: number; experienceRequired: number }[];
-
 
 export const ItemTypes = [
   "WEAPON",
@@ -837,7 +827,6 @@ export const DURABILITY_POINT_PRICE_PERCENT = 0.1;
 
 // Skill Tree Entry Types
 export const SkillTreeEntryTypes = ["DEFAULT", "SPECIAL"] as const;
-export type SkillTreeEntryType = (typeof SkillTreeEntryTypes)[number];
 
 /** Maximum extra columns or rows on each side of a method's default footprint. */
 export const MAX_METHOD_SIZE = 10;
@@ -875,8 +864,6 @@ export const JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES = [
   "SPECIAL",
   "FORBIDDEN",
 ] as const satisfies readonly JutsuType[];
-export type JutsuTrainToLearnRestrictedType =
-  (typeof JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES)[number];
 
 export const CombatStatNames = [
   "offence",
@@ -933,19 +920,6 @@ export const PvpBattleTypes: BattleType[] = [
   "KAGE_PVP",
   "KAGE_AI",
   "RANKED_PVP",
-];
-
-export const PveBattleTypes: BattleType[] = [
-  "TERRITORY_WAR",
-  "HUNTING",
-  "ARENA",
-  "QUEST",
-  "RANDOM_ENCOUNTER",
-  "TRAINING",
-  "VILLAGE_PROTECTOR",
-  "CLAN_CHALLENGE",
-  "RAID",
-  "OVERWORLD",
 ];
 
 export const QuestBattleTypes: BattleType[] = [
@@ -1006,10 +980,8 @@ export const STRUCTURE_ADJACENTS = [
 ];
 
 export const TournamentTypes = ["CLAN", "EVENT"] as const;
-export type TournamentType = (typeof TournamentTypes)[number];
 
 export const TournamentStates = ["OPEN", "IN_PROGRESS", "COMPLETED"] as const;
-export type TournamentState = (typeof TournamentStates)[number];
 
 export const TournamentMatchStates = ["WAITING", "PLAYED", "NO_SHOW"] as const;
 export type TournamentMatchState = (typeof TournamentMatchStates)[number];
@@ -1130,7 +1102,6 @@ export const QuestTypesWithMaxAttempts = [
   "raid",
   "overworld",
 ];
-export type QuestTypeWithMaxAttempts = (typeof QuestTypesWithMaxAttempts)[number];
 
 export const SmileyEmotions = ["like", "love", "laugh"] as const;
 
@@ -1441,7 +1412,6 @@ export const RECRUITMENT_REWARDS = [
   "CLAN_POINTS",
   "RANK_MILESTONE",
 ] as const;
-export type RecruitmentReward = (typeof RECRUITMENT_REWARDS)[number];
 
 // Reputation points a recruiter receives the first time an eligible recruit reaches each rank,
 // in rank order. Reaching a rank also reaches every milestone below it. Elder is not on the
@@ -1829,12 +1799,6 @@ export const GATHERING_REQUIRED_EXP: Record<GATHERING_RANK, number> = {
   "A RANK": 2163000,
   "S RANK": 3244500,
 };
-export const GATHERING_EXPERIENCE_GAIN: Record<ItemRarity, number> = {
-  COMMON: 200,
-  RARE: 300,
-  EPIC: 400,
-  LEGENDARY: 500,
-};
 export const GATHERING_ITEM_DROP_CHANCES: Record<
   GATHERING_RANK,
   Record<ItemRarity, number>
@@ -1902,12 +1866,6 @@ export const CRAFTING_REQUIRED_EXP: Record<CRAFTING_RANK, number> = {
   APPRENTICE: 540750,
   MASTER: 1622250,
   FORGEMASTER: 3244500,
-};
-export const CRAFTING_EXP_GAIN: Record<CRAFTING_RANK, number> = {
-  NOVICE: 1000,
-  APPRENTICE: 2000,
-  MASTER: 3000,
-  FORGEMASTER: 0,
 };
 export const CRAFTING_MAX_IMBUED_ITEMS: Record<CRAFTING_RANK, number> = {
   NOVICE: 0,
@@ -2017,7 +1975,6 @@ export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
 
 // Black market config
 export const RYO_FOR_REP_DAYS_FROZEN = 3;
-export const RYO_FOR_REP_DAYS_AUTO_DELIST = 30;
 export const RYO_FOR_REP_MAX_LISTINGS = 5;
 export const RYO_FOR_REP_MIN_REPS = 10;
 export const PITY_BLOODLINE_ROLLS = 200;
@@ -2103,7 +2060,6 @@ export const WAR_WINNING_BOOST_TRAINING_PERC = 20;
 export const WAR_TOKEN_REDUCTION_INTERVAL_HOURS = 24; // How often tokens should be reduced
 export const WAR_LOSING_COOLDOWN_DAYS = 10; // Cooldown for losing a war
 export const WAR_WINNING_COOLDOWN_DAYS = 3; // Cooldown for winning a war
-export const WAR_STRUCTURE_UPGRADE_BLOCK_DAYS = 7; // Structure upgrade block duration
 export const WAR_VICTORY_TOKEN_BONUS = 3000000; // Victory bonus tokens
 export const WAR_PURCHASE_SHRINE_TOKEN_COST = 100000; // Cost in village tokens to purchase a shrine
 export const WAR_DECLARATION_COST = 1000000; // Cost in village tokens to declare war
@@ -2150,8 +2106,6 @@ export const WAR_HEALTH_KAGEDEATH_REMOVE = 50;
 
 // Sector control impact on townhall
 export const WAR_SECTOR_LOSS_TOWNHALL_DAMAGE = 300; // Townhall HP lost when losing a sector
-export const WAR_SECTOR_RECAPTURE_TOWNHALL_HEAL = 150; // Townhall HP recovered when recapturing a sector
-export const WAR_SECTOR_RECAPTURE_WINDOW_DAYS = 7; // Days within which recapture bonus applies
 
 // Enhanced rewards
 export const WAR_VICTORY_STRUCTURE_BOOST_LEVELS = 3; // Temporary level boost for structures on war victory
@@ -2206,8 +2160,6 @@ export const WAR_SHRINE_IMAGE_BY_BIOME: Record<CombatBiome, string> = {
   arena: WAR_SHRINE_IMAGE,
   default: WAR_SHRINE_IMAGE,
 };
-export const WAR_RAMEN_IMAGE =
-  "https://uploadthing.b-cdn.net/f/6407eedd-9382-41e9-b27d-eb02afe87ce9-srb0e7.webp";
 export const WAR_STATES = [
   "ACTIVE",
   "ATTACKER_VICTORY",
@@ -2269,7 +2221,6 @@ export const MPVP_BATTLE_TYPES = [
   "SHRINE_BATTLE",
   "RAID_BATTLE",
 ] as const;
-export type MpvpBattleType = (typeof MPVP_BATTLE_TYPES)[number];
 
 export const MPVP_BATTLE_SIDES = ["ATTACKER", "DEFENDER"] as const;
 export type MpvpBattleSide = (typeof MPVP_BATTLE_SIDES)[number];
@@ -2312,9 +2263,7 @@ export const ELDER_MIN_VOTING_COUNT = 3; // Minimum elders required to initiate 
 export const ELDER_WAR_VOTE_HOURS = 24; // Hours elders have to vote on war declarations
 export const ELDER_KAGE_REMOVAL_VOTE_DAYS = 7; // Days elders have to vote on kage removal
 export const ELDER_VOTE_TYPES = ["WAR_DECLARATION", "KAGE_REMOVAL"] as const;
-export type ElderVoteType = (typeof ELDER_VOTE_TYPES)[number];
 export const ELDER_VOTE_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
-export type ElderVoteStatus = (typeof ELDER_VOTE_STATUSES)[number];
 export const CLANS_PER_STRUCTURE_LEVEL = 999999;
 export const CLAN_LOBBY_SECONDS = 30;
 /** Shared clan rewards, credited once per victory rather than once per participant. */
@@ -2466,10 +2415,8 @@ export const REPORT_CONTEXT_WINDOW = 20;
 // Kage config
 export const FRIENDLY_PRESTIGE_COST = 10000; // Prestige cost of killing friendly
 export const KAGE_ANBU_DELETE_COST = 3000; // Anbu delete cost
-export const KAGE_CHALLENGE_TIMEOUT_MINS = 30; // Timeout for PvP kage battle
 export const KAGE_DEFAULT_PRESTIGE = 5000; // Starting prestige of kage
 export const KAGE_DELAY_SECS = 3 * 24 * 3600; // Delay before kage can perform actions (3 days)
-export const KAGE_ELDER_MIN_DAYS = 100; // minimum days in village to be elder
 export const KAGE_MAX_ELDERS = 3;
 export const KAGE_MAX_WEEKLY_PRESTIGE_SEND = 6000; // Maximum weekly prestige send from elders
 export const KAGE_MIN_DAYS_IN_VILLAGE = 20; // minimum days in village to become kage
@@ -2559,25 +2506,13 @@ export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
 
-// Draco files (see https://github.com/google/draco/tree/main/javascript)
-export const DRACO_DECODER_URL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF0eCaMuG2iOewJtjGzvNcmEX3TBnoSfMDZPH";
-export const DRACO_ENCODER_URL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJGexpLZRfoVrha0LP4mAS5KM7wtiZbUNXJxdC";
-
 // Biome backgrounds
 export const IMG_BG_OCEAN =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIo4wHixfOewksxBoS1HQCihpL7c42Ky9uUFv.webp";
-export const IMG_BG_GROUND =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJszlXPLfKL5D7TAFe29bymSaPCIQ846MdzG.webp";
-export const IMG_BG_DESSERT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQHU9dvmojJ0EqeDCvBrNmZaXVdY97gSpOWi.webp";
 export const IMG_BG_ICE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRXmgug0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
 export const IMG_BG_SNOW =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVWyAP1F2veAXohUuE59nTQHRJIYjtiG18aF4.webp";
-export const IMG_BG_DIRT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJob2ojkZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 
 // Images
 export const IMG_DEFAULT_PROFILE_PICTURE =
@@ -2588,9 +2523,6 @@ export const IMG_OCCUPATION_HUNTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ2xooNenMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8.webp";
 export const IMG_OCCUPATION_CRAFTING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YhkcAXKPBOUWGyFuM4DlL1v5HNTZhkte0z6.webp";
-// Source copies: assets/occupations/farming.webp, assets/farming/*
-export const IMG_OCCUPATION_FARMING =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNdWH9tsO4cexqW2RDgkE3zZbNXSFGitmnar";
 
 // Shared clock for path publication and its interpolated presentation.
 export const SECTOR_WALK_STEP_MS = 100;
@@ -2707,27 +2639,13 @@ export const IMG_REGISTRATIN_STEP1 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeKNAEEyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_REGISTRATIN_STEP2 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTOMd6Y5IU29dZYJPoOKSh5vmlqatMub3EigH.webp";
-export const IMG_REGISTRATIN_STEP3 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZlINOXaYQrBIUTu69nkMxWmS4ah0O7LVCp8b.webp";
-export const IMG_REGISTRATIN_STEP4 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqppFvGcdkOZgJQ8mGRcdx3SsWvPelyYFTt5V.webp";
-export const IMG_REGISTRATIN_STEP5 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ56sDpz797jl4ubX8xrRqTZasyMp2WA5eLGUP.webp";
-export const IMG_REGISTRATIN_STEP6 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwm1XDCT2j854CWbaITZyegfXimvd7s16cO0h.webp";
-export const IMG_REGISTRATIN_STEP7 =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQU7pvzjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_REGISTRATIN_STEP8 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8B9jC0rkkp45TvAnoIBa0rtCf1lbyXYjVKQ2.webp";
 export const IMG_REGISTRATIN_STEP9 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnjHXr3mojJ0EqeDCvBrNmZaXVdY97gSpOWiA.webp";
 
-export const IMG_SCENE_SCROLL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRceTKeq0udmODoNtpa0FMcwI4k2Eq7nJhyvj.webp";
 export const IMG_SCENE_BACKGROUND =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1HAqWl6bo95WClq4K0wxZUmJcvThgdVenO3P.webp";
-export const IMG_SCENE_CHARACTER =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF08NAw3G2iOewJtjGzvNcmEX3TBnoSfMDZPH.webp";
 
 /** Objective medallions share a consistent silhouette and palette across activity types. */
 export const IMG_BADGE_RESET_QUEST =
@@ -2856,15 +2774,6 @@ export const IMG_BADGE_USE_JUTSU_COMBAT = IMG_BADGE_JUTSUS_MASTERED;
 export const IMG_BADGE_TAG_USAGE_WIN = IMG_BADGE_START_BATTLE;
 export const IMG_BADGE_DAMAGE_DEALT = IMG_BADGE_DEFEAT_OPPONENTS;
 
-export const IMG_BG_COLISEUM =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo5wb6hZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
-export const IMG_BG_ARENA_CHRISMAS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQr5mXyjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
-export const IMG_BG_ARENA_KONOKI =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyj0BtAzEwoh0WXMnscL279N8ayVQUCbRzS3.webp";
-export const IMG_BG_ARENA_SILENCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSZtKvF3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH.webp";
-
 export const IMG_VILLAGE_FACTION =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyODt1NukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
 
@@ -2927,8 +2836,6 @@ export const IMG_MANUAL_SAGE_MODE =
   "https://uploadthing.b-cdn.net/f/ZV0VxZ-iWF6FW84u-0B4t.webp";
 export const IMG_MANUAL_JUTSU =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMI7fE4tsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
-export const IMG_MANUAL_JUTSU_RESKINS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEOTlPgLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_MANUAL_SKILLTREE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQB2gVJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2.webp";
 export const IMG_MANUAL_BALANCE =
@@ -3028,9 +2935,6 @@ export const IMG_LAYOUT_CLASSIC_PREVIEW =
   "https://ui0arpl8sm.ufs.sh/f/_03vrgYNKcvpN0czPTPcI.webp";
 export const IMG_PIXEL_HERO_POSTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW2NIKTvszvj71yaSYC0MDOmbko5q9JAGuLHf.jpg";
-// "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqbkFzRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
-// export const IMG_LOGO_FULL =
-//   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8b0eqBkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q.webp";
 export const IMG_LOGO_FULL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHeJzt0QvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
 export const IMG_LOGO_SHORT =
@@ -3047,16 +2951,12 @@ export const IMG_SECTOR_USER_MARKER =
   "https://uploadthing.b-cdn.net/f/cc347416-8bf6-40cf-9184-b4af64e6feae-n771t1.webp";
 export const IMG_SECTOR_USER_SPRITE_MASK =
   "https://uploadthing.b-cdn.net/f/40061bc5-d73c-4265-8eff-4798fd840ae2-x83hc4.webp";
-export const IMG_SECTOR_SHADOW =
-  "https://uploadthing.b-cdn.net/f/bd8d8c75-96a0-4c71-94b6-f02e1ee382b5-exyuao.png";
 export const IMG_SECTOR_USERSPRITE_LEFT =
   "https://uploadthing.b-cdn.net/f/5c812303-70aa-4fc4-982c-6e72eee3c4b6-u7oujn.webp";
 export const IMG_SECTOR_USERSPRITE_RIGHT =
   "https://uploadthing.b-cdn.net/f/b6c5b6ba-99e0-49e5-b4a2-bf6ba9ca1ebc-dbaxa8.webp";
 export const IMG_SECTOR_VS_ICON =
   "https://uploadthing.b-cdn.net/f/be789e50-095f-4e50-bffc-fe0fedd8777b-dd7l0q.webp";
-export const IMG_SECTOR_WALL_STONE_TOWER =
-  "https://uploadthing.b-cdn.net/f/aab037bb-7ac7-48f7-9994-548d87eb55f1-lga892.webp";
 export const IMG_MAP_WAR_ICON =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgipq89cU9cpECTimBdjaqbNn7vQsxGR1wLk4.webp";
 export const IMG_MAP_QUEST_ICON =
@@ -3141,8 +3041,6 @@ export const IMG_BASIC_DEFENSIVE_STANCE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFr82ddG2iOewJtjGzvNcmEX3TBnoSfMDZPH4.webp";
 export const IMG_BASIC_FLEE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRohRDR0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
-export const IMG_BASIC_STEALTH =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDtLSxhzEwoh0WXMnscL279N8ayVQUCbRzS3p.webp";
 export const IMG_BASIC_WAIT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8ByNJwOkkp45TvAnoIBa0rtCf1lbyXYjVKQ2.webp";
 export const IMG_BASIC_MOVE =
@@ -3218,19 +3116,6 @@ export const IMG_BUILDING_ARCHIVE =
 export const IMG_BUILDING_ADMINBUILDING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 
-export const IMG_ACTIONTIMER_BG =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZNkUoDaYQrBIUTu69nkMxWmS4ah0O7LVCp8b.webp";
-export const IMG_ACTIONTIMER_YELLOW =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXnRHYeqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
-export const IMG_ACTIONTIMER_RED =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyrbex4ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
-export const IMG_ACTIONTIMER_BLUE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJqA6PRRdkOZgJQ8mGRcdx3SsWvPelyYFTt5Vn.webp";
-export const IMG_ACTIONTIMER_GREEN =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwSFJxPT2j854CWbaITZyegfXimvd7s16cO0h.webp";
-export const IMG_ACTIONTIMER_OVERLAY =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHVKSE4QvYURJhgs76VZtf9wxpMa13Cq0iOnr.webp";
-
 export const IMG_INITIATIVE_D20 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE7476GLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BATTLEFIELD_TOMBSTONE =
@@ -3238,8 +3123,6 @@ export const IMG_BATTLEFIELD_TOMBSTONE =
 export const IMG_BATTLEFIELD_STAR =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuGvcEjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 
-export const MUSIC_SHADOW_OF_THE_BLADE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQCH0mJjhzBPya1rwfCIqOTU0cV5xgsMeo3u2";
 export const MUSIC_WELCOME_TO_SEICHI =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmJDFBGHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap";
 export const MUSIC_SHIROHANA_THEME =
@@ -3262,8 +3145,6 @@ export const MUSIC_HALLOWEEN_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJX2KBuGqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
 export const MUSIC_WINTER_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMIfxyadtsO4cexqW2RDgkE3zZbNXSFGitmna";
-export const MUSIC_SHADOWS_DANCE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhUwWfeMfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
 export const MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmK3DnyHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap";
 export const MUSIC_HEAVENLY_SONATA_THEME =
@@ -3403,9 +3284,6 @@ export const HOME_FURNITURE_STORAGE_CAPACITY = HOME_FURNITURE_MAX_PLACEMENTS * H
 export const HOME_FURNITURE_FLOOR_DEPTH_RATIO = 0.7;
 
 // Auction system constants
-export const IMG_AUCTION_HOUSE =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmcDNSqHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp" as const;
-
 export const AUCTION_LISTING_STATES = [
   "ACTIVE",
   "SOLD",
@@ -3426,7 +3304,6 @@ export const AUCTION_BIDDER_LEVEL_MIN = 1;
 export const AUCTION_BIDDER_LEVEL_MAX = MAX_PLAYER_LEVEL;
 
 export const AUCTION_BID_STATES = ["ACTIVE", "REFUNDED", "WON"] as const;
-export type AuctionBidState = (typeof AUCTION_BID_STATES)[number];
 
 // Bounty system constants
 export const BOUNTY_STATUSES = ["OPEN", "CLAIMED", "EXPIRED", "CANCELLED"] as const;
@@ -3675,14 +3552,11 @@ export const TowerDefenseUpgradeCategories: Record<
 export type TowerDefenseUpgradeCategory = keyof typeof TowerDefenseUpgradeCategories;
 
 export const TowerDefenseRunStatuses = ["ACTIVE", "COMPLETED", "ABANDONED"] as const;
-export type TowerDefenseRunStatus = (typeof TowerDefenseRunStatuses)[number];
 
 // Game balance constants
 export const TD_INITIAL_GRID_SIZE = 7;
 export const TD_MAX_GRID_SIZE = 35;
 export const TD_GRID_EXPAND_EVERY_N_WAVES = 5;
-export const TD_WAVE_ENEMY_BASE = 3;
-export const TD_WAVE_ENEMY_SCALING = 1.2;
 export const TD_SCORE_PER_KILL = 10;
 export const TD_SCORE_TO_POINTS_RATIO = 100; // 100 score = 1 permanent point
 export const TD_PLAYER_BASE_HEALTH = 100;
@@ -3691,7 +3565,6 @@ export const TD_SHURIKEN_BASE_RANGE = 2;
 export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
 export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
 export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
-export const TD_WAVE_END_GRACE_PERIOD_MS = 200; // Grace period after last enemy dies before transitioning to wave-end
 export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
 export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match lib.rs
 export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
@@ -3727,7 +3600,6 @@ export const SENSORY_DETECT_CHANCE_PER_1000_POINTS = 2.75; // +2.75% per 1000 po
 export const SENSORY_MAX_DETECT_CHANCE_PERC = 60; // 60% max detection chance
 export const SENSORY_BASE_COOLDOWN_SECONDS = 120; // 2 minute base cooldown
 export const SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS = 5; // -5 seconds per 1000 points
-export const SENSORY_DETECTION_DURATION_SECONDS = 30; // Detection lasts 30 seconds
 export const STEALTH_TRAIN_GAIN_PER_MINUTE = 50; // Training gain per minute
 
 // Covert training types enum
@@ -3974,9 +3846,6 @@ export const STORE_FEDERAL_PRODUCTS = [
     federalStatus: "GOLD",
   },
 ] as const;
-
-/** RevenueCat entitlement that grants federal status, whichever plan is active. */
-export const STORE_FEDERAL_ENTITLEMENT = "federal";
 
 /** Tax-inclusive USD monthly prices shared by Stripe validation and federal support UI. */
 export const FEDERAL_MONTHLY_USD_CENTS = { NORMAL: 500, SILVER: 1000, GOLD: 1500 } as const;
