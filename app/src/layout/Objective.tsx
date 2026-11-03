@@ -352,7 +352,6 @@ export const Reward: React.FC<RewardProps> = (props) => {
 
 interface EventTimerProps {
   quest: Quest;
-  tracker: QuestTrackerType;
 }
 
 export const EventTimer: React.FC<EventTimerProps> = (props) => {
