@@ -31,21 +31,8 @@ export const isValidDiscordWebhook = (url: string | undefined): boolean => {
       (parsed.hostname === "discord.com" || parsed.hostname === "discordapp.com") &&
       /^\/api\/webhooks\/\d+\/[\w-]+$/.test(parsed.pathname)
     );
-  } catch (error) {
-    // Invalid URL strings (TypeError) are expected during validation
-    // Log unexpected errors that aren't standard URL parsing failures
-    if (error instanceof TypeError) {
-      // Only ignore TypeErrors that are actually from URL parsing by checking stack trace
-      const stack = error.stack ?? "";
-      const isUrlConstructorError =
-        error.message.includes("Invalid URL") &&
-        (stack.includes("URL") || stack.includes("node:internal/url"));
-      if (!isUrlConstructorError) {
-        console.error("[Discord] Unexpected TypeError (not URL parsing):", error);
-      }
-    } else {
-      console.error("[Discord] Unexpected error validating webhook URL:", error);
-    }
+  } catch {
+    // Only the URL constructor can throw here, for strings that are not URLs
     return false;
   }
 };
