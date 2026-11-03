@@ -137,7 +137,7 @@ export default function MyItems() {
     },
     timeDiff,
   );
-  const inventoryTime = new Date(dataUpdatedAt - (timeDiff ?? 0));
+  const inventoryTime = new Date(dataUpdatedAt - timeDiff);
 
   // Mutations
   const { mutate: buyItemSlot, isPending: isBuyingItemSlot } =

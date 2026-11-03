@@ -67,7 +67,7 @@ export default function Bank() {
   const interest = calcBankInterest(boost, userData);
 
   // Pending interest query
-  const { data: pendingInterest } = usePendingBankInterest(!!userData, timeDiff ?? 0);
+  const { data: pendingInterest } = usePendingBankInterest(!!userData, timeDiff);
 
   // Schemas
   const fromPocketSchema = createMoneyTransferSchema(money);

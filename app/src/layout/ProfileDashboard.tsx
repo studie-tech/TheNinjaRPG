@@ -125,8 +125,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   const dashboard = api.profile.getDashboard.useQuery(undefined, {
     staleTime: 60_000,
   });
-  const streaks = useActivityStreaks(true, timeDiff ?? 0);
-  const interest = usePendingBankInterest(true, timeDiff ?? 0);
+  const streaks = useActivityStreaks(true, timeDiff);
+  const interest = usePendingBankInterest(true, timeDiff);
   const sidebarTimers = api.profile.getSidebarTimers.useQuery();
   const hunting = api.hunting.getSession.useQuery(undefined, {
     enabled: userData?.occupation === "HUNTER",
@@ -224,7 +224,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
 
   useRefreshAt(
     [
-      nextUtcDayAt(new Date(Date.now() - (timeDiff ?? 0))),
+      nextUtcDayAt(new Date(Date.now() - timeDiff)),
       ...(dashboard.data?.candidates ?? []).flatMap((entry) => [
         entry.startsAt,
         entry.endsAt,
@@ -237,7 +237,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
         utils.profile.getUser.invalidate(),
       ]);
     },
-    timeDiff ?? 0,
+    timeDiff,
   );
 
   if (!userData) return <Loader explanation="Loading your logbook..." />;

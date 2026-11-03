@@ -46,7 +46,7 @@ export const useClaimStreakDay = () => {
                   getClaimedStreaks(
                     current,
                     data.streakUpdate!,
-                    new Date(Date.now() - (timeDiff ?? 0)),
+                    new Date(Date.now() - timeDiff),
                   )
               : undefined,
             context.streaks,
