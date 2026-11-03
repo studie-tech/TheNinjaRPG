@@ -80,12 +80,13 @@ export const getTimeOfLastReset = () => {
 /**
  * Number of seconds passed since the given date
  *
- * @param date - The date to calculate the seconds passed since
+ * @param date - The date to calculate the seconds passed since; battle JSON columns
+ *   carry it as an ISO string
  * @param timeDiff - The time difference in milliseconds
  * @param floor - Whether to floor the result
  * @returns The number of seconds passed since the given date
  */
-export const secondsPassed = (date: Date, timeDiff?: number, floor = true) => {
+export const secondsPassed = (date: Date | string, timeDiff?: number, floor = true) => {
   let now = Date.now();
   if (timeDiff) now = now - timeDiff;
   const parsedDate = date instanceof Date ? date : new Date(date);

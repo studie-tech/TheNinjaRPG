@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
 import React from "react";
 import type { Transform } from "react-html-parser";
 import ReactHtmlParser from "react-html-parser";
@@ -74,17 +73,9 @@ const parseStyleAttribute = (styleJson?: string): React.CSSProperties | undefine
   try {
     const parsedStyle = JSON.parse(styleJson) as unknown;
     return isValidStyle(parsedStyle) ? parsedStyle : undefined;
-  } catch (error) {
-    // Expected: SyntaxError for malformed JSON
-    if (error instanceof SyntaxError) {
-      return undefined;
-    }
-    // Capture unexpected errors in Sentry for monitoring
-    Sentry.captureException(error, {
-      tags: { source: "parse-style-attribute" },
-      extra: { style: styleJson },
-    });
-    throw error;
+  } catch {
+    // Malformed JSON
+    return undefined;
   }
 };
 
