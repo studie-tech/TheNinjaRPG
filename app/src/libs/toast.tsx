@@ -71,11 +71,6 @@ export const triggerConfetti = async (
   duration = 1000,
   colors = ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"],
 ): Promise<void> => {
-  // Guard against SSR - only run in browser
-  if (typeof window === "undefined") {
-    return;
-  }
-
   // Start the celebration sound before particle imports can delay playback.
   // Autoplay restrictions are handled by the shared player without blocking confetti.
   if (CONFETTI_SFX_URL && getAudioPreference("sfxOn")) {

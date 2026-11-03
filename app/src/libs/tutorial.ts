@@ -70,9 +70,10 @@ export const TUTORIAL_CAPTURE_SECTOR = 227;
 /** Wake Island, home of the Bondkeeper Sanctuary and the Genin exam. */
 export const TUTORIAL_WAKE_SECTOR = MAP_WAKE_ISLAND_SECTOR;
 
-/** Horizon's current world sector — not the pre-remap 296 value. */
-export const TUTORIAL_HOME_SECTOR =
-  WORLD_LANDMARKS.find((landmark) => landmark.name === "Horizon")?.sector ?? 301;
+const horizon = WORLD_LANDMARKS.find((landmark) => landmark.name === "Horizon");
+if (!horizon) throw new Error("WORLD_LANDMARKS must include Horizon");
+/** Horizon's world sector. */
+export const TUTORIAL_HOME_SECTOR = horizon.sector;
 
 /**
  * Objectives of the "Getting Started" quest, in the order its chain visits

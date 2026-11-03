@@ -28,7 +28,6 @@ import {
 import {
   calculateUpgradeCost,
   directionToSpriteDirection,
-  generateRunSeed,
 } from "@/libs/towerDefense/game";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { findUserRoleById } from "@/queries/profile";
@@ -967,7 +966,7 @@ function initiateSession(input: {
 
   // Generate unique identifiers
   const nonce = generateSessionNonce();
-  const seed = generateRunSeed();
+  const seed = crypto.randomUUID();
 
   // Convert to signed formats for SpacetimeDB
   const signedUpgradeDefinitions = toSignedUpgradeDefinitions(upgradeDefinitions);
