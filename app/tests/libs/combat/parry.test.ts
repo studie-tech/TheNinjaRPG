@@ -205,3 +205,34 @@ it("splits a 1000 incoming hit into 700 received and 300 returned", () => {
   expect(hp(result, "defender")).toBe(9300);
   expect(hp(result, "attacker")).toBe(9700);
 });
+
+it.each([
+  ["increaseheal", 90],
+  ["decreaseheal", 30],
+] as const)("applies %s to Absorb healing from returned damage", (type, healing) => {
+  const source = hit();
+  source.power = 1250;
+  const absorb = makeEffect(
+    "absorb",
+    { power: 20, calculation: "percentage", rounds: 3 },
+    {
+      creatorId: "attacker",
+      targetId: "attacker",
+      targetType: "user",
+      createdRound: 1,
+    },
+  );
+  const modifier = makeEffect(
+    type,
+    { power: 50, calculation: "percentage", rounds: 3 },
+    {
+      creatorId: "attacker",
+      targetId: "attacker",
+      targetType: "user",
+      createdRound: 1,
+    },
+  );
+  const result = run([source, defense(30), absorb, modifier]);
+  expect(hp(result, "attacker")).toBe(9700 + healing);
+  expect(hp(result, "defender")).toBe(9300);
+});

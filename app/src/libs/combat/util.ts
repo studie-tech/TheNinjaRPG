@@ -3118,8 +3118,7 @@ export const alignBattle = (
     refreshMasteries(battle.usersState, battle.usersEffects);
     // Sage exhaustion + clearing `sageModeActivated` runs in `applySageModeAfterRoundTransition`
     // (called from combat router when `progressRound` — avoids util ↔ process circular imports).
-    // Note: Pool adjustments are handled centrally in applyEffects post-pass
-    // (process.ts) to avoid double-application or drift
+    // Remaining pool adjustment deltas are reconciled in the applyEffects post-pass.
   }
   // Update the active user on the battle
   battle.activeUserId = actor.userId;

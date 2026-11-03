@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { accumulateCurseConsequence, accumulateCurseDamage } from "@/libs/combat/curse";
 import { applyEffects } from "@/libs/combat/process";
 import { curse, settleCurse } from "@/libs/combat/tags";
-import { alignBattle } from "@/libs/combat/util";
+import { alignBattle, applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { CurseTag } from "@/validators/combat";
 import {
@@ -142,6 +142,34 @@ describe("Curse", () => {
     user(battle).curHealth = 0;
     settleCurse(effect, user(battle), [effect]);
     expect(user(battle).curHealth).toBe(0);
+  });
+  it("reconciles expiring maximum HP before capping payout", () => {
+    const effect = mark();
+    effect.curseState = { storedHealing: 500, activatedRound: 1 };
+    const bonus = makeEffect(
+      "increasemaxpools",
+      { power: 1000, calculation: "static", poolsAffected: ["Health"], rounds: 1 },
+      {
+        creatorId: "attacker",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: 1,
+      },
+    );
+    const battle = scenario([effect, bonus]);
+    const holder = user(battle);
+    holder.maxHealth = 5000;
+    holder.curHealth = 4500;
+    applyPoolAdjustmentsToBase(holder, battle.usersEffects);
+    expect(holder.curHealth).toBe(5500);
+    const transition = expire(battle);
+    expect(transition.progressRound).toBe(true);
+    expect(holder.curHealth).toBe(5000);
+    expect(
+      transition.expiredEffects.some((e) => e.txt.includes("restores 500.00 HP")),
+    ).toBe(true);
+    const result = applyEffects(battle, "attacker").newBattle;
+    expect(user(result).curHealth).toBe(5000);
   });
   it("blocks payout under heal prevention and consumes it once", () => {
     const effect = mark();

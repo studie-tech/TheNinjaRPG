@@ -36,6 +36,7 @@ import {
 } from "@/libs/combat/summon";
 import type { CombatAction } from "@/libs/combat/types";
 import {
+  applyPoolAdjustmentsToBase,
   canStackEffect,
   getBaseDamageForModifier,
   getEffectiveMaxPool,
@@ -1133,7 +1134,9 @@ export const adjustHealGiven = (
       }
       // Adjust absorb
       if (consequence.targetId === effect.targetId && consequence.absorb_hp) {
-        const absorbEffect = usersEffects.find((e) => e.id === effectId);
+        const absorbEffect = usersEffects.find(
+          (e) => e.id === (consequence.diffuseSourceEffectId ?? effectId),
+        );
         if (absorbEffect) {
           const change =
             effect.calculation === "percentage"
@@ -1885,6 +1888,8 @@ export const settleCurse = (
       increaseHealGiven(resolved, usersEffects, consequences, target);
     else decreaseHealGiven(resolved, usersEffects, consequences, target);
   }
+  // Expiring maximum-pool effects change current HP before the payout cap is measured.
+  applyPoolAdjustmentsToBase(target, usersEffects);
   const healing = Math.min(
     Math.max(0, consequence.heal_hp ?? 0),
     Math.max(0, getEffectiveMaxPool(target, usersEffects, "Health") - target.curHealth),
