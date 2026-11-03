@@ -50,7 +50,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       item: {
-        getUserItemCounts: { invalidate }, getUserItems: { invalidate },
+        getUserItems: { invalidate },
         getPurchaseAllowance: { invalidate },
       },
       home: { getUserHome: { invalidate: homeInvalidation } },

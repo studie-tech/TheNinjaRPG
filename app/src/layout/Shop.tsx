@@ -366,7 +366,6 @@ const Shop: React.FC<ShopProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         setItemConfirmOpen(false);
-        void utils.item.getUserItemCounts.invalidate();
         void updateUser(data.userPatch, { revision, delta: data.userDelta });
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
