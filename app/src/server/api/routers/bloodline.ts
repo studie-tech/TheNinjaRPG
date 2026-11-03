@@ -320,9 +320,7 @@ export const bloodlineRouter = createTRPCRouter({
         await updateBloodline(ctx.drizzle, user, line, swapCost, swapMessage);
       } catch (error) {
         if (error instanceof BloodlineGrantRejectedError)
-          return errorResponse(
-            "Bloodline or battle status changed. Refresh and try again",
-          );
+          return errorResponse(error.message);
         throw error;
       }
 
@@ -956,9 +954,7 @@ export const bloodlineRouter = createTRPCRouter({
         );
       } catch (error) {
         if (error instanceof BloodlineGrantRejectedError)
-          return errorResponse(
-            "Bloodline or battle status changed. Refresh and try again",
-          );
+          return errorResponse(error.message);
         throw error;
       }
       return {
@@ -1072,7 +1068,9 @@ export const updateBloodline = async (
     updatedAt,
   );
   if (!updateResult.rowsAffected) {
-    throw new BloodlineGrantRejectedError("Unable to update bloodline");
+    throw new BloodlineGrantRejectedError(
+      "Bloodline or battle status changed. Refresh and try again",
+    );
   }
   // Only once the grant is confirmed, run the side-effect writes
   await Promise.all([
