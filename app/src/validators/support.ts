@@ -67,7 +67,6 @@ export const supportTicketFilterSchema = z.object({
   dateTo: z.iso.datetime().optional(),
   cursor: z.number().nullish(),
   limit: z.number().min(1).max(100).prefault(20),
-  offset: z.number().min(0).prefault(0),
   orderBy: z
     .enum(["createdAt", "updatedAt", "priority", "status"])
     .prefault("createdAt"),
@@ -79,7 +78,6 @@ export type SupportTicketFilteringSchema = z.infer<typeof supportTicketFilterSch
 export const supportTicketMetricsSchema = z.object({
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),
-  groupBy: z.enum(["day", "week", "month"]).prefault("day"),
   category: z.enum(SupportTicketCategories).optional(),
   assignedToUserId: z.string().optional(),
 });
