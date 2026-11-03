@@ -16,7 +16,6 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { FARM_MAX_PLOTS, FARM_STARTING_PLOTS } from "@/drizzle/constants";
 import {
   farmCollectionLog,
   farmExtraction,
@@ -437,7 +436,6 @@ export const updateUserDataForBuyShopItem = (
         gte(userData.farmCurrency, shopEntry.cost),
         eq(userData.farmPlotsPurchased, user.farmPlotsPurchased),
         lt(userData.farmPlotsPurchased, maxPurchased),
-        sql`${FARM_STARTING_PLOTS} + ${userData.farmPlotsPurchased} + 1 <= ${FARM_MAX_PLOTS}`,
       ),
     );
 
