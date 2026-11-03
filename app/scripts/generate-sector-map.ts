@@ -44,7 +44,6 @@ import {
 } from "@/libs/sector-map/tiled";
 import { getNeighborCoordinates } from "@/libs/sector-map/validation";
 import { getBiomeFromTileType } from "@/libs/travel";
-import { getSectorTileType } from "@/server/utils/sectorMap";
 import { getFlagValue, parseIntList } from "./cli";
 import {
   createWorldLandScore,
@@ -55,7 +54,6 @@ import {
   WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
   type Vec3,
 } from "@/libs/sector-map/worldgen";
-import { getWorldProtectedLandSectors } from "@/libs/sector-map/landmarks";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
 import type { SectorMapZone } from "@/libs/sector-map/types";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
@@ -86,10 +84,6 @@ interface AnchorSpec {
   y: number;
 }
 
-/** Base biome of the sector on the global hexasphere map */
-const getBaseTerrain = (sector: number): string =>
-  getBiomeFromTileType(getSectorTileType(sector));
-
 /**
  * The sector's four 3D corner points in [NW, NE, SE, SW] order - the order
  * tilePosition's bilinear interpolation relies on. hexasphere.json stores
@@ -106,11 +100,10 @@ const centerVec = (sector: number): Vec3 => {
   return { x: c.x, y: c.y, z: c.z };
 };
 
-const protectedLandSectors =
-  globalMap.protectedLandSectors ?? getWorldProtectedLandSectors();
+const protectedLandSectors = globalMap.protectedLandSectors!;
 const wakeIslandCenter = centerVec(MAP_WAKE_ISLAND_SECTOR);
 const wakeIslandNeighborSectors = new Set(
-  (globalMap.tiles[MAP_WAKE_ISLAND_SECTOR]?.n ?? []).filter((sector) => sector >= 0),
+  globalMap.tiles[MAP_WAKE_ISLAND_SECTOR]!.n!.filter((sector) => sector >= 0),
 );
 const wakeIslandRadius =
   Math.min(
@@ -143,7 +136,7 @@ const worldLandScore = createWorldLandScore({
   wakeMoatRadius,
 });
 
-/** Anchor keys mirror the legacy sector anchor layout so downstream lookups keep working */
+/** Anchor keys (spawn.*, shrine.*, exit.*, structure.*) that downstream lookups resolve */
 const buildAnchors = (options: GeneratorOptions): AnchorSpec[] => {
   const { width, height, village } = options;
   const spawnX = Math.floor(width / 2);
@@ -181,7 +174,6 @@ const buildAnchors = (options: GeneratorOptions): AnchorSpec[] => {
  */
 const generateCells = (options: GeneratorOptions) => {
   const { sector, width, height, village, seed } = options;
-  const baseTerrain = getBaseTerrain(sector);
   const prng = alea(`sector-${sector}-${seed}`);
   const roadNoise = createNoise2D(prng);
 
@@ -292,7 +284,7 @@ const generateCells = (options: GeneratorOptions) => {
       if (cell.walkCost <= 0) cell.walkCost = 1;
     } else {
       if (cell.walkCost <= 0) cell.walkCost = 1;
-      if (cell.terrain === "ocean") cell.terrain = intendedLand[y]?.[x] ?? baseTerrain;
+      if (cell.terrain === "ocean") cell.terrain = intendedLand[y]![x]!;
       if (cell.zone === "water") cell.zone = village ? "village" : "wilderness";
     }
     if (zone) cell.zone = zone;
@@ -592,14 +584,13 @@ export const buildTiledJson = (options: GeneratorOptions) => {
 };
 
 /**
- * Parse CLI flags. Accepts --sectors or the legacy --sector alias. The
- * --ensure-walkable format is semicolon-separated "x,y" pairs (e.g.
+ * Parse CLI flags. The --ensure-walkable format is semicolon-separated "x,y" pairs (e.g.
  * "3,4;5,6"); malformed pairs are silently dropped. Width/height default to
  * SECTOR_WIDTH/SECTOR_HEIGHT and seed to "v1".
  */
 const parseArgs = (argv: string[]) => {
   const getValue = (flag: string) => getFlagValue(argv, flag);
-  const sectors = parseIntList(getValue("--sectors") ?? getValue("--sector"));
+  const sectors = parseIntList(getValue("--sectors"));
   const ensureWalkable = (getValue("--ensure-walkable") ?? "")
     .split(";")
     .map((pair) => pair.split(",").map((value) => Number(value.trim())))
