@@ -35,7 +35,6 @@ interface ReportUserProps {
     id: string;
     content?: string;
     title?: string;
-    symmary?: string;
   };
 }
 
@@ -117,12 +116,6 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           ) : (
             <>
               <Post title={props.content.title} user={props.user} hover_effect={false}>
-                {props.content.symmary && (
-                  <div>
-                    {parseHtml(props.content.symmary)}
-                    <hr />
-                  </div>
-                )}
                 <hr />
                 {props.content.content && (
                   <div>
