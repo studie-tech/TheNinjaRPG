@@ -39,7 +39,7 @@ export const getPotencyDescription = (
   power = effect.power,
   owner = effect.target === "SELF" ? "your" : "the target's",
 ) => {
-  if (effect.affectedTag === "none" && !effect.affectedElements?.length) {
+  if (effect.affectedTag === "none" && !effect.affectedElements.length) {
     return "No tags are affected. Select Affected Elements to apply potency by element.";
   }
   const affected =
@@ -50,7 +50,7 @@ export const getPotencyDescription = (
   const units =
     effect.calculation === "percentage" ? `${amount}%` : `${amount} power points`;
   const change = effect.type === "increasepotency" ? "increased" : "decreased";
-  const elements = effect.affectedElements?.length
+  const elements = effect.affectedElements.length
     ? ` Affected elements (match any): ${effect.affectedElements
         .map((element) => (element === "None" ? "None (non-elemental)" : element))
         .join(", ")}.`
@@ -111,7 +111,7 @@ export const resolvePotencyTags = (
     const sign = effect.type === "increasepotency" ? 1 : -1;
     modifiers.push({
       affectedTag: effect.affectedTag,
-      affectedElements: effect.affectedElements ?? [],
+      affectedElements: effect.affectedElements,
       flat: effect.calculation === "static" ? sign * amount : 0,
       percentage:
         effect.calculation === "percentage" ? sign * Math.min(100, amount) : 0,

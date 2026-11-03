@@ -1350,7 +1350,7 @@ export const getEffectStackKey = (effect: UserEffect) => {
     return `${key}-${effect.aggroMode}-${effect.calculation}`;
   }
   if (effect.type === "increasepotency" || effect.type === "decreasepotency") {
-    const elements = [...new Set(effect.affectedElements ?? [])].sort().join(",");
+    const elements = [...new Set(effect.affectedElements)].sort().join(",");
     return `${key}-${effect.affectedTag}-${effect.calculation}-${elements || "all"}`;
   }
   return key;

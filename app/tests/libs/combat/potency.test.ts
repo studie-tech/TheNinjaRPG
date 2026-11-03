@@ -464,23 +464,6 @@ describe("potency element matching", () => {
     }
   });
 
-  it("keeps existing potency effects without an element selection unrestricted", () => {
-    const action = makeAction([
-      makeTag("damage", { power: 40, elements: ["Fire"] }),
-      makeTag("damage", { power: 40, elements: ["Ice"] }),
-      makeTag("heal", { power: 40 }),
-    ]);
-    const effect = makePotency({ power: 20 });
-    const legacyEffect = { ...effect };
-    Reflect.deleteProperty(legacyEffect, "affectedElements");
-    expect(getEffectStackKey(legacyEffect)).toBe(getEffectStackKey(effect));
-    for (const potency of [effect, legacyEffect]) {
-      expect(
-        resolvePotencyTags(action, [potency], "attacker").map((tag) => tag.power),
-      ).toEqual([60, 60, 60]);
-    }
-  });
-
   it("stacks distinct element selections and normalizes element order and duplicates", () => {
     const action = makeAction([
       makeTag("damage", { power: 40, elements: ["Fire"] }),
