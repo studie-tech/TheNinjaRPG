@@ -14,6 +14,7 @@ import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
 import { ActionSelector } from "@/layout/CombatActions";
+import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
 import ContentBox from "@/layout/ContentBox";
@@ -440,6 +441,7 @@ export default function CombatPage() {
         className={cn("flex flex-col gap-1", results && "opacity-50")}
         inert={!!results}
       >
+        <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
         <ActionSelector
           showInfoIcon={true}
           items={actions}
