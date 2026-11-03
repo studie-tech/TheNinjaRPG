@@ -38,7 +38,7 @@ vi.mock("@/layout/RichInput", () => ({
 }));
 vi.mock("@/layout/ModerationSummary", () => ({ ModerationSummary: () => null }));
 vi.mock("@/layout/Report", () => ({ default: () => null }));
-vi.mock("@/layout/EmojiPicker", () => ({ default: () => null }));
+vi.mock("@/layout/EmojiPicker", () => ({ EmojiPicker: () => null }));
 
 let postSpy: { mockRestore: () => void };
 let confirmSpy: { mockRestore: () => void };

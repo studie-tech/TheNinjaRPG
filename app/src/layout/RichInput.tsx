@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { TAVERN_IMAGE_MAX_SIZE_MB } from "@/drizzle/constants";
-import EmojiPicker from "@/layout/EmojiPicker";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";

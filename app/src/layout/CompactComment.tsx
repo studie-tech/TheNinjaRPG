@@ -21,7 +21,7 @@ import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
-import EmojiPicker from "@/layout/EmojiPicker";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import { getPostUserClasses, type PostProps } from "@/layout/Post";

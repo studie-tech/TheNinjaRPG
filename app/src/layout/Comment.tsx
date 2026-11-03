@@ -13,7 +13,7 @@ import {
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
-import EmojiPicker from "@/layout/EmojiPicker";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import ReportUser from "@/layout/Report";
 import type { ChatStartUser } from "@/libs/chatPanel";
