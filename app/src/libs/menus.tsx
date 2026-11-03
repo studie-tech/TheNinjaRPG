@@ -25,7 +25,6 @@ import { type ReactNode, useMemo } from "react";
 import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
-import { calcIsInVillage } from "@/libs/travel";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
@@ -226,14 +225,11 @@ export const useGameMenu = () => {
     !!sector &&
     findVillageUserRelationship(sector, userData?.villageId ?? "syndicate")?.status ===
       "ALLY";
-  // Position matters only when it changes village access or the structure offered by the menu.
+  // Position matters only when it changes the structure offered by the menu.
   const { data: arrival } = useUserDataSelector((user) => ({
     canVisit:
       !!sector &&
-      ((calcIsInVillage({ x: user.longitude, y: user.latitude }) &&
-        (ownSector || isAllied)) ||
-        user.isOutlaw ||
-        sector.type === "SAFEZONE"),
+      (ownSector || isAllied || user.isOutlaw || sector.type === "SAFEZONE"),
     structureId:
       pathname === "/travel" && (ownSector || isAllied)
         ? sector?.structures?.find(

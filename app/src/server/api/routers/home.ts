@@ -30,7 +30,7 @@ import {
 } from "@/libs/item";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
-import { calcIsInVillage, getBiomeFromTileType } from "@/libs/travel";
+import { getBiomeFromTileType } from "@/libs/travel";
 import {
   executeResultForSetHomeSharing,
   executeResultForToggleStoreItem,
@@ -279,10 +279,9 @@ export const homeRouter = createTRPCRouter({
       if (isPyramidIsolated) return errorResponse(ISOLATED_PYRAMID_MESSAGE);
       if (!user) return errorResponse("User not found");
       // Derived
-      const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
       const newStatus: UserStatus = user.status === "ASLEEP" ? "AWAKE" : "ASLEEP";
       // Guards
-      if (user.isOutlaw && inVillage) {
+      if (user.isOutlaw) {
         const sectorVillage = await fetchSectorVillage(ctx.drizzle, user?.sector ?? -1);
         if (
           newStatus === "ASLEEP" &&
@@ -291,8 +290,6 @@ export const homeRouter = createTRPCRouter({
         ) {
           return errorResponse("You can't sleep in a village as an outlaw");
         }
-      } else if (!user.isOutlaw && !inVillage) {
-        return errorResponse("You can't sleep outside a village as a non-outlaw");
       }
       if (user.isBanned) return errorResponse("You are banned");
       if (!["ASLEEP", "AWAKE"].includes(user.status)) {

@@ -201,7 +201,7 @@ import {
   calcJutsuEquipLimit,
   settleQueuedTraining,
 } from "@/libs/train";
-import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
+import { getBiomeFromGlobalTile } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import {
   deleteBattleById,
@@ -4109,9 +4109,8 @@ export const processUsersForBattle = async (
       user.avatarLight = user.anbuSquad.image;
     }
 
-    // For ally village check later (and formerly for village wall defence bonus)
+    // For ally village check later
     const ownSector = user.sector === user.village?.sector;
-    const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
 
     const fitsBattle = (usage: BattleUsageType) => fitsBattleUsage(battleType, usage);
 
@@ -4500,7 +4499,7 @@ export const processUsersForBattle = async (
 
     // Check if we are in ally village or not
     user.allyVillage = false;
-    if (inVillage && !ownSector) {
+    if (!ownSector) {
       const sector = info.villages.find((v) => v.sector === user.sector);
       if (sector) {
         const relationship = findRelationship(relations, user.villageId, sector.id);

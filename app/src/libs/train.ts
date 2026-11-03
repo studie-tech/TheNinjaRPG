@@ -71,7 +71,6 @@ import {
   type TerritoryBoostUser,
   territoryWarBoostWindows,
 } from "@/libs/territoryWar";
-import { calcIsInVillage } from "@/libs/travel";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
@@ -867,11 +866,7 @@ type StatTrainingUser = UserStatData &
 /** Training is available while awake in the player's village. */
 const trainingStartBlockMessage = (user: StatTrainingUser): string | null => {
   if (user.status !== "AWAKE") return "Must be awake to train";
-  if (!user.isOutlaw) {
-    if (!calcIsInVillage({ x: user.longitude, y: user.latitude }))
-      return "Must be in your own village";
-    if (user.sector !== user.village?.sector) return "Wrong sector";
-  }
+  if (!user.isOutlaw && user.sector !== user.village?.sector) return "Wrong sector";
   return null;
 };
 
