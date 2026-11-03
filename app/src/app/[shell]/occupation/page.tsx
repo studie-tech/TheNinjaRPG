@@ -112,8 +112,8 @@ export default function Occupations() {
   };
 
   const topRightContent =
-    userData?.occupation &&
-    (changeStatusData?.canChange || canChangeContent(userData?.role || "USER")) ? (
+    userData.occupation &&
+    (changeStatusData.canChange || canChangeContent(userData.role)) ? (
       <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
         <DialogTrigger asChild>
           <Button>
@@ -144,7 +144,7 @@ export default function Occupations() {
         defaultBackHref="/profile"
         topRightContent={topRightContent}
       >
-        {userData?.occupation ? (
+        {userData.occupation ? (
           <div>
             {occupationInfo && (
               <div className="flex flex-col gap-0.5 sm:gap-1">
@@ -164,7 +164,7 @@ export default function Occupations() {
               )}
               {changeStatusData &&
                 !changeStatusData.canChange &&
-                !canChangeContent(userData?.role || "USER") && (
+                !canChangeContent(userData.role) && (
                   <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
                     <span>You can change occupations in</span>
                     {userData.occupationSignupAt && (
@@ -191,7 +191,7 @@ export default function Occupations() {
           />
         )}
       </ContentBox>
-      {userData && renderOccupationComponent(userData)}
+      {renderOccupationComponent(userData)}
     </>
   );
 }
@@ -294,10 +294,8 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
  * Render the occupation component
  * @returns The occupation component
  */
-const renderOccupationComponent = (userData: {
-  occupation?: OccupationType | null;
-}) => {
-  if (!userData?.occupation) return null;
+const renderOccupationComponent = (userData: { occupation: OccupationType | null }) => {
+  if (!userData.occupation) return null;
 
   switch (userData.occupation) {
     case "GATHERING":
