@@ -771,11 +771,7 @@ export const ContentFiltering = <
                     <FilterSelect
                       key={field.id}
                       label={field.label}
-                      value={
-                        (value as string) ??
-                        ("noneOption" in field && field.noneOption?.value) ??
-                        "None"
-                      }
+                      value={value as string}
                       onValueChange={(v) => setter(v)}
                       options={options}
                       includeNone={"includeNone" in field ? field.includeNone : true}
@@ -860,10 +856,7 @@ export const ContentFiltering = <
                       React.Dispatch<React.SetStateAction<string[]>>
                     >
                   )[cat.key];
-                  if (setter)
-                    setter((prev: string[] = []) =>
-                      (prev ?? []).filter((x) => x !== item),
-                    );
+                  if (setter) setter((prev) => prev.filter((x) => x !== item));
                 }}
                 disabled={disabled}
               />

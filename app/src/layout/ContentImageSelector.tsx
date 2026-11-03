@@ -157,7 +157,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
           ? `${data.systemPrompt}\n${data.userPrompt}`
           : data.userPrompt,
         previousImg: props.referenceImageUrl,
-        removeBg: REMOVE_BG_TYPES.includes(props.type ?? ""),
+        removeBg: REMOVE_BG_TYPES.includes(props.type),
         relationId: id,
         size: size,
         maxDim: maxDim,
@@ -183,7 +183,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
             ? `${data.systemPrompt}\nKeep the camera and design consistent. Preserve the viewing direction unless the correction explicitly changes it. ${data.editPrompt}`
             : data.editPrompt,
         previousImg: displayUrl,
-        removeBg: REMOVE_BG_TYPES.includes(props.type ?? ""),
+        removeBg: REMOVE_BG_TYPES.includes(props.type),
         relationId: id,
         size: size,
         maxDim: maxDim,
