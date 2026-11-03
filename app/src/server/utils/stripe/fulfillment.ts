@@ -89,14 +89,12 @@ export const grantStripeReceipt = async (
           return "review_required" as const;
         }
       }
-      if (!stored.grantedAt) {
-        // The marker and credit commit together; an interrupted response can safely retry.
-        const result = await executeResultForClaim(client, receipt);
-        if (result.rowsAffected === 0) {
-          const current = await findStripePaymentForGrantStripeReceipt(client, receipt);
-          if (!current?.grantedAt && !(await isRetiredStoreUserId(client, recipientId)))
-            throw new Error("Stripe receipt recipient is unavailable");
-        }
+      // The marker and credit commit together; an interrupted response can safely retry.
+      const result = await executeResultForClaim(client, receipt);
+      if (result.rowsAffected === 0) {
+        const current = await findStripePaymentForGrantStripeReceipt(client, receipt);
+        if (!current?.grantedAt && !(await isRetiredStoreUserId(client, recipientId)))
+          throw new Error("Stripe receipt recipient is unavailable");
       }
     };
     const outcome = stored.grantedAt
