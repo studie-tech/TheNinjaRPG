@@ -33,46 +33,30 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 
-/** Build the `paypalSubscription` listing for `GET`, using predicates on `status`, `orderId`, `updatedAt`. */
-export const listPaypalSubscriptionForGET = (client: Pick<DrizzleClient, "query">) =>
+/** Build the `paypalSubscription` listing for `GET`: ACTIVE rows last paid before `cutoff`. */
+export const listPaypalSubscriptionForGET = (
+  client: Pick<DrizzleClient, "query">,
+  cutoff: Date,
+) =>
   client.query.paypalSubscription.findMany({
     where: and(
       eq(paypalSubscription.status, "ACTIVE"),
-      isNotNull(paypalSubscription.orderId),
-      lte(
-        paypalSubscription.updatedAt,
-        new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
-      ),
+      lte(paypalSubscription.updatedAt, cutoff),
     ),
   });
 
-/** Build the `paypalSubscription` listing for `GET`, using predicates on `status`, `orderId`, `updatedAt`. */
-export const listPaypalSubscriptionForGET2 = (client: Pick<DrizzleClient, "query">) =>
-  client.query.paypalSubscription.findMany({
-    where: and(
-      eq(paypalSubscription.status, "ACTIVE"),
-      isNull(paypalSubscription.orderId),
-      lte(
-        paypalSubscription.updatedAt,
-        new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
-      ),
-    ),
-  });
-
-/** Build the `paypalSubscription` update for `GET`, setting `status`, using predicates on `id`. */
+/**
+ * Build the `paypalSubscription` cancellation for `GET`, using predicates on `id`. The
+ * last-payment marker (`updatedAt`) is left untouched so the tier cannot outlive what
+ * was paid for.
+ */
 export const updatePaypalSubscriptionForGET = (
   client: Pick<DrizzleClient, "update">,
-  isDone: false | true,
   subscription: { id: string },
 ) =>
   client
     .update(paypalSubscription)
-    .set({
-      status: isDone ? "CANCELLED" : "ACTIVE",
-      // As above: the reputation-funded row's last-payment marker has to survive being
-      // cancelled, or the tier outlives what was paid for.
-      ...(isDone ? {} : { updatedAt: new Date() }),
-    })
+    .set({ status: "CANCELLED" })
     .where(eq(paypalSubscription.id, subscription.id));
 
 /** Build the `webStoreBundle` listing for `getStoreBundles`, using predicates on `isActive`. */
