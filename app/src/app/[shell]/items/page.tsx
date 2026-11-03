@@ -913,7 +913,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   // Handler for when mutations are settled
   const onSettled = () => {
-    document.body.style.cursor = "default";
     setIsOpen(false);
     setUserItem(undefined);
   };
@@ -1664,7 +1663,6 @@ const Character: React.FC<CharacterProps> = (props) => {
       }
     },
     onSettled: () => {
-      document.body.style.cursor = "default";
       setIsOpen(false);
       setShowItemDetails(false);
       setUserItem(undefined);

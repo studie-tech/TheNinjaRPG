@@ -99,7 +99,6 @@ describe("inventory pages", () => {
       // Another tab consumes a meal while this modal still holds its earlier quantity.
       quantity = 2;
       activeMeal = "Rice Bowl";
-      document.body.style.cursor = "wait";
       await consume.mutate({ userItemId: "meal-stack", expectedQuantity: 3 });
 
       expect(toast).toHaveBeenCalledWith({ success: false, message: "Your meal stack changed. Refresh your inventory and try again" });
@@ -108,7 +107,6 @@ describe("inventory pages", () => {
       expect(consume.getCurrentResult().isPending).toBe(false);
       expect(isOpen).toBe(false);
       expect(selected).toBeUndefined();
-      expect(document.body.style.cursor).toBe("default");
     } finally {
       unsubscribeInventory();
       unsubscribeProfile();

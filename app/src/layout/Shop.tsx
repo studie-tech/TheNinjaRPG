@@ -382,9 +382,6 @@ const Shop: React.FC<ShopProps> = (props) => {
       }
     },
     onError: (error) => setPurchaseError(error.message),
-    onSettled: () => {
-      document.body.style.cursor = "default";
-    },
   });
 
   const sDiscount = getStrucBoost("itemDiscountPerLvl", userData.village?.structures);

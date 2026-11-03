@@ -61,7 +61,6 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       },
       onSettled: (_data, error) => {
         setIsOpen(false);
-        document.body.style.cursor = "default";
         if (error) return updateUser(undefined, { revision: undefined });
       },
     });

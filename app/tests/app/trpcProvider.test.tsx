@@ -251,7 +251,6 @@ for (const flow of recoveryFlows) {
       expect(queryClient.getQueryData(test.key)).toEqual(test.authoritative);
       if (flow.procedure === "bloodline.purchaseBloodline") {
         expect(test.closeModal).toHaveBeenCalledWith(false);
-        expect(document.body.style.cursor).toBe("default");
       }
     },
   );

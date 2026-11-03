@@ -201,7 +201,6 @@ export default function MyJutsu() {
   const freeTransferResetTime = getFreeTransferResetTime();
 
   const onSettled = () => {
-    document.body.style.cursor = "default";
     setIsOpen(false);
     setUserJutsu(undefined);
     setTransferTarget(undefined);
