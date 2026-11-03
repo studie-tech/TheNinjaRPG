@@ -1,9 +1,54 @@
 import { expect, it, vi } from "bun:test";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { BufferImageSource, Container, Texture } from "pixi.js";
-import { acquireVillageLightField, lightOcclusionPolygon } from "@/libs/rendering/villageLightField";
+import { acquirePrebakedVillageLightField, acquireVillageLightField, lightOcclusionPolygon, unpackVillageLightField } from "@/libs/rendering/villageLightField";
+import published from "@/libs/rendering/bakedVillageLightFields.json";
+import bakedSources from "@/libs/rendering/bakedWorldSources.json";
+import worldSources from "@/libs/rendering/worldAssetSources.json";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+
+it("preserves hidden RGB and independent window eligibility across opaque image decoding", () => {
+  const packed = new Uint8Array([
+    120, 80, 40, 255, 20, 60, 90, 255, 0, 0, 0, 255, 100, 100, 100, 255,
+    1, 2, 3, 255, 4, 5, 6, 255, 240, 240, 240, 255, 8, 8, 8, 255,
+  ]);
+  expect(Array.from(unpackVillageLightField(packed, 2, 2))).toEqual([120,80,40,0,20,60,90,100,1,2,3,240,4,5,6,8]);
+  expect(() => unpackVillageLightField(packed.subarray(4),2,2)).toThrow();
+});
+
+it("publishes a lossless complete pool matching its authored source catalog", async () => {
+  expect(createHash("sha256").update(JSON.stringify([bakedSources,worldSources])).digest("hex")).toBe(published.catalog);
+  for (const field of Object.values(published.fields)) {
+    const {data,info}=await sharp(readFileSync(new URL(`../../../public${field.image}`,import.meta.url))).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+    expect([info.width,info.height]).toEqual([field.width*2,field.height]);
+    const pixels=unpackVillageLightField(data,field.width,field.height);
+    expect(createHash("sha256").update(pixels).digest("hex")).toBe(field.rgbaSha256);
+    expect(pixels.some((n,i)=>i%4<3&&n>0&&pixels[i-i%4+3]===0)).toBe(true);
+  }
+});
+
+it("does not paint or load a guessed pool for an unknown sector signature", async () => {
+  const canvas=vi.spyOn(HTMLCanvasElement.prototype,"getContext");
+  const lease=acquirePrebakedVillageLightField("unknown scene signature",{x:100,y:-200});
+  try {expect(await lease.resource).toBeNull();expect(canvas).not.toHaveBeenCalled();}
+  finally {lease.release();lease.release();canvas.mockRestore();}
+});
+
+it("cancels a released layout before it paints an obsolete pool", async () => {
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext");
+  const lease = acquireVillageLightField([{ x: 0, y: 0, height: 12, reach: 213 }])!;
+  lease.release();
+  try {
+    await expect(lease.resource).rejects.toMatchObject({ name: "AbortError" });
+    expect(canvas).not.toHaveBeenCalled();
+  } finally {
+    canvas.mockRestore();
+  }
+});
 
 it("shares an RGB pool texture across translated layouts and ignores invalid fixtures", async () => {
   const stops = vi.fn();

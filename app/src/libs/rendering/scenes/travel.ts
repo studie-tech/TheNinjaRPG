@@ -424,6 +424,9 @@ export const createTravelScene = async (options: {
           x: origin.x + entry.dx * spanX,
           y: origin.y + entry.dy * spanY,
         };
+        if (entry.sector === snapshot.sector)
+          await bakedLighting?.preloadField(preparedSector.sourceKey, position);
+        if (disposed || token !== generation) return;
         const existing = sectors.get(entry.sector);
         if (existing?.key === key) {
           existing.position = position;

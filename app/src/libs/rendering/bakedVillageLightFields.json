@@ -1,0 +1,22 @@
+{
+  "catalog": "64146a352f26fff63ed35ac512bba2812eb4bfc121868288271bcd2c11a4a5d6",
+  "fields": {
+    "edff25891a2841adc54e4276dffdc5bc71bbf0f7400f047f18cabe070172aa53": {
+      "image": "/world-lighting/pools/599a49f813dc838d.png",
+      "width": 768,
+      "height": 480,
+      "rgbaSha256": "defe3baa0f81545cbe142e8501ef4bce3a7637d07893f4e7f6d40d4516d7bd6a"
+    }
+  },
+  "scenes": {
+    "eb53b3df1466a981b0cd4282437467ef6faf91c598131b4b2d262f740f767607": {
+      "field": "edff25891a2841adc54e4276dffdc5bc71bbf0f7400f047f18cabe070172aa53",
+      "bounds": {
+        "minX": -765.4076322673418,
+        "maxX": 1820.3076405792406,
+        "minY": -629.307638278481,
+        "maxY": 985.4860923139239
+      }
+    }
+  }
+}

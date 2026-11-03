@@ -16,6 +16,7 @@ import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLig
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import {
+  acquirePrebakedVillageLightField,
   acquireVillageLightField,
   type VillageLightBlocker,
 } from "@/libs/rendering/villageLightField";
@@ -83,6 +84,19 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   let pendingField: ReturnType<typeof acquireVillageLightField> = null;
   let fieldTimer: ReturnType<typeof setTimeout> | null = null;
   let fieldRevision = 0;
+  let preloadLease: ReturnType<typeof acquirePrebakedVillageLightField> | null = null;
+  let preloadKey = "";
+  let preloadRevision = 0;
+  let preloadReady: Promise<void> | null = null;
+  let pendingAtlases = 0;
+  const settleAtlas = <T>(resource: Promise<T>) => {
+    pendingAtlases++;
+    return resource.finally(() => {
+      pendingAtlases--;
+      dirty = true;
+      if (!disposed) game.invalidate();
+    });
+  };
   let previousGlow = -1;
   let smoothSun: ReturnType<typeof worldSunlight> | null = null;
   let dirty = true,
@@ -226,7 +240,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         ? base.acquireAtlas(bakedShadowKey(source.texture, description))
         : null;
       if (sceneryAtlas)
-        void sceneryAtlas.resource
+        void settleAtlas(sceneryAtlas.resource)
           .then((atlas) => {
             if (!scenery.has(record)) return;
             record.atlas = atlas;
@@ -292,7 +306,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     buildings.add(building);
     const key = bakedShadowKey(source.texture, description);
     const atlasLease = base.acquireAtlas(key);
-    const resource = atlasLease.resource;
+    const resource = settleAtlas(atlasLease.resource);
     void resource
       .then((atlas) => {
         if (!building.active || disposed) return;
@@ -331,6 +345,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     if (fieldTimer !== null) clearTimeout(fieldTimer);
     fieldLease?.release();
     pendingField?.release();
+    preloadRevision++;
+    preloadLease?.release();
     overlays.clear();
     blockers.clear();
     buildings.clear();
@@ -341,6 +357,30 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   return {
     ...base,
     kind: "baked" as const,
+    preloadField: (sceneKey: string, position: { x: number; y: number }) => {
+      const key = `${sceneKey}:${position.x}:${position.y}`;
+      if (key === preloadKey) return preloadReady;
+      preloadKey = key;
+      const revision = ++preloadRevision;
+      preloadLease?.release();
+      const lease = acquirePrebakedVillageLightField(sceneKey, position);
+      preloadLease = lease;
+      preloadReady = lease.resource
+        .then((field) => {
+          if (disposed || revision !== preloadRevision || !field) return;
+          base.setWarmField(field);
+          game.invalidate();
+        })
+        .catch((error) => {
+          lease.release();
+          if (!disposed)
+            console.warn(
+              "Village pool preload unavailable; waiting for fixture lighting",
+              error,
+            );
+        });
+      return preloadReady;
+    },
     register,
     invalidate: () => {
       dirty = true;
@@ -529,38 +569,46 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         if (fieldTimer !== null) clearTimeout(fieldTimer);
         pendingField?.release();
         pendingField = null;
-        fieldTimer = setTimeout(() => {
-          fieldTimer = null;
-          const lease = acquireVillageLightField(radiance, occluders);
-          if (!lease) {
-            fieldLease?.release();
-            fieldLease = null;
-            base.setWarmField(null);
-            return;
-          }
-          pendingField = lease;
-          void lease.resource
-            .then((field) => {
-              if (disposed || revision !== fieldRevision) {
+        if (pendingAtlases === 0)
+          fieldTimer = setTimeout(() => {
+            fieldTimer = null;
+            const lease = acquireVillageLightField(radiance, occluders);
+            if (!lease) {
+              fieldLease?.release();
+              fieldLease = null;
+              base.setWarmField(null);
+              return;
+            }
+            pendingField = lease;
+            void lease.resource
+              .then((field) => {
+                if (disposed || revision !== fieldRevision) {
+                  lease.release();
+                  return;
+                }
+                const previous = fieldLease;
+                fieldLease = lease;
+                pendingField = null;
+                base.setWarmField(field);
+                preloadRevision++;
+                preloadLease?.release();
+                preloadLease = null;
+                previous?.release();
+                game.invalidate();
+              })
+              .catch((error) => {
                 lease.release();
-                return;
-              }
-              const previous = fieldLease;
-              fieldLease = lease;
-              pendingField = null;
-              base.setWarmField(field);
-              previous?.release();
-              game.invalidate();
-            })
-            .catch((error) => {
-              lease.release();
-              if (!disposed)
-                console.warn(
-                  "Village radiance unavailable; retaining the cached field",
-                  error,
-                );
-            });
-        }, 100);
+                if (
+                  !disposed &&
+                  revision === fieldRevision &&
+                  !(error instanceof Error && error.name === "AbortError")
+                )
+                  console.warn(
+                    "Village radiance unavailable; retaining the cached field",
+                    error,
+                  );
+              });
+          }, 100);
       }
       const night = game.visualEffects.localLights ? 1 - light.day : 0;
       if (night !== previousGlow) {

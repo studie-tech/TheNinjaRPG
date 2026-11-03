@@ -1,13 +1,32 @@
 import { BufferImageSource, Texture } from "pixi.js";
+import { createSceneAssets, readTexturePixels } from "@/libs/rendering/assets";
+import published from "@/libs/rendering/bakedVillageLightFields.json";
 import type { VillageLight } from "@/libs/rendering/bakedVillageLighting";
+import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import type { WorldBounds } from "@/libs/rendering/visibility";
+import worldSources from "@/libs/rendering/worldAssetSources.json";
 
 const fields = new Map<string, Texture>();
+const fallbackLayouts = new Map<string, string>();
 const cache = createLeaseCache<Texture>({
   load: async (key) => {
-    const layout = JSON.parse(key) as LightLayout;
-    const texture = await rasterize(layout);
+    let texture: Texture;
+    if (key.startsWith("baked:")) {
+      try {
+        texture = await loadPublishedField(
+          published.fields[key.slice(6) as keyof typeof published.fields],
+        );
+      } catch (error) {
+        const layout = fallbackLayouts.get(key);
+        if (!layout) throw error;
+        console.warn(
+          "Village light bake unavailable; using the layout rasterizer",
+          error,
+        );
+        texture = await rasterize(JSON.parse(layout) as LightLayout);
+      }
+    } else texture = await rasterize(JSON.parse(key) as LightLayout);
     fields.set(key, texture);
     return texture;
   },
@@ -19,6 +38,128 @@ const cache = createLeaseCache<Texture>({
   bytes: (texture) => texture.source.pixelWidth * texture.source.pixelHeight * 4,
   idleBudget: 4 * 1024 * 1024,
 });
+
+const digest = async (key: string) => {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(bytes), (n) => n.toString(16).padStart(2, "0")).join(
+    "",
+  );
+};
+let matchingCatalog: Promise<boolean> | null = null;
+const hasPublishedCatalog = () =>
+  (matchingCatalog ??= digest(JSON.stringify([bakedSources, worldSources])).then(
+    (key) => key === published.catalog,
+  ));
+
+/** Published layouts use the same leases as their fully resolved runtime representation. */
+const leaseField = (key: Promise<string | null>, bounds: WorldBounds) => {
+  let lease: ReturnType<typeof cache.acquire> | null = null;
+  let released = false;
+  const resource = key.then(async (value) => {
+    if (!value || released) return null;
+    lease = cache.acquire(value);
+    const texture = await lease.resource;
+    return { texture, bounds };
+  });
+  return {
+    resource,
+    release: () => {
+      released = true;
+      lease?.release();
+    },
+  };
+};
+
+/** A static sector signature allows the complete pool to load before fixture artwork. */
+export const acquirePrebakedVillageLightField = (
+  sceneKey: string,
+  origin: { x: number; y: number },
+) => {
+  let lease: ReturnType<typeof leaseField> | null = null;
+  let released = false;
+  const resource = Promise.all([digest(sceneKey), hasPublishedCatalog()]).then(
+    async ([key, matches]) => {
+      const scene = matches
+        ? (
+            published.scenes as Readonly<
+              Record<string, { field: string; bounds: WorldBounds }>
+            >
+          )[key]
+        : undefined;
+      if (!scene || released) return null;
+      const b = scene.bounds;
+      lease = leaseField(Promise.resolve(`baked:${scene.field}`), {
+        minX: b.minX + origin.x,
+        maxX: b.maxX + origin.x,
+        minY: b.minY + origin.y,
+        maxY: b.maxY + origin.y,
+      });
+      return lease.resource;
+    },
+  );
+  return {
+    resource,
+    release: () => {
+      released = true;
+      lease?.release();
+    },
+  };
+};
+
+const loadPublishedField = async (source: BakedField) => {
+  const assets = createSceneAssets();
+  try {
+    const packed = await assets.texture(source.image, 0, "nearest");
+    if (packed.width !== source.width * 2 || packed.height !== source.height)
+      throw new Error("Village light bake dimensions do not match its layout");
+    const pixels = readTexturePixels(packed, source.width * 2, source.height);
+    return createFieldTexture(
+      unpackVillageLightField(pixels, source.width, source.height),
+      source.width,
+      source.height,
+    );
+  } finally {
+    assets.dispose();
+  }
+};
+
+/** Opaque RGB tiles preserve both irradiance and eligibility through ordinary image decoding. */
+export const unpackVillageLightField = (
+  packed: Uint8Array,
+  width: number,
+  height: number,
+) => {
+  if (packed.length !== width * 2 * height * 4)
+    throw new Error("Invalid village light bake data");
+  const pixels = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const target = (y * width + x) * 4;
+      const color = (y * width * 2 + x) * 4;
+      const eligibility = color + width * 4;
+      pixels[target] = packed[color]!;
+      pixels[target + 1] = packed[color + 1]!;
+      pixels[target + 2] = packed[color + 2]!;
+      pixels[target + 3] = packed[eligibility]!;
+    }
+  return pixels;
+};
+
+const createFieldTexture = (
+  pixels: Uint8Array | Uint8ClampedArray,
+  width: number,
+  height: number,
+) =>
+  new Texture({
+    source: new BufferImageSource({
+      resource: pixels,
+      width,
+      height,
+      format: "rgba8unorm",
+      alphaMode: "no-premultiply-alpha",
+      scaleMode: "linear",
+    }),
+  });
 
 /** Translation-independent layout leases share colored, occluded pools without camera-triggered rasterization. */
 export const acquireVillageLightField = (
@@ -85,10 +226,22 @@ export const acquireVillageLightField = (
           a.points[0]!.y - b.points[0]!.y,
       ),
   };
-  const lease = cache.acquire(JSON.stringify(layout));
+  const key = JSON.stringify(layout);
+  const lease = leaseField(
+    Promise.all([digest(key), hasPublishedCatalog()]).then(([fingerprint, matches]) => {
+      if (!matches || !Object.hasOwn(published.fields, fingerprint)) return key;
+      const bakedKey = `baked:${fingerprint}`;
+      fallbackLayouts.set(bakedKey, key);
+      return bakedKey;
+    }),
+    bounds,
+  );
   return {
-    resource: lease.resource.then((texture) => ({ texture, bounds })),
-    release: lease.release,
+    ...lease,
+    resource: lease.resource.then((field) => {
+      if (!field) throw new DOMException("Village field cancelled", "AbortError");
+      return field;
+    }),
   };
 };
 
@@ -241,17 +394,7 @@ const rasterize = async (layout: LightLayout) => {
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
   const eligibility = maskContext.getImageData(0, 0, canvas.width, canvas.height).data;
   for (let i = 3; i < pixels.length; i += 4) pixels[i] = eligibility[i] ?? 0;
-  const texture = new Texture({
-    source: new BufferImageSource({
-      resource: pixels,
-      width: canvas.width,
-      height: canvas.height,
-      format: "rgba8unorm",
-      alphaMode: "no-premultiply-alpha",
-      scaleMode: "linear",
-    }),
-  });
-  return texture;
+  return createFieldTexture(pixels, canvas.width, canvas.height);
 };
 
 const convexHull = (points: readonly Point[]) => {
@@ -272,6 +415,7 @@ const convexHull = (points: readonly Point[]) => {
 };
 
 type Point = { x: number; y: number };
+type BakedField = { image: string; width: number; height: number };
 export type VillageLightBlocker = {
   points: readonly Point[];
   height: number;
