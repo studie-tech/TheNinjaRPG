@@ -23,9 +23,6 @@ import java.util.Map;
  *
  * Every supported release posts the countdown the same way: an ongoing notification with a
  * determinate progress bar, on its own low-importance channel so it never makes a sound.
- * Android 16 (API 36) added Notification.ProgressStyle, which would render this as a
- * lock-screen card and a status-bar chip instead; adopting it is left for when the app
- * compiles against API 36, and until then the notification is what every release gets.
  */
 @CapacitorPlugin(name = "TNRLiveActivity")
 public class TNRLiveUpdatesPlugin extends Plugin {

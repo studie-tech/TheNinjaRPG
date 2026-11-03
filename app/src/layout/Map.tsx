@@ -26,6 +26,7 @@ interface MapProps {
   autoRotate?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
+  /** Receive the picked world sector ID for travel, editing or war selection. */
   onTileClick?: (sector: number) => void;
 }
 
