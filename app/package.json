@@ -16,7 +16,7 @@
   "scripts": {
     "build": "next build --debug",
     "check": "biome check . && tsc --noEmit",
-    "build-stats": "ANALYZE=true next build",
+    "build-stats": "next build --analyze",
     "dev": "next dev",
     "format:check": "biome format .",
     "format:write": "biome format --write .",
@@ -45,7 +45,6 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.99",
     "@ai-sdk/react": "^4.0.152",
-    "@builder.io/partytown": "^0.10.3",
     "@clerk/mcp-tools": "^0.6.0",
     "@clerk/nextjs": "^7.9.19",
     "@emoji-mart/data": "^1.2.1",
@@ -54,7 +53,6 @@
     "@hookform/resolvers": "^6.0.0",
     "@icons-pack/react-simple-icons": "^13.15.1",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@next/bundle-analyzer": "16.4.2",
     "@next/third-parties": "16.4.2",
     "@paypal/react-paypal-js": "10.6.0",
     "@planetscale/database": "^2.0.0",
