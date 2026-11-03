@@ -4,47 +4,6 @@ import { promisify } from "node:util";
 const lookup = promisify(dns.lookup);
 
 /**
- * Normalize and validate IPv4 addresses (handles dotted decimal, integer, and hex formats)
- */
-export function normalizeIPv4(hostname: string): string | null {
-  // Standard dotted decimal (e.g., "192.168.1.1")
-  const dottedMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (dottedMatch) {
-    const octets = dottedMatch.slice(1).map(Number);
-    if (octets.every((n) => n >= 0 && n <= 255)) {
-      return octets.join(".");
-    }
-    return null;
-  }
-
-  // Integer format (e.g., "2130706433" for 127.0.0.1)
-  if (/^\d+$/.test(hostname)) {
-    const num = parseInt(hostname, 10);
-    if (num >= 0 && num <= 0xffffffff) {
-      const a = (num >>> 24) & 0xff;
-      const b = (num >>> 16) & 0xff;
-      const c = (num >>> 8) & 0xff;
-      const d = num & 0xff;
-      return `${a}.${b}.${c}.${d}`;
-    }
-  }
-
-  // Hex format (e.g., "0x7f000001" for 127.0.0.1)
-  if (/^0x[0-9a-f]+$/i.test(hostname)) {
-    const num = parseInt(hostname, 16);
-    if (num >= 0 && num <= 0xffffffff) {
-      const a = (num >>> 24) & 0xff;
-      const b = (num >>> 16) & 0xff;
-      const c = (num >>> 8) & 0xff;
-      const d = num & 0xff;
-      return `${a}.${b}.${c}.${d}`;
-    }
-  }
-
-  return null;
-}
-
-/**
  * Checks if an IP address is private, loopback, or link-local.
  */
 export function isPrivateIp(ip: string): boolean {
@@ -148,60 +107,6 @@ function parseIPv6(ip: string): number[] | null {
 }
 
 /**
- * Synchronous URL validation for SSRF protection.
- * Blocks localhost, private IP ranges, cloud metadata endpoints,
- * and various IP encoding tricks (integer, hex, IPv6-wrapped).
- * Does NOT perform DNS resolution - use validateUrlForSsrf for complete protection.
- */
-export function isUrlSafeSynchronous(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-
-    // Only allow HTTP(S) protocols
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return false;
-    }
-
-    let hostname = parsed.hostname.toLowerCase();
-
-    // Block localhost by name
-    if (hostname === "localhost") {
-      return false;
-    }
-
-    // Block cloud metadata endpoints
-    if (hostname === "169.254.169.254" || hostname === "fd00:ec2::254") {
-      return false;
-    }
-
-    // Handle IPv6 literal format [addr] - strip brackets
-    if (hostname.startsWith("[") && hostname.endsWith("]")) {
-      hostname = hostname.slice(1, -1);
-    }
-
-    // Check if it's an IPv6 address
-    if (hostname.includes(":")) {
-      return !isPrivateIp(hostname);
-    }
-
-    // Normalize potential IPv4 variants (dotted, integer, hex)
-    const normalizedIP = normalizeIPv4(hostname);
-    if (normalizedIP) {
-      return !isPrivateIp(normalizedIP);
-    }
-
-    // For hostnames (not IPs), we can't reliably check DNS resolution
-    // without making this function async. The best we can do is block
-    // obvious localhost/internal names.
-    // Note: A complete SSRF fix requires DNS resolution - use validateUrlForSsrf.
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Validates a URL for SSRF protection with DNS resolution.
  * - Ensures protocol is http or https
  * - Checks against an optional allowlist of prefixes
@@ -236,7 +141,7 @@ export async function validateUrlForSsrf(
         ? url.hostname.slice(1, -1)
         : url.hostname;
 
-    // Normalize potential IPv4 variants (dotted, integer, hex) before DNS lookup
+    // Check IPv4 literals directly before DNS lookup
     const normalizedIP = normalizeIPv4(hostname);
     if (normalizedIP) {
       hostname = normalizedIP;
@@ -280,4 +185,15 @@ export async function validateUrlForSsrf(
   } catch {
     return false;
   }
+}
+
+/**
+ * Validate a dotted-decimal IPv4 address. `new URL()` already canonicalizes integer, hex,
+ * octal and short forms to dotted decimal before a hostname reaches this check.
+ */
+function normalizeIPv4(hostname: string): string | null {
+  const dottedMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!dottedMatch) return null;
+  const octets = dottedMatch.slice(1).map(Number);
+  return octets.every((n) => n >= 0 && n <= 255) ? octets.join(".") : null;
 }
