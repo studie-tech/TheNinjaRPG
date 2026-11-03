@@ -798,7 +798,7 @@ export const jutsuRouter = createTRPCRouter({
       if (userjutsuObj) {
         const res1 = await deleteUserJutsuForForget(ctx.drizzle, input);
         if (res1.rowsAffected === 1) {
-          return { success: true, message: `Jutsu forgotten, 0 ryo restored` };
+          return { success: true, message: "Jutsu forgotten" };
         }
       }
       return { success: false, message: `Could not find jutsu to delete` };
