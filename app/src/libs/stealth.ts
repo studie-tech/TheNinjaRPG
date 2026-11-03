@@ -272,27 +272,22 @@ export const calcCovertTrainingGain = (
  * @param timeDiff - Client minus server clock offset in milliseconds.
  */
 export const getStealthStatus = (
-  userData:
-    | (TerritoryBoostUser & {
-        stealth: number;
-        sensory: number;
-        stealthActive: boolean;
-        stealthActivatedAt: Date | null;
-        stealthCooldownAt: Date | null;
-        lastSensoryAt: Date | null;
-        covertTrainingType: "stealth" | "sensory" | null;
-        covertTrainingStartedAt: Date | null;
-        covertTrainingMinutes: number | null;
-        pvpBoost?: { totalPercent: number };
-      })
-    | undefined
-    | null,
+  userData: TerritoryBoostUser & {
+    stealth: number;
+    sensory: number;
+    stealthActive: boolean;
+    stealthActivatedAt: Date | null;
+    stealthCooldownAt: Date | null;
+    lastSensoryAt: Date | null;
+    covertTrainingType: "stealth" | "sensory" | null;
+    covertTrainingStartedAt: Date | null;
+    covertTrainingMinutes: number | null;
+    pvpBoost?: { totalPercent: number };
+  },
   cap: number,
   gainPerMinute: number,
   timeDiff: number = 0,
 ) => {
-  if (!userData) return undefined;
-
   const covertTrainingFinishAt = calcCovertTrainingFinishAt(
     userData.covertTrainingStartedAt,
     userData.covertTrainingMinutes,

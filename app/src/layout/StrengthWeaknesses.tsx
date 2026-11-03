@@ -18,7 +18,6 @@ import {
   MAX_MASTERY_CAP,
   MasteryNames,
   STEALTH_SENSORY_CAP,
-  STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TOTAL_MASTERY_CAP,
   UserRolesWithSkillTreeAccess,
@@ -124,11 +123,11 @@ const StrengthWeaknesses: React.FC = () => {
       }
       initialBreak={true}
     >
-      {currentTab === "Stats" && userData && <StatsTab userData={userData} />}
-      {currentTab === "Graphs" && userData && <GraphsTab userData={userData} />}
-      {currentTab === "Skills" && userData && <SkillsTab userData={userData} />}
+      {currentTab === "Stats" && <StatsTab userData={userData} />}
+      {currentTab === "Graphs" && <GraphsTab userData={userData} />}
+      {currentTab === "Skills" && <SkillsTab userData={userData} />}
       {currentTab === "Bloodright" && <Bloodright />}
-      {currentTab === "Covert" && userData && <CovertTab userData={userData} />}
+      {currentTab === "Covert" && <CovertTab userData={userData} />}
     </ContentBox>
   );
 };
@@ -266,7 +265,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
     const masteries = userData.effectiveMasteries ?? userData;
     const masteryCtx = masteryChartRef?.current?.getContext("2d");
     const combatCtx = combatChartRef?.current?.getContext("2d");
-    if (masteryCtx && combatCtx && userData) {
+    if (masteryCtx && combatCtx) {
       let masteryChart: Chart<"radar"> | undefined;
       let combatChart: Chart<"bar"> | undefined;
       let cancelled = false;
@@ -524,23 +523,13 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   const utils = api.useUtils();
 
   // Skill Tree Queries - only run when this component is mounted
-  const { data: allSkills } = api.skillTree.getAll.useQuery(
-    { limit: 500 },
-    { enabled: !!userData },
-  );
+  const { data: allSkills } = api.skillTree.getAll.useQuery({ limit: 500 });
 
-  const { data: userSkills } = api.skillTree.getUserSkills.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery();
 
-  const { data: folders } = api.skillTree.getAllFolders.useQuery(
-    { includeHidden },
-    { enabled: !!userData },
-  );
+  const { data: folders } = api.skillTree.getAllFolders.useQuery({ includeHidden });
 
-  const { data: folderStats } = api.skillTree.getFolderStats.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: folderStats } = api.skillTree.getFolderStats.useQuery();
 
   // Skill Tree Mutations
   const { mutate: purchaseSkill, isPending: isPurchasing } =
@@ -563,7 +552,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   const allSkillsData = allSkills?.data ?? [];
   const ownedSkills = userSkills?.skills ?? [];
   const activatedSkillCount = userSkills?.activatedSkillCount ?? 0;
-  const totalSkillPoints = userData?.skillPoints || 0;
+  const totalSkillPoints = userData.skillPoints;
   const usedSkillPoints = userSkills?.usedSkillPoints ?? 0;
 
   // Get selected folder
@@ -581,8 +570,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   };
 
   // Check if user has chunin+ rank to access skill tree
-  const hasSkillTreeAccess =
-    userData && UserRolesWithSkillTreeAccess.includes(userData.rank);
+  const hasSkillTreeAccess = UserRolesWithSkillTreeAccess.includes(userData.rank);
 
   if (!hasSkillTreeAccess) {
     return (
@@ -677,10 +665,8 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
     timeDiff,
   );
 
-  const stealthProgress =
-    ((stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
-  const sensoryProgress =
-    ((stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
+  const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
+  const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
 
   return (
     <div className="space-y-6">
@@ -693,18 +679,14 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
         <div className="mb-1 flex justify-between">
           <span className="text-sm">Progress</span>
           <span className="font-medium text-sm">
-            {Math.floor(
-              stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT,
-            ).toLocaleString()}{" "}
-            / {STEALTH_SENSORY_CAP.toLocaleString()}
+            {Math.floor(stealthStatus.stealth).toLocaleString()} /{" "}
+            {STEALTH_SENSORY_CAP.toLocaleString()}
           </span>
         </div>
         <Progress value={stealthProgress} className="h-2" />
         <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-          <p>
-            Duration: {Math.floor((stealthStatus?.stealthDurationMax ?? 60) / 60)} min
-          </p>
-          <p>Keep Chance: {(stealthStatus?.stealthKeepChance ?? 5).toFixed(1)}%</p>
+          <p>Duration: {Math.floor(stealthStatus.stealthDurationMax / 60)} min</p>
+          <p>Keep Chance: {stealthStatus.stealthKeepChance.toFixed(1)}%</p>
         </div>
       </div>
 
@@ -717,22 +699,16 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
         <div className="mb-1 flex justify-between">
           <span className="text-sm">Progress</span>
           <span className="font-medium text-sm">
-            {Math.floor(
-              stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT,
-            ).toLocaleString()}{" "}
-            / {STEALTH_SENSORY_CAP.toLocaleString()}
+            {Math.floor(stealthStatus.sensory).toLocaleString()} /{" "}
+            {STEALTH_SENSORY_CAP.toLocaleString()}
           </span>
         </div>
         <Progress value={sensoryProgress} className="h-2" />
         <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-          <p>
-            Detection Chance: {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
-          </p>
-          <p>Cooldown: {Math.floor(stealthStatus?.sensoryCooldown ?? 120)} sec</p>
+          <p>Detection Chance: {stealthStatus.sensoryDetectChance.toFixed(1)}%</p>
+          <p>Cooldown: {Math.floor(stealthStatus.sensoryCooldown)} sec</p>
         </div>
       </div>
-
-      {/* Training Link */}
     </div>
   );
 };

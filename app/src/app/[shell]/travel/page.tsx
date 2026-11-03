@@ -1622,14 +1622,14 @@ const StealthControls: React.FC<{
       ? lastSuccessfulSensoryAt
       : userData?.lastSensoryAt;
 
-  const stealthStatus = getStealthStatus(
-    userData
-      ? { ...userData, lastSensoryAt: effectiveLastSensoryAt ?? null }
-      : userData,
-    STEALTH_SENSORY_CAP,
-    STEALTH_TRAIN_GAIN_PER_MINUTE,
-    timeDiff,
-  );
+  const stealthStatus = userData
+    ? getStealthStatus(
+        { ...userData, lastSensoryAt: effectiveLastSensoryAt ?? null },
+        STEALTH_SENSORY_CAP,
+        STEALTH_TRAIN_GAIN_PER_MINUTE,
+        timeDiff,
+      )
+    : undefined;
   const sensoryCooldown = useLiveCountdown(stealthStatus?.sensoryCooldownRemaining);
   const stealthCooldown = useLiveCountdown(stealthStatus?.stealthCooldownRemaining);
   const stealthDuration = useLiveCountdown(stealthStatus?.stealthDurationRemaining);

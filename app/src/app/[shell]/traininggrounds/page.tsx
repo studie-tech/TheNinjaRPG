@@ -71,7 +71,6 @@ import {
   SENSEI_STUDENT_RYO_PER_MISSION,
   STATS_PER_ENERGY,
   STEALTH_SENSORY_CAP,
-  STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TOTAL_MASTERY_CAP,
   TRAINING_CAPTCHA_SOLVED_GRACE_MINUTES,
@@ -1680,7 +1679,7 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         if (data.success && data.data) {
           const statUpdate =
-            stealthStatus?.covertTrainingType === "stealth"
+            stealthStatus.covertTrainingType === "stealth"
               ? { stealth: data.data.newValue }
               : { sensory: data.data.newValue };
           await updateUser({
@@ -1710,16 +1709,14 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  const stealthProgress =
-    ((stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
-  const sensoryProgress =
-    ((stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT) / STEALTH_SENSORY_CAP) * 100;
+  const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
+  const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
 
   // Check if currently training
-  const isTraining = !!stealthStatus?.covertTrainingType;
-  const trainingType = stealthStatus?.covertTrainingType;
-  const trainingFinishAt = stealthStatus?.covertTrainingFinishAt;
-  const trainingGain = stealthStatus?.covertTrainingGain;
+  const isTraining = !!stealthStatus.covertTrainingType;
+  const trainingType = stealthStatus.covertTrainingType;
+  const trainingFinishAt = stealthStatus.covertTrainingFinishAt;
+  const trainingGain = stealthStatus.covertTrainingGain;
 
   return (
     <ContentBox
@@ -1772,21 +1769,16 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                 <div className="mb-1 flex justify-between">
                   <span className="text-sm">Progress</span>
                   <span className="font-medium text-sm">
-                    {Math.floor(
-                      stealthStatus?.stealth ?? STEALTH_SENSORY_DEFAULT,
-                    ).toLocaleString()}{" "}
-                    / {STEALTH_SENSORY_CAP.toLocaleString()}
+                    {Math.floor(stealthStatus.stealth).toLocaleString()} /{" "}
+                    {STEALTH_SENSORY_CAP.toLocaleString()}
                   </span>
                 </div>
                 <Progress value={stealthProgress} className="h-2" />
                 <div className="mt-3 space-y-1 text-muted-foreground text-sm">
                   <p>
-                    Duration:{" "}
-                    {Math.floor((stealthStatus?.stealthDurationMax ?? 60) / 60)} min
+                    Duration: {Math.floor(stealthStatus.stealthDurationMax / 60)} min
                   </p>
-                  <p>
-                    Keep Chance: {(stealthStatus?.stealthKeepChance ?? 5).toFixed(1)}%
-                  </p>
+                  <p>Keep Chance: {stealthStatus.stealthKeepChance.toFixed(1)}%</p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -1823,21 +1815,16 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
                 <div className="mb-1 flex justify-between">
                   <span className="text-sm">Progress</span>
                   <span className="font-medium text-sm">
-                    {Math.floor(
-                      stealthStatus?.sensory ?? STEALTH_SENSORY_DEFAULT,
-                    ).toLocaleString()}{" "}
-                    / {STEALTH_SENSORY_CAP.toLocaleString()}
+                    {Math.floor(stealthStatus.sensory).toLocaleString()} /{" "}
+                    {STEALTH_SENSORY_CAP.toLocaleString()}
                   </span>
                 </div>
                 <Progress value={sensoryProgress} className="h-2" />
                 <div className="mt-3 space-y-1 text-muted-foreground text-sm">
                   <p>
-                    Detection Chance:{" "}
-                    {(stealthStatus?.sensoryDetectChance ?? 5).toFixed(1)}%
+                    Detection Chance: {stealthStatus.sensoryDetectChance.toFixed(1)}%
                   </p>
-                  <p>
-                    Cooldown: {Math.floor(stealthStatus?.sensoryCooldown ?? 120)} sec
-                  </p>
+                  <p>Cooldown: {Math.floor(stealthStatus.sensoryCooldown)} sec</p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
