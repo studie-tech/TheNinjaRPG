@@ -7,7 +7,7 @@
  * SFSafariViewController / Chrome Custom Tabs and let the deep link bring the player back.
  */
 
-import { addNativeListener, invoke, invokeSafe, isNative } from "./bridge";
+import { addNativeListener, invoke, invokeSafe } from "./bridge";
 
 const PLUGIN = "Browser";
 
@@ -22,12 +22,6 @@ export const EXTERNAL_OAUTH_PROVIDERS = [
   "github",
 ] as const;
 export type ExternalOAuthProvider = (typeof EXTERNAL_OAUTH_PROVIDERS)[number];
-
-export const requiresSystemBrowser = (provider: string): boolean =>
-  isNative() &&
-  (EXTERNAL_OAUTH_PROVIDERS as readonly string[]).includes(
-    provider.replace("oauth_", ""),
-  );
 
 /**
  * Open a URL in the system browser.

@@ -47,13 +47,6 @@ export const start = async (
 ): Promise<StartedActivity | undefined> =>
   invokeSafe<StartedActivity>(PLUGIN, "start", { kind, ...toPayload(state) });
 
-export const update = async (
-  activityId: string,
-  state: LiveActivityState,
-): Promise<void> => {
-  await invokeSafe(PLUGIN, "update", { activityId, ...toPayload(state) });
-};
-
 export const end = async (activityId: string): Promise<void> => {
   await invokeSafe(PLUGIN, "end", { activityId });
 };

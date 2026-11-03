@@ -41,5 +41,3 @@ export {
 } from "./userAgent";
 export * as viewport from "./viewport";
 export * as widgets from "./widgetBridge";
-
-export type NativePlatform = "ios" | "android" | "web";

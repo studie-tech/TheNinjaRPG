@@ -8,7 +8,7 @@
  * trivially exploitable.
  */
 
-import { getPlatform, hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
+import { getPlatform, invoke, invokeSafe } from "./bridge";
 import type { NativePurchaseHistory } from "./purchaseSettlement";
 
 const PLUGIN = "Purchases";
@@ -137,8 +137,6 @@ export const androidSubscriptionChange = (
     },
   };
 };
-
-export const isSupported = (): boolean => isNative() && hasPlugin(PLUGIN);
 
 /**
  * Configure the SDK with the public key for this platform and bind purchases to the
