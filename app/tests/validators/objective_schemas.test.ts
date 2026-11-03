@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
   AllObjectives,
-  allObjectiveSchema,
   allObjectiveTasks,
   getObjectiveSchema,
 } from "@/validators/objectives";
@@ -75,7 +74,7 @@ describe("specific-X / tag / damage objective schemas", () => {
     expect((parsed as { value: number }).value).toBe(500);
   });
 
-  it("accepts each new objective through AllObjectives and allObjectiveSchema", () => {
+  it("accepts each new objective through AllObjectives", () => {
     const samples = [
       base({ task: "craft_specific_item", craftItemIds: ["i1"], value: 1 }),
       base({ task: "train_specific_jutsu", trainJutsuIds: ["j1"], value: 1 }),
@@ -88,7 +87,6 @@ describe("specific-X / tag / damage objective schemas", () => {
     ];
     for (const sample of samples) {
       expect(AllObjectives.safeParse(sample).success).toBe(true);
-      expect(allObjectiveSchema.safeParse(sample).success).toBe(true);
     }
   });
 });

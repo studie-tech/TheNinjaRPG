@@ -1343,23 +1343,6 @@ export const getObjectiveSchema = (type: string) => {
   throw new Error(`Unknown objective task ${type}`);
 };
 
-export const allObjectiveSchema = z.union([
-  SimpleObjective,
-  MoveToObjective,
-  CollectItem,
-  DeliverItem,
-  DefeatOpponents,
-  CraftSpecificItem,
-  TrainSpecificJutsu,
-  CompleteSpecificQuest,
-  BuyItem,
-  UseSpecificItemCombat,
-  UseSpecificJutsuCombat,
-  TagUsageWin,
-  DamageDealt,
-  BloodlineCollection,
-]);
-
 /**
  * Validator schema for Raid Damage Threshold configuration.
  * Used for creating/updating threshold records via the admin UI.
