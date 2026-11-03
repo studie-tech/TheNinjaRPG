@@ -378,7 +378,6 @@ const ElderHall: React.FC<{
                   <AvatarImage
                     href={elder.avatar}
                     alt={elder.username}
-                    userId={elder.userId}
                     hover_effect={true}
                     size={100}
                   />
@@ -1343,7 +1342,6 @@ const AllianceCard: React.FC<{
             <AvatarImage
               href={entity.kage.avatar}
               alt={entity.kage.username}
-              userId={entity.kage.userId}
               size={120}
               hover_effect={true}
               priority={false}

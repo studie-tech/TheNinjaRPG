@@ -33,13 +33,11 @@ export const useAvatarRenditionWidth = (size: number) => {
 
 interface AvatarImageProps {
   href?: string | null;
-  userId?: string;
   alt?: string;
   size: number;
   /** Reserve preloading for a prominent portrait, rather than repeated list rows. */
   priority?: boolean;
   hover_effect?: boolean;
-  refetchUserData?: boolean;
   className?: string;
 }
 

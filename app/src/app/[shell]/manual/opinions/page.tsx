@@ -145,7 +145,6 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       <AvatarImage
         href={user.avatar}
         alt={user.username}
-        userId={user.userId}
         hover_effect={isLoggedIn}
         size={100}
       />

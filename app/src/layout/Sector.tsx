@@ -2687,7 +2687,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             <p className="p-5 text-3xl">
               <AvatarImage
                 href={targetUser.avatar}
-                userId={targetUser.userId}
                 alt={targetUser.username}
                 size={256}
                 priority
@@ -2956,12 +2955,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                       />
                     )}
                 </div>
-                <AvatarImage
-                  href={user.avatar}
-                  userId={user.userId}
-                  alt={user.username}
-                  size={512}
-                />
+                <AvatarImage href={user.avatar} alt={user.username} size={512} />
               </div>
               <div className="relative">
                 {showRob && (

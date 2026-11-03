@@ -465,7 +465,6 @@ function PollContent({
             <div className="h-6 w-6">
               <AvatarImage
                 href={option.targetUser.avatar}
-                userId={option.targetUser.userId}
                 alt={option.targetUser.username}
                 size={100}
               />

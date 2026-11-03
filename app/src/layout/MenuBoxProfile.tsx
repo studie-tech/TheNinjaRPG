@@ -244,10 +244,8 @@ const MenuBoxProfile: React.FC = () => {
           <Link href="/profile">
             <AvatarImage
               href={userData?.avatar}
-              userId={userData?.userId}
               alt={userData?.username}
               className="theme-player-avatar"
-              refetchUserData={true}
               size={100}
               hover_effect={true}
               priority

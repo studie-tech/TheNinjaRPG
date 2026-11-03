@@ -1134,7 +1134,6 @@ const Marriage: React.FC = () => {
               <AvatarImage
                 href={user.avatar}
                 alt={user.username}
-                userId={user.userId}
                 hover_effect={false}
                 size={100}
               />
@@ -1257,7 +1256,6 @@ const NewAiAvatar: React.FC = () => {
             <AvatarImage
               href={userData.avatar}
               alt={userData.username}
-              refetchUserData={true}
               size={512}
               priority
               className="w-36"

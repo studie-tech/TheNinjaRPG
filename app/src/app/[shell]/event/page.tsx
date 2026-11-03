@@ -357,7 +357,6 @@ const NotificationSystem: React.FC = () => {
                         {entry.user && (
                           <AvatarImage
                             href={entry.user.avatar}
-                            userId={entry.user.userId}
                             alt={entry.user.username}
                             size={100}
                           />

@@ -34,16 +34,14 @@ interface BuildingProps {
   structure: VillageStructure;
   village: Village;
   showBar?: boolean;
-  textPosition: "bottom" | "right";
   showUpgrade?: boolean;
-  showNumbers?: boolean;
   /** Load the first visible row immediately; other tiles load as they approach the viewport. */
   eager?: boolean;
 }
 
 const Building: React.FC<BuildingProps> = (props) => {
   // Destructure
-  const { structure, village, showBar, textPosition, showUpgrade, showNumbers } = props;
+  const { structure, village, showBar, showUpgrade } = props;
 
   // State
   const { data: userData } = useRequiredUserData();
@@ -111,15 +109,12 @@ const Building: React.FC<BuildingProps> = (props) => {
             title=""
             tooltip="Health"
             color="bg-red-500"
-            showText={showNumbers}
             current={structure.curSp}
             total={structure.maxSp}
           />
         </div>
       )}
-      <div
-        className={`grid min-w-0 ${textPosition === "right" ? "grid-cols-2" : ""} items-center`}
-      >
+      <div className="grid min-w-0 items-center">
         <Link href={structure.route}>
           <Image
             className={cn(

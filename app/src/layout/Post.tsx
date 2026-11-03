@@ -154,7 +154,6 @@ const Post: React.FC<PostProps> = (props) => {
           <Link href={`/username/${props.user.username}`}>
             <AvatarImage
               href={props.user.avatar}
-              userId={props.user.userId}
               alt={props.user.username}
               size={100}
             />

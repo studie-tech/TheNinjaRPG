@@ -1605,7 +1605,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   <AvatarImage
                     href={visibleAvatar}
                     alt={profile.username}
-                    userId={profile.userId}
                     hover_effect={false}
                     className="w-full"
                     priority={true}
@@ -2682,7 +2681,6 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
               <AvatarImage
                 href={user.avatar || ""}
                 alt={user.username}
-                userId={user.userId}
                 hover_effect={true}
                 size={100}
               />
@@ -2730,7 +2728,6 @@ const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive 
               <AvatarImage
                 href={user.avatar}
                 alt={user.username}
-                userId={user.userId}
                 hover_effect={true}
                 size={100}
               />
@@ -3293,7 +3290,6 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
                 <AvatarImage
                   href={user.avatar || ""}
                   alt={user.username}
-                  userId={user.userId}
                   hover_effect={true}
                   size={100}
                 />

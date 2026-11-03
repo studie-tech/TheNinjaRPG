@@ -201,7 +201,6 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                         >
                           <AvatarImage
                             href={user.avatar}
-                            userId={user.userId}
                             alt={user.username}
                             size={50}
                           />

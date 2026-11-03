@@ -185,7 +185,6 @@ export default function Reports() {
                         <div className="mr-3 basis-2/12 truncate text-center sm:basis-3/12 sm:text-base">
                           <AvatarImage
                             href={reportedUser.avatar}
-                            userId={reportedUser.userId}
                             alt={reportedUser.username}
                             size={100}
                           />

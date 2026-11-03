@@ -424,7 +424,6 @@ const UserList: React.FC<UserListProps> = (props) => {
           <AvatarImage
             href={user.avatar}
             alt={user.username}
-            userId={user.userId}
             hover_effect={true}
             size={100}
           />

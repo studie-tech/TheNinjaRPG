@@ -52,9 +52,7 @@ const MenuBoxCombat: React.FC = () => {
         <Link href="/profile">
           <AvatarImage
             href={battleUser.avatar}
-            userId={battleUser.userId}
             alt={battleUser.username}
-            refetchUserData={true}
             size={100}
             hover_effect={true}
             priority

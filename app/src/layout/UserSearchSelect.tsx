@@ -63,12 +63,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
       className="inline-flex items-center rounded-lg border border-amber-900 bg-gray-100 px-2 font-medium text-gray-800 text-sm"
     >
       <div className="m-1 w-8">
-        <AvatarImage
-          href={user.avatar}
-          userId={user.userId}
-          alt={user.username}
-          size={100}
-        />
+        <AvatarImage href={user.avatar} alt={user.username} size={100} />
       </div>
       <p className="whitespace-nowrap">{user.username}</p>
       <X
@@ -133,12 +128,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
               }}
             >
               <div className="basis-1/12">
-                <AvatarImage
-                  href={user.avatar}
-                  userId={user.userId}
-                  alt={user.username}
-                  size={100}
-                />
+                <AvatarImage href={user.avatar} alt={user.username} size={100} />
               </div>
               <div className="ml-2 text-black">
                 <p>{user.username}</p>

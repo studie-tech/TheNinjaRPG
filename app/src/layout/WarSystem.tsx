@@ -1280,13 +1280,7 @@ const WarSideTownHall: React.FC<{
         </div>
       )}
       <div className="w-full max-w-[160px]">
-        <Building
-          structure={structure}
-          village={village}
-          textPosition="bottom"
-          showBar={false}
-          showNumbers={false}
-        />
+        <Building structure={structure} village={village} showBar={false} />
       </div>
     </div>
   );
