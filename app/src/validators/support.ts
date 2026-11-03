@@ -43,16 +43,6 @@ export const escalateToGithubSchema = z.object({
   ticketId: z.string(),
 });
 
-// Create Support Ticket Comment Schema
-export const createSupportTicketCommentSchema = z.object({
-  content: z
-    .string()
-    .min(1, "Comment cannot be empty")
-    .max(5000, "Comment cannot exceed 5000 characters"),
-  isStaffOnly: z.boolean().prefault(false),
-  isResolution: z.boolean().prefault(false),
-});
-
 // Support Ticket Filter Schema
 export const supportTicketFilterSchema = z.object({
   status: z.array(z.enum(SupportTicketStatuses)).optional(),
