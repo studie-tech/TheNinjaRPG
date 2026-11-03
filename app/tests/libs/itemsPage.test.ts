@@ -4,9 +4,11 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import {
   backpackFilterChips,
   dropTargetsFor,
+  equipLimitReason,
   filterBackpack,
   fittingSlots,
   rankSlotCandidates,
+  slotName,
   sortBackpack,
 } from "@/libs/itemsPage";
 
@@ -162,5 +164,24 @@ describe("slot rules", () => {
     const loose = userItem({ id: "Tanto" });
     expect(dropTargetsFor(loose, (_ui, slot) => (slot === "HAND_2" ? "Needs 500 Bukijutsu" : null))).toEqual(["HAND_1"]);
     expect(dropTargetsFor(userItem({ id: "Ore", itemType: "MATERIAL", slot: "NONE" }), () => null)).toEqual([]);
+  });
+
+  it("names slots as players read them", () => {
+    expect(slotName("HAND_2")).toBe("Hand 2");
+    expect(slotName("ITEM_3")).toBe("Item 3");
+    expect(slotName("HEAD")).toBe("Head");
+  });
+
+  it("blocks gear already at its equip limit, as the server does", () => {
+    const worn = userItem({ id: "Katana", equipped: "HAND_1" });
+    const copy = { ...userItem({ id: "Katana copy" }), itemId: worn.itemId } as UserItemWithRelations;
+    const limitOne = (ui: UserItemWithRelations) => ({ ...ui, item: { ...ui.item, maxEquips: 1 } }) as UserItemWithRelations;
+    const all = [limitOne(worn), limitOne(copy)];
+    expect(equipLimitReason(all[0]!, all)).toBe("Unequip from Hand 1 first");
+    expect(equipLimitReason(all[1]!, all)).toBe("Already equipped in Hand 1");
+    const limitTwo = all.map((ui) => ({ ...ui, item: { ...ui.item, maxEquips: 2 } }) as UserItemWithRelations);
+    expect(equipLimitReason(limitTwo[1]!, limitTwo)).toBeNull();
+    const loose = limitOne(userItem({ id: "Tanto" }));
+    expect(equipLimitReason(loose, [loose])).toBeNull();
   });
 });

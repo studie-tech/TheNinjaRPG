@@ -11,10 +11,9 @@ import {
 } from "@/components/ui/context-menu";
 import { type ItemSlot, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
-import { slotName } from "@/layout/items/SlotPicker";
 import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import { nonCombatConsume } from "@/libs/item";
-import { fittingSlots } from "@/libs/itemsPage";
+import { fittingSlots, slotName } from "@/libs/itemsPage";
 import { needsInventoryRepair } from "@/libs/repair";
 import type { UserWithRelations } from "@/routers/profile";
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { useHotkeyAssignment } from "@/layout/HotkeyControls";
 import { BackpackList } from "@/layout/items/BackpackList";
@@ -11,11 +13,12 @@ import { EquipmentFigure } from "@/layout/items/EquipmentFigure";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import { SlotPicker } from "@/layout/items/SlotPicker";
-import { dropTargetsFor } from "@/libs/itemsPage";
+import { dropTargetsFor, equipLimitReason, slotName } from "@/libs/itemsPage";
 import { gearMissingMastery } from "@/libs/mastery";
 import { cn } from "@/libs/shadui";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import type { UserWithRelations } from "@/routers/profile";
+import { canChangeContent } from "@/utils/permissions";
 
 /** What the side panel shows: the backpack, one slot's picker, or one item. */
 export type ItemsView =
@@ -36,8 +39,8 @@ interface ItemsWorkspaceProps {
 /**
  * The Equipped figure beside the backpack, where a slot opens its picker and an item its
  * inspector. Wide containers show them side by side; narrow ones use Equipment and
- * Backpack tabs with panels as bottom sheets. Items can be dragged onto fitting slots and
- * opened in a menu by right-click or long-press.
+ * Backpack tabs with panels in a bottom sheet. With a mouse or trackpad, backpack items can
+ * be dragged onto fitting slots; every item opens a menu by right-click or long-press.
  */
 export function ItemsWorkspace({
   userData,
@@ -51,14 +54,26 @@ export function ItemsWorkspace({
   });
   const [phoneTab, setPhoneTab] = useState<"equipment" | "backpack">("equipment");
   const [dragging, setDragging] = useState<UserItemWithRelations | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  // Toggling an equip twice reverses it on the server, so one change is sent at a time.
+  const equipInFlight = useRef(false);
+  const hasFinePointer = useMediaQuery("(any-pointer: fine)");
 
-  const { equip, merge } = useItemActions({
+  const { equip, merge, isEquipping } = useItemActions({
     userData,
     useritem: undefined,
-    onDone: () => {},
+    onDone: () => {
+      equipInFlight.current = false;
+    },
   });
+  const equipOnce = (input: { userItemId: string; slot: ItemSlot }) => {
+    if (equipInFlight.current) return;
+    equipInFlight.current = true;
+    equip(input);
+  };
   const {
     hotkeys,
     assign: assignHotkey,
@@ -81,6 +96,25 @@ export function ItemsWorkspace({
       ? userItems.find((ui) => ui.id === view.userItemId)
       : undefined;
   const hasPanel = view.kind !== "backpack";
+  // Hidden items show only to content staff, as everywhere else items are listed.
+  const choosable = canChangeContent(userData.role)
+    ? userItems
+    : userItems.filter((ui) => !ui.item.hidden);
+  const choosableBag = canChangeContent(userData.role)
+    ? bagItems
+    : bagItems.filter((ui) => !ui.item.hidden);
+
+  // Panels sit beside the figure when there is room, else in a bottom sheet above the
+  // layout's own navigation.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setIsNarrow(entry.contentRect.width < 600);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
 
   const openView = (next: ItemsView) => {
     if (document.activeElement instanceof HTMLElement) {
@@ -116,8 +150,11 @@ export function ItemsWorkspace({
     const current = Math.floor(missing.current).toLocaleString();
     return `Unusable in battle: requires ${missing.required.toLocaleString()} ${missing.label} (you have ${current})`;
   };
-  // The server refuses gear whose mastery is unmet once the slot's current item is removed.
+  // The server refuses gear at its equip limit, and gear whose mastery is unmet once the
+  // slot's current item is removed.
   const getBlockedReason = (userItem: UserItemWithRelations, slot: ItemSlot) => {
+    const limit = equipLimitReason(userItem, userItems);
+    if (limit) return limit;
     const missing = gearMissingMastery(userItem, {
       ...wearer,
       items: userItems.filter((ui) => ui.equipped !== slot),
@@ -136,8 +173,8 @@ export function ItemsWorkspace({
       userData={userData}
       getBlockedReason={getBlockedReason}
       onInspect={(userItemId) => openView({ kind: "item", userItemId })}
-      onEquip={(userItemId, slot) => equip({ userItemId, slot })}
-      onUnequip={(userItemId, slot) => equip({ userItemId, slot })}
+      onEquip={(userItemId, slot) => equipOnce({ userItemId, slot })}
+      onUnequip={(userItemId, slot) => equipOnce({ userItemId, slot })}
       onMerge={(target) => merge({ itemId: target.itemId })}
       onSetHotkey={setHotkey}
     >
@@ -145,8 +182,48 @@ export function ItemsWorkspace({
     </ItemContextMenu>
   );
 
+  const panelTitle =
+    view.kind === "slot"
+      ? `${slotName(view.slot)} slot`
+      : inspected
+        ? inspected.item.name
+        : "Item";
+  const panel = (
+    <>
+      {view.kind === "slot" && (
+        <SlotPicker
+          slot={view.slot}
+          userItems={choosable}
+          getBlockedReason={getBlockedReason}
+          onEquip={(userItemId, slot) => equipOnce({ userItemId, slot })}
+          onUnequip={(userItemId, slot) => equipOnce({ userItemId, slot })}
+          onInspect={(userItemId) => openView({ kind: "item", userItemId })}
+          onShowInBackpack={() => {
+            setPhoneTab("backpack");
+            closeView();
+          }}
+          onClose={closeView}
+          isPending={isEquipping}
+          showClose={!isNarrow}
+        />
+      )}
+      {inspected && (
+        <ItemInspector
+          key={inspected.id}
+          userItem={inspected}
+          allUserItems={userItems}
+          userData={userData}
+          onClose={closeView}
+          onSetHotkey={setHotkey}
+          masteryWarning={masteryWarning(inspected)}
+          showClose={!isNarrow}
+        />
+      )}
+    </>
+  );
+
   return (
-    <div className="@container">
+    <div ref={rootRef} className="@container">
       {hotkeyDialog}
       <div
         role="tablist"
@@ -163,7 +240,7 @@ export function ItemsWorkspace({
           selected={phoneTab === "backpack"}
           onSelect={() => setPhoneTab("backpack")}
         >
-          Backpack · {bagItems.length}
+          Backpack · {choosableBag.length}
         </PhoneTab>
       </div>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
@@ -189,9 +266,8 @@ export function ItemsWorkspace({
               onSlotClick={(slot) => openView({ kind: "slot", slot })}
               onDropItem={(userItemId, slot) => {
                 setDragging(null);
-                equip({ userItemId, slot });
+                equipOnce({ userItemId, slot });
               }}
-              onDragItem={setDragging}
               wrapTile={(_slot, userItem, tile) =>
                 userItem ? withMenu(userItem, tile) : tile
               }
@@ -202,7 +278,7 @@ export function ItemsWorkspace({
           className={cn(
             "min-w-0 overflow-y-auto border-t-2 border-dashed bg-poppopover p-3 @min-[600px]:max-h-[600px] @min-[600px]:border-t-0 @min-[600px]:border-l-2",
             phoneTab === "equipment" && "@max-[600px]:hidden",
-            hasPanel && "@min-[600px]:hidden",
+            hasPanel && !isNarrow && "@min-[600px]:hidden",
           )}
         >
           <h2 className="mb-2 font-bold text-2xl text-foreground">Backpack</h2>
@@ -211,54 +287,31 @@ export function ItemsWorkspace({
             userData={userData}
             selectedId={inspected?.id}
             onSelect={(userItemId) => openView({ kind: "item", userItemId })}
-            onDragItem={setDragging}
+            onDragItem={hasFinePointer ? setDragging : undefined}
             wrapCard={withMenu}
           />
         </div>
-        {hasPanel && (
-          <>
-            <button
-              type="button"
-              aria-label="Close panel"
-              tabIndex={-1}
-              className="fixed inset-0 z-40 bg-black/40 @min-[600px]:hidden"
-              onClick={closeView}
-            />
-            <div
-              ref={panelRef}
-              data-items-panel
-              className="min-w-0 bg-poppopover p-3 @max-[600px]:fixed @max-[600px]:inset-x-0 @max-[600px]:bottom-0 @max-[600px]:z-50 @max-[600px]:max-h-[85dvh] @max-[600px]:overflow-y-auto @max-[600px]:rounded-t-2xl @max-[600px]:border-primary @max-[600px]:border-t-2 @max-[600px]:shadow-2xl @min-[600px]:col-start-2 @min-[600px]:row-start-1 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:border-l-2 @min-[600px]:border-dashed"
-            >
-              {view.kind === "slot" && (
-                <SlotPicker
-                  slot={view.slot}
-                  userItems={userItems}
-                  getBlockedReason={getBlockedReason}
-                  onEquip={(userItemId, slot) => equip({ userItemId, slot })}
-                  onUnequip={(userItemId, slot) => equip({ userItemId, slot })}
-                  onInspect={(userItemId) => openView({ kind: "item", userItemId })}
-                  onShowInBackpack={() => {
-                    setPhoneTab("backpack");
-                    closeView();
-                  }}
-                  onClose={closeView}
-                />
-              )}
-              {inspected && (
-                <ItemInspector
-                  key={inspected.id}
-                  userItem={inspected}
-                  allUserItems={userItems}
-                  userData={userData}
-                  onClose={closeView}
-                  onSetHotkey={setHotkey}
-                  masteryWarning={masteryWarning(inspected)}
-                />
-              )}
-            </div>
-          </>
+        {hasPanel && !isNarrow && (
+          <div
+            ref={panelRef}
+            data-items-panel
+            className="col-start-2 row-start-1 max-h-[600px] min-w-0 overflow-y-auto border-l-2 border-dashed bg-poppopover p-3"
+          >
+            {panel}
+          </div>
         )}
       </div>
+      {isNarrow && (
+        <Sheet open={hasPanel} onOpenChange={(open) => !open && closeView()}>
+          <SheetContent
+            side="bottom"
+            className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+          >
+            <SheetTitle className="sr-only">{panelTitle}</SheetTitle>
+            {panel}
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }

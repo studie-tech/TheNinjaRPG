@@ -16,6 +16,16 @@ import * as skills from "@/libs/skillRequirements";
 const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let equip: ReturnType<typeof vi.fn>;
+let settle: () => void;
+let containerWidth = 1000;
+const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
+
+const setFinePointer = (fine: boolean) =>
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({ matches: query === "(any-pointer: fine)" && fine, addEventListener() {}, removeEventListener() {} }),
+  });
 
 beforeEach(() => {
   for (const key of browserGlobals) {
@@ -23,7 +33,24 @@ beforeEach(() => {
   }
   window.localStorage.clear();
   equip = vi.fn();
-  vi.spyOn(itemActions, "useItemActions").mockReturnValue({ equip, merge: vi.fn() } as never);
+  settle = () => {};
+  vi.spyOn(itemActions, "useItemActions").mockImplementation(((options: { onDone: () => void }) => {
+    settle = options.onDone;
+    return { equip, merge: vi.fn(), isEquipping: false };
+  }) as never);
+  setFinePointer(true);
+  containerWidth = 1000;
+  // The workspace measures its own width to choose inline panels or a bottom sheet.
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}
+      observe() {
+        this.callback([{ contentRect: { width: containerWidth } }]);
+      }
+      disconnect() {}
+    },
+  });
   vi.spyOn(hotkeyControls, "useHotkeyAssignment").mockReturnValue({ hotkeys: { byAction: {} }, assign: vi.fn(), dialog: null } as never);
   vi.spyOn(equipmentPreview, "EquipmentPreview").mockImplementation(() => <button type="button">Preview</button>);
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
@@ -45,6 +72,10 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   window.localStorage.clear();
+  if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  else Reflect.deleteProperty(window, "matchMedia");
+  if (originalResizeObserver) Object.defineProperty(globalThis, "ResizeObserver", originalResizeObserver);
+  else Reflect.deleteProperty(globalThis, "ResizeObserver");
   browserGlobals.forEach((key, index) => {
     const descriptor = browserDescriptors[index];
     if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -145,7 +176,8 @@ it("returns to backpack when the inspected item is gone", () => {
   expect(document.querySelector("[data-items-panel]")).toBeNull();
 });
 
-it("phone shows tabs and opens panels as sheets", () => {
+it("phone shows tabs and opens panels in a bottom sheet", () => {
+  containerWidth = 390;
   renderWorkspace();
   const [equipmentTab, backpackTab] = screen.getAllByRole("tab");
   expect(equipmentTab?.getAttribute("aria-selected")).toBe("true");
@@ -157,9 +189,10 @@ it("phone shows tabs and opens panels as sheets", () => {
   act(() => {
     fireEvent.click(card("Raijin Tanto"));
   });
-  const panel = document.querySelector("[data-items-panel]");
-  expect(panel?.className).toContain("@max-[600px]:fixed");
-  expect(screen.getByRole("button", { name: "Close panel" })).toBeDefined();
+  // A modal sheet above every layout's navigation, not a panel inside the page.
+  const sheet = screen.getByRole("dialog");
+  expect(sheet.contains(screen.getByRole("region", { name: "Inspecting Raijin Tanto" }))).toBe(true);
+  expect(document.querySelector("[data-items-panel]")).toBeNull();
 });
 
 it("show backpack from the picker switches the phone tab", () => {
@@ -192,15 +225,38 @@ it("drags a backpack item onto a fitting slot only", () => {
   expect(equip).toHaveBeenCalledWith({ userItemId: "Raijin Tanto", slot: "HAND_2" });
 });
 
-it("drags worn gear to the other hand", () => {
+it("does not drag worn gear, which the server will not move", () => {
+  renderWorkspace();
+  expect(slotOf("HAND_1").getAttribute("draggable")).not.toBe("true");
+  expect(card("Raijin Tanto").getAttribute("draggable")).toBe("true");
+});
+
+it("does not offer drag on touch-only devices", () => {
+  setFinePointer(false);
+  renderWorkspace();
+  expect(card("Raijin Tanto").getAttribute("draggable")).not.toBe("true");
+});
+
+it("sends one equip per change until it settles", () => {
   renderWorkspace();
   act(() => {
-    fireEvent.dragStart(slotOf("HAND_1"), { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.click(slotOf("HAND_2"));
   });
-  // Its own slot is not a target; the other hand is.
-  expect(slotOf("HAND_1").className).toContain("opacity-40");
+  const button = screen.getByRole("button", { name: "Equip Raijin Tanto" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(equip).toHaveBeenCalledTimes(1);
+  act(() => settle());
+  fireEvent.click(button);
+  expect(equip).toHaveBeenCalledTimes(2);
+});
+
+it("keeps hidden items out of the slot picker for players", () => {
+  const secret = { ...gear("Secret Blade", "HAND"), item: { ...gear("Secret Blade", "HAND").item, hidden: true } } as UserItemWithRelations;
+  renderWorkspace({ userItems: [katana, tanto, secret] });
   act(() => {
-    fireEvent.drop(slotOf("HAND_2"), { dataTransfer: { getData: () => "Shadowsteel Katana" } });
+    fireEvent.click(slotOf("HAND_2"));
   });
-  expect(equip).toHaveBeenCalledWith({ userItemId: "Shadowsteel Katana", slot: "HAND_2" });
+  expect(screen.queryByRole("button", { name: "Equip Secret Blade" })).toBeNull();
+  expect(screen.getAllByRole("tab")[1]?.textContent).toBe("Backpack · 1");
 });

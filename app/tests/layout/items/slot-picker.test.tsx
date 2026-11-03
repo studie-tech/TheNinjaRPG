@@ -105,3 +105,10 @@ it("closes on Escape and the close button", () => {
   fireEvent.click(screen.getByRole("button", { name: "Close slot picker" }));
   expect(onClose).toHaveBeenCalledTimes(2);
 });
+
+it("disables equip and unequip while a change is saving", () => {
+  renderPicker({ isPending: true });
+  expect((screen.getByRole("button", { name: "Equip Raijin Tanto" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Unequip" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByRole("region", { name: "Hand slot" }).getAttribute("aria-busy")).toBe("true");
+});

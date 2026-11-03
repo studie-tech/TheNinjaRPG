@@ -12,7 +12,7 @@ interface ItemCardProps {
   userItem: UserItemWithRelations;
   isSelected: boolean;
   onSelect: (userItemId: string) => void;
-  /** Drag-to-equip source; only wired on devices with a mouse or trackpad. */
+  /** Makes the card a drag-to-equip source; the page passes it on devices with a mouse or trackpad. */
   onDragStart?: (userItem: UserItemWithRelations) => void;
   onDragEnd?: () => void;
 }

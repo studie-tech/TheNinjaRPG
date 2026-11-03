@@ -176,3 +176,28 @@ export const dropTargetsFor = <T extends UserItemWithRelations>(
   fittingSlots(userItem.item).filter(
     (slot) => slot !== userItem.equipped && !getBlockedReason(userItem, slot),
   );
+
+/** "Hand 2", "Item 3", "Head": a slot as players read it. */
+export const slotName = (slot: ItemSlot) => {
+  const [kind = slot, index] = slot.split("_");
+  const name = kind.charAt(0) + kind.slice(1).toLowerCase();
+  return index ? `${name} ${index}` : name;
+};
+
+/**
+ * Why the server would refuse to equip this item anywhere: every equipped copy, this one
+ * included, counts toward the item's equip limit, so worn gear cannot move slots directly.
+ */
+export const equipLimitReason = <T extends UserItemWithRelations>(
+  userItem: T,
+  allItems: T[],
+): string | null => {
+  const equipped = allItems.filter(
+    (ui) => ui.itemId === userItem.itemId && ui.equipped !== "NONE",
+  );
+  if (equipped.length < userItem.item.maxEquips) return null;
+  if (userItem.equipped !== "NONE")
+    return `Unequip from ${slotName(userItem.equipped)} first`;
+  const [first] = equipped;
+  return first ? `Already equipped in ${slotName(first.equipped)}` : null;
+};

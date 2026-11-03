@@ -8,7 +8,7 @@ import ContentImage from "@/layout/ContentImage";
 import { EQUIPMENT_LAYOUT } from "@/layout/items/EquipmentFigure";
 import { rarityLabel, rarityTextClass } from "@/layout/items/ItemCard";
 import { applyActiveVariant } from "@/libs/combat/util";
-import { rankSlotCandidates } from "@/libs/itemsPage";
+import { rankSlotCandidates, slotName } from "@/libs/itemsPage";
 import { cn } from "@/libs/shadui";
 
 interface SlotPickerProps {
@@ -22,6 +22,10 @@ interface SlotPickerProps {
   onInspect: (userItemId: string) => void;
   onShowInBackpack: () => void;
   onClose: () => void;
+  /** An equip or unequip is saving; the buttons wait for it. */
+  isPending?: boolean;
+  /** Hidden where the surrounding sheet has its own close button. */
+  showClose?: boolean;
 }
 
 /**
@@ -37,6 +41,8 @@ export function SlotPicker({
   onInspect,
   onShowInBackpack,
   onClose,
+  isPending = false,
+  showClose = true,
 }: SlotPickerProps) {
   const label =
     EQUIPMENT_LAYOUT.find((entry) => entry.slot === slot)?.label ?? slotName(slot);
@@ -47,9 +53,17 @@ export function SlotPicker({
   return (
     <section
       aria-label={title}
+      aria-busy={isPending}
       className="flex flex-col gap-3"
       onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+        // Escape inside a dialog opened from here belongs to that dialog.
+        if (
+          event.key === "Escape" &&
+          !event.defaultPrevented &&
+          event.currentTarget.contains(event.target as Node)
+        ) {
+          onClose();
+        }
       }}
     >
       <div className="flex items-start gap-2">
@@ -59,15 +73,17 @@ export function SlotPicker({
             {candidates.length === 1 ? "1 item fits" : `${candidates.length} items fit`}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Close slot picker"
-          onClick={onClose}
-          className="h-9 w-9"
-        >
-          <X className="h-5 w-5" />
-        </Button>
+        {showClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close slot picker"
+            onClick={onClose}
+            className="h-9 w-9"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
       {current && (
@@ -93,6 +109,7 @@ export function SlotPicker({
               variant="outline"
               size="sm"
               className="flex-1"
+              disabled={isPending}
               onClick={() => onUnequip(current.id, slot)}
             >
               Unequip
@@ -134,7 +151,7 @@ export function SlotPicker({
               <Button
                 size="sm"
                 aria-label={`Equip ${userItem.item.name}`}
-                disabled={!!blockedReason}
+                disabled={!!blockedReason || isPending}
                 onClick={() => onEquip(userItem.id, slot)}
               >
                 Equip
@@ -167,13 +184,6 @@ function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
     </span>
   );
 }
-
-/** "Hand 2", "Item 3", "Head": a slot as players read it. */
-export const slotName = (slot: ItemSlot) => {
-  const [kind, index] = slot.split("_");
-  const name = (kind ?? slot).charAt(0) + (kind ?? slot).slice(1).toLowerCase();
-  return index ? `${name} ${index}` : name;
-};
 
 const wearText = (userItem: UserItemWithRelations) =>
   userItem.item.maxDurability > 0

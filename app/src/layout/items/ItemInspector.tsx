@@ -35,7 +35,6 @@ import {
   RepairModalWrapper,
 } from "@/layout/items/ItemRepair";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
-import { slotName } from "@/layout/items/SlotPicker";
 import Loader from "@/layout/Loader";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
@@ -46,6 +45,7 @@ import {
   showsItemLevelBadge,
 } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
+import { slotName } from "@/libs/itemsPage";
 import { getRepairKits } from "@/libs/repair";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -60,6 +60,8 @@ interface ItemInspectorProps {
   onSetHotkey?: (userItem: UserItemWithRelations) => void;
   /** Why the item does not work in battle while equipped, if it does not. */
   masteryWarning?: string;
+  /** Hidden where the surrounding sheet has its own close button. */
+  showClose?: boolean;
 }
 
 /**
@@ -74,6 +76,7 @@ export function ItemInspector({
   onClose,
   onSetHotkey,
   masteryWarning,
+  showClose = true,
 }: ItemInspectorProps) {
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
   const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
@@ -150,7 +153,14 @@ export function ItemInspector({
       aria-label={useritem.item.name}
       className="flex flex-col gap-3"
       onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+        // Escape inside a confirmation or dialog opened from here belongs to that dialog.
+        if (
+          event.key === "Escape" &&
+          !event.defaultPrevented &&
+          event.currentTarget.contains(event.target as Node)
+        ) {
+          onClose();
+        }
       }}
     >
       <div className="flex items-center gap-2">
@@ -158,15 +168,17 @@ export function ItemInspector({
           ← Backpack
         </Button>
         <div className="grow" />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Close inspector"
-          className="h-9 w-9"
-          onClick={onClose}
-        >
-          <X className="h-5 w-5" />
-        </Button>
+        {showClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close inspector"
+            className="h-9 w-9"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <span className="h-16 w-16 shrink-0">

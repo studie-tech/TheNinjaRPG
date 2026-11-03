@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
@@ -10,8 +10,14 @@ import { ItemInspector } from "@/layout/items/ItemInspector";
 import * as itemLib from "@/libs/item";
 
 let equip: ReturnType<typeof vi.fn>;
+// Radix dispatches DOM events through the global constructors.
+const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
+const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
+  for (const key of browserGlobals) {
+    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
+  }
   equip = vi.fn();
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
   vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);
@@ -31,6 +37,11 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  browserGlobals.forEach((key, index) => {
+    const descriptor = browserDescriptors[index];
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  });
 });
 
 type Fixture = { equipped?: ItemSlot; itemType?: string; quantity?: number; canStack?: boolean; isEventItem?: boolean; inShop?: boolean };
@@ -124,4 +135,16 @@ it("returns to the backpack on Escape and from the back link", () => {
   fireEvent.keyDown(screen.getByRole("region", { name: "Twin Fang Blade" }), { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: "← Backpack" }));
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the inspector open when Escape cancels one of its confirmations", () => {
+  const { onClose } = renderInspector();
+  act(() => {
+    fireEvent.click(nativeButton("Sell Item [120 ryo]")!);
+  });
+  const confirm = screen.getByRole("dialog");
+  act(() => {
+    fireEvent.keyDown(confirm, { key: "Escape" });
+  });
+  expect(onClose).not.toHaveBeenCalled();
 });
