@@ -28,7 +28,9 @@ import { ITEM_LEVEL_CAP, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
 import Confirm from "@/layout/Confirm";
+import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import { rarityLabel, rarityTextClass, slotLabel } from "@/layout/items/ItemCard";
 import {
   ItemDurabilityRepairActions,
   RepairModalWrapper,
@@ -46,6 +48,7 @@ import {
 import { getItemConsumeInput } from "@/libs/itemConsumption";
 import { slotName } from "@/libs/itemsPage";
 import { getRepairKits } from "@/libs/repair";
+import { cn } from "@/libs/shadui";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -146,6 +149,20 @@ export function ItemInspector({
     }
     splitStack({ userItemId: useritem.id, quantityToKeep: quantity });
   };
+  const look = applyActiveVariant(useritem as UserItemWithVariants);
+  const canEquip =
+    useritem.equipped === "NONE" &&
+    useritem.item.itemType !== "FURNITURE" &&
+    useritem.item.itemType !== "MEAL";
+  const canConsume = !isMeal && nonCombatConsume(useritem.item, userData);
+  const hasVariants =
+    ((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0;
+  const durabilityPercent =
+    useritem.item.maxDurability > 0
+      ? Math.round((useritem.durability / useritem.item.maxDurability) * 100)
+      : null;
+  const hasMoreActions =
+    useritem.item.canStack || hasVariants || (availableEvolutions?.length ?? 0) > 0;
 
   return (
     <section
@@ -179,9 +196,29 @@ export function ItemInspector({
           </Button>
         )}
       </div>
-      <div className="flex items-center gap-3">
-        <div className="min-w-0">
-          <h2 className="font-bold text-foreground text-lg">{useritem.item.name}</h2>
+      <div className="flex items-start gap-3">
+        <span className="relative h-16 w-16 shrink-0">
+          <ContentImage
+            image={look.image}
+            alt={useritem.item.name}
+            rarity={useritem.item.rarity}
+            className="h-16 w-16"
+          />
+          {showsItemLevelBadge(useritem.item) && (
+            <span className="absolute -bottom-1 -left-1 rounded-md border-2 border-red-600 bg-background px-1 font-bold text-[10px] text-foreground">
+              Lv {useritem.level}
+            </span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold text-foreground text-lg">{look.name}</h2>
+          <p
+            className={cn("font-medium text-sm", rarityTextClass[useritem.item.rarity])}
+          >
+            {rarityLabel[useritem.item.rarity]} {useritem.item.itemType.toLowerCase()}
+            {useritem.item.slot !== "NONE" && ` · fits ${slotLabel(useritem)}`}
+            {useritem.quantity > 1 && ` · ×${useritem.quantity}`}
+          </p>
           {equippedIn && (
             <p className="text-muted-foreground text-sm">
               Equipped in {slotName(equippedIn)}
@@ -192,233 +229,10 @@ export function ItemInspector({
           )}
         </div>
       </div>
-      {(equippedIn || canSetHotkey || isMeal) && !isLoading && (
-        <div className="flex flex-row flex-wrap items-center gap-2">
-          {equippedIn && (
-            <Button
-              variant="info"
-              onClick={() => equip({ userItemId: useritem.id, slot: equippedIn })}
-            >
-              <Shirt className="mr-2 h-5 w-5" />
-              Unequip
-            </Button>
-          )}
-          {canSetHotkey && (
-            <Button
-              variant="outline"
-              className="not-any-pointer-fine:hidden"
-              onClick={() => onSetHotkey?.(useritem)}
-            >
-              Set hotkey
-            </Button>
-          )}
-          {isMeal && (
-            <Confirm
-              title={`Eat ${useritem.item.name}?`}
-              proceed_label="Eat meal"
-              proceed_loading_label="Eating…"
-              disabled={isLoading}
-              confirmDisabled={!canEatMeal}
-              isLoading={isConsuming}
-              keepOpenOnAccept
-              button={
-                <Button variant="info" disabled={isLoading}>
-                  <Cookie className="mr-2 h-5 w-5" />
-                  Eat meal
-                </Button>
-              }
-              onAccept={() => consume(getItemConsumeInput(userData.userId, useritem))}
-            >
-              <p>
-                Eat one <b>{useritem.item.name}</b>? Its effect lasts{" "}
-                {useritem.item.mealDurationSeconds} seconds.
-              </p>
-              <p className="text-muted-foreground text-sm">
-                Eating the same meal extends its duration; another meal replaces it. You
-                must be awake and out of combat.
-              </p>
-            </Confirm>
-          )}
-        </div>
+      {look.description && (
+        <p className="line-clamp-3 text-muted-foreground text-sm">{look.description}</p>
       )}
-      {!isLoading && (
-        <div className="flex flex-row flex-wrap items-center gap-2">
-          {useritem.equipped === "NONE" &&
-            useritem.item.itemType !== "FURNITURE" &&
-            useritem.item.itemType !== "MEAL" && (
-              <Button variant="info" onClick={() => equip({ userItemId: useritem.id })}>
-                <Shirt className="mr-2 h-5 w-5" />
-                Equip
-              </Button>
-            )}
-          {useritem.item.canStack && (
-            <>
-              <Button
-                variant={isMeal ? "outline" : "info"}
-                onClick={() => merge({ itemId: useritem.itemId })}
-              >
-                <Merge className="mr-2 h-5 w-5" />
-                Merge Stacks
-              </Button>
-              {useritem.quantity > 1 && (
-                <Button
-                  variant={isMeal ? "outline" : "info"}
-                  onClick={() => {
-                    setIsSplitDialogOpen(true);
-                    setQuantityToKeep(Number.NaN);
-                  }}
-                >
-                  <Split className="mr-2 h-5 w-5" />
-                  Split Stack
-                </Button>
-              )}
-            </>
-          )}
-          {!isMeal && nonCombatConsume(useritem.item, userData) && (
-            <Button
-              variant="info"
-              disabled={isConsuming}
-              onClick={() => consume(getItemConsumeInput(userData.userId, useritem))}
-            >
-              <Cookie className="mr-2 h-5 w-5" />
-              Consume
-            </Button>
-          )}
-          <ItemDurabilityRepairActions
-            useritem={useritem}
-            userData={userData}
-            repairItemsCount={repairItems.length}
-            onOpenRepairModal={() => setIsRepairModalOpen(true)}
-            onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
-            isRepairingWithRyo={isRepairingWithRyo}
-          />
-          {((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0 && (
-            <Button
-              variant="info"
-              onClick={() => {
-                const withVariants = useritem as UserItemWithVariants;
-                if (withVariants.item.variants?.length) {
-                  setVariantItem(withVariants);
-                }
-              }}
-            >
-              Variants
-            </Button>
-          )}
-          {availableEvolutions?.map((evo) => {
-            const isStillCrafting =
-              !!useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date();
-            const { remove: imbuementsLost } = partitionImbuementsForItemTransfer(
-              useritem.imbuements,
-              evo,
-            );
-            const canEvolve =
-              userData.status === "AWAKE" &&
-              useritem.level >= ITEM_LEVEL_CAP &&
-              useritem.quantity === 1 &&
-              !useritem.isInAuction &&
-              !isStillCrafting &&
-              meetsEvolutionStatRequirements(evo, userData) &&
-              hasRequiredLevel(userData.level, evo.requiredLevel) &&
-              (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
-            return (
-              <Confirm
-                key={evo.id}
-                title={`Evolve to ${evo.name}`}
-                confirmDisabled={!canEvolve}
-                button={
-                  <Button
-                    id={`evolve-${evo.id}`}
-                    variant="secondary"
-                    disabled={isLoading}
-                  >
-                    <CircleFadingArrowUp className="mr-2 h-5 w-5" />
-                    Evolve
-                  </Button>
-                }
-                onAccept={(e) => {
-                  e.preventDefault();
-                  if (!canEvolve) return;
-                  evolveItem({
-                    userItemId: useritem.id,
-                    evolutionItemId: evo.id,
-                  });
-                }}
-              >
-                <p>
-                  Evolve <b>{useritem.item.name}</b> into <b>{evo.name}</b>?
-                </p>
-                <p className="mt-2 text-muted-foreground text-sm">
-                  This replaces your current item. The evolved item starts at level 1
-                  and can be leveled to {ITEM_LEVEL_CAP} through PvP. Durability is
-                  capped to the new item&apos;s max.
-                </p>
-                {imbuementsLost.length > 0 && (
-                  <p className="text-destructive text-sm">
-                    Warning: the following imbuement
-                    {imbuementsLost.length === 1 ? "" : "s"} cannot transfer to this
-                    evolution and will be removed:{" "}
-                    <b>
-                      {imbuementsLost
-                        .map((imb) => imb.item?.name ?? "Unknown crystal")
-                        .join(", ")}
-                    </b>
-                  </p>
-                )}
-                {userData.status !== "AWAKE" && (
-                  <p className="text-destructive text-sm">
-                    Must be awake to evolve an item (current:{" "}
-                    {userData.status.toLowerCase()}).
-                  </p>
-                )}
-                {useritem.level < ITEM_LEVEL_CAP && (
-                  <p className="text-destructive text-sm">
-                    Required Item Level: <b>{ITEM_LEVEL_CAP}</b> (current:{" "}
-                    {useritem.level})
-                  </p>
-                )}
-                {useritem.quantity !== 1 && (
-                  <p className="text-destructive text-sm">
-                    Split the stack to a single item before evolving.
-                  </p>
-                )}
-                {isStillCrafting && (
-                  <p className="text-destructive text-sm">
-                    Cannot evolve an item that is still crafting.
-                  </p>
-                )}
-                {evo.requiredLevel > 1 && (
-                  <p className="text-sm">
-                    Required Character Level: <b>{evo.requiredLevel}</b>
-                  </p>
-                )}
-              </Confirm>
-            );
-          })}
-          <div className="grow"></div>
-          <Confirm
-            title="Security Confirmation"
-            proceed_label="Submit"
-            button={
-              useritem.item.isEventItem || !useritem.item.inShop ? (
-                <Button id="sell" variant="destructive">
-                  <ArrowDownToLine className="mr-2 h-5 w-5" />
-                  Drop Item
-                </Button>
-              ) : (
-                <Button id="sell" variant="destructive">
-                  <CircleDollarSign className="mr-2 h-5 w-5" />
-                  Sell Item [{Math.floor(sellPrice)} ryo]
-                </Button>
-              )
-            }
-            onAccept={() => sell({ userItemId: useritem.id })}
-          >
-            Are you absolutely sure you wish to remove this item from your inventory?
-          </Confirm>
-        </div>
-      )}
-      <div>
+      <div className="text-sm">
         {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
           <p>
             - Need {remainingXpToLevel(useritem.item.xpToLevel, useritem.experience)} XP
@@ -426,18 +240,223 @@ export function ItemInspector({
           </p>
         )}
       </div>
-      <ItemWithEffects
-        item={{
-          ...applyActiveVariant(useritem as UserItemWithVariants),
-          imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
-          curDurability: useritem.durability,
-          level: useritem.level,
-          experience: useritem.experience,
-        }}
-        key={useritem.id}
-        showStatistic="item"
-        showEvolutions
-      />
+      {!isLoading && (
+        <>
+          <div className="flex flex-row flex-wrap items-center gap-2">
+            {canEquip && (
+              <Button onClick={() => equip({ userItemId: useritem.id })}>
+                <Shirt className="mr-2 h-5 w-5" />
+                Equip
+              </Button>
+            )}
+            {equippedIn && (
+              <Button
+                onClick={() => equip({ userItemId: useritem.id, slot: equippedIn })}
+              >
+                <Shirt className="mr-2 h-5 w-5" />
+                Unequip
+              </Button>
+            )}
+            {isMeal && (
+              <Confirm
+                title={`Eat ${useritem.item.name}?`}
+                proceed_label="Eat meal"
+                proceed_loading_label="Eating…"
+                disabled={isLoading}
+                confirmDisabled={!canEatMeal}
+                isLoading={isConsuming}
+                keepOpenOnAccept
+                button={
+                  <Button disabled={isLoading}>
+                    <Cookie className="mr-2 h-5 w-5" />
+                    Eat meal
+                  </Button>
+                }
+                onAccept={() => consume(getItemConsumeInput(userData.userId, useritem))}
+              >
+                <p>
+                  Eat one <b>{useritem.item.name}</b>? Its effect lasts{" "}
+                  {useritem.item.mealDurationSeconds} seconds.
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  Eating the same meal extends its duration; another meal replaces it.
+                  You must be awake and out of combat.
+                </p>
+              </Confirm>
+            )}
+            {canConsume && (
+              <Button
+                disabled={isConsuming}
+                onClick={() => consume(getItemConsumeInput(userData.userId, useritem))}
+              >
+                <Cookie className="mr-2 h-5 w-5" />
+                Consume
+              </Button>
+            )}
+            {canSetHotkey && (
+              <Button
+                variant="outline"
+                className="not-any-pointer-fine:hidden"
+                onClick={() => onSetHotkey?.(useritem)}
+              >
+                Set hotkey
+              </Button>
+            )}
+          </div>
+          {durabilityPercent !== null && (
+            <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-semibold">Durability {durabilityPercent}%</span>
+                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <span
+                    className={cn(
+                      "block h-full rounded-full",
+                      durabilityPercent < 50 ? "bg-orange-600" : "bg-lime-600",
+                    )}
+                    style={{ width: `${durabilityPercent}%` }}
+                  />
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ItemDurabilityRepairActions
+                  useritem={useritem}
+                  userData={userData}
+                  repairItemsCount={repairItems.length}
+                  onOpenRepairModal={() => setIsRepairModalOpen(true)}
+                  onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
+                  isRepairingWithRyo={isRepairingWithRyo}
+                />
+              </div>
+            </div>
+          )}
+          {hasMoreActions && (
+            <div className="flex flex-row flex-wrap items-center gap-2">
+              {useritem.item.canStack && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => merge({ itemId: useritem.itemId })}
+                  >
+                    <Merge className="mr-2 h-5 w-5" />
+                    Merge Stacks
+                  </Button>
+                  {useritem.quantity > 1 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsSplitDialogOpen(true);
+                        setQuantityToKeep(Number.NaN);
+                      }}
+                    >
+                      <Split className="mr-2 h-5 w-5" />
+                      Split Stack
+                    </Button>
+                  )}
+                </>
+              )}
+              {hasVariants && (
+                <Button
+                  variant="outline"
+                  onClick={() => setVariantItem(useritem as UserItemWithVariants)}
+                >
+                  Variants
+                </Button>
+              )}
+              {availableEvolutions?.map((evo) => {
+                const isStillCrafting =
+                  !!useritem.craftingFinishedAt &&
+                  useritem.craftingFinishedAt > new Date();
+                const { remove: imbuementsLost } = partitionImbuementsForItemTransfer(
+                  useritem.imbuements,
+                  evo,
+                );
+                const canEvolve =
+                  userData.status === "AWAKE" &&
+                  useritem.level >= ITEM_LEVEL_CAP &&
+                  useritem.quantity === 1 &&
+                  !useritem.isInAuction &&
+                  !isStillCrafting &&
+                  meetsEvolutionStatRequirements(evo, userData) &&
+                  hasRequiredLevel(userData.level, evo.requiredLevel) &&
+                  (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
+                return (
+                  <Confirm
+                    key={evo.id}
+                    title={`Evolve to ${evo.name}`}
+                    confirmDisabled={!canEvolve}
+                    button={
+                      <Button
+                        id={`evolve-${evo.id}`}
+                        variant="secondary"
+                        disabled={isLoading}
+                      >
+                        <CircleFadingArrowUp className="mr-2 h-5 w-5" />
+                        Evolve
+                      </Button>
+                    }
+                    onAccept={(e) => {
+                      e.preventDefault();
+                      if (!canEvolve) return;
+                      evolveItem({
+                        userItemId: useritem.id,
+                        evolutionItemId: evo.id,
+                      });
+                    }}
+                  >
+                    <p>
+                      Evolve <b>{useritem.item.name}</b> into <b>{evo.name}</b>?
+                    </p>
+                    <p className="mt-2 text-muted-foreground text-sm">
+                      This replaces your current item. The evolved item starts at level
+                      1 and can be leveled to {ITEM_LEVEL_CAP} through PvP. Durability
+                      is capped to the new item&apos;s max.
+                    </p>
+                    {imbuementsLost.length > 0 && (
+                      <p className="text-destructive text-sm">
+                        Warning: the following imbuement
+                        {imbuementsLost.length === 1 ? "" : "s"} cannot transfer to this
+                        evolution and will be removed:{" "}
+                        <b>
+                          {imbuementsLost
+                            .map((imb) => imb.item?.name ?? "Unknown crystal")
+                            .join(", ")}
+                        </b>
+                      </p>
+                    )}
+                    {userData.status !== "AWAKE" && (
+                      <p className="text-destructive text-sm">
+                        Must be awake to evolve an item (current:{" "}
+                        {userData.status.toLowerCase()}).
+                      </p>
+                    )}
+                    {useritem.level < ITEM_LEVEL_CAP && (
+                      <p className="text-destructive text-sm">
+                        Required Item Level: <b>{ITEM_LEVEL_CAP}</b> (current:{" "}
+                        {useritem.level})
+                      </p>
+                    )}
+                    {useritem.quantity !== 1 && (
+                      <p className="text-destructive text-sm">
+                        Split the stack to a single item before evolving.
+                      </p>
+                    )}
+                    {isStillCrafting && (
+                      <p className="text-destructive text-sm">
+                        Cannot evolve an item that is still crafting.
+                      </p>
+                    )}
+                    {evo.requiredLevel > 1 && (
+                      <p className="text-sm">
+                        Required Character Level: <b>{evo.requiredLevel}</b>
+                      </p>
+                    )}
+                  </Confirm>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
       {!useritem.item.canBeImbued &&
         useritem.equipped === "NONE" &&
         useritem.imbuements.some(
@@ -491,6 +510,52 @@ export function ItemInspector({
       {isEquipping && <Loader explanation="Equipping" />}
       {isEvolving && <Loader explanation="Evolving" />}
       {isRepairingWithRyo && <Loader explanation="Repairing" />}
+      <details className="group rounded-lg border bg-card">
+        <summary className="flex min-h-11 cursor-pointer items-center px-3 font-semibold text-sm">
+          All details
+        </summary>
+        <div className="p-2">
+          <ItemWithEffects
+            item={{
+              ...applyActiveVariant(useritem as UserItemWithVariants),
+              imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
+              curDurability: useritem.durability,
+              level: useritem.level,
+              experience: useritem.experience,
+            }}
+            key={useritem.id}
+            showStatistic="item"
+            showEvolutions
+          />
+        </div>
+      </details>
+      {!isLoading && (
+        <div className="flex items-center gap-2 border-t pt-3">
+          <span className="flex-1 text-muted-foreground text-xs">
+            Asks for a security confirmation
+          </span>
+          <Confirm
+            title="Security Confirmation"
+            proceed_label="Submit"
+            button={
+              useritem.item.isEventItem || !useritem.item.inShop ? (
+                <Button id="sell" variant="destructive">
+                  <ArrowDownToLine className="mr-2 h-5 w-5" />
+                  Drop Item
+                </Button>
+              ) : (
+                <Button id="sell" variant="destructive">
+                  <CircleDollarSign className="mr-2 h-5 w-5" />
+                  Sell Item [{Math.floor(sellPrice)} ryo]
+                </Button>
+              )
+            }
+            onAccept={() => sell({ userItemId: useritem.id })}
+          >
+            Are you absolutely sure you wish to remove this item from your inventory?
+          </Confirm>
+        </div>
+      )}
       {isSplitDialogOpen && useritem && (
         <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
           <DialogContent>

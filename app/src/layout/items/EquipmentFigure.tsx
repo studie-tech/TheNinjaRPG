@@ -8,7 +8,6 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
-import DurabilityBar from "@/layout/DurabilityBar";
 import Image from "@/layout/Image";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
 import { applyActiveVariant } from "@/libs/combat/util";
@@ -122,7 +121,7 @@ export function EquipmentFigure({
   );
 }
 
-/** Art, hotkey, wear, mastery warning and stack size or level of an equipped item. */
+/** Art, hotkey, stack size, level, wear and warnings of an equipped item. */
 function EquippedTileContent({
   userItem,
   hotkey,
@@ -133,45 +132,64 @@ function EquippedTileContent({
   warning: string | undefined;
 }) {
   const { item } = userItem;
+  const durability =
+    item.maxDurability > 0
+      ? Math.round((userItem.durability / item.maxDurability) * 100)
+      : null;
+  const isWorn = durability !== null && durability < 50;
   return (
-    <span className="relative block h-full w-full">
+    <span className="relative block h-full w-full p-1">
       <ContentImage
         image={applyActiveVariant(userItem as UserItemWithVariants).image}
         hideBorder={true}
         alt={item.name}
         rarity={item.rarity}
-        className=""
+        className="rounded-lg"
       />
       {hotkey && (
-        <kbd className="pointer-events-none absolute top-[2px] left-[2px] z-10 rounded-[3px] border border-black/40 bg-white/90 px-[3px] font-bold font-mono text-[10px] text-black leading-[14px] not-any-pointer-fine:hidden">
+        <kbd className="pointer-events-none absolute top-0.5 left-0.5 z-10 rounded-[3px] border border-black/40 bg-white/95 px-[3px] font-bold font-mono text-[10px] text-black leading-[14px] not-any-pointer-fine:hidden">
           {hotkey.toUpperCase()}
         </kbd>
       )}
-      {item.maxDurability > 0 && (
-        <DurabilityBar
-          currentDurability={userItem.durability}
-          maxDurability={item.maxDurability}
-          position="top-right"
-          size="medium"
-        />
+      {userItem.quantity > 1 && (
+        <span className="absolute top-0.5 right-1 z-10 rounded bg-white/90 px-0.5 font-bold text-[10px] text-slate-900 leading-[14px]">
+          ×{userItem.quantity}
+        </span>
       )}
-      {warning && (
+      {showsItemLevelBadge(item) && (
+        <span className="absolute bottom-2 left-0.5 z-10 rounded border border-red-600 bg-white/95 px-0.5 font-bold text-[9px] text-red-700 leading-[12px]">
+          Lv {userItem.level}
+        </span>
+      )}
+      {durability !== null && (
+        <span className="absolute right-1.5 bottom-1 left-1.5 h-1 overflow-hidden rounded-full bg-slate-300">
+          <span
+            data-durability
+            className={cn(
+              "block h-full rounded-full",
+              isWorn ? "bg-orange-600" : "bg-lime-600",
+            )}
+            style={{ width: `${durability}%` }}
+          />
+        </span>
+      )}
+      {warning ? (
         <span
-          className="absolute top-0 left-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 text-red-600"
+          className="absolute -top-2 -right-2 z-20 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 text-white"
           title={warning}
         >
-          <AlertTriangle className="h-4 w-4" aria-label={warning} />
+          <AlertTriangle className="h-3 w-3" aria-label={warning} />
         </span>
+      ) : (
+        isWorn && (
+          <span
+            className="absolute -top-2 -right-2 z-20 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-orange-600 font-extrabold text-white text-xs"
+            title={`Durability ${durability}%: repair soon`}
+          >
+            !
+          </span>
+        )
       )}
-      {showsItemLevelBadge(item) ? (
-        <span className="absolute bottom-0 left-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 font-bold text-black">
-          {userItem.level}
-        </span>
-      ) : userItem.quantity > 1 ? (
-        <span className="absolute right-0 bottom-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
-          {userItem.quantity}
-        </span>
-      ) : null}
     </span>
   );
 }

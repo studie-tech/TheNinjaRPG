@@ -155,5 +155,19 @@ it("puts the actions before the long effects card", () => {
   const effects = screen.getByText("Item effects");
   // The effects card repeats the name and art, so the panel leads with what can be done.
   expect(equipButton.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.queryByText("Twin Fang Blade art")).toBeNull();
+  // The header art sits in a positioned box so it cannot cover the controls above it.
+  expect(screen.getByText("Twin Fang Blade art").parentElement?.className).toContain("relative");
+});
+
+it("keeps the full stats in a collapsed All details section", () => {
+  renderInspector();
+  const details = screen.getByText("Item effects").closest("details");
+  expect(details).not.toBeNull();
+  expect(details?.open).toBe(false);
+  expect(details?.querySelector("summary")?.textContent).toBe("All details");
+});
+
+it("shows durability with its repair actions when the item wears", () => {
+  renderInspector({ userItem: { ...userItem(), durability: 20 } as never });
+  expect(screen.getByText("Durability 40%")).toBeDefined();
 });

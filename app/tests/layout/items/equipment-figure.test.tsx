@@ -114,3 +114,14 @@ it("does not offer equipped gear as a drag source", () => {
   renderFigure();
   expect(slotOf("HAND_1").getAttribute("draggable")).not.toBe("true");
 });
+
+it("shows stack size, level and wear the way the mockup does", () => {
+  const shuriken = worn("Storm Shuriken", "THROWN", { quantity: 24, item: { ...worn("x", "THROWN").item, name: "Storm Shuriken", itemType: "CONSUMABLE", slot: "THROWN", maxDurability: 0 } });
+  const sandals = worn("Wind Sandals", "FEET", { durability: 20, item: { ...worn("x", "FEET").item, name: "Wind Sandals", itemType: "ARMOR", slot: "FEET" } });
+  renderFigure({ userItems: [...items, shuriken, sandals] });
+  expect(slotOf("THROWN").textContent).toContain("×24");
+  // Worn below half: an orange mark and a bottom bar at its share.
+  expect(screen.getByTitle("Durability 40%: repair soon")).toBeDefined();
+  expect(slotOf("FEET").querySelector<HTMLElement>("[data-durability]")?.style.width).toBe("40%");
+  expect(slotOf("HAND_1").textContent).toContain("Lv 1");
+});

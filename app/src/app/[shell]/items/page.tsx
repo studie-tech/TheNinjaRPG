@@ -1,6 +1,5 @@
 "use client";
 
-import { CircleFadingArrowUp } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -16,10 +15,10 @@ import { COST_EXTRA_ITEM_SLOT, NonActionItemTypes } from "@/drizzle/constants";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
+import { BagTabs } from "@/layout/items/BagTabs";
 import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
 import {
   calcMaxCookingItems,
   calcMaxEventItems,
@@ -156,34 +155,35 @@ export default function MyItems() {
         title="Items"
         subtitle={
           activeTab === "normal"
-            ? `${normalItemCount}/${maxNormalItems} slots`
+            ? `${normalItemCount} / ${maxNormalItems} bag slots`
             : activeTab === "event"
-              ? `${eventItemCount}/${maxEventItems} slots`
+              ? `${eventItemCount} / ${maxEventItems} bag slots`
               : activeTab === "materials"
-                ? `${materialsItemCount}/${maxMaterials} slots`
-                : `${cookingItemCount}/${maxCookingItems} slots`
+                ? `${materialsItemCount} / ${maxMaterials} bag slots`
+                : `${cookingItemCount} / ${maxCookingItems} bag slots`
         }
         padding={false}
         topRightContent={
           <div className="flex flex-row items-center gap-1">
-            <NavTabs
-              id="backpackSelection"
-              current={activeTab}
-              options={availableTabs}
-              setValue={setActiveTab}
-              itemClassName={() => "mr-1 last:mr-0"}
-              className="text-xs sm:text-sm"
+            <BagTabs
+              bags={[
+                { value: "normal", count: normalItemCount ?? 0 },
+                { value: "event", count: eventItemCount ?? 0 },
+                { value: "materials", count: materialsItemCount ?? 0 },
+                { value: "cooking", count: cookingItemCount ?? 0 },
+              ]}
+              active={activeTab}
+              onChange={setActiveTab}
             />
             <Button
-              animation="pulse"
-              size="icon"
+              size="sm"
               aria-label="Purchase an extra item slot"
               aria-busy={isBuyingItemSlot}
               disabled={isBuyingItemSlot}
               loading={isBuyingItemSlot}
               onClick={() => setIsBuyItemSlotOpen(true)}
             >
-              <CircleFadingArrowUp className="h-6 w-6" />
+              + Slot
             </Button>
             <Dialog
               open={isBuyItemSlotOpen}
@@ -250,6 +250,7 @@ export default function MyItems() {
           </div>
         }
       >
+        <ItemsToolbar userData={userData} userItems={userItems} />
         {isFetching && <Loader explanation="Refreshing items" />}
         {/* Wait for the updated equipment state before accepting another action. */}
         <div inert={isFetching}>
@@ -270,7 +271,6 @@ export default function MyItems() {
           />
         </div>
       </ContentBox>
-      <ItemsToolbar userData={userData} userItems={userItems} />
       {userItems && (
         // Keep hotkey setup out of the way without a mouse or trackpad.
         <div className="not-any-pointer-fine:hidden">
