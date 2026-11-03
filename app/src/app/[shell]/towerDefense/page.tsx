@@ -393,9 +393,7 @@ const TowerDefensePage: React.FC = () => {
               <h2 className="font-bold text-4xl text-green-500">
                 Wave {gameState.currentWave} Complete!
               </h2>
-              <p className="mt-3 text-muted-foreground">
-                All enemies defeated!
-              </p>
+              <p className="mt-3 text-muted-foreground">All enemies defeated!</p>
               <div className="mt-6 flex justify-center gap-4">
                 <Button
                   onClick={startWave}

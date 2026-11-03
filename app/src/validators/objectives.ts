@@ -84,12 +84,9 @@ import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
 import {
-  AllTags,
   questBuffTypes,
   questDebuffTypes,
   questStartingEffectsSchema,
-  rejectActivityBonuses,
-  SuperRefinePassiveEffects,
 } from "@/validators/combat";
 import { mapLocationFields, supportsMapStructure } from "@/validators/mapLocation";
 import { masteryRequirementFields } from "@/validators/mastery";
@@ -99,7 +96,7 @@ import {
   type QuestRewardType,
   questRewardFields,
 } from "@/validators/rewardPackages";
-import { ObjectiveReward, questRewardModeFields } from "@/validators/rewards";
+import { questRewardModeFields } from "@/validators/rewards";
 import { villageMissionContentError } from "@/validators/villageMission";
 
 /** Event counters retain progress before an achievement's first reward claim. */
@@ -1303,4 +1300,3 @@ export const getObjectiveSchema = (type: string) => {
   }
   throw new Error(`Unknown objective task ${type}`);
 };
-

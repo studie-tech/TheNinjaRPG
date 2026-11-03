@@ -750,13 +750,13 @@ const applyFederalRevocation = async (
   const { eventId, occurredAt, productId, store, transactionId, isSandbox } = scope;
   const exact = transactionId
     ? await findStorePurchaseForApplyFederalRevocation(
-          client,
-          transactionId,
-          store,
-          productId,
-          isSandbox,
-        )
-      : undefined;
+        client,
+        transactionId,
+        store,
+        productId,
+        isSandbox,
+      )
+    : undefined;
   // Revoking the receipt and recomputing the shared status are separate writes on
   // PlanetScale. A retry must repair the second write if the first delivery failed after
   // stamping revokedAt.
