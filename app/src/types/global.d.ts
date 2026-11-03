@@ -2,7 +2,6 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       DATABASE_URL: string;
-      DISCORD_TICKETS: string;
       DISCORD_CONTENT_UPDATES: string;
       DISCORD_NEWS_UPDATES: string;
       FACEBOOK_PAGE_ID: string;

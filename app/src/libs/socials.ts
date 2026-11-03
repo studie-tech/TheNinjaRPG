@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
 import { NodeHtmlMarkdown } from "node-html-markdown";
-import type { UserData } from "@/drizzle/schema";
 import { truncateString } from "@/utils/string";
-import type { TicketType } from "@/validators/misc";
 
 // Shared NodeHtmlMarkdown instance for converting HTML to Markdown across all social media integrations
 const nodeHtmlMarkdown = new NodeHtmlMarkdown({}, undefined, undefined);
@@ -360,51 +358,5 @@ export const callTwitterNews = async (title: string, content: string) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ text: tweetText }),
-  });
-};
-
-export const callDiscordTicket = async (
-  thread_name: string,
-  reason: string,
-  type: TicketType,
-  user: UserData,
-) => {
-  if (isExternalPostingDisabled()) return;
-  const webhookUrl = process.env.DISCORD_TICKETS;
-  if (!isValidDiscordWebhook(webhookUrl)) {
-    console.error("[Discord] Invalid webhook URL for tickets");
-    return;
-  }
-
-  const image_url = user.avatar;
-  const content = `*Report from TNR interface*\n\n**Username:** ${user.username}\n**Reason:** ${nodeHtmlMarkdown.translate(reason)}\n${type === "bug_report" ? "<@&1131406837762244760>" : "<@&1086822053254017105>"}\n`;
-  return fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      avatar_url: image_url?.includes("https") ? image_url : "",
-      content: content,
-      username: user.username,
-      thread_name,
-      embeds: [
-        {
-          title: "User Information",
-          description: `
-            **Username:** ${user.username}
-            **User ID:** ${user.userId}
-            **Role:** ${user.role}
-            **Banned**: ${user.isBanned ? "true" : "false"}
-            **Silenced**: ${user.isSilenced ? "true" : "false"}
-            **Federal Status:** ${user.federalStatus}
-
-            **Level:** ${user.level}
-            **Rank:** ${user.rank}
-            **Status:** ${user.status}
-
-            **Last update:** ${user.regenAt.toISOString()}`,
-          color: 15844367,
-        },
-      ],
-    }),
   });
 };

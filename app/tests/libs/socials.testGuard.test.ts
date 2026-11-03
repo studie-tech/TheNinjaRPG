@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { UserData } from "@/drizzle/schema";
 import {
   callDiscordContent,
   callDiscordNews,
-  callDiscordTicket,
   callFacebookNews,
   callInstagramNews,
   callRedditNews,
@@ -16,7 +14,6 @@ import {
 const FAKE_ENV: Record<string, string> = {
   DISCORD_CONTENT_UPDATES: "https://discord.com/api/webhooks/1/fake-token",
   DISCORD_NEWS_UPDATES: "https://discord.com/api/webhooks/2/fake-token",
-  DISCORD_TICKETS: "https://discord.com/api/webhooks/3/fake-token",
   FACEBOOK_PAGE_ID: "page",
   FACEBOOK_PAGE_ACCESS_TOKEN: "token",
   INSTAGRAM_BUSINESS_ACCOUNT_ID: "account",
@@ -30,25 +27,10 @@ const FAKE_ENV: Record<string, string> = {
   TWITTER_ACCESS_SECRET: "secret",
 };
 
-const user = {
-  userId: "u",
-  username: "Tester",
-  role: "USER",
-  avatar: null,
-  isBanned: false,
-  isSilenced: false,
-  federalStatus: "NONE",
-  level: 1,
-  rank: "STUDENT",
-  status: "AWAKE",
-  regenAt: new Date(0),
-} as unknown as UserData;
-
 const postEverywhere = () =>
   Promise.all([
     callDiscordContent("Staff", "Fixture", ["Updated: {}"]),
     callDiscordNews("Title", "Body"),
-    callDiscordTicket("thread", "reason", "bug_report", user),
     callFacebookNews("Title", "Body"),
     callInstagramNews("Title", "Body", "https://example.com/a.png"),
     callRedditNews("Title", "Body"),
