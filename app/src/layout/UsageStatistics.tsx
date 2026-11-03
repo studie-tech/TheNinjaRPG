@@ -76,12 +76,11 @@ interface GroupedLevelStatsProps {
     source: string;
     levelDistribution: { level: number; count: number }[];
   }[];
-  title: string;
   xaxis: string;
 }
 
 export const GroupedLevelStats: React.FC<GroupedLevelStatsProps> = (props) => {
-  const { datasets, title, xaxis } = props;
+  const { datasets, xaxis } = props;
   const chartRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -128,7 +127,7 @@ export const GroupedLevelStats: React.FC<GroupedLevelStatsProps> = (props) => {
     });
 
     return () => myChart.destroy();
-  }, [datasets, title, xaxis]);
+  }, [datasets, xaxis]);
 
   return (
     <div className="relative w-[99%]">
@@ -243,11 +242,10 @@ interface DailyCountsBySourceProps {
     source: string;
     series: { date: string; count: number }[];
   }[];
-  title: string;
 }
 
 export const DailyCountsBySourceChart: React.FC<DailyCountsBySourceProps> = (props) => {
-  const { datasets, title } = props;
+  const { datasets } = props;
   const chartRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -295,7 +293,7 @@ export const DailyCountsBySourceChart: React.FC<DailyCountsBySourceProps> = (pro
     });
 
     return () => chart.destroy();
-  }, [datasets, title]);
+  }, [datasets]);
 
   return (
     <div className="relative w-[99%]" style={{ height: 360 }}>
