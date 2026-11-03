@@ -323,197 +323,176 @@ export const combatRouter = createTRPCRouter({
       // Initial battle version
       const actionRounds: number[] = [];
 
-      // OUTER LOOP: Attempt to perform action untill success || error thrown
-      // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      // Re-read and retry when another request claimed the battle version first
       let attempts = 0;
       while (true) {
-        try {
-          // Increment attempts
-          attempts += 1;
+        // Increment attempts
+        attempts += 1;
 
-          // Distinguish between public and non-public user state
-          const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
-          if (!userBattle) {
-            return { battle: null, result: null };
-          }
-          const stateBaseline = captureCombatStateUpdate(userBattle);
-
-          const spawnedWave = advanceEncounterWave(
-            userBattle,
-            !!dungeonBattleOutcome(userBattle),
-          );
-          // Current state of battle
-          const actId = userBattle.activeUserId;
-          const activeUser = userBattle.usersState.find((u) => u.userId === actId);
-          const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
-
-          // Update the battle to the correct activeUserId & round. Default to current user
-          const fetchedVersion = userBattle.version;
-          const fetchedUpdatedAt = userBattle.updatedAt;
-          const { progressRound, changedActor, actionRound, expiredEffects } =
-            alignBattle(userBattle, actionRounds, ctx.userId);
-          // A round can advance on this poll path too (idle turn timeout), not only via
-          // performAction. Run the sage exhaustion transition here as well, or it stays
-          // stranded until the next action. In-memory (no DB round-trip) and idempotent
-          // (guarded on sageModeActivated); the persist below carries the change, and the
-          // applyEffects call in the no-activity branch ticks any queued after-effects.
-          if (progressRound) {
-            applySageModeAfterRoundTransition(userBattle);
-          }
-          if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
-          advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
-
-          if (!actionRounds.includes(actionRound)) {
-            actionRounds.push(actionRound);
-          }
-
-          // Calculate if the battle is over for this user, and if so update user DB
-          // Fetch game settings for multipliers
-          let result = calcBattleResult(
-            userBattle,
-            ctx.userId,
-            userBattle.extraState.settings,
-          );
-
-          // The state this poll actually settles on. applyEffects hands back a
-          // clone rather than mutating in place, so everything downstream of it
-          // -- the result, the reward writes, the response -- has to read from
-          // that clone or it disagrees with what was just persisted.
-          let settledBattle = userBattle;
-
-          const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
-          // A settlement-only poll must persist leftBattle without ticking effects again.
-          const shouldTickEffects = battleOver || progressRound || changedActor;
-          const history: Parameters<typeof createAction>[2] = [];
-          if (shouldTickEffects && !hadActivity && actId && activeUser) {
-            const { newBattle, actionEffects } = applyEffects(userBattle, actId);
-            advanceEncounterWave(newBattle, !!dungeonBattleOutcome(newBattle));
-            settledBattle = newBattle;
-            // Effects ticking on this poll can end the fight -- a lingering
-            // damage tag finishing the last opponent -- so the result computed
-            // above is stale here, and persisting it would store a decided
-            // battle as an unfinished one nobody can ever act in again.
-            // calcBattleResult only mutates when it returns a result, so
-            // re-running it after a null costs nothing.
-            result =
-              result ??
-              calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
-
-            // Remove expired ground effects after applyEffects has processed them
-            // This ensures summon despawning logic runs before effects are removed
-            newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
-              if (e.rounds !== undefined && e.rounds <= 0) {
-                if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
-                  return true;
-                } else {
-                  return false; // Remove expired effects
-                }
-              }
-              return true; // Keep active effects
-            });
-
-            // Expiry and idle damage share one history key for this round/version.
-            history.push({
-              battleRound: actionRound,
-              appliedEffects: [...expiredEffects, ...actionEffects],
-              description: `${activeUser.username} stands and does nothing. `,
-              battleVersion: fetchedVersion,
-              actionId: "wait",
-              userId: activeUser.userId,
-            });
-          } else if (expiredEffects.length) {
-            history.push({
-              battleRound: actionRound,
-              appliedEffects: expiredEffects,
-              description: "Battlefield effects expire.",
-              battleVersion: fetchedVersion,
-              actionId: "wait",
-            });
-          }
-
-          if (result || progressRound || changedActor || spawnedWave) {
-            // alignBattle stamps updatedAt on every call. A settlement-only save must
-            // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
-            // as "the actor already acted" and would skip the idle actor's effects tick.
-            if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
-            const claim = await updateBattle(
-              ctx.drizzle,
-              result,
-              ctx.userId,
-              settledBattle,
-              fetchedVersion,
-              pusher,
-            );
-            if (!claim && attempts < 3) continue;
-            if (!claim) throw new Error("Battle version changed");
-            const { finishBattle } = claim;
-            const [logEntries] = await Promise.all([
-              createAction(ctx.drizzle, settledBattle, history),
-              finishBattle(),
-              ...(result &&
-              !settledBattle.extraState.dungeon &&
-              !settledBattle.extraState.hunting
-                ? [
-                    updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                    // Polling settlement pays the same faction counters as an action.
-                    updateVillageAnbuClan(
-                      ctx.drizzle,
-                      settledBattle,
-                      result,
-                      ctx.userId,
-                    ),
-                    updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                    updateKage(ctx.drizzle, settledBattle, result),
-                    // Terminal event outcomes were committed with the battle version claim.
-                    ...(claim.battleOver && settledBattle.extraState.tournamentGameId
-                      ? []
-                      : [
-                          updateTournament(
-                            ctx.drizzle,
-                            settledBattle,
-                            result,
-                            ctx.userId,
-                          ),
-                        ]),
-                    updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
-                  ]
-                : []),
-            ]);
-            // Idle effects can land a killing blow here too. Announce only after
-            // their log insert finishes so clients can refresh an earlier read.
-            if (
-              history.length &&
-              settledBattle.usersState.filter((user) => !user.isAi).length > 1
-            ) {
-              notifyBattleLogs(
-                pusher,
-                settledBattle,
-                logEntries,
-                !!result,
-                result
-                  ? undefined
-                  : buildCombatStateUpdate(stateBaseline, settledBattle),
-              );
-            }
-          }
-
-          // Hide private state of non-session user
-          const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
-
-          // Return the new battle + result state if applicable
-          return { battle: newMaskedBattle, result: result };
-        } catch (e) {
-          // If any of the above fails, retry the whole procedure
-          if (e instanceof Error) {
-            try {
-              e.message += ` (Attempt ${attempts})`;
-            } catch (e) {
-              console.error(e);
-            }
-          }
-          console.log("ERROR: ", e);
-          if (attempts > 2) throw e;
+        // Distinguish between public and non-public user state
+        const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        if (!userBattle) {
+          return { battle: null, result: null };
         }
+        const stateBaseline = captureCombatStateUpdate(userBattle);
+
+        const spawnedWave = advanceEncounterWave(
+          userBattle,
+          !!dungeonBattleOutcome(userBattle),
+        );
+        // Current state of battle
+        const actId = userBattle.activeUserId;
+        const activeUser = userBattle.usersState.find((u) => u.userId === actId);
+        const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
+
+        // Update the battle to the correct activeUserId & round. Default to current user
+        const fetchedVersion = userBattle.version;
+        const fetchedUpdatedAt = userBattle.updatedAt;
+        const { progressRound, changedActor, actionRound, expiredEffects } =
+          alignBattle(userBattle, actionRounds, ctx.userId);
+        // A round can advance on this poll path too (idle turn timeout), not only via
+        // performAction. Run the sage exhaustion transition here as well, or it stays
+        // stranded until the next action. In-memory (no DB round-trip) and idempotent
+        // (guarded on sageModeActivated); the persist below carries the change, and the
+        // applyEffects call in the no-activity branch ticks any queued after-effects.
+        if (progressRound) {
+          applySageModeAfterRoundTransition(userBattle);
+        }
+        if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
+        advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
+
+        if (!actionRounds.includes(actionRound)) {
+          actionRounds.push(actionRound);
+        }
+
+        // Calculate if the battle is over for this user, and if so update user DB
+        // Fetch game settings for multipliers
+        let result = calcBattleResult(
+          userBattle,
+          ctx.userId,
+          userBattle.extraState.settings,
+        );
+
+        // The state this poll actually settles on. applyEffects hands back a
+        // clone rather than mutating in place, so everything downstream of it
+        // -- the result, the reward writes, the response -- has to read from
+        // that clone or it disagrees with what was just persisted.
+        let settledBattle = userBattle;
+
+        const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
+        // A settlement-only poll must persist leftBattle without ticking effects again.
+        const shouldTickEffects = battleOver || progressRound || changedActor;
+        const history: Parameters<typeof createAction>[2] = [];
+        if (shouldTickEffects && !hadActivity && actId && activeUser) {
+          const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+          advanceEncounterWave(newBattle, !!dungeonBattleOutcome(newBattle));
+          settledBattle = newBattle;
+          // Effects ticking on this poll can end the fight -- a lingering
+          // damage tag finishing the last opponent -- so the result computed
+          // above is stale here, and persisting it would store a decided
+          // battle as an unfinished one nobody can ever act in again.
+          // calcBattleResult only mutates when it returns a result, so
+          // re-running it after a null costs nothing.
+          result =
+            result ??
+            calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
+
+          // Remove expired ground effects after applyEffects has processed them
+          // This ensures summon despawning logic runs before effects are removed
+          newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
+            if (e.rounds !== undefined && e.rounds <= 0) {
+              if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+                return true;
+              } else {
+                return false; // Remove expired effects
+              }
+            }
+            return true; // Keep active effects
+          });
+
+          // Expiry and idle damage share one history key for this round/version.
+          history.push({
+            battleRound: actionRound,
+            appliedEffects: [...expiredEffects, ...actionEffects],
+            description: `${activeUser.username} stands and does nothing. `,
+            battleVersion: fetchedVersion,
+            actionId: "wait",
+            userId: activeUser.userId,
+          });
+        } else if (expiredEffects.length) {
+          history.push({
+            battleRound: actionRound,
+            appliedEffects: expiredEffects,
+            description: "Battlefield effects expire.",
+            battleVersion: fetchedVersion,
+            actionId: "wait",
+          });
+        }
+
+        if (result || progressRound || changedActor || spawnedWave) {
+          // alignBattle stamps updatedAt on every call. A settlement-only save must
+          // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
+          // as "the actor already acted" and would skip the idle actor's effects tick.
+          if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
+          const claim = await updateBattle(
+            ctx.drizzle,
+            result,
+            ctx.userId,
+            settledBattle,
+            fetchedVersion,
+            pusher,
+          );
+          if (!claim && attempts < 3) continue;
+          if (!claim) throw new Error("Battle version changed");
+          const { finishBattle } = claim;
+          const [logEntries] = await Promise.all([
+            createAction(ctx.drizzle, settledBattle, history),
+            finishBattle(),
+            ...(result &&
+            !settledBattle.extraState.dungeon &&
+            !settledBattle.extraState.hunting
+              ? [
+                  updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                  // Polling settlement pays the same faction counters as an action.
+                  updateVillageAnbuClan(ctx.drizzle, settledBattle, result, ctx.userId),
+                  updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                  updateKage(ctx.drizzle, settledBattle, result),
+                  // Terminal event outcomes were committed with the battle version claim.
+                  ...(claim.battleOver && settledBattle.extraState.tournamentGameId
+                    ? []
+                    : [
+                        updateTournament(
+                          ctx.drizzle,
+                          settledBattle,
+                          result,
+                          ctx.userId,
+                        ),
+                      ]),
+                  updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
+                ]
+              : []),
+          ]);
+          // Idle effects can land a killing blow here too. Announce only after
+          // their log insert finishes so clients can refresh an earlier read.
+          if (
+            history.length &&
+            settledBattle.usersState.filter((user) => !user.isAi).length > 1
+          ) {
+            notifyBattleLogs(
+              pusher,
+              settledBattle,
+              logEntries,
+              !!result,
+              result ? undefined : buildCombatStateUpdate(stateBaseline, settledBattle),
+            );
+          }
+        }
+
+        // Hide private state of non-session user
+        const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
+
+        // Return the new battle + result state if applicable
+        return { battle: newMaskedBattle, result: result };
       }
     }),
   getBattleEntries: protectedProcedure
