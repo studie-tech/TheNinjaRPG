@@ -19,7 +19,7 @@ export async function isUrlAccessible(url: string): Promise<boolean> {
   }
 
   try {
-    const response = await fetchWithTimeout(url, { method: "HEAD" }, 5000);
+    await fetchWithTimeout(url, { method: "HEAD" }, 5000);
     return true;
   } catch (error: unknown) {
     if (error instanceof Error) {

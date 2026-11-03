@@ -31,7 +31,5 @@ declare global {
   }
 }
 
-declare module "@g-loot/react-tournament-brackets";
-
 // We must export something for it to be a module
 export {};

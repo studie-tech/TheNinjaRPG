@@ -230,7 +230,6 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
   // If not cached but pending, wait for it
   if (!buffer && bufferPending.has(url)) {
     try {
-      console.log("Waiting for pending buffer:", url);
       buffer = await bufferPending.get(url);
     } catch (err) {
       console.warn("Failed to load pending buffer:", url, err);
@@ -263,7 +262,6 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
     }
   }
 
-  console.log("Falling back to Audio element:", url);
   // Element-based fallback (still allows overlapping via clone)
   const audioCache = getAudioCache();
   let audio = audioCache.get(url);
