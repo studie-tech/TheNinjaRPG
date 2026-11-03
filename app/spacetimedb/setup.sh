@@ -57,24 +57,17 @@ sudo systemctl stop spacetimedb 2>/dev/null || true
 echo "[1/9] Updating system packages..."
 sudo dnf update -y
 
-# Install required packages
-# Note: Amazon Linux 2023 uses curl-minimal by default which conflicts with curl
-# We use wget for downloads and curl-minimal works fine for basic HTTP requests
+# Install required packages. Amazon Linux 2023's curl-minimal covers every download
+# and HTTP check below.
 echo "[2/9] Installing required packages..."
-sudo dnf install -y git gcc gcc-c++ make openssl-devel pkg-config wget tar gzip
+sudo dnf install -y git gcc gcc-c++ make openssl-devel pkg-config tar gzip
 
 # Install Rust (required for building modules)
 echo "[3/9] Installing Rust..."
 if command -v rustc &> /dev/null; then
     echo "Rust already installed: $(rustc --version)"
 else
-    # curl-minimal on Amazon Linux 2023 works fine for this
-    # If curl is not available, use wget as fallback
-    if command -v curl &> /dev/null; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    else
-        wget -qO- https://sh.rustup.rs | sh -s -- -y
-    fi
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source "$HOME/.cargo/env"
 fi
 
@@ -90,16 +83,11 @@ echo "[5/9] Installing SpacetimeDB CLI..."
 if command -v spacetime &> /dev/null; then
     echo "SpacetimeDB CLI already installed: $(spacetime --version)"
 else
-    # Use curl-minimal or wget for the SpacetimeDB installer
-    if command -v curl &> /dev/null; then
-        curl -sSf https://install.spacetimedb.com | sh
-    else
-        wget -qO- https://install.spacetimedb.com | sh
-    fi
+    curl -sSf https://install.spacetimedb.com | sh
 fi
 
 # Ensure spacetime is in PATH
-export PATH="$HOME/.local/bin:$HOME/.spacetime/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 source "$HOME/.bashrc" 2>/dev/null || true
 
 # Create SpacetimeDB data directory
@@ -124,7 +112,7 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR
-Environment="PATH=$HOME/.spacetime/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="HOME=$HOME"
 ExecStart=$SPACETIME_BIN start --listen-addr 127.0.0.1:$SPACETIMEDB_PORT
 Restart=always
@@ -162,13 +150,6 @@ done
 echo "[8/9] Building and publishing Tower Defense module..."
 cd "$SCRIPT_DIR"
 
-# Ensure we have the source files
-if [ ! -f "Cargo.toml" ]; then
-    echo "Error: Cargo.toml not found in $SCRIPT_DIR"
-    echo "Make sure you're running this script from the spacetimedb directory"
-    exit 1
-fi
-
 # Build the module
 echo "Building module..."
 $SPACETIME_BIN build
@@ -185,12 +166,11 @@ sudo dnf install -y nginx
 sudo systemctl enable nginx
 
 # Always copy fresh Nginx configuration from source (handles domain changes on re-run)
-# The source nginx.conf uses a placeholder domain that we replace
+# and replace its server_name with $DOMAIN
 echo "Copying fresh Nginx configuration..."
 sudo cp -f "$SCRIPT_DIR/nginx.conf" /etc/nginx/nginx.conf
 
-# Update domain in nginx config (replace the placeholder domain)
-# Using a generic pattern that matches any previous domain
+# A generic pattern matches whichever domain the copied file names
 sudo sed -i "s/server_name  .*/server_name  $DOMAIN;/g" /etc/nginx/nginx.conf
 
 # Test nginx configuration before restarting
