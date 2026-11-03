@@ -16,8 +16,12 @@ export const accumulateCurseDamage = (
   targetId: string,
   healthLost: number,
   round: number,
+  creditUserId = attackerId,
 ) => {
-  const attacker = users.find((u) => u.userId === attackerId);
+  // Controllers preserve expired summons' allegiance; Curse ownership stays with attackerId.
+  const attacker =
+    users.find((u) => u.userId === attackerId) ??
+    users.find((u) => u.userId === creditUserId);
   const target = users.find((u) => u.userId === targetId);
   if (
     !attacker ||

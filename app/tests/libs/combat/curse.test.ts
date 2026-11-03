@@ -410,6 +410,76 @@ it("counts Diffuse damage only as it is repaid while Curse is active", () => {
   expect(stored(battle)).toBe(250);
 });
 
+it.each([
+  { expires: false, allied: false },
+  { expires: true, allied: false },
+  { expires: false, allied: true },
+  { expires: true, allied: true },
+])("keeps clone debt Curse attribution: %j", ({ expires, allied }) => {
+  const direction = allied ? "right" : "left";
+  const duration = makeEffect(
+    "clone",
+    { power: 100, rounds: 2 },
+    { creatorId: "clone", createdRound: 1, isNew: false },
+  );
+  duration.rounds = expires ? 1 : 2;
+  const initial = makeCompleteBattle({
+    round: 3,
+    activeUserId: "clone",
+    usersState: [
+      makeBattleUser("defender", { curHealth: 5000, maxHealth: 10000 }),
+      makeBattleUser("attacker", { direction }),
+      ...(allied ? [makeBattleUser("opponent", { direction: "left" })] : []),
+      makeBattleUser("clone", {
+        direction,
+        isSummon: true,
+        isOriginal: false,
+        isAi: true,
+        controllerId: "attacker",
+      }),
+    ],
+    groundEffects: [duration],
+    usersEffects: [
+      mark(),
+      mark(50, "defender"),
+      makeEffect(
+        "diffuse",
+        { power: 50, rounds: 3, delayRounds: 1 },
+        {
+          creatorId: "defender",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 1,
+        },
+      ),
+      hit("clone"),
+    ],
+  });
+  let battle = applyEffects(initial, "clone").newBattle;
+  expect(user(battle, "defender").curHealth).toBe(4500);
+  expect(stored(battle, "defender")).toBe(allied ? 0 : 125);
+  expect(stored(battle)).toBe(0);
+  expect(user(battle, "defender").diffuseDamage).toMatchObject([
+    { attackerId: "attacker", sourceUserId: "clone", remainingDamage: 500 },
+  ]);
+
+  battle.usersState.forEach((u) => {
+    u.round = battle.round;
+    u.actionPoints = 0;
+  });
+  battle.roundStartAt = new Date(Date.now() - 600000);
+  const transition = alignBattle(battle, []);
+  expect(transition.progressRound).toBe(true);
+  expect(transition.actor.userId).toBe("defender");
+  expect(battle.usersState.some((u) => u.userId === "clone")).toBe(!expires);
+
+  battle = applyEffects(battle, "defender").newBattle;
+  expect(user(battle, "defender").curHealth).toBe(4000);
+  expect(user(battle, "defender").diffuseDamage).toEqual([]);
+  expect(stored(battle, "defender")).toBe(allied ? 0 : 250);
+  expect(stored(battle)).toBe(0);
+});
+
 it("includes residual damage and returned Parry damage", () => {
   const residual = hit();
   residual.rounds = 3;

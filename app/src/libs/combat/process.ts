@@ -637,7 +637,7 @@ export const applyEffects = (
     actorId,
     round,
     actionEffects,
-    (userId, targetId, damage, healthLost) => {
+    (userId, targetId, damage, healthLost, creditUserId) => {
       accumulateCurseDamage(
         newUsersEffects,
         newUsersState,
@@ -645,6 +645,7 @@ export const applyEffects = (
         targetId,
         healthLost,
         round,
+        creditUserId,
       );
       if (userId !== targetId) {
         accumulateShieldConversion(userId, damage, "consume");
