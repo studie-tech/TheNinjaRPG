@@ -16,7 +16,6 @@ declare global {
       TWITTER_ACCESS_TOKEN: string;
       TWITTER_ACCESS_SECRET: string;
       REPLICATE_API_TOKEN: string;
-      CAPTCHA_SALT: string;
       PUSHER_APP_ID: string;
       PUSHER_APP_SECRET: string;
       NEXT_PUBLIC_PUSHER_APP_KEY: string;

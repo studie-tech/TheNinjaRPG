@@ -70,7 +70,6 @@ export const serverSchema = z.object({
   // Epidemic Sound Partner API key for sound suggestions in the content review desk
   EPIDEMIC_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
-  CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
   // Optional instance PEM public key for networkless token verification.
   CLERK_JWT_KEY: z.string().optional(),
@@ -168,7 +167,6 @@ export const serverEnv = {
   REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
   EPIDEMIC_API_KEY: process.env.EPIDEMIC_API_KEY,
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
-  CAPTCHA_SALT: process.env.CAPTCHA_SALT,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
   CLERK_JWT_KEY: process.env.CLERK_JWT_KEY,
   NATIVE_CLERK_PROXY_ENABLED: /** @type {"true" | "false" | undefined} */ (

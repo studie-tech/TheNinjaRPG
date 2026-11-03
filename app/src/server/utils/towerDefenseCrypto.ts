@@ -23,27 +23,13 @@ import type {
   SignedUpgradeDefinition,
 } from "@/validators/towerDefense";
 
-// Secret key for HMAC - uses a dedicated env var or falls back to a derived key
+/** HMAC key for session signing; required in production. */
 const getSecretKey = (): string => {
-  // Use dedicated tower defense secret if available
-  if (env.TOWER_DEFENSE_HMAC_SECRET) {
-    return env.TOWER_DEFENSE_HMAC_SECRET;
-  }
-
-  // In production, TOWER_DEFENSE_HMAC_SECRET is REQUIRED
+  if (env.TOWER_DEFENSE_HMAC_SECRET) return env.TOWER_DEFENSE_HMAC_SECRET;
   if (env.NODE_ENV === "production") {
-    const errorMsg =
-      "TOWER_DEFENSE_HMAC_SECRET is missing in production environment. " +
-      "A dedicated TOWER_DEFENSE_HMAC_SECRET must be configured in production for secure session signing.";
-    console.error(`❌ ${errorMsg}`);
-    throw new Error(errorMsg);
+    throw new Error("TOWER_DEFENSE_HMAC_SECRET must be configured in production");
   }
-
-  // Fall back to deriving from CAPTCHA_SALT or a constant (non-production only)
-  const baseSecret = env.CAPTCHA_SALT ?? "tower-defense-default-secret";
-  return createHmac("sha256", baseSecret)
-    .update("tower-defense-hmac-key-v1")
-    .digest("hex");
+  return "development-tower-defense-secret";
 };
 
 /**
