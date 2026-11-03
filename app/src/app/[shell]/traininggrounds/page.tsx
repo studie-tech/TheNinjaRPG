@@ -307,7 +307,6 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
 
   const { data: requests } = api.sensei.getRequests.useQuery(undefined, {
     staleTime: 5000,
-    enabled: !!userData,
   });
 
   // Mutations
@@ -540,7 +539,7 @@ const StatsTraining: React.FC<
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [userData, timeDiff]);
-  const showCaptcha = userData && showTrainingCapcha(userData);
+  const showCaptcha = showTrainingCapcha(userData);
 
   // tRPC useUtils
   const utils = api.useUtils();
@@ -663,7 +662,6 @@ const StatsTraining: React.FC<
     isStoppingMastery ||
     isChanging;
 
-  if (!userData) return <Loader explanation="Loading userdata" />;
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
@@ -1120,21 +1118,17 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
-      enabled: userData !== undefined,
     },
   );
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Get user students
-  const { data: students } = api.sensei.getStudents.useQuery(
-    { userId: userData?.userId || "" },
-    { enabled: !!userData },
-  );
+  const { data: students } = api.sensei.getStudents.useQuery({
+    userId: userData.userId,
+  });
 
   // Worn gear and activated skills raise masteries, as the server's training gate counts
-  const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: userItems } = api.item.getUserItems.useQuery(undefined);
   const masteries = effectiveMasteries({
     ...userData,
     items: userItems ?? [],
@@ -1142,7 +1136,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Ownership and active training must remain available outside the picker filters.
   const { data: userJutsus, isPending: isRefetchingUserJutsu } =
-    api.jutsu.getUserJutsus.useQuery({}, { enabled: !!userData });
+    api.jutsu.getUserJutsus.useQuery({});
   const userJutsuCounts = userJutsus?.map((userJutsu) => {
     return {
       id: userJutsu.jutsuId,
@@ -1207,9 +1201,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
 
   // Levels waiting behind the active training
-  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined);
   const { mutate: cancelQueued, isPending: isCancellingQueued } =
     api.jutsu.cancelQueuedTraining.useMutation({
       onMutate: prepareUserUpdate,
@@ -1230,9 +1222,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const isPending = isStartingTrain || isStoppingTrain || isCancellingQueued;
 
   // Favorites are shared with the ranked loadout builder (same stored list & star)
-  const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery(undefined);
   const favoriteJutsuIds = rankedLoadout?.loadout.favoriteJutsuIds ?? [];
   const { mutate: saveFavorites, isPending: isSavingFavorite } =
     api.pvpRank.updateRankedLoadout.useMutation({
@@ -1269,9 +1259,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       setLevelCount(1);
     });
   };
-
-  // While loading userdata
-  if (!userData) return <Loader explanation="Loading userdata" />;
 
   // Collect all ancestor jutsu IDs that the user has evolved past
   const evolvedAncestorIds = new Set<string>();
@@ -1388,7 +1375,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okRank = checkJutsuRank(jutsu?.jutsuRank, userData.rank);
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
-  const canAfford = userData && cost && userData.money >= cost;
+  const canAfford = cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
   const canTrain =
     okRank &&
@@ -1472,139 +1459,136 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         }
       >
         <JutsuStatQuickFilters state={state} />
-        {userData && (
-          // Bound the selector's scroll area; retain its height while jutsu load.
-          <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
-            <div
-              id="jutsu-training-picker"
-              className="max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain pr-1"
-            >
-              <ActionSelector
-                gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
-                items={alljutsus}
-                counts={userJutsuCounts}
-                selectedId={jutsu?.id}
-                labelSingles={true}
-                emptyText="No jutsu available for your rank"
-                onClick={(id) => {
-                  if (id === jutsu?.id) {
-                    setJutsuConfirmOpen(false);
-                  } else {
-                    const selected = alljutsus?.find((jutsu) => jutsu.id === id);
-                    startTransition(() => {
-                      setJutsu(selected);
-                      setLevelCount(1);
-                      setIsOpen(true);
-                    });
-                  }
-                }}
-                showBgColor={false}
-                showLabels={true}
-                setLastElement={setLastElement}
-              />
-            </div>
-            {isOpen && jutsu && (
-              <Modal
-                id="tutorial-traininggrounds-trainJutsu"
-                title="Confirm Purchase"
-                proceed_label={proceed_label}
-                proceedDisabled={!Number.isFinite(levelCount)}
-                isOpen={isOpen}
-                setIsOpen={setJutsuConfirmOpen}
-                isValid={false}
-                onClose={() => startTransition(() => setJutsu(undefined))}
-                onAccept={() => {
-                  if (canTrain && !isPending) {
-                    train({ jutsuId: jutsu.id, levels: count });
-                  } else {
-                    setJutsuConfirmOpen(false);
-                  }
-                }}
-                confirmClassName={
-                  canTrain
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-red-600 text-white hover:bg-red-700"
+        {/* Bound the selector's scroll area; retain its height while jutsu load. */}
+        <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
+          <div
+            id="jutsu-training-picker"
+            className="max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain pr-1"
+          >
+            <ActionSelector
+              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
+              items={alljutsus}
+              counts={userJutsuCounts}
+              selectedId={jutsu?.id}
+              labelSingles={true}
+              emptyText="No jutsu available for your rank"
+              onClick={(id) => {
+                if (id === jutsu?.id) {
+                  setJutsuConfirmOpen(false);
+                } else {
+                  const selected = alljutsus?.find((jutsu) => jutsu.id === id);
+                  startTransition(() => {
+                    setJutsu(selected);
+                    setLevelCount(1);
+                    setIsOpen(true);
+                  });
                 }
-              >
-                <div className="relative">
-                  <p className="pb-3">
-                    You have {userData.money.toLocaleString()} ryo in your pocket
-                  </p>
-                  {jutsu.requiredRank === "ELITE JONIN" && (
-                    <p className="pb-3 text-muted-foreground text-sm">
-                      Elite Jonin jutsu take {ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER}×
-                      as long to train, up to{" "}
-                      {(MAX_JUTSU_TRAIN_TIME_MS *
-                        ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER) /
-                        3_600_000}{" "}
-                      hours per level. Training Grounds cap: level {JUTSU_LEVEL_CAP}.
-                    </p>
-                  )}
-                  {!isPending && maxLevelCount > 1 && (
-                    <div className="mb-3 rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
-                      <label
-                        htmlFor="jutsu-level-count"
-                        className="mb-2 block font-medium text-sm"
-                      >
-                        Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount}
-                        )
-                      </label>
-                      <NumberInput
-                        id="jutsu-level-count"
-                        inputMode="numeric"
-                        min={1}
-                        max={maxLevelCount}
-                        value={levelCount}
-                        onValueChange={setLevelCount}
-                        emptyFallback={1}
-                        className="w-full"
-                      />
-                      <p className="mt-2 text-muted-foreground text-xs">
-                        {count > 1
-                          ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
-                          : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
-                      </p>
-                    </div>
-                  )}
-                  {!isPending && isRankedFavoritable(jutsu) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mb-3 flex items-center gap-2"
-                      disabled={!rankedLoadout || isSavingFavorite}
-                      onClick={() => toggleFavorite(jutsu.id)}
-                    >
-                      {isSavingFavorite ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Saving
-                        </>
-                      ) : (
-                        <>
-                          <Star
-                            className={`h-4 w-4 ${favoriteJutsuIds.includes(jutsu.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
-                          />
-                          {favoriteJutsuIds.includes(jutsu.id)
-                            ? "Unfavorite"
-                            : "Favorite"}
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {!isPending && (
-                    <ItemWithEffects
-                      item={jutsu}
-                      key={jutsu.id}
-                      showStatistic="jutsu"
-                      showEvolutions
-                    />
-                  )}
-                  {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
-                </div>
-              </Modal>
-            )}
+              }}
+              showBgColor={false}
+              showLabels={true}
+              setLastElement={setLastElement}
+            />
           </div>
-        )}
+          {isOpen && jutsu && (
+            <Modal
+              id="tutorial-traininggrounds-trainJutsu"
+              title="Confirm Purchase"
+              proceed_label={proceed_label}
+              proceedDisabled={!Number.isFinite(levelCount)}
+              isOpen={isOpen}
+              setIsOpen={setJutsuConfirmOpen}
+              isValid={false}
+              onClose={() => startTransition(() => setJutsu(undefined))}
+              onAccept={() => {
+                if (canTrain && !isPending) {
+                  train({ jutsuId: jutsu.id, levels: count });
+                } else {
+                  setJutsuConfirmOpen(false);
+                }
+              }}
+              confirmClassName={
+                canTrain
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              }
+            >
+              <div className="relative">
+                <p className="pb-3">
+                  You have {userData.money.toLocaleString()} ryo in your pocket
+                </p>
+                {jutsu.requiredRank === "ELITE JONIN" && (
+                  <p className="pb-3 text-muted-foreground text-sm">
+                    Elite Jonin jutsu take {ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER}× as
+                    long to train, up to{" "}
+                    {(MAX_JUTSU_TRAIN_TIME_MS *
+                      ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER) /
+                      3_600_000}{" "}
+                    hours per level. Training Grounds cap: level {JUTSU_LEVEL_CAP}.
+                  </p>
+                )}
+                {!isPending && maxLevelCount > 1 && (
+                  <div className="mb-3 rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                    <label
+                      htmlFor="jutsu-level-count"
+                      className="mb-2 block font-medium text-sm"
+                    >
+                      Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount})
+                    </label>
+                    <NumberInput
+                      id="jutsu-level-count"
+                      inputMode="numeric"
+                      min={1}
+                      max={maxLevelCount}
+                      value={levelCount}
+                      onValueChange={setLevelCount}
+                      emptyFallback={1}
+                      className="w-full"
+                    />
+                    <p className="mt-2 text-muted-foreground text-xs">
+                      {count > 1
+                        ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
+                        : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
+                    </p>
+                  </div>
+                )}
+                {!isPending && isRankedFavoritable(jutsu) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mb-3 flex items-center gap-2"
+                    disabled={!rankedLoadout || isSavingFavorite}
+                    onClick={() => toggleFavorite(jutsu.id)}
+                  >
+                    {isSavingFavorite ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving
+                      </>
+                    ) : (
+                      <>
+                        <Star
+                          className={`h-4 w-4 ${favoriteJutsuIds.includes(jutsu.id) ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`}
+                        />
+                        {favoriteJutsuIds.includes(jutsu.id)
+                          ? "Unfavorite"
+                          : "Favorite"}
+                      </>
+                    )}
+                  </Button>
+                )}
+                {!isPending && (
+                  <ItemWithEffects
+                    item={jutsu}
+                    key={jutsu.id}
+                    showStatistic="jutsu"
+                    showEvolutions
+                  />
+                )}
+                {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
+              </div>
+            </Modal>
+          )}
+        </div>
         {/* The list can be taller than the screen, so the loader sticks in view */}
         {isFetching && (
           <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
@@ -1692,6 +1676,8 @@ const CovertTraining: React.FC<
         }
       },
     });
+
+  if (!stealthStatus) return null;
 
   const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
   const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
