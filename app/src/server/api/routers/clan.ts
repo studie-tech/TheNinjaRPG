@@ -556,7 +556,7 @@ export const clanRouter = createTRPCRouter({
       ]);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
-      const nMembers = fetchedClan.members.length || 0;
+      const nMembers = fetchedClan.members.length;
       const isLeader = user.userId === fetchedClan.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
@@ -933,7 +933,6 @@ export const clanRouter = createTRPCRouter({
       const isColeader = checkCoLeader(user.userId, clanData);
       const isMemberLeader = input.memberId === clanData?.leaderId;
       const isMemberColeader = checkCoLeader(input.memberId, clanData);
-      const isMemberAssassin = checkAssassin(input.memberId, clanData);
       const canEdit = canEditClans(user.role);
       const isYourself = ctx.userId === input.memberId;
       const groupLabel = user.isOutlaw ? "faction" : "clan";
@@ -954,7 +953,7 @@ export const clanRouter = createTRPCRouter({
         coLeader1: clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
         coLeader2: clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
         coLeader3: clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
-        ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
+        ...(assasinField ? { [assasinField]: null } : {}),
       };
       // Mutate
       await updateClanForDemoteMember(ctx.drizzle, updateData, clanData);

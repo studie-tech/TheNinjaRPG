@@ -1,7 +1,7 @@
 /**
  * Database access for bounty; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actionLog, bounty, bountyContribution, bountySignup } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -18,13 +18,10 @@ export const listBountyForBoard = (
       input.status === "all"
         ? undefined
         : input.status === "OPEN"
-          ? and(
-              inArray(bounty.status, ["OPEN", "CLAIMED"]),
-              // Hide completed bounties (CLAIMED and collected)
-              or(
-                eq(bounty.status, "OPEN"),
-                and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt)),
-              ),
+          ? // Hide completed bounties (CLAIMED and collected)
+            or(
+              eq(bounty.status, "OPEN"),
+              and(eq(bounty.status, "CLAIMED"), isNull(bounty.collectedAt)),
             )
           : eq(bounty.status, input.status),
     columns: {

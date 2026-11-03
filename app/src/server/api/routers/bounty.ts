@@ -58,7 +58,7 @@ export const bountyRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get bounty board listings" } })
     .input(bountyBoardFilterSchema)
     .query(async ({ ctx, input }) => {
-      const limit = input.limit ?? 30;
+      const limit = input.limit;
       const offset = (input.cursor ?? 0) * limit;
       const userId = ctx.userId;
 

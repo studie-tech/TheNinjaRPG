@@ -29,6 +29,7 @@ import {
   PITY_BLOODLINE_ROLLS,
   REP_TRADE_MIN_LEVEL,
   RYO_FOR_REP_DAYS_FROZEN,
+  RYO_FOR_REP_RESERVE,
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -504,7 +505,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   );
 
   // Derived
-  const tradeableReps = Math.max(userData.reputationPoints - 5, 0);
+  const tradeableReps = Math.max(userData.reputationPoints - RYO_FOR_REP_RESERVE, 0);
 
   return (
     <ContentBox

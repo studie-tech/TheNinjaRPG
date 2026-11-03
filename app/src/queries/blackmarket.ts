@@ -31,7 +31,7 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
   });
 };
 
-import { asc, desc, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { asc, desc, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -40,6 +40,7 @@ import {
   COST_EXTRA_JUTSU_SLOT,
   COST_REROLL_ELEMENT,
   RYO_CAP,
+  RYO_FOR_REP_RESERVE,
 } from "@/drizzle/constants";
 import { actionLog, userData } from "@/drizzle/schema";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
@@ -135,7 +136,10 @@ export const updateUserDataForCreateOffer = (
     .update(userData)
     .set({ reputationPoints: sql`${userData.reputationPoints} - ${input.reps}` })
     .where(
-      and(eq(userData.userId, ctx.userId), gt(userData.reputationPoints, input.reps)),
+      and(
+        eq(userData.userId, ctx.userId),
+        gte(userData.reputationPoints, input.reps + RYO_FOR_REP_RESERVE),
+      ),
     );
 
 /** Build the `ryoTrade` insert for `createOffer`. */

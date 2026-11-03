@@ -1989,6 +1989,8 @@ export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
 export const RYO_FOR_REP_DAYS_FROZEN = 3;
 export const RYO_FOR_REP_MAX_LISTINGS = 5;
 export const RYO_FOR_REP_MIN_REPS = 10;
+/** Reputation points a seller keeps out of every ryo-for-rep listing. */
+export const RYO_FOR_REP_RESERVE = 5;
 export const PITY_BLOODLINE_ROLLS = 200;
 
 // Reputation purchase config
