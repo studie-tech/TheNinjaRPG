@@ -119,12 +119,12 @@ const blacklistPanel = (success: boolean) => {
     }
     throw new Error(`Unexpected request: ${path}`);
   });
-  const affectedKeys = [
+  const seededKeys = [
     getQueryKey(testApi.profile.getBlacklist, undefined, "query"),
     ...[{ convo_id: "private", limit: 10 }, { convo_title: "Global", limit: 15 }].map((input) => getQueryKey(testApi.comments.getConversationComments, input, "infinite")),
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
   ];
-  for (const key of affectedKeys) queryClient.setQueryData(key, []);
+  for (const key of seededKeys) queryClient.setQueryData(key, []);
+  const affectedKeys = [...seededKeys, getQueryKey(testApi.comments.getUserConversations, undefined, "query")];
   getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "inbox", conversationId: "private" });
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
   vi.spyOn(chatConversation, "ChatConversation").mockImplementation(({ toolbarStart, toolbarEnd }) => <div>
