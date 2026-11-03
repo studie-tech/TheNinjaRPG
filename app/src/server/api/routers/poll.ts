@@ -65,7 +65,6 @@ export const pollRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }
@@ -86,19 +85,16 @@ export const pollRouter = createTRPCRouter({
             createdByUserId: user.userId,
             isCustomOption: false,
           };
-        } else if (option.type === "user") {
-          return {
-            id: nanoid(),
-            pollId,
-            text: option.username,
-            optionType: "user" as const,
-            targetUserId: option.userId,
-            createdByUserId: user.userId,
-            isCustomOption: false,
-          };
         }
-        // This should never happen due to the discriminated union
-        throw new Error("Invalid option type");
+        return {
+          id: nanoid(),
+          pollId,
+          text: option.username,
+          optionType: "user" as const,
+          targetUserId: option.userId,
+          createdByUserId: user.userId,
+          isCustomOption: false,
+        };
       });
 
       // Run both database operations in parallel
@@ -123,7 +119,6 @@ export const pollRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }
@@ -167,7 +162,6 @@ export const pollRouter = createTRPCRouter({
         findPollOptionForVote(ctx.drizzle, input),
       ]);
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }
@@ -201,7 +195,6 @@ export const pollRouter = createTRPCRouter({
         findPollOptionForAddOption(ctx.drizzle, input),
       ]);
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!existingPoll) return errorResponse("Poll not found");
       if (existingOption) return errorResponse("Option already exists");
       if (!existingPoll.isActive) return errorResponse("Poll is not active");
@@ -217,11 +210,9 @@ export const pollRouter = createTRPCRouter({
       if (input.type === "text") {
         await insertPollOptionForAddOption(ctx.drizzle, input, user, isAdmin);
         await insertActionLogForAddOption(ctx.drizzle, user, existingPoll, input);
-      } else if (input.type === "user") {
+      } else {
         await insertPollOptionForAddOption2(ctx.drizzle, input, user, isAdmin);
         await insertActionLogForAddOption2(ctx.drizzle, user, existingPoll, input);
-      } else {
-        return errorResponse("Invalid option type");
       }
 
       return { success: true, message: "Option added successfully" };
@@ -229,8 +220,8 @@ export const pollRouter = createTRPCRouter({
 
   // Get all polls with pagination
   getPolls: publicProcedure.input(getPollsSchema).query(async ({ ctx, input }) => {
-    const currentCursor = input?.cursor ? input.cursor : 0;
-    const limit = input?.limit ? input.limit : 10;
+    const currentCursor = input.cursor ?? 0;
+    const limit = input.limit;
     const skip = currentCursor * limit;
     const whereClause = input.includeInactive ? undefined : eq(poll.isActive, true);
 
@@ -272,10 +263,8 @@ export const pollRouter = createTRPCRouter({
   getUserVote: protectedProcedure
     .input(z.object({ pollId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      // Guard
-      if (!user) throw new Error("User not found");
+      // fetchUser rejects callers without a character
+      await fetchUser(ctx.drizzle, ctx.userId);
       return await fetchUserVote(ctx.drizzle, ctx.userId, input.pollId);
     }),
 
@@ -292,7 +281,6 @@ export const pollRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }
@@ -320,7 +308,6 @@ export const pollRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }
@@ -354,7 +341,6 @@ export const pollRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user) return errorResponse("User not found");
       if (!canInteractWithPolls(user.rank)) {
         return errorResponse("Too low rank to vote. Must be at least Genin.");
       }

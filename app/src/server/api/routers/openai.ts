@@ -76,9 +76,9 @@ export const generativeAiRouter = createTRPCRouter({
         throw cause;
       }
       // Store for future reference
-      if (resultUrls && resultUrls.length > 0) {
+      if (resultUrls.length > 0) {
         await insertHistoricalAvatarForCreateImg(ctx.drizzle, resultUrls, input);
       }
-      return { success: true, message: "Image generated", url: resultUrls?.[0] };
+      return { success: true, message: "Image generated", url: resultUrls[0] };
     }),
 });

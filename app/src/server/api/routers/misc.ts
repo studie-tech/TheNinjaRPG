@@ -153,15 +153,11 @@ export const miscRouter = createTRPCRouter({
         return errorResponse("You or an AI must be marked as sender");
       }
       // Update database
-      const [result] = await Promise.all([
+      await Promise.all([
         insertNotificationForSubmitNotification(ctx.drizzle, sender, input),
         updateUserDataForSubmitNotification(ctx.drizzle),
       ]);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could insert notificaiton in db" };
-      } else {
-        return { success: true, message: "Notification sent" };
-      }
+      return { success: true, message: "Notification sent" };
     }),
   getPreviousNotifications: protectedProcedure
     .meta({
@@ -364,8 +360,8 @@ export const miscRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input?.cursor ? input.cursor : 0;
-      const limit = input?.limit ? input.limit : 100;
+      const currentCursor = input.cursor ?? 0;
+      const limit = input.limit;
       const skip = currentCursor * limit;
 
       // Resolve username filters to userId arrays (done upfront to keep main query simple)
