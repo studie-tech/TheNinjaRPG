@@ -4,7 +4,6 @@ import { BanStates, TimeUnits } from "@/drizzle/constants";
 
 export const systems = [
   "forum_comment",
-  "tavern_comment",
   "conversation_comment",
   "user_profile",
   "concept_art",
