@@ -352,7 +352,6 @@ export const listPublicUserRows = (
       ...(input.recruiterId ? [eq(userData.recruiterId, input.recruiterId)] : []),
       ...(input.orderBy === "Staff" ? [notInArray(userData.role, ["USER"])] : []),
       ...(input.orderBy === "Outlaws" ? [eq(userData.isOutlaw, true)] : []),
-      ...(input.isAi ? [eq(userData.isAi, true)] : []),
       ...(input.inArena !== undefined ? [eq(userData.inArena, !!input.inArena)] : []),
       ...(input.isEvent !== undefined ? [eq(userData.isEvent, !!input.isEvent)] : []),
       ...(input.isWarCamp !== undefined

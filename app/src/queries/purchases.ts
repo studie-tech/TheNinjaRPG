@@ -45,7 +45,6 @@ export const selectStorePurchaseForRecent = (
   input: {
     transactionId?: undefined | string;
     productId?: undefined | string;
-    createdAfter?: undefined | Date;
     limit: number;
   },
 ) =>
@@ -71,9 +70,6 @@ export const selectStorePurchaseForRecent = (
           ? [eq(storePurchase.transactionId, input.transactionId)]
           : []),
         ...(input.productId ? [eq(storePurchase.productId, input.productId)] : []),
-        ...(input.createdAfter
-          ? [gte(storePurchase.createdAt, input.createdAfter)]
-          : []),
       ),
     )
     .orderBy(desc(storePurchase.createdAt))
