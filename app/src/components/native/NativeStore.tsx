@@ -9,6 +9,7 @@ import {
 } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -31,6 +32,7 @@ import {
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
+import { storePurchaseLockSchema } from "@/validators/nativePurchases";
 
 /**
  * Backoff while waiting for the grant webhook: roughly 21 seconds in total, which is
@@ -128,11 +130,8 @@ export default function NativeStore() {
       const next = update(unsettledAttemptsRef.current);
       unsettledAttemptsRef.current = next;
       setUnsettledAttempts(next);
-      try {
-        window.localStorage.setItem(PURCHASE_ATTEMPT_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // The in-memory lock still protects this mounted checkout if storage is unavailable.
-      }
+      // The in-memory lock still protects this mounted checkout if storage is unavailable.
+      safeLocalStorageSetItem(PURCHASE_ATTEMPT_STORAGE_KEY, JSON.stringify(next));
     },
     [],
   );
@@ -142,64 +141,13 @@ export default function NativeStore() {
   // remove it and reopen checkout for that product.
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(PURCHASE_ATTEMPT_STORAGE_KEY);
+      const raw = safeLocalStorageGetItem(PURCHASE_ATTEMPT_STORAGE_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : [];
       if (Array.isArray(parsed)) {
+        // Entries are validated one by one so a corrupt entry cannot release the others.
         const stored = parsed.flatMap((entry): StorePurchaseLock[] => {
-          if (!entry || typeof entry !== "object") return [];
-          const value = entry as {
-            accountId?: unknown;
-            attempt?: {
-              transactionId?: unknown;
-              productId?: unknown;
-              baselineReceiptIds?: unknown;
-              baselineNativeTransactionIds?: unknown;
-              phase?: unknown;
-              startedAt?: unknown;
-            };
-          };
-          const valid =
-            typeof value.accountId === "string" &&
-            typeof value.attempt?.productId === "string" &&
-            (value.attempt.transactionId === undefined ||
-              typeof value.attempt.transactionId === "string") &&
-            Array.isArray(value.attempt.baselineReceiptIds) &&
-            value.attempt.baselineReceiptIds.every(
-              (receiptId) => typeof receiptId === "string",
-            );
-          if (!valid || !value.attempt) return [];
-          // Phase-less entries were written after a native callback was already lost in
-          // older builds. Keep them conservatively locked rather than abandoning them.
-          return [
-            {
-              accountId: value.accountId as string,
-              attempt: {
-                transactionId:
-                  typeof value.attempt.transactionId === "string"
-                    ? value.attempt.transactionId
-                    : undefined,
-                productId: value.attempt.productId as string,
-                baselineReceiptIds: value.attempt.baselineReceiptIds as string[],
-                baselineNativeTransactionIds: Array.isArray(
-                  value.attempt.baselineNativeTransactionIds,
-                )
-                  ? value.attempt.baselineNativeTransactionIds.filter(
-                      (id): id is string => typeof id === "string",
-                    )
-                  : [],
-                phase:
-                  value.attempt.phase === "sheet-open" ||
-                  value.attempt.phase === "payment-pending" ||
-                  value.attempt.phase === "charged-or-pending"
-                    ? value.attempt.phase
-                    : "charged-or-pending",
-                startedAt:
-                  typeof value.attempt.startedAt === "string"
-                    ? value.attempt.startedAt
-                    : new Date(0).toISOString(),
-              },
-            },
-          ];
+          const lock = storePurchaseLockSchema.safeParse(entry);
+          return lock.success ? [lock.data] : [];
         });
         recoveredAccounts.current = new Set(stored.map((entry) => entry.accountId));
         unsettledAttemptsRef.current = stored;
