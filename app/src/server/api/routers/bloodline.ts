@@ -436,7 +436,9 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse(
           "Unlink or delete its jutsu reskins before deleting this bloodline reskin",
         );
-      // Mutate
+      // Mutate. The transaction holds the reskin group's row lock, which jutsu family
+      // saves and createLinkedReskin also take, so no jutsu can link to the group
+      // between the child check and the delete.
       const deleted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           await selectBloodlineReskinForDeleteReskin(tx, input);
