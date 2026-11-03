@@ -14,6 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import { useConversationViewing } from "@/hooks/useConversationViewing";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
 import ContentBox from "@/layout/ContentBox";
@@ -21,6 +23,7 @@ import { ConversationComments } from "@/layout/ConversationComments";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { subscribeConversation } from "@/libs/conversationEvents";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
@@ -39,19 +42,25 @@ import type { MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import { getSearchValidator } from "@/validators/register";
 
-interface ConversationProps {
+/** Props that select a conversation and react to its events. */
+export interface ConversationLogicProps {
   convo_title?: string;
   convo_id?: string;
-  defaultBackHref?: string;
   refreshKey: number;
+  /** The compact panel remains visible while its phone dialog covers the full page. */
+  isInChatPanel?: boolean;
+  onCommentPosted?: (comment: string) => void;
+  /** When set, banned/silenced users may only compose if they created this ticket */
+  supportTicketCreatedByUserId?: string;
+}
+
+interface ConversationProps extends ConversationLogicProps {
+  defaultBackHref?: string;
   title: string;
   subtitle: string;
   initialBreak?: boolean;
   topRightContent?: React.ReactNode;
-  onCommentPosted?: () => void;
   onBack?: () => void;
-  /** When set, banned/silenced users may only compose if they created this ticket */
-  supportTicketCreatedByUserId?: string;
   /** Enables persisted username/title colors only for tavern conversations. */
   tavernStyling?: boolean;
 }
@@ -83,7 +92,11 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
   );
 };
 
-const Conversation: React.FC<ConversationProps> = (props) => {
+/**
+ * State, live events and actions of one conversation. The tavern page and the
+ * compact chat panel render the same conversation logic in different layouts.
+ */
+export const useConversation = (props: ConversationLogicProps) => {
   const isNativeShell = useNativeShell();
   const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, pusher } = useUserData();
@@ -145,6 +158,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     placeholderData: (previousData) => previousData,
   });
   const conversation = comments?.pages[0]?.convo;
+  useConversationViewing(conversation?.id, isPageActive, props.isInChatPanel);
   const canComposeDespiteRestriction =
     !!userData &&
     !!conversation?.isStaffAvailable &&
@@ -173,6 +187,14 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   >;
 
   const utils = api.useUtils();
+  const { refreshConversationComments, recordConversationRead } =
+    useConversationCacheUpdate();
+  const lastReadAt = conversation?.lastReadAt;
+  useEffect(() => {
+    if (conversation?.id && lastReadAt) {
+      void recordConversationRead(conversation.id, lastReadAt);
+    }
+  }, [conversation?.id, lastReadAt, recordConversationRead]);
 
   /**
    * Shared infinite-query cache writer for conversation comments. The
@@ -565,9 +587,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     api.comments.createConversationComment.useMutation({
       onMutate: async (newMessage) => {
         onMutateCheck();
-        return await optimisticConversationUpdate(newMessage);
+        const input = queryKey;
+        return { ...(await optimisticConversationUpdate(newMessage)), input };
       },
-      onSuccess: (data, _newComment, context) => {
+      onSuccess: (data, newComment, context) => {
         if (data.success) {
           if (conversation)
             reset({
@@ -578,7 +601,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             });
           setEditorKey((prev) => prev + 1);
           if (props.onCommentPosted) {
-            props.onCommentPosted();
+            props.onCommentPosted(newComment.comment);
           }
           if (data.commentId && context?.optimisticCommentId) {
             // Stamp the server id onto the matching optimistic comment only.
@@ -590,6 +613,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               ),
             );
           }
+          void refreshConversationComments(newComment.object_id, context?.input);
         } else {
           removeOptimisticComment(context?.optimisticCommentId);
           showMutationToast({ success: false, message: data.message });
@@ -604,7 +628,10 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   // Create comment & optimistically update the interface
   const { mutate: fetchComment } = api.comments.fetchConversationComment.useMutation({
     onSuccess: async (data) => {
-      if (data) await optimisticConversationUpdate(data);
+      if (!data) return;
+      await optimisticConversationUpdate(data);
+      if (data.lastReadAt && data.conversationId)
+        await recordConversationRead(data.conversationId, data.lastReadAt);
     },
   });
 
@@ -614,27 +641,24 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   useEffect(() => {
     if (conversation && pusher && !isPaused) {
       const ownUserId = userData?.userId;
-      const channel = pusher.subscribe(conversation.id);
-      channel.bind(
-        "event",
-        (data: {
-          message: string;
-          fromId?: string;
-          commentId?: string;
-          emoji?: string;
-          username?: string;
-        }) => {
+      return subscribeConversation(
+        pusher,
+        conversation.id,
+        JSON.stringify(queryKey),
+        (data, ownsCacheUpdate) => {
           switch (data.message) {
             case "new":
-              if (data.fromId !== ownUserId && data.commentId) {
+              if (ownsCacheUpdate && data.fromId !== ownUserId && data.commentId) {
                 fetchComment({
                   commentId: data.commentId,
                   conversationId: conversation.id,
+                  markRead: isPageActive,
                 });
               }
               break;
             case "reaction":
               if (
+                ownsCacheUpdate &&
                 data.fromId !== ownUserId &&
                 data.commentId &&
                 data.username &&
@@ -664,11 +688,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           }
         },
       );
-      return () => {
-        pusher.unsubscribe(conversation.id);
-      };
     }
-  }, [isPaused, conversation, pusher]);
+  }, [isPaused, isPageActive, conversation, pusher, queryKey]);
 
   // Resuming after the subscription above is restored fetches what arrived meanwhile.
   useEffect(() => {
@@ -740,6 +761,73 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   };
 
   const allComments = comments?.pages.flatMap((page) => page.data);
+
+  return {
+    userData,
+    isNativeShell,
+    comments,
+    allComments,
+    conversation,
+    isPending,
+    searchQuery,
+    clearSearch,
+    searchButtonElement,
+    invalidateComments,
+    deletedCommentIds,
+    setLastElement,
+    canComposeMessage,
+    composeRestrictionMessage,
+    canPostAsAI,
+    userSearchMethods,
+    maxUsers,
+    senderUser,
+    quoteIds,
+    setValue,
+    getValues,
+    toggleQuoteId,
+    control,
+    errors,
+    editorKey,
+    isCommenting,
+    handleSubmitComment,
+    reactConversationComment,
+    handleConversationCommentDeleted,
+    typingUsers,
+  };
+};
+
+const Conversation: React.FC<ConversationProps> = (props) => {
+  const {
+    userData,
+    isNativeShell,
+    comments,
+    allComments,
+    conversation,
+    isPending,
+    searchQuery,
+    clearSearch,
+    searchButtonElement,
+    invalidateComments,
+    deletedCommentIds,
+    setLastElement,
+    canComposeMessage,
+    composeRestrictionMessage,
+    canPostAsAI,
+    userSearchMethods,
+    maxUsers,
+    senderUser,
+    quoteIds,
+    setValue,
+    toggleQuoteId,
+    control,
+    errors,
+    editorKey,
+    isCommenting,
+    handleSubmitComment,
+    reactConversationComment,
+    handleConversationCommentDeleted,
+    typingUsers,
+  } = useConversation(props);
 
   return (
     <div key={`${props.refreshKey}-${senderUser?.userId}`}>

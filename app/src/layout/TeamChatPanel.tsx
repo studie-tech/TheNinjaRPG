@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import { subscribeConversation } from "@/libs/conversationEvents";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -16,6 +18,7 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
 }) => {
   const { data: userData, pusher } = useRequiredUserData();
   const util = api.useUtils();
+  const { refreshConversationComments } = useConversationCacheUpdate();
   const [message, setMessage] = useState("");
 
   const queryKey = useMemo(
@@ -43,31 +46,35 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
   const { mutate: sendMessage, isPending: isSending } =
     api.comments.createConversationComment.useMutation({
       onError: (error) => showMutationToast({ success: false, message: error.message }),
-      onSuccess: async (data) => {
+      onSuccess: async (data, newMessage) => {
         if (!data.success) {
           showMutationToast(data);
           return;
         }
 
         setMessage("");
-        await util.comments.getConversationComments.invalidate(queryKey);
+        await refreshConversationComments(newMessage.object_id);
       },
     });
 
   useEffect(() => {
     if (!pusher || !conversationId) return;
 
-    const channel = pusher.subscribe(conversationId);
-    channel.bind("event", (data: { message?: string; fromId?: string }) => {
-      // Skip the echo of our own send — onSuccess already invalidated.
-      if (data.message === "new" && data.fromId !== userData?.userId) {
-        void util.comments.getConversationComments.invalidate(queryKey);
-      }
-    });
-
-    return () => {
-      pusher.unsubscribe(conversationId);
-    };
+    return subscribeConversation(
+      pusher,
+      conversationId,
+      JSON.stringify(queryKey),
+      (data, ownsCacheUpdate) => {
+        // Skip the echo of our own send — onSuccess already invalidated.
+        if (
+          ownsCacheUpdate &&
+          data.message === "new" &&
+          data.fromId !== userData?.userId
+        ) {
+          void util.comments.getConversationComments.invalidate(queryKey);
+        }
+      },
+    );
   }, [
     conversationId,
     pusher,

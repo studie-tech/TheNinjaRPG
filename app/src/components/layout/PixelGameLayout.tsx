@@ -1,7 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { CircleHelp, Earth, House, MessageCircleWarning, Music } from "lucide-react";
+import { Earth, House, MessageCircle, Music } from "lucide-react";
 import type React from "react";
 import { Suspense } from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
@@ -13,6 +13,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { IMG_LAYOUT_MOBILE_TOP, IMG_LOGO_SHORT } from "@/drizzle/constants";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -55,16 +56,27 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
   mobileNotificationCount,
 }) => {
+  const { swapSides } = useActivityDock();
   return (
     <div
       className="tnr-pixel-game absolute top-0 bottom-0 w-full md:relative"
       data-layout-variant="pixel"
     >
       {(userData || isAnonymousLayout) && (
-        <div className="fixed right-1 bottom-1 z-50 rounded-full bg-slate-500 md:right-5 md:bottom-5">
+        <div
+          className={cn(
+            "fixed bottom-1 rounded-full bg-slate-500",
+            userData
+              ? cn(
+                  "z-[65] md:bottom-5",
+                  swapSides ? "left-1 md:left-5" : "right-1 md:right-5",
+                )
+              : "right-1 z-50 md:right-5 md:bottom-5",
+          )}
+        >
           <LowerRightHelpBtn className="hidden md:block">
             {userData ? (
-              <MessageCircleWarning className={cn(variantClasses.yellowButton)} />
+              <MessageCircle className={cn(variantClasses.yellowButton)} />
             ) : (
               <Music className={cn(variantClasses.yellowButton)} />
             )}
@@ -201,7 +213,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 <div className="z-10 ml-auto flex shrink-0 items-center gap-2">
                   <LowerRightHelpBtn className="block">
                     <span className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}>
-                      <CircleHelp className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
+                      <MessageCircle className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </span>
                   </LowerRightHelpBtn>
                   <Sheet

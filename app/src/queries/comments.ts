@@ -352,18 +352,16 @@ export const selectConversationCommentForGetConversationComments = (
     .limit(input.limit)
     .offset(skip);
 
-/**
- * Build the `user2conversation` update for `getConversationComments`, setting
- * `lastReadAt`, using predicates on `userId` and `conversationId`.
- */
-export const updateUser2conversationForGetConversationComments = (
+/** Record the confirmed read time for one player's private conversation. */
+export const updateUserConversationReadAt = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
   convo: { id: string },
+  lastReadAt: Date,
 ) =>
   client
     .update(user2conversation)
-    .set({ lastReadAt: new Date() })
+    .set({ lastReadAt })
     .where(
       and(
         eq(user2conversation.userId, ctx.userId),
@@ -415,11 +413,19 @@ export const updateConversationForCreateConversationComment = (
 export const updateUserDataForCreateConversationComment = (
   client: Pick<DrizzleClient, "update">,
   usersIdsInConvo: string[],
+  conversationId: string,
 ) =>
   client
     .update(userData)
     .set({ inboxNews: sql`${userData.inboxNews} + 1` })
-    .where(inArray(userData.userId, usersIdsInConvo));
+    .where(
+      and(
+        inArray(userData.userId, usersIdsInConvo),
+        // Muted chat stays readable but no longer counts as new inbox news.
+        eq(userData.chatMuted, false),
+        sql`NOT JSON_CONTAINS(${userData.mutedConversationIds}, JSON_QUOTE(${conversationId}))`,
+      ),
+    );
 
 /** Build the `userData` update for `createConversationComment`, setting `tavernMessages`, using predicates on `userId`. */
 export const updateUserDataForCreateConversationComment2 = (

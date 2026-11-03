@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TAVERN_IMAGE_MAX_SIZE_MB } from "@/drizzle/constants";
 import EmojiPicker from "@/layout/EmojiPicker";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getImageDimensions } from "@/utils/image";
 import { needsHtmlSource, richTextInput } from "@/utils/richText";
@@ -47,6 +48,7 @@ export const RichInput = (props: RichInputProps) => {
   const { field } = useController({ name: props.id, control: props.control });
   const value = (field.value as string) || "";
   const [sourceMode, setSourceMode] = useState(() => needsHtmlSource(value));
+  const [toolbarOpen, setToolbarOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -115,6 +117,9 @@ export const RichInput = (props: RichInputProps) => {
     field.onChange(html);
   });
   const onSelectionChange = useEffectEvent(() => {
+    // Quill blanks the style select for plain text or a blurred editor; show Paragraph.
+    const styleSelect = toolbarRef.current?.querySelector("select");
+    if (styleSelect && styleSelect.selectedIndex < 0) styleSelect.selectedIndex = 0;
     const editor = quillRef.current;
     const range = editor?.getSelection();
     if (range && editor) {
@@ -554,6 +559,98 @@ export const RichInput = (props: RichInputProps) => {
     </>
   );
 
+  const editorElement = isSource ? (
+    <Textarea
+      ref={textareaRef}
+      id={props.id}
+      name={field.name}
+      aria-label={props.label || "Message"}
+      value={value}
+      onBlur={field.onBlur}
+      disabled={blocked}
+      autoFocus={props.autoFocus ?? true}
+      placeholder={props.placeholder}
+      rows={props.rows}
+      isDirty={props.isDirty}
+      // The compact row draws the frame; the field itself stays borderless.
+      className={
+        props.compact
+          ? "min-h-0 resize-none border-0 bg-transparent px-[8px] py-[6px] shadow-none focus-visible:ring-0"
+          : undefined
+      }
+      style={{ minHeight: height }}
+      onPaste={(event) => {
+        if (props.plainText || !props.allowClipboardPaste || !allowImages) return;
+        const file = Array.from(event.clipboardData.files).find((item) =>
+          item.type.startsWith("image/"),
+        );
+        if (file) {
+          event.preventDefault();
+          void uploadImage(file);
+        }
+      }}
+      onChange={(event) => {
+        field.onChange(event);
+        checkMention(event.target.value, event.target.selectionStart);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.stopPropagation();
+        submitOnEnter(event);
+      }}
+    />
+  ) : (
+    // biome-ignore lint/a11y/noStaticElementInteractions: delegates input events to Quill's accessible contenteditable textbox.
+    <div
+      className="rich-input-editor"
+      ref={hostRef}
+      style={{ minHeight: height }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.stopPropagation();
+      }}
+      onKeyDownCapture={submitOnEnter}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDropCapture={(event) => {
+        if (!event.dataTransfer.files.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const file = Array.from(event.dataTransfer.files).find((item) =>
+          item.type.startsWith("image/"),
+        );
+        if (file) void uploadImage(file);
+      }}
+      onPasteCapture={(event) => {
+        if (blocked) return;
+        const editor = quillRef.current;
+        const html = !allowImages ? event.clipboardData.getData("text/html") : "";
+        // Filter only new clipboard embeds; existing media drafts remain recoverable.
+        if (!allowImages && editor && /<img\b/i.test(html)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const range = editor.getSelection(true);
+          const content = editor.clipboard.convert({ html });
+          content.ops = content.ops.filter((op) => typeof op.insert === "string");
+          editor.updateContents(
+            [{ retain: range.index }, { delete: range.length }, ...content.ops],
+            "user",
+          );
+          editor.setSelection(range.index + content.length(), 0, "silent");
+          return;
+        }
+        if (!props.allowClipboardPaste || !quillRef.current) return;
+        const file = Array.from(event.clipboardData.files).find((item) =>
+          item.type.startsWith("image/"),
+        );
+        if (file) {
+          event.preventDefault();
+          event.stopPropagation();
+          void uploadImage(file);
+        }
+      }}
+    />
+  );
+
   return (
     <div aria-disabled={blocked} className="min-w-0">
       {props.label && (
@@ -566,7 +663,13 @@ export const RichInput = (props: RichInputProps) => {
         data-rich-input
       >
         {!props.plainText && (
-          <div className="flex min-w-0 items-center border-b">
+          <div
+            id={`${props.id}-toolbar`}
+            className={cn(
+              "flex min-w-0 items-center border-b",
+              props.compact && !toolbarOpen && "hidden",
+            )}
+          >
             {!isSource && (
               // Quill's native toolbar listeners require new controls when the editor is recreated.
               <div
@@ -633,9 +736,11 @@ export const RichInput = (props: RichInputProps) => {
                 )}
               </div>
             )}
-            <div className="ml-auto flex shrink-0 items-center gap-1 p-1">
-              {editorActions}
-            </div>
+            {!props.compact && (
+              <div className="ml-auto flex shrink-0 items-center gap-1 p-1">
+                {editorActions}
+              </div>
+            )}
           </div>
         )}
         <Popover
@@ -700,90 +805,36 @@ export const RichInput = (props: RichInputProps) => {
             </PopoverContent>
           )}
         </Popover>
-        {isSource ? (
-          <Textarea
-            ref={textareaRef}
-            id={props.id}
-            name={field.name}
-            aria-label={props.label || "Message"}
-            value={value}
-            onBlur={field.onBlur}
-            disabled={blocked}
-            autoFocus={props.autoFocus ?? true}
-            placeholder={props.placeholder}
-            rows={props.rows}
-            isDirty={props.isDirty}
-            style={{ minHeight: height }}
-            onPaste={(event) => {
-              if (props.plainText || !props.allowClipboardPaste || !allowImages) return;
-              const file = Array.from(event.clipboardData.files).find((item) =>
-                item.type.startsWith("image/"),
-              );
-              if (file) {
-                event.preventDefault();
-                void uploadImage(file);
-              }
-            }}
-            onChange={(event) => {
-              field.onChange(event);
-              checkMention(event.target.value, event.target.selectionStart);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.stopPropagation();
-              submitOnEnter(event);
-            }}
-          />
+        {props.compact ? (
+          // Each side sits in a 32px slot matching the editor's line box, so buttons
+          // line up with the text and stay on the last line as it grows.
+          <div className="rich-input-compact flex min-w-0 items-end gap-1 p-1">
+            {!props.plainText && (
+              <div className="flex h-[32px] shrink-0 items-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={toolbarOpen ? "secondary" : "ghost"}
+                  className="h-8 w-8 shrink-0 text-xs font-bold"
+                  title="Formatting"
+                  aria-label="Formatting"
+                  aria-pressed={toolbarOpen}
+                  aria-controls={`${props.id}-toolbar`}
+                  onClick={() => setToolbarOpen(!toolbarOpen)}
+                >
+                  Aa
+                </Button>
+              </div>
+            )}
+            <div className="max-h-40 min-w-0 flex-1 overflow-y-auto">
+              {editorElement}
+            </div>
+            <div className="flex h-[32px] shrink-0 items-center gap-0.5">
+              {editorActions}
+            </div>
+          </div>
         ) : (
-          // biome-ignore lint/a11y/noStaticElementInteractions: delegates input events to Quill's accessible contenteditable textbox.
-          <div
-            className="rich-input-editor"
-            ref={hostRef}
-            style={{ minHeight: height }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.stopPropagation();
-            }}
-            onKeyDownCapture={submitOnEnter}
-            onDragOver={(event) => {
-              if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-            }}
-            onDropCapture={(event) => {
-              if (!event.dataTransfer.files.length) return;
-              event.preventDefault();
-              event.stopPropagation();
-              const file = Array.from(event.dataTransfer.files).find((item) =>
-                item.type.startsWith("image/"),
-              );
-              if (file) void uploadImage(file);
-            }}
-            onPasteCapture={(event) => {
-              if (blocked) return;
-              const editor = quillRef.current;
-              const html = !allowImages ? event.clipboardData.getData("text/html") : "";
-              // Filter only new clipboard embeds; existing media drafts remain recoverable.
-              if (!allowImages && editor && /<img\b/i.test(html)) {
-                event.preventDefault();
-                event.stopPropagation();
-                const range = editor.getSelection(true);
-                const content = editor.clipboard.convert({ html });
-                content.ops = content.ops.filter((op) => typeof op.insert === "string");
-                editor.updateContents(
-                  [{ retain: range.index }, { delete: range.length }, ...content.ops],
-                  "user",
-                );
-                editor.setSelection(range.index + content.length(), 0, "silent");
-                return;
-              }
-              if (!props.allowClipboardPaste || !quillRef.current) return;
-              const file = Array.from(event.clipboardData.files).find((item) =>
-                item.type.startsWith("image/"),
-              );
-              if (file) {
-                event.preventDefault();
-                event.stopPropagation();
-                void uploadImage(file);
-              }
-            }}
-          />
+          editorElement
         )}
         {!isSource && !ready && (
           <p role="status" className="p-2 text-sm">
@@ -792,7 +843,7 @@ export const RichInput = (props: RichInputProps) => {
               : "Loading editor…"}
           </p>
         )}
-        {props.plainText && (
+        {props.plainText && !props.compact && (
           <div className="flex items-center justify-end gap-1 border-t p-1">
             {editorActions}
           </div>
@@ -885,6 +936,8 @@ interface RichInputProps {
   focusEndOnExternalChange?: boolean;
   /** Retain literal text for consumers that do not accept HTML. */
   plainText?: boolean;
+  /** One-row composer: formatting appears above it on demand, actions sit inline. */
+  compact?: boolean;
   /** Let containing forms block submission until image insertion finishes. */
   onUploadPendingChange?: (pending: boolean) => void;
 }

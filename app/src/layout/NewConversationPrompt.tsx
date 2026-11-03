@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -50,13 +51,26 @@ export interface NewConversationPromptProps {
     federalStatus: FederalStatus;
   };
   newButton: React.ReactNode;
+  /** Open the form right away, e.g. when messaging a player from the chat panel. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
+  const { refreshConversationList } = useConversationCacheUpdate();
   const maxUsers = 5;
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
+    props.defaultOpen ?? false,
+  );
   const createSubmissionRef = useRef(false);
+  const previousCreateDialogOpenRef = useRef(isCreateDialogOpen);
+
+  useEffect(() => {
+    if (previousCreateDialogOpenRef.current === isCreateDialogOpen) return;
+    previousCreateDialogOpenRef.current = isCreateDialogOpen;
+    props.onOpenChange?.(isCreateDialogOpen);
+  }, [isCreateDialogOpen, props.onOpenChange]);
 
   const create = useForm<CreateConversationSchema>({
     resolver: zodResolver(createConversationSchema),
@@ -106,9 +120,10 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   }, [users, create]);
 
   const createConversation = api.comments.createConversation.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
+        await refreshConversationList();
         create.reset();
         setIsCreateDialogOpen(false);
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
@@ -143,7 +158,8 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   ) => {
     setIsCreateDialogOpen((current) => {
       const next = typeof value === "function" ? value(current) : value;
-      return !next && createSubmissionRef.current ? current : next;
+      const resolved = !next && createSubmissionRef.current ? current : next;
+      return resolved;
     });
   };
 

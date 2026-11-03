@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleHelp, Compass, House } from "lucide-react";
+import { Compass, House, MessageCircle } from "lucide-react";
 import { Suspense } from "react";
 import {
   Sheet,
@@ -10,11 +10,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { IMG_LOGO_SHORT } from "@/drizzle/constants";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
@@ -43,13 +45,21 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     location,
     variantClasses,
   } = props;
+  const { swapSides } = useActivityDock();
   const isGuidedTutorial = isTutorialActive(userData);
 
   return (
     <div className="tnr-theme-game" data-layout-variant={props.variant}>
-      <div className="fixed right-5 bottom-5 z-50 hidden min-[1100px]:block">
+      <div
+        className={cn(
+          "fixed hidden min-[1100px]:block",
+          userData
+            ? cn("bottom-5 z-[65]", swapSides ? "left-5" : "right-5")
+            : "right-5 bottom-5 z-50",
+        )}
+      >
         <LowerRightHelpBtn className="theme-header-button shadow-lg">
-          <CircleHelp aria-hidden="true" />
+          <MessageCircle aria-hidden="true" />
         </LowerRightHelpBtn>
       </div>
       <a className="theme-skip-link" href="#game-content">
@@ -108,7 +118,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
             {props.variant === "20-eclipse-observatory" && (
               <div className="theme-world-access">
                 <LowerRightHelpBtn className="theme-header-button">
-                  <CircleHelp aria-hidden="true" />
+                  <MessageCircle aria-hidden="true" />
                 </LowerRightHelpBtn>
               </div>
             )}
@@ -176,8 +186,8 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
             </Link>
           ))}
           <LowerRightHelpBtn className="theme-help">
-            <CircleHelp aria-hidden="true" />
-            <span>Help</span>
+            <MessageCircle aria-hidden="true" />
+            <span>Chat</span>
           </LowerRightHelpBtn>
         </nav>
 

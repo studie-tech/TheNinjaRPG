@@ -53,7 +53,7 @@ import {
   updateConversationCommentForReactConversationComment,
   updateConversationForCreateConversationComment,
   updateSupportTicketForUpdateSupportTicketStatusAfterComment,
-  updateUser2conversationForGetConversationComments,
+  updateUserConversationReadAt,
   updateUserDataForCreateConversationComment,
   updateUserDataForCreateConversationComment2,
   updateUserDataForGetUserConversations,
@@ -225,6 +225,8 @@ export const commentsRouter = createTRPCRouter({
         )
         .map((c) => ({
           ...c.conversation,
+          // Unread when the conversation changed after this player last read it.
+          lastReadAt: c.lastReadAt,
           users: c.conversation?.users.filter((u) => u.userData),
         }))
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
@@ -327,6 +329,7 @@ export const commentsRouter = createTRPCRouter({
       z.object({
         commentId: z.string(),
         conversationId: z.string().min(1).optional(),
+        markRead: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -360,8 +363,12 @@ export const commentsRouter = createTRPCRouter({
         !canViewConversation(convo, ctx.userId, found.readerRole)
       )
         return null;
+      const lastReadAt = input.markRead && !convo.isPublic ? new Date() : undefined;
+      if (lastReadAt) {
+        await updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt);
+      }
       const { readerRole: _readerRole, ...result } = found;
-      return result;
+      return { ...result, ...(lastReadAt && { lastReadAt }) };
     }),
   getConversationComments: protectedProcedure
     .meta({ mcp: { description: "Get messages in a conversation" } })
@@ -448,6 +455,7 @@ export const commentsRouter = createTRPCRouter({
         );
       }
 
+      const lastReadAt = convo.isPublic ? undefined : new Date();
       const [comments] = await Promise.all([
         selectConversationCommentForGetConversationComments(
           ctx.drizzle,
@@ -458,21 +466,15 @@ export const commentsRouter = createTRPCRouter({
           skip,
         ),
         // Update last read
-        ...(convo.isPublic
-          ? []
-          : [
-              updateUser2conversationForGetConversationComments(
-                ctx.drizzle,
-                ctx,
-                convo,
-              ),
-            ]),
+        ...(lastReadAt
+          ? [updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt)]
+          : []),
       ]);
       // Fetch
       const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
       return {
         restrictionMessage: null,
-        convo: convo,
+        convo: { ...convo, ...(lastReadAt && { lastReadAt }) },
         data: comments,
         nextCursor: nextCursor,
       };
@@ -623,7 +625,13 @@ export const commentsRouter = createTRPCRouter({
         updateConversationForCreateConversationComment(ctx.drizzle, convo),
         // Inbox news (database update)
         ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
-          ? [updateUserDataForCreateConversationComment(ctx.drizzle, usersIdsInConvo)]
+          ? [
+              updateUserDataForCreateConversationComment(
+                ctx.drizzle,
+                usersIdsInConvo,
+                convo.id,
+              ),
+            ]
           : []),
         // Public conversation stats
         ...(convo.isPublic
@@ -662,6 +670,8 @@ export const commentsRouter = createTRPCRouter({
         ...notifiedUserIds.map(({ userId, type }) =>
           pusher.trigger(userId, "event", {
             type: "pinged",
+            conversationId: convo.id,
+            isPublic: convo.isPublic,
             message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
           }),
         ),
@@ -675,7 +685,12 @@ export const commentsRouter = createTRPCRouter({
         ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
           ? usersIdsInConvo
               .filter((id) => id !== effectiveUserId)
-              .map((userId) => pusher.trigger(userId, "event", { type: "newInbox" }))
+              .map((userId) =>
+                pusher.trigger(userId, "event", {
+                  type: "newInbox",
+                  conversationId: convo.id,
+                }),
+              )
           : []),
       ]);
 
@@ -988,15 +1003,10 @@ export const createConvo = async (info: {
     isStaffAvailable = false,
     isPublic = false,
   } = info;
-  // Push notifications early
-  const pusher = getServerPusher();
-  receiverUserIds.forEach(
-    (userId) => void pusher.trigger(userId, "event", { type: "newInbox" }),
-  );
+  const insertId = convoId ?? nanoid();
   // Unique users to insert in conversation
   const uniqueUserIds = [...new Set([...receiverUserIds, senderUserId, authorUserId])];
   // Update DB concurrently
-  const insertId = convoId ?? nanoid();
   const messageId = nanoid();
   const sanitized = sanitize(content);
   await Promise.all([
@@ -1012,7 +1022,7 @@ export const createConvo = async (info: {
       insertUser2conversationForCreateConvo(client, insertId, user),
     ),
     ...(receiverUserIds.length > 0
-      ? [updateUserDataForCreateConversationComment(client, receiverUserIds)]
+      ? [updateUserDataForCreateConversationComment(client, receiverUserIds, insertId)]
       : []),
     insertConversationComment(
       client,
@@ -1023,6 +1033,14 @@ export const createConvo = async (info: {
       insertId,
     ),
   ]);
+  const pusher = getServerPusher();
+  receiverUserIds.forEach(
+    (userId) =>
+      void pusher.trigger(userId, "event", {
+        type: "newInbox",
+        conversationId: insertId,
+      }),
+  );
   notifyPrivateConversation(client, {
     conversationId: insertId,
     isPublic,

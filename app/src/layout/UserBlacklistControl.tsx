@@ -8,6 +8,7 @@ import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -15,8 +16,7 @@ import { showMutationToast } from "@/libs/toast";
 import { getSearchValidator } from "@/validators/register";
 
 const UserBlacklistControl: React.FC = () => {
-  // Get react query utility
-  const utils = api.useUtils();
+  const { refreshBlacklist } = useBlacklistCacheUpdate();
 
   // Query
   const { data } = api.profile.getBlacklist.useQuery(undefined);
@@ -27,11 +27,7 @@ const UserBlacklistControl: React.FC = () => {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.profile.getBlacklist.invalidate(),
-            utils.comments.getConversationComments.invalidate(),
-            utils.comments.getUserConversations.invalidate(),
-          ]);
+          await refreshBlacklist();
         }
       },
     });

@@ -14,6 +14,18 @@ export type LemuVariant = (typeof LEMU_VARIANTS)[number];
 
 /** Enroll visitors only when every alternative has a configured portrait. */
 const LEMU_ALTERNATIVES = IMG_URL_ASSISTANT_ALTERNATIVES;
+
+/** Fraction of each intro image above its waist, used to crop against the dialogue border. */
+export const LEMU_PORTRAIT_WAIST: Record<string, number> = {
+  [IMG_URL_ASSISTANT]: 0.7,
+  [LEMU_ALTERNATIVES[0]]: 0.44,
+  [LEMU_ALTERNATIVES[1]]: 0.46,
+  [LEMU_ALTERNATIVES[2]]: 0.44,
+  [LEMU_ALTERNATIVES[3]]: 0.43,
+  [LEMU_ALTERNATIVES[4]]: 0.42,
+  [LEMU_ALTERNATIVES[5]]: 0.41,
+};
+
 export const isLemuExperimentEnabled =
   LEMU_ALTERNATIVES.length === LEMU_VARIANTS.length - 1;
 

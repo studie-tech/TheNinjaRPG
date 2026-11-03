@@ -46,11 +46,8 @@ export interface PostProps {
 }
 
 const Post: React.FC<PostProps> = (props) => {
-  let userColor = "text-popover-foreground";
-  let userRole = "bg-slate-300";
   let color = "bg-popover text-popover-foreground";
   let hover = "hover:bg-poppopover";
-  let titleColor = "bg-gray-500 text-white";
 
   switch (props.color) {
     case "green":
@@ -75,95 +72,10 @@ const Post: React.FC<PostProps> = (props) => {
       break;
   }
 
-  switch (props.user?.federalStatus) {
-    case "NORMAL":
-      userColor =
-        "bg-linear-to-r from-sky-500 via-sky-300 to-sky-500 bg-clip-text text-transparent font-black";
-      break;
-    case "SILVER":
-      userColor =
-        "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black";
-      break;
-    case "GOLD":
-      userColor =
-        "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black";
-      break;
-  }
-
-  switch (props.user?.role) {
-    case "MODERATOR":
-    case "JR_MODERATOR":
-      userColor =
-        "bg-linear-to-r from-green-800 via-green-500 to-green-800 bg-clip-text text-transparent";
-      userRole = "bg-green-500";
-      break;
-    case "HEAD_MODERATOR":
-      userColor =
-        "bg-linear-to-r from-emerald-700 via-emerald-500 to-emerald-700 bg-clip-text text-transparent";
-      userRole = "bg-emerald-700";
-      break;
-    case "HEAD_EVENT":
-      userColor =
-        "bg-linear-to-r from-pink-600 via-pink-500 to-pink-600 bg-clip-text text-transparent";
-      userRole = "bg-pink-600";
-      break;
-    case "EVENT":
-      userColor =
-        "bg-linear-to-r from-orange-600 via-orange-500 to-orange-600 bg-clip-text text-transparent";
-      userRole = "bg-orange-500";
-      break;
-    case "HEAD_CONTENT":
-    case "HEAD_BALANCE":
-      userColor =
-        "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent";
-      userRole = "bg-sky-600";
-      break;
-    case "CONTENT":
-    case "BALANCE":
-      userColor =
-        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
-      userRole = "bg-purple-400";
-      break;
-    case "CODER":
-      userColor =
-        "bg-linear-to-r from-pink-500 via-pink-300 to-pink-500 bg-clip-text text-transparent";
-      userRole = "bg-pink-300";
-      break;
-    case "CONTENT-ADMIN":
-      userColor =
-        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
-      userRole = "bg-purple-400";
-      break;
-    case "EVENT-ADMIN":
-      userColor =
-        "bg-linear-to-r from-rose-500 via-rose-300 to-rose-500 bg-clip-text text-transparent";
-      userRole = "bg-rose-300";
-      break;
-    case "MODERATOR-ADMIN":
-      userColor =
-        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
-      userRole = "bg-red-400";
-      break;
-    case "CODING-ADMIN":
-    case "OWNER":
-      userColor =
-        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
-      userRole = "bg-red-400";
-      break;
-  }
-
-  if (props.user) {
-    const tavernColors = resolveTavernColorClasses({
-      tavernStyling: props.tavernStyling ?? false,
-      role: props.user.role,
-      usernamePreset: props.user.tavernUsernameColor ?? "DEFAULT",
-      titlePreset: props.user.tavernTitleColor ?? "DEFAULT",
-      baseUsernameClass: userColor,
-      baseTitleClass: titleColor,
-    });
-    userColor = tavernColors.usernameClass;
-    titleColor = tavernColors.titleClass;
-  }
+  const { userColor, userRole, titleColor } = getPostUserClasses(
+    props.user,
+    props.tavernStyling,
+  );
 
   // Blocks
   const UsernameBlock = props.user && (
@@ -269,3 +181,103 @@ const Post: React.FC<PostProps> = (props) => {
 };
 
 export default Post;
+
+/** Username, title and role badge classes from a poster's support status, role and tavern colors. */
+export const getPostUserClasses = (
+  user: PostProps["user"],
+  tavernStyling?: boolean,
+) => {
+  let userColor = "text-popover-foreground";
+  let userRole = "bg-slate-300";
+  let titleColor = "bg-gray-500 text-white";
+  switch (user?.federalStatus) {
+    case "NORMAL":
+      userColor =
+        "bg-linear-to-r from-sky-500 via-sky-300 to-sky-500 bg-clip-text text-transparent font-black";
+      break;
+    case "SILVER":
+      userColor =
+        "bg-linear-to-r from-gray-500 via-gray-400 to-gray-500 bg-clip-text text-transparent font-black";
+      break;
+    case "GOLD":
+      userColor =
+        "bg-linear-to-r from-amber-600 via-amber-400 to-amber-600 bg-clip-text text-transparent font-black";
+      break;
+  }
+
+  switch (user?.role) {
+    case "MODERATOR":
+    case "JR_MODERATOR":
+      userColor =
+        "bg-linear-to-r from-green-800 via-green-500 to-green-800 bg-clip-text text-transparent";
+      userRole = "bg-green-500";
+      break;
+    case "HEAD_MODERATOR":
+      userColor =
+        "bg-linear-to-r from-emerald-700 via-emerald-500 to-emerald-700 bg-clip-text text-transparent";
+      userRole = "bg-emerald-700";
+      break;
+    case "HEAD_EVENT":
+      userColor =
+        "bg-linear-to-r from-pink-600 via-pink-500 to-pink-600 bg-clip-text text-transparent";
+      userRole = "bg-pink-600";
+      break;
+    case "EVENT":
+      userColor =
+        "bg-linear-to-r from-orange-600 via-orange-500 to-orange-600 bg-clip-text text-transparent";
+      userRole = "bg-orange-500";
+      break;
+    case "HEAD_CONTENT":
+    case "HEAD_BALANCE":
+      userColor =
+        "bg-linear-to-r from-sky-600 via-sky-500 to-sky-600 bg-clip-text text-transparent";
+      userRole = "bg-sky-600";
+      break;
+    case "CONTENT":
+    case "BALANCE":
+      userColor =
+        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
+      userRole = "bg-purple-400";
+      break;
+    case "CODER":
+      userColor =
+        "bg-linear-to-r from-pink-500 via-pink-300 to-pink-500 bg-clip-text text-transparent";
+      userRole = "bg-pink-300";
+      break;
+    case "CONTENT-ADMIN":
+      userColor =
+        "bg-linear-to-r from-purple-500 via-purple-400 to-purple-500 bg-clip-text text-transparent";
+      userRole = "bg-purple-400";
+      break;
+    case "EVENT-ADMIN":
+      userColor =
+        "bg-linear-to-r from-rose-500 via-rose-300 to-rose-500 bg-clip-text text-transparent";
+      userRole = "bg-rose-300";
+      break;
+    case "MODERATOR-ADMIN":
+      userColor =
+        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
+      userRole = "bg-red-400";
+      break;
+    case "CODING-ADMIN":
+    case "OWNER":
+      userColor =
+        "bg-linear-to-r from-red-500 via-red-400 to-red-500 bg-clip-text text-transparent";
+      userRole = "bg-red-400";
+      break;
+  }
+
+  if (user) {
+    const tavernColors = resolveTavernColorClasses({
+      tavernStyling: tavernStyling ?? false,
+      role: user.role,
+      usernamePreset: user.tavernUsernameColor ?? "DEFAULT",
+      titlePreset: user.tavernTitleColor ?? "DEFAULT",
+      baseUsernameClass: userColor,
+      baseTitleClass: titleColor,
+    });
+    userColor = tavernColors.usernameClass;
+    titleColor = tavernColors.titleClass;
+  }
+  return { userColor, userRole, titleColor };
+};

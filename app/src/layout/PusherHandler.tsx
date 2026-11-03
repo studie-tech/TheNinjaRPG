@@ -1,14 +1,23 @@
 "use client";
 
+import { useStore } from "jotai";
 import Pusher from "pusher-js";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
+import { addConversationMention } from "@/deltas/chat";
+import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useEventTournamentNoticeCache } from "@/hooks/useEventTournamentNotices";
 import Link from "@/layout/Link";
+import {
+  chatMentionsAtom,
+  chatPanelAtom,
+  chatViewedConversationsAtom,
+  isConversationMuted,
+} from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
 
@@ -25,6 +34,8 @@ export type UserEvent = {
   dungeonRunId?: string;
   alertType?: string;
   sector?: number;
+  conversationId?: string;
+  isPublic?: boolean;
 };
 
 export const usePusherHandler = (
@@ -44,13 +55,46 @@ export const usePusherHandler = (
   // tRPC utility
   const utils = api.useUtils();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
+  const store = useStore();
 
   // Pusher connection
   const [pusher, setPusher] = useState<Pusher | undefined>(undefined);
 
+  // Pending chat events belong to the account, including across membership-channel rebinding.
+  const notificationSession = useRef<symbol | undefined>(undefined);
+  useEffect(() => {
+    notificationSession.current = Symbol();
+    return () => {
+      notificationSession.current = undefined;
+    };
+  }, [userId]);
+
   // Listen on user channel for live updates on things
   useEffect(() => {
     if (userId) {
+      const session = notificationSession.current;
+      const canNotifyConversation = (conversationId: string | undefined) => {
+        const user = utils.profile.getUser.getData()?.userData;
+        return (
+          !!session &&
+          notificationSession.current === session &&
+          user?.userId === userId &&
+          !isConversationMuted(user, conversationId) &&
+          (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
+        );
+      };
+      const resolveNotificationProfile = async (conversationId: string | undefined) => {
+        if (!utils.profile.getUser.getData()?.userData) {
+          try {
+            // Join the initial profile request so its loading and error state can settle normally.
+            await utils.profile.getUser.fetch(undefined, { staleTime: Infinity });
+          } catch {
+            // UserContext owns the profile failure and the page's recovery/redirect UX.
+            return;
+          }
+        }
+        return canNotifyConversation(conversationId);
+      };
       // Pusher Channel
       const pusher = new Pusher(
         process.env.NEXT_PUBLIC_PUSHER_APP_KEY,
@@ -154,18 +198,46 @@ export const usePusherHandler = (
           void utils.comments.getUserConversations.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
-          if (!isOnInbox()) {
-            showMutationToast({
-              success: true,
-              message: "You have a new message",
-              duration: data.duration,
-              title: "Notification!",
-              action: (
-                <ToastAction altText="To Inbox">
-                  <Link href="/inbox">To Inbox</Link>
-                </ToastAction>
-              ),
-            });
+          void utils.comments.getUserConversations.invalidate();
+          const shouldNotify = await resolveNotificationProfile(data.conversationId);
+          if (shouldNotify && canNotifyConversation(data.conversationId)) {
+            try {
+              // Cancel cached refreshes so the authoritative read starts after this delivery.
+              await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
+            } catch {
+              // UserContext exposes a failed refresh; an eligible message can still show its toast.
+            }
+            if (!canNotifyConversation(data.conversationId)) return;
+            if (!isOnInbox()) {
+              const canOpenChat =
+                (utils.profile.getUser.getData()?.userData?.level ?? 0) >=
+                MESSAGING_MIN_LEVEL;
+              showMutationToast({
+                success: true,
+                message: "You have a new message",
+                duration: data.duration,
+                title: "Notification!",
+                action: (
+                  <ToastAction
+                    altText={canOpenChat ? "Open chat" : "To Inbox"}
+                    onClick={() => {
+                      if (!canOpenChat) {
+                        router.push("/inbox");
+                        return;
+                      }
+                      store.set(chatPanelAtom, (current) => ({
+                        ...current,
+                        openRequested: true,
+                        tab: "inbox",
+                        conversationId: data.conversationId,
+                      }));
+                    }}
+                  >
+                    {canOpenChat ? "Open chat" : "To Inbox"}
+                  </ToastAction>
+                ),
+              });
+            }
           }
         } else if (data.type === "userMessage" || data.type === "homeInvitation") {
           if (data.type === "homeInvitation")
@@ -202,12 +274,23 @@ export const usePusherHandler = (
             ),
           });
         } else if (data.type === "pinged") {
-          showMutationToast({
-            success: true,
-            message: data.message ?? "You have been pinged",
-            duration: data.duration,
-            title: "Notification!",
-          });
+          const conversationId = data.conversationId;
+          if (
+            (await resolveNotificationProfile(conversationId)) &&
+            canNotifyConversation(conversationId)
+          ) {
+            if (conversationId && data.isPublic) {
+              store.set(chatMentionsAtom, (old) =>
+                addConversationMention(old, conversationId),
+              );
+            }
+            showMutationToast({
+              success: true,
+              message: data.message ?? "You have been pinged",
+              duration: data.duration,
+              title: "Notification!",
+            });
+          }
         }
       });
       // Listen on clanId channel
@@ -258,7 +341,7 @@ export const usePusherHandler = (
         pusher.disconnect();
       };
     }
-  }, [userId, clanId, villageId, router, utils, refreshEventTournamentNotices]);
+  }, [userId, clanId, villageId, router, utils, store, refreshEventTournamentNotices]);
 
   return pusher;
 };

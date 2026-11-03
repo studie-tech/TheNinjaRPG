@@ -24,6 +24,7 @@ import {
   safeLocalStorageSetItem,
   useLocalStorage,
 } from "@/hooks/localstorage";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import { useAudio } from "@/hooks/useAudio";
 import { useSelectGameLayout } from "@/hooks/useGameLayout";
 import { useIframeMute } from "@/hooks/useIframeMute";
@@ -597,6 +598,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   };
 
   const handleLayoutChange = useSelectGameLayout();
+  const { swapSides, setSwapSides } = useActivityDock();
 
   const sections = {
     audio: (
@@ -677,6 +679,14 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
             }
             checked={!!swapSidebars}
             onCheckedChange={setSwapSidebars}
+          />
+          <SettingsToggle
+            label="Swap Chat and Activity sides"
+            description={
+              swapSides ? "Chat left · Activity right" : "Chat right · Activity left"
+            }
+            checked={swapSides}
+            onCheckedChange={setSwapSides}
           />
         </div>
         {lightLayoutChanged && (
