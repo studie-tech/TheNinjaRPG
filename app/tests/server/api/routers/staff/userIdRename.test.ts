@@ -1277,7 +1277,7 @@ describeWithDatabase("staff user-id rename", () => {
         purchasedAt,
         raw: {},
       }),
-    ).resolves.toMatchObject({ status: "granted", reputationPoints: 8 });
+    ).resolves.toMatchObject({ status: "granted" });
     const [renamedAfter, receipt] = await Promise.all([
       database.query.userData.findFirst({
         columns: { reputationPoints: true },

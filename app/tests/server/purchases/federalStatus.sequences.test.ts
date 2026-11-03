@@ -22,7 +22,6 @@ import {
   reconcileFederalStatuses,
   revokeFederalStatus,
   setFederalStatusWithStoreFloor,
-  storeFederalFloor,
   type StoreTransfer,
   transferStorePurchases as persistStoreTransfer,
 } from "@/server/utils/purchases/grant";
@@ -64,6 +63,17 @@ const statusOf = async (): Promise<FederalStatus> => {
   const row = await database.query.userData.findFirst({
     columns: { federalStatus: true },
     where: eq(userData.userId, USER),
+  });
+  return row?.federalStatus ?? "NONE";
+};
+
+/** The tier the production writer settles on when no PayPal tier vouches for one. */
+const storeFloorOf = async (userId = USER): Promise<FederalStatus> => {
+  const database = await db();
+  await setFederalStatusWithStoreFloor(database, userId, "NONE");
+  const row = await database.query.userData.findFirst({
+    columns: { federalStatus: true },
+    where: eq(userData.userId, userId),
   });
   return row?.federalStatus ?? "NONE";
 };
@@ -323,8 +333,10 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     await revokeFederalStatus(await db(), USER, { occurredAt: new Date() });
     expect(await statusOf()).toBe("NORMAL");
     // now PayPal ends too: the spent store receipt must not hold the tier open
-    const next = await storeFederalFloor(await db(), USER);
-    expect(next).toBe("NONE");
+    await (await db())
+      .delete(paypalSubscription)
+      .where(eq(paypalSubscription.affectedUserId, USER));
+    expect(await storeFloorOf()).toBe("NONE");
   });
 
   it("keeps a live store subscription safe from a PayPal writer", async () => {
@@ -344,8 +356,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
 
   it("stops vouching once the receipt is older than the grace window", async () => {
     await buyFederal("GOLD", 70 * DAY);
-    const next = await storeFederalFloor(await db(), USER);
-    expect(next).toBe("NONE");
+    expect(await storeFloorOf()).toBe("NONE");
   });
 
   it("does not use receipt age after an explicit paid-through date has ended", async () => {
@@ -356,7 +367,6 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .set({ expiresAt: new Date(Date.now() - MINUTE) })
       .where(eq(storePurchase.transactionId, transactionId));
 
-    expect(await storeFederalFloor(database, USER)).toBe("NONE");
     await setFederalStatusWithStoreFloor(database, USER, "NONE");
     expect(await statusOf()).toBe("NONE");
   });
@@ -377,15 +387,14 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       transactionId,
     });
 
-    expect(await storeFederalFloor(database, USER)).toBe("GOLD");
     expect(await statusOf()).toBe("GOLD");
+    expect(await storeFloorOf()).toBe("GOLD");
   });
 
   it("still vouches inside the billing-retry grace window", async () => {
     // A renewal that failed 40 days ago is still within the store's retry period.
     await buyFederal("GOLD", 40 * DAY);
-    const next = await storeFederalFloor(await db(), USER);
-    expect(next).toBe("GOLD");
+    expect(await storeFloorOf()).toBe("GOLD");
   });
 
   it("keeps a cancelled web subscription until its paid period runs out", async () => {
@@ -569,7 +578,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       where: eq(storePurchase.userId, USER),
     });
     expect(receipt?.expiresAt ?? null).toBeNull();
-    expect(await storeFederalFloor(database, USER)).toBe("GOLD");
+    expect(await storeFloorOf()).toBe("GOLD");
   });
 
   it("retires the receipt an upgrade left behind", async () => {
@@ -621,7 +630,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       raw: {},
     });
     // Recorded for the audit trail, but never accepted, so nothing vouches for a tier.
-    expect(await storeFederalFloor(await db(), USER)).toBe("NONE");
+    expect(await storeFloorOf()).toBe("NONE");
   });
 
   it("isolates a delayed production purchase from sandbox expiry and transfer history", async () => {
@@ -658,7 +667,8 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         purchasedAt,
         raw: {},
       }),
-    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
+    ).resolves.toMatchObject({ status: "granted" });
+    expect(await statusOf()).toBe("GOLD");
     const receipt = await database.query.storePurchase.findFirst({
       columns: { userId: true, revokedAt: true },
       where: eq(storePurchase.transactionId, transactionId),
@@ -700,7 +710,8 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         purchasedAt,
         raw: {},
       }),
-    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
+    ).resolves.toMatchObject({ status: "granted" });
+    expect(await statusOf()).toBe("GOLD");
     const receipt = await database.query.storePurchase.findFirst({
       columns: { userId: true, revokedAt: true },
       where: eq(storePurchase.transactionId, transactionId),
@@ -785,7 +796,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(receipt?.userId).toBe(DESTINATION);
     expect(receipt?.acceptedAt).toBeNull();
     expect(receipt?.grantedAt).toBeInstanceOf(Date);
-    expect(await storeFederalFloor(database, DESTINATION)).toBe("NONE");
+    expect(await storeFloorOf(DESTINATION)).toBe("NONE");
     const destination = await database.query.userData.findFirst({
       columns: { federalStatus: true },
       where: eq(userData.userId, DESTINATION),
@@ -798,7 +809,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .update(storePurchase)
       .set({ acceptedAt: new Date() })
       .where(eq(storePurchase.transactionId, transactionId));
-    expect(await storeFederalFloor(database, DESTINATION)).toBe("NONE");
+    expect(await storeFloorOf(DESTINATION)).toBe("NONE");
     await database
       .update(userData)
       .set({ federalStatus: "GOLD" })
@@ -1051,7 +1062,6 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     };
     await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
       status: "granted",
-      federalStatus: "GOLD",
     });
     await expect(grantStorePurchase(database, grant)).resolves.toEqual({
       status: "duplicate",
@@ -1911,7 +1921,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       purchasedAt: new Date(),
       raw: {},
     });
-    expect(result).toMatchObject({ status: "granted", federalStatus: "NORMAL" });
+    expect(result).toMatchObject({ status: "granted" });
     expect(await statusOf()).toBe("NORMAL");
   });
 
@@ -2033,10 +2043,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     expect(pending?.grantedAt).toBeNull();
     const retried = await grantStorePurchase(database, grant);
-    expect(retried).toMatchObject({
-      status: "granted",
-      reputationPoints: 8,
-    });
+    expect(retried).toMatchObject({ status: "granted" });
     await expect(grantStorePurchase(database, grant)).resolves.toEqual({
       status: "duplicate",
     });
@@ -2230,6 +2237,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
         purchasedAt: endedAt,
         raw: {},
       }),
-    ).resolves.toMatchObject({ status: "granted", federalStatus: "GOLD" });
+    ).resolves.toMatchObject({ status: "granted" });
+    const user = await database.query.userData.findFirst({
+      columns: { federalStatus: true },
+      where: eq(userData.userId, userId),
+    });
+    expect(user?.federalStatus).toBe("GOLD");
   });
 });

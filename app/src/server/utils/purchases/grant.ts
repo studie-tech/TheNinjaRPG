@@ -58,14 +58,12 @@ import {
   listStorePurchaseForApplyStoreExtension2,
   listStorePurchaseForApplyStoreTransfer,
   listStorePurchaseForSettleRecordedLedger,
-  listStorePurchaseForStoreFederalFloor,
   listStorePurchaseTransferForMigrateStorePurchaseTransfers,
   listStorePurchaseTransferForTransferChainUserIds,
   listStorePurchaseTransferForTransferPredecessorUserIds,
   listStorePurchaseTransferForTransferredUserId,
   selectStorePurchaseForReconcileStorePurchaseOwner,
   selectStoreUserIds,
-  selectUserDataForApplyStorePurchase2,
   selectUserDataForReconcileFederalStatuses,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations2,
@@ -99,7 +97,7 @@ export interface StoreGrant {
 }
 
 export type GrantOutcome =
-  | { status: "granted"; reputationPoints?: number; federalStatus?: FederalStatus }
+  | { status: "granted" }
   | { status: "duplicate" }
   | { status: "ignored"; reason: string };
 
@@ -540,13 +538,7 @@ const applyStorePurchase = async (
       throw new Error(`Could not apply store receipt ${grant.transactionId}`);
     }
 
-    if (reps) return { status: "granted", reputationPoints: reps.reputationPoints };
-    const target = federal?.federalStatus ?? "NONE";
-    const [updated] = await selectUserDataForApplyStorePurchase2(
-      client,
-      recipientUserId,
-    );
-    return { status: "granted", federalStatus: updated?.federalStatus ?? target };
+    return { status: "granted" };
   } catch (error) {
     if (!isMysqlDeadlockError(error)) {
       Sentry.captureException(error, {
@@ -1249,29 +1241,6 @@ const paypalFederalFloor = async (
     PAYPAL_WINDOW_MS,
   );
   return highest(rows.map((row) => row.federalStatus));
-};
-
-/**
- * The tier a store subscription still vouches for, or `NONE`.
- *
- * A receipt outlives the subscription it paid for, so the row alone cannot say whether the
- * player is still a subscriber — `revokedAt` is what separates the two, stamped by
- * `revokeFederalStatus` when the store reports the subscription has ended. Reading it here
- * rather than inferring from the player's current status is what lets the PayPal writers
- * take a tier away once all sources have finished, while still refusing to take one away
- * from a store subscription that is very much alive.
- */
-export const storeFederalFloor = async (
-  client: DrizzleClient,
-  userId: string,
-): Promise<FederalStatus> => {
-  const rows = await listStorePurchaseForStoreFederalFloor(
-    client,
-    userId,
-    isSandboxGrantee,
-    STORE_WINDOW_MS,
-  );
-  return highest(rows.map((row) => row.federalStatus ?? "NONE"));
 };
 
 /**
