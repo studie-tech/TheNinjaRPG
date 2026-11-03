@@ -8,20 +8,17 @@ import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import HomePage from "@/app/[shell]/home/page";
-import * as dialog from "@/components/ui/dialog";
 import { type HomeType, HomeTypeDetails, IMG_HOME_KITCHEN, MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import * as sleep from "@/hooks/sleep";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import * as Link from "@/layout/Link";
-import * as Modal from "@/layout/Modal";
 import { getHomeFurnitureGeometry, type HomeFurniture, unprojectHomePlacement } from "@/libs/home";
 import { getHomeRooms } from "@/libs/homeProperty";
 import { HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import * as Kitchen from "@/layout/Kitchen";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { actualDialog, actualModal } from "../../setup/preload";
 
 const furniture: HomeFurniture[] = [
   { id: "owned-bed", itemId: "home-bed", name: "Bed", image: "/images/home/furniture/bed.webp", width: 34, groundAnchor: 91.1, action: "sleep", isFloor: false, quantity: 1, views: {} },
@@ -77,12 +74,6 @@ beforeEach(() => {
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: replaceRoute } as never);
   vi.spyOn(navigation, "useSearchParams").mockImplementation(() => searchParams as never);
-  vi.spyOn(Modal, "default").mockImplementation(actualModal);
-  vi.spyOn(dialog, "Dialog").mockImplementation(actualDialog.Dialog);
-  vi.spyOn(dialog, "DialogContent").mockImplementation(actualDialog.DialogContent);
-  vi.spyOn(dialog, "DialogFooter").mockImplementation(actualDialog.DialogFooter);
-  vi.spyOn(dialog, "DialogHeader").mockImplementation(actualDialog.DialogHeader);
-  vi.spyOn(dialog, "DialogTitle").mockImplementation(actualDialog.DialogTitle);
   // Fresh tRPC hooks preserve real mutation lifecycles despite other suites' shared API mocks.
   Object.assign(vi.spyOn(client, "api" as never), {
     home: testApi.home,

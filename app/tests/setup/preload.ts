@@ -7,9 +7,7 @@
  * its rows leak into it.
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
-import * as dialog from "@/components/ui/dialog";
 import Link from "@/layout/Link";
-import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -26,9 +24,7 @@ import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 
 // UI suites can restore real components and feedback after another suite mocks their module.
-export const actualDialog = { ...dialog };
 export const actualLink = Link;
-export const actualModal = Modal;
 export const actualRichInput = RichInput;
 export const actualItemWithEffects = ItemWithEffects;
 export const actualContentImageSelector = ContentImageSelector;

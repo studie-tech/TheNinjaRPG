@@ -5,10 +5,8 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import DeleteUserButton, { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
-import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
-import { actualModal } from "../setup/preload";
 
 type Result = UserDeltaResponse & { affectedUserId?: string };
 type Callbacks = { onMutate?: () => number | undefined; onSuccess: (result: Result, input?: unknown, revision?: number) => Promise<void>; onError: (error: { message: string }) => void };
@@ -44,7 +42,6 @@ beforeEach(() => {
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: { userId }, timeDiff: 0, prepareUserUpdate, updateUser }) as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(Modal, "default").mockImplementation(actualModal);
   vi.spyOn(gtm, "sendGTMEvent").mockImplementation(() => undefined);
 });
 

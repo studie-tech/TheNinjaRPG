@@ -1,14 +1,12 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
-import * as dialog from "@/components/ui/dialog";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import * as media from "@/hooks/useMediaQuery";
 import { ChatPanel } from "@/layout/ChatPanel";
 import * as content from "@/layout/ChatPanelContent";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
-import { actualDialog } from "../setup/preload";
 
 const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 let level: number;
@@ -19,9 +17,6 @@ beforeEach(() => {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },
   });
-  for (const key of Object.keys(actualDialog) as (keyof typeof actualDialog)[]) {
-    vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
-  }
   vi.spyOn(media, "useMediaQuery").mockReturnValue(true);
   vi.spyOn(context, "useUserData").mockImplementation(() => ({ data: { userId: "reader", level, tutorialOn: true, chatMuted: false, mutedConversationIds: [] } }) as never);
   vi.spyOn(content, "default").mockImplementation(({ onClose }) => <button type="button" onClick={onClose}>Close chat</button>);
