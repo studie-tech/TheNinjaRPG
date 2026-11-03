@@ -1262,22 +1262,25 @@ export default function MyJutsu() {
         )}
       </ContentBox>
       {userJutsus && (
-        <ContentBox
-          title="Battle Hotkeys"
-          subtitle="Keys for your equipped jutsu and basic actions"
-          initialBreak={true}
-        >
-          <LoadoutHotkeysPanel
-            kind="jutsu"
-            actions={userJutsus
-              .filter((uj) => uj.equipped)
-              .map((uj) => ({
-                id: uj.jutsuId,
-                name: uj.jutsu.name,
-                hidden: uj.jutsu.hidden,
-              }))}
-          />
-        </ContentBox>
+        // Touch-only devices have no keyboard to press battle keys with.
+        <div className="not-any-pointer-fine:hidden">
+          <ContentBox
+            title="Battle Hotkeys"
+            subtitle="Keys for your equipped jutsu and basic actions"
+            initialBreak={true}
+          >
+            <LoadoutHotkeysPanel
+              kind="jutsu"
+              actions={userJutsus
+                .filter((uj) => uj.equipped)
+                .map((uj) => ({
+                  id: uj.jutsuId,
+                  name: uj.jutsu.name,
+                  hidden: uj.jutsu.hidden,
+                }))}
+            />
+          </ContentBox>
+        </div>
       )}
       {/* Free Transfer Timer */}
       {freeTransferResetTime &&

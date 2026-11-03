@@ -54,6 +54,12 @@ export const toHotkey = (key: string): string | undefined => {
   return (HOTKEY_KEYS as readonly string[]).includes(lower) ? lower : undefined;
 };
 
+/**
+ * Hotkeys need a keyboard, which touch-only devices lack: their setup controls and
+ * key badges use `not-any-pointer-fine:hidden`, and this is the same check in code.
+ */
+export const canSetHotkeys = () => window.matchMedia("(any-pointer: fine)").matches;
+
 /** Leave typing, Radix controls and open overlays to their own keyboard handling. */
 export const isBattleHotkeyBlocked = (event: KeyboardEvent): boolean => {
   if (event.defaultPrevented) return true;

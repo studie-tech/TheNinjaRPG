@@ -652,7 +652,7 @@ export default function CombatPage() {
             </div>
           )}
           <div className="grow"></div>
-          <div className="hidden text-right text-xs md:block">
+          <div className="hidden text-right text-xs md:any-pointer-fine:block">
             {hotkeys.byAction.wait && (
               <p className="text-orange-700">
                 Hotkey &quot;{hotkeys.byAction.wait.toUpperCase()}&quot;: End turn
