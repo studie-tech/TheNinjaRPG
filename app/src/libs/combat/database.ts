@@ -80,7 +80,6 @@ import {
   insertBattleActionForCreateAction,
   insertBattleActionForCreateAction2,
   insertDataBattleActionForSaveUsage,
-  insertKageDefendedChallengesForUpdateKage,
   insertLogBattleLengthsForFinishBattle,
   insertNotificationForUpdateRaidProgress,
   insertRaidParticipationForUpdateRaidProgress,
@@ -569,12 +568,13 @@ export const updateKage = async (
   curBattle: CompleteBattle,
   result: CombatResult | null,
 ) => {
-  // Only care about Kage battles between members of the same village
+  // Only care about scheduled Kage battles between members of the same village
   if (!result) return;
+  const match = curBattle.extraState.kageMatch;
+  if (!match) return;
   const participants = getKageChallengeParticipants(curBattle);
   if (!participants) return;
   const { challenger, kage } = participants;
-  const defenderId = curBattle.extraState.kageMatch?.kageId ?? kage.userId;
 
   const challengerDidWin = didKageChallengerWin(
     challenger,
@@ -594,26 +594,11 @@ export const updateKage = async (
   ];
 
   await Promise.all([
-    // Scheduled fights finish their original queue row with the terminal battle claim.
-    // Fights admitted before scheduling still need a completed receipt; battleId
-    // makes those retries idempotent without recreating a scheduled queue entry.
-    ...(!curBattle.extraState.kageMatch
-      ? [
-          insertKageDefendedChallengesForUpdateKage(
-            client,
-            curBattle,
-            challenger,
-            defenderId,
-            challengerDidWin,
-          ),
-        ]
-      : []),
-
     // Move the hat only if the challenger actually wins. CAS on the kage this
     // battle defeated: a delayed second finalization of an old battle must not
     // re-seat its challenger over a kage legitimately installed in the meantime.
     ...(challengerDidWin
-      ? [updateVillageForUpdateKage(client, challenger, defenderId, curBattle)]
+      ? [updateVillageForUpdateKage(client, challenger, match)]
       : []),
 
     ...(deleteItems.length > 0

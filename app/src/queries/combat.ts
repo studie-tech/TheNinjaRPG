@@ -1841,52 +1841,11 @@ export const updateKageDefendedChallengesForCompleteKageDefense = (
       ),
     );
 
-/** Build the `kageDefendedChallenges` insert for `updateKage`, updating duplicate keys. */
-export const insertKageDefendedChallengesForUpdateKage = (
-  client: Pick<DrizzleClient, "insert">,
-  curBattle: { id: string; createdAt: Date; round: number },
-  challenger: { villageId: string; userId: string },
-  defenderId: string,
-  challengerDidWin: false | true,
-) =>
-  client
-    .insert(kageDefendedChallenges)
-    .values({
-      id: nanoid(),
-      battleId: curBattle.id,
-      villageId: challenger.villageId,
-      userId: challenger.userId,
-      kageId: defenderId,
-      status: "COMPLETED",
-      notBefore: curBattle.createdAt,
-      startedAt: curBattle.createdAt,
-      resolvedAt: new Date(),
-      outcome: challengerDidWin
-        ? "Challenger won the title fight"
-        : "Kage defended the title",
-      didWin: challengerDidWin ? 1 : 0,
-      rounds: curBattle.round,
-    })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
 /** Build the `village` update for `updateKage`, using predicates on `id`, `kageId`, `leaderUpdatedAt`. */
 export const updateVillageForUpdateKage = (
   client: Pick<DrizzleClient, "update">,
   challenger: { userId: string; villageId: string },
-  defenderId: string,
-  curBattle: {
-    extraState: {
-      kageMatch?:
-        | undefined
-        | {
-            id: string;
-            villageId: string;
-            kageId: string;
-            tenure: string;
-            ai: false | true;
-          };
-    };
-  },
+  match: { kageId: string; tenure: string },
 ) =>
   client
     .update(village)
@@ -1898,15 +1857,8 @@ export const updateVillageForUpdateKage = (
     .where(
       and(
         eq(village.id, challenger.villageId),
-        eq(village.kageId, defenderId),
-        ...(curBattle.extraState.kageMatch
-          ? [
-              eq(
-                village.leaderUpdatedAt,
-                new Date(curBattle.extraState.kageMatch.tenure),
-              ),
-            ]
-          : []),
+        eq(village.kageId, match.kageId),
+        eq(village.leaderUpdatedAt, new Date(match.tenure)),
       ),
     );
 
