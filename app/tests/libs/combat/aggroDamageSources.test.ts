@@ -219,18 +219,19 @@ describe("Diffuse damage enmity", () => {
     expect(user(paid, "attacker").damageDealt).toBe(80);
   });
 
-  it("repays serialized debts without threat metadata using their existing quest attribution", () => {
-    const legacy = battle([]);
-    user(legacy, "defender").diffuseDamage = [
+  it("repays debts without enmity attribution as damage only", () => {
+    const recoil = battle([]);
+    user(recoil, "defender").diffuseDamage = [
       {
         attackerId: "attacker",
+        sourceUserId: "attacker",
         remainingDamage: 40,
         remainingTurns: 1,
         lastAppliedRound: 3,
         creditDamage: true,
       },
     ];
-    const paid = repay(legacy);
+    const paid = repay(recoil);
     expect(user(paid, "defender").curHealth).toBe(960);
     expect(user(paid, "attacker").damageDealt).toBe(40);
     expect(user(paid, "attacker").enmity).toBe(0);

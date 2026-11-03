@@ -183,10 +183,10 @@ export type CombatUserFields = {
   /** Damage already deferred by Diffuse; survives the granting effect's expiry. */
   diffuseDamage?: {
     attackerId: string;
-    /** Original damage actor; absent for recoil or debts without threat attribution. */
+    /** Original damage actor; absent for recoil. */
     enmityUserId?: string;
     /** Actual caster, retained separately from controller quest credit. */
-    sourceUserId?: string;
+    sourceUserId: string;
     remainingDamage: number;
     remainingTurns: number;
     lastAppliedRound: number;

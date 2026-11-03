@@ -71,7 +71,7 @@ it("keeps shared PvP credit reserved after lethal deferred damage to the settled
     battleType: "COMBAT", round: 3, activeUserId: "winner-a", roundStartAt: new Date(),
     usersState: [
       makeBattleUser("winner-a", { villageId: "v1", direction: "left", curHealth: 20, leftBattle: true, round: 3,
-        diffuseDamage: [{ attackerId: "opponent", remainingDamage: 30, remainingTurns: 1, lastAppliedRound: 3, creditDamage: true }] }),
+        diffuseDamage: [{ attackerId: "opponent", sourceUserId: "opponent", remainingDamage: 30, remainingTurns: 1, lastAppliedRound: 3, creditDamage: true }] }),
       makeBattleUser("winner-b", { villageId: "v1", direction: "left", round: 3 }),
       makeBattleUser("opponent", { villageId: "v2", direction: "right", curHealth: 0, leftBattle: true }),
     ], usersEffects: [],
