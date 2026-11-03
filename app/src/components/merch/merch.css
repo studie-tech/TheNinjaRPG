@@ -1,5 +1,4 @@
 .merch-store {
-  max-width: 1800px;
   margin: auto;
 }
 .merch-store a {
@@ -17,29 +16,13 @@
   outline: 3px solid #c3914d;
   outline-offset: 4px;
 }
-.merch-bag-trigger b {
-  background: #334b3d;
-  color: white;
-  border-radius: 50%;
-  font-size: 10px;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-}
 .merch-skip {
-  position: absolute;
-  top: -100px;
   z-index: 100;
   background: white;
   padding: 15px;
 }
-.merch-skip:focus {
-  top: 0;
-}
 .merch-hero {
   position: relative;
-  min-height: 620px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -76,7 +59,6 @@
 }
 .merch-hero h1 {
   font-family: Georgia,serif;
-  font-size: clamp(40px,4.9vw,76px);
   line-height: 1.07;
   letter-spacing: -2px;
   margin: 0 0 28px;
@@ -102,20 +84,12 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  background: #314d3d;
   color: #fff !important;
-  border: 1px solid #314d3d;
+  border: 1px solid;
   padding: 16px 23px;
   font-size: 12px;
   line-height: 1.3;
   transition: background .2s;
-}
-.merch-button:hover {
-  background: #486751;
-}
-.merch-button-outline {
-  background: transparent;
-  color: #314d3d !important;
 }
 .merch-hero-pieces {
   position: absolute;
@@ -453,8 +427,6 @@
   margin-top: 15px;
 }
 .merch-bag {
-  background: #f5f2e9 !important;
-  color: #253332 !important;
   max-width: 470px !important;
   width: 100% !important;
   overflow-y: auto;
@@ -685,9 +657,6 @@
   .merch-section-heading>p {
     margin-top: 16px;
   }
-  .merch-hero {
-    min-height: 560px;
-  }
   .merch-hero-copy {
     width: 57%;
   }
@@ -729,19 +698,14 @@
   }
 }
 @container merch (max-width:650px) {
-  .merch-bag-trigger>span {
-    display: none;
-  }
   .merch-hero {
     padding: 45px 6% 280px;
-    min-height: 650px;
     align-items: flex-start;
   }
   .merch-hero-copy {
     width: 100%;
   }
   .merch-hero h1 {
-    font-size: 45px;
     letter-spacing: -1px;
     margin-bottom: 20px;
   }
@@ -806,7 +770,6 @@
     padding: 40px 5%;
   }
   .merch-section-heading {
-    display: block;
     margin-bottom: 25px;
   }
   .merch-section-heading h2,.merch-faq h2 {
@@ -895,9 +858,6 @@
     padding: 40px 6%;
     gap: 30px;
   }
-  .merch-bag {
-    padding: 25px 20px !important;
-  }
   .merch-product-detail {
     grid-template-columns: 1fr;
     padding: 20px 5% 40px;
@@ -906,11 +866,7 @@
   .merch-product-copy {
     padding-top: 15px;
   }
-  .merch-product-copy h1 {
-    font-size: clamp(30px,6cqi,37px);
-  }
   .merch-design-story {
-    grid-template-columns: 1fr;
     padding: 40px 6%;
     gap: 0;
   }
@@ -1007,7 +963,6 @@
   .merch-hero {
     padding: 38px 5%;
     align-items: center;
-    min-height: 400px;
   }
   .merch-hero-copy {
     width: 63%;
@@ -1091,7 +1046,6 @@
 @container merch (max-width:479px) {
   .merch-hero {
     padding: 30px 6% 230px;
-    min-height: 550px;
   }
   .merch-hero h1 {
     font-size: 35px;

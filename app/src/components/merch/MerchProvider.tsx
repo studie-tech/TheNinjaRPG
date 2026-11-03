@@ -12,7 +12,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import "./merch.css";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
@@ -235,14 +234,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
         add,
       }}
     >
-      <div
-        className="merch-store"
-        style={
-          {
-            "--merch-wallpaper": `url("${IMG_WALLPAPER_HORIZON}")`,
-          } as React.CSSProperties
-        }
-      >
+      <div className="merch-store">
         <a className="merch-skip" href="#merch-main">
           Skip to collection
         </a>
@@ -286,7 +278,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
             </SheetDescription>
           </SheetHeader>
           {(cart.isError || needsCartRefresh) && !preview && (
-            <div className="merch-inline-error">
+            <div>
               <p>Your bag couldn’t be loaded.</p>
               <button type="button" onClick={() => void refreshCart()}>
                 Refresh bag
@@ -364,7 +356,6 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                           <button
                             type="button"
                             disabled={busy}
-                            className="merch-remove"
                             aria-label={`Remove ${line.title}`}
                             onClick={() => void update(line, 0)}
                           >
