@@ -14,6 +14,22 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("retires one derived texture binding without releasing another scene's active lease", async () => {
+    const resource = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => resource);
+    const unload = vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
+    const first = createSceneAssets(), second = createSceneAssets(), pressure = createSceneAssets();
+    const path = "/world-shadows/active-lease.png", other = "/world-shadows/idle-pressure.png";
+    try {
+      await Promise.all([first.texture(path, 0), second.texture(path, 0)]);
+      first.releaseTexture(path, 0); first.dispose();
+      await pressure.texture(other, 0); pressure.dispose();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(unload.mock.calls.map(([url]) => url)).not.toContain(path);
+      expect(await second.texture(path, 0)).toBe(resource);
+      expect(load.mock.calls.filter(([input]) => (input as unknown as { src: string }).src === path)).toHaveLength(1);
+    } finally { first.dispose(); second.dispose(); pressure.dispose(); resource.destroy(true); }
+  });
   it("removes daylight emitter batches and applies independent effect switches without animation", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);

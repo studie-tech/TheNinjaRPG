@@ -224,7 +224,7 @@ describe("world material loading", () => {
         if (!materialUrls.has(path)) return albedo.texture;
         if (failure === "missing") throw new Error("Missing authored material");
         return auxiliary.texture;
-      }, dispose,
+      }, releaseTexture() {}, dispose,
     }));
     let drawn: Uint8Array = new Uint8Array();
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((kind: string) => kind === "2d" ? {
@@ -274,7 +274,7 @@ describe("world material loading", () => {
       numerical.pixels.set([129, 128, 128, 255], i * 4);
     }
     const loadTexture = vi.fn(async (image: string) => materialUrls.has(image) ? numerical.texture : albedo.texture);
-    const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({ texture: loadTexture, dispose }));
+    const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({ texture: loadTexture, releaseTexture() {}, dispose }));
     let drawn: Uint8Array = new Uint8Array();
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((kind: string) => kind === "2d" ? {
       drawImage: (pixels: Uint8Array) => { drawn = pixels; },

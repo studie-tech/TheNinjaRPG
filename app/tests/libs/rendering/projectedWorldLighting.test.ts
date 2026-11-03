@@ -1,5 +1,7 @@
-import { describe, expect, it } from "bun:test";
-import { Container, Sprite, Texture } from "pixi.js";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { describe, expect, it, vi } from "bun:test";
+import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import published from "@/libs/rendering/bakedWorldSources.json";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
@@ -20,6 +22,58 @@ const fixture = () => {
 };
 
 describe("projected world lighting", () => {
+  it("changes authored compass masks without rebuilding stationary asset poses", async () => {
+    const f = fixture();
+    const original = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 627, height: 627 }) });
+    const view = new Texture({ source: original.source, frame: new Rectangle(22.5, 38, 124.5, 138) });
+    const atlas = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 8 * 4), width: 16, height: 8 }) });
+    Object.assign(f.game, { assets: { texture: vi.fn(async () => atlas), releaseTexture: vi.fn() }, signal: new AbortController().signal, isDisposed: () => false, invalidate: vi.fn() });
+    f.source.texture = view;
+    const update = vi.spyOn(f.source, "updateLocalTransform");
+    try {
+      const release = f.lighting.register(f.source, { id: "authored-tree", kind: "decoration", image: "/world-art/woodland-village.webp", x: 20, y: 30, size: 40, groundY: 10, shadowCaster: "canopy" });
+      await release.ready;
+      const wide = { minX: -1000, maxX: 1000, minY: -1000, maxY: 1000 };
+      f.lighting.update({ x: 1, y: 0, z: .5, day: 1 }, wide);
+      update.mockClear();
+      f.lighting.update({ x: 0, y: 1, z: .5, day: 1 }, wide);
+      expect(update).not.toHaveBeenCalled();
+      f.lighting.invalidate();
+      f.lighting.update({ x: 0, y: 1, z: .5, day: 1 }, wide);
+      expect(update).toHaveBeenCalled();
+      release();
+    } finally { update.mockRestore(); f.dispose(); view.destroy(false); original.destroy(true); atlas.destroy(true); }
+  });
+  it("keeps active atlas leases alive while evicting idle baked masks under pressure", async () => {
+    const f = fixture();
+    const atlasTexture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 8 * 4), width: 16, height: 8 }) });
+    const releaseTexture = vi.fn();
+    Object.assign(f.game, { assets: { texture: vi.fn(async () => atlasTexture), releaseTexture }, signal: new AbortController().signal, isDisposed: () => false });
+    const keys = Object.keys(published).slice(0, 8);
+    const held = f.lighting.acquireAtlas(keys[0]!), shared = f.lighting.acquireAtlas(keys[0]!);
+    const pressure = keys.slice(1).map(key => f.lighting.acquireAtlas(key));
+    try {
+      const [first] = await Promise.all([held.resource, shared.resource, ...pressure.map(lease => lease.resource)]);
+      held.release(); for (const lease of pressure) lease.release();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(releaseTexture).toHaveBeenCalled();
+      expect(first!.views.every(view => !view.destroyed)).toBe(true);
+      expect(await shared.resource).toBe(first);
+      shared.release();
+    } finally { held.release(); shared.release(); for (const lease of pressure) lease.release(); f.dispose(); atlasTexture.destroy(true); }
+  });
+
+  it("keeps unknown upright foliage from collapsing edge-on at horizontal light angles", () => {
+    const f = fixture();
+    try {
+      f.register();
+      f.lighting.update({ x: 1, y: 0, z: .5, day: 1 }, viewport);
+      const shadow = f.lighting.container.children[0]!.children[0] as Sprite;
+      shadow.updateLocalTransform();
+      const m = shadow.localTransform;
+      expect(Math.abs(m.a * m.d - m.b * m.c)).toBeGreaterThan(.01);
+    } finally { f.dispose(); }
+  });
   it("allocates sunlight silhouettes only when needed and releases offscreen GPU objects", () => {
     const f = fixture();
     try {

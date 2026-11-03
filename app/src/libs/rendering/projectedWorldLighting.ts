@@ -10,7 +10,17 @@ import {
   UniformGroup,
 } from "pixi.js";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
+import {
+  type BakedShadowAtlas,
+  bakedShadowBounds,
+  bakedShadowKey,
+  bakedShadowTransform,
+  hasBakedShadow,
+  loadBakedShadowAtlas,
+  placeBakedShadowPair,
+} from "@/libs/rendering/bakedShadowAtlas";
 import { worldLighting } from "@/libs/rendering/color";
+import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
@@ -56,18 +66,39 @@ export const createProjectedWorldLighting = (
   filter.enabled = false;
   container.filters = [filter];
   const records = new Set<ProjectedShadowRecord>();
+  const loadedAtlases = new Map<string, BakedShadowAtlas>();
+  const atlases = createLeaseCache<BakedShadowAtlas>({
+    load: async (key) => {
+      const atlas = await loadBakedShadowAtlas(game, key);
+      loadedAtlases.set(key, atlas);
+      return atlas;
+    },
+    unload: async (key) => {
+      const atlas = loadedAtlases.get(key);
+      if (!atlas) return;
+      atlas.destroy();
+      atlas.releaseTextures();
+      loadedAtlases.delete(key);
+    },
+    bytes: (atlas) => atlas.bytes,
+    idleBudget: 4 * 1024 * 1024,
+  });
   let dirty = true;
   let previousDirection = "";
   let viewport: WorldBounds | null = null;
   let order = 0;
   let warmField: VillageLightField | null = null;
   game.own(() => {
+    for (const record of records) record.releaseAtlas?.();
     records.clear();
+    for (const atlas of loadedAtlases.values()) atlas.destroy();
+    loadedAtlases.clear();
     filter.destroy();
   });
   return {
     kind: "projected" as const,
     container,
+    acquireAtlas: atlases.acquire,
     setWarmField: (field: VillageLightField | null) => {
       warmField = field;
       warmMappingDirty = true;
@@ -93,7 +124,8 @@ export const createProjectedWorldLighting = (
       }
       const record: ProjectedShadowRecord = {
         source,
-        shadow: null,
+        shadows: [],
+        atlas: null,
         description,
         transform: new Matrix(),
         bounds: null,
@@ -102,14 +134,37 @@ export const createProjectedWorldLighting = (
       };
       records.add(record);
       dirty = true;
+      const lease = hasBakedShadow(source.texture, description)
+        ? atlases.acquire(bakedShadowKey(source.texture, description))
+        : null;
+      record.releaseAtlas = lease?.release;
+      const ready = lease
+        ? lease.resource
+            .then((atlas) => {
+              if (!records.has(record)) return;
+              record.atlas = atlas;
+              for (const shadow of record.shadows) shadow.destroy();
+              record.shadows = [];
+              dirty = true;
+              game.invalidate();
+            })
+            .catch((error) => {
+              if (records.has(record) && !game.isDisposed())
+                console.warn(
+                  "Authored shadow unavailable; retaining the artwork fallback",
+                  error,
+                );
+            })
+        : Promise.resolve();
       return Object.assign(
         () => {
           records.delete(record);
-          if (record.shadow && !record.shadow.destroyed) record.shadow.destroy();
-          record.shadow = null;
+          for (const shadow of record.shadows) if (!shadow.destroyed) shadow.destroy();
+          record.shadows = [];
+          record.releaseAtlas?.();
           dirty = true;
         },
-        { ready: Promise.resolve() },
+        { ready },
       );
     },
     update: (
@@ -172,6 +227,7 @@ export const createProjectedWorldLighting = (
       if (!ground.visible) return;
       const direction = `${light.x}:${light.y}:${light.z}`;
       if (dirty || direction !== previousDirection) {
+        const posesChanged = dirty;
         dirty = false;
         previousDirection = direction;
         viewport = null;
@@ -191,18 +247,50 @@ export const createProjectedWorldLighting = (
             record.bounds = null;
             continue;
           }
+          // Compass changes replace masks; stationary authored footprints retain their geometry and bounds.
+          if (record.atlas && !posesChanged && record.bounds) continue;
           const parent = origin(source.parent);
+          if (record.atlas) {
+            source.updateLocalTransform();
+            record.transform.copyFrom(
+              bakedShadowTransform(
+                record.atlas,
+                source,
+                parent.clone().append(source.localTransform),
+              ),
+            );
+            record.bounds = bakedShadowBounds(record.atlas, record.transform);
+            record.poseDirty = true;
+            continue;
+          }
           const height = Math.abs(source.height);
-          const foot =
-            description.entrance?.y ??
-            description.y - height * (1 - (description.anchorY ?? 0.5));
+          const foot = description.entrance?.y ?? description.groundY;
           const base = parent.apply({ x: description.x, y: foot });
           const rise = height / Math.max(1, source.texture.orig.height);
           // Clamp grazing sun silhouettes to keep very long copies from covering distant scenery.
           const slopeX =
             Math.max(-1.4, Math.min(1.4, light.x / Math.max(0.3, light.z))) * rise;
           const slopeY = Math.min(-0.12, light.y / (2 * Math.max(0.3, light.z))) * rise;
-          record.transform.set(source.scale.x, 0, slopeX, slopeY, base.x, base.y);
+          if (
+            description.shadowCaster === "canopy" ||
+            description.shadowCaster === "conifer" ||
+            description.shadowCaster === "column"
+          ) {
+            const length = Math.hypot(light.x, light.y) || 1;
+            const ux = -light.x / length,
+              uy = -light.y / length;
+            const reach =
+              Math.max(0.3, Math.min(1.6, length / Math.max(0.3, light.z))) * rise;
+            record.transform.set(
+              -uy * source.scale.x,
+              (ux * source.scale.x) / 2,
+              -ux * reach,
+              (-uy * reach) / 2,
+              base.x,
+              base.y,
+            );
+          } else
+            record.transform.set(source.scale.x, 0, slopeX, slopeY, base.x, base.y);
           record.bounds = projectedBounds(source, record.transform);
           record.poseDirty = true;
         }
@@ -224,22 +312,38 @@ export const createProjectedWorldLighting = (
       };
       for (const record of records) {
         if (!record.bounds || !boundsOverlap(record.bounds, viewport)) {
-          if (record.shadow && !record.shadow.destroyed) record.shadow.destroy();
-          record.shadow = null;
+          for (const shadow of record.shadows) if (!shadow.destroyed) shadow.destroy();
+          record.shadows = [];
           continue;
         }
-        if (!record.shadow) {
-          const shadow = new Sprite(record.source.texture);
-          shadow.anchor.set(record.source.anchor.x, 1);
-          shadow.tint = 0x202932;
-          shadow.alpha = 0.22;
-          shadow.zIndex = record.order;
-          ground.addChild(shadow);
-          record.shadow = shadow;
+        if (!record.shadows.length) {
+          for (let i = 0; i < (record.atlas ? 2 : 1); i++) {
+            const shadow = new Sprite(record.source.texture);
+            shadow.anchor.set(record.source.anchor.x, 1);
+            shadow.tint = 0x202932;
+            shadow.alpha = 0.22;
+            shadow.zIndex = record.order;
+            shadow.label = `scenery-shadow:${record.description.id}`;
+            ground.addChild(shadow);
+            record.shadows.push(shadow);
+          }
           record.poseDirty = true;
         }
-        if (record.poseDirty) {
-          record.shadow.setFromMatrix(record.transform);
+        if (record.atlas) {
+          placeBakedShadowPair(
+            record.shadows,
+            record.atlas,
+            record.transform,
+            light.x,
+            light.y,
+            record.description.shadowCaster === "canopy" ||
+              record.description.shadowCaster === "conifer"
+              ? 0.3
+              : 0.22,
+          );
+          record.poseDirty = false;
+        } else if (record.poseDirty) {
+          record.shadows[0]?.setFromMatrix(record.transform);
           record.poseDirty = false;
         }
       }
@@ -320,7 +424,9 @@ export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLight
 
 type ProjectedShadowRecord = {
   source: Sprite;
-  shadow: Sprite | null;
+  shadows: Sprite[];
+  atlas: BakedShadowAtlas | null;
+  releaseAtlas?: () => void;
   description: WorldSpriteDescription;
   transform: Matrix;
   bounds: WorldBounds | null;

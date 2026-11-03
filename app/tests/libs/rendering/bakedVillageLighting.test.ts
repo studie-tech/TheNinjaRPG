@@ -96,6 +96,11 @@ it("adds artwork-shaped local scenery shadows lazily and releases emissive fixtu
     lighting.update({ x: 0, y: 1, z: 1, day: 0 }, view);
     const local = ground.children.filter(child => child.label === "baked-scenery-local-shadow") as Sprite[];
     expect(local).toHaveLength(2); expect(local[0]!.texture).toBe(tree.texture); expect(local[0]!.visible).toBe(true);
+    lighting.update({ x: 0, y: 1, z: 1, day: 0 }, { minX: 1000, maxX: 1100, minY: 1000, maxY: 1100 });
+    expect(local.every(shadow => !shadow.visible)).toBe(true);
+    lighting.update({ x: 0, y: 1, z: 1, day: 0 }, view);
+    expect(ground.children.filter(child => child.label === "baked-scenery-local-shadow")).toEqual(local);
+    expect(local[0]!.visible).toBe(true);
     releaseLamp(); lighting.update({ x: 0, y: 1, z: 1, day: 0 }, view);
     expect(local.every(shadow => !shadow.visible)).toBe(true);
     releaseTree(); expect(local.every(shadow => shadow.destroyed)).toBe(true); expect(Texture.WHITE.destroyed).toBe(false);

@@ -301,6 +301,29 @@ describe("travel actor artwork loading", () => {
     expect(bodies.every(root => Number(root.label.slice("user:loading-".length)) >= 20)).toBe(true);
   });
 
+  it("reuses viewport membership between exact visibility boundaries and refreshes it after source changes", () => {
+    holdCharacters();
+    const { actors, grid, snapshot } = fixture();
+    const users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: i < 20 ? 1 : 8, latitude: i < 20 ? 1 : 8 }));
+    const tile = grid.getHex({ col: 1, row: 1 })!;
+    const bounds = { minX: -tile.center.x + .371, maxX: -tile.center.x + 1.371, minY: -tile.center.y + .371, maxY: -tile.center.y + 1.371 };
+    actors.setViewport(bounds); actors.sync(snapshot(users));
+    const lookup = vi.spyOn(grid, "getHex");
+    try {
+      actors.setViewport({ ...bounds });
+      actors.setViewport({ minX: bounds.minX + .00001, maxX: bounds.maxX + .00001, minY: bounds.minY + .00001, maxY: bounds.maxY + .00001 });
+      expect(lookup).not.toHaveBeenCalled();
+      const next = grid.getHex({ col: 8, row: 8 })!; lookup.mockClear();
+      const reused = { minX: -next.center.x, maxX: -next.center.x + 1, minY: -next.center.y, maxY: -next.center.y + 1 };
+      actors.setViewport(reused);
+      expect(lookup).toHaveBeenCalled();
+      lookup.mockClear(); Object.assign(reused, bounds); actors.setViewport(reused);
+      expect(lookup).toHaveBeenCalled();
+      lookup.mockClear(); actors.sync(snapshot(users.map(user => ({ ...user, latitude: 2 }))));
+      expect(lookup).toHaveBeenCalled();
+    } finally { lookup.mockRestore(); }
+  });
+
   it("orders a batch of movement edges by their published clock instead of the source array", () => {
     holdCharacters();
     const { actors, snapshot } = fixture();

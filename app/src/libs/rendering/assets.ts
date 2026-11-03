@@ -26,22 +26,34 @@ const textures = createLeaseCache<Texture>({
  */
 export const createSceneAssets = () => {
   const owned = new Map<string, ReturnType<typeof textures.acquire>>();
+  const textureKey = (path: string, width: number, sampling: "linear" | "nearest") => {
+    const source =
+      worldAssetSource(path)?.image ??
+      (width === 0 ? path : textureImageUrl(path, width));
+    return sampling === "nearest" ? `${source.split("#")[0]}#tnr-nearest` : source;
+  };
   let disposed = false;
   return {
     /** Positive widths request a CDN rendition; zero preserves the exact native source URL. */
     texture: (path: string, width = 50, sampling: "linear" | "nearest" = "linear") => {
       if (disposed) return Promise.reject(new Error("Scene assets are disposed"));
-      const source =
-        worldAssetSource(path)?.image ??
-        (width === 0 ? path : textureImageUrl(path, width));
       // Sampling is immutable for a shared source; nearest art owns a separate decoded source.
-      const url =
-        sampling === "nearest" ? `${source.split("#")[0]}#tnr-nearest` : source;
+      const url = textureKey(path, width, sampling);
       const existing = owned.get(url);
       if (existing) return existing.resource;
       const entry = textures.acquire(url);
       owned.set(url, entry);
       return entry.resource;
+    },
+    /** A bounded derived-resource cache can retire its binding without disposing unrelated scene artwork. */
+    releaseTexture: (
+      path: string,
+      width = 50,
+      sampling: "linear" | "nearest" = "linear",
+    ) => {
+      const key = textureKey(path, width, sampling);
+      owned.get(key)?.release();
+      owned.delete(key);
     },
     dispose: () => {
       if (disposed) return;

@@ -50,7 +50,7 @@ beforeEach(() => {
   }) });
   cleanups.push(() => texture.destroy(true));
   vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({
-    texture: async () => texture, dispose() {},
+    texture: async () => texture, releaseTexture() {}, dispose() {},
   }));
   vi.spyOn(maskedTextures, "acquireMaskedTexture").mockImplementation(() => ({
     resource: Promise.resolve(texture), release() {},

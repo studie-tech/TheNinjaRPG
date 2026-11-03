@@ -85,6 +85,7 @@ export const createTravelActors = (
   let actorSector: number | null = null;
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
+  let stableViewport: Record<keyof WorldBounds, [number, number]> | null = null;
   let visibleKey = "";
   const movementOrder = new Map<
     string,
@@ -103,14 +104,42 @@ export const createTravelActors = (
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
+    const domain: typeof stableViewport = bounds
+      ? {
+          minX: [-Infinity, Infinity],
+          maxX: [-Infinity, Infinity],
+          minY: [-Infinity, Infinity],
+          maxY: [-Infinity, Infinity],
+        }
+      : null;
+    const boundary = (axis: keyof WorldBounds, value: number) => {
+      if (!bounds || !domain) return;
+      const range = domain[axis];
+      if (bounds[axis] < value) range[1] = Math.min(range[1], value);
+      else if (bounds[axis] > value) range[0] = Math.max(range[0], value);
+      else range[0] = range[1] = value;
+    };
     const visibleUsers = !bounds
       ? snapshot.users
       : snapshot.users.filter((user) => {
-          if (user.userId === snapshot.viewer?.userId) return true;
           const tile = snapshot.grid.getHex({
             col: user.longitude,
             row: user.latitude,
           });
+          if (tile) {
+            const x = -tile.center.x,
+              y = -tile.center.y;
+            // Membership can change only when a viewport edge crosses a padding or artwork boundary.
+            boundary("minX", x + tile.width * 3);
+            boundary("minX", x + tile.width * 2);
+            boundary("maxX", x - tile.width * 3);
+            boundary("maxX", x - tile.width);
+            boundary("minY", y + tile.height * 3);
+            boundary("minY", y + tile.height * 2.4);
+            boundary("maxY", y - tile.height * 3);
+            boundary("maxY", y - tile.height);
+          }
+          if (user.userId === snapshot.viewer?.userId) return true;
           return (
             tile &&
             -tile.center.x >= bounds.minX - tile.width * 3 &&
@@ -158,6 +187,7 @@ export const createTravelActors = (
         candidates.slice(0, WORLD_DETAIL.travelCharacters).map((entry) => entry.key),
       );
     }
+    stableViewport = domain;
     return { ...snapshot, users: visibleUsers, characterKeys };
   };
   /** Camera movement only reconciles resources when visible actor membership changes. */
@@ -604,8 +634,22 @@ export const createTravelActors = (
     container,
     sync,
     setViewport: (bounds: WorldBounds) => {
-      viewport = bounds;
+      const previous = viewport;
+      const domain = stableViewport;
+      viewport = { ...bounds };
       if (!sourceSnapshot) return;
+      if (
+        (previous &&
+          bounds.minX === previous.minX &&
+          bounds.maxX === previous.maxX &&
+          bounds.minY === previous.minY &&
+          bounds.maxY === previous.maxY) ||
+        (domain &&
+          (Object.keys(domain) as (keyof WorldBounds)[]).every(
+            (axis) => bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
+          ))
+      )
+        return;
       const visible = visibleSnapshot(sourceSnapshot);
       const key = userKey(visible);
       if (key === visibleKey) return;
