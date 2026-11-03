@@ -247,18 +247,11 @@ export default function Training() {
           <StatsTraining
             userData={userData}
             timeDiff={timeDiff}
-            updateUser={updateUser}
-            initialBreak
             section={activeSection}
           />
         )}
         {activeSection === "Jutsu" && (
-          <JutsuTraining
-            userData={userData}
-            timeDiff={timeDiff}
-            updateUser={updateUser}
-            initialBreak
-          />
+          <JutsuTraining userData={userData} timeDiff={timeDiff} />
         )}
         {activeSection === trainingSections.covertSection && (
           <>
@@ -267,13 +260,7 @@ export default function Training() {
               timeDiff={timeDiff}
               updateUser={updateUser}
             />
-            {showSenseiSystem && (
-              <SenseiSystem
-                userData={userData}
-                timeDiff={timeDiff}
-                updateUser={updateUser}
-              />
-            )}
+            {showSenseiSystem && <SenseiSystem userData={userData} />}
           </>
         )}
       </TabsContent>
@@ -284,10 +271,6 @@ export default function Training() {
 interface TrainingProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
-  /** Whichever box comes second carries this: it spaces the boxes apart and
-   *  demotes the heading, so the leading box is the one titling the page. */
-  initialBreak?: boolean;
 }
 
 /**
@@ -295,7 +278,7 @@ interface TrainingProps {
  * @param props
  * @returns
  */
-const SenseiSystem: React.FC<TrainingProps> = (props) => {
+const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // Settings
   const { userData } = props;
@@ -753,7 +736,7 @@ const StatsTraining: React.FC<
           title="Combat stats"
           topRightCorntentBreakpoint="sm"
           subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
-          initialBreak={props.initialBreak}
+          initialBreak
           topRightContent={
             // The Energy controls only matter once the captcha check is out of the way
             needsCaptcha ? undefined : (
@@ -1483,8 +1466,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       <ContentBox
         title="Techniques"
         subtitle="Jutsu Techniques"
-        defaultBackHref={props.initialBreak ? undefined : "/village"}
-        initialBreak={props.initialBreak}
+        initialBreak
         topRightContent={
           <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
         }
@@ -1641,7 +1623,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
  * @param props
  * @returns
  */
-const CovertTraining: React.FC<TrainingProps> = (props) => {
+const CovertTraining: React.FC<
+  TrainingProps & {
+    updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
+  }
+> = (props) => {
   const { userData, timeDiff, updateUser } = props;
 
   // Stealth status derived from userData
