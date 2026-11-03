@@ -10,14 +10,12 @@ import * as client from "@/app/_trpc/client";
 import ChatBox from "@/layout/ChatBox";
 import * as richInput from "@/layout/RichInput";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const clients: QueryClient[] = [];
 const storageKey = "seichiAiChat:history-reader";
 const otherStorageKey = "seichiAiChat:another-reader";
 let scrollToDescriptor: PropertyDescriptor | undefined;
 beforeEach(() => {
-  ensureDom();
   scrollToDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTo");
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
 });

@@ -9,7 +9,6 @@ import * as audioPreferences from "@/libs/audioPreferences";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
-import { ensureDom } from "../setup/dom.mjs";
 
 type RemoteCommand = "play" | "pause" | "toggle";
 type AudioTestMocks = {
@@ -64,8 +63,6 @@ const user = (level: number, musicOn = true) =>
     buttonSfxOn: true,
     level,
   }) as NonNullable<UserWithRelations>;
-
-ensureDom();
 
 beforeEach(() => {
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);

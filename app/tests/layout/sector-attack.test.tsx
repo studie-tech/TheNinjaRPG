@@ -9,10 +9,8 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import { travelActionAvailability } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
-import { ensureDom } from "../setup/dom.mjs";
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(Image, "default").mockImplementation(({ alt, src, ...props }) => (
     // biome-ignore lint/performance/noImgElement: isolated scouting image fixture
     <img {...props} alt={alt} src={typeof src === "string" ? src : undefined} />

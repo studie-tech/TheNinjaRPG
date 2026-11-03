@@ -2,14 +2,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "bun:test";
 import { useNativeShell } from "@/hooks/useNativeShell";
-import { ensureDom } from "../setup/dom.mjs";
 
 const Probe = () => {
   const native = useNativeShell();
   return <span>{native === undefined ? "pending" : String(native)}</span>;
 };
-
-ensureDom();
 
 const capacitorWindow = window as typeof window & {
   Capacitor?: { isNativePlatform: () => boolean };

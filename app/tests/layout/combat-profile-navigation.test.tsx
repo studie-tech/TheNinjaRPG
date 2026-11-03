@@ -5,10 +5,8 @@ import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import { maskBattle } from "@/libs/combat/util";
 import * as UserContext from "@/utils/UserContext";
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
-import { ensureDom } from "../setup/dom.mjs";
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(UserContext, "useUserData").mockReturnValue({
     data: { userId: "viewer" }, timeDiff: 0,
   } as ReturnType<typeof UserContext.useUserData>);

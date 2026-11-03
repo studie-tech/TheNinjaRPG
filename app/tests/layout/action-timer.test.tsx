@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, render } from "@testing-library/react";
 import { Profiler, type ProfilerOnRenderCallback } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -8,8 +7,6 @@ import {
   makeBattleUser,
   makeCompleteBattle,
 } from "../libs/combat/helpers/battleScenario";
-
-ensureDom();
 
 vi.mock("@/utils/UserContext", () => ({
   useUserData: () => ({ timeDiff: 0 }),

@@ -8,7 +8,6 @@ import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 type Notice = RouterOutputs["territoryWar"]["getNotice"];
@@ -16,7 +15,6 @@ const clients: QueryClient[] = [];
 let now = 0;
 
 beforeEach(() => {
-  ensureDom();
   now = Date.UTC(2026, 10, 1, 12);
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);

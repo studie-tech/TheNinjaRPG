@@ -8,7 +8,6 @@ import * as Loader from "@/layout/Loader";
 import * as Welcome from "@/layout/Welcome";
 import type { UserWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const push = vi.fn();
 const referral = vi.fn();
@@ -16,7 +15,6 @@ let session: ReturnType<typeof UserContext.useUserData>;
 const character = { userId: "player" } as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  ensureDom();
   push.mockClear();
   referral.mockClear();
   session = { isClerkLoaded: true, isSignedIn: false, userId: undefined, data: undefined, status: "success" } as typeof session;

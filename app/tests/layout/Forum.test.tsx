@@ -4,11 +4,9 @@ import { useController } from "react-hook-form";
 import { ForumComposer, ForumSearch } from "@/layout/Forum";
 import * as RichInput from "@/layout/RichInput";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const storageKey = "forum-draft:forum-draft-player:thread:topic";
 beforeEach(() => {
-  ensureDom();
   localStorage.removeItem(storageKey);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "forum-draft-player", role: "USER" } } as never);
   vi.spyOn(RichInput, "default").mockImplementation(({ control, disabled }) => {

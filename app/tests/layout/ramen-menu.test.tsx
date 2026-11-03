@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -38,7 +37,6 @@ const purchase = vi.fn(async (input: FoodInput) => {
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   isPending = false;
   purchaseResult = { success: true, message: "Food purchased", userPatch: { curStamina: 40, curChakra: 40, curHealth: 100 }, userDelta: { money: -10 } };

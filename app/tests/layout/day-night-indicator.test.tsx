@@ -7,7 +7,6 @@ import { getWorldCyclePosition } from "@/libs/dayNight";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import type { UserWithRelations } from "@/routers/profile";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const cycleStart = WORLD_CYCLE_SECONDS * 1000 * 100;
 const timeDiff = 90_000;
@@ -33,7 +32,6 @@ const PreviewMap = ({ role = "OWNER", editable = true, initialDate = null, initi
 };
 
 beforeEach(() => {
-  ensureDom();
   globalThis.CustomEvent = window.CustomEvent;
   // Staff access and the server-clock offset belong to this fixture's provider.
   vi.spyOn(userContext, "useUserInfo").mockImplementation(() => useContext(UserContext) as never);

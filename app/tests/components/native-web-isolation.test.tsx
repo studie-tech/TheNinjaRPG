@@ -1,12 +1,9 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import * as Google from "@next/third-parties/google";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import PWAManager from "@/components/pwa/PWAManager";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { WebAnalytics } from "@/layout/WebAnalytics";
-
-ensureDom();
 
 const userAgent = Object.getOwnPropertyDescriptor(navigator, "userAgent");
 const serviceWorker = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");

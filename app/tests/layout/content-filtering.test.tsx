@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { StrictMode } from "react";
@@ -7,8 +6,6 @@ import {
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-
-ensureDom();
 
 const makeSchema = (category = "WEAPON") =>
   defineFilteringSchema({

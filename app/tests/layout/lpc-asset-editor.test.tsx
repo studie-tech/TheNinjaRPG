@@ -8,11 +8,9 @@ import { LpcAssetEditor } from "@/layout/LpcAssetEditor";
 import * as uploads from "@/utils/uploadthing";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
-import { ensureDom } from "../setup/dom.mjs";
 import { lpcAssets } from "../setup/lpc";
 
 beforeEach(() => {
-  ensureDom();
   Object.assign(vi.spyOn(client, "api" as never), {
     gameAsset: {
       getLpcCatalog: { useQuery: () => ({ data: lpcAssets, error: null, refetch: async () => undefined }) },

@@ -13,7 +13,6 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
 import { actualDialog } from "../../setup/preload";
 
 type Result = RouterOutputs["poll"]["createPoll"];
@@ -38,7 +37,6 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   vi.clearAllMocks();

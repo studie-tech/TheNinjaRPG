@@ -16,11 +16,9 @@ import { trainRouter } from "@/server/api/routers/train";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { ensureDom } from "../setup/dom.mjs";
 import { insertQuests, insertUsers } from "../setup/factories";
 import { callerFor, describeWithDatabase, resetTables } from "../setup/testDatabase";
 
-ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [], stops: (() => void)[] = [];
 beforeEach(() => Object.assign(vi.spyOn(appClient, "api" as never), { profile: api.profile, item: api.item, raids: api.raids, bloodline: api.bloodline, pets: api.pets, quests: api.quests, useUtils: api.useUtils }));

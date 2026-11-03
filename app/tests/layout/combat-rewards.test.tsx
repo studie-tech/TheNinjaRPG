@@ -1,4 +1,3 @@
-import "../setup/dom.mjs";
 import { afterEach, expect, it } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import { CombatRewards, HuntingRewards } from "@/layout/CombatRewards";

@@ -1,14 +1,10 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useState } from "react";
 import { WeightedCacheEditor } from "@/layout/WeightedCacheEditor";
 import { CACHE_RESTRICTED_REWARD_MESSAGE } from "@/libs/weightedCache";
 import type { WeightedCache } from "@/validators/weightedCache";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 
-ensureDom();
-const { cleanup, fireEvent, render, waitFor, within } = await import(
-  "@testing-library/react"
-);
 const scrollDescriptor = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
   "scrollIntoView",
@@ -17,7 +13,6 @@ const scroll = vi.fn();
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   scroll.mockClear();
   HTMLElement.prototype.scrollIntoView = scroll;
   globalThis.CustomEvent = window.CustomEvent;

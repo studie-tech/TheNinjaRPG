@@ -10,7 +10,6 @@ import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { EVENT_TOURNAMENT_READY_SECONDS } from "@/drizzle/constants";
 import { useEventTournamentNoticeCache, useEventTournamentNotices } from "@/hooks/useEventTournamentNotices";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 type Notices = RouterOutputs["tournament"]["getEventNotices"];
@@ -18,7 +17,6 @@ const clients: QueryClient[] = [];
 let now = 0;
 
 beforeEach(() => {
-  ensureDom();
   now = Date.UTC(2026, 10, 1, 12);
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);

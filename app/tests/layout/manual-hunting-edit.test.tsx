@@ -7,7 +7,6 @@ import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import HuntingEditor from "@/app/[shell]/manual/hunting/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { huntingHabitatContent } from "../setup/hunting";
 
 type SaveInput = RouterInputs["hunting"]["save"];
@@ -36,7 +35,6 @@ afterEach(() => {
 });
 
 it("uses server-assigned contract IDs when saving the habitat draft again", async () => {
-  ensureDom();
   const content = { ...huntingHabitatContent(), contracts: [] };
   const refetch = vi.fn(async () => undefined);
   const save = vi.fn(async (input: SaveInput): Promise<SaveResult> => ({

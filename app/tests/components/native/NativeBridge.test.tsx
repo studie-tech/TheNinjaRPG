@@ -5,7 +5,6 @@ import * as liveActivity from "@/hooks/useLiveActivity";
 import * as push from "@/hooks/useNativePush";
 import * as native from "@/libs/native";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
 import NativeBridge from "@/components/native/NativeBridge";
 
 const back = vi.fn();
@@ -22,7 +21,6 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   vi.spyOn(navigation, "usePathname").mockReturnValue("/login");
   vi.spyOn(navigation, "useRouter").mockReturnValue({

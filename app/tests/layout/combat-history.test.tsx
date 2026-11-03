@@ -13,7 +13,6 @@ import CombatHistory from "@/layout/CombatHistory";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 // Keep the real history component, subscription hook and tRPC query lifecycle;
 // control only websocket delivery, user context and the server's log responses.
@@ -36,7 +35,6 @@ const lethalEntry = {
 } as BattleAction;
 
 beforeEach(() => {
-  ensureDom();
   entries = [];
   onEvent = undefined;
   unsubscribe.mockClear();

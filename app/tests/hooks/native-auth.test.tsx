@@ -7,9 +7,7 @@ import * as handoff from "@/hooks/useNativeAuthHandoff";
 import * as native from "@/libs/native";
 import { appEvents, oauthBrowser } from "@/libs/native";
 import { nativeAuthChallenge } from "@/server/utils/nativeAuth";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 const flowId = "a".repeat(43);
 const code = "c".repeat(43);
 const callback = `tnr://oauth-callback?flow=${flowId}&code=${code}`;

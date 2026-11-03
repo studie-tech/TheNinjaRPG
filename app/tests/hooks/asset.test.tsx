@@ -5,7 +5,6 @@ import * as client from "@/app/_trpc/client";
 import type { GameAsset } from "@/drizzle/schema";
 import { useAssetEditForm } from "@/hooks/asset";
 import * as toast from "@/libs/toast";
-import { ensureDom } from "../setup/dom.mjs";
 
 type Result = { success: boolean; message: string };
 type Callbacks = {
@@ -25,7 +24,6 @@ const refetch = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
 
 beforeEach(() => {
-  ensureDom();
   save.mockReset();
   save.mockResolvedValue({ success: true, message: "Saved" });
   refetch.mockClear(); invalidate.mockClear();

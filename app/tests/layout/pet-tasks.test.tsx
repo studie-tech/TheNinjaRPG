@@ -11,7 +11,6 @@ import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { updateUserCache } from "@/utils/userCache";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
@@ -26,7 +25,6 @@ const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event }, CustomEvent: { configurable: true, value: window.CustomEvent },
     ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },

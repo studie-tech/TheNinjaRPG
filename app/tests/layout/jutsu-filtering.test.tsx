@@ -1,12 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import { availableRanks } from "@/libs/train";
-import { ensureDom } from "../setup/dom.mjs";
 
-beforeEach(ensureDom);
 afterEach(cleanup);
 
 describe("jutsu filter defaults", () => {

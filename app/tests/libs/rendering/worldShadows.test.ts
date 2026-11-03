@@ -14,11 +14,9 @@ import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
-import { ensureDom } from "../../setup/dom.mjs";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
-ensureDom();
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 const fixture = (instanced = false, resolution = 1) => {
   const cleanups: (() => void)[] = [];

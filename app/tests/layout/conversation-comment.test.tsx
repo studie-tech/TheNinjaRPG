@@ -13,7 +13,6 @@ import { ConversationComments } from "@/layout/ConversationComments";
 import type { PostProps } from "@/layout/Post";
 import type { MutateCommentSchema } from "@/validators/comments";
 import * as Parse from "@/utils/parse";
-import { ensureDom } from "../setup/dom.mjs";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
 import { createToastMock } from "../setup/toastMock";
 
@@ -45,7 +44,6 @@ let confirmSpy: { mockRestore: () => void };
 let rowSpy: { mockRestore: () => void } | undefined;
 let parseSpy: { mockRestore: () => void } | undefined;
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   postSpy = vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => <div>{options}{children}</div>);
   confirmSpy = vi.spyOn(Confirm, "default").mockImplementation(() => null);

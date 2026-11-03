@@ -7,7 +7,6 @@ import GraphBankLedger from "@/layout/GraphBankLedger";
 import GraphBlackmarketLedger from "@/layout/GraphBlackmarketLedger";
 import GraphCombatLog from "@/layout/GraphCombatLog";
 import * as graph from "@/layout/GraphUsersGeneric";
-import { ensureDom } from "../setup/dom.mjs";
 
 const refetch = vi.fn();
 let graphMock: Mock<typeof graph.default>;
@@ -20,7 +19,6 @@ let query: {
 };
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   query = {
     data: undefined,

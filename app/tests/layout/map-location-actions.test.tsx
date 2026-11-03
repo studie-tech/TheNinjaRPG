@@ -1,10 +1,8 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import type { MapLocation } from "@/validators/mapLocation";
-import { ensureDom } from "../setup/dom.mjs";
 
-beforeEach(ensureDom);
 afterEach(cleanup);
 const tower: MapLocation = { id: "tower", name: "Old Watchtower", description: "A tower.", assetId: "tower-art", sector: 724, longitude: 4, latitude: 5, scale: 1 };
 

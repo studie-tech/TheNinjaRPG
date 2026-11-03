@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { createPurchaseIdentityScope, restoreForBoundIdentity } from "@/libs/native/purchases";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 const capacitorWindow = window as typeof window & { Capacitor?: unknown };
 afterEach(() => { delete capacitorWindow.Capacitor; });
 

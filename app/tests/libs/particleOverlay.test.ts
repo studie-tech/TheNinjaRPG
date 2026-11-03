@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   CONFETTI_OVERLAY_ID,
@@ -6,8 +5,6 @@ import {
   ensureParticleOverlayCanvas,
   particleOverlayStyle,
 } from "@/libs/particleOverlay";
-
-ensureDom();
 
 afterEach(() => {
   document.getElementById(CONFETTI_OVERLAY_ID)?.remove();

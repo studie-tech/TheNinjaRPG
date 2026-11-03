@@ -10,9 +10,6 @@ import {
   toHotkey,
 } from "@/libs/combat/hotkeys";
 import { hotkeyMapSchema } from "@/validators/loadout";
-import { ensureDom } from "../../setup/dom.mjs";
-
-ensureDom();
 
 describe("battle hotkey focus", () => {
   it("leaves fields and Radix control typeahead to the focused control", () => {

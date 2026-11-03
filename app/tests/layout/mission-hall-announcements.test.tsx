@@ -9,7 +9,6 @@ import * as MissionPicker from "@/layout/MissionPicker";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import * as QuestStartCache from "@/hooks/useQuestStartCacheUpdate";
-import { ensureDom } from "../setup/dom.mjs";
 
 type StartResult = RouterOutputs["quests"]["startQuest"];
 let selectMission: ComponentProps<typeof MissionPicker.default>["onMissionSelect"];
@@ -19,7 +18,6 @@ const invalidate = vi.fn(async () => undefined);
 const shown = vi.fn<typeof toast.showMutationToast>(() => undefined);
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(MissionPicker, "default").mockImplementation(({ onMissionSelect }) => {

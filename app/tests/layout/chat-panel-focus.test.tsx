@@ -8,7 +8,6 @@ import { ChatPanel } from "@/layout/ChatPanel";
 import * as content from "@/layout/ChatPanelContent";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualDialog } from "../setup/preload";
 
 const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
@@ -16,7 +15,6 @@ let level: number;
 
 beforeEach(() => {
   level = MESSAGING_MIN_LEVEL;
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

@@ -11,7 +11,6 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
@@ -27,7 +26,6 @@ let hasMoreReviews: boolean;
 let scrollDescriptor: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  ensureDom();
   scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
   hasLocations = true;

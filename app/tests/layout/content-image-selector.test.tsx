@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import * as elementSize from "@radix-ui/react-use-size";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
@@ -71,7 +70,6 @@ const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "canc
 ] as const);
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   vi.spyOn(ContentImageSelector, "default").mockImplementation(ActualContentImageSelector);
   requests.length = 0;

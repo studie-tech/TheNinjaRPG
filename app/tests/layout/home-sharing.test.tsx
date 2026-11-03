@@ -15,7 +15,6 @@ import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import type UserRequestSystem from "@/layout/UserRequestSystem";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
-import { ensureDom } from "../setup/dom.mjs";
 
 type HomeRequest = ComponentProps<typeof UserRequestSystem>["requests"][number];
 type Result = { success: boolean; message: string };
@@ -34,7 +33,6 @@ const request = (overrides: Partial<HomeRequest> = {}): HomeRequest => ({
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), { home: testApi.home, tournament: testApi.tournament, useUtils: testApi.useUtils });
   vi.spyOn(Link, "default").mockImplementation(({ children, href, onClick }) => (

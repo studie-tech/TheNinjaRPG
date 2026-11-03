@@ -25,7 +25,6 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualDialog, actualUserContext } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
@@ -36,7 +35,6 @@ const eventDescriptors = ["Event", "CustomEvent"].map(
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let pathname = "/tavern";
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

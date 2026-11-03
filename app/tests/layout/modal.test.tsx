@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
@@ -54,7 +53,6 @@ afterEach(() => {
 });
 
 describe("Modal", () => {
-  beforeEach(ensureDom);
   afterEach(cleanup);
 
   it("keeps the footer outside the scrollable body on small viewports", () => {

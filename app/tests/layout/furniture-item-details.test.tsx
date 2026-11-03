@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { cleanup, render } = await import("@testing-library/react");
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ItemWithEffectsProps } from "@/layout/ItemWithEffects";
 
@@ -28,7 +27,6 @@ const furniture = {
 } as unknown as ItemWithEffectsProps["item"];
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), {
     bloodline: { getAllNames: names }, sageMode: { getAllNames: names },

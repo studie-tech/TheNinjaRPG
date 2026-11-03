@@ -4,9 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { useGameScene } from "@/hooks/game-scene";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 afterEach(cleanup);
 const source = readFileSync(join(import.meta.dirname, "../../src/layout/Combat.tsx"), "utf8");
 const sourceBetween = (start: string, end: string) => {

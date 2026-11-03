@@ -9,7 +9,6 @@ import { DUNGEON_FLOORS_PER_TIER } from "@/drizzle/constants";
 import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { dungeonContent } from "../setup/dungeon";
 
 type SaveInput = RouterInputs["coop"]["dungeon"]["save"];
@@ -39,7 +38,6 @@ afterEach(() => {
 });
 
 it.each(["success", "error"])("keeps the saved draft selected until a pending save settles with %s", async (outcome) => {
-  ensureDom();
   const definitions = [
     { id: "A", content: { ...dungeonContent(), name: "Dungeon A" } },
     { id: "B", content: { ...dungeonContent(), name: "Dungeon B" } },

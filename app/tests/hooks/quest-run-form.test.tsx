@@ -12,7 +12,6 @@ import {
   RaidObjective,
   SimpleObjective,
 } from "@/validators/objectives";
-import { ensureDom } from "../setup/dom.mjs";
 
 const tickets = [{ ids: ["ticket"], number: 2 }];
 const floor = InstantStartBattleObjective.parse({
@@ -31,7 +30,6 @@ const save = vi.fn(async (_input: unknown) => ({ success: true }));
 const names = { useQuery: () => ({ data: [], isPending: false }) };
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),

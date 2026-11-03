@@ -14,7 +14,6 @@ import type { UserPatch } from "@/deltas/profile";
 import * as routing from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money = 100, userId = "actor", tutorialOn = true) => ({
@@ -80,7 +79,6 @@ beforeEach(() => {
     const selected = useMemo(() => data ? select(data) : undefined, [data]);
     return { data: selected, updateUser: mocks.updateUser } as never;
   }));
-  ensureDom();
   localStorage.clear();
   Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });

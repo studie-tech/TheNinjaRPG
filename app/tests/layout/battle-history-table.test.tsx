@@ -9,7 +9,6 @@ import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
-import { ensureDom } from "../setup/dom.mjs";
 
 type Input = RouterInputs["combat"]["getBattleHistory"];
 type Row = RouterOutputs["combat"]["getBattleHistory"]["data"][number];
@@ -21,7 +20,6 @@ let fail: boolean;
 let delay: (() => void) | undefined;
 
 beforeEach(() => {
-  ensureDom();
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   requests = [];
   push = vi.fn();

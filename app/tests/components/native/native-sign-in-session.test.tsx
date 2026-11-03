@@ -8,9 +8,7 @@ import * as shell from "@/hooks/useNativeShell";
 import { ActiveSessionBoundary } from "@/layout/ActiveSessionBoundary";
 import * as native from "@/libs/native";
 import { appleAuth } from "@/libs/native";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 const replace = vi.fn();
 const create = vi.fn();
 const setActive = vi.fn();

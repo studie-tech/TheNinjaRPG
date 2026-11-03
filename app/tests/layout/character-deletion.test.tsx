@@ -8,7 +8,6 @@ import DeleteUserButton, { CharacterDeletionSettings } from "@/layout/DeleteUser
 import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualModal } from "../setup/preload";
 
 type Result = UserDeltaResponse & { affectedUserId?: string };
@@ -31,7 +30,6 @@ const browserGlobals = ["Event", "CustomEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  ensureDom();
   for (const key of browserGlobals) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   vi.clearAllMocks();
   isPending = false;

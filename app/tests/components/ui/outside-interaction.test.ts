@@ -1,4 +1,3 @@
-import { ensureDom } from "../../setup/dom.mjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { ignoreToastInteractions } from "@/components/ui/outside-interaction";
 
@@ -9,7 +8,6 @@ const outsideEvent = (target: EventTarget | null) => ({
 
 describe("ignoreToastInteractions", () => {
   beforeEach(() => {
-    ensureDom();
     document.body.innerHTML = `
       <section data-sonner-toaster="true"><li data-sonner-toast><button id="dismiss">OK</button></li></section>
       <main><button id="page">Page</button></main>`;

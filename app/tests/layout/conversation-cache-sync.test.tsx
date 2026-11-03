@@ -26,7 +26,6 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualRichInput } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
@@ -45,7 +44,6 @@ const conversation = (id: string, title: string) => ({
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },

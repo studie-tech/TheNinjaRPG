@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
@@ -38,15 +37,14 @@ import * as Image from "@/layout/Image";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
+import Shop from "@/layout/Shop";
 
-const { default: Shop } = await import("@/layout/Shop");
 const user = {
   level: 50, money: 1_000, reputationPoints: 0, seichiSilver: 0,
   villageId: "village", village: { structures: [] },
 } as unknown as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   purchaseResult = { success: true, message: "Purchased" };
   Object.assign(vi.spyOn(client, "api" as never), {

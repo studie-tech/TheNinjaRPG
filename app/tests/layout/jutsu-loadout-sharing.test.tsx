@@ -3,10 +3,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { JutsuLoadoutSharingDialog } from "@/layout/JutsuLoadoutSharing";
 import { exportJutsuLoadout } from "@/libs/loadout";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualDialog } from "../setup/preload";
 
-ensureDom();
 type Props = ComponentProps<typeof JutsuLoadoutSharingDialog>;
 const preview = {
   token: "a".repeat(64),

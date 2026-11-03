@@ -8,10 +8,8 @@ import ChatPanelBody from "@/layout/ChatPanelContent";
 import * as prompt from "@/layout/NewConversationPrompt";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 beforeEach(() => {
-  ensureDom();
   getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "tavern" });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });

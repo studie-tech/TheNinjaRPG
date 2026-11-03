@@ -9,10 +9,8 @@ import {
   useNavigationRouter,
 } from "@/hooks/navigation";
 import { NavigationProvider } from "@/layout/NavigationProvider";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualLink as Link } from "../setup/preload";
 
-ensureDom();
 // Model the public Link event contract without importing Next's bundled RSC runtime.
 const TestNextLink = ({
   prefetch, href, children, onClick, onNavigate, ...rest

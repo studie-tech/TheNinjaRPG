@@ -1,8 +1,5 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { IframeMuteObserver } from "@/utils/audio";
-import { ensureDom } from "../setup/dom.mjs";
-
-beforeEach(ensureDom);
 
 const appendUserIframe = async () => {
   const iframe = document.createElement("iframe");

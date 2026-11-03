@@ -8,7 +8,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 
 type Result = UserDeltaResponse;
@@ -70,7 +69,6 @@ vi.mock("@/layout/ContentBox", () => ({
 vi.mock("@/libs/toast", createToastMock);
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   mocks.invalidate.mockImplementation(async () => undefined);
   mocks.client = undefined;

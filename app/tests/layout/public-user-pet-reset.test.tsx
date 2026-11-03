@@ -9,7 +9,6 @@ import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
 import { ResetPetImageGeneration } from "@/layout/PublicUser";
 import * as toast from "@/libs/toast";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
@@ -19,7 +18,6 @@ const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  ensureDom();
   scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
   Object.defineProperties(globalThis, {

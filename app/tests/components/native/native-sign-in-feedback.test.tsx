@@ -6,12 +6,10 @@ import NativeSignIn from "@/components/native/NativeSignIn";
 import * as auth from "@/hooks/useNativeAuth";
 import * as shell from "@/hooks/useNativeShell";
 import { appleAuth } from "@/libs/native";
-import { ensureDom } from "../../setup/dom.mjs";
 
 const signIn = vi.fn<() => Promise<auth.NativeAuthResult>>();
 
 beforeEach(() => {
-  ensureDom();
   signIn.mockReset();
   vi.spyOn(clerk, "useSession").mockReturnValue({ isLoaded: true, isSignedIn: false } as ReturnType<typeof clerk.useSession>);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: vi.fn() } as never);

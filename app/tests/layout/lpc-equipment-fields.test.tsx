@@ -1,20 +1,17 @@
 import * as lpcHooks from "@/hooks/lpc";
 import { lpcAssets } from "../setup/lpc";
-import { ensureDom } from "../setup/dom.mjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useForm } from "react-hook-form";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcColor, SpriteAppearance } from "@/validators/lpc";
-
-const { act, cleanup, fireEvent, render, renderHook } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 
 type Fields = { lpcProfile: string | null; lpcColor: LpcColor | null };
 const item = { id: "staff-preview", name: "Blue armour", slot: "CHEST", itemType: "ARMOR", lpcProfile: "plate", lpcColor: "blue" as const };
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(lpcHooks, "useLpcDesigns").mockReturnValue({ data: lpcAssets, error: null } as unknown as ReturnType<typeof lpcHooks.useLpcDesigns>);
   vi.spyOn(characterPreview, "CharacterPreview").mockImplementation(({ user, label }) => (
     <output data-testid="appearance" aria-label={label}>{JSON.stringify(resolveSpriteAppearance(user))}</output>

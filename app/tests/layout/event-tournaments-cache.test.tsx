@@ -19,7 +19,6 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { eventTournamentConfigSchema } from "@/validators/tournament";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 const UserContext = createContext<ReturnType<typeof userContext.useUserData> | null>(null);
@@ -46,7 +45,6 @@ const snapshot = (participant: boolean, invitation = false) => ({
 }) as Profile;
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/tournaments/event");
   Object.assign(vi.spyOn(client, "api" as never), {

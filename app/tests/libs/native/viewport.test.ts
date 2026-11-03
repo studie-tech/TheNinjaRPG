@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { fitContent } from "@/libs/native/viewport";
-import { ensureDom } from "../../setup/dom.mjs";
 
 type NativeWindow = Window & { Capacitor?: unknown };
 let previous: unknown;
 beforeEach(() => {
-  ensureDom();
   previous = (window as NativeWindow).Capacitor;
 });
 afterEach(() => { (window as NativeWindow).Capacitor = previous; });

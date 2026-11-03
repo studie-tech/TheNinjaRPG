@@ -9,7 +9,6 @@ import * as input from "@/components/ui/input";
 import * as shell from "@/hooks/useNativeShell";
 import * as contentBox from "@/layout/ContentBox";
 import { appleAuth } from "@/libs/native";
-import { ensureDom } from "../../setup/dom.mjs";
 import { NativeAccountDeletion } from "@/components/native/NativeAccountDeletion";
 
 let screen: ReturnType<typeof within>;
@@ -28,7 +27,6 @@ beforeEach(() => {
   vi.spyOn(clerkErrors, "isReverificationCancelledError").mockImplementation(
     () => state.cancel,
   );
-  ensureDom();
   screen = within(document.body);
   vi.spyOn(clerk, "useUser").mockReturnValue({
     isLoaded: true,

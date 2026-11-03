@@ -14,7 +14,6 @@ import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
 const testApi = createTRPCReact<AppRouter>();
@@ -35,7 +34,6 @@ const stateAt = (version: number, patch: Partial<BattleState> = {}) =>
   ({ battle: { id: "battle", version, updatedAt: new Date(0) }, result: null, isPending: false, ...patch }) as BattleState;
 
 beforeEach(() => {
-  ensureDom();
   reads = [];
   finishRead = undefined;
   pauseSuccess = undefined;

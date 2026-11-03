@@ -12,9 +12,7 @@ import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import type { HotkeyMap } from "@/libs/combat/hotkeys";
 import { updateQueryCache } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

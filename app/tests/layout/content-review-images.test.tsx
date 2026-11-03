@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { sceneAssetIds } from "@/libs/contentReview/paths";
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as UserContext from "@/utils/UserContext";
@@ -106,7 +105,6 @@ describe("proposal review detail", () => {
     vi.restoreAllMocks();
   });
   beforeEach(() => {
-    ensureDom();
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
       prepareUserUpdate: vi.fn(),
       updateUser: vi.fn(),

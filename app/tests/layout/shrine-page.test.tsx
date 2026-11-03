@@ -11,7 +11,6 @@ import * as ramen from "@/layout/RamenShop";
 import * as warField from "@/layout/WarFieldActions";
 import * as userContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
-import { ensureDom } from "../setup/dom.mjs";
 
 type SectorData = RouterOutputs["travel"]["getSectorData"];
 type ShrineBattle = RouterOutputs["shrine"]["getShrineBattles"][number];
@@ -25,7 +24,6 @@ let sectorData: SectorData;
 let battles: ShrineBattle[];
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   villageId = "neutral";
   sideVillageId = "attacker";

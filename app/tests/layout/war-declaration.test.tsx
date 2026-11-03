@@ -23,7 +23,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { FetchActiveWarsReturnType } from "@/routers/war";
 import * as UserContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
-import { ensureDom } from "../setup/dom.mjs";
 
 // Exercise declarations through WarMap while isolating map rendering and transport.
 vi.spyOn(dynamic, "default").mockImplementation(
@@ -114,7 +113,6 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   vi.clearAllMocks();

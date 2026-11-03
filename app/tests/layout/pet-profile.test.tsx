@@ -31,7 +31,6 @@ import { petSpeciesFixture } from "../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities";
 import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
-import { ensureDom } from "../setup/dom.mjs";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -71,7 +70,6 @@ const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDesc
 beforeEach(() => {
   prepareUserUpdate.mockReset().mockReturnValue(17);
   updateUser.mockReset().mockResolvedValue(false);
-  ensureDom();
   scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
   Object.defineProperties(globalThis, {

@@ -5,12 +5,10 @@ import { ActivityDock } from "@/layout/ActivityDock";
 import * as logbook from "@/layout/Logbook";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import * as context from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const eventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 let user: { userId: string; tutorialOn: boolean; tutorialStep: number; userQuests: unknown[]; questData: unknown[] };
 beforeEach(() => {
-  ensureDom();
   localStorage.clear();
   Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });

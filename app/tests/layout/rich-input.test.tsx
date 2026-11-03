@@ -7,7 +7,6 @@ import * as uploadthing from "@/utils/uploadthing";
 import * as toast from "@/libs/toast";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import { actualDialog, actualRichInput as RichInput } from "../setup/preload";
-import { ensureDom } from "../setup/dom.mjs";
 
 const startUpload = vi.fn();
 const submit = vi.fn();
@@ -15,7 +14,6 @@ const uploadPending = vi.fn();
 let spies: { mockRestore: () => void }[];
 const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

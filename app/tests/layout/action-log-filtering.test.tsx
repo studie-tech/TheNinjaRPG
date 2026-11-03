@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { cleanup, renderHook } from "@testing-library/react";
 import { getFilter, useFiltering } from "@/layout/ActionLogFiltering";
-import { ensureDom } from "../setup/dom.mjs";
 
-beforeEach(ensureDom);
 afterEach(cleanup);
 
 describe("action log filter defaults", () => {

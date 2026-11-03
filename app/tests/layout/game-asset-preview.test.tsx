@@ -1,13 +1,11 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
 import { GameAssetPreview } from "@/layout/GameAssetPreview";
-import { ensureDom } from "../setup/dom.mjs";
 import { lpcAssets } from "../setup/lpc";
 
 afterEach(cleanup);
 
 it("anchors mixed-size and trimmed LPC layers in one logical viewport", () => {
-  ensureDom();
   const asset = lpcAssets.find(({ id }) => id === "shirt")!;
   const source = asset.lpcConfig.variants["male/gray/blue"]![0]!;
   const stand = [[0], [1], [2], [3]];

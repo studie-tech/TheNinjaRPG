@@ -16,7 +16,6 @@ import { getDailyPetOptions } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 const dayKey = "2026-10-16";
@@ -27,7 +26,6 @@ const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

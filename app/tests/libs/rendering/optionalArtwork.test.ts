@@ -12,9 +12,7 @@ import { createTowerDefenseEffects } from "@/libs/rendering/scenes/towerDefenseE
 import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
 import type { FarmPlotState, FarmVisualState } from "@/validators/farming";
 import type { TowerDefenseProjectile } from "@/validators/towerDefense";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 const cleanups: (() => void)[] = [];
 const originalMatchMedia = Object.getOwnPropertyDescriptor(globalThis, "matchMedia");
 beforeEach(() => {

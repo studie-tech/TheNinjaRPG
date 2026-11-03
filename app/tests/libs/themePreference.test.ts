@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { getEffectiveColorTheme } from "@/libs/themePreference";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 describe("getEffectiveColorTheme", () => {
   afterEach(() => {
