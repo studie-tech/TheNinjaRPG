@@ -154,8 +154,7 @@ export const dataRouter = createTRPCRouter({
       const whereConds: QueryCondition[] = [
         inArray(abEvent.experiment, activeExperiments),
       ];
-      if (input?.utmSource && input.utmSource.length > 0)
-        whereConds.push(eq(abEvent.source, input.utmSource));
+      if (input.utmSource) whereConds.push(eq(abEvent.source, input.utmSource));
 
       // Join completions to filtered exposures: a later completion belongs to the
       // first-visit cohort, without loading successes from unrelated experiments.
@@ -207,7 +206,7 @@ export const dataRouter = createTRPCRouter({
         visitorWhere.push(gte(visitorLog.createdAt, new Date(input.startDate)));
       if (input.endDate)
         visitorWhere.push(lte(visitorLog.createdAt, new Date(input.endDate)));
-      if (input.utmSource && input.utmSource.length > 0) {
+      if (input.utmSource) {
         visitorWhere.push(eq(visitorLog.utmSource, input.utmSource));
       } else {
         visitorWhere.push(ne(visitorLog.utmSource, ""));
@@ -353,7 +352,7 @@ export const dataRouter = createTRPCRouter({
       });
 
       const clicks = allVisitorsRow.length;
-      const signups = filteredSignupsRow?.length ?? 0;
+      const signups = filteredSignupsRow.length;
       const characterCreations = characterCreationsRow.length;
       const signupRate = clicks > 0 ? signups / clicks : 0;
       const characterCreationRate = clicks > 0 ? characterCreations / clicks : 0;
@@ -577,7 +576,7 @@ export const dataRouter = createTRPCRouter({
         }
       })();
 
-      const clampMax = RecruitmentMetricMax[metric] ?? 1000;
+      const clampMax = RecruitmentMetricMax[metric];
       const clampedExpr = sql<number>`LEAST(GREATEST(${metricColumn}, 0), ${clampMax})`;
 
       // Small helpers to aggregate per-user rows into level counts
@@ -771,9 +770,7 @@ export const dataRouter = createTRPCRouter({
             dayExpr,
             realWhere,
           )
-        : Promise.resolve(
-            [] as { day: Date | string; source: string; count: number }[],
-          );
+        : Promise.resolve([] as { day: string; source: string; count: number }[]);
 
       // Dynamic series
       const dynPromise =
@@ -783,7 +780,7 @@ export const dataRouter = createTRPCRouter({
               dayExpr,
               input,
             )
-          : Promise.resolve([] as { day: Date | string; count: number }[]);
+          : Promise.resolve([] as { day: string; count: number }[]);
 
       const recPromise =
         !selected || wantsRecruited
@@ -792,7 +789,7 @@ export const dataRouter = createTRPCRouter({
               dayExpr,
               input,
             )
-          : Promise.resolve([] as { day: Date | string; count: number }[]);
+          : Promise.resolve([] as { day: string; count: number }[]);
 
       const [rows, dynamicRows, recruitedRows] = await Promise.all([
         realPromise,
@@ -801,27 +798,20 @@ export const dataRouter = createTRPCRouter({
       ]);
 
       const bySource = new Map<string, { date: string; count: number }[]>();
-      (rows as { day: Date | string; source: string; count: number }[]).forEach((r) => {
-        const d = (r.day as unknown as string) ?? String(r.day);
+      rows.forEach((r) => {
         if (!bySource.has(r.source)) bySource.set(r.source, []);
-        bySource.get(r.source)?.push({ date: d, count: r.count });
+        bySource.get(r.source)?.push({ date: r.day, count: r.count });
       });
       if (dynamicRows.length > 0) {
         bySource.set(
           "Dynamic",
-          (dynamicRows as { day: Date | string; count: number }[]).map((r) => ({
-            date: (r.day as unknown as string) ?? String(r.day),
-            count: r.count,
-          })),
+          dynamicRows.map((r) => ({ date: r.day, count: r.count })),
         );
       }
       if (recruitedRows.length > 0) {
         bySource.set(
           "Recruited",
-          (recruitedRows as { day: Date | string; count: number }[]).map((r) => ({
-            date: (r.day as unknown as string) ?? String(r.day),
-            count: r.count,
-          })),
+          recruitedRows.map((r) => ({ date: r.day, count: r.count })),
         );
       }
 

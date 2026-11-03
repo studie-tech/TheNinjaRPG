@@ -112,7 +112,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics = (
       userAgent: visitorLog.userAgent,
     })
     .from(visitorLog)
-    .where(visitorWhere.length > 0 ? and(...visitorWhere) : undefined);
+    .where(and(...visitorWhere));
 
 /**
  * Build the `visitorLog` selection for `getRecruitmentMainMetrics`, including
@@ -137,13 +137,11 @@ export const selectVisitorLogForGetRecruitmentMainMetrics2 = (
     .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         lt(userData.tutorialStep, 100),
         gte(userData.createdAt, visitorLog.createdAt),
-        ...(input.utmSource && input.utmSource.length > 0
-          ? [eq(referralSource.source, input.utmSource)]
-          : []),
+        ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
       ),
     );
 
@@ -163,7 +161,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics3 = (
     .innerJoin(userData, eq(userData.userId, historicalIp.userId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         gte(userData.createdAt, visitorLog.createdAt),
         ne(userData.rank, "STUDENT"),
@@ -186,7 +184,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics4 = (
     .innerJoin(userData, eq(userData.userId, historicalIp.userId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         gte(userData.createdAt, visitorLog.createdAt),
         ne(userData.rank, "STUDENT"),
@@ -212,7 +210,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics5 = (
     .innerJoin(userData, eq(userData.userId, historicalIp.userId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         gte(userData.createdAt, visitorLog.createdAt),
         gt(userData.pvpFights, 0),
@@ -237,7 +235,7 @@ export const selectVisitorLogForGetRecruitmentMainMetrics6 = (
     .innerJoin(userData, eq(userData.userId, historicalIp.userId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         gte(userData.createdAt, visitorLog.createdAt),
         gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
@@ -267,7 +265,7 @@ export const selectPaypalTransactionForGetRecruitmentMainMetrics = (
     .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
     .where(
       and(
-        ...(input.utmSource && input.utmSource.length > 0
+        ...(input.utmSource
           ? [eq(visitorLog.utmSource, input.utmSource)]
           : [isNotNull(visitorLog.utmSource)]),
         inArray(paypalTransaction.status, ["COMPLETED", "REVIEW_REQUIRED"]),
@@ -294,15 +292,13 @@ export const selectVisitorLogForGetRecruitmentMainMetrics7 = (
     .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
     .where(
       and(
-        input.utmSource && input.utmSource.length > 0
+        input.utmSource
           ? eq(visitorLog.utmSource, input.utmSource)
           : ne(visitorLog.utmSource, ""),
         eq(userData.isAi, false),
         lt(userData.tutorialStep, 100),
         gte(userData.createdAt, visitorLog.createdAt),
-        ...(input.utmSource && input.utmSource.length > 0
-          ? [eq(referralSource.source, input.utmSource)]
-          : []),
+        ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
       ),
     );
 
@@ -346,16 +342,14 @@ export const selectQuestHistoryForGetRecruitmentMainMetrics2 = (
     .innerJoin(quest, eq(quest.id, questHistory.questId))
     .where(
       and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
+        ...visitorWhere,
         eq(userData.isAi, false),
         lt(userData.tutorialStep, 100),
         gte(userData.createdAt, visitorLog.createdAt),
         gte(userData.tutorialStep, TUTORIAL_STEPS_COUNT),
         // By default exclude users who disabled the tutorial
         ...(input.includeTierTutorialDisabled ? [] : [ne(userData.tutorialOn, false)]),
-        ...(input.utmSource && input.utmSource.length > 0
-          ? [eq(referralSource.source, input.utmSource)]
-          : []),
+        ...(input.utmSource ? [eq(referralSource.source, input.utmSource)] : []),
         eq(quest.questType, "tier"),
         eq(questHistory.completed, 1),
       ),
@@ -653,11 +647,7 @@ export const selectBloodlineForGetBloodlineBalanceStatistics = (
       name: bloodline.name,
     })
     .from(bloodline)
-    .where(
-      bloodlineWhereConditions.length > 0
-        ? and(...bloodlineWhereConditions)
-        : undefined,
-    );
+    .where(and(...bloodlineWhereConditions));
 
 /** Build the `userData` selection for `getBloodlineBalanceStatistics`. */
 export const selectUserDataForGetBloodlineBalanceStatistics = (
@@ -814,7 +804,7 @@ export const listSkillTreeForGetSkillTreeBalanceStatistics = (
   whereConditions: import("@/utils/typeutils").QueryCondition[],
 ) =>
   client.query.skillTree.findMany({
-    where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+    where: and(...whereConditions),
     columns: {
       id: true,
       name: true,
@@ -916,7 +906,7 @@ export const selectLogBattleLengthsForGetBattleLengthStatistics = (
     })
     .from(logBattleLengths)
     .groupBy(logBattleLengths.battleType, logBattleLengths.rounds)
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .where(and(...whereConditions))
     .having(havingClause)
     .orderBy(asc(logBattleLengths.rounds));
 
@@ -934,7 +924,7 @@ export const selectLogQueueLengthsForGetQueueLengthStatistics = (
     })
     .from(logQueueLengths)
     .groupBy(logQueueLengths.rankedRank, logQueueLengths.ceiledMinutes)
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+    .where(and(...whereConditions))
     .having(havingClause)
     .orderBy(asc(logQueueLengths.ceiledMinutes));
 
@@ -1088,12 +1078,7 @@ export const selectUserDataForGetRankedRankDistributionStatistics = (
       villageId: userData.villageId,
     })
     .from(userData)
-    .where(
-      and(
-        eq(userData.isAi, false),
-        whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      ),
-    );
+    .where(and(eq(userData.isAi, false), and(...whereConditions)));
 
 /** Build the `quest` selection for `getQuestRewardStatistics`, using the configured predicates. */
 export const selectQuestForGetQuestRewardStatistics = (
@@ -1110,7 +1095,7 @@ export const selectQuestForGetQuestRewardStatistics = (
       content: quest.content,
     })
     .from(quest)
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+    .where(and(...whereConditions));
 
 /**
  * Build the `dataBattleAction` selection for `getStatistics`, using predicates on
