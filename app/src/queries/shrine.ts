@@ -458,7 +458,7 @@ export const updateVillageForSetBoostTemplate = (
     .update(village)
     .set({
       shrineSettings: sql`JSON_SET(
-            COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+            ${village.shrineSettings},
             '$.boostTemplate', CAST(${JSON.stringify(input.template)} AS JSON),
             '$.boostTemplateUpdatedBy', ${user.username},
             '$.boostTemplateUpdatedAt', ${templateUpdatedAt}

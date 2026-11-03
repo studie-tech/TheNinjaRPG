@@ -20,7 +20,7 @@ export function mergeActiveBoostsExpression(params: {
 
   // Ensure $.activeBoosts exists as an object before we touch keys under it.
   let expr = sql`JSON_SET(
-    COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+    ${village.shrineSettings},
     '$.activeBoosts',
     COALESCE(JSON_EXTRACT(${village.shrineSettings}, '$.activeBoosts'), JSON_OBJECT())
   )`;
@@ -69,7 +69,7 @@ export function setShrineSettingsKeyExpression(
   value: string[],
 ): ReturnType<typeof sql> {
   return sql`JSON_SET(
-    COALESCE(${village.shrineSettings}, JSON_OBJECT()),
+    ${village.shrineSettings},
     ${`$.${key}`},
     CAST(${JSON.stringify(value)} AS JSON)
   )`;
