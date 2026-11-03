@@ -235,9 +235,8 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
     settings.push(...newSettings);
   }
 
-  // Convert to DmgConfig, falling back to defaults for safety
-  const get = (name: string) =>
-    settings.find((s) => s.name === name)?.value ?? DMG_SETTING_DEFAULTS[name] ?? 0;
+  // Missing settings were inserted above, so every name resolves to a row
+  const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
 
   return {
     stats_scaling: get("DMG_STATS_SCALING"),
