@@ -13,7 +13,7 @@ import { initialPetSpecies } from "./helpers/species";
 const beforeCutoff = new Date(PET_GENDER_EDIT_UNTIL.getTime() - 1);
 const atCutoff = new Date(PET_GENDER_EDIT_UNTIL.getTime());
 const pet = { userId: "owner", speciesId: "pet-species-0", species: initialPetSpecies[0]!, paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, rank: 1, artRank: 0, avatar: null };
-const adoption = { name: "Aslan", dayKey: "2026-10-26", speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 };
+const adoption = { currency: "REPUTATION", name: "Aslan", dayKey: "2026-10-26", speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 };
 
 describe("companion gender edit cutoff", () => {
   it("allows edits strictly before 26 Nov 2026 UTC", () => {
