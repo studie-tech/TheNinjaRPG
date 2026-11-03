@@ -35,7 +35,7 @@ export default function SupportPage() {
   const filterState = useSupportTicketFiltering();
 
   // Determine if user is staff
-  const isStaff = userData?.role ? isStaffRole(userData.role) : false;
+  const isStaff = isStaffRole(userData?.role);
 
   // Query for tickets
   const { data, isFetching, fetchNextPage, hasNextPage } =
@@ -57,7 +57,9 @@ export default function SupportPage() {
     );
 
   const allTickets =
-    data?.pages.flatMap((page) => page.data).filter((ticket) => ticket?.createdBy) ||
+    data?.pages
+      .flatMap((page) => page.data)
+      .filter((ticket): ticket is NonNullable<typeof ticket> => !!ticket?.createdBy) ??
     [];
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
@@ -155,76 +157,74 @@ export default function SupportPage() {
               )}
 
               {allTickets.map((ticket, i) => (
-                <div key={ticket?.id || `ticket-placeholder-${i}`}>
-                  {ticket && (
-                    <div ref={i === allTickets.length - 1 ? setLastElement : null}>
-                      <Post
-                        title={ticket.title}
-                        hover_effect={true}
-                        color={
-                          ticket.assignedTo?.userId === userData?.userId
-                            ? "blue"
-                            : "default"
-                        }
-                        user={ticket.createdBy}
-                        href={`/support/${ticket.id}`}
-                      >
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2 text-foreground-muted text-sm">
-                            <span>by {ticket.createdBy.username}</span>
-                            <Separator orientation="vertical" className="h-4" />
-                            <span>{formatTimeAgo(ticket.createdAt)}</span>
-                            {ticket.assignedTo && (
-                              <>
-                                <Separator orientation="vertical" className="h-4" />
-                                <span>assigned to {ticket.assignedTo.username}</span>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={getStatusColor(ticket.status)}>
-                              {getStatusIcon(ticket.status)}
-                              <span className="ml-1">
-                                {ticket.status.replaceAll("_", " ")}
-                              </span>
-                            </Badge>
-                            <Badge className={getCategoryColor(ticket.category)}>
-                              {ticket.category.replaceAll("_", " ")}
-                            </Badge>
-                            <Badge className={getPriorityColor(ticket.priority)}>
-                              {ticket.priority}
-                            </Badge>
-                            {ticket.isPublic && (
-                              <Badge variant="outline">
-                                <Users className="mr-1 h-3 w-3" />
-                                Public
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="line-clamp-3 rounded-md border p-2 text-foreground text-sm">
-                            {parseHtml(ticket.description)}
-                          </div>
-
-                          {ticket.tags && ticket.tags.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1">
-                              <Tag className="h-3 w-3 text-foreground" />
-                              {ticket.tags.map((tag, i) => (
-                                <Badge
-                                  key={`${tag}-${i}`}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
+                <div key={ticket.id}>
+                  <div ref={i === allTickets.length - 1 ? setLastElement : null}>
+                    <Post
+                      title={ticket.title}
+                      hover_effect={true}
+                      color={
+                        ticket.assignedTo?.userId === userData?.userId
+                          ? "blue"
+                          : "default"
+                      }
+                      user={ticket.createdBy}
+                      href={`/support/${ticket.id}`}
+                    >
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-foreground-muted text-sm">
+                          <span>by {ticket.createdBy.username}</span>
+                          <Separator orientation="vertical" className="h-4" />
+                          <span>{formatTimeAgo(ticket.createdAt)}</span>
+                          {ticket.assignedTo && (
+                            <>
+                              <Separator orientation="vertical" className="h-4" />
+                              <span>assigned to {ticket.assignedTo.username}</span>
+                            </>
                           )}
                         </div>
-                      </Post>
-                    </div>
-                  )}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={getStatusColor(ticket.status)}>
+                            {getStatusIcon(ticket.status)}
+                            <span className="ml-1">
+                              {ticket.status.replaceAll("_", " ")}
+                            </span>
+                          </Badge>
+                          <Badge className={getCategoryColor(ticket.category)}>
+                            {ticket.category.replaceAll("_", " ")}
+                          </Badge>
+                          <Badge className={getPriorityColor(ticket.priority)}>
+                            {ticket.priority}
+                          </Badge>
+                          {ticket.isPublic && (
+                            <Badge variant="outline">
+                              <Users className="mr-1 h-3 w-3" />
+                              Public
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="line-clamp-3 rounded-md border p-2 text-foreground text-sm">
+                          {parseHtml(ticket.description)}
+                        </div>
+
+                        {ticket.tags && ticket.tags.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Tag className="h-3 w-3 text-foreground" />
+                            {ticket.tags.map((tag, i) => (
+                              <Badge
+                                key={`${tag}-${i}`}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </Post>
+                  </div>
                 </div>
               ))}
             </>
