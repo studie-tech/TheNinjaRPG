@@ -143,13 +143,6 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         call.resolve();
     }
 
-    @PluginMethod
-    public void getPushToStartToken(PluginCall call) {
-        // An iOS-only concept. Resolving empty keeps this a capability check on the web
-        // side rather than an error to handle per platform.
-        call.resolve(new JSObject());
-    }
-
     private void post(int notificationId, String activityId, PluginCall call, long endsAt) {
         Context context = getContext();
         String title = call.getString("title", "TheNinja-RPG");

@@ -157,7 +157,7 @@ public class TNRAudioService extends Service {
             .setOngoing(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && session != null) {
+        if (session != null) {
             builder.setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()));
         }
         return builder.build();

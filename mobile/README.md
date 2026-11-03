@@ -113,7 +113,7 @@ settings, and validates the result by reopening the project. It is idempotent.
 ## Running
 
 The iOS shell and home-screen widgets target iOS 15.4 and later. Live Activities are registered
-only on iOS 16.2 and later; remote push-to-start additionally needs iOS 17.2. On iOS 15,
+only on iOS 16.2 and later. On iOS 15,
 hospital widgets show the finish time rather than a running relative timer, and include
 an expiry timeline entry so the old system cannot turn the countdown into a count-up.
 Ordinary notifications, audio, Apple sign-in and purchases remain separate capabilities.
