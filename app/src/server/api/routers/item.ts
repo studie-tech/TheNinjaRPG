@@ -2253,7 +2253,6 @@ export const itemRouter = createTRPCRouter({
         marriageSlots: user.marriageSlots,
         extraReskinSlots: user.extraReskinSlots,
       };
-      const data: unknown[] = [];
 
       // Rewards
       const rewards: ObjectiveRewardType[] = [];
@@ -2285,7 +2284,6 @@ export const itemRouter = createTRPCRouter({
             previousRolls,
             rank: effect.rank,
           });
-          data.push(bloodlinePool);
           const randomBloodline = getRandomElement(bloodlinePool);
           if (!randomBloodline) {
             throw serverError("NOT_FOUND", "No bloodline found");
@@ -2293,7 +2291,6 @@ export const itemRouter = createTRPCRouter({
           // Success?
           const roll = Math.random() * 100;
           const success = roll < effect.power;
-          data.push({ roll, success });
           // Log action
           const previousRoll = previousRolls.find((r) =>
             success
@@ -2337,7 +2334,6 @@ export const itemRouter = createTRPCRouter({
             user,
             previousRolls: previousSageRolls,
           });
-          data.push(sageModePool);
           const randomSageMode = getRandomElement(sageModePool);
           if (!randomSageMode) {
             messages.push(
@@ -2347,7 +2343,6 @@ export const itemRouter = createTRPCRouter({
           }
           const roll = Math.random() * 100;
           const success = roll < effect.power;
-          data.push({ roll, success });
           if (success) {
             mutations.push((client) =>
               insertSageModeRollsForConsume(client, ctx, randomSageMode),
