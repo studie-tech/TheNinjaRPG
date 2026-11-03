@@ -172,7 +172,7 @@ describe("profile context structural sharing", () => {
     expect(screen.getByRole("button", { name: "Claiming..." }).hasAttribute("disabled")).toBe(true);
     const rejection = { success: false as const, message: "Reward is not ready" };
     await test.settle(async () => { finishClaim(rejection); await claimResponse; });
-    expect(screen.getByRole("button", { name: /^Claim$/ }).hasAttribute("disabled")).toBe(false);
+    expect((await screen.findByRole("button", { name: /^Claim$/ })).hasAttribute("disabled")).toBe(false);
     expect(toast).toHaveBeenCalledWith(rejection);
   });
   it("keeps session services and selected UI idle while imperative position readers stay current", async () => {
