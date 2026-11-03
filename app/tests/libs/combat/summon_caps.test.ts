@@ -123,20 +123,6 @@ describe("one-piloted-summon cap", () => {
   });
 });
 
-describe("legacy battles without summonSourceId", () => {
-  it("still blocks a duplicate by falling back to the template username", () => {
-    const legacy = spawned("s1", DEMON, "Demon", { summonSourceId: undefined });
-    const state = [player(), template(DEMON, "Demon"), legacy];
-    expect(reason(state, DEMON, false)).toContain("already summoned");
-  });
-
-  it("does not block a different creature via the username fallback", () => {
-    const legacy = spawned("s1", DEMON, "Demon", { summonSourceId: undefined });
-    const state = [player(), template(DEMON, "Demon"), template(TIGER, "Tiger"), legacy];
-    expect(reason(state, TIGER, false)).toBeNull();
-  });
-});
-
 describe("clones never trip either cap", () => {
   it("a clone does not count as a summon of its creature", () => {
     const clone = spawned("c1", DEMON, "Demon", {

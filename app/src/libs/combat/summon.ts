@@ -14,9 +14,9 @@ export const summonController = (
 
 /** The hidden clone-source template, not a battlefield entity.
  *  Primary signal: the explicit isSummonTemplate flag (set at load, cleared on
- *  spawn). Legacy fallback for battles predating the flag: a non-live summon
- *  (curHealth<=0) whose controllerId matches no combatant. curHealth<=0 is
- *  required so an ALIVE orphaned summon is not misread as a template. */
+ *  spawn). A dead summon whose controller is no longer a combatant (a creature
+ *  summoned by a summon that has since left) is hidden the same way. curHealth<=0
+ *  is required so an ALIVE orphaned summon is not misread as a template. */
 export const isSummonTemplate = (
   u: Pick<
     BattleUserState,
@@ -97,14 +97,7 @@ export const summonCastBlockedReason = (
   effects: UserEffect[],
 ): string | null => {
   const live = liveSummonsOf(usersState, controllerId, effects);
-  // Battles that started before summonSourceId existed compare against the
-  // template username, which a spawned summon still inherits.
-  const template = usersState.find((u) => u.controllerId === sourceAiId);
-  const duplicate = live.find((u) =>
-    u.summonSourceId
-      ? u.summonSourceId === sourceAiId
-      : !!template && u.username === template.username,
-  );
+  const duplicate = live.find((u) => u.summonSourceId === sourceAiId);
   if (duplicate) return `${duplicate.username} is already summoned`;
   if (wantsPilot && live.some((u) => u.isPiloted)) {
     return "You can only control one summon at a time";

@@ -160,7 +160,14 @@ describe("summon teardown — positive control", () => {
   it("an EXPIRED summon effect (rounds=0, not new) tears down the live summon", () => {
     const battle = mkBattle(
       [mkPlayer(), mkLiveSummon(), mkTemplate()],
-      [mkSummonGroundEffect({ isNew: false, castThisRound: false, rounds: 0 })],
+      [
+        mkSummonGroundEffect({
+          isNew: false,
+          castThisRound: false,
+          rounds: 0,
+          summonedUserId: "live-summon-id",
+        }),
+      ],
     );
 
     const { newBattle } = applyEffects(battle, PLAYER_ID);
@@ -192,14 +199,14 @@ describe("blocked summon re-cast does NOT remove the existing live summon", () =
 
 describe("summon expiry teardown targets the summon, not a clone", () => {
   it("unsummons the real summon and leaves the player's clone intact", () => {
-    // Clone placed BEFORE the summon so a controllerId-only fallback (which a
-    // clone also satisfies) would wrongly pick the clone first.
+    // Clone placed BEFORE the summon, which shares its isSummon and controllerId.
     const usersState = [mkPlayer(), mkClone(), mkLiveSummon(), mkTemplate()];
     // An expired summon effect (rounds=0, not new) drives the teardown path.
     const expiry = mkSummonGroundEffect({
       isNew: false,
       castThisRound: false,
       rounds: 0,
+      summonedUserId: "live-summon-id",
     });
 
     const res = summon(usersState, expiry, [], mkBattle(usersState, []));

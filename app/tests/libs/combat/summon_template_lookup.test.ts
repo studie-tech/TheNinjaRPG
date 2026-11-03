@@ -320,50 +320,9 @@ describe("summons blocked in auto-resolved battle types", () => {
 });
 
 describe("summon teardown after a re-cast", () => {
-  it("removes the expired dead summon, not the freshly re-cast live one", () => {
-    // A re-cast inserts the new live summon at summoner+1, ahead of the older
-    // dead one. When the old effect expires, teardown must remove the dead
-    // summon, not the live one a plain first-match would hit.
-    const liveS2 = {
-      userId: "s2",
-      controllerId: PLAYER_ID,
-      username: "Live",
-      isSummon: true,
-      curHealth: 500,
-      fledBattle: false,
-      leftBattle: false,
-    } as unknown as BattleUserState;
-    const deadS1 = {
-      userId: "s1",
-      controllerId: PLAYER_ID,
-      username: "Dead",
-      isSummon: true,
-      curHealth: 0,
-      fledBattle: false,
-      leftBattle: false,
-    } as unknown as BattleUserState;
-    const usersState = [mkPlayer(), liveS2, deadS1]; // live ahead of dead
-    const userEffects: UserEffect[] = [];
-    const expireEffect = {
-      type: "summon",
-      aiId: AI_DB_ID,
-      creatorId: PLAYER_ID,
-      rounds: 0,
-      isNew: false,
-      castThisRound: false,
-    } as unknown as GroundEffect;
-
-    // No summonedUserId -> legacy branch, which prefers the non-live summon.
-    summon(usersState, expireEffect, userEffects, mkBattle());
-
-    expect(usersState.find((u) => u.userId === "s2")).toBeDefined(); // live kept
-    expect(usersState.find((u) => u.userId === "s1")).toBeUndefined(); // dead removed
-  });
-
   it("removes the summon the effect actually spawned, even if it is the live one", () => {
-    // The legacy heuristic always prefers the non-live summon, so it removes the
-    // dead one no matter which effect expired. With summonedUserId the effect
-    // that spawned the LIVE summon correctly tears down that one instead.
+    // A re-cast inserts the new live summon ahead of an older dead one; the
+    // expiring effect tears down exactly the summon it spawned.
     const liveS2 = {
       userId: "s2",
       controllerId: PLAYER_ID,

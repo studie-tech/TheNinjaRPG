@@ -28,8 +28,6 @@ import {
 import { getPotencyDescription } from "@/libs/combat/potency";
 import { getEffectPower } from "@/libs/combat/power";
 import {
-  isClone,
-  isLiveSummon,
   shouldPilotSummon,
   summonCastBlockedReason,
   summonsAllowedInBattle,
@@ -3455,26 +3453,7 @@ export const summon = (
     // Remove exactly the creature this effect spawned. aiId stays pointed at the
     // clone-source template (so re-cast works), so the spawned id is carried on
     // summonedUserId instead.
-    let idx = usersState.findIndex((u) => u.userId === effect.summonedUserId);
-    if (idx === -1 && effect.summonedUserId === undefined) {
-      // Battles already in flight when summonedUserId was introduced. Match on
-      // controllerId and prefer a non-live summon: a re-cast inserts the new
-      // live summon ahead of an older dead one, so a plain first-match could
-      // remove the live one. Clones share isSummon and controllerId, so they are
-      // excluded here too. Safe to delete once no pre-upgrade battles remain.
-      idx = usersState.findIndex(
-        (u) =>
-          u.isSummon &&
-          !isClone(u) &&
-          u.controllerId === effect.creatorId &&
-          !isLiveSummon(u, usersState, userEffects),
-      );
-      if (idx === -1) {
-        idx = usersState.findIndex(
-          (u) => u.isSummon && !isClone(u) && u.controllerId === effect.creatorId,
-        );
-      }
-    }
+    const idx = usersState.findIndex((u) => u.userId === effect.summonedUserId);
     if (idx > -1) {
       const removed = usersState[idx];
       usersState.splice(idx, 1);
