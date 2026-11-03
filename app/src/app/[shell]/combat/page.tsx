@@ -93,7 +93,7 @@ export default function CombatPage() {
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
-  // Shared battle state survives battlefield layout remounts until this page leaves.
+  // The page owns shared battle state across battlefield layout remounts.
   useEffect(
     () => () => {
       setBattleAtom(undefined);
@@ -257,6 +257,9 @@ export default function CombatPage() {
   // A different client can settle combat while this profile still holds its ID.
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
+    if (userId && !results && (!userData?.battleId || isBattleMissing)) {
+      setBattleAtom((current) => (current?.id === battle?.id ? undefined : current));
+    }
     if (isBattleMissing) {
       if (userData?.battleId) void utils.profile.getUser.invalidate();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
@@ -265,10 +268,12 @@ export default function CombatPage() {
     }
   }, [
     isBattleMissing,
+    userId,
     userData?.battleId,
     battle?.id,
     battle?.extraState.dungeon,
     results,
+    setBattleAtom,
     router,
     utils,
   ]);

@@ -16,6 +16,10 @@ import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as combatSettings from "@/layout/UserCombatSettings";
+import * as avatar from "@/layout/Avatar";
+import MenuBoxProfile from "@/layout/MenuBoxProfile";
+import * as statusBar from "@/layout/StatusBar";
+import * as menus from "@/libs/menus";
 import * as toast from "@/libs/toast";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
@@ -249,6 +253,50 @@ it("recovers a settled battle missing behind a cached character ID", async () =>
   expect(push).not.toHaveBeenCalled();
 });
 
+it.each(["query", "profile"])("releases battle pools when the %s confirms combat ended while the page stays mounted", async (source) => {
+  const battle = makeCompleteBattle({ id: "externally-settled", usersState: [
+    makeUser({ userId: "player", curHealth: 23, maxHealth: 100, curChakra: 31, maxChakra: 100, curStamina: 42, maxStamina: 100 }),
+  ] });
+  const { view, queryClient, changeProfile } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  expect(store.get(userContext.userBattleAtom)?.id).toBe(battle.id);
+  if (source === "query") {
+    await act(async () => queryClient.setQueryData(["combat", battle.id], empty));
+    await view.findByText("You are not in an active battle.");
+    expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  }
+  changeProfile({ status: "AWAKE", battleId: null, curHealth: 90, curChakra: 91, curStamina: 92 });
+  expect(view.getByText("You are not in an active battle.")).toBeDefined();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => ({
+    timeDiff: 0, data: select({ ...userContext.useRequiredUserData().data, level: 10, experience: 0, rank: "GENIN", regeneration: 7, raidBuffs: [], titles: [] } as never),
+  }) as never);
+  vi.spyOn(avatar, "default").mockReturnValue(null as never);
+  vi.spyOn(menus, "useGameMenu").mockReturnValue({} as never);
+  vi.spyOn(statusBar, "default").mockImplementation(({ title, current, regen }) => <p>{title}: {current}; regen: {regen}</p>);
+  Object.assign(client.api, {
+    profile: { getSidebarTimers: { useQuery: () => ({ data: undefined }) } },
+    raids: { getUserRaidBuffs: { useQuery: () => ({ data: undefined }) } },
+  });
+  const sidebar = render(<MenuBoxProfile />);
+  expect(sidebar.getByText("HP: 90; regen: 7")).toBeDefined();
+  expect(sidebar.getByText("CP: 91; regen: 7")).toBeDefined();
+  expect(sidebar.getByText("SP: 92; regen: 7")).toBeDefined();
+});
+
+it("preserves a newer shared battle snapshot when the rendered battle disappears", async () => {
+  const battle = makeCompleteBattle({ id: "older", usersState: [makeUser({ userId: "player" })] });
+  const newer = { ...battle, id: "newer" } as unknown as NonNullable<Response["battle"]>;
+  const { view, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  act(() => store.set(userContext.userBattleAtom, newer));
+  await act(async () => queryClient.setQueryData(["combat", battle.id], empty));
+  await view.findByText("You are not in an active battle.");
+  expect(store.get(userContext.userBattleAtom)).toBe(newer);
+});
+
 it("offers a return path when the character has no battle, without querying", () => {
   const read = vi.fn(async () => empty);
   const { view, refetchProfile } = mount(null, read);
@@ -302,6 +350,7 @@ it("keeps an already displayed result when a later lookup or profile loses its b
   changeBattle(null);
   expect(view.getByText("Finished battle result")).toBeDefined();
   expect(view.queryByRole("link", { name: "Return to Profile" })).toBeNull();
+  expect(getDefaultStore().get(userContext.userBattleAtom)?.id).toBe(battle.id);
 });
 
 it("preserves dungeon recovery when a different member settles its battle", async () => {
