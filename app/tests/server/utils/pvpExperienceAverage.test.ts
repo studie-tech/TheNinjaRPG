@@ -3,10 +3,7 @@ import { getTableConfig } from "drizzle-orm/mysql-core";
 import { PVP_EXPERIENCE_AVERAGE_SETTING } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import {
-  fetchPvpExperienceAverage,
-  resetPvpExperienceAverageCache,
-} from "@/server/utils/pvpExperience";
+import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 
 const start = new Date("2026-10-21T12:00:00Z");
 
@@ -25,12 +22,10 @@ const fakeClient = (averages: number[]) => {
 
 describe("fetchPvpExperienceAverage instance cache", () => {
   beforeEach(() => {
-    resetPvpExperienceAverageCache();
     setSystemTime(start);
   });
   afterEach(() => {
     setSystemTime();
-    resetPvpExperienceAverageCache();
   });
 
   it("serves repeat calls within the TTL from one query", async () => {

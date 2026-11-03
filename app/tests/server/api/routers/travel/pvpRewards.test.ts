@@ -35,7 +35,7 @@ describeWithDatabase("robbery generated prestige PvP boost", () => {
     expect(result.success).toBe(true);
     expect(result.money).toBe(800);
     expect(await readRobber()).toMatchObject({ money: 800, villagePrestige: prestige });
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, VICTIM) })).toMatchObject({ money: 700 });
+    expect(await readVictim()).toMatchObject({ money: 700 });
   });
 
   it("credits nothing when the target deduction fails", async () => {

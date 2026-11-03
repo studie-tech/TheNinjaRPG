@@ -5,23 +5,11 @@ import type { DrizzleClient } from "@/server/db";
 export const countUserReads = (database: DrizzleClient) => {
   let reads = 0;
   let userWrites = 0;
-  let villageReads = 0;
   const userQueries = new Proxy(database.query.userData, {
     get(target, property, receiver) {
       if (property === "findFirst") {
         return (...args: Parameters<typeof target.findFirst>) => {
           reads += 1;
-          return target.findFirst(...args);
-        };
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  });
-  const villageQueries = new Proxy(database.query.village, {
-    get(target, property, receiver) {
-      if (property === "findFirst") {
-        return (...args: Parameters<typeof target.findFirst>) => {
-          villageReads += 1;
           return target.findFirst(...args);
         };
       }
@@ -36,9 +24,9 @@ export const countUserReads = (database: DrizzleClient) => {
           return target.update(table);
         };
       }
-      if (property === "query") return { ...target.query, userData: userQueries, village: villageQueries };
+      if (property === "query") return { ...target.query, userData: userQueries };
       return Reflect.get(target, property, receiver);
     },
   });
-  return { client, getReads: () => reads, getVillageReads: () => villageReads, getUserWrites: () => userWrites };
+  return { client, getReads: () => reads, getUserWrites: () => userWrites };
 };

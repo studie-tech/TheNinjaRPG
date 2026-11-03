@@ -523,7 +523,6 @@ describeWithDatabase("staff user-id rename", () => {
     // into the same Clerk session, so a tombstone they can never clear would lock them out
     // of the game permanently, with no way back short of a new email address.
     const database = await getTestDatabase();
-    await database.delete(storePurchase).where(eq(storePurchase.userId, OLD_USER_ID));
     await deleteUser(database, OLD_USER_ID);
     await Promise.all([
       database.insert(village).values({
@@ -1029,9 +1028,6 @@ describeWithDatabase("staff user-id rename", () => {
       where: eq(userData.userId, OLD_USER_ID),
     });
     expect(reborn?.federalStatus).toBe("SILVER");
-    await database
-      .delete(paypalSubscription)
-      .where(eq(paypalSubscription.affectedUserId, OLD_USER_ID));
   });
 
   it("gives deletion durable ownership before cleanup and refuses a concurrent rename", async () => {
