@@ -6,7 +6,6 @@ import {
   PET_OPTION_COUNTS,
   PET_SPECIES_RARITY_WEIGHTS,
   PetRarities,
-  type PetRarity,
 } from "@/drizzle/constants";
 import type { PetSpecies, UserData } from "@/drizzle/schema";
 import { getPetDayKey } from "@/utils/time";
@@ -16,7 +15,6 @@ export type PetAppearanceOption = {
   index: number;
   name: string;
   description: string;
-  rarity?: PetRarity;
 };
 
 /** Species additionally participate in rarity-weighted daily sampling. */
