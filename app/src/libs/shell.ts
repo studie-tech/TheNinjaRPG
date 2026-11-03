@@ -1,6 +1,5 @@
-import { GAME_LAYOUTS, getWelcomeLayout } from "@/libs/gameLayouts";
+import { GAME_LAYOUTS, getWelcomeLayout, toGameLayoutId } from "@/libs/gameLayouts";
 import {
-  cookieValueToLayout,
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
 } from "@/libs/layoutPreference";
@@ -157,7 +156,7 @@ export const chooseShell = (
   if (!hasSession && request.userAgent && CRAWLER_USER_AGENT.test(request.userAgent)) {
     return { variant: { client, layout: "default", signedIn: false }, assigned: {} };
   }
-  const preference = cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE));
+  const preference = toGameLayoutId(request.cookies.get(LAYOUT_PREFERENCE_COOKIE));
   const layout =
     preference ?? (!hasSession ? getWelcomeLayout(welcomeLayout) : "default");
   const assigned: ShellChoice["assigned"] = {};

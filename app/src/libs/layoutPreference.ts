@@ -57,14 +57,6 @@ export interface LayoutExperimentAssignment {
   variant: string;
 }
 
-export const cookieValueToLayout = (
-  value?: string | null,
-): EffectiveLayout | undefined => {
-  if (value === "pixel" || value === "PIXEL") return "pixel";
-  if (value === "default" || value === "DEFAULT") return "default";
-  return toGameLayoutId(value);
-};
-
 export const getLayoutExperimentAssignments = (variants: {
   abLemuReplacementVariant?: string | null;
   wallpaperVariant?: string | null;
@@ -83,46 +75,8 @@ export const getLayoutExperimentAssignments = (variants: {
   return assignments;
 };
 
-type BrowserCookieStore = {
-  set: (options: {
-    name: string;
-    value: string;
-    path?: string;
-    expires?: number;
-    sameSite?: "lax" | "strict" | "none";
-    secure?: boolean;
-  }) => Promise<void>;
-};
-
 export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
-  if (typeof window === "undefined") return;
-
-  const expires = Date.now() + 365 * 24 * 60 * 60 * 1000;
-  const secure = window.location.protocol === "https:";
-  const secureAttribute = secure ? "; secure" : "";
-  // Write document.cookie synchronously so a following reload sees the preference.
-  // Chrome's Cookie Store API is asynchronous and can lose the race with reload().
-  // biome-ignore lint/suspicious/noDocumentCookie: synchronous persistence is needed before layout reload.
-  document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=${layout}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
-
-  const cookieStore = (window as Window & { cookieStore?: BrowserCookieStore })
-    .cookieStore;
-  if (cookieStore) {
-    void cookieStore
-      .set({
-        name: LAYOUT_PREFERENCE_COOKIE,
-        value: layout,
-        path: "/",
-        expires,
-        sameSite: "lax",
-        secure,
-      })
-      .catch(() => {
-        // document.cookie above is what the next reload reads. Chrome's Cookie Store
-        // mirror separately rejects with UnknownError, or a malformed-cookie TypeError,
-        // on some profiles. The chosen layout is already stored, so the page continues.
-      });
-  }
+  writeYearCookie(LAYOUT_PREFERENCE_COOKIE, layout);
 };
 
 /**
@@ -132,10 +86,7 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
  * @param scale - Validated font scale
  */
 export const persistFontScaleCookie = (scale: FontScaleValue) => {
-  if (typeof window === "undefined") return;
-  const secureAttribute = window.location.protocol === "https:" ? "; secure" : "";
-  // biome-ignore lint/suspicious/noDocumentCookie: mirrors persistLayoutPreferenceCookie above.
-  document.cookie = `${FONT_SCALE_COOKIE}=${scale}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
+  writeYearCookie(FONT_SCALE_COOKIE, String(scale));
 };
 
 /**
@@ -160,13 +111,24 @@ export const applyFontScaleCookie = () => {
 export const storedValueToLayout = (
   value?: string | null,
 ): EffectiveLayout | undefined => {
-  const direct = cookieValueToLayout(value);
+  const direct = toGameLayoutId(value);
   if (direct) return direct;
   if (!value) return undefined;
   try {
     const parsed = JSON.parse(value) as unknown;
-    return typeof parsed === "string" ? cookieValueToLayout(parsed) : undefined;
+    return typeof parsed === "string" ? toGameLayoutId(parsed) : undefined;
   } catch {
     return undefined;
   }
+};
+
+/**
+ * Write a site-wide preference cookie for one year. document.cookie is synchronous,
+ * so a reload that follows immediately already sees the value.
+ */
+const writeYearCookie = (name: string, value: string) => {
+  if (typeof window === "undefined") return;
+  const secureAttribute = window.location.protocol === "https:" ? "; secure" : "";
+  // biome-ignore lint/suspicious/noDocumentCookie: synchronous persistence is needed before a reload.
+  document.cookie = `${name}=${value}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
 };
