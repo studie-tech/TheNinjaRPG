@@ -24,11 +24,10 @@ import {
 Sentry.init({
   dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
 
-  // Session Replay is intentionally not registered. Both replay sample rates were set
-  // to 0, so the rrweb recorder was downloaded, parsed and initialised on every page
-  // load without ever recording a session — pure cost against the interaction budget.
-  // To re-enable, prefer Sentry.lazyLoadIntegration("replayIntegration") so the
-  // recorder is only fetched once a session is actually being sampled.
+  // Session Replay is not registered: the rrweb recorder would cost download, parse and
+  // init time on every page load. To enable it, use
+  // Sentry.lazyLoadIntegration("replayIntegration") so the recorder is fetched only for
+  // sampled sessions.
 
   // Adjust this value in production, or use tracesSampler for greater control
   tracesSampleRate: 0.001,
@@ -223,9 +222,6 @@ Sentry.init({
     if (isFirefoxNSError(event)) {
       return null; // Drop Firefox NS_ERROR from third-party scripts
     }
-    if (isRageClickEvent(event)) {
-      return null; // Drop rage click events from error tracking
-    }
     if (isResponseBodyAlreadyReadError(event)) {
       return null; // Drop Response body already read errors
     }
@@ -260,9 +256,6 @@ Sentry.init({
   // Leave this off while a pull zone serves the bundle: app frames then come from
   // the zone's hostname, and an allowlist of the site would drop every client error.
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
-
-  // Replay sample rates are omitted along with the integration above; they have no
-  // effect on their own.
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
@@ -2185,41 +2178,6 @@ const isUserscriptRawError = (err: unknown): boolean => {
 
   // Only filter if the error is purely from the userscript (no app code in stack)
   return !hasAppCodeInStack;
-};
-
-/**
- * Check if an event is a Sentry rage click detection.
- * Rage clicks are user interaction patterns (rapid repeated clicks) detected by
- * Sentry's Session Replay SDK, not actual application errors. They represent
- * potential UX friction points but are not actionable bugs.
- *
- * UX note: Rage clicks are expected user behavior, especially on:
- * - Mobile devices with touch screen sensitivity
- * - Slow networks where users perceive UI as unresponsive
- * - Budget devices with lower touch accuracy
- * - Accordion/expandable UI components where users try to close already-open items
- *
- * Rage clicks are still captured as replay events (when replays are enabled) and
- * can be analyzed separately from error tracking. Filtering them from error tracking
- * reduces noise and focuses attention on actual application bugs.
- *
- * Detection pattern:
- * - Event title: "Rage Click"
- * - Event level: "error" (Sentry's default categorization)
- * - No exception or stack trace (not a JavaScript error)
- * - May have replay_id tag indicating associated session replay
- *
- */
-const isRageClickEvent = (event: Sentry.ErrorEvent): boolean => {
-  const title = (event as any).title ?? "";
-  const level = event.level;
-  const hasException = (event.exception?.values?.length ?? 0) > 0;
-
-  // Rage clicks have:
-  // 1. Title "Rage Click"
-  // 2. Level "error"
-  // 3. No exception/stack trace
-  return title === "Rage Click" && level === "error" && !hasException;
 };
 
 /**

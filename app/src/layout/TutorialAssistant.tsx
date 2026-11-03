@@ -1,6 +1,5 @@
 "use client";
 
-import * as Sentry from "@sentry/nextjs";
 import {
   ArrowRight,
   Gift,
@@ -734,20 +733,6 @@ const PlayerTutorialAssistant: React.FC<
       }
     }
   }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
-
-  // Start Sentry replay on the first tutorial step
-  useEffect(() => {
-    // Do not handle replays on done tutorial
-    if (stepNumber >= TUTORIAL_STEPS.length) return;
-    if (!userData) return;
-    if (userData.level > 1) return;
-    if (userData?.tutorialOn === false) return;
-    // Start replay if we're on step 0 (first step)
-    const replay = Sentry.getReplay();
-    if (replay && stepNumber === 0) {
-      replay.start();
-    }
-  }, [stepNumber, userData]);
 
   // Helper function to update the highlight position
   const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
