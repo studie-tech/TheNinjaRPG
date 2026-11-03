@@ -80,8 +80,8 @@ import type { QuestTrackerType } from "@/validators/objectives";
 /** Marks the assistant panel so the highlight logic can measure what it covers. */
 const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
 
-/** Where the Activity dock lands when it dodges a highlight (its `top-20`). */
-const DODGED_PANEL_TOP_PX = 60;
+/** Where the Activity dock lands when it dodges a highlight (its `top-20`), in rem. */
+const DODGED_PANEL_TOP_REM = 5;
 
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
 const STUCK_STEP_SECONDS = 60;
@@ -877,7 +877,12 @@ const PlayerTutorialAssistant: React.FC<
             if (
               panelAfter &&
               rectsOverlap(after, panelAfter) &&
-              after.top > DODGED_PANEL_TOP_PX + panelAfter.height
+              after.top >
+                DODGED_PANEL_TOP_REM *
+                  Number.parseFloat(
+                    getComputedStyle(document.documentElement).fontSize,
+                  ) +
+                  panelAfter.height
             ) {
               setPanelDodgesHighlight(true);
             }

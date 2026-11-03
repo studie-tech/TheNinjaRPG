@@ -841,20 +841,24 @@ export const useTutorialStep = () => {
     guidanceReason,
   ]);
 
-  // Update user's tutorial step
-  const { mutate: updateTutorialStep, isPending } =
-    api.profile.updateTutorialStep.useMutation({
-      onSuccess: async (data) => {
-        if (data.success && data.userPatch?.tutorialStep !== undefined) {
-          await updateUser({ tutorialStep: data.userPatch.tutorialStep });
-          const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
-          const onBattlePage = pathname === "/combat";
-          if (nextStepPage && !onBattlePage && !isSamePage(nextStepPage, pathname)) {
-            router.push(nextStepPage);
-          }
+  // Saves the tutorial step: `mutate` for callers that fire and forget,
+  // the async form for `saveStep`, which rolls the optimistic step back.
+  const {
+    mutate: updateTutorialStep,
+    mutateAsync: saveTutorialStep,
+    isPending,
+  } = api.profile.updateTutorialStep.useMutation({
+    onSuccess: async (data) => {
+      if (data.success && data.userPatch?.tutorialStep !== undefined) {
+        await updateUser({ tutorialStep: data.userPatch.tutorialStep });
+        const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
+        const onBattlePage = pathname === "/combat";
+        if (nextStepPage && !onBattlePage && !isSamePage(nextStepPage, pathname)) {
+          router.push(nextStepPage);
         }
-      },
-    });
+      }
+    },
+  });
 
   // Hide the assistant once the player is past the last step
   useEffect(() => {
@@ -872,15 +876,11 @@ export const useTutorialStep = () => {
     if (isPending || nextStep === stepNumber) return;
     const previousStep = stepNumber;
     await updateUser({ tutorialStep: nextStep });
-    return new Promise<void>((resolve) => {
-      updateTutorialStep(
-        { step: nextStep },
-        {
-          onError: () => void updateUser({ tutorialStep: previousStep }),
-          onSettled: () => resolve(),
-        },
-      );
-    });
+    try {
+      await saveTutorialStep({ step: nextStep });
+    } catch {
+      await updateUser({ tutorialStep: previousStep });
+    }
   };
 
   const handleNextStepAsync = async (forceStep?: string) => {

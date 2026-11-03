@@ -630,6 +630,8 @@ function Travel() {
       onMutate: () => ({
         revision: prepareUserUpdate(),
         sector: prepareSectorUpdate(),
+        // Starting the trip already stored its server-confirmed destination.
+        arrivalSector: userData?.sector,
       }),
       onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
@@ -646,7 +648,10 @@ function Travel() {
         );
         await updateSector(profileApplied, context.sector);
         // A step that names its destination is only finished by arriving there.
-        if (tutorialFocusSector === null || patch?.sector === tutorialFocusSector) {
+        if (
+          tutorialFocusSector === null ||
+          context.arrivalSector === tutorialFocusSector
+        ) {
           await completeTutorialAction("travelArrive");
         }
       },
