@@ -56,7 +56,6 @@ export default function NativeBridge() {
   const [snapshotOwnerUserId, setSnapshotOwnerUserId] = useState<string | null>(() =>
     safeLocalStorageGetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY),
   );
-  const isSignedOut = isClerkLoaded && !userId;
   const shouldClearAccountState = shouldClearNativeAccountState({
     isClerkLoaded,
     status,
@@ -211,7 +210,7 @@ export default function NativeBridge() {
       void clearWidgets().catch(() => undefined);
       return;
     }
-    if (widgetAccountAction !== "sync" || !userData || isSignedOut) return;
+    if (widgetAccountAction !== "sync" || !userData) return;
     const quest = activeQuest(userData);
     const snapshot = {
       widgetToken,
@@ -251,18 +250,11 @@ export default function NativeBridge() {
           setSnapshotOwnerUserId(userData.userId);
         },
       )
-      .then((outcome) => {
-        // A stale write was skipped because a clear took ownership. The clear already reset
-        // this signature, but keep the invariant local in case these operations are reused.
-        if (outcome === "stale" && lastSnapshot.current === signature) {
-          lastSnapshot.current = null;
-        }
-      })
       .catch(() => {
         // Keep the prior persisted owner and allow an unchanged regeneration tick to retry.
         if (lastSnapshot.current === signature) lastSnapshot.current = null;
       });
-  }, [clearWidgets, isSignedOut, userData, timeDiff, widgetToken, widgetAccountAction]);
+  }, [clearWidgets, userData, timeDiff, widgetToken, widgetAccountAction]);
 
   if (!isOutdated) return null;
   return <UpdateWall />;
