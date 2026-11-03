@@ -26,6 +26,7 @@ const textures = createLeaseCache<Texture>({
  */
 export const createSceneAssets = () => {
   const owned = new Map<string, ReturnType<typeof textures.acquire>>();
+  const leases = new Set<() => void>();
   const textureKey = (path: string, width: number, sampling: "linear" | "nearest") => {
     const source =
       worldAssetSource(path)?.image ??
@@ -45,21 +46,31 @@ export const createSceneAssets = () => {
       owned.set(url, entry);
       return entry.resource;
     },
-    /** A bounded derived-resource cache can retire its binding without disposing unrelated scene artwork. */
-    releaseTexture: (
+    /** Derived atlas views hold independent leases even when several frames share one image page. */
+    acquireTexture: (
       path: string,
       width = 50,
       sampling: "linear" | "nearest" = "linear",
     ) => {
-      const key = textureKey(path, width, sampling);
-      owned.get(key)?.release();
-      owned.delete(key);
+      if (disposed)
+        return {
+          resource: Promise.reject<Texture>(new Error("Scene assets are disposed")),
+          release: () => {},
+        };
+      const lease = textures.acquire(textureKey(path, width, sampling));
+      const release = () => {
+        lease.release();
+        leases.delete(release);
+      };
+      leases.add(release);
+      return { resource: lease.resource, release };
     },
     dispose: () => {
       if (disposed) return;
       disposed = true;
       for (const entry of owned.values()) entry.release();
       owned.clear();
+      for (const release of leases) release();
     },
   };
 };

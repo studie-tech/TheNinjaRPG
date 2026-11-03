@@ -69,7 +69,11 @@ export const createProjectedWorldLighting = (
   const loadedAtlases = new Map<string, BakedShadowAtlas>();
   const atlases = createLeaseCache<BakedShadowAtlas>({
     load: async (key) => {
-      const atlas = await loadBakedShadowAtlas(game, key);
+      const atlas = await loadBakedShadowAtlas(
+        game,
+        key,
+        options.restoreWarmWindows ?? false,
+      );
       loadedAtlases.set(key, atlas);
       return atlas;
     },
@@ -407,15 +411,20 @@ void main() {
   vec4 source = texture2D(uTexture, vTextureCoord);
   vec3 base = source.rgb / max(source.a, 0.0001);
   vec3 color = base * uAmbient;
-  vec3 emission = mix(color, base, uWarmSource);
+  vec3 emission = color;
   float warm = smoothstep(0.18, 0.5, emission.r - emission.b) * smoothstep(0.1, 0.4, emission.g - emission.b) * smoothstep(0.02, 0.18, emission.r - emission.g);
   vec3 moon = color * vec3(0.62, 0.68, 0.76);
-  vec3 lit = mix(color, moon, uNight) + warm * uLocalNight * (min(vec3(1.0), mix(color * 1.6, base * 1.25, uWarmSource)) - moon);
+  vec3 lit = mix(color, moon, uNight) + warm * uLocalNight * (1.0 - uWarmSource) * (min(vec3(1.0), color * 1.6) - moon);
   if (uWarmSource > 0.5 && uLocalNight > 0.0) {
     vec3 screenPoint = vec3(vScreenPosition, 1.0);
     vec2 warmUV = vec2(dot(uWarmU, screenPoint), dot(uWarmV, screenPoint));
-    float field = texture2D(uWarmMap, warmUV).r * step(0.0, warmUV.x) * step(warmUV.x, 1.0) * step(0.0, warmUV.y) * step(warmUV.y, 1.0);
-    lit += base * vec3(0.80, 0.48, 0.15) * field * uLocalNight;
+    float inside = step(0.0, warmUV.x) * step(warmUV.x, 1.0) * step(0.0, warmUV.y) * step(warmUV.y, 1.0);
+    vec4 pool = texture2D(uWarmMap, warmUV) * inside;
+    vec3 field = pool.rgb;
+    // Authored fixture positions gate recovery through the shared ambient pass; red paint stays shaded.
+    float glow = pool.a * smoothstep(0.82, 0.98, base.r) * smoothstep(0.52, 0.74, base.g) * smoothstep(0.12, 0.32, base.r - base.b);
+    lit = mix(lit, max(lit, base), glow * uLocalNight);
+    lit += base * field * uLocalNight;
   }
   gl_FragColor = vec4(min(vec3(1.0), lit) * source.a, source.a);
 }`;

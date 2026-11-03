@@ -21,12 +21,13 @@ describe("world sprite atlas ownership", () => {
     const first = createSceneAssets(), second = createSceneAssets(), pressure = createSceneAssets();
     const path = "/world-shadows/active-lease.png", other = "/world-shadows/idle-pressure.png";
     try {
-      await Promise.all([first.texture(path, 0), second.texture(path, 0)]);
-      first.releaseTexture(path, 0); first.dispose();
+      const a = first.acquireTexture(path, 0), b = second.acquireTexture(path, 0);
+      await Promise.all([a.resource, b.resource]);
+      a.release(); first.dispose();
       await pressure.texture(other, 0); pressure.dispose();
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(unload.mock.calls.map(([url]) => url)).not.toContain(path);
-      expect(await second.texture(path, 0)).toBe(resource);
+      expect(await b.resource).toBe(resource);
       expect(load.mock.calls.filter(([input]) => (input as unknown as { src: string }).src === path)).toHaveLength(1);
     } finally { first.dispose(); second.dispose(); pressure.dispose(); resource.destroy(true); }
   });

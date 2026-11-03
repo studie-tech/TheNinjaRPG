@@ -758,7 +758,7 @@ describe("physical world lighting", () => {
     // Fixture-owned atlas sources preserve real dimensions independently of shared scene image leases.
     const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({
       texture: async (path) => decoded[path === worldAssetSource("/world-art/biome-scenery.webp")!.material ? 1 : 0]!,
-      releaseTexture() {},
+      acquireTexture() { return {resource: Promise.resolve(Texture.EMPTY), release() {}}; },
       dispose() {},
     }));
     let drawn: Uint8Array = new Uint8Array();

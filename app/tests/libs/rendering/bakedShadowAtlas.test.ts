@@ -1,11 +1,11 @@
 import { describe, expect, it, mock, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
-import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
+import { BufferImageSource, Container, Matrix, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import sources from "@/libs/rendering/bakedWorldSources.json";
-import { hasBakedShadow, loadBakedShadowAtlas } from "@/libs/rendering/bakedShadowAtlas";
+import { bakedShadowBasis, bakedShadowKey, bakedShadowTransform, hasBakedShadow, loadBakedShadowAtlas } from "@/libs/rendering/bakedShadowAtlas";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
@@ -14,6 +14,29 @@ const first = () => { const entry = Object.entries(sources)[0]; if (!entry) thro
 const texture = (width: number, height: number) => new Texture({ source: new BufferImageSource({ resource: new Uint8Array(width * height * 4), width, height }) });
 
 describe("prebaked world assets", () => {
+  it("keeps fitted wall foundations while casting in a common world light basis", async () => {
+    for (const [key] of Object.entries(sources).filter(([key]) => JSON.parse(key).length === 5)) {
+      const [image, frame, , material, basis] = JSON.parse(key);
+      const original = texture(1024, 1024), view = new Texture({source:original.source,frame:new Rectangle(frame.x,frame.y,frame.width,frame.height)});
+      const shadowTexture = texture(16,8), glow = texture(1024,1024), scale = .25;
+      const description = {id:"wall",kind:"village_wall_panel",image,worldMaterial:material,size:frame.height*scale,width:frame.width*scale*basis[0],shearY:basis[1]/basis[0],shadowCaster:"wall",x:100,y:-40,groundY:-40} as WorldSpriteDescription;
+      const sprite = new Sprite(view);sprite.anchor.set(.4,.7);
+      const pose = new Matrix(basis[0]*scale,basis[1]*scale,0,-scale,100,-40);
+      const game = {assets:{acquireTexture:(path:string)=>({resource:Promise.resolve(path.includes("world-lighting")?glow:shadowTexture),release(){}})},signal:new AbortController().signal,isDisposed:()=>false} as unknown as GameRenderer;
+      try {
+        expect(bakedShadowKey(view,description)).toBe(key);
+        expect(bakedShadowBasis(view,description)).toEqual(basis);
+        const atlas = await loadBakedShadowAtlas(game,key), m = bakedShadowTransform(atlas,sprite,pose);
+        expect(m.b).toBeCloseTo(0,6);expect(m.c).toBeCloseTo(0,6);
+        expect(m.a/(atlas.width*frame.height/atlas.cellWidth)).toBeCloseTo(scale,6);
+        expect(-m.d/(atlas.height*frame.height/atlas.cellHeight)).toBeCloseTo(scale,6);
+        const zero = m.apply({x:-atlas.minX/atlas.width*atlas.cellWidth,y:-atlas.minY/atlas.height*atlas.cellHeight});
+        const anchor = pose.apply({x:-sprite.anchor.x*frame.width,y:-sprite.anchor.y*frame.height});
+        expect(zero.x).toBeCloseTo(anchor.x,6);expect(zero.y).toBeCloseTo(anchor.y,6);
+        atlas.destroy();atlas.releaseTextures();
+      } finally {sprite.destroy();view.destroy(false);original.destroy(true);shadowTexture.destroy(true);glow.destroy(true);}
+    }
+  });
   it("retains canopy depth and occupied pixels in every baked compass direction", async () => {
     for (const width of [124.5, 110]) {
       const entry = Object.entries(sources).find(([key]) => { const [image, frame] = JSON.parse(key); return image === WORLD_ASSET_SOURCES["/world-art/woodland-village.webp"]?.image && frame.width === width; });
@@ -43,7 +66,13 @@ describe("prebaked world assets", () => {
       for (const png of [atlas, ...(emission ? [emission] : [])]) { expect(png.subarray(1, 4).toString()).toBe("PNG"); expect(png.readUInt32BE(16)).toBeLessThanOrEqual(4096); expect(png.readUInt32BE(20)).toBeLessThanOrEqual(4096); }
       const width = atlas.readUInt32BE(16), height = atlas.readUInt32BE(20);
       expect(width % 4).toBe(0); expect(height % 2).toBe(0);
-      expect(source.bytes).toBe((width * height + (emission ? emission.readUInt32BE(16) * emission.readUInt32BE(20) : 0)) * 4);
+      expect(source.bytes).toBe(width * height * 4 + ("emissionBytes" in source ? source.emissionBytes : 0));
+      if (emission && "emissionFrame" in source) {
+        const [x,y,w,h] = source.emissionFrame;
+        expect(x!+w!).toBeLessThanOrEqual(emission.readUInt32BE(16));
+        expect(y!+h!).toBeLessThanOrEqual(emission.readUInt32BE(20));
+        expect(source.emissionBytes).toBe(w!*h!*4);
+      }
       if (emission) expect(source.emitters.length).toBeGreaterThan(0);
     }
   });
@@ -52,7 +81,7 @@ describe("prebaked world assets", () => {
     const [key] = first(), [image, frame, orig, material] = JSON.parse(key);
     const source = texture(frame.x + frame.width, frame.y + frame.height);
     const view = new Texture({ source: source.source, frame: new Rectangle(frame.x, frame.y, frame.width, frame.height), orig: new Rectangle(orig.x, orig.y, orig.width, orig.height) });
-    const description: WorldSpriteDescription = { id: "building", kind: "structure", image, worldMaterial: material, size: 1, x: 0, y: 0, groundY: 0 };
+    const description: WorldSpriteDescription = { id: "building", kind: "structure", preserveAspect: true, image, worldMaterial: material, size: 1, x: 0, y: 0, groundY: 0 };
     try {
       expect(hasBakedShadow(view, description)).toBe(true);
       expect(hasBakedShadow(view, { ...description, image: `${image}-changed` })).toBe(false);
@@ -63,9 +92,9 @@ describe("prebaked world assets", () => {
   });
 
   it("loads every direction together without a renderer or live shadow calculation and releases only its views", async () => {
-    const [key, metadata] = first(), atlas = texture(16, 8), emission = texture(4, 4);
+    const [key, metadata] = first(), atlas = texture(16, 8), emission = texture(1024, 1024);
     const load = mock(async (path: string) => path === metadata.atlas ? atlas : emission);
-    const game = { assets: { texture: load }, signal: new AbortController().signal, isDisposed: () => false } as unknown as GameRenderer;
+    const game = { assets: { acquireTexture: (path: string) => ({resource:load(path),release:vi.fn()}) }, signal: new AbortController().signal, isDisposed: () => false } as unknown as GameRenderer;
     try {
       const result = await loadBakedShadowAtlas(game, key);
       expect(load.mock.calls.map(([path]) => path)).toEqual([metadata.atlas, ...("emission" in metadata ? [metadata.emission] : [])]);
@@ -78,7 +107,7 @@ describe("prebaked world assets", () => {
 
   it("rejects unsupported asset versions before loading textures", async () => {
     const load = mock(async () => Texture.WHITE);
-    await expect(loadBakedShadowAtlas({ assets: { texture: load } } as unknown as GameRenderer, "unknown-version")).rejects.toThrow("No authored shadow bake");
+    await expect(loadBakedShadowAtlas({ assets: { acquireTexture: () => ({resource:load(),release:vi.fn()}) } } as unknown as GameRenderer, "unknown-version")).rejects.toThrow("No authored shadow bake");
     expect(load).not.toHaveBeenCalled();
   });
 
@@ -87,13 +116,13 @@ describe("prebaked world assets", () => {
     const [key, metadata] = first(), [image, frame, orig, material] = JSON.parse(key);
     const original = texture(frame.x + frame.width, frame.y + frame.height);
     const view = new Texture({ source: original.source, frame: new Rectangle(frame.x, frame.y, frame.width, frame.height), orig: new Rectangle(orig.x, orig.y, orig.width, orig.height) });
-    const atlas = texture(16, 8), emission = texture(4, 4), world = new Container(), cleanups: (() => void)[] = [];
-    const game = { renderer: { resolution: 1 }, assets: { texture: async (path: string) => path === metadata.atlas ? atlas : emission },
+    const atlas = texture(16, 8), emission = texture(1024, 1024), world = new Container(), cleanups: (() => void)[] = [];
+    const game = { renderer: { resolution: 1 }, assets: { acquireTexture: (path: string) => ({resource:Promise.resolve(path === metadata.atlas ? atlas : emission),release:vi.fn()}) },
       visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, signal: new AbortController().signal, isDisposed: () => false, invalidate: () => {},
       own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;
     try {
       const lighting = createBakedVillageLighting(game, world), building = new Sprite(view); building.anchor.set(.5); world.addChild(lighting.container, building);
-      const release = lighting.register(building, { id: "building", kind: "structure", image, worldMaterial: material, shadowCaster: "building", light: 1, size: orig.height, x: 0, y: 0, groundY: 0 });
+      const release = lighting.register(building, { id: "building", kind: "structure", preserveAspect: true, image, worldMaterial: material, shadowCaster: "building", light: 1, size: orig.height, x: 0, y: 0, groundY: 0 });
       await new Promise(resolve => setTimeout(resolve, 0));
       lighting.update({ x: 0, y: -.5, z: .866, day: 0 }, { minX: -10000, maxX: 10000, minY: -10000, maxY: 10000 });
       expect(building.children).toHaveLength(1); expect(building.children[0]?.visible).toBe(true);

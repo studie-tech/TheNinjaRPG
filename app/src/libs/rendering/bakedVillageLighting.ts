@@ -11,12 +11,13 @@ import {
   createCharacterShadowPoses,
   type ShadowPose,
 } from "@/libs/rendering/characterShadowPose";
+import { createWindSprite } from "@/libs/rendering/primitives/windSprites";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import {
-  createVillageLightField,
-  type VillageLightField,
+  acquireVillageLightField,
+  type VillageLightBlocker,
 } from "@/libs/rendering/villageLightField";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
@@ -61,7 +62,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   base.container.addChildAt(ground, 1);
   base.container.addChildAt(localGround, 1);
   const poses = createCharacterShadowPoses();
-  let lightField: VillageLightField | null = null;
   const buildings = new Set<Building>();
   const scenery = new Set<{
     source: Sprite;
@@ -76,7 +76,14 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     poseDirty: boolean;
   }>();
   const characters = new Map<Container, Character>();
-  const fixtures = new Set<Fixture>();
+  const fixtures = new Map<Sprite, Fixture>();
+  const overlays = new Map<Sprite, Sprite>();
+  const blockers = new Map<Sprite, BakedShadowAtlas>();
+  let fieldLease: ReturnType<typeof acquireVillageLightField> = null;
+  let pendingField: ReturnType<typeof acquireVillageLightField> = null;
+  let fieldTimer: ReturnType<typeof setTimeout> | null = null;
+  let fieldRevision = 0;
+  let previousGlow = -1;
   let smoothSun: ReturnType<typeof worldSunlight> | null = null;
   let dirty = true,
     disposed = false;
@@ -108,14 +115,41 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   ) => {
     const atlas = building.atlas;
     if (!atlas) return;
-    placeBakedShadowPair(
-      sprites,
-      atlas,
-      bakedShadowTransform(atlas, building.source, building.transform),
-      x,
-      y,
-      opacity,
-    );
+    placeBakedShadowPair(sprites, atlas, building.shadowPose, x, y, opacity);
+  };
+  const removeLighting = (source: Sprite) => {
+    overlays.get(source)?.destroy();
+    overlays.delete(source);
+    fixtures.delete(source);
+    blockers.delete(source);
+    dirty = true;
+  };
+  const installLighting = (
+    source: Sprite,
+    description: WorldSpriteDescription,
+    atlas: BakedShadowAtlas,
+  ) => {
+    if (atlas.emission !== Texture.EMPTY && !overlays.has(source)) {
+      const overlay = createWindSprite(game.renderer, atlas.emission, 0);
+      overlay.anchor.copyFrom(source.anchor);
+      overlay.width = source.texture.orig.width;
+      overlay.height = source.texture.orig.height;
+      overlay.visible = false;
+      overlay.label = "baked-fixture-emission";
+      source.addChild(overlay);
+      overlays.set(source, overlay);
+      previousGlow = -1;
+    }
+    if (description.light || atlas.frame.emitters.length)
+      fixtures.set(source, { source, description, atlas, light: null });
+    if (
+      atlas.frame.footprints.length &&
+      (description.shadowCaster === "wall" ||
+        description.shadowCaster === "building" ||
+        description.kind === "village_wall_tower")
+    )
+      blockers.set(source, atlas);
+    dirty = true;
   };
   const register: typeof base.register = (
     source,
@@ -196,6 +230,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
           .then((atlas) => {
             if (!scenery.has(record)) return;
             record.atlas = atlas;
+            installLighting(source, description, atlas);
             dirty = true;
             game.invalidate();
           })
@@ -207,16 +242,17 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         dirty = true;
         baseRelease();
         sceneryAtlas?.release();
+        removeLighting(source);
       };
       fallback = Object.assign(release, { ready: fallback.ready });
     }
     if (description.light) {
-      const fixture = { source, description, light: null } as Fixture;
-      fixtures.add(fixture);
+      const fixture = { source, description, atlas: null, light: null } as Fixture;
+      fixtures.set(source, fixture);
       dirty = true;
       const release = fallback;
       const remove = () => {
-        fixtures.delete(fixture);
+        fixtures.delete(source);
         dirty = true;
         release();
       };
@@ -234,8 +270,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     if (!hasBakedShadow(source.texture, description))
       return Object.assign(
         () => {
-          for (const fixture of fixtures)
-            if (fixture.source === source) fixtures.delete(fixture);
+          fixtures.delete(source);
           dirty = true;
           fallback();
         },
@@ -245,11 +280,11 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       source,
       description,
       transform: new Matrix(),
+      shadowPose: new Matrix(),
       height: 0,
       atlas: null,
       sun: pair(),
       lamps: [pair(localGround), pair(localGround)],
-      emission: null,
       selected: [],
       active: true,
       fallback,
@@ -263,16 +298,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         if (!building.active || disposed) return;
         building.atlas = atlas;
         fallback();
-        const emission = new Sprite(atlas.emission);
-        emission.anchor.copyFrom(source.anchor);
-        emission.width = source.texture.orig.width;
-        emission.height = source.texture.orig.height;
-        emission.tint = 0xffffff;
-        emission.blendMode = "normal";
-        emission.visible = false;
-        emission.alpha = 0;
-        source.addChild(emission);
-        building.emission = emission;
+        installLighting(source, description, atlas);
         dirty = true;
         game.invalidate();
       })
@@ -291,10 +317,9 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         atlasLease.release();
         for (const sprite of [...building.sun, ...building.lamps.flat()])
           sprite.destroy();
-        building.emission?.destroy();
+        removeLighting(source);
         dirty = true;
-        for (const fixture of fixtures)
-          if (fixture.source === source) fixtures.delete(fixture);
+        fixtures.delete(source);
       },
       { ready: Promise.resolve() },
     );
@@ -302,7 +327,12 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   game.own(() => {
     disposed = true;
     poses.destroy();
-    lightField?.texture.destroy(true);
+    fieldRevision++;
+    if (fieldTimer !== null) clearTimeout(fieldTimer);
+    fieldLease?.release();
+    pendingField?.release();
+    overlays.clear();
+    blockers.clear();
     buildings.clear();
     characters.clear();
     fixtures.clear();
@@ -347,25 +377,50 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         dirty = false;
         lights = [];
         const radiance: VillageLight[] = [];
-        for (const fixture of fixtures) {
+        for (const fixture of fixtures.values()) {
           if (fixture.source.destroyed || !fixture.source.parent) continue;
           const m = origin(fixture.source, matrices),
             d = fixture.description;
           const height = Math.hypot(m.c, m.d) * fixture.source.texture.orig.height;
-          const building = [...buildings].find((b) => b.source === fixture.source);
-          const emitters = building?.atlas?.frame.emitters;
+          const emitters = fixture.atlas?.frame.emitters;
           const average = emitters?.length
-            ? emitters.reduce(
+            ? emitters.reduce<{
+                x: number;
+                y: number;
+                height: number;
+                color: [number, number, number];
+                normal: [number, number];
+              }>(
                 (v, e) => ({
                   x: v.x + e.x / emitters.length,
                   y: v.y + e.y / emitters.length,
                   height: v.height + e.height / emitters.length,
+                  color: v.color.map(
+                    (c, i) =>
+                      c + (e.color?.[i] ?? [1, 0.75, 0.35][i]!) / emitters.length,
+                  ) as [number, number, number],
+                  normal: v.normal.map(
+                    (c, i) => c + (e.normal?.[i] ?? 0) / emitters.length,
+                  ) as [number, number],
                 }),
-                { x: 0, y: 0, height: 0 },
+                {
+                  x: 0,
+                  y: 0,
+                  height: 0,
+                  color: [0, 0, 0] as [number, number, number],
+                  normal: [0, 0] as [number, number],
+                },
               )
-            : { x: 0.5, y: 0.65, height: 0.3 };
+            : {
+                x: 0.5,
+                y: 0.65,
+                height: 0.3,
+                color: [1, 0.75, 0.35] as [number, number, number],
+                normal: [0, 0] as [number, number],
+              };
           const groundLight = (
-            emitter: typeof average,
+            emitter: Pick<typeof average, "x" | "y" | "height"> &
+              Partial<Pick<typeof average, "color" | "normal">>,
             reach: number,
           ): VillageLight => {
             const point = m.apply({
@@ -382,6 +437,13 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               height: emitter.height * height,
               reach,
               owner: fixture.source,
+              color: (emitter.color ?? average.color).map(
+                (c, i) => c * [0.92, 0.75, 0.55][i]!,
+              ) as [number, number, number],
+              direction: emitter.normal
+                ? { x: emitter.normal[0], y: emitter.normal[1] / 2 }
+                : undefined,
+              emission: { x: point.x, y: point.y, radius: height * 0.075 },
             };
           };
           fixture.light = groundLight(
@@ -389,16 +451,26 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             height * (d.shadowCaster === "building" ? 2.5 : 1.8),
           );
           lights.push(fixture.light);
-          radiance.push(fixture.light);
-          // Authored windows add entrance pools to the cached map without adding live shadow sources.
-          for (const emitter of emitters ?? [])
-            radiance.push(groundLight(emitter, height * 1.3));
+          // Window pools are cached irradiance; each fixture still contributes only one shadow source.
+          if (emitters?.length)
+            for (const emitter of emitters)
+              radiance.push(
+                groundLight(
+                  emitter,
+                  height * (d.shadowCaster === "building" ? 2.3 : 1.8),
+                ),
+              );
+          else radiance.push(fixture.light);
         }
         for (const building of buildings) {
           building.transform.copyFrom(origin(building.source, matrices));
           building.height =
             Math.hypot(building.transform.c, building.transform.d) *
             building.source.texture.orig.height;
+          if (building.atlas)
+            building.shadowPose.copyFrom(
+              bakedShadowTransform(building.atlas, building.source, building.transform),
+            );
           const foot = building.transform.apply({
             x: 0,
             y: building.source.texture.orig.height * (1 - building.source.anchor.y),
@@ -436,12 +508,68 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               };
           record.poseDirty = true;
         }
-        const previousField = lightField;
-        lightField = createVillageLightField(radiance);
-        base.setWarmField(lightField);
-        previousField?.texture.destroy(true);
+        const occluders: VillageLightBlocker[] = [];
+        for (const [source, atlas] of blockers) {
+          if (source.destroyed || !source.parent) continue;
+          const m = origin(source, matrices),
+            h = source.texture.orig.height;
+          for (const footprint of atlas.frame.footprints)
+            occluders.push({
+              owner: source,
+              height: footprint.height * Math.hypot(m.c, m.d) * h,
+              points: footprint.points.map(([x, y]) =>
+                m.apply({
+                  x: x * h - source.anchor.x * source.texture.orig.width,
+                  y: y * h - source.anchor.y * h,
+                }),
+              ),
+            });
+        }
+        const revision = ++fieldRevision;
+        if (fieldTimer !== null) clearTimeout(fieldTimer);
+        pendingField?.release();
+        pendingField = null;
+        fieldTimer = setTimeout(() => {
+          fieldTimer = null;
+          const lease = acquireVillageLightField(radiance, occluders);
+          if (!lease) {
+            fieldLease?.release();
+            fieldLease = null;
+            base.setWarmField(null);
+            return;
+          }
+          pendingField = lease;
+          void lease.resource
+            .then((field) => {
+              if (disposed || revision !== fieldRevision) {
+                lease.release();
+                return;
+              }
+              const previous = fieldLease;
+              fieldLease = lease;
+              pendingField = null;
+              base.setWarmField(field);
+              previous?.release();
+              game.invalidate();
+            })
+            .catch((error) => {
+              lease.release();
+              if (!disposed)
+                console.warn(
+                  "Village radiance unavailable; retaining the cached field",
+                  error,
+                );
+            });
+        }, 100);
       }
       const night = game.visualEffects.localLights ? 1 - light.day : 0;
+      if (night !== previousGlow) {
+        previousGlow = night;
+        for (const overlay of overlays.values()) {
+          overlay.visible = night > 0;
+          overlay.alpha = night;
+        }
+      }
       localGround.visible = game.visualEffects.shadows && night > 0;
       localGround.alpha = night;
       const sun = smoothSun ?? light;
@@ -497,10 +625,6 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               );
             }
           building.localVisible = localVisible;
-          if (building.emission) {
-            building.emission.visible = visible && night > 0;
-            building.emission.alpha = night;
-          }
         }
         if (localGround.visible)
           for (const record of scenery) {
@@ -679,22 +803,27 @@ export type VillageLight = {
   height: number;
   reach: number;
   owner?: Container;
+  color?: readonly [number, number, number];
+  intensity?: number;
+  direction?: { x: number; y: number };
+  emission?: { x: number; y: number; radius: number };
 };
 type WeightedLight = { light: VillageLight; strength: number; weight: number };
 type Fixture = {
   source: Sprite;
   description: WorldSpriteDescription;
   light: VillageLight | null;
+  atlas: BakedShadowAtlas | null;
 };
 type Building = {
   source: Sprite;
   description: WorldSpriteDescription;
   transform: Matrix;
+  shadowPose: Matrix;
   height: number;
   atlas: BakedShadowAtlas | null;
   sun: Sprite[];
   lamps: Sprite[][];
-  emission: Sprite | null;
   selected: WeightedLight[];
   active: boolean;
   fallback: () => void;

@@ -7,7 +7,7 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
 export const SHADOW_DIRECTIONS = 8;
 const DIRECTION_STEP = (Math.PI * 2) / SHADOW_DIRECTIONS;
-const sources: Readonly<Record<string, BakedSource>> = published;
+const sources = published as unknown as Readonly<Record<string, BakedSource>>;
 
 /** Adjacent compass samples share unit weight, including across the last/first seam. */
 export const shadowDirectionBlend = (x: number, y: number) => {
@@ -27,7 +27,7 @@ export const bakedShadowKey = (
   description: WorldSpriteDescription,
 ) => {
   const published = worldAssetSource(description.image);
-  return JSON.stringify([
+  const key: unknown[] = [
     published?.image ?? description.image,
     source.frame,
     source.orig,
@@ -35,24 +35,77 @@ export const bakedShadowKey = (
       (published
         ? { material: published.material, surfaces: published.surfaces }
         : undefined),
-  ]);
+  ];
+  const basis = bakedShadowBasis(source, description);
+  if (basis[0] !== 1 || basis[1] !== 0 || basis[2] !== 0 || basis[3] !== -1)
+    key.push(basis);
+  return JSON.stringify(key);
+};
+
+/** Normalize the artwork pose by physical height; positional and camera changes do not change its bake. */
+export const bakedShadowBasis = (
+  source: Texture,
+  description: WorldSpriteDescription,
+) => {
+  const size = description.size;
+  if (!(size > 0)) return [1, 0, 0, -1] as const;
+  const ratio =
+    ((description.width ??
+      (description.preserveAspect
+        ? (size * source.orig.width) / source.orig.height
+        : size)) *
+      source.orig.height) /
+    (size * source.orig.width);
+  const angle = description.rotation ?? 0,
+    shear = description.shearY ?? 0;
+  const c = Math.cos(angle),
+    s = Math.sin(angle);
+  return [ratio * (c - s * shear), ratio * (s + c * shear), s, -c].map(
+    (value) => Math.round(value * 1_000_000) / 1_000_000,
+  ) as [number, number, number, number];
 };
 
 export const hasBakedShadow = (source: Texture, description: WorldSpriteDescription) =>
   !!sources[bakedShadowKey(source, description)];
 
 /** All compass samples and window emission arrive together, before any direction transition. */
-export const loadBakedShadowAtlas = async (game: GameRenderer, key: string) => {
+export const loadBakedShadowAtlas = async (
+  game: GameRenderer,
+  key: string,
+  includeEmission = true,
+) => {
   const source = sources[key];
   if (!source) throw new Error("No authored shadow bake for this asset version");
-  const [atlas, emission] = await Promise.all([
-    game.assets.texture(source.atlas, 0, "linear"),
-    source.emission
-      ? game.assets.texture(source.emission, 0, "nearest")
-      : Texture.EMPTY,
-  ]);
-  if (game.isDisposed() || game.signal.aborted)
+  const atlasLease = game.assets.acquireTexture(source.atlas, 0, "linear");
+  const emissionLease =
+    includeEmission && source.emission
+      ? game.assets.acquireTexture(source.emission, 0, "nearest")
+      : null;
+  let atlas: Texture, emissionSource: Texture;
+  try {
+    [atlas, emissionSource] = await Promise.all([
+      atlasLease.resource,
+      emissionLease?.resource ?? Texture.EMPTY,
+    ]);
+  } catch (error) {
+    atlasLease.release();
+    emissionLease?.release();
+    throw error;
+  }
+  if (game.isDisposed() || game.signal.aborted) {
+    atlasLease.release();
+    emissionLease?.release();
     throw new DOMException("Lighting cancelled", "AbortError");
+  }
+  const emission =
+    emissionLease && source.emissionFrame && source.emissionTrim
+      ? new Texture({
+          source: emissionSource.source,
+          frame: new Rectangle(...source.emissionFrame),
+          orig: new Rectangle(0, 0, ...(source.emissionSize ?? [1, 1])),
+          trim: new Rectangle(...source.emissionTrim),
+        })
+      : emissionSource;
   const width = atlas.width / 4,
     height = atlas.height / 2;
   const views = Array.from(
@@ -73,19 +126,21 @@ export const loadBakedShadowAtlas = async (game: GameRenderer, key: string) => {
     cellWidth: width,
     cellHeight: height,
     emission,
-    frame: { emitters: source.emitters },
+    frame: { emitters: source.emitters, footprints: source.footprints ?? [] },
+    basis: source.basis ?? ([1, 0, 0, -1] as const),
     aspect: source.aspect,
     minX: source.minX,
     minY: source.minY,
     width: source.width,
     height: source.height,
-    bytes: source.bytes,
+    bytes: source.bytes - (includeEmission ? 0 : (source.emissionBytes ?? 0)),
     destroy: () => {
       for (const view of views) view.destroy(false);
+      if (emission !== emissionSource) emission.destroy(false);
     },
     releaseTextures: () => {
-      game.assets.releaseTexture(source.atlas, 0, "linear");
-      if (source.emission) game.assets.releaseTexture(source.emission, 0, "nearest");
+      atlasLease.release();
+      emissionLease?.release();
     },
   };
 };
@@ -101,11 +156,22 @@ export const bakedShadowTransform = (
   const height = source.texture.orig.height;
   const x = (atlas.width * height) / atlas.cellWidth;
   const y = (atlas.height * height) / atlas.cellHeight;
-  const origin = pose.apply({
-    x: atlas.minX * height - source.anchor.x * source.texture.orig.width,
-    y: atlas.minY * height - source.anchor.y * height,
+  const basis = atlas.basis;
+  const residual = pose.clone().append(new Matrix(...basis).invert());
+  const anchor = pose.apply({
+    x: -source.anchor.x * source.texture.orig.width,
+    y: -source.anchor.y * height,
   });
-  return new Matrix(pose.a * x, pose.b * x, pose.c * y, pose.d * y, origin.x, origin.y);
+  const px = atlas.minX * height,
+    py = -atlas.minY * height;
+  return new Matrix(
+    residual.a * x,
+    residual.b * x,
+    -residual.c * y,
+    -residual.d * y,
+    anchor.x + residual.a * px + residual.c * py,
+    anchor.y + residual.b * px + residual.d * py,
+  );
 };
 
 /** All compass cells share a conservative frame so culling retains shadows cast from offscreen assets. */
@@ -157,7 +223,19 @@ type BakedSource = {
   width: number;
   height: number;
   bytes: number;
-  emitters: { x: number; y: number; height: number }[];
+  emitters: {
+    x: number;
+    y: number;
+    height: number;
+    color?: [number, number, number];
+    normal?: [number, number];
+  }[];
   atlas: string;
   emission?: string;
+  emissionFrame?: [number, number, number, number];
+  emissionTrim?: [number, number, number, number];
+  emissionSize?: [number, number];
+  emissionBytes?: number;
+  basis?: [number, number, number, number];
+  footprints?: { points: [number, number][]; height: number }[];
 };

@@ -27,11 +27,11 @@ describe("projected world lighting", () => {
     const original = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 627, height: 627 }) });
     const view = new Texture({ source: original.source, frame: new Rectangle(22.5, 38, 124.5, 138) });
     const atlas = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 8 * 4), width: 16, height: 8 }) });
-    Object.assign(f.game, { assets: { texture: vi.fn(async () => atlas), releaseTexture: vi.fn() }, signal: new AbortController().signal, isDisposed: () => false, invalidate: vi.fn() });
+    Object.assign(f.game, { assets: { acquireTexture: () => ({resource: Promise.resolve(atlas), release: vi.fn()}) }, signal: new AbortController().signal, isDisposed: () => false, invalidate: vi.fn() });
     f.source.texture = view;
     const update = vi.spyOn(f.source, "updateLocalTransform");
     try {
-      const release = f.lighting.register(f.source, { id: "authored-tree", kind: "decoration", image: "/world-art/woodland-village.webp", x: 20, y: 30, size: 40, groundY: 10, shadowCaster: "canopy" });
+      const release = f.lighting.register(f.source, { id: "authored-tree", kind: "decoration", image: "/world-art/woodland-village.webp", preserveAspect: true, x: 20, y: 30, size: 40, groundY: 10, shadowCaster: "canopy" });
       await release.ready;
       const wide = { minX: -1000, maxX: 1000, minY: -1000, maxY: 1000 };
       f.lighting.update({ x: 1, y: 0, z: .5, day: 1 }, wide);
@@ -48,7 +48,7 @@ describe("projected world lighting", () => {
     const f = fixture();
     const atlasTexture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 8 * 4), width: 16, height: 8 }) });
     const releaseTexture = vi.fn();
-    Object.assign(f.game, { assets: { texture: vi.fn(async () => atlasTexture), releaseTexture }, signal: new AbortController().signal, isDisposed: () => false });
+    Object.assign(f.game, { assets: { acquireTexture: () => ({resource: Promise.resolve(atlasTexture), release: releaseTexture}) }, signal: new AbortController().signal, isDisposed: () => false });
     const keys = Object.keys(published).slice(0, 8);
     const held = f.lighting.acquireAtlas(keys[0]!), shared = f.lighting.acquireAtlas(keys[0]!);
     const pressure = keys.slice(1).map(key => f.lighting.acquireAtlas(key));
