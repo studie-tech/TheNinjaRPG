@@ -2562,7 +2562,8 @@ export const FARM_LEVEL_EXTRACTOR_CAP: { level: number; max: number }[] = [
   { level: 100, max: 3 },
 ];
 
-export type FarmShopEntryType = "PLOT" | "EXTRACTOR" | "SEED" | "FERTILIZER";
+export const FARM_SHOP_ENTRY_TYPES = ["PLOT", "EXTRACTOR", "SEED", "FERTILIZER"] as const;
+export type FarmShopEntryType = (typeof FARM_SHOP_ENTRY_TYPES)[number];
 
 export const FARM_SHOP_ENTRIES: {
   type: FarmShopEntryType;
