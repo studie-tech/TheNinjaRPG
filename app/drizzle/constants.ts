@@ -3426,6 +3426,10 @@ export const SUPPORT_TICKET_COLORS = {
     RESOLVED: "bg-teal-100 text-teal-800",
     CLOSED: "bg-gray-100 text-gray-800",
   },
+} satisfies {
+  CATEGORY: Record<SupportTicketCategory, string>;
+  PRIORITY: Record<SupportTicketPriority, string>;
+  STATUS: Record<SupportTicketStatus, string>;
 };
 
 // Category descriptions to help users choose the right category

@@ -11,12 +11,7 @@ import { IMG_AVATAR_DEFAULT, SUPPORT_TICKET_COLORS } from "@/drizzle/constants";
 import type { SupportTicket, UserData } from "@/drizzle/schema";
 import type { UpdateSupportTicketSchema } from "@/validators/support";
 
-/**
- * Annonymize user information
- * @param user
- * @param viewerRole
- * @returns
- */
+/** Hide staff identity from regular users. */
 export const anonymizeStaffInfo = (
   user: {
     userId: string;
@@ -47,17 +42,17 @@ export const anonymizeStaffInfo = (
 
 // Helper function to get priority color
 export const getPriorityColor = (priority: SupportTicketPriority) => {
-  return SUPPORT_TICKET_COLORS.PRIORITY[priority] || "bg-gray-100 text-gray-800";
+  return SUPPORT_TICKET_COLORS.PRIORITY[priority];
 };
 
 // Helper function to get category color
 export const getCategoryColor = (category: SupportTicketCategory) => {
-  return SUPPORT_TICKET_COLORS.CATEGORY[category] || "bg-gray-100 text-gray-800";
+  return SUPPORT_TICKET_COLORS.CATEGORY[category];
 };
 
 // Helper function to get status color
 export const getStatusColor = (status: SupportTicketStatus) => {
-  return SUPPORT_TICKET_COLORS.STATUS[status] || "bg-gray-100 text-gray-800";
+  return SUPPORT_TICKET_COLORS.STATUS[status];
 };
 
 export { formatTimeAgo } from "@/utils/time";
