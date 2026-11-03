@@ -157,7 +157,7 @@ describe("Curse", () => {
     expect(user(battle).curHealth).toBe(5000);
     expect(effect.curseState.storedHealing).toBe(0);
   });
-  it("applies current healing modifiers at payout", () => {
+  it("ignores healing increases at payout", () => {
     const effect = mark();
     effect.curseState = { storedHealing: 500, activatedRound: 1 };
     const boost = makeEffect(
@@ -167,7 +167,7 @@ describe("Curse", () => {
     );
     const battle = scenario([effect, boost]);
     settleCurse(effect, user(battle), battle.usersEffects);
-    expect(user(battle).curHealth).toBe(5750);
+    expect(user(battle).curHealth).toBe(5500);
   });
   it("does not accumulate on its casting action", () => {
     const effect = mark();
@@ -317,4 +317,46 @@ it("starts accumulating on the next action within the same round", () => {
   battle.usersEffects.push(hit());
   battle = applyEffects(battle, "attacker").newBattle;
   expect(stored(battle)).toBe(250);
+});
+
+it.each(["increaseheal", "decreaseheal"] as const)(
+  "keeps stored healing and expiration payout unchanged by %s",
+  (type) => {
+    const modifier = makeEffect(
+      type,
+      { power: 50, calculation: "percentage", rounds: 3 },
+      {
+        creatorId: "attacker",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: 1,
+      },
+    );
+    const battle = applyEffects(
+      scenario([mark(), modifier, hit(), hit("defender", "attacker")]),
+      "attacker",
+    ).newBattle;
+    expect(stored(battle)).toBe(500);
+    const health = user(battle).curHealth;
+    expire(battle);
+    expect(user(battle).curHealth - health).toBe(500);
+  },
+);
+
+it("restores exactly the displayed fractional stored healing on expiration", () => {
+  const effect = mark();
+  effect.curseState = { storedHealing: 759.52, activatedRound: 1 };
+  const reduction = makeEffect(
+    "decreaseheal",
+    { power: 30, calculation: "percentage", rounds: 3 },
+    { creatorId: "attacker", targetId: "attacker", createdRound: 1 },
+  );
+  const battle = scenario([effect, reduction]);
+  const displayed = stored(battle).toFixed(2);
+  const health = user(battle).curHealth;
+  const transition = expire(battle);
+  expect((user(battle).curHealth - health).toFixed(2)).toBe(displayed);
+  expect(
+    transition.expiredEffects.some((e) => e.txt.includes(`restores ${displayed} HP`)),
+  ).toBe(true);
 });

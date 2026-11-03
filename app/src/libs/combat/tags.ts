@@ -36,16 +36,13 @@ import {
 } from "@/libs/combat/summon";
 import type { CombatAction } from "@/libs/combat/types";
 import {
-  canStackEffect,
   getBaseDamageForModifier,
   getEffectiveMaxPool,
-  getEffectStackKey,
   getPoolsAffected,
   getPreventTypeName,
   isEffectActive,
   isEffectEnabled,
   selectTransferEffects,
-  sortEffects,
   storeMasteryBases,
 } from "@/libs/combat/util";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
@@ -1842,7 +1839,7 @@ export const curse = (
   );
 };
 
-/** Consume a naturally expired Curse once, applying the holder's current healing defenses. */
+/** Consume a naturally expired Curse once; stored HP bypasses healing modifiers. */
 export const settleCurse = (
   effect: UserEffect,
   target: BattleUserState,
@@ -1863,30 +1860,8 @@ export const settleCurse = (
     return;
   if (!preventCheck(usersEffects, "healprevent", target).pass)
     return preventResponse(effect, target, "cannot receive Curse healing");
-  const consequence: Consequence = {
-    userId: target.userId,
-    targetId: target.userId,
-    heal_hp: stored,
-  };
-  const consequences = new Map([[effect.id, consequence]]);
-  const applied = new Set<string>();
-  for (const modifier of usersEffects
-    .filter((e) => e.type === "increaseheal" || e.type === "decreaseheal")
-    .sort(sortEffects)) {
-    if (
-      modifier.targetId !== target.userId ||
-      !isEffectEnabled(modifier, usersEffects) ||
-      !canStackEffect(modifier, applied)
-    )
-      continue;
-    applied.add(getEffectStackKey(modifier));
-    const resolved = { ...modifier };
-    if (resolved.type === "increaseheal")
-      increaseHealGiven(resolved, usersEffects, consequences, target);
-    else decreaseHealGiven(resolved, usersEffects, consequences, target);
-  }
   const healing = Math.min(
-    Math.max(0, consequence.heal_hp ?? 0),
+    Math.max(0, stored),
     Math.max(0, getEffectiveMaxPool(target, usersEffects, "Health") - target.curHealth),
   );
   target.curHealth += healing;
