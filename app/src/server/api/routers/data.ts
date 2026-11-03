@@ -70,9 +70,7 @@ import {
   selectPaypalTransactionForGetRecruitmentMainMetrics,
   selectPaypalTransactionForGetRevenueByReferralSource,
   selectQuestForGetQuestRewardStatistics,
-  selectQuestForGetRecruitmentMainMetrics,
   selectQuestForGetRecruitmentMainMetrics2,
-  selectQuestHistoryForGetRecruitmentMainMetrics,
   selectQuestHistoryForGetRecruitmentMainMetrics2,
   selectUserDataForGetBloodlineBalanceStatistics,
   selectUserDataForGetRankedRankDistributionStatistics,
@@ -115,7 +113,7 @@ import {
 } from "@/server/api/trpc";
 import { fetchPublicUsers } from "@/server/utils/profile";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
-import { type DeviceType, getDeviceType } from "@/utils/hardware";
+import { getDeviceType } from "@/utils/hardware";
 import {
   canAccessHiddenSkillTree,
   canChangeContent,
@@ -189,7 +187,6 @@ export const dataRouter = createTRPCRouter({
         endDate: z.string().optional(),
         utmSource: z.string().optional(),
         deviceType: z.array(z.enum(["mobile", "desktop", "unknown"])).optional(),
-        questFunnels: z.array(z.string()).optional(),
         includeTutorialDisabled: z.boolean().optional(),
         includeTierTutorialDisabled: z.boolean().optional(),
       }),
@@ -225,8 +222,6 @@ export const dataRouter = createTRPCRouter({
         tutorialFinishedSignupsRowRaw,
         totalRevenueRowRaw,
         allTimeSignupsForValueRaw,
-        quests,
-        completedQuests,
         tierQuests,
         completedTierQuestsRaw,
       ] = await Promise.all([
@@ -246,19 +241,6 @@ export const dataRouter = createTRPCRouter({
         selectPaypalTransactionForGetRecruitmentMainMetrics(ctx.drizzle, input),
         // allTimeSignupsForValue: all-time signups count for signupValueUsd (no time filter, only utmSource)
         selectVisitorLogForGetRecruitmentMainMetrics7(ctx.drizzle, input),
-        // quests: Fetch quest data to get objective descriptions
-        input.questFunnels && input.questFunnels.length > 0
-          ? selectQuestForGetRecruitmentMainMetrics(ctx.drizzle, {
-              questFunnels: input.questFunnels,
-            })
-          : Promise.resolve([]),
-        // completedQuests: Fetch completed quest history for all signup users
-        input.questFunnels && input.questFunnels.length > 0
-          ? selectQuestHistoryForGetRecruitmentMainMetrics(ctx.drizzle, visitorWhere, {
-              utmSource: input.utmSource,
-              questFunnels: input.questFunnels,
-            })
-          : Promise.resolve([]),
         // tierQuests: Fetch all tier quests ordered by tierLevel
         selectQuestForGetRecruitmentMainMetrics2(ctx.drizzle),
         // completedTierQuests: Fetch completed tier quests for users who finished tutorial
@@ -388,60 +370,6 @@ export const dataRouter = createTRPCRouter({
       const signupValueUsd =
         allTimeSignupsForValue > 0 ? totalRevenueUsd / allTimeSignupsForValue : 0;
 
-      // Extract quest funnels for each requested quest
-      const questFunnels: Record<
-        string,
-        Array<{ objectives: number; deviceType: DeviceType }>
-      > = {};
-      const questObjectiveDescriptions: Record<string, string[]> = {};
-      if (input.questFunnels && input.questFunnels.length > 0) {
-        // Create a map of userId -> Set of completed quest IDs for quick lookup
-        const completedQuestsMap = new Map<string, Set<string>>();
-        completedQuests.forEach((cq) => {
-          if (!completedQuestsMap.has(cq.userId)) {
-            completedQuestsMap.set(cq.userId, new Set());
-          }
-          completedQuestsMap.get(cq.userId)?.add(cq.questId);
-        });
-
-        for (const questId of input.questFunnels) {
-          // Extract objective descriptions from quest content
-          const questData = quests.find((q) => q.id === questId);
-          let totalObjectives = 0;
-          if (questData?.content && typeof questData.content === "object") {
-            const content = questData.content as {
-              objectives?: { description?: string }[];
-            };
-            if (Array.isArray(content.objectives)) {
-              totalObjectives = content.objectives.length;
-              questObjectiveDescriptions[questId] = content.objectives.map(
-                (obj) => obj.description ?? "",
-              );
-            }
-          }
-
-          questFunnels[questId] = filteredSignupsRow.map((r) => {
-            // Determine device type from userAgent
-            const deviceType = getDeviceType(r.userAgent ?? undefined);
-
-            // Check if user completed this quest
-            let objectives = 0;
-            const userId = r.userId ?? "";
-            if (completedQuestsMap.get(userId)?.has(questId)) {
-              objectives = totalObjectives;
-            } else {
-              // Otherwise check questData for partial completion
-              const questTracker = r.questData?.find((q) => q.id === questId);
-              if (questTracker && Array.isArray(questTracker.goals)) {
-                objectives = questTracker.goals.filter((g) => g.done).length;
-              }
-            }
-
-            return { objectives, deviceType };
-          });
-        }
-      }
-
       // Extract tutorial steps for each signup with device type and username
       // By default, exclude users who have disabled the tutorial (tutorialOn = false)
       const tutorialFilteredSignups = input.includeTutorialDisabled
@@ -503,8 +431,6 @@ export const dataRouter = createTRPCRouter({
         tutorialFinishedByDevice,
         signupValueUsd,
         totalRevenueUsd,
-        questFunnels,
-        questObjectiveDescriptions,
         tutorialSteps,
         nonStudentSignups,
         nonStudentGeninSignups,

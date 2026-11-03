@@ -127,7 +127,6 @@ export const selectVisitorLogForGetRecruitmentMainMetrics2 = (
     .select({
       userId: userData.userId,
       username: userData.username,
-      questData: userData.questData,
       tutorialStep: userData.tutorialStep,
       tutorialOn: userData.tutorialOn,
       userAgent: visitorLog.userAgent,
@@ -304,52 +303,6 @@ export const selectVisitorLogForGetRecruitmentMainMetrics7 = (
         ...(input.utmSource && input.utmSource.length > 0
           ? [eq(referralSource.source, input.utmSource)]
           : []),
-      ),
-    );
-
-/** Build the `quest` selection for `getRecruitmentMainMetrics`, using predicates on `id`. */
-export const selectQuestForGetRecruitmentMainMetrics = (
-  client: Pick<DrizzleClient, "select">,
-  input: { questFunnels: string[] },
-) =>
-  client
-    .select({
-      id: quest.id,
-      content: quest.content,
-    })
-    .from(quest)
-    .where(inArray(quest.id, input.questFunnels));
-
-/**
- * Build the `questHistory` selection for `getRecruitmentMainMetrics`, including
- * predicates on `isAi`, `tutorialStep`, `createdAt`.
- */
-export const selectQuestHistoryForGetRecruitmentMainMetrics = (
-  client: Pick<DrizzleClient, "select">,
-  visitorWhere: import("@/utils/typeutils").QueryCondition[],
-  input: { utmSource?: undefined | string; questFunnels: string[] },
-) =>
-  client
-    .select({
-      userId: questHistory.userId,
-      questId: questHistory.questId,
-    })
-    .from(questHistory)
-    .innerJoin(userData, eq(userData.userId, questHistory.userId))
-    .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
-    .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
-    .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
-    .where(
-      and(
-        ...(visitorWhere.length > 0 ? visitorWhere : []),
-        eq(userData.isAi, false),
-        lt(userData.tutorialStep, 100),
-        gte(userData.createdAt, visitorLog.createdAt),
-        ...(input.utmSource && input.utmSource.length > 0
-          ? [eq(referralSource.source, input.utmSource)]
-          : []),
-        inArray(questHistory.questId, input.questFunnels),
-        eq(questHistory.completed, 1),
       ),
     );
 
