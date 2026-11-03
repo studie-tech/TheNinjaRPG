@@ -50,7 +50,6 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { readCampaignSource } from "@/libs/campaignSource";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
@@ -201,15 +200,9 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
 
   // If we have local storage referrer, set it as default value
   useEffect(() => {
-    // Recruiter user
     const referrer = safeLocalStorageGetItem("ref");
     if (referrer) {
       form.setValue("recruiter_userid", referrer);
-    }
-    // Source
-    const source = readCampaignSource();
-    if (source) {
-      form.setValue("utm_source", source);
     }
   }, [form]);
 

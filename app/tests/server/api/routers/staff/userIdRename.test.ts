@@ -554,7 +554,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: "reclaim-bloodline",
     });
     expect(created.success).toBe(true);
@@ -636,7 +635,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: "registration-bloodline",
     });
     expect(created.success).toBe(true);
@@ -696,7 +694,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: `${tag}-bloodline`,
     });
   };

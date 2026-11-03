@@ -68,7 +68,6 @@ const register = async (userId: string, signupIp: string | undefined) => {
     read_privacy: true,
     read_earlyaccess: true,
     recruiter_userid: RECRUITER,
-    utm_source: null,
     bloodlineId: "recruit-bloodline",
   });
 };

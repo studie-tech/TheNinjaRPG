@@ -106,7 +106,6 @@ const register = async (userId: string, database?: DrizzleClient, userIp?: strin
       read_tos: true,
       read_privacy: true,
       read_earlyaccess: true,
-      utm_source: null,
       bloodlineId: "tombstone-bloodline",
     });
 

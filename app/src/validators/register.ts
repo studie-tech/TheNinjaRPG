@@ -140,7 +140,6 @@ export const registrationSchema = z
     read_privacy: z.literal(true),
     read_earlyaccess: z.literal(true),
     recruiter_userid: z.string().nullish(),
-    utm_source: utmSourceSchema,
     bloodlineId: z.string().min(1, "Bloodline selection is required"),
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),
