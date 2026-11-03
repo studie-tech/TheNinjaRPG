@@ -156,7 +156,7 @@ export default function OccupationCrafting() {
     targetName: string;
     crystalName: string;
   } | null>(null);
-  const imbueRequestRef = useRef(pendingImbueRequest);
+  const imbueInFlightRef = useRef(false);
   const [removeImbuementTarget, setRemoveImbuementTarget] =
     useState<ImbuementRemoval | null>(null);
   const [pendingRemoveImbuement, setPendingRemoveImbuement] =
@@ -164,7 +164,7 @@ export default function OccupationCrafting() {
   const [removedImbuementIds, setRemovedImbuementIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const removeImbuementRequestRef = useRef(pendingRemoveImbuement);
+  const removeImbuementInFlightRef = useRef(false);
 
   // Clear the optimistic success marker only after authoritative inventory data contains the
   // exact imbuement. Until then it prevents stale cache data from exposing another imbue action.
@@ -234,7 +234,7 @@ export default function OccupationCrafting() {
 
   const handleImbueItem = async () => {
     if (
-      imbueRequestRef.current ||
+      imbueInFlightRef.current ||
       committedImbue ||
       !selectedImbuableItem ||
       !selectedCrystalUserItem ||
@@ -252,7 +252,7 @@ export default function OccupationCrafting() {
       targetName: selectedImbuableItem.item?.name || "item",
       crystalName: selectedCrystalUserItem.item?.name || "crystal",
     };
-    imbueRequestRef.current = request;
+    imbueInFlightRef.current = true;
     setPendingImbueRequest(request);
 
     try {
@@ -260,8 +260,6 @@ export default function OccupationCrafting() {
         userItemId: request.userItemId,
         userCrystalItemId: request.userCrystalItemId,
       });
-      if (imbueRequestRef.current !== request) return;
-
       showMutationToast(data);
       if (!data.success) return;
 
@@ -283,40 +281,32 @@ export default function OccupationCrafting() {
     } catch (error) {
       // This caller owns transport feedback and retains the exact item/crystal selection.
       // Other tRPC failures use the global handler.
-      if (
-        imbueRequestRef.current === request &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
+      if (error instanceof Error && isRetryableTrpcError(error)) {
         showMutationToast({
           success: false,
           message: "Could not imbue this item. Check your connection and try again.",
         });
       }
     } finally {
-      if (imbueRequestRef.current === request) {
-        imbueRequestRef.current = null;
-        setPendingImbueRequest(null);
-      }
+      imbueInFlightRef.current = false;
+      setPendingImbueRequest(null);
     }
   };
 
   const handleRemoveImbuement = async () => {
     const target = removeImbuementTarget;
-    if (!target || removeImbuementRequestRef.current) return;
+    if (!target || removeImbuementInFlightRef.current) return;
 
     // Capture the exact inventory row and imbuement synchronously. React's pending flag is only
     // visible on the next render, so the ref is the same-tick duplicate-submit guard.
     const request = { ...target };
-    removeImbuementRequestRef.current = request;
+    removeImbuementInFlightRef.current = true;
     setPendingRemoveImbuement(request);
 
     try {
       const data = await removeImbuementMutation.mutateAsync({
         userItemImbuementId: request.userItemImbuementId,
       });
-      if (removeImbuementRequestRef.current !== request) return;
-
       showMutationToast(data);
       if (!data.success) return;
 
@@ -335,21 +325,15 @@ export default function OccupationCrafting() {
     } catch (error) {
       // This caller owns transport feedback and retains the exact target for retry.
       // Other tRPC failures use the global handler.
-      if (
-        removeImbuementRequestRef.current === request &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
+      if (error instanceof Error && isRetryableTrpcError(error)) {
         showMutationToast({
           success: false,
           message: `Could not remove ${request.crystalName}. Check your connection and try again.`,
         });
       }
     } finally {
-      if (removeImbuementRequestRef.current === request) {
-        removeImbuementRequestRef.current = null;
-        setPendingRemoveImbuement(null);
-      }
+      removeImbuementInFlightRef.current = false;
+      setPendingRemoveImbuement(null);
     }
   };
 

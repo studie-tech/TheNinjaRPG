@@ -1157,9 +1157,6 @@ export const useTowerDefense = (userId?: string) => {
     try {
       // Clear entities from refs (no React state update needed for entities)
       clearEntityStore();
-      setGameState((prev) => ({
-        ...prev,
-      }));
       await connectionRef.current.startWave(sessionId);
     } catch (error) {
       setGameState((prev) => ({

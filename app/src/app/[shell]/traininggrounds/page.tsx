@@ -1677,8 +1677,6 @@ const CovertTraining: React.FC<
       },
     });
 
-  if (!stealthStatus) return null;
-
   const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
   const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
 

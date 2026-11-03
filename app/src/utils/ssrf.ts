@@ -1,4 +1,5 @@
 import dns from "node:dns";
+import { isIPv4 } from "node:net";
 import { promisify } from "node:util";
 
 const lookup = promisify(dns.lookup);
@@ -136,19 +137,14 @@ export async function validateUrlForSsrf(
     }
 
     // Normalize IPv6 hostnames (remove brackets)
-    let hostname =
+    const hostname =
       url.hostname.startsWith("[") && url.hostname.endsWith("]")
         ? url.hostname.slice(1, -1)
         : url.hostname;
 
     // Check IPv4 literals directly before DNS lookup
-    const normalizedIP = normalizeIPv4(hostname);
-    if (normalizedIP) {
-      hostname = normalizedIP;
-      // Check normalized IP directly
-      if (isPrivateIp(hostname)) {
-        return false;
-      }
+    if (isIPv4(hostname) && isPrivateIp(hostname)) {
+      return false;
     }
 
     // DNS lookup with timeout
@@ -185,15 +181,4 @@ export async function validateUrlForSsrf(
   } catch {
     return false;
   }
-}
-
-/**
- * Validate a dotted-decimal IPv4 address. `new URL()` already canonicalizes integer, hex,
- * octal and short forms to dotted decimal before a hostname reaches this check.
- */
-function normalizeIPv4(hostname: string): string | null {
-  const dottedMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (!dottedMatch) return null;
-  const octets = dottedMatch.slice(1).map(Number);
-  return octets.every((n) => n >= 0 && n <= 255) ? octets.join(".") : null;
 }
