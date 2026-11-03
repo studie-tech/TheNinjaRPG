@@ -1,4 +1,8 @@
-import { updateUserDataForEnforceRateLimit } from "@/queries/concurrency";
+import {
+  fetchUserDataForEnforceRateLimit,
+  insertActionLogForEnforceRateLimit,
+  updateUserDataForEnforceRateLimit,
+} from "@/queries/concurrency";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
@@ -46,7 +50,7 @@ import {
  * processing a request
  *
  */
-import { drizzleDB } from "@/server/db";
+import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
 
 import { hasSensitiveTrpcInput } from "@/server/utils/trpcInput";
@@ -151,8 +155,9 @@ const t = initTRPC
  * These are the pieces you use to build your tRPC API. You should import these a lot in the
  * "/src/server/api/routers" directory.
  */
+const ratelimitRedis = Redis.fromEnv();
 const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
+  redis: ratelimitRedis,
   limiter: Ratelimit.slidingWindow(60, "60 s"),
   analytics: true,
   prefix: "trpc-ratelimit",
@@ -200,6 +205,94 @@ export const deferredRatelimitMiddleware = t.middleware(
 export const QUERY_RATE_LIMIT_MESSAGE =
   "Too many requests for this page. Please wait a moment and try again.";
 
+/** Fraction of pocket money and bank taken by a rate-limit fine. */
+export const RATE_LIMIT_FINE_RATE = 0.01;
+
+/**
+ * At most one fine per user per this many seconds, across all procedures. Matches the
+ * limiter window, so a burst of rejected clicks costs 1% once instead of 1% per click.
+ */
+export const RATE_LIMIT_FINE_COOLDOWN_SECONDS = 60;
+
+/** Whole-ryo fine for a balance; never negative. */
+export const rateLimitFine = (balance: number) =>
+  Math.max(Math.floor(balance * RATE_LIMIT_FINE_RATE), 0);
+
+/** Player-facing message for a penalized (mutation) rate-limit violation. */
+export const rateLimitFineMessage = (
+  fine: { moneyFine: number; bankFine: number } | null,
+) =>
+  fine
+    ? `You're moving too fast! You were fined ${fine.moneyFine.toLocaleString("en-US")} ryo (pocket) and ${fine.bankFine.toLocaleString("en-US")} ryo (bank). Slow down to avoid further fines.`
+    : `You're moving too fast! You were already fined in the last ${RATE_LIMIT_FINE_COOLDOWN_SECONDS} seconds, so no further fine this time. Slow down to avoid further fines.`;
+
+/**
+ * Claim the per-user fine slot (SET NX EX on the limiter's Redis). Returns false while
+ * a previous fine is still cooling down, and also if Redis errors: an infrastructure
+ * hiccup must never cost a player money.
+ */
+const claimRateLimitFineSlot = async (userId: string) => {
+  try {
+    const claimed = await ratelimitRedis.set(`trpc-ratelimit-fine:${userId}`, "1", {
+      nx: true,
+      ex: RATE_LIMIT_FINE_COOLDOWN_SECONDS,
+    });
+    return Boolean(claimed);
+  } catch (error) {
+    console.warn(
+      `Rate-limit fine cooldown unavailable, skipping fine: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
+};
+
+/**
+ * Count the infraction and, at most once per cooldown window, fine 1% of pocket
+ * money and bank. The exact amounts are returned (for the player message) and
+ * recorded in ActionLog (for staff). Returns null when no fine was taken.
+ */
+const penalizeRateLimitViolation = async (
+  client: Pick<DrizzleClient, "query" | "transaction">,
+  userId: string,
+  path: string,
+) => {
+  const user = await fetchUserDataForEnforceRateLimit(client, { userId });
+  if (!user) {
+    throw new TRPCError({
+      message: `User not found for rate limit penalty`,
+      code: "NOT_FOUND",
+    });
+  }
+  const fined = await claimRateLimitFineSlot(userId);
+  const moneyFine = fined ? rateLimitFine(user.money) : 0;
+  const bankFine = fined ? rateLimitFine(user.bank) : 0;
+  // The debit and its audit row commit together: a failed ActionLog insert must not
+  // leave an unrecorded fine on the account.
+  await client.transaction(async (tx) => {
+    const result = await updateUserDataForEnforceRateLimit(tx, {
+      userId,
+      moneyFine,
+      bankFine,
+    });
+    if (result.rowsAffected === 0) {
+      throw new TRPCError({
+        message: `User not found for rate limit penalty`,
+        code: "NOT_FOUND",
+      });
+    }
+    if (moneyFine > 0 || bankFine > 0) {
+      await insertActionLogForEnforceRateLimit(tx, {
+        userId,
+        path,
+        moneyFine,
+        bankFine,
+      });
+    }
+  });
+  if (!fined) return null;
+  return { moneyFine, bankFine };
+};
+
 /**
  * Whether a rate-limit violation debits the caller. Only mutations do: queries are
  * also fired by the client on its own (polling, invalidations, retries, remounts),
@@ -212,9 +305,10 @@ export const isPenalizedRateLimitViolation = (path: string, type: string) =>
 /**
  * Sliding-window rate limit keyed per procedure path + identity (userId, or IP
  * for anonymous callers). Every procedure type is limited; violations of
- * mutations by logged-in users also incur a 1% money/bank penalty. If the Redis
- * limiter is unreachable, development fails open (local shim may not be
- * running) while production fails closed.
+ * mutations by logged-in users also incur a 1% money/bank fine (at most once per
+ * RATE_LIMIT_FINE_COOLDOWN_SECONDS), reported in the error and in ActionLog. If
+ * the Redis limiter is unreachable, development fails open (local shim may not
+ * be running) while production fails closed.
  */
 const enforceRateLimit = async (
   context: Pick<
@@ -244,30 +338,29 @@ const enforceRateLimit = async (
     );
   }
   if (!success) {
-    const penalized = isPenalizedRateLimitViolation(path, type);
-    // Authentication retries must never debit an existing character (and a newly
-    // authenticated identity may not have created a character yet).
-    if (context.userId && penalized) {
-      const result = await updateUserDataForEnforceRateLimit(context.drizzle, {
-        userId: context.userId,
-      });
-      if (result.rowsAffected === 0) {
-        throw new TRPCError({
-          message: `User not found for rate limit penalty`,
-          code: "NOT_FOUND",
-        });
-      }
+    if (path.startsWith("nativeAuth.")) {
+      // Authentication retries must never debit an existing character (and a newly
+      // authenticated identity may not have created a character yet).
+      throw serverError(
+        "TOO_MANY_REQUESTS",
+        "Too many sign-in attempts. Please wait a minute and try again.",
+      );
     }
-    throw serverError(
-      "TOO_MANY_REQUESTS",
-      path.startsWith("nativeAuth.")
-        ? "Too many sign-in attempts. Please wait a minute and try again."
-        : !penalized
-          ? QUERY_RATE_LIMIT_MESSAGE
-          : context.userId
-            ? `You are acting too fast. Incident logged for review on path ${path}. 1% money reduced.`
-            : "You are acting too fast. Please wait a moment and try again.",
+    if (!isPenalizedRateLimitViolation(path, type)) {
+      throw serverError("TOO_MANY_REQUESTS", QUERY_RATE_LIMIT_MESSAGE);
+    }
+    if (!context.userId) {
+      throw serverError(
+        "TOO_MANY_REQUESTS",
+        "You are acting too fast. Please wait a moment and try again.",
+      );
+    }
+    const fine = await penalizeRateLimitViolation(
+      context.drizzle,
+      context.userId,
+      path,
     );
+    throw serverError("TOO_MANY_REQUESTS", rateLimitFineMessage(fine));
   }
 };
 
