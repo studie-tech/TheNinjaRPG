@@ -37,7 +37,11 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
-import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
+import {
+  getLemuImage,
+  LEMU_EXPERIMENT,
+  LEMU_PORTRAIT_WAIST,
+} from "@/libs/lemuExperiment";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
   getActiveObjective,
@@ -88,23 +92,26 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
   return (safeTop + safeBottom) / 2;
 };
 
-/** Perches the instructor above the dialogue, leaving underlying game controls clickable. */
+/** Crops the instructor at the waist against the dock, independently of lesson height. */
 const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
   characterImage,
 }) => {
   const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  const defaultImage = getLemuImage(variant);
-  const className = cn(
-    "pointer-events-none absolute right-4 bottom-full mb-2 h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl scale-x-[-1]",
-  );
+  const image = characterImage || getLemuImage(variant);
+  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
   return (
-    <Image
-      src={characterImage || defaultImage}
-      width={512}
-      height={768}
-      alt="Assistant"
-      className={className}
-    />
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
+      style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
+    >
+      <Image
+        src={image}
+        width={512}
+        height={768}
+        alt="Assistant"
+        className="mr-4 ml-auto h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl scale-x-[-1]"
+      />
+    </div>
   );
 };
 
@@ -147,7 +154,7 @@ const AssistantDialog: React.FC<{
     data-tutorial-step={stepId}
     data-dodge-highlight={dodgeHighlight || undefined}
     aria-label={`Tutorial: ${title}`}
-    className="pointer-events-auto relative"
+    className="pointer-events-auto"
   >
     <AssistantPortrait characterImage={characterImage} />
     <div
