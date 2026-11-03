@@ -83,11 +83,7 @@ describe("ANBU request squad identity", () => {
       },
     };
 
-    const result = await fetchSquadForAnbuRequest(client as never, {
-      relatedId: "squad-1",
-      // Stale receiver from before promoteMember reassignment
-      receiverId: "old-leader",
-    });
+    const result = await fetchSquadForAnbuRequest(client as never, { relatedId: "squad-1" });
 
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(expectedWhere);
