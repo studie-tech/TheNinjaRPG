@@ -897,11 +897,10 @@ export const travelRouter = createTRPCRouter({
       const { longitude, latitude, sector, villageId } = input;
       const userId = ctx.userId;
       const userVillage = villageId ?? "syndicate";
-      // Return a graceful response instead of a raw 500 if the sector has no
-      // published map (mutations must return baseServerResponse per CLAUDE.md).
       // When the destination looks like a default-sized border crossing, load
       // that neighbour in the same query so the walk does not wait on a
-      // second sequential published-map read.
+      // second sequential published-map read. A sector without a published map
+      // is simply absent from the result.
       const sectorsToPrefetch = publishedMapsToPrefetchForMove(sector, {
         x: longitude,
         y: latitude,
@@ -910,7 +909,12 @@ export const travelRouter = createTRPCRouter({
       // prefetches are retried below only when the move actually crosses.
       const prefetchedCampSector = sectorsToPrefetch[1];
       const [maps, originalUser, warCampEntry, isolated] = await Promise.all([
-        fetchPublishedSectorMaps(ctx.drizzle, sectorsToPrefetch).catch(() => null),
+        fetchPublishedSectorMaps(ctx.drizzle, sectorsToPrefetch).catch(
+          (error: unknown) => {
+            if (isTransientDatabaseError(error)) return null;
+            throw error;
+          },
+        ),
         findUserDataForMoveInSector(ctx.drizzle, userId),
         prefetchedCampSector === undefined
           ? undefined
@@ -921,8 +925,9 @@ export const travelRouter = createTRPCRouter({
       ]);
       if (isolated) return errorResponse(ISOLATED_PYRAMID_MESSAGE);
       if (!originalUser) return errorResponse("User not found");
+      if (!maps) return errorResponse("Connection hiccup, please try moving again");
       let moveUser = originalUser;
-      const sectorMap = maps?.get(sector);
+      const sectorMap = maps.get(sector);
       if (!sectorMap) return errorResponse("This sector has no published map yet");
       // If a republish blocked the tile the player is standing on, snap them to
       // the nearest walkable tile instead of locking them in place forever.
@@ -962,7 +967,7 @@ export const travelRouter = createTRPCRouter({
           targetSector === prefetchedCampSector && warCampEntry
             ? warCampEntry
             : fetchWarCampEntry(ctx.drizzle, userId, targetSector),
-          maps?.get(targetSector) ??
+          maps.get(targetSector) ??
             fetchPublishedSectorMap(ctx.drizzle, targetSector).catch(() => null),
         ]);
         if (updated) {
