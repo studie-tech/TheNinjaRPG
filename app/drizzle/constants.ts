@@ -2022,7 +2022,6 @@ export const RYO_FOR_REP_DAYS_AUTO_DELIST = 30;
 export const RYO_FOR_REP_MAX_LISTINGS = 5;
 export const RYO_FOR_REP_MIN_REPS = 10;
 export const PITY_BLOODLINE_ROLLS = 200;
-export const PITY_SYSTEM_ENABLED = true;
 
 // Reputation purchase config
 export const MAX_REPS_PER_MONTH = 4000;

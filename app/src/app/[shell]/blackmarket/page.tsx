@@ -27,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   PITY_BLOODLINE_ROLLS,
-  PITY_SYSTEM_ENABLED,
   REP_TRADE_MIN_LEVEL,
   RYO_FOR_REP_DAYS_FROZEN,
   repTradeLevelMessage,
@@ -163,7 +162,7 @@ const BlackMarketItemCatalog: React.FC<{
           headerExtra: currencyNav,
         }}
       />
-      {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
+      <PityBloodlineRoll userData={userData} />
     </>
   );
 };

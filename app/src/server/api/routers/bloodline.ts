@@ -13,7 +13,6 @@ import {
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   COST_SWAP_BLOODLINE,
   LetterRanks,
-  PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
   ROLL_CHANCE,
 } from "@/drizzle/constants";
@@ -851,7 +850,6 @@ export const bloodlineRouter = createTRPCRouter({
         rank: input.rank,
       });
       // Guard
-      if (!PITY_SYSTEM_ENABLED) return errorResponse("Pity system is disabled");
       const prevRoll = previousRolls.find(
         (r) => r.goal === input.rank && !r.bloodlineId,
       );
