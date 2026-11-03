@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +45,8 @@ interface LoadoutSelectorProps<T extends LoadoutData> {
   variant?: "sheet" | "dropdown";
   /** Sheet chip sized for a toolbar: icon instead of "Change", shorter name on mobile */
   compact?: boolean;
+  /** Dropdown only: a pencil beside it renames the selected loadout */
+  renamable?: boolean;
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
   config: LoadoutSelectorConfig<T>;
@@ -97,30 +99,6 @@ const LoadoutSelector = <T extends LoadoutData>(
   const getDisplayName = (loadout: LoadoutData, index: number) =>
     loadout.name || `${props.label || "Loadout"} ${index + 1}`;
 
-  if (variant === "dropdown") {
-    return (
-      <div className="min-w-0 flex-1">
-        {props.label && <p className="mb-1 text-sm">{props.label}</p>}
-        <Select
-          value={selectedId ?? undefined}
-          onValueChange={handleSelect}
-          disabled={isPending}
-        >
-          <SelectTrigger className="h-8 w-full min-w-[8rem]">
-            <SelectValue placeholder="Select loadout" />
-          </SelectTrigger>
-          <SelectContent>
-            {data?.map((loadout, index) => (
-              <SelectItem key={loadout.id} value={loadout.id}>
-                {getDisplayName(loadout, index)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    );
-  }
-
   const submitRename = (id: string, value: string, currentName?: string) => {
     const trimmed = value.trim();
     setEditingId(null);
@@ -129,6 +107,57 @@ const LoadoutSelector = <T extends LoadoutData>(
       renameMutation?.mutate({ id, name: trimmed });
     }
   };
+
+  if (variant === "dropdown") {
+    const selectedIndex = data?.findIndex((loadout) => loadout.id === selectedId) ?? -1;
+    const selected = selectedIndex >= 0 ? data?.[selectedIndex] : undefined;
+    const selectedName = selected ? getDisplayName(selected, selectedIndex) : undefined;
+    const canRename = props.renamable && renameMutation && selected && selectedName;
+    return (
+      <div className="min-w-0 flex-1">
+        {props.label && <p className="mb-1 text-sm">{props.label}</p>}
+        {canRename && editingId === selected.id ? (
+          <RenameInput
+            name={selectedName}
+            defaultValue={selected.name ?? ""}
+            className="h-8"
+            onSubmit={(value) => submitRename(selected.id, value, selected.name)}
+          />
+        ) : (
+          <div className="flex items-center gap-1">
+            <Select
+              value={selectedId ?? undefined}
+              onValueChange={handleSelect}
+              disabled={isPending}
+            >
+              <SelectTrigger className="h-8 w-full min-w-[8rem]">
+                <SelectValue placeholder="Select loadout" />
+              </SelectTrigger>
+              <SelectContent>
+                {data?.map((loadout, index) => (
+                  <SelectItem key={loadout.id} value={loadout.id}>
+                    {getDisplayName(loadout, index)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {canRename && (
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                aria-label={`Rename ${selectedName}`}
+                title="Rename loadout"
+                disabled={renameMutation.isPending}
+                onClick={() => setEditingId(selected.id)}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const slots = (data ?? []).slice(0, maxLoadouts);
   const selectedIndex = slots.findIndex((loadout) => loadout.id === selectedId);
@@ -197,26 +226,11 @@ const LoadoutSelector = <T extends LoadoutData>(
           const isEditing = editingId === loadout.id;
           if (isEditing) {
             return (
-              <input
+              <RenameInput
                 key={loadout.id}
-                // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
-                autoFocus
-                aria-label={`Rename ${displayName}`}
+                name={displayName}
                 defaultValue={loadout.name ?? ""}
-                maxLength={LOADOUT_NAME_MAX_LENGTH}
-                className="w-full rounded border bg-background px-2 py-1 text-sm"
-                onBlur={(e) => submitRename(loadout.id, e.target.value, loadout.name)}
-                onKeyDown={(e) => {
-                  // Commit on Enter via the single onBlur path (no double
-                  // submit); Escape clears first so the blur-commit no-ops.
-                  if (e.key === "Enter") e.currentTarget.blur();
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.currentTarget.value = "";
-                    e.currentTarget.blur();
-                  }
-                }}
+                onSubmit={(value) => submitRename(loadout.id, value, loadout.name)}
               />
             );
           }
@@ -261,3 +275,39 @@ const LoadoutSelector = <T extends LoadoutData>(
 };
 
 export default LoadoutSelector;
+
+/** Inline name field: Enter or leaving the field saves, Escape keeps the old name. */
+function RenameInput({
+  name,
+  defaultValue,
+  className,
+  onSubmit,
+}: {
+  name: string;
+  defaultValue: string;
+  className?: string;
+  onSubmit: (value: string) => void;
+}) {
+  return (
+    <input
+      // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
+      autoFocus
+      aria-label={`Rename ${name}`}
+      defaultValue={defaultValue}
+      maxLength={LOADOUT_NAME_MAX_LENGTH}
+      className={`w-full rounded border bg-background px-2 py-1 text-sm ${className ?? ""}`}
+      onBlur={(e) => onSubmit(e.target.value)}
+      onKeyDown={(e) => {
+        // Commit on Enter via the single onBlur path (no double
+        // submit); Escape clears first so the blur-commit no-ops.
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.value = "";
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}

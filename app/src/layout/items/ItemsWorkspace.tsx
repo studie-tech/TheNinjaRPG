@@ -34,6 +34,10 @@ interface ItemsWorkspaceProps {
   bagItems: UserItemWithRelations[];
   /** The selected bag; panels opened in another bag close on a switch. */
   bag: string;
+  /** Shown beside the Backpack heading: the bag's capacity and slot purchase. */
+  backpackStatus?: React.ReactNode;
+  /** Shown under the Backpack heading: the bag switcher. */
+  bagTabs?: React.ReactNode;
 }
 
 /**
@@ -47,6 +51,8 @@ export function ItemsWorkspace({
   userItems,
   bagItems,
   bag,
+  backpackStatus,
+  bagTabs,
 }: ItemsWorkspaceProps) {
   const [opened, setOpened] = useState<{ bag: string; view: ItemsView }>({
     bag,
@@ -100,9 +106,6 @@ export function ItemsWorkspace({
   const choosable = canChangeContent(userData.role)
     ? userItems
     : userItems.filter((ui) => !ui.item.hidden);
-  const choosableBag = canChangeContent(userData.role)
-    ? bagItems
-    : bagItems.filter((ui) => !ui.item.hidden);
 
   // Panels sit beside the figure when there is room, else in a bottom sheet above the
   // layout's own navigation.
@@ -240,7 +243,7 @@ export function ItemsWorkspace({
           selected={phoneTab === "backpack"}
           onSelect={() => setPhoneTab("backpack")}
         >
-          Backpack · {choosableBag.length}
+          Backpack
         </PhoneTab>
       </div>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
@@ -281,7 +284,11 @@ export function ItemsWorkspace({
             hasPanel && !isNarrow && "@min-[600px]:hidden",
           )}
         >
-          <h2 className="mb-2 font-bold text-2xl text-foreground">Backpack</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
+            {backpackStatus}
+          </div>
+          {bagTabs && <div className="mt-1 mb-3">{bagTabs}</div>}
           <BackpackList
             items={bagItems}
             userData={userData}
@@ -305,7 +312,12 @@ export function ItemsWorkspace({
         <Sheet open={hasPanel} onOpenChange={(open) => !open && closeView()}>
           <SheetContent
             side="bottom"
-            className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none"
+            // Focus the sheet itself so the close button does not open with a focus ring.
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              (event.currentTarget as HTMLElement | null)?.focus();
+            }}
             // The sheet's strict containment would ignore the panel's height; keep it
             // content-sized up to the maximum.
             style={{ contain: "layout paint" }}

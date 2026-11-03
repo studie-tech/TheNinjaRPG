@@ -183,18 +183,15 @@ export function LoadoutHotkeysPanel({
       ) : rows.length === 0 ? (
         <p className="text-sm">Equip items to give them hotkeys.</p>
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-1">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-4 gap-y-1.5">
           {rows.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between gap-2 text-sm"
-            >
-              <span className="truncate">{row.name}</span>
+            <li key={row.id} className="flex min-w-0 items-center gap-2 text-sm">
               <HotkeyChip
                 label={row.name}
                 hotkey={hotkeys.byAction[row.id]}
                 onClick={() => assign(row)}
               />
+              <span className="truncate">{row.name}</span>
             </li>
           ))}
         </ul>

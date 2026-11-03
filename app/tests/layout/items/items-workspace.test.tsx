@@ -181,7 +181,7 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   renderWorkspace();
   const [equipmentTab, backpackTab] = screen.getAllByRole("tab");
   expect(equipmentTab?.getAttribute("aria-selected")).toBe("true");
-  expect(backpackTab?.textContent).toBe("Backpack · 2");
+  expect(backpackTab?.textContent).toBe("Backpack");
   act(() => {
     fireEvent.click(backpackTab!);
   });
@@ -260,5 +260,24 @@ it("keeps hidden items out of the slot picker for players", () => {
     fireEvent.click(slotOf("HAND_2"));
   });
   expect(screen.queryByRole("button", { name: "Equip Secret Blade" })).toBeNull();
-  expect(screen.getAllByRole("tab")[1]?.textContent).toBe("Backpack · 1");
+  expect(screen.queryByRole("button", { name: /^Secret Blade/ })).toBeNull();
+});
+
+it("shows the bag's capacity beside the backpack heading and its tabs below", () => {
+  renderWorkspace({ backpackStatus: <p>4 / 20</p>, bagTabs: <p>Bag tabs</p> });
+  const heading = screen.getByRole("heading", { name: "Backpack" });
+  expect(heading.parentElement?.textContent).toBe("Backpack4 / 20");
+  expect(heading.parentElement?.nextElementSibling?.textContent).toBe("Bag tabs");
+});
+
+it("opens the phone sheet with focus on the sheet, not its close button", () => {
+  containerWidth = 390;
+  renderWorkspace();
+  act(() => {
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+  });
+  act(() => {
+    fireEvent.click(card("Raijin Tanto"));
+  });
+  expect(document.activeElement === screen.getByRole("dialog")).toBe(true);
 });

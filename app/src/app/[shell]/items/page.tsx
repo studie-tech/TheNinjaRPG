@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleFadingArrowUp } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { COST_EXTRA_ITEM_SLOT, NonActionItemTypes } from "@/drizzle/constants";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
-import { BagTabs } from "@/layout/items/BagTabs";
+import { BagCapacity, BagTabs } from "@/layout/items/BagTabs";
 import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
@@ -151,105 +152,7 @@ export default function MyItems() {
 
   return (
     <>
-      <ContentBox
-        title="Items"
-        subtitle={
-          activeTab === "normal"
-            ? `${normalItemCount} / ${maxNormalItems} bag slots`
-            : activeTab === "event"
-              ? `${eventItemCount} / ${maxEventItems} bag slots`
-              : activeTab === "materials"
-                ? `${materialsItemCount} / ${maxMaterials} bag slots`
-                : `${cookingItemCount} / ${maxCookingItems} bag slots`
-        }
-        padding={false}
-        topRightContent={
-          <div className="flex flex-row items-center gap-1">
-            <BagTabs
-              bags={[
-                { value: "normal", count: normalItemCount ?? 0 },
-                { value: "event", count: eventItemCount ?? 0 },
-                { value: "materials", count: materialsItemCount ?? 0 },
-                { value: "cooking", count: cookingItemCount ?? 0 },
-              ]}
-              active={activeTab}
-              onChange={setActiveTab}
-            />
-            <Button
-              size="sm"
-              aria-label="Purchase an extra item slot"
-              aria-busy={isBuyingItemSlot}
-              disabled={isBuyingItemSlot}
-              loading={isBuyingItemSlot}
-              onClick={() => setIsBuyItemSlotOpen(true)}
-            >
-              + Slot
-            </Button>
-            <Dialog
-              open={isBuyItemSlotOpen}
-              onOpenChange={(open) => {
-                if (!isBuyingItemSlot) setIsBuyItemSlotOpen(open);
-              }}
-            >
-              <DialogContent
-                aria-busy={isBuyingItemSlot}
-                onEscapeKeyDown={(event) => {
-                  if (isBuyingItemSlot) event.preventDefault();
-                }}
-                onInteractOutside={(event) => {
-                  if (isBuyingItemSlot) event.preventDefault();
-                }}
-              >
-                <DialogHeader>
-                  <DialogTitle>Extra Item Slot</DialogTitle>
-                  <DialogDescription>
-                    Purchase an extra item slot for {COST_EXTRA_ITEM_SLOT} reputation
-                    points. You currently have {userData.reputationPoints} reputation{" "}
-                    {userData.reputationPoints === 1 ? "point" : "points"}.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="min-h-8" aria-live="polite" aria-atomic="true">
-                  {isBuyingItemSlot ? (
-                    <Loader explanation="Purchasing" noPadding />
-                  ) : canAfford ? (
-                    <p>Are you sure you want to complete this purchase?</p>
-                  ) : (
-                    <p>
-                      You need {COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more
-                      reputation points.
-                    </p>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button
-                    disabled={!canAfford || isBuyingItemSlot}
-                    aria-busy={isBuyingItemSlot}
-                    loading={isBuyingItemSlot}
-                    onClick={() => {
-                      if (!canAfford || buyItemSlotInFlight.current) return;
-                      buyItemSlotInFlight.current = true;
-                      buyItemSlot();
-                    }}
-                  >
-                    {isBuyingItemSlot
-                      ? "Purchasing"
-                      : canAfford
-                        ? `Purchase for ${COST_EXTRA_ITEM_SLOT} reps`
-                        : `Need ${COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more reps`}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={isBuyingItemSlot}
-                    onClick={() => setIsBuyItemSlotOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        }
-      >
+      <ContentBox title="Items" padding={false}>
         <ItemsToolbar userData={userData} userItems={userItems} />
         {isFetching && <Loader explanation="Refreshing items" />}
         {/* Wait for the updated equipment state before accepting another action. */}
@@ -258,6 +161,53 @@ export default function MyItems() {
             userData={userData}
             userItems={availableItems ?? []}
             bag={activeTab}
+            backpackStatus={
+              <div className="flex items-center gap-1">
+                <BagCapacity
+                  used={
+                    (activeTab === "normal"
+                      ? normalItemCount
+                      : activeTab === "event"
+                        ? eventItemCount
+                        : activeTab === "materials"
+                          ? materialsItemCount
+                          : cookingItemCount) ?? 0
+                  }
+                  max={
+                    activeTab === "normal"
+                      ? maxNormalItems
+                      : activeTab === "event"
+                        ? maxEventItems
+                        : activeTab === "materials"
+                          ? maxMaterials
+                          : maxCookingItems
+                  }
+                />
+                {/* Purchased slots extend the Gear bag only. */}
+                {activeTab === "normal" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="Buy an extra Gear bag slot"
+                    hoverText="Buy an extra Gear bag slot"
+                    aria-busy={isBuyingItemSlot}
+                    disabled={isBuyingItemSlot}
+                    loading={isBuyingItemSlot}
+                    onClick={() => setIsBuyItemSlotOpen(true)}
+                  >
+                    <CircleFadingArrowUp className="h-5 w-5" />
+                  </Button>
+                )}
+              </div>
+            }
+            bagTabs={
+              <BagTabs
+                bags={availableTabs}
+                active={activeTab}
+                onChange={setActiveTab}
+              />
+            }
             bagItems={
               (activeTab === "normal"
                 ? normalItems
@@ -271,6 +221,68 @@ export default function MyItems() {
           />
         </div>
       </ContentBox>
+      <Dialog
+        open={isBuyItemSlotOpen}
+        onOpenChange={(open) => {
+          if (!isBuyingItemSlot) setIsBuyItemSlotOpen(open);
+        }}
+      >
+        <DialogContent
+          aria-busy={isBuyingItemSlot}
+          onEscapeKeyDown={(event) => {
+            if (isBuyingItemSlot) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            if (isBuyingItemSlot) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Extra Item Slot</DialogTitle>
+            <DialogDescription>
+              Purchase an extra item slot for {COST_EXTRA_ITEM_SLOT} reputation points.
+              You currently have {userData.reputationPoints} reputation{" "}
+              {userData.reputationPoints === 1 ? "point" : "points"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-8" aria-live="polite" aria-atomic="true">
+            {isBuyingItemSlot ? (
+              <Loader explanation="Purchasing" noPadding />
+            ) : canAfford ? (
+              <p>Are you sure you want to complete this purchase?</p>
+            ) : (
+              <p>
+                You need {COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more
+                reputation points.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={!canAfford || isBuyingItemSlot}
+              aria-busy={isBuyingItemSlot}
+              loading={isBuyingItemSlot}
+              onClick={() => {
+                if (!canAfford || buyItemSlotInFlight.current) return;
+                buyItemSlotInFlight.current = true;
+                buyItemSlot();
+              }}
+            >
+              {isBuyingItemSlot
+                ? "Purchasing"
+                : canAfford
+                  ? `Purchase for ${COST_EXTRA_ITEM_SLOT} reps`
+                  : `Need ${COST_EXTRA_ITEM_SLOT - userData.reputationPoints} more reps`}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={isBuyingItemSlot}
+              onClick={() => setIsBuyItemSlotOpen(false)}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {userItems && (
         // Keep hotkey setup out of the way without a mouse or trackpad.
         <div className="not-any-pointer-fine:hidden">
