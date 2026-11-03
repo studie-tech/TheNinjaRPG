@@ -90,10 +90,9 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
   const availableStaff = staffData?.data || [];
 
   // Query for canned responses
-  const { data: cannedResponses, refetch: refetchCannedResponses } =
-    api.support.getCannedResponses.useQuery(undefined, {
-      enabled: isStaff && canEditCannedResponses(userData?.role),
-    });
+  const { data: cannedResponses } = api.support.getCannedResponses.useQuery(undefined, {
+    enabled: isStaff && canEditCannedResponses(userData?.role),
+  });
 
   // Update ticket mutation
   const updateTicket = api.support.updateTicket.useMutation({
@@ -169,10 +168,6 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
       .catch(() => {
         showMutationToast({ success: false, message: "Failed to copy to clipboard" });
       });
-  };
-
-  const handleCannedResponsesChange = () => {
-    void refetchCannedResponses();
   };
 
   // Derived pass 2
@@ -742,7 +737,6 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         <CannedResponsesManagement
           isOpen={isManagementOpen}
           setIsOpen={setIsManagementOpen}
-          onResponsesChange={handleCannedResponsesChange}
         />
       )}
     </div>

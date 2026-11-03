@@ -1,8 +1,7 @@
 "use client";
 
 import { Copy, Edit2, Loader2, Plus, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,13 +19,11 @@ import { useUserData } from "@/utils/UserContext";
 interface CannedResponsesManagementProps {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  onResponsesChange?: () => void;
 }
 
 export default function CannedResponsesManagement({
   isOpen,
   setIsOpen,
-  onResponsesChange,
 }: CannedResponsesManagementProps) {
   const { data: userData } = useUserData();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -35,23 +32,17 @@ export default function CannedResponsesManagement({
   const [deletingResponseIds, setDeletingResponseIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const deletingResponseIdsRef = useRef(new Set<string>());
-  const deletedResponseIdsRef = useRef(new Set<string>());
   const utils = api.useUtils();
 
-  const {
-    data: cannedResponses,
-    isLoading,
-    refetch,
-  } = api.support.getCannedResponses.useQuery(undefined, {
-    enabled: isOpen,
-  });
+  const { data: cannedResponses, isLoading } = api.support.getCannedResponses.useQuery(
+    undefined,
+    { enabled: isOpen },
+  );
 
   const createMutation = api.support.createCannedResponse.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
-      void refetch();
-      onResponsesChange?.();
+      void utils.support.getCannedResponses.invalidate();
       setIsCreateModalOpen(false);
       setFormData({ title: "", description: "" });
     },
@@ -60,14 +51,29 @@ export default function CannedResponsesManagement({
   const updateMutation = api.support.updateCannedResponse.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
-      void refetch();
-      onResponsesChange?.();
+      void utils.support.getCannedResponses.invalidate();
       setEditingResponse(null);
       setFormData({ title: "", description: "" });
     },
   });
 
-  const deleteMutation = api.support.deleteCannedResponse.useMutation();
+  const deleteMutation = api.support.deleteCannedResponse.useMutation({
+    onSuccess: (result, { id }) => {
+      showMutationToast(result);
+      if (!result.success) return;
+      utils.support.getCannedResponses.setData(undefined, (responses) =>
+        responses?.filter((response) => response.id !== id),
+      );
+      void utils.support.getCannedResponses.invalidate();
+    },
+    onSettled: (_result, _error, { id }) => {
+      setDeletingResponseIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+    },
+  });
 
   if (!userData || !canEditCannedResponses(userData.role)) {
     return null;
@@ -94,34 +100,10 @@ export default function CannedResponsesManagement({
     setFormData({ title: response.title, description: response.description });
   };
 
-  const handleDelete = async (id: string) => {
-    if (
-      deletingResponseIdsRef.current.has(id) ||
-      deletedResponseIdsRef.current.has(id)
-    ) {
-      return;
-    }
-
-    deletingResponseIdsRef.current.add(id);
-    setDeletingResponseIds(new Set(deletingResponseIdsRef.current));
-
-    try {
-      const result = await deleteMutation.mutateAsync({ id });
-      showMutationToast(result);
-      if (!result.success) return;
-
-      deletedResponseIdsRef.current.add(id);
-      utils.support.getCannedResponses.setData(undefined, (responses) =>
-        responses?.filter((response) => response.id !== id),
-      );
-      onResponsesChange?.();
-      void refetch().catch(() => undefined);
-    } catch {
-      toast.error("Failed to delete canned response");
-    } finally {
-      deletingResponseIdsRef.current.delete(id);
-      setDeletingResponseIds(new Set(deletingResponseIdsRef.current));
-    }
+  const handleDelete = (id: string) => {
+    if (deletingResponseIds.has(id)) return;
+    setDeletingResponseIds((current) => new Set(current).add(id));
+    deleteMutation.mutate({ id });
   };
 
   const handleCopy = (description: string) => {
@@ -219,7 +201,7 @@ export default function CannedResponsesManagement({
                             isLoading={isDeleting}
                             keepOpenOnAccept
                             disabled={isDeleting}
-                            onAccept={() => void handleDelete(response.id)}
+                            onAccept={() => handleDelete(response.id)}
                           >
                             This permanently deletes the canned response. This action
                             cannot be undone.
