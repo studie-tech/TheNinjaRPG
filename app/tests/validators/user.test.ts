@@ -3,9 +3,9 @@ import { BasicElementName, ELEMENTAL_MASTERY_CAP, TavernColorPresets } from "@/d
 import type { UserWithRelations } from "@/routers/profile";
 import { AllTags } from "@/validators/combat";
 import { getSearchValidator } from "@/validators/register";
+import { getBloodlineElements } from "@/libs/userElements";
 import {
   getPublicUsersSchema,
-  getBloodlineElements,
   createAssignedExperienceSchema,
   tavernColorChangeSchema,
 } from "@/validators/user";

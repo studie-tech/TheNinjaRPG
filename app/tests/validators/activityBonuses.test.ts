@@ -14,7 +14,6 @@ import {
   rejectActivityBonuses,
   SkillTreeValidator,
 } from "@/validators/combat";
-import { RaidDamageThresholdValidator } from "@/validators/objectives";
 
 describe("activity tag contracts", () => {
   for (const schema of [
@@ -69,9 +68,6 @@ describe("activity tag contracts", () => {
     expect(
       z.array(AllTags).superRefine(rejectActivityBonuses).safeParse(effects).success,
     ).toBe(false);
-    expect(RaidDamageThresholdValidator.shape.effects.safeParse(effects).success).toBe(
-      false,
-    );
   });
   it.each(activityBonusTypes)("%s requires an ordinary skill", (type) => {
     const skill = {

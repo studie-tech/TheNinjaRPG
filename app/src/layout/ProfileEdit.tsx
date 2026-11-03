@@ -144,6 +144,7 @@ import {
   TAVERN_COLOR_STYLES,
 } from "@/libs/tavernColors";
 import { showMutationToast } from "@/libs/toast";
+import { getBloodlineElements } from "@/libs/userElements";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { round } from "@/utils/math";
@@ -184,7 +185,6 @@ import {
 import {
   type GenderChangeSchema,
   genderChangeSchema,
-  getBloodlineElements,
   updateUserPreferencesSchema,
 } from "@/validators/user";
 
