@@ -56,8 +56,6 @@ export const clanGetRequestSchema = z.object({
   clanLeaderId: z.string(),
 });
 
-export type ClanGetRequestSchema = z.infer<typeof clanGetRequestSchema>;
-
 /**
  * Checks if a user is a clan leader.
  * @param userId - The ID of the user to check.

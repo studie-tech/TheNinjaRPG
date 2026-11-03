@@ -85,4 +85,3 @@ export const OverworldPlacementSchema = z
   });
 
 export type OverworldPlacementInput = z.input<typeof OverworldPlacementSchema>;
-export type OverworldPlacementType = z.output<typeof OverworldPlacementSchema>;

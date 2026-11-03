@@ -9,8 +9,6 @@ export const dayNightCycleStateSchema = z.object({
   dayCycleIndex: z.number().int(),
 });
 
-export type DayNightCycleState = z.infer<typeof dayNightCycleStateSchema>;
-
 export const farmPlotStateSchema = z.object({
   id: z.string(),
   slotIndex: z.number().int(),

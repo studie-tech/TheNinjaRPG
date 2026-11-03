@@ -135,7 +135,6 @@ export const auctionListingSchemaForItem = (
 
 // Type exports
 export type CreateAuctionListingSchema = z.infer<typeof createAuctionListingSchema>;
-export type GetAuctionListingsSchema = z.infer<typeof getAuctionListingsSchema>;
 
 const offerQuantity = z.int().min(1).max(MAX_ITEM_STACK_SIZE);
 export const createAuctionOfferSchema = z.discriminatedUnion("offerType", [

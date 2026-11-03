@@ -2,9 +2,8 @@ import { z } from "zod";
 import { ActivityStreakTypes } from "@/drizzle/constants";
 import { rewardFields } from "./rewards";
 
-// Reward schema - reuse from objectives
+// Reward schema built from the shared reward fields
 export const streakRewardSchema = z.object(rewardFields);
-export type StreakRewardType = z.infer<typeof streakRewardSchema>;
 
 // Single day reward configuration
 export const streakDayRewardSchema = z.object({
@@ -85,7 +84,6 @@ export type ActivityStreakConfigUpdateInput = z.infer<
 export const purchaseEventPassSchema = z.object({
   configId: z.string(),
 });
-export type PurchaseEventPassInput = z.infer<typeof purchaseEventPassSchema>;
 
 // Schema for claiming a streak day
 export const claimStreakDaySchema = z.object({
@@ -95,7 +93,6 @@ export const claimStreakDaySchema = z.object({
   // If true, user explicitly wants to reset streak to day 1
   reset: z.boolean().optional().prefault(false),
 });
-export type ClaimStreakDayInput = z.infer<typeof claimStreakDaySchema>;
 
 // Form schema for editing activity streak config (rewards managed separately in state)
 export const activityStreakFormSchema = z.object({

@@ -33,8 +33,6 @@ export const reportTimeoutSchema = z.object({
   object_id: z.string(),
 });
 
-export type ReportTimeoutSchema = z.infer<typeof reportTimeoutSchema>;
-
 export const userReviewSchema = z.object({
   staffUserId: z.string(),
   review: z.string(),
@@ -64,7 +62,6 @@ export const reportFilteringSchema = z.object({
   endDate: z.date().optional(),
   system: z.string().optional(),
 });
-export type ReportFilteringSchema = z.infer<typeof reportFilteringSchema>;
 
 export const modBotPerformanceSchema = z.object({
   days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30),

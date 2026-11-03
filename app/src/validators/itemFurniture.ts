@@ -43,7 +43,6 @@ export const furnitureViewSchema = z.strictObject({
   groundAnchor: z.coerce.number().min(1).max(100).optional(),
   geometry: furnitureGeometrySchema.optional(),
 });
-export type FurnitureView = z.output<typeof furnitureViewSchema>;
 
 /** The canonical zero-degree view remains Item.image; absent directions are unavailable. */
 export const furnitureViewsSchema = z

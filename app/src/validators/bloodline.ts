@@ -26,7 +26,6 @@ export const baseReskinSchema = z.object({
 export const bloodlineReskinCreateSchema = baseReskinSchema.extend({
   bloodlineId: z.string(),
 });
-export type BloodlineReskinCreateSchema = z.infer<typeof bloodlineReskinCreateSchema>;
 
 /** Schema for updating a bloodline reskin (staff only, includes reason). */
 export const bloodlineReskinUpdateSchema = baseReskinSchema.extend({
@@ -39,6 +38,3 @@ export const removeBloodlineFromPoolSchema = z.object({
   bloodlineId: z.string(),
   reason: z.string().trim().min(10).max(500),
 });
-export type RemoveBloodlineFromPoolSchema = z.infer<
-  typeof removeBloodlineFromPoolSchema
->;

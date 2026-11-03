@@ -107,9 +107,4 @@ export const aiTestUserCallEndpointRequestSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional(),
 });
 
-export type AiTestUserRequest = z.infer<typeof aiTestUserRequestSchema>;
 export type AiTestUserProfile = z.infer<typeof aiTestUserProfileSchema>;
-export type AiTestUserResponse = z.infer<typeof aiTestUserResponseSchema>;
-export type AiTestUserCallEndpointRequest = z.infer<
-  typeof aiTestUserCallEndpointRequestSchema
->;

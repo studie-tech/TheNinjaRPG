@@ -11,8 +11,6 @@ export const awardSchema = z
     error: "Either reputation or money amount must be provided",
   });
 
-export type AwardSchema = z.infer<typeof awardSchema>;
-
 // Filtering schema for listing awards
 export const awardsFilteringSchema = z.object({
   rewardType: z.enum(["all", "reputation", "money", "both"]).prefault("all"),
@@ -20,5 +18,3 @@ export const awardsFilteringSchema = z.object({
   awardedBy: z.string().optional(), // awardedBy username contains
   date: z.string().optional(),
 });
-
-export type AwardsFilteringSchema = z.infer<typeof awardsFilteringSchema>;

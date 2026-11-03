@@ -36,5 +36,3 @@ export const npcHealOutputSchema = baseServerResponse.extend({
     })
     .optional(),
 });
-
-export type HealerAfterHeal = z.infer<typeof healerAfterHealSchema>;

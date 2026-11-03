@@ -19,6 +19,3 @@ export const listApplicationsInfiniteSchema = z.object({
   targetRole: z.enum(StaffApplicationTargetRoles).optional(),
   state: z.enum(StaffApplicationStates).optional(),
 });
-export type ListApplicationsInfiniteSchema = z.infer<
-  typeof listApplicationsInfiniteSchema
->;

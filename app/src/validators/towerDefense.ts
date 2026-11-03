@@ -26,9 +26,6 @@ export type TowerDefenseState = z.infer<typeof towerDefenseStateSchema>;
 // ============================================
 // Enemy Types & Directions
 // ============================================
-export const enemyTypeSchema = z.string();
-export type EnemyType = z.infer<typeof enemyTypeSchema>;
-
 /**
  * Enemy spawn data (static fields sent once per enemy)
  * COST OPTIMIZATION: Path and maxHealth are sent in this table to save bandwidth
@@ -52,7 +49,7 @@ export type EnemyDirection = z.infer<typeof enemyDirectionSchema>;
 export const towerDefenseEnemySchema = z.object({
   id: z.string(),
   aiUserId: z.string(),
-  enemyType: enemyTypeSchema,
+  enemyType: z.string(),
   position: hexPositionSchema,
   path: z.array(hexPositionSchema),
   pathIndex: z.int().min(0),
@@ -218,7 +215,6 @@ export interface RuntimeState {
 export const purchaseUpgradeInputSchema = z.object({
   upgradeId: z.string(),
 });
-export type PurchaseUpgradeInput = z.infer<typeof purchaseUpgradeInputSchema>;
 
 // ============================================
 // Signed Definitions
@@ -276,7 +272,6 @@ export const characterAnimationSchema = z.object({
   frameDurationMs: z.int().min(1).prefault(100),
   loop: z.boolean().prefault(true),
 });
-export type CharacterAnimation = z.infer<typeof characterAnimationSchema>;
 
 export const characterAssetConfigSchema = z.object({
   rotations: z.record(spriteDirectionSchema, z.string()),
@@ -315,7 +310,6 @@ export const claimCompletedRunInputSchema = z.object({
   upgradeDefinitionsJson: z.string().min(1, "Upgrade definitions required"),
   enemyDefinitionsJson: z.string().min(1, "Enemy definitions required"),
 });
-export type ClaimCompletedRunInput = z.infer<typeof claimCompletedRunInputSchema>;
 
 /** A completed_run row as SpacetimeDB's SQL endpoint returns it. */
 export const spacetimeCompletedRunSchema = z.object({
