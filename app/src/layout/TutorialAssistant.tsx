@@ -462,7 +462,7 @@ const CancelTutorialConfirmDialog: React.FC<{
  */
 interface TutorialAssistantProps {
   /** Viewport width below which the shell moves its game menu into a drawer. */
-  sidebarBreakpoint?: number;
+  sidebarBreakpoint: number;
   rightSideBarOpen: boolean;
   setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;
@@ -512,7 +512,7 @@ const PlayerTutorialAssistant: React.FC<
   rightSideBarOpen,
   setRightSideBarOpen,
   rightSideBarRef,
-  sidebarBreakpoint = 768,
+  sidebarBreakpoint,
 }) => {
   // State
   const { data: userData, updateUser } = useUserDataSelector((user) => ({
@@ -658,13 +658,7 @@ const PlayerTutorialAssistant: React.FC<
       if (userData?.tutorialOn === false) return;
 
       // Handle the tutorial step
-      let tutorialStep = userData.tutorialStep;
-
-      // Set to 0 if undefined (first time user)
-      if (tutorialStep === undefined) {
-        tutorialStep = 0;
-        updateTutorialStep({ step: 0 });
-      }
+      const tutorialStep = userData.tutorialStep;
 
       // Get current step config
       const isHospitalized = userData.status === "HOSPITALIZED";
@@ -739,15 +733,7 @@ const PlayerTutorialAssistant: React.FC<
         }
       }
     }
-  }, [
-    userData,
-    currentStep,
-    pathname,
-    router,
-    updateTutorialStep,
-    rightSideBarOpen,
-    isMobile,
-  ]);
+  }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
 
   // Start Sentry replay on the first tutorial step
   useEffect(() => {
