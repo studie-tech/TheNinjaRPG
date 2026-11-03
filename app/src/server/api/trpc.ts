@@ -22,7 +22,6 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/headers";
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
-import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
@@ -63,10 +62,9 @@ import { getClientIp } from "@/utils/network";
  * @see https://trpc.io/docs/context
  */
 export const createAppTRPCContext = async (options: {
-  req: NextRequest;
   readHeaders: ReadonlyHeaders;
   readCookies: ReadonlyRequestCookies;
-  procedureTypes?: ReadonlyMap<string, string>;
+  procedureTypes: ReadonlyMap<string, string>;
 }) => {
   // Get user ID - SIMPLE
   const session = await auth();
@@ -80,7 +78,7 @@ export const createAppTRPCContext = async (options: {
   const telemetry: { queryMetrics?: ReadonlyMap<string, QueryAttribution> } = {
     queryMetrics: parseQueryMetricsHeader(
       readHeaders.get(QUERY_METRICS_HEADER),
-      options.procedureTypes ?? new Map(),
+      options.procedureTypes,
     ),
   };
   // AB testing cookies
