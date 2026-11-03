@@ -12,16 +12,13 @@ import type { updateAiProfileSchema } from "@/validators/ai";
  *
  * @param client - The DrizzleClient instance used to query the database.
  * @param id - The unique identifier of the AI profile to fetch.
- * @returns The AI profile object, including its associated rules.
- * @throws Will throw an error if the profile with the given ID is not found.
+ * @returns The AI profile object, including its associated rules, or undefined when no
+ * profile has the given ID.
  */
 export const fetchAiProfileById = async (client: DrizzleClient, id: string) => {
   const profile = await client.query.aiProfile.findFirst({
     where: eq(aiProfile.id, id),
   });
-  if (!profile) {
-    throw new Error(`fetchAiProfile: Profile not found: ${id}`);
-  }
   return profile;
 };
 

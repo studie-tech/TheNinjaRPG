@@ -157,7 +157,11 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     pvpAverage,
   ] = await Promise.all([
     // Fetch default AI profile
-    fetchAiProfileById(client, "Default"),
+    fetchAiProfileById(client, "Default").then((profile) => {
+      if (!profile)
+        throw new Error("fetchBattleEssentials: Default AI profile not found");
+      return profile;
+    }),
     // Fetch active wars
     client.query.war.findMany({
       where: eq(war.status, "ACTIVE"),
