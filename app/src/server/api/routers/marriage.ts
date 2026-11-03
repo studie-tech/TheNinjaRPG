@@ -1,4 +1,3 @@
-import type { inferRouterOutputs } from "@trpc/server";
 import { z } from "zod";
 import { getServerPusher } from "@/libs/pusher";
 import {
@@ -190,5 +189,3 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Divorce finalized" };
     }),
 });
-
-export type MarriageRouter = inferRouterOutputs<typeof marriageRouter>;

@@ -3625,7 +3625,6 @@ export const splitAchievementProgress = (
   });
   return progress;
 };
-export type FetchedPublicUsers = Awaited<ReturnType<typeof fetchPublicUsers>>;
 
 /**
  * Scale an edited AI row to its level before it is saved. Changed combat stats are the

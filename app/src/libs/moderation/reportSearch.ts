@@ -28,8 +28,6 @@ const vectorCapabilities = new WeakMap<
 >();
 const fulltextUnavailableUntil = new WeakMap<DrizzleClient, number>();
 
-export type PreviousReport = Awaited<ReturnType<typeof getRelatedReports>>[number];
-
 const eligibleReports = (client: DrizzleClient) =>
   and(
     ne(userReport.aiInterpretation, ""),

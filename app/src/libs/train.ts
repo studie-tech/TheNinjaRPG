@@ -664,18 +664,6 @@ export const getTrainingSections = (canUseSenseiSystem: boolean) => {
   };
 };
 
-export const mainFilters = [
-  "No Filter",
-  "Name",
-  "Most Recent",
-  "Bloodline",
-  "Stat",
-  "Effect",
-  "Element",
-  "AppearAnimation",
-  "StaticAnimation",
-  "DisappearAnimation",
-] as const;
 export const statFilters = [
   "Highest",
   "Ninjutsu",
@@ -714,9 +702,7 @@ export const jutsuStatQuickFilterSelection = (
   quickFilter: JutsuStatQuickFilter,
 ): StatGenType[] => (quickFilter === "All" ? [] : [quickFilter]);
 
-export type FilterType = (typeof mainFilters)[number];
 export type StatGenType = (typeof statFilters)[number];
-export type RarityType = (typeof rarities)[number];
 
 /**
  * Get training efficiency

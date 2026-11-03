@@ -2194,7 +2194,6 @@ export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to war health whe
 export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to war health when shrine is recaptured (HP > 25%)
 export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of max shrine HP)
 export const SHRINE_STATUSES = ["ACTIVE", "CAPTURED"] as const; // Status tracking for shrine capture/recovery cycles
-export type ShrineStatus = (typeof SHRINE_STATUSES)[number];
 export const WAR_SHRINE_IMAGE =
   "https://ui0arpl8sm.ufs.sh/f/world-shrine-akikaze-c1602b7764686d7d1bdf028f.webp";
 /** Shrine architecture follows the biome; map terrain supplies the ground beneath its foundation. */

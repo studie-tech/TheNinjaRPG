@@ -1,7 +1,6 @@
 import { count, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import type { RouterOutputs } from "@/app/_trpc/client";
 import {
   getCancelWarMissionUserUpdate,
   getCompleteWarMissionUserUpdate,
@@ -2058,10 +2057,6 @@ export type FetchActiveWarsReturnType = War & {
   attackerVillage: Village & { structures: VillageStructure[] };
   defenderVillage: Village & { structures: VillageStructure[] };
 };
-
-export type GetActiveWarsReturnType = NonNullable<
-  RouterOutputs["war"]["getActiveWars"]
->;
 
 /**
  * Count non-AI members of the owning faction for Hideouts and Strongholds,

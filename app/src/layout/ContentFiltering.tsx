@@ -39,15 +39,6 @@ import { useDelayState } from "@/hooks/useDelayState";
 /** Discrete UI option for (single|multi)-select fields */
 export type Option<V extends string = string> = { value: V; label: string };
 
-/** Supported field control types */
-export type FieldType =
-  | "text"
-  | "date"
-  | "number"
-  | "single-select"
-  | "multi-select"
-  | "tri-state";
-
 // Field config types (discriminated unions ensure correct value types)
 
 /** Free-text input */

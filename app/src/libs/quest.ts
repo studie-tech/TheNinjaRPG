@@ -1996,9 +1996,6 @@ const getPendingQuestItemEffects = (
   return { collections: outstanding, deliveries: pendingDeliveries };
 };
 
-// Type returned by getNewTrackers
-export type GetNewTrackersResult = Awaited<ReturnType<typeof getNewTrackers>>;
-
 /**
  * Unfinished goals with concrete map locations. Checked goals can be included in the player's
  * current sector so a republished map cannot leave an active mission on blocked terrain.

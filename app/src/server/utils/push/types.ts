@@ -1,4 +1,4 @@
-import type { PushCategory, PushPlatform } from "@/drizzle/constants";
+import type { PushCategory } from "@/drizzle/constants";
 
 /** One rendered notification, ready for either transport. */
 export interface PushMessage {
@@ -26,11 +26,6 @@ export interface PushMessage {
 /** Token rejections for a player-initiated test stay in the response instead of Sentry. */
 export const shouldReportPushFailures = (message: PushMessage): boolean =>
   message.suppressFailureReport !== true;
-
-export interface PushTarget {
-  token: string;
-  platform: PushPlatform;
-}
 
 /** Outcome for a single token. `retryable` failures leave the token in place. */
 export type PushResult =
