@@ -563,8 +563,8 @@ describeWithDatabase("staff user-id rename", () => {
       where: eq(userData.userId, OLD_USER_ID),
     });
     expect(reborn?.userId).toBe(OLD_USER_ID);
-    // The column default, not the literal a raw insert would otherwise write.
-    expect(reborn?.earnedExperience).toBe(2000);
+    // New characters earn their experience through the Academy Trials.
+    expect(reborn?.earnedExperience).toBe(0);
   });
 
   it("lets a deleted identity with store history make another character, and its subscription follows", async () => {
