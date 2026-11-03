@@ -1,8 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Cytoscape from "cytoscape";
-import edgehandles from "cytoscape-edgehandles";
+import type Cytoscape from "cytoscape";
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
 import { useForm, useWatch } from "react-hook-form";
@@ -14,9 +13,6 @@ import { isMobile } from "@/utils/audio";
 import { isErrorFromSource } from "@/utils/error";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { getSearchValidator } from "@/validators/register";
-
-// Register edgehandles extension once globally
-Cytoscape.use(edgehandles);
 
 interface GraphUsersGenericProps {
   hideDefault?: boolean;
@@ -46,15 +42,11 @@ const GraphUsersGeneric = (
       try {
         layoutInstanceRef.current.stop();
       } catch (e) {
-        if (e instanceof Error) {
-          // Only suppress the known "already stopped" error from cytoscape
-          if (isErrorFromSource(e, "cytoscape", "already stopped")) {
-            // Reset refs even for expected errors before returning
-            layoutRunningRef.current = false;
-            layoutInstanceRef.current = null;
-            return; // Silently ignore expected error
-          }
-          // Log all other errors - these are unexpected
+        // Only the known "already stopped" error from cytoscape is expected
+        if (
+          e instanceof Error &&
+          !isErrorFromSource(e, "cytoscape", "already stopped")
+        ) {
           console.warn("Unexpected error stopping layout:", e);
         }
       } finally {
@@ -146,13 +138,6 @@ const GraphUsersGeneric = (
         : null;
   }, [highlights, props.edges, props.hideDefault]);
 
-  // Second layer
-  // showIds?.push(
-  //   ...props.edges
-  //     .filter((e) => showIds.includes(e.source) || showIds.includes(e.target))
-  //     .flatMap((edge) => [edge.source, edge.target]),
-  // );
-
   // Memoize elements array to provide stable reference for useMemo dependencies
   const elements = useMemo(() => {
     const maxWeight = Math.max(...props.edges.map((x) => x.weight));
@@ -165,7 +150,7 @@ const GraphUsersGeneric = (
           (e) => !showIds || (showIds.includes(e.source) && showIds.includes(e.target)),
         )
         .map((e) => ({
-          data: { ...e, weight: (5 * maxWeight) / e.weight, classes: "autorotate" },
+          data: { ...e, weight: (5 * maxWeight) / e.weight },
         })),
     ];
   }, [props.nodes, props.edges, showIds]);
@@ -220,13 +205,6 @@ const GraphUsersGeneric = (
           style={{ width: "100%", height: "100%" }}
           stylesheet={
             [
-              {
-                selector: "node[name]",
-                style: {
-                  content: "data(name)",
-                  color: color,
-                },
-              },
               {
                 selector: "edge",
                 style: {

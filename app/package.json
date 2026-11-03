@@ -105,7 +105,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "cytoscape": "^3.34.4",
-    "cytoscape-edgehandles": "^4.0.1",
     "date-fns": "^4.4.0",
     "deep-object-diff": "^1.1.9",
     "dotenv": "^18.0.8",
@@ -162,7 +161,6 @@
     "@testing-library/react": "^16.3.3",
     "@types/bun": "1.4.3",
     "@types/cytoscape": "^3.31.0",
-    "@types/cytoscape-edgehandles": "^4.0.5",
     "@types/cytoscape-popper": "^4.0.0",
     "@types/jszip": "^3.4.1",
     "@types/node": "26.6.5",
@@ -197,9 +195,6 @@
   "packageManager": "bun@1.4.3",
   "overrides": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@types/cytoscape-edgehandles": {
-      "cytoscape": "$cytoscape"
-    },
     "@types/react-cytoscapejs": {
       "cytoscape": "$cytoscape"
     }

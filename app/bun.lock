@@ -67,7 +67,6 @@
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "cytoscape": "^3.34.4",
-        "cytoscape-edgehandles": "^4.0.1",
         "date-fns": "^4.4.0",
         "deep-object-diff": "^1.1.9",
         "dotenv": "^18.0.8",
@@ -124,7 +123,6 @@
         "@testing-library/react": "^16.3.3",
         "@types/bun": "1.4.3",
         "@types/cytoscape": "^3.31.0",
-        "@types/cytoscape-edgehandles": "^4.0.5",
         "@types/cytoscape-popper": "^4.0.0",
         "@types/jszip": "^3.4.1",
         "@types/node": "26.6.5",
@@ -153,9 +151,6 @@
   },
   "overrides": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@types/cytoscape-edgehandles": {
-      "cytoscape": "^3.34.4",
-    },
     "@types/react-cytoscapejs": {
       "cytoscape": "^3.34.4",
     },
@@ -869,8 +864,6 @@
 
     "@types/cytoscape": ["@types/cytoscape@3.31.0", "", { "dependencies": { "cytoscape": "*" } }, "sha512-EXHOHxqQjGxLDEh5cP4te6J0bi7LbCzmZkzsR6f703igUac8UGMdEohMyU3GHAayCTZrLQOMnaE/lqB2Ekh8Ww=="],
 
-    "@types/cytoscape-edgehandles": ["@types/cytoscape-edgehandles@4.0.5", "", { "dependencies": { "cytoscape": "^3.31" } }, "sha512-CHgYD/NV90bx+0/w0QjLsi9JYYSh9RlvoklEe2T/5/+zXv1rsXbvQMM4PX5AxqZ9FatQOa/h3zSnAquPfLAuyg=="],
-
     "@types/cytoscape-popper": ["@types/cytoscape-popper@4.0.0", "", { "dependencies": { "cytoscape-popper": "*" } }, "sha512-iYRvGKDy5Bk4NRcBhNWl9T5BbP8iirYimDXOj8Tc2Rp+Hi75pu0JJ+SIM4fyZj3369o4zPl7lDdpPepyjGNnPA=="],
 
     "@types/d3": ["@types/d3@3.5.53", "", {}, "sha512-8yKQA9cAS6+wGsJpBysmnhlaaxlN42Qizqkw+h2nILSlS+MAG2z4JdO6p+PJrJ+ACvimkmLJL281h157e52psQ=="],
@@ -1134,8 +1127,6 @@
     "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
 
     "cytoscape": ["cytoscape@3.34.4", "", {}, "sha512-msY99tMY8iWTg+sIPGfSqDcPNOt4xcj+v/K/7qUFaCUxxlqnMkUYLBjRUzn9W5CU/R2hrmtJa5+UtovrEM2ctg=="],
-
-    "cytoscape-edgehandles": ["cytoscape-edgehandles@4.0.1", "", { "dependencies": { "lodash.memoize": "^4.1.2", "lodash.throttle": "^4.1.1" }, "peerDependencies": { "cytoscape": "^3.2.0" } }, "sha512-uSYshkqRZ4luCxK295bEVTg46q4ZW+fwJhcIzMrtfNR7zeAnJ38Z48kUGeu5ibtXkgLbcZAg0YE4ED2dRuaePg=="],
 
     "cytoscape-popper": ["cytoscape-popper@4.0.1", "", { "peerDependencies": { "cytoscape": "^3.2.0" } }, "sha512-u2gYDMMvGSlAJbNfKvMljOM/p+BrHu0A4VcpELa+xJf54HoMn+nV0iuhALZx+O89b74SKJRy7jYo2WfkD5uvsw=="],
 
@@ -1466,10 +1457,6 @@
     "lodash.clonedeep": ["lodash.clonedeep@4.5.0", "", {}, "sha512-H5ZhCF25riFd9uB5UCkVKo61m3S/xZk1x4wA6yp/L3RFP6Z/eHH1ymQcGLo7J3GMPfm0V/7m1tryHuGVxpqEBQ=="],
 
     "lodash.isequal": ["lodash.isequal@4.5.0", "", {}, "sha512-pDo3lu8Jhfjqls6GkMgpahsF9kCyayhgykjyLMNFTKWrpVdAQtYyB4muAMWozBB4ig/dtWAmsMxLEI8wuz+DYQ=="],
-
-    "lodash.memoize": ["lodash.memoize@4.1.2", "", {}, "sha512-t7j+NzmgnQzTAYXcsHYLgimltOV1MXHtlOWf6GjL9Kj8GK5FInw5JotxvbOs+IvV1/Dzo04/fCGfLVs7aXb4Ag=="],
-
-    "lodash.throttle": ["lodash.throttle@4.1.1", "", {}, "sha512-wIkUCfVKpVsWo3JSZlc+8MB5it+2AN5W8J7YVMST30UrvcQNZ1Okbj+rbVniijTWE6FGYy4XJq/rHkas8qJMLQ=="],
 
     "log-symbols": ["log-symbols@4.1.0", "", { "dependencies": { "chalk": "^4.1.0", "is-unicode-supported": "^0.1.0" } }, "sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg=="],
 
