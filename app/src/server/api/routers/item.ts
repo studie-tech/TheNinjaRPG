@@ -3009,7 +3009,7 @@ export const itemRouter = createTRPCRouter({
       const kitConsumeResults = await Promise.all(
         kitsToUse.map(async ({ repairItemId, quantityUsed }) => {
           const repairKitRow = useritems.find((ui) => ui.id === repairItemId);
-          if (!repairKitRow || !repairKitRow.item.destroyOnUse) {
+          if (!repairKitRow?.item.destroyOnUse) {
             return null;
           }
           const consumed = await retryOnDeadlock(() =>
