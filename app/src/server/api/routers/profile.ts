@@ -3128,16 +3128,6 @@ const fetchUpdatedUserOnce = async (
     const now = new Date();
     const newDay = isDifferentDay(now, user.updatedAt);
 
-    // Check if travel should be completed automatically
-    if (user.status === "TRAVEL" && user.travelFinishAt && user.travelFinishAt <= now) {
-      user.status = "AWAKE";
-      user.travelFinishAt = null;
-      forceRegen = true;
-      requiresUserRefresh = true;
-      requiresProgressionRefresh = true;
-      toastMessages.push("You have arrived at your destination!");
-    }
-
     // Figure out if we're running update
     const sinceUpdate = secondsPassed(user.updatedAt);
     const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
