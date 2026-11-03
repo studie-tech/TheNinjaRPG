@@ -1,14 +1,12 @@
 /**
  * Checks whether a Vercel preview deployment is ready for a given PR.
  *
- * Looks for a preview in this order:
- *   1. Successful Vercel check runs on the PR head SHA (legacy auto-deploys)
- *   2. A reusable Vercel Preview GitHub deployment of the PR head SHA
- *   3. A snapshot commit on `tnr-preview/pr-{N}` whose parent is the PR head
+ * Previews are built only from snapshot commits (see create-pr-preview.mjs), so
+ * this looks for a Vercel Preview GitHub deployment of the snapshot commit on
+ * `tnr-preview/pr-{N}` whose parent is the PR head.
  *
  * Env vars consumed:
- *   GITHUB_TOKEN, PR_NUMBER, VERCEL_CHECK_NAME_PATTERN,
- *   PREVIEW_BRANCH (optional)
+ *   GITHUB_TOKEN, PR_NUMBER, PREVIEW_BRANCH (optional)
  *
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready    — "true" | "false"
@@ -16,7 +14,7 @@
  *   reason      — human-readable explanation when not ready
  *   check_name, details_url, head_sha, pr_url — supplementary metadata
  */
-import { setOutput, createGithubClient, toTrustedPreviewUrl } from "./ci-helpers.mjs";
+import { setOutput, createGithubClient } from "./ci-helpers.mjs";
 import {
   createPreviewDeploymentClient,
   withRetry,
@@ -25,7 +23,6 @@ import {
 const githubToken = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 const prNumber = Number(process.env.PR_NUMBER);
-const checkNamePatternRaw = process.env.VERCEL_CHECK_NAME_PATTERN ?? "vercel";
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -54,29 +51,6 @@ const preview = createPreviewDeploymentClient({
   repo,
 });
 
-/** Parse the deployment URL out of a Vercel check run's output summary. */
-const extractPreviewUrl = (checkRun) => {
-  const summary = checkRun?.output?.summary ?? "";
-
-  // Vercel feedback URLs embed the deployment hostname after /open-feedback/
-  // e.g. https://vercel.live/open-feedback/my-app-git-branch.vercel.app?via=...
-  const feedbackMatch = summary.match(
-    /https:\/\/vercel\.live\/open-feedback\/([a-z0-9-]+\.vercel\.app)/i,
-  );
-  if (feedbackMatch) {
-    const trusted = toTrustedPreviewUrl(`https://${feedbackMatch[1]}`);
-    if (trusted) return trusted;
-  }
-
-  // Fallback: grab any URL from the summary text, validate hostname
-  const fromSummary = summary.match(/https:\/\/[^\s)]+/i)?.[0];
-  if (fromSummary) {
-    const trusted = toTrustedPreviewUrl(fromSummary);
-    if (trusted) return trusted;
-  }
-  return "";
-};
-
 const notReady = (reason, extras = {}) => {
   setOutput("is_ready", "false");
   setOutput("reason", reason);
@@ -97,32 +71,6 @@ const ready = ({ previewUrl, checkName, detailsUrl, headSha, prUrl }) => {
   setOutput("pr_url", prUrl ?? "");
 };
 
-const findSuccessfulCheck = async (headSha) => {
-  const regex = new RegExp(checkNamePatternRaw, "i");
-  const checksResponse = await githubRequest(
-    `/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`,
-  );
-
-  const checks = Array.isArray(checksResponse?.check_runs)
-    ? checksResponse.check_runs
-    : [];
-  const matchingChecks = checks.filter((checkRun) =>
-    regex.test(checkRun?.name ?? ""),
-  );
-  const successfulChecks = matchingChecks.filter(
-    (checkRun) =>
-      checkRun?.status === "completed" && checkRun?.conclusion === "success",
-  );
-
-  const latestSuccessfulCheck = successfulChecks.sort((a, b) => {
-    const aCompleted = Date.parse(a?.completed_at ?? "");
-    const bCompleted = Date.parse(b?.completed_at ?? "");
-    return bCompleted - aCompleted;
-  })[0];
-
-  return { checks, matchingChecks, latestSuccessfulCheck };
-};
-
 const createPreviewHint =
   "A collaborator with write access can comment `/tnr-create-preview` to deploy one.";
 
@@ -135,34 +83,6 @@ const main = async () => {
 
   if (!headSha) {
     notReady(`Missing head SHA for PR #${prNumber}`);
-    return;
-  }
-
-  const { matchingChecks, latestSuccessfulCheck } =
-    await findSuccessfulCheck(headSha);
-  if (latestSuccessfulCheck) {
-    const previewUrl = extractPreviewUrl(latestSuccessfulCheck);
-    if (previewUrl) {
-      ready({
-        previewUrl,
-        checkName: latestSuccessfulCheck?.name ?? "",
-        detailsUrl: latestSuccessfulCheck?.details_url ?? "",
-        headSha,
-        prUrl,
-      });
-      return;
-    }
-  }
-
-  const headDeployment = await withRetry(() => preview.inspectPreview(headSha));
-  if (headDeployment.successful) {
-    ready({
-      previewUrl: headDeployment.successful.url,
-      checkName: headDeployment.successful.environment,
-      detailsUrl: headDeployment.successful.detailsUrl,
-      headSha,
-      prUrl,
-    });
     return;
   }
 
@@ -206,10 +126,10 @@ const main = async () => {
     }
   }
 
-  const reason = matchingChecks.length
-    ? `Found Vercel checks but none are successful yet for pattern ${checkNamePatternRaw}. ${createPreviewHint}`
-    : `No Vercel preview is deployed for this PR. ${createPreviewHint}`;
-  notReady(reason, { head_sha: headSha, pr_url: prUrl });
+  notReady(`No Vercel preview is deployed for this PR. ${createPreviewHint}`, {
+    head_sha: headSha,
+    pr_url: prUrl,
+  });
 };
 
 // Catch-all: surface the error as a "not ready" output rather than crashing

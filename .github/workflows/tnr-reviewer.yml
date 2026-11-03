@@ -17,8 +17,8 @@
 #
 # Pipeline: command_gate → preview_check → run_tnr_reviewer
 #   1. command_gate: validates the trigger, checks actor permissions, fetches metadata
-#   2. preview_check: PR → existing Vercel check/deployment or tnr-preview/pr-{N}
-#      snapshot (created by `/tnr-create-preview`); issue → resolve/create main preview
+#   2. preview_check: PR → Preview deployment of its tnr-preview/pr-{N} snapshot
+#      (created by `/tnr-create-preview`); issue → resolve/create main preview
 #   3. run_tnr_reviewer: checks out the target SHA, builds a prompt, runs Codex, posts results
 name: TNR Reviewer
 
@@ -51,7 +51,7 @@ jobs:
       (startsWith(github.event.comment.body, '/tnr-review-now') ||
        startsWith(github.event.comment.body, '/tnr-repro-now'))) ||
       github.event_name == 'workflow_dispatch'
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       issues: write
       pull-requests: write
@@ -312,13 +312,12 @@ jobs:
   preview_check:
     needs: command_gate
     if: needs.command_gate.outputs.should_run == 'true'
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 35
     concurrency:
       group: tnr-preview-${{ needs.command_gate.outputs.mode }}-${{ needs.command_gate.outputs.mode == 'issue-repro' && 'main' || needs.command_gate.outputs.pr_number }}
       cancel-in-progress: false
     permissions:
-      checks: read
       pull-requests: read
       issues: write
       contents: read
@@ -347,9 +346,7 @@ jobs:
           PUSH_TOKEN: ${{ secrets.PAT_TOKEN }}
           PR_NUMBER: ${{ needs.command_gate.outputs.pr_number }}
           MAIN_SHA: ${{ needs.command_gate.outputs.head_sha }}
-          TNR_MAIN_PREVIEW_URL: ${{ vars.TNR_MAIN_PREVIEW_URL }}
-          PREVIEW_BRANCH: ${{ vars.TNR_MAIN_PREVIEW_BRANCH || 'tnr-preview/main' }}
-          VERCEL_CHECK_NAME_PATTERN: ${{ vars.TNR_VERCEL_CHECK_PATTERN || 'vercel' }}
+          PREVIEW_BRANCH: tnr-preview/main
 
       # If the preview isn't ready, update the comment with the reason
       # so the user knows why the run was skipped
@@ -373,7 +370,7 @@ jobs:
   report_interrupted:
     needs: [command_gate, preview_check]
     if: always() && needs.command_gate.outputs.should_run == 'true' && (needs.preview_check.result == 'cancelled' || needs.preview_check.result == 'failure')
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       issues: write
       contents: read
@@ -395,7 +392,7 @@ jobs:
   run_tnr_reviewer:
     needs: [command_gate, preview_check]
     if: needs.preview_check.outputs.is_ready == 'true'
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     # One agent per PR/issue at a time; don't cancel in-progress to avoid partial reports
     concurrency:
       group: tnr-reviewer-${{ needs.command_gate.outputs.mode }}-${{ needs.command_gate.outputs.issue_number }}
@@ -551,7 +548,7 @@ jobs:
           codex-version: "0.154.0"
           sandbox: "danger-full-access"
           safety-strategy: "unsafe"
-          allow-users: ${{ vars.TNR_CODEX_ALLOW_USERS || 'MathiasGruber' }}
+          allow-users: MathiasGruber
           prompt-file: ${{ steps.build_prompt.outputs.prompt_file }}
 
       # Always upload artifacts (screenshots, logs) even on failure for debugging

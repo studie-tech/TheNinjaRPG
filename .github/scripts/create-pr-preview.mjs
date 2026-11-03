@@ -1,9 +1,10 @@
 /**
  * Create (or reuse) an on-demand Vercel preview for a pull request.
  *
- * Regular PR branches no longer auto-deploy. This script snapshots the PR
- * head onto `tnr-preview/pr-{N}` so Vercel's GitHub integration builds a
- * preview of that exact tree, then waits until the deployment is ready.
+ * Regular PR branches do not auto-deploy (see git.deploymentEnabled in
+ * app/vercel.json). This script snapshots the PR head onto `tnr-preview/pr-{N}`
+ * so Vercel's GitHub integration builds a preview of that exact tree, then
+ * waits until the deployment is ready.
  *
  * Env vars consumed:
  *   GITHUB_TOKEN, GITHUB_REPOSITORY, PUSH_TOKEN (PAT, contents:write),
@@ -94,41 +95,8 @@ const fetchPullRequestHead = async () => {
 const main = async () => {
   const headSha = await fetchPullRequestHead();
 
-  const existing = await withRetry(() => preview.inspectPreview(headSha));
-  if (existing.successful) {
-    ready({
-      previewUrl: existing.successful.url,
-      reason: `Reusing existing ${existing.successful.environment} of the PR head`,
-      checkName: existing.successful.environment,
-      detailsUrl: existing.successful.detailsUrl,
-      headSha,
-    });
-    return;
-  }
-
-  if (existing.inProgress) {
-    console.log(
-      `Preview already in progress (${existing.inProgress.state}); waiting`,
-    );
-    const waited = await preview.waitForPreview(headSha, waitOptions);
-    if (waited.successful) {
-      ready({
-        previewUrl: waited.successful.url,
-        reason: `Waited for in-progress ${waited.successful.environment} of the PR head`,
-        checkName: waited.successful.environment,
-        detailsUrl: waited.successful.detailsUrl,
-        headSha,
-      });
-      return;
-    }
-    if (!waited.failed) requirePreview(waited, headSha);
-    console.log(
-      `In-progress preview of the PR head failed (${waited.failed}); falling back to a snapshot build`,
-    );
-  }
-
   const currentBranchSha = await preview.readBranchSha(previewBranch);
-  if (currentBranchSha && currentBranchSha !== headSha) {
+  if (currentBranchSha) {
     const snapshotOfHead = await preview.isSnapshotOf(currentBranchSha, headSha);
     if (snapshotOfHead) {
       const snapshotPreview = await withRetry(() =>

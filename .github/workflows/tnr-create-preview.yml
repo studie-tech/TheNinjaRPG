@@ -214,13 +214,12 @@ jobs:
   create_preview:
     needs: command_gate
     if: needs.command_gate.outputs.should_run == 'true'
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 35
     concurrency:
       group: tnr-create-preview-${{ needs.command_gate.outputs.pr_number }}
       cancel-in-progress: false
     permissions:
-      checks: read
       pull-requests: write
       issues: write
       contents: read
@@ -292,7 +291,7 @@ jobs:
   report_interrupted:
     needs: [command_gate, create_preview]
     if: always() && needs.command_gate.outputs.should_run == 'true' && (needs.create_preview.result == 'cancelled' || needs.create_preview.result == 'failure')
-    runs-on: ${{ vars.TNR_REVIEWER_RUNNER_LABEL || 'blacksmith-2vcpu-ubuntu-2404' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
       issues: write
       pull-requests: write

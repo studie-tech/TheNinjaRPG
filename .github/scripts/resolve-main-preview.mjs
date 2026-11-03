@@ -9,25 +9,23 @@
  *     tree.
  *
  * Strategy:
- *   1. Optional override: TNR_MAIN_PREVIEW_URL (must be https://*.vercel.app)
- *   2. Reuse a successful Vercel Preview GitHub deployment of the main SHA,
- *      or of a snapshot commit of it left on `tnr-preview/main` by a prior run
- *   3. Otherwise create an empty snapshot commit (same tree as main) and point
+ *   1. Reuse a successful Vercel Preview GitHub deployment of a snapshot commit
+ *      of the main SHA left on `tnr-preview/main` by a prior run
+ *   2. Otherwise create an empty snapshot commit (same tree as main) and point
  *      `tnr-preview/main` at it. The snapshot SHA is unique, so Vercel's
  *      GitHub integration always builds a preview for it — no reliance on
  *      whether Vercel deduplicates SHAs it already deployed to production.
- *   4. Poll until that preview succeeds, fails, or times out
+ *   3. Poll until that preview succeeds, fails, or times out
  *
  * Env vars consumed:
  *   GITHUB_TOKEN, GITHUB_REPOSITORY, PUSH_TOKEN (PAT, contents:write),
- *   MAIN_SHA (optional), TNR_MAIN_PREVIEW_URL (optional),
- *   PREVIEW_BRANCH,
+ *   MAIN_SHA (optional), PREVIEW_BRANCH (optional),
  *   POLL_INTERVAL_MS, POLL_TIMEOUT_MS
  *
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready, preview_url, reason, check_name, details_url, head_sha
  */
-import { setOutput, createGithubClient, toTrustedPreviewUrl } from "./ci-helpers.mjs";
+import { setOutput, createGithubClient } from "./ci-helpers.mjs";
 import {
   createPreviewDeploymentClient,
   requirePreview,
@@ -37,7 +35,6 @@ import {
 const githubToken = process.env.GITHUB_TOKEN;
 const pushToken = process.env.PUSH_TOKEN || "";
 const repository = process.env.GITHUB_REPOSITORY;
-const overrideUrl = (process.env.TNR_MAIN_PREVIEW_URL ?? "").trim();
 const previewBranch = process.env.PREVIEW_BRANCH || "tnr-preview/main";
 const pollIntervalMs = Number(process.env.POLL_INTERVAL_MS ?? 15_000);
 const pollTimeoutMs = Number(process.env.POLL_TIMEOUT_MS ?? 25 * 60 * 1000);
@@ -110,64 +107,9 @@ const main = async () => {
     ? { sha: process.env.MAIN_SHA }
     : await fetchDefaultBranchSha();
 
-  if (overrideUrl) {
-    const normalized = overrideUrl.startsWith("http")
-      ? overrideUrl
-      : `https://${overrideUrl}`;
-    const trusted = toTrustedPreviewUrl(normalized);
-    if (!trusted) {
-      notReady(
-        "TNR_MAIN_PREVIEW_URL is not a trusted https://*.vercel.app URL",
-        { head_sha: resolvedSha },
-      );
-      return;
-    }
-    ready({
-      previewUrl: trusted,
-      reason: "Using TNR_MAIN_PREVIEW_URL override",
-      checkName: "TNR_MAIN_PREVIEW_URL",
-      detailsUrl: trusted,
-      headSha: resolvedSha,
-    });
-    return;
-  }
-
-  const existing = await withRetry(() => preview.inspectPreview(resolvedSha));
-  if (existing.successful) {
-    ready({
-      previewUrl: existing.successful.url,
-      reason: `Reusing existing ${existing.successful.environment} of main`,
-      checkName: existing.successful.environment,
-      detailsUrl: existing.successful.detailsUrl,
-      headSha: resolvedSha,
-    });
-    return;
-  }
-
-  if (existing.inProgress) {
-    console.log(
-      `Preview already in progress (${existing.inProgress.state}); waiting`,
-    );
-    const waited = await preview.waitForPreview(resolvedSha, waitOptions);
-    if (waited.successful) {
-      ready({
-        previewUrl: waited.successful.url,
-        reason: `Waited for in-progress ${waited.successful.environment} of main`,
-        checkName: waited.successful.environment,
-        detailsUrl: waited.successful.detailsUrl,
-        headSha: resolvedSha,
-      });
-      return;
-    }
-    if (!waited.failed) requirePreview(waited, resolvedSha);
-    console.log(
-      `In-progress preview of main failed (${waited.failed}); falling back to a fresh snapshot build`,
-    );
-  }
-
   // A previous run may already have a unique snapshot commit of this main SHA.
   const currentBranchSha = await preview.readBranchSha(previewBranch);
-  if (currentBranchSha && currentBranchSha !== resolvedSha) {
+  if (currentBranchSha) {
     const snapshotOfMain = await preview.isSnapshotOf(
       currentBranchSha,
       resolvedSha,

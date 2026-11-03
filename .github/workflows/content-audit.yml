@@ -64,7 +64,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      checks: read
       deployments: read
       pull-requests: read
       statuses: read
