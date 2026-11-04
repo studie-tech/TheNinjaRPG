@@ -1,84 +1,85 @@
-import type { GATHERING_RANK, HUNTING_RANK, ItemRarity } from "@/drizzle/constants";
-import { clamp } from "@/utils/math";
+import type { ItemRarity } from "@/drizzle/constants";
+import { calculatePercent } from "@/utils/math";
 
-type OccupationRank = HUNTING_RANK | GATHERING_RANK;
-type DroppedItem = { id: string; name: string; rarity: ItemRarity };
+export type RankDropCandidate = { id: string; name: string; rarity: ItemRarity };
 
-/** Build the rank, progress and drop rules of an occupation from its balance tables. */
-export const createOccupationRanks = (
-  ranks: readonly OccupationRank[],
-  requiredExp: Record<OccupationRank, number>,
-  dropChances: Record<OccupationRank, Record<ItemRarity, number>>,
+/**
+ * Highest rank whose required experience is met, falling back to the lowest rank.
+ * @param ranks - Ranks ordered from lowest to highest
+ * @param requiredExp - Experience required per rank
+ * @param experience - The experience of the user
+ */
+export const getRankForExperience = <Rank extends string>(
+  ranks: readonly [Rank, ...Rank[]],
+  requiredExp: Record<Rank, number>,
+  experience: number,
+): Rank =>
+  [...ranks].reverse().find((rank) => experience >= requiredExp[rank]) ?? ranks[0];
+
+/** Rank following `rank`, or null at the top of the ladder. */
+export const getNextRank = <Rank extends string>(
+  ranks: readonly Rank[],
+  rank: Rank,
+): Rank | null => ranks[ranks.indexOf(rank) + 1] ?? null;
+
+/** Experience required for the rank following `rank`, or null at the top of the ladder. */
+export const getNextRankExperience = <Rank extends string>(
+  ranks: readonly Rank[],
+  requiredExp: Record<Rank, number>,
+  rank: Rank,
 ) => {
-  const getRank = (experience: number): OccupationRank => {
-    if (experience >= requiredExp["S RANK"]) return "S RANK";
-    if (experience >= requiredExp["A RANK"]) return "A RANK";
-    if (experience >= requiredExp["B RANK"]) return "B RANK";
-    if (experience >= requiredExp["C RANK"]) return "C RANK";
-    if (experience >= requiredExp["D RANK"]) return "D RANK";
-    return "NONE";
-  };
+  const nextRank = getNextRank(ranks, rank);
+  return nextRank === null ? null : requiredExp[nextRank];
+};
 
-  const getNextRank = (rank: OccupationRank) => {
-    const currentIndex = ranks.indexOf(rank);
-    if (currentIndex === ranks.length - 1) return null;
-    return ranks[currentIndex + 1];
+/** Percentage between the current and next rank thresholds; 100 at the top rank. */
+export const getRankProgress = <Rank extends string>(
+  ranks: readonly [Rank, ...Rank[]],
+  requiredExp: Record<Rank, number>,
+  experience: number,
+) => {
+  const currentRank = getRankForExperience(ranks, requiredExp, experience);
+  const nextRank = getNextRank(ranks, currentRank);
+  if (nextRank === null) {
+    return { progress: 100, nextRank: null, nextRankExperience: null };
+  }
+  const currentRankExp = requiredExp[currentRank];
+  const nextRankExperience = requiredExp[nextRank];
+  return {
+    progress: calculatePercent(
+      experience - currentRankExp,
+      nextRankExperience - currentRankExp,
+    ),
+    nextRank,
+    nextRankExperience,
   };
+};
 
-  /** Experience required for the next rank; null at the top rank. */
-  const getNextRankExperience = (rank: OccupationRank) => {
-    switch (rank) {
-      case "S RANK":
-        return null;
-      case "A RANK":
-        return requiredExp["S RANK"];
-      case "B RANK":
-        return requiredExp["A RANK"];
-      case "C RANK":
-        return requiredExp["B RANK"];
-      default:
-        return requiredExp["C RANK"];
+/**
+ * Roll each candidate against its rarity's chance for the user's rank.
+ * @param rankChances - Drop chance in percent per rarity
+ * @param items - Candidate items, optionally restricted by validIds
+ * @param validIds - An empty list allows all candidates
+ * @param bonusQuantity - Extra units per successful drop; does not change its chance
+ * @returns One entry per awarded unit
+ */
+export const rollRankItemDrops = (
+  rankChances: Record<ItemRarity, number>,
+  items: RankDropCandidate[],
+  validIds: string[] = [],
+  bonusQuantity = 0,
+) => {
+  const drops: RankDropCandidate[] = [];
+  const filteredItems =
+    validIds && validIds.length > 0
+      ? items.filter((item) => validIds.includes(item.id))
+      : items;
+  for (const item of filteredItems) {
+    const chance = rankChances[item.rarity] / 100;
+    if (chance > 0 && Math.random() < chance) {
+      // Repeat successful drops so reward insertion and progress count every unit.
+      for (let quantity = 0; quantity <= bonusQuantity; quantity++) drops.push(item);
     }
-  };
-
-  const getRankProgress = (experience: number) => {
-    const currentRank = getRank(experience);
-    const nextRankExp = getNextRankExperience(currentRank);
-    if (!nextRankExp) return { progress: 100, nextRank: null };
-    const currentRankExp = requiredExp[currentRank];
-    const progress =
-      ((experience - currentRankExp) / (nextRankExp - currentRankExp)) * 100;
-    return { progress: clamp(progress, 0, 100), nextRank: getNextRank(currentRank) };
-  };
-
-  /**
-   * Roll rank-based drop chances, then add the whole-unit bonus to successful drops.
-   * @param experience - Occupation experience used to choose the drop chances.
-   * @param items - Candidate materials, optionally restricted by validIds.
-   * @param validIds - An empty list allows all candidate materials.
-   * @param bonusQuantity - Extra units per successful material; does not change its chance.
-   * @returns One entry per awarded unit, used by inventory grants and occupation progress.
-   */
-  const getItemDrops = (
-    experience: number,
-    items: DroppedItem[],
-    validIds: string[] = [],
-    bonusQuantity = 0,
-  ) => {
-    const rankChances = dropChances[getRank(experience)];
-    const drops: DroppedItem[] = [];
-    const filteredItems =
-      validIds && validIds.length > 0
-        ? items.filter((item) => validIds.includes(item.id))
-        : items;
-    for (const item of filteredItems) {
-      const chance = rankChances[item.rarity] / 100;
-      if (chance > 0 && Math.random() < chance) {
-        for (let quantity = 0; quantity <= bonusQuantity; quantity++) drops.push(item);
-      }
-    }
-    return drops;
-  };
-
-  return { getRank, getNextRankExperience, getRankProgress, getItemDrops };
+  }
+  return drops;
 };

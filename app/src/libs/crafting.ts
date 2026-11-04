@@ -10,6 +10,11 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
+import {
+  getNextRankExperience,
+  getRankForExperience,
+  getRankProgress,
+} from "@/libs/occupationRank";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { reduceActivitySeconds } from "@/utils/time";
 
@@ -65,12 +70,8 @@ export const craftingStartBlockMessage = (
  * @param experience - The experience of the user
  * @returns The crafting rank
  */
-export const getCraftingRank = (experience: number): CRAFTING_RANK => {
-  if (experience >= CRAFTING_REQUIRED_EXP.FORGEMASTER) return "FORGEMASTER";
-  if (experience >= CRAFTING_REQUIRED_EXP.MASTER) return "MASTER";
-  if (experience >= CRAFTING_REQUIRED_EXP.APPRENTICE) return "APPRENTICE";
-  return "NOVICE";
-};
+export const getCraftingRank = (experience: number) =>
+  getRankForExperience(CRAFTING_RANKS, CRAFTING_REQUIRED_EXP, experience);
 
 /**
  * Crafting rank a user still needs before crafting an item, or null when the
@@ -100,28 +101,6 @@ export const getMissingCraftingRank = (
  */
 export const formatCraftingRank = (craftingRank: CRAFTING_RANK | "UNKNOWN") =>
   capitalizeFirstLetter(craftingRank);
-
-/**
- * Get the next crafting rank
- * @param craftingRank - The current crafting rank
- * @returns The next crafting rank
- */
-export const getNextCraftingRank = (craftingRank: CRAFTING_RANK) => {
-  const currentIndex = CRAFTING_RANKS.indexOf(craftingRank);
-  if (currentIndex === CRAFTING_RANKS.length - 1) return null;
-  return CRAFTING_RANKS[currentIndex + 1];
-};
-
-/**
- * Get the experience required for the next rank
- * @param craftingRank - The current crafting rank
- * @returns The experience required for the next rank
- */
-export const getNextRankExperience = (craftingRank: CRAFTING_RANK) => {
-  const nextRank = getNextCraftingRank(craftingRank);
-  if (!nextRank) return null;
-  return CRAFTING_REQUIRED_EXP[nextRank];
-};
 
 /**
  * Get the total quantity of a specific item the user has
@@ -219,7 +198,11 @@ export const getCurrentCraftingStatus = (
         item.craftingFinishedAt && new Date(item.craftingFinishedAt) > new Date(),
     );
 
-    const nextRankExperience = getNextRankExperience(craftingRank);
+    const nextRankExperience = getNextRankExperience(
+      CRAFTING_RANKS,
+      CRAFTING_REQUIRED_EXP,
+      craftingRank,
+    );
 
     return {
       isCurrentlyCrafting: !!currentCraftingItem,
@@ -237,22 +220,8 @@ export const getCurrentCraftingStatus = (
  * @param experience - The experience of the user
  * @returns The crafting rank progress
  */
-export const getCraftingRankProgress = (experience: number) => {
-  const currentRank = getCraftingRank(experience);
-  const nextRankExp = getNextRankExperience(currentRank);
-
-  if (!nextRankExp) {
-    return { progress: 100, nextRank: null };
-  }
-  const currentRankExp = CRAFTING_REQUIRED_EXP[currentRank];
-  const progress =
-    ((experience - currentRankExp) / (nextRankExp - currentRankExp)) * 100;
-
-  return {
-    progress: Math.max(0, Math.min(100, progress)),
-    nextRank: getNextRankExperience(currentRank),
-  };
-};
+export const getCraftingRankProgress = (experience: number) =>
+  getRankProgress(CRAFTING_RANKS, CRAFTING_REQUIRED_EXP, experience);
 
 /**
  * Calculate the effective max imbuements for an item

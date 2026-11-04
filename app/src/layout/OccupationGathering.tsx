@@ -11,11 +11,7 @@ import {
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import QuestPicker from "@/layout/QuestPicker";
-import {
-  getGatheringRank,
-  getGatheringRankProgress,
-  getNextRankExperience,
-} from "@/libs/gathering";
+import { getGatheringRank, getGatheringRankProgress } from "@/libs/gathering";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -29,7 +25,6 @@ export default function OccupationGathering() {
   // Derived data
   const gatheringRank = getGatheringRank(userData.gatheringExperience);
   const rankProgress = getGatheringRankProgress(userData.gatheringExperience);
-  const nextRankExp = getNextRankExperience(gatheringRank);
 
   return (
     <>
@@ -55,8 +50,10 @@ export default function OccupationGathering() {
                   <span>
                     Experience: {userData.gatheringExperience.toLocaleString()}
                   </span>
-                  {rankProgress.nextRank && nextRankExp && (
-                    <span>Next: {nextRankExp.toLocaleString()}</span>
+                  {rankProgress.nextRankExperience && (
+                    <span>
+                      Next: {rankProgress.nextRankExperience.toLocaleString()}
+                    </span>
                   )}
                 </div>
                 <Progress value={rankProgress.progress} className="h-2" />

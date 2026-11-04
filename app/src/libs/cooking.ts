@@ -3,6 +3,7 @@ import type { Item } from "@/drizzle/schema";
 import { getStatTypeLabels } from "@/libs/combat/util";
 import { getFarmingLevel } from "@/libs/farming";
 import { calcLevelRequirements } from "@/libs/profile";
+import { calculatePercent } from "@/utils/math";
 import { reduceActivitySeconds } from "@/utils/time";
 
 /** Cooking levels use the existing Farming experience curve. */
@@ -28,14 +29,9 @@ export const getCookingRankProgress = (experience: number) => {
     progress:
       nextExperience === null
         ? 100
-        : Math.min(
-            100,
-            Math.max(
-              0,
-              ((experience - currentExperience) /
-                (nextExperience - currentExperience)) *
-                100,
-            ),
+        : calculatePercent(
+            experience - currentExperience,
+            nextExperience - currentExperience,
           ),
   };
 };
