@@ -57,6 +57,17 @@ export const isKage = (user: NonNullable<UserWithRelations>) => {
   return Boolean(user?.village && user.userId === user.village?.kageId);
 };
 
+/** When the incumbent's tenure could first run a schedule. */
+export const kageTenureStart = (
+  v: Pick<Village, "leaderUpdatedAt" | "kageScheduleAvailableAt">,
+) =>
+  new Date(Math.max(v.leaderUpdatedAt.getTime(), v.kageScheduleAvailableAt.getTime()));
+
+/** The publication deadline a tenure starts with. */
+export const initialKageSetupDeadline = (
+  v: Pick<Village, "leaderUpdatedAt" | "kageScheduleAvailableAt">,
+) => secondsFromDate(KAGE_DEFENSE_SETUP_HOURS * 3600, kageTenureStart(v));
+
 /**
  * Schedule publication deadline for the incumbent's current tenure, or null once
  * published. Matches the server's initial deadline until reconciliation persists one.
@@ -72,10 +83,5 @@ export const getKageSetupDeadline = (
     state?.kageId === v.kageId && state.tenure === v.leaderUpdatedAt.toISOString();
   if (sameTenure && state.publishedAt) return null;
   if (sameTenure && state.setupDueAt) return new Date(state.setupDueAt);
-  return secondsFromDate(
-    KAGE_DEFENSE_SETUP_HOURS * 3600,
-    new Date(
-      Math.max(v.leaderUpdatedAt.getTime(), v.kageScheduleAvailableAt.getTime()),
-    ),
-  );
+  return initialKageSetupDeadline(v);
 };

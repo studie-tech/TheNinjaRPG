@@ -43,7 +43,12 @@ import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getKageEligibility, getKageSlots } from "@/utils/kage";
+import {
+  getKageEligibility,
+  getKageSlots,
+  initialKageSetupDeadline,
+  kageTenureStart,
+} from "@/utils/kage";
 import { periodStart, secondsFromDate } from "@/utils/time";
 import type { KageDefenseSchedule } from "@/validators/kage";
 
@@ -112,9 +117,7 @@ const loadKageDefense = async (client: DrizzleClient, villageId: string) => {
           publishedAt: null,
           missedStarts: 0,
           paused: false,
-          observedAt: new Date(
-            Math.max(v.leaderUpdatedAt.getTime(), v.kageScheduleAvailableAt.getTime()),
-          ).toISOString(),
+          observedAt: kageTenureStart(v).toISOString(),
         };
   // An NPC incumbent cannot publish a schedule. Public daily windows let villagers contest it.
   if (v.kage?.isAi && !state.publishedAt) {
@@ -160,13 +163,7 @@ export const syncLockedKageDefense = async (
 ) => {
   const { now, state, village: v } = hall;
   const priorObservation = new Date(state.observedAt);
-  const initialSetupDeadline = secondsFromDate(
-    KAGE_DEFENSE_SETUP_HOURS * 3600,
-    new Date(
-      Math.max(v.leaderUpdatedAt.getTime(), v.kageScheduleAvailableAt.getTime()),
-    ),
-  );
-  state.setupDueAt ??= initialSetupDeadline.toISOString();
+  state.setupDueAt ??= initialKageSetupDeadline(v).toISOString();
   const missedObservation =
     now.getTime() - priorObservation.getTime() > KAGE_DEFENSE_GRACE_MINUTES * 60_000;
   // The publication deadline freezes while war or service interruptions prevent participation.
@@ -554,12 +551,7 @@ const readKageDefensePublic = async (client: DrizzleClient, villageId: string) =
     schedule: v.kageSchedule,
     setupDeadline: v.kageSchedule?.setupDueAt
       ? new Date(v.kageSchedule.setupDueAt)
-      : secondsFromDate(
-          KAGE_DEFENSE_SETUP_HOURS * 3600,
-          new Date(
-            Math.max(v.leaderUpdatedAt.getTime(), v.kageScheduleAvailableAt.getTime()),
-          ),
-        ),
+      : initialKageSetupDeadline(v),
     queue,
     history,
   };

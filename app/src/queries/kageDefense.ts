@@ -256,10 +256,7 @@ export const listWarForLoadKageDefense = (
 ) =>
   client.query.war.findMany({
     columns: { id: true, status: true, startedAt: true, endedAt: true },
-    where: and(
-      eq(war.type, "VILLAGE_WAR"),
-      or(eq(war.attackerVillageId, villageId), eq(war.defenderVillageId, villageId)),
-    ),
+    where: villageWarWhere(villageId),
   });
 
 /** Persist schedule JSON only for the tenure loaded under the village lock. */
@@ -641,11 +638,7 @@ export const selectVillageForMaintainKageDefenses = (
           .from(war)
           .where(
             and(
-              eq(war.type, "VILLAGE_WAR"),
-              or(
-                eq(war.attackerVillageId, village.id),
-                eq(war.defenderVillageId, village.id),
-              ),
+              villageWarWhere(village.id),
               or(eq(war.status, "ACTIVE"), gte(war.startedAt, uninterruptedSince)),
             ),
           ),
@@ -689,3 +682,10 @@ export const incrementKageScheduleVersion = (
     .update(village)
     .set({ kageScheduleVersion: sql`${village.kageScheduleVersion} + 1` })
     .where(eq(village.id, villageId));
+
+/** A VILLAGE_WAR the village fights on either side; takes a bound id or a joined column. */
+const villageWarWhere = (villageId: string | typeof village.id) =>
+  and(
+    eq(war.type, "VILLAGE_WAR"),
+    or(eq(war.attackerVillageId, villageId), eq(war.defenderVillageId, villageId)),
+  );
