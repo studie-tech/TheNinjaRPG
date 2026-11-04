@@ -37,7 +37,6 @@ export const isDiscordRequestError = (error: unknown): error is DiscordRequestEr
 const requestError = (status: number, message: string, code?: number) =>
   Object.assign(new Error(message), { status, code }) as DiscordRequestError;
 
-
 type Auth = { bot: string } | { bearer: string } | null;
 
 type DiscordRequest = {

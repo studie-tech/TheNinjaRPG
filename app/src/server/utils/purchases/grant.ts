@@ -79,7 +79,11 @@ import {
   updateUserDataForSetFederalStatusWithStoreFloor,
 } from "@/queries/purchases";
 import type { DrizzleClient } from "@/server/db";
-import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import {
+  isMysqlDeadlockError,
+  isMysqlDuplicateKeyError,
+  retryOnDeadlock,
+} from "@/server/utils/mysqlErrors";
 
 export interface StoreGrant {
   userId: string;
@@ -100,34 +104,6 @@ export type GrantOutcome =
   | { status: "granted" }
   | { status: "duplicate" }
   | { status: "ignored"; reason: string };
-
-/**
- * PlanetScale surfaces a unique-key collision as a `DatabaseError` whose message carries
- * MySQL's 1062 "Duplicate entry" text; there is no structured code to switch on.
- */
-const isDuplicateKeyError = (error: unknown): boolean => {
-  let current: unknown = error;
-  for (let depth = 0; current && depth < 5; depth++) {
-    if (typeof current === "string") return /duplicate entry|1062/i.test(current);
-    if (typeof current !== "object") return false;
-    const details = current as {
-      cause?: unknown;
-      code?: unknown;
-      errno?: unknown;
-      message?: unknown;
-    };
-    if (
-      details.code === "ER_DUP_ENTRY" ||
-      details.errno === 1062 ||
-      (typeof details.message === "string" &&
-        /duplicate entry|1062/i.test(details.message))
-    ) {
-      return true;
-    }
-    current = details.cause;
-  }
-  return false;
-};
 
 /**
  * Whether sandbox receipts count for this account.
@@ -459,7 +435,7 @@ const applyStorePurchase = async (
       accepted,
     );
   } catch (error) {
-    if (isDuplicateKeyError(error)) inserted = false;
+    if (isMysqlDuplicateKeyError(error)) inserted = false;
     else {
       if (!isMysqlDeadlockError(error)) {
         Sentry.captureException(error, {
