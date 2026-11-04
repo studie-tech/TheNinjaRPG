@@ -26,6 +26,29 @@ import { isDeletedStoreUserId } from "@/server/utils/purchases/grant";
 import { dynamicMonthlyRepCap, getStoreBundleMinimumPriceCents } from "@/utils/paypal";
 import { type StoreContents, storeContentsSchema } from "@/validators/points";
 
+/** Delivery failures that are safe to show the buyer; retries re-run the same delivery. */
+export const STORE_DELIVERY_ERRORS = {
+  snapshotMissing:
+    "Checkout snapshot not found. Contact support with your payment receipt.",
+  paymentMismatch:
+    "Payment does not match this checkout. Contact support with your payment receipt.",
+  itemUnavailable:
+    "A purchased item is unavailable. Contact support; your payment can be retried.",
+  recipientUnavailable:
+    "Recipient unavailable. Contact support with your payment receipt.",
+} as const;
+
+/** Whether a provider amount and invoice are exactly what the checkout snapshot quoted. */
+export const storePaymentMatches = (
+  order: { id: string; priceCents: number },
+  payment: { currency?: string; value?: string; invoiceId?: string },
+) =>
+  payment.currency === "USD" &&
+  !!payment.value &&
+  /^\d+(?:\.\d{1,2})?$/.test(payment.value) &&
+  Math.round(Number(payment.value) * 100) === order.priceCents &&
+  payment.invoiceId === order.id;
+
 /** Distinguish snapshot-backed purchases from legacy PayPal custom IDs during recovery. */
 export const readStoreCustomId = (value?: string) =>
   value?.startsWith("store:") ? value.slice(6) : undefined;
@@ -105,19 +128,9 @@ export const deliverStoreOrder = async (
   },
 ) => {
   const order = await findWebStoreOrderById(client, input.snapshotId);
-  if (!order)
-    throw new Error(
-      "Checkout snapshot not found. Contact support with your payment receipt.",
-    );
-  if (
-    input.currency !== "USD" ||
-    !/^\d+(?:\.\d{1,2})?$/.test(input.value) ||
-    Math.round(Number(input.value) * 100) !== order.priceCents ||
-    input.invoiceId !== order.id
-  )
-    throw new Error(
-      "Payment does not match this checkout. Contact support with your payment receipt.",
-    );
+  if (!order) throw new Error(STORE_DELIVERY_ERRORS.snapshotMissing);
+  if (!storePaymentMatches(order, input))
+    throw new Error(STORE_DELIVERY_ERRORS.paymentMismatch);
   if (order.grantedAt) return { success: true, message: "Purchase already delivered" };
   const contents = storeContentsSchema.parse(order.contents);
   const items = contents.items.length
@@ -126,10 +139,7 @@ export const deliverStoreOrder = async (
   const grants: (typeof userItem.$inferInsert)[] = [];
   for (const reward of contents.items) {
     const definition = items.find((i) => i.id === reward.id);
-    if (!definition)
-      throw new Error(
-        "A purchased item is unavailable. Contact support; your payment can be retried.",
-      );
+    if (!definition) throw new Error(STORE_DELIVERY_ERRORS.itemUnavailable);
     const stackSize = definition.canStack ? Math.max(1, definition.stackSize) : 1;
     for (let remaining = reward.quantity; remaining > 0; remaining -= stackSize)
       grants.push({
@@ -158,16 +168,11 @@ export const deliverStoreOrder = async (
       // Item-only offers still require a recipient, but must not interpret a no-op +0 as absence.
       if (contents.reputationPoints === 0 && contents.money === 0) {
         const [recipient] = await selectUserDataForDeliverStoreOrder(tx, order);
-        if (!recipient)
-          throw new Error(
-            "Recipient unavailable. Contact support with your payment receipt.",
-          );
+        if (!recipient) throw new Error(STORE_DELIVERY_ERRORS.recipientUnavailable);
       } else {
         const credited = await updateUserDataForDeliverStoreOrder(tx, contents, order);
         if (credited.rowsAffected !== 1)
-          throw new Error(
-            "Recipient unavailable. Contact support with your payment receipt.",
-          );
+          throw new Error(STORE_DELIVERY_ERRORS.recipientUnavailable);
       }
       if (grants.length) await insertUserItems(tx, grants);
       await insertPaypalTransactionForDeliverStoreOrder(tx, order, input, contents);

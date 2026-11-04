@@ -76,6 +76,8 @@ import {
   deliverStoreOrder,
   readStoreCustomId,
   reserveStoreOrder,
+  STORE_DELIVERY_ERRORS,
+  storePaymentMatches,
 } from "@/server/utils/webStore";
 import {
   calcFedUgradeCost,
@@ -123,6 +125,15 @@ type PaypalOrder =
       }[];
     }
   | undefined;
+type PaypalPurchaseUnit = NonNullable<
+  NonNullable<PaypalOrder>["purchase_units"]
+>[number];
+type StoreCapture = NonNullable<
+  NonNullable<PaypalPurchaseUnit["payments"]>["captures"]
+>[number];
+
+const PAYPAL_DECLINED_MESSAGE =
+  "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.";
 
 type PaypalSubscription = {
   id: string;
@@ -288,14 +299,7 @@ export const paypalRouter = createTRPCRouter({
       if (!snapshot || snapshot.buyerId !== ctx.userId)
         return errorResponse("This checkout belongs to another account");
       const unit = order?.purchase_units?.[0];
-      if (
-        order?.purchase_units?.length !== 1 ||
-        unit?.invoice_id !== snapshot.id ||
-        unit.amount?.currency_code !== "USD" ||
-        !unit.amount.value ||
-        !/^\d+(?:\.\d{1,2})?$/.test(unit.amount.value) ||
-        Math.round(Number(unit.amount.value) * 100) !== snapshot.priceCents
-      )
+      if (order?.purchase_units?.length !== 1 || !unitMatchesSnapshot(unit, snapshot))
         return errorResponse(
           "Payment does not match this checkout. No payment was captured.",
         );
@@ -337,10 +341,7 @@ export const paypalRouter = createTRPCRouter({
           {},
           releaseDeclinedCapture,
         );
-        if (!order)
-          return errorResponse(
-            "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.",
-          );
+        if (!order) return errorResponse(PAYPAL_DECLINED_MESSAGE);
       }
       // Some provider responses are minimal; fetch the completed representation before delivery.
       if (!order?.purchase_units?.[0]?.payments?.captures?.length)
@@ -348,24 +349,20 @@ export const paypalRouter = createTRPCRouter({
       const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
       if (isDeclinedStoreCapture(capture?.status)) {
         await releaseDeclinedCapture();
-        return errorResponse(
-          "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.",
-        );
+        return errorResponse(PAYPAL_DECLINED_MESSAGE);
       }
       if (capture?.status !== "COMPLETED")
         return errorResponse(
           "Payment is awaiting confirmation. Use Lookup Transaction after it clears.",
         );
       const purchaseInputs = await purchaseInputsQuery;
-      const result = await deliverStoreOrder(ctx.drizzle, {
+      const result = await deliverStoreCapture(
+        ctx.drizzle,
         snapshotId,
-        captureId: capture.id,
-        orderId: input.orderId,
-        currency: capture.amount.currency_code ?? "",
-        value: capture.amount.value ?? "",
-        invoiceId: capture.invoice_id ?? order?.purchase_units?.[0]?.invoice_id,
-        raw: order,
-      });
+        input.orderId,
+        order,
+        capture,
+      );
       const { delivery, ...response } = result;
       if (!delivery) return response;
       if (delivery.recipientId !== ctx.userId)
@@ -404,16 +401,9 @@ export const paypalRouter = createTRPCRouter({
         const snapshot = await findWebStoreOrderById(ctx.drizzle, snapshotId);
         if (!snapshot || snapshot.buyerId !== ctx.userId)
           return errorResponse("This checkout belongs to another account");
-        if (
-          order.purchase_units?.length !== 1 ||
-          unit?.invoice_id !== snapshot.id ||
-          unit.amount?.currency_code !== "USD" ||
-          !unit.amount.value ||
-          !/^\d+(?:\.\d{1,2})?$/.test(unit.amount.value) ||
-          Math.round(Number(unit.amount.value) * 100) !== snapshot.priceCents
-        )
+        if (order.purchase_units?.length !== 1 || !unitMatchesSnapshot(unit, snapshot))
           return errorResponse("Payment does not match this checkout.");
-        const capture = unit.payments?.captures?.[0];
+        const capture = unit?.payments?.captures?.[0];
         if (isDeclinedStoreCapture(capture?.status)) {
           if (snapshot.captureAttemptId)
             await releaseDeclinedStoreCapture(
@@ -422,23 +412,19 @@ export const paypalRouter = createTRPCRouter({
               ctx.userId,
               snapshot.captureAttemptId,
             );
-          return errorResponse(
-            "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.",
-          );
+          return errorResponse(PAYPAL_DECLINED_MESSAGE);
         }
-        if (unit.payments?.captures?.length !== 1 || capture?.status !== "COMPLETED")
+        if (unit?.payments?.captures?.length !== 1 || capture?.status !== "COMPLETED")
           return errorResponse(
             "Payment is not completed yet. Retry using Lookup Transaction after it clears.",
           );
-        return deliverStoreOrder(ctx.drizzle, {
+        return deliverStoreCapture(
+          ctx.drizzle,
           snapshotId,
-          captureId: capture.id,
-          orderId: input.orderId,
-          currency: capture.amount.currency_code ?? "",
-          value: capture.amount.value ?? "",
-          invoiceId: capture.invoice_id ?? unit?.invoice_id,
-          raw: order,
-        });
+          input.orderId,
+          order,
+          capture,
+        );
       }
       return deliverPaypalOrder(ctx.drizzle, order, ctx.userId, input.orderId);
     }),
@@ -855,23 +841,13 @@ export const getPaypalTransactions = async (
   // Current date in 2014-07-12T00:00:00-0700 format
   const startDate = addDays(transactionDate, -14);
   const endDate = addDays(transactionDate, 14);
-  let path = `${process.env.NEXT_PUBLIC_PAYPAL_URL}/v1/reporting/transactions?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
+  let path = `/v1/reporting/transactions?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
   if (transactionId) {
     path = `${path}&transaction_id=${transactionId}`;
   }
-  return await fetch(`${path}&fields=all`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  })
-    .then((response) => {
-      return response.json();
-    })
-    .then((data: { transaction_details?: PaypalTransaction[] }) => {
-      return data.transaction_details ?? [];
-    });
+  const response = await paypalFetch(`${path}&fields=all`, token, { method: "GET" });
+  const data = (await response.json()) as { transaction_details?: PaypalTransaction[] };
+  return data.transaction_details ?? [];
 };
 
 /**
@@ -908,12 +884,7 @@ export const syncTransactions = async (
             // A blocked delivery must not stop other payments or the hourly referral pass.
             const known =
               error instanceof Error &&
-              [
-                "Checkout snapshot not found. Contact support with your payment receipt.",
-                "Payment does not match this checkout. Contact support with your payment receipt.",
-                "A purchased item is unavailable. Contact support; your payment can be retried.",
-                "Recipient unavailable. Contact support with your payment receipt.",
-              ].includes(error.message);
+              Object.values<string>(STORE_DELIVERY_ERRORS).includes(error.message);
             if (!known) {
               logError(error, "Store delivery failed", {
                 transactionId: info.transaction_id,
@@ -1043,26 +1014,16 @@ export const getPaypalSubscriptionStatus = (
  * @returns The subscription data
  */
 export const getPaypalSubscription = async (subscriptionId: string, token: string) => {
-  return await fetch(
-    `${process.env.NEXT_PUBLIC_PAYPAL_URL}/v1/billing/subscriptions/${subscriptionId}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    },
-  )
-    .then((response) => {
-      if (response.status === 404) return undefined;
-      // An outage is not proof that paid support ended; leave reconciliation retryable.
-      if (!response.ok)
-        throw new Error(`PayPal subscription lookup failed (${response.status})`);
-      return response.json();
-    })
-    .then((data: PaypalSubscription | undefined) => {
-      return data;
-    });
+  const response = await paypalFetch(
+    `/v1/billing/subscriptions/${subscriptionId}`,
+    token,
+    { method: "GET" },
+  );
+  if (response.status === 404) return undefined;
+  // An outage is not proof that paid support ended; leave reconciliation retryable.
+  if (!response.ok)
+    throw new Error(`PayPal subscription lookup failed (${response.status})`);
+  return (await response.json()) as PaypalSubscription;
 };
 
 /**
@@ -1072,18 +1033,27 @@ export const cancelPaypalSubscription = async (
   subscriptionId: string,
   token: string,
 ) => {
-  return await fetch(
-    `${process.env.NEXT_PUBLIC_PAYPAL_URL}/v1/billing/subscriptions/${subscriptionId}/cancel`,
+  const response = await paypalFetch(
+    `/v1/billing/subscriptions/${subscriptionId}/cancel`,
+    token,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({ reason: "Cancelled through the game" }),
     },
-  ).then((response) => response.status);
+  );
+  return response.status;
 };
+
+/** Calls the PayPal REST API as the app; callers keep their own response handling. */
+const paypalFetch = (path: string, token: string, init: RequestInit) =>
+  fetch(`${process.env.NEXT_PUBLIC_PAYPAL_URL}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...init.headers,
+    },
+  });
 
 /**
  * Fetch an access token from paypal
@@ -1108,23 +1078,12 @@ export const getPaypalAccessToken = async () => {
  * Fetch a paypal order
  */
 export const getPaypalOrder = async (input: { orderId: string; token: string }) => {
-  const order = await fetch(
-    `${process.env.NEXT_PUBLIC_PAYPAL_URL}/v2/checkout/orders/${input.orderId}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${input.token}`,
-        "Content-Type": "application/json",
-      },
-    },
-  )
-    .then((response) => {
-      return response.ok ? response.json() : undefined;
-    })
-    .then((data: PaypalOrder) => {
-      return data;
-    });
-  return order;
+  const response = await paypalFetch(
+    `/v2/checkout/orders/${input.orderId}`,
+    input.token,
+    { method: "GET" },
+  );
+  return (response.ok ? await response.json() : undefined) as PaypalOrder;
 };
 
 /** Verify one authoritative legacy capture before entering shared receipt delivery. */
@@ -1428,6 +1387,35 @@ const prepareWebCheckout = async (
   });
 };
 
+/** Whether an order's purchase unit carries the snapshot's invoice, currency and price. */
+const unitMatchesSnapshot = (
+  unit: PaypalPurchaseUnit | undefined,
+  snapshot: { id: string; priceCents: number },
+) =>
+  storePaymentMatches(snapshot, {
+    currency: unit?.amount?.currency_code,
+    value: unit?.amount?.value,
+    invoiceId: unit?.invoice_id,
+  });
+
+/** Deliver a completed capture of a snapshot-backed order. */
+const deliverStoreCapture = (
+  client: DrizzleClient,
+  snapshotId: string,
+  orderId: string,
+  order: PaypalOrder,
+  capture: StoreCapture,
+) =>
+  deliverStoreOrder(client, {
+    snapshotId,
+    captureId: capture.id,
+    orderId,
+    currency: capture.amount.currency_code ?? "",
+    value: capture.amount.value ?? "",
+    invoiceId: capture.invoice_id ?? order?.purchase_units?.[0]?.invoice_id,
+    raw: order,
+  });
+
 /** Classify terminal capture failures independently of the provider order's overall status. */
 const isDeclinedStoreCapture = (status?: string) =>
   status === "DECLINED" || status === "DENIED" || status === "FAILED";
@@ -1444,11 +1432,9 @@ const requestStorePaypalOrder = async (
   body: unknown,
   onDeclined?: () => Promise<unknown>,
 ): Promise<PaypalOrder> => {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_PAYPAL_URL}${path}`, {
+  const response = await paypalFetch(path, token, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
       "PayPal-Request-Id": requestId,
       Prefer: "return=representation",
     },
