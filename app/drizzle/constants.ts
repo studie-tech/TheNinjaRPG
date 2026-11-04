@@ -1036,6 +1036,23 @@ export const QuestTypes = [
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+/** Contracts a companion may take on. */
+export const PET_TASK_QUEST_TYPES = [
+  "hunting",
+  "gathering",
+] as const satisfies readonly QuestType[];
+export const isPetTaskQuestType = (
+  questType: QuestType,
+): questType is (typeof PET_TASK_QUEST_TYPES)[number] =>
+  (PET_TASK_QUEST_TYPES as readonly QuestType[]).includes(questType);
+/** Quests run together, without personal entry receipts. */
+export const SHARED_RUN_QUEST_TYPES = [
+  "raid",
+  "village_mission",
+  "achievement",
+] as const satisfies readonly QuestType[];
+export const isSharedRunQuestType = (questType: QuestType) =>
+  (SHARED_RUN_QUEST_TYPES as readonly QuestType[]).includes(questType);
 export const QUESTS_CONCURRENT_LIMIT = 4;
 
 // Ordering here represents the default ordering for tutorial component

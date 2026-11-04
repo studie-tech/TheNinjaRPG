@@ -124,7 +124,12 @@ import { groupBy } from "@/utils/grouping";
 import { secondsFromNow, secondsPassed } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import type { QuestTrackerType } from "@/validators/objectives";
-import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
+import {
+  sectorIdSchema,
+  sectorLatitudeSchema,
+  sectorLongitudeSchema,
+  startGlobalMoveSchema,
+} from "@/validators/travel";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
@@ -139,14 +144,8 @@ export const travelRouter = createTRPCRouter({
         // Coordinate bounds via zod (no sector-map read needed): the co-location
         // guards below require both robber and victim to stand on this exact tile,
         // and a player can only ever be on a walkable, in-bounds tile.
-        longitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_WIDTH - 1),
-        latitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_HEIGHT - 1),
+        longitude: sectorLongitudeSchema,
+        latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
       }),

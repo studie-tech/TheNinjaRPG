@@ -9,7 +9,7 @@ import {
 import { statFilters } from "@/libs/train";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 // Inline schema
 const makeBloodlineFilteringSchema = (
@@ -59,7 +59,7 @@ const makeBloodlineFilteringSchema = (
         label: "Effects",
         type: "multi-select",
         defaultValue: [],
-        options: effectFilters.map((e) => ({ value: e, label: e })),
+        options: tagTypes.map((e) => ({ value: e, label: e })),
       },
       {
         id: "stat",

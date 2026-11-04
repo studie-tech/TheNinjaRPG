@@ -20,6 +20,7 @@ import { type CoopRoster, encounterWaveSchema } from "@/validators/coop";
 import { mapLocationFields } from "@/validators/mapLocation";
 import { RewardPackageValidator } from "@/validators/rewardPackages";
 import type { PostProcessedRewards } from "@/validators/rewards";
+import { sectorLatitudeSchema, sectorLongitudeSchema } from "@/validators/travel";
 
 /** Quest-compatible lifetime attempt caps, calendar cooldowns and completion caps. */
 export const dungeonRequirementsSchema = z.object({
@@ -73,16 +74,8 @@ export const dungeonContentSchema = z
     structureAssetId: mapLocationFields.structureAssetId,
     structureScale: mapLocationFields.structureScale,
     sector: z.number().int().min(MAP_SECTOR_ID_MIN).max(MAP_SECTOR_ID_MAX),
-    longitude: z
-      .number()
-      .int()
-      .min(0)
-      .max(SECTOR_WIDTH - 1),
-    latitude: z
-      .number()
-      .int()
-      .min(0)
-      .max(SECTOR_HEIGHT - 1),
+    longitude: sectorLongitudeSchema,
+    latitude: sectorLatitudeSchema,
     expiresAt: z.coerce.date().nullable(),
     hidden: z.boolean().prefault(true),
     background: z.enum(COMBAT_BIOMES).prefault("default"),

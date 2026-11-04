@@ -131,6 +131,7 @@ import { itemDatabaseFilter } from "./item";
 import { jutsuDatabaseFilter } from "./jutsu";
 
 import { isSkillVisible, skillTreeDatabaseFilter } from "./skillTree";
+import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const dataRouter = createTRPCRouter({
   /** Return full-history variant counts for tests with an event in the last week. */
@@ -1580,10 +1581,7 @@ export const dataRouter = createTRPCRouter({
         const rewards = [
           ...(content?.reward ? [content.reward] : []),
           ...(content?.objectives ?? []),
-        ].flatMap((reward) => [
-          reward,
-          ...(reward.reward_packages ?? []).map((pack) => pack.rewards),
-        ]);
+        ].flatMap((reward) => rewardPayloads(reward));
         const total = collapseRewards(rewards)[metric];
         return {
           id: q.id,

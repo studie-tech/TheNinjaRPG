@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import type { SentimentType } from "@/drizzle/constants";
 import {
   Form,
   FormControl,
@@ -92,7 +93,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     });
 
   // Handle feedback submission
-  const handleFeedback = async (sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL") => {
+  const handleFeedback = async (sentiment: SentimentType) => {
     if (feedbackSubmitted) return;
 
     try {

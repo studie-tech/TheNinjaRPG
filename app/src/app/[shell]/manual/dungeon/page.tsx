@@ -36,6 +36,7 @@ import { formatLocalDateTimeInput } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import {
   type DungeonContent,
+  type DungeonFloor,
   dungeonContentSchema,
   dungeonRequirementsSchema,
 } from "@/validators/dungeon";
@@ -82,7 +83,7 @@ export default function DungeonEditor() {
   const patch = (values: Partial<DungeonContent>) =>
     setContent((current) => ({ ...current, ...values }));
   /** Apply a room edit to a clone so nested wave changes preserve React state immutability. */
-  const editRoom = (update: (room: DungeonContent["tiers"][number][number]) => void) =>
+  const editRoom = (update: (room: DungeonFloor) => void) =>
     setContent((current) => {
       const next = structuredClone(current);
       const room = next.tiers[tier]?.[floor];

@@ -7,7 +7,7 @@ import {
   toOptions,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 interface JutsuBalanceFilteringProps {
   state: JutsuBalanceFilteringState;
@@ -35,7 +35,7 @@ const makeSchema = (bloodlines: { id: string; name: string }[]) =>
         label: "Jutsu Effects",
         type: "multi-select",
         defaultValue: [],
-        options: effectFilters.map((e) => ({ value: e, label: e })),
+        options: tagTypes.map((e) => ({ value: e, label: e })),
       },
       {
         id: "bloodlineIds",

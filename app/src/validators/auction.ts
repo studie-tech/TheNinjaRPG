@@ -162,11 +162,3 @@ export const auctionOfferIdSchema = z.object({ offerId: z.string().min(1) });
 export const acceptAuctionOfferSchema = auctionOfferIdSchema.extend({
   userItemId: z.string().min(1),
 });
-
-// Black market offer schema
-export const blackMarketOfferSchema = z.object({
-  reps: z.coerce.number().int().min(1),
-  ryo: z.coerce.number().int().min(1),
-});
-export type BlackMarketOfferSchemaInput = z.input<typeof blackMarketOfferSchema>;
-export type BlackMarketOfferSchema = z.infer<typeof blackMarketOfferSchema>;

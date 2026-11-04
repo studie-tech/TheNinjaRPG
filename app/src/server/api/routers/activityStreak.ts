@@ -7,7 +7,7 @@ import {
   getPurchaseEventPassUserUpdate,
 } from "@/deltas/activityStreak";
 
-import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { COST_STREAK_CATCHUP_DAY, ActivityStreakTypes } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
   getEventPassCompletionDate,
@@ -364,7 +364,7 @@ export const activityStreakRouter = createTRPCRouter({
             configId: z.string(),
             progressId: z.string(),
             totalDays: z.number(),
-            streakType: z.enum(["RECURRING", "EVENT_PASS"]),
+            streakType: z.enum(ActivityStreakTypes),
             before: z.object({
               currentDay: z.number(),
               startedAt: z.date(),
@@ -650,7 +650,7 @@ export const activityStreakRouter = createTRPCRouter({
     .input(
       z
         .object({
-          streakType: z.enum(["RECURRING", "EVENT_PASS"]).optional(),
+          streakType: z.enum(ActivityStreakTypes).optional(),
         })
         .optional(),
     )

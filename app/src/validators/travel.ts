@@ -4,6 +4,8 @@ import {
   MAP_SECTOR_ID_MIN,
   MAX_PVP_BRACKET,
   MAX_TRAVEL_PINS,
+  SECTOR_HEIGHT,
+  SECTOR_WIDTH,
 } from "@/drizzle/constants";
 
 export const sectorIdSchema = z.coerce
@@ -12,18 +14,26 @@ export const sectorIdSchema = z.coerce
   .min(MAP_SECTOR_ID_MIN)
   .max(MAP_SECTOR_ID_MAX);
 
+/** A tile column inside a sector. */
+export const sectorLongitudeSchema = z
+  .int()
+  .min(0)
+  .max(SECTOR_WIDTH - 1);
+/** A tile row inside a sector. */
+export const sectorLatitudeSchema = z
+  .int()
+  .min(0)
+  .max(SECTOR_HEIGHT - 1);
+
 /** Accept the departure hint while deriving departure and landing from server state. */
 export const startGlobalMoveSchema = z
   .strictObject({ sector: sectorIdSchema, curSector: sectorIdSchema.optional() })
   .transform(({ sector }) => ({ sector }));
 
-export const quickTravelSchema = z.object({ sector: sectorIdSchema });
-export type QuickTravelSchemaInput = z.input<typeof quickTravelSchema>;
-export type QuickTravelSchema = z.infer<typeof quickTravelSchema>;
-
-export const findSectorSchema = z.object({ sector: sectorIdSchema });
-export type FindSectorSchemaInput = z.input<typeof findSectorSchema>;
-export type FindSectorSchema = z.infer<typeof findSectorSchema>;
+/** Sector picker shared by the quick-travel and find-sector forms. */
+export const sectorFormSchema = z.object({ sector: sectorIdSchema });
+export type SectorFormInput = z.input<typeof sectorFormSchema>;
+export type SectorForm = z.infer<typeof sectorFormSchema>;
 
 export const bracketSliderSchema = z.object({
   // -1 disables the bracket filter; 0–8 select an exact bracket

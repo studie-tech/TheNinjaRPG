@@ -15,6 +15,7 @@ import {
   REWARD_CHOICE_CONTENT_FIELDS,
   type RewardChoiceAmountField,
   type RewardChoiceCard,
+  hasMasteryPromotion,
 } from "@/validators/rewards";
 
 /**
@@ -105,10 +106,7 @@ export const isSageModeCard = (card: Pick<RewardChoiceCard, "field" | "rewards">
 
 /** The reward payload carries one mastery promotion, so promotion bundles are alternatives. */
 export const isMasteryPromotionCard = (card: Pick<RewardChoiceCard, "rewards">) =>
-  !!card.rewards?.reward_mastery_stat &&
-  card.rewards.reward_mastery_stat !== "None" &&
-  !!card.rewards.reward_mastery_rank &&
-  card.rewards.reward_mastery_rank !== "NONE";
+  !!card.rewards && hasMasteryPromotion(card.rewards);
 
 /** Most compatible cards: unrestricted cards plus one sage mode and one mastery promotion. */
 export const maxRewardPicks = (
@@ -162,13 +160,14 @@ export const getUnavailableRewardCards = (
   const unavailable = new Map<string, string>();
   for (const card of cards) {
     if (card.field === "reward_package" && card.rewards) {
-      const { reward_mastery_stat: stat, reward_mastery_rank: rank } = card.rewards;
+      const { rewards } = card;
       if (
-        stat &&
-        stat !== "None" &&
-        rank &&
-        rank !== "NONE" &&
-        !canPromoteMastery(ownership, stat, rank)
+        hasMasteryPromotion(rewards) &&
+        !canPromoteMastery(
+          ownership,
+          rewards.reward_mastery_stat,
+          rewards.reward_mastery_rank,
+        )
       ) {
         unavailable.set(card.id, "Requires the previous mastery rank");
         continue;

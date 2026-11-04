@@ -14,7 +14,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { formatBattleUsageType } from "@/utils/string";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 interface ItemShopFilteringProps {
   state: ItemShopFilteringState;
@@ -45,7 +45,7 @@ const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType
         label: "Effects",
         type: "multi-select",
         defaultValue: [],
-        options: effectFilters.map((ef) => ({ value: ef, label: ef })),
+        options: tagTypes.map((ef) => ({ value: ef, label: ef })),
       },
       {
         id: "itemRarity",

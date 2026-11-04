@@ -153,6 +153,7 @@ import {
   clanCreateSchema,
   clanGetRequestSchema,
   clanPointConversionSchema,
+  factionColorEditSchema,
   factionEditSchema,
   restoreStrongholdSchema,
   strictClanNameField,
@@ -743,7 +744,7 @@ export const clanRouter = createTRPCRouter({
     }),
   editClanColor: protectedProcedure
     .meta({ mcp: { description: "Change faction color" } })
-    .input(z.object({ clanId: z.string(), color: z.string() }))
+    .input(factionColorEditSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -763,11 +764,6 @@ export const clanRouter = createTRPCRouter({
         return errorResponse(`${groupLabel} needs a hideout to change colors`);
       if (user.reputationPoints < CLAN_COLOR_CHANGE_REP_COST)
         return errorResponse(`Not enough reputation points`);
-      if (!/^#[0-9A-F]{6}$/i.test(input.color)) {
-        return errorResponse(
-          "Invalid color format. Must be a valid hex color (e.g. #FF0000)",
-        );
-      }
 
       // Mutate - deduct reputation points from the user
       const result = await updateUserDataForEditClanColor(ctx.drizzle, user);

@@ -7,6 +7,8 @@ import {
   HUNTING_RANKS,
   IMG_AVATAR_DEFAULT,
   IMG_BADGE_DIALOG,
+  isPetTaskQuestType,
+  isSharedRunQuestType,
   LetterRanks,
   MASTERY_RANKS,
   MasteryNames,
@@ -281,7 +283,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     },
   ];
 
-  if (items && !["raid", "village_mission", "achievement"].includes(questType))
+  if (items && !isSharedRunQuestType(questType))
     formData.push({
       id: "entryItems",
       type: "db_values_with_number",
@@ -295,7 +297,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       type: "boolean",
       label: "Isolated run (no outside activities)",
     });
-  if (questType === "hunting" || questType === "gathering")
+  if (isPetTaskQuestType(questType))
     formData.push({
       id: "petTaskMinutes",
       type: "number",

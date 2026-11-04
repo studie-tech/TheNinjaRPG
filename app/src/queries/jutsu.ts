@@ -10,7 +10,7 @@ import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
 import { getNextUserSnapshotAt } from "@/utils/time";
-import type { baseReskinSchema } from "@/validators/jutsu";
+import type { jutsuReskinBaseSchema } from "@/validators/jutsu";
 
 /** Fetch the stable slot order used for both display and allowance checks. */
 export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) => {
@@ -1036,7 +1036,7 @@ export const updateJutsuReskinForUpdateReskin = (
   client: Pick<DrizzleClient, "update">,
   targetUser: { userId: string },
   targetJutsu: { id: string },
-  cosmetics: z.infer<typeof baseReskinSchema>,
+  cosmetics: z.infer<typeof jutsuReskinBaseSchema>,
   reskin: { image: string; id: string },
 ) =>
   client

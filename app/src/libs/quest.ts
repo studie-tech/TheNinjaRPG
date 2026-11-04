@@ -125,12 +125,17 @@ import {
   QuestCompletionTasks,
   QuestTracker,
 } from "@/validators/objectives";
-import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
+import {
+  QuestReward,
+  type QuestRewardType,
+  rewardPayloads,
+} from "@/validators/rewardPackages";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
 import {
   MASTERY_EXPERIENCE_FIELDS,
   type PostProcessedRewards,
   REWARD_CHOICE_AMOUNT_FIELDS,
+  hasMasteryPromotion,
 } from "@/validators/rewards";
 import { getQuestCounterFieldName } from "@/validators/user";
 
@@ -486,10 +491,7 @@ export const getReward = (
         rawRewards = getFixedChoiceRewards(questReward);
         choiceRewards = questReward;
       } else {
-        rawRewards = collapseRewards([
-          questReward,
-          ...(questReward.reward_packages ?? []).map((pack) => pack.rewards),
-        ]);
+        rawRewards = collapseRewards(rewardPayloads(questReward));
       }
     }
     (completionOnly ? [] : userQuest.quest.content.objectives).forEach((objective) => {
@@ -501,10 +503,7 @@ export const getReward = (
         }
         // Compose packages with their objective's direct rewards before merging the payout.
         if (objective.reward_packages?.length) {
-          const objectiveReward = collapseRewards([
-            objective,
-            ...objective.reward_packages.map((pack) => pack.rewards),
-          ]);
+          const objectiveReward = collapseRewards(rewardPayloads(objective));
           rawRewards = collapseRewards([rawRewards, objectiveReward]);
           return;
         }
@@ -2412,16 +2411,11 @@ export const isAvailableUserQuests = (
   const promotion =
     !isRewardChoiceQuest(questAndUserQuestInfo.content) &&
     completionReward?.reward_packages?.length
-      ? collapseRewards([
-          completionReward,
-          ...completionReward.reward_packages.map((pack) => pack.rewards),
-        ])
+      ? collapseRewards(rewardPayloads(completionReward))
       : completionReward;
   const promotionCheck =
-    !promotion?.reward_mastery_stat ||
-    promotion.reward_mastery_stat === "None" ||
-    !promotion.reward_mastery_rank ||
-    promotion.reward_mastery_rank === "NONE" ||
+    !promotion ||
+    !hasMasteryPromotion(promotion) ||
     canPromoteMastery(
       baseMasteries,
       promotion.reward_mastery_stat,

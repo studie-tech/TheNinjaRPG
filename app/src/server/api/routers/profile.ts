@@ -351,7 +351,7 @@ import {
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
-import { idSchema } from "@/validators/misc";
+import { experienceAwardSchema, idSchema } from "@/validators/misc";
 import {
   attributes,
   colors,
@@ -2326,12 +2326,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Award experience to a user (staff only)
   awardExperience: protectedProcedure
-    .input(
-      z.object({
-        targetUserId: z.string(),
-        amount: z.number().min(1).max(100000),
-      }),
-    )
+    .input(experienceAwardSchema.extend({ targetUserId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -2370,11 +2365,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Award experience to all users (staff only)
   awardExperienceToAll: protectedProcedure
-    .input(
-      z.object({
-        amount: z.number().min(1).max(100000),
-      }),
-    )
+    .input(experienceAwardSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query

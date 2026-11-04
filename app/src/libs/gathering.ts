@@ -1,107 +1,17 @@
-import type { GATHERING_RANK, ItemRarity } from "@/drizzle/constants";
 import {
   GATHERING_ITEM_DROP_CHANCES,
   GATHERING_RANKS,
   GATHERING_REQUIRED_EXP,
 } from "@/drizzle/constants";
+import { createOccupationRanks } from "@/libs/occupationRank";
 
-/**
- * Get the gathering rank based on the experience
- * @param experience - The experience of the user
- * @returns The gathering rank
- */
-export const getGatheringRank = (experience: number): GATHERING_RANK => {
-  if (experience >= GATHERING_REQUIRED_EXP["S RANK"]) return "S RANK";
-  if (experience >= GATHERING_REQUIRED_EXP["A RANK"]) return "A RANK";
-  if (experience >= GATHERING_REQUIRED_EXP["B RANK"]) return "B RANK";
-  if (experience >= GATHERING_REQUIRED_EXP["C RANK"]) return "C RANK";
-  if (experience >= GATHERING_REQUIRED_EXP["D RANK"]) return "D RANK";
-  return "NONE";
-};
-
-/**
- * Get the next gathering rank
- * @param gatheringRank - The current gathering rank
- * @returns The next gathering rank
- */
-export const getNextGatheringRank = (gatheringRank: GATHERING_RANK) => {
-  const currentIndex = GATHERING_RANKS.indexOf(gatheringRank);
-  if (currentIndex === GATHERING_RANKS.length - 1) return null;
-  return GATHERING_RANKS[currentIndex + 1];
-};
-
-/**
- * Get the experience required for the next rank
- * @param gatheringRank - The current gathering rank
- * @returns The experience required for the next rank
- */
-export const getNextRankExperience = (gatheringRank: GATHERING_RANK) => {
-  switch (gatheringRank) {
-    case "S RANK":
-      return null;
-    case "A RANK":
-      return GATHERING_REQUIRED_EXP["S RANK"];
-    case "B RANK":
-      return GATHERING_REQUIRED_EXP["A RANK"];
-    case "C RANK":
-      return GATHERING_REQUIRED_EXP["B RANK"];
-    default:
-      return GATHERING_REQUIRED_EXP["C RANK"];
-  }
-};
-
-/**
- * Get the gathering rank progress
- * @param experience - The experience of the user
- * @returns The gathering rank progress
- */
-export const getGatheringRankProgress = (experience: number) => {
-  const currentRank = getGatheringRank(experience);
-  const nextRankExp = getNextRankExperience(currentRank);
-
-  if (!nextRankExp) {
-    return { progress: 100, nextRank: null };
-  }
-
-  const currentRankExp = GATHERING_REQUIRED_EXP[currentRank];
-  const progress =
-    ((experience - currentRankExp) / (nextRankExp - currentRankExp)) * 100;
-
-  return {
-    progress: Math.max(0, Math.min(100, progress)),
-    nextRank: getNextGatheringRank(currentRank),
-  };
-};
-
-type DroppedItem = { id: string; name: string; rarity: ItemRarity };
-
-/**
- * Roll rank-based drop chances, then add the captured whole-unit bonus to successful drops.
- * @param experience - Gathering experience used to choose the drop chances.
- * @param items - Candidate materials, optionally restricted by validIds.
- * @param validIds - An empty list allows all candidate materials.
- * @param bonusQuantity - Extra units per successful material; does not change its drop chance.
- * @returns One entry per awarded unit, used by inventory grants and gathering progress.
- */
-export const getGatheringItemDrops = (
-  experience: number,
-  items: DroppedItem[],
-  validIds: string[] = [],
-  bonusQuantity = 0,
-) => {
-  const currentRank = getGatheringRank(experience);
-  const rankChances = GATHERING_ITEM_DROP_CHANCES[currentRank];
-  const drops: DroppedItem[] = [];
-  const filteredItems =
-    validIds && validIds.length > 0
-      ? items.filter((item) => validIds.includes(item.id))
-      : items;
-  for (const item of filteredItems) {
-    const chance = rankChances[item.rarity] / 100;
-    if (chance > 0 && Math.random() < chance) {
-      // Repeat successful drops so reward insertion and herbs-gathered progress count every unit.
-      for (let quantity = 0; quantity <= bonusQuantity; quantity++) drops.push(item);
-    }
-  }
-  return drops;
-};
+export const {
+  getRank: getGatheringRank,
+  getNextRankExperience,
+  getRankProgress: getGatheringRankProgress,
+  getItemDrops: getGatheringItemDrops,
+} = createOccupationRanks(
+  GATHERING_RANKS,
+  GATHERING_REQUIRED_EXP,
+  GATHERING_ITEM_DROP_CHANCES,
+);

@@ -84,7 +84,7 @@ import {
 } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
-import { rerollElementSchema } from "@/validators/blackmarket";
+import { blackMarketOfferSchema, rerollElementSchema } from "@/validators/blackmarket";
 import { statSchema } from "@/validators/combat";
 import { genders } from "@/validators/register";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -123,13 +123,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   createOffer: protectedProcedure
     .meta({ mcp: { description: "Create a ryo trade offer" } })
-    .input(
-      z.object({
-        reps: z.coerce.number().int().min(1),
-        ryo: z.coerce.number().int().min(1),
-        allowedUser: z.string().nullish(),
-      }),
-    )
+    .input(blackMarketOfferSchema.extend({ allowedUser: z.string().nullish() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch

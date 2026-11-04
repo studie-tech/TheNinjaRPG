@@ -27,6 +27,7 @@ import {
   villageMissionCancelSchema,
   villageMissionObjectiveSchema,
 } from "@/validators/villageMission";
+import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const villageMissionRouter = createTRPCRouter({
   get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {
@@ -94,12 +95,8 @@ export const villageMissionRouter = createTRPCRouter({
         questId: candidate.id,
         name: candidate.name,
         description: candidate.description,
-        rewardTokens: collapseRewards([
-          candidate.content.reward,
-          ...(candidate.content.reward.reward_packages ?? []).map(
-            (pack) => pack.rewards,
-          ),
-        ]).reward_tokens,
+        rewardTokens: collapseRewards(rewardPayloads(candidate.content.reward))
+          .reward_tokens,
         objectives: candidate.content.objectives.map((objective) =>
           villageMissionObjectiveSchema.parse(objective),
         ),

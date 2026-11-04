@@ -88,9 +88,9 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import {
-  type FindSectorSchema,
-  type FindSectorSchemaInput,
-  findSectorSchema,
+  type SectorForm,
+  type SectorFormInput,
+  sectorFormSchema,
 } from "@/validators/travel";
 import {
   type AllianceOfferSchema,
@@ -305,9 +305,9 @@ export const WarMap: React.FC<{
   const [focusSector, setFocusSector] = useState<number | null>(null);
 
   // Find sector form
-  const findSectorForm = useForm<FindSectorSchemaInput, unknown, FindSectorSchema>({
+  const findSectorForm = useForm<SectorFormInput, unknown, SectorForm>({
     mode: "all",
-    resolver: zodResolver(findSectorSchema),
+    resolver: zodResolver(sectorFormSchema),
   });
   const findSectorValue = useWatch({
     control: findSectorForm.control,

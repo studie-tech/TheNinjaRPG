@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
+import { IMG_BUILDING_MISSIONHALL, type BountyStatus } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -57,9 +57,7 @@ interface BountyBoardProps {
 export default function BountyBoard({ userData }: BountyBoardProps) {
   const util = api.useUtils();
   const { updateUser } = useRequiredUserData();
-  const [bountyStatus, setBountyStatus] = useState<
-    "OPEN" | "CLAIMED" | "EXPIRED" | "CANCELLED" | "all"
-  >("OPEN");
+  const [bountyStatus, setBountyStatus] = useState<BountyStatus | "all">("OPEN");
   const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
   const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);

@@ -9,6 +9,7 @@ import {
   UserRanks,
 } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
+import { reskinBaseSchema } from "@/validators/bloodline";
 import { JutsuValidator } from "@/validators/combat";
 
 export const getEvolutionsSchema = z.object({
@@ -80,11 +81,8 @@ export type UserJutsuFilteringSchema = z.infer<typeof userJutsuFilteringSchema>;
 /**
  * Base schema for reskins
  */
-export const baseReskinSchema = z.object({
-  name: z.string().trim().min(0).max(100).optional(),
-  description: z.string().min(0).max(1000).optional(),
+export const jutsuReskinBaseSchema = reskinBaseSchema.extend({
   battleDescription: z.string().min(0).max(1000).optional(),
-  image: z.string().min(1).max(191).optional(),
 });
 
 /**
@@ -92,7 +90,7 @@ export const baseReskinSchema = z.object({
  * Shared between client (react-hook-form) and server (tRPC input).
  * - image is optional from the client; router defaults to the base jutsu image when omitted.
  */
-export const jutsuReskinCreateSchema = baseReskinSchema.extend({
+export const jutsuReskinCreateSchema = jutsuReskinBaseSchema.extend({
   jutsuId: z.string(),
 });
 
@@ -104,7 +102,7 @@ export type JutsuReskinCreateSchema = z.infer<typeof jutsuReskinCreateSchema>;
  * - username / jutsuId: the owner and base jutsu the reskin is assigned to.
  * - attached: whether the owner's copy of that jutsu uses the reskin.
  */
-export const jutsuReskinUpdateSchema = baseReskinSchema.extend({
+export const jutsuReskinUpdateSchema = jutsuReskinBaseSchema.extend({
   username: z.string().trim().min(1).max(191),
   jutsuId: z.string().min(1),
   attached: z.boolean(),

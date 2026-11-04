@@ -27,7 +27,7 @@ import {
 import { clampActionLogText } from "@/utils/actionLog";
 import { getUnique } from "@/utils/grouping";
 import { DAY_S, secondsFromDate } from "@/utils/time";
-import type { baseReskinSchema } from "@/validators/bloodline";
+import type { reskinBaseSchema } from "@/validators/bloodline";
 
 /** Load a reskin and its bloodline by reskin ID; no match yields undefined. */
 export const fetchBloodlineReskin = async (client: DrizzleClient, reskinId: string) => {
@@ -292,7 +292,7 @@ export const insertActionLogForUpdateReskin = (
 /** Build the `bloodlineReskin` update for `updateReskin`, using predicates on `id`. */
 export const updateBloodlineReskinForUpdateReskin = (
   client: Pick<DrizzleClient, "update">,
-  newData: z.infer<typeof baseReskinSchema>,
+  newData: z.infer<typeof reskinBaseSchema>,
   reskin: { image: string; id: string },
 ) =>
   client

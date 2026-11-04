@@ -6,7 +6,7 @@ import {
 } from "@/layout/ContentFiltering";
 import { canSeeIps } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 interface UserFilteringProps {
   state: UserFilteringState;
@@ -57,7 +57,7 @@ const makeUserFilteringSchema = () =>
         label: "Effects",
         type: "multi-select",
         defaultValue: [],
-        options: (effectFilters ?? []).map((ef) => ({ value: ef, label: ef })),
+        options: (tagTypes ?? []).map((ef) => ({ value: ef, label: ef })),
         visibleIf: (ctx) =>
           Boolean((ctx as { showEffects?: boolean } | undefined)?.showEffects),
       },

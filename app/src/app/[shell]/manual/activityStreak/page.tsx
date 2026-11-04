@@ -1,6 +1,7 @@
 "use client";
 
 import { FilePlus, Trash2 } from "lucide-react";
+import { type ActivityStreakType } from "@/drizzle/constants";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -36,7 +37,7 @@ export default function ActivityStreakListPage() {
   const { data: userData } = useUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<ConfigWithRewards | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "RECURRING" | "EVENT_PASS">(
+  const [typeFilter, setTypeFilter] = useState<"all" | ActivityStreakType>(
     "all",
   );
   const router = useRouter();

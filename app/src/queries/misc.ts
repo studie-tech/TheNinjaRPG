@@ -15,6 +15,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { SentimentType } from "@/drizzle/constants";
 import { TRAINING_CAPTCHA_SOLVED_GRACE_MINUTES } from "@/drizzle/constants";
 import {
   abEvent,
@@ -260,7 +261,7 @@ export const insertSupportReviewForReviewSupportWithAI = (
   input: {
     apiRoute: string;
     chatHistory: any[];
-    sentiment: "NEUTRAL" | "POSITIVE" | "NEGATIVE";
+    sentiment: SentimentType;
   },
 ) =>
   client.insert(supportReview).values({

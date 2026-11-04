@@ -304,7 +304,11 @@ import {
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
-import { sectorIdSchema } from "@/validators/travel";
+import {
+  sectorIdSchema,
+  sectorLatitudeSchema,
+  sectorLongitudeSchema,
+} from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
 
@@ -1045,14 +1049,8 @@ export const combatRouter = createTRPCRouter({
         // Coordinate bounds are enforced here (zod), so no sector-map read is
         // needed to validate reachability: the target is another player, who can
         // only ever stand on a walkable, in-bounds tile.
-        longitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_WIDTH - 1),
-        latitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_HEIGHT - 1),
+        longitude: sectorLongitudeSchema,
+        latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
         asset: z.enum(COMBAT_BIOMES).optional(),

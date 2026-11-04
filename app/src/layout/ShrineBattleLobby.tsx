@@ -6,11 +6,7 @@ import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  SHRINE_BATTLE_LOBBY_SECONDS,
-  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-  SHRINE_BATTLE_MIN_ATTACKERS,
-} from "@/drizzle/constants";
+import { SHRINE_BATTLE_LOBBY_SECONDS, SHRINE_BATTLE_MAX_USERS_PER_SIDE, SHRINE_BATTLE_MIN_ATTACKERS, type MpvpBattleSide } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/schema";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import AvatarImage from "@/layout/Avatar";
@@ -169,7 +165,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
 interface ShrineBattleCardProps {
   battle: ShrineBattleData;
   userId: string;
-  onJoin: (side: "ATTACKER" | "DEFENDER") => void;
+  onJoin: (side: MpvpBattleSide) => void;
   onLeave: () => void;
   onInitiate: () => void;
   isJoining: boolean;

@@ -17,27 +17,7 @@ import {
   getStartPetTaskUserUpdate,
   getUnchangedRewardChoiceUserUpdate,
 } from "@/deltas/quests";
-import {
-  ENERGY_QUEST_REWARDS,
-  FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
-  getUserCaps,
-  LetterRanks,
-  MAX_SKILL_POINTS,
-  MasteryNames,
-  MEDNIN_EXP_CAP,
-  NPC_ONLY_QUEST_TYPES,
-  PET_TASK_MAX_MINUTES,
-  PET_TASK_MIN_RANK,
-  type QuestType,
-  QuestTypes,
-  REGEN_SECONDS,
-  SAGE_MASTERY_EXP_CAP,
-  SENSEI_STUDENT_RYO_PER_MISSION,
-  TUTORIAL_GENIN_EXAM_QUEST_ID,
-  TUTORIAL_STARTER_QUEST_ID,
-  type UserRole,
-  VILLAGE_SYNDICATE_ID,
-} from "@/drizzle/constants";
+import { ENERGY_QUEST_REWARDS, FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS, getUserCaps, LetterRanks, MAX_SKILL_POINTS, MasteryNames, MEDNIN_EXP_CAP, NPC_ONLY_QUEST_TYPES, PET_TASK_MAX_MINUTES, PET_TASK_MIN_RANK, type QuestType, QuestTypes, REGEN_SECONDS, SAGE_MASTERY_EXP_CAP, SENSEI_STUDENT_RYO_PER_MISSION, TUTORIAL_GENIN_EXAM_QUEST_ID, TUTORIAL_STARTER_QUEST_ID, type UserRole, VILLAGE_SYNDICATE_ID, PET_TASK_QUEST_TYPES } from "@/drizzle/constants";
 import {
   type Quest,
   quest,
@@ -338,6 +318,8 @@ import {
   type RewardChoiceCard,
   type RewardChoiceDisplay,
   RewardChoiceDisplaySchema,
+  hasMasteryPromotion,
+  hasPromotionRank,
 } from "@/validators/rewards";
 import {
   getQuestCounterFieldName,
@@ -348,6 +330,7 @@ import {
   type UserDeltaResponse,
   userDeltaResponseSchema,
 } from "@/validators/userCache";
+import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */
@@ -1026,20 +1009,14 @@ export const questsRouter = createTRPCRouter({
         // Check we only give ranks with exams
         let rankError = false;
         if (
-          collapseRewards([
-            data.content.reward,
-            ...(data.content.reward.reward_packages ?? []).map((pack) => pack.rewards),
-          ]).reward_rank !== "NONE" &&
+          collapseRewards(rewardPayloads(data.content.reward)).reward_rank !== "NONE" &&
           !["starter", "exam"].includes(data.questType)
         ) {
           rankError = true;
         }
         data.content.objectives.forEach((objective) => {
           if (
-            collapseRewards([
-              objective,
-              ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-            ]).reward_rank !== "NONE" &&
+            collapseRewards(rewardPayloads(objective)).reward_rank !== "NONE" &&
             data.questType !== "exam"
           ) {
             rankError = true;
@@ -2362,10 +2339,7 @@ export const updateRewards = async (info: {
   );
   const updatedUserData: Record<string, unknown> = {
     ...masteryGainUpdates(masteryGains),
-    ...(rewards.reward_mastery_stat &&
-    rewards.reward_mastery_stat !== "None" &&
-    rewards.reward_mastery_rank &&
-    rewards.reward_mastery_rank !== "NONE"
+    ...(hasMasteryPromotion(rewards)
       ? {
           masteryRanks: masteryRankUpdate(
             rewards.reward_mastery_stat,
@@ -3491,7 +3465,7 @@ const petTaskContentCondition = (task: PetTask, role: UserRole) =>
   sql`EXISTS (SELECT 1 FROM ${quest} WHERE ${and(
     eq(quest.id, task.questId),
     eq(quest.updatedAt, new Date(task.questVersion)),
-    inArray(quest.questType, ["hunting", "gathering"]),
+    inArray(quest.questType, PET_TASK_QUEST_TYPES),
     gte(quest.petTaskMinutes, 1),
     lte(quest.petTaskMinutes, PET_TASK_MAX_MINUTES),
     canPlayHiddenQuests(role) ? undefined : eq(quest.hidden, false),
@@ -4829,7 +4803,7 @@ const describePackageRewards = (
   if (reward.reward_rank !== "NONE") entries.push(`Rank: ${reward.reward_rank}`);
   if (reward.reward_village_membership !== "NONE")
     entries.push(`Village: ${reward.reward_village_membership}`);
-  if (reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE")
+  if (hasPromotionRank(reward))
     entries.push(`${reward.reward_mastery_stat}: ${reward.reward_mastery_rank}`);
   if (reward.reward_hunter_items) entries.push("Hunting material drops");
   if (reward.reward_gathering_items) entries.push("Gathering material drops");

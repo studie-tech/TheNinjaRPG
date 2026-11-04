@@ -55,7 +55,7 @@ import {
   type BlackMarketOfferSchema,
   type BlackMarketOfferSchemaInput,
   blackMarketOfferSchema,
-} from "@/validators/auction";
+} from "@/validators/blackmarket";
 import { getSearchValidator } from "@/validators/register";
 
 export default function BlackMarket() {

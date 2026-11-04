@@ -116,6 +116,13 @@ import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
+const damageThresholdFields = {
+  damageRequired: z.number().min(1),
+  rewards: ObjectiveReward,
+  effects: z.array(AllTags).prefault([]),
+  effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
+};
+
 export const raidsRouter = createTRPCRouter({
   /**
    * Get completed raids (ended or boss defeated) for viewing history and claiming rewards
@@ -439,12 +446,9 @@ export const raidsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(
       z.object({
+        ...damageThresholdFields,
         questId: z.string(),
-        damageRequired: z.number().min(1),
         sortOrder: z.number().min(0).max(255).prefault(0),
-        rewards: ObjectiveReward,
-        effects: z.array(AllTags).prefault([]),
-        effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
       }),
     )
     .output(baseServerResponse)
@@ -478,12 +482,9 @@ export const raidsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(
       z.object({
+        ...damageThresholdFields,
         thresholdId: z.string(),
-        damageRequired: z.number().min(1),
         sortOrder: z.number().min(0).max(255),
-        rewards: ObjectiveReward,
-        effects: z.array(AllTags).prefault([]),
-        effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
       }),
     )
     .output(baseServerResponse)

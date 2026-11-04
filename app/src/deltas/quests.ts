@@ -13,7 +13,7 @@ import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { PetTask } from "@/validators/petTasks";
-import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
+import { MASTERY_EXPERIENCE_FIELDS, hasPromotionRank } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /** Project only confirmed whole-stack quest deliveries; grants, nested starts and combat need recovery. */
@@ -115,7 +115,7 @@ export const getRewardUserDelta = (
     rewards.reward_gathering_experience !== 0 ||
     (rewards.reward_pet_experience ?? 0) !== 0 ||
     MASTERY_EXPERIENCE_FIELDS.some((field) => (rewards[field] ?? 0) > 0) ||
-    (rewards.reward_mastery_rank && rewards.reward_mastery_rank !== "NONE") ||
+    hasPromotionRank(rewards) ||
     rewards.reward_sage_mastery_experience !== 0
   ) {
     // Content grants, profession milestones and shared relations change derived profile data.

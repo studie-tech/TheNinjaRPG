@@ -9,7 +9,11 @@ import {
   objectiveImageMap,
   type QuestTrackerType,
 } from "@/validators/objectives";
-import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
+import {
+  QuestReward,
+  type QuestRewardType,
+  rewardPayloads,
+} from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
 
 export const getObjectiveImage = (objective: AllObjectivesType) => {
@@ -314,10 +318,9 @@ export const getRewardArray = (reward?: QuestRewardType) => {
   if (reward.reward_level) rewards.push(`level ${reward.reward_level}`);
   if (reward.reward_stats)
     rewards.push(`+${reward.reward_stats} to each combat stat (up to rank caps)`);
-  const questReward = collapseRewards([
-    ObjectiveReward.parse(reward),
-    ...(reward.reward_packages ?? []).map((pack) => pack.rewards),
-  ]);
+  const questReward = collapseRewards(
+    rewardPayloads(reward, ObjectiveReward.parse(reward)),
+  );
   if (questReward.reward_items.length > 0) {
     rewards.push(`${questReward.reward_items.length} items`);
   }

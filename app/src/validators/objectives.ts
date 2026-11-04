@@ -1,85 +1,5 @@
 import { z } from "zod";
-import {
-  FARMING_MAX_LEVEL,
-  GATHERING_RANKS,
-  HUNTING_RANKS,
-  IMG_BADGE_A_CRIME_TOTAL,
-  IMG_BADGE_A_MISSION_TOTAL,
-  IMG_BADGE_ARENAKILLS,
-  IMG_BADGE_B_CRIME_TOTAL,
-  IMG_BADGE_B_MISSION_TOTAL,
-  IMG_BADGE_BATTLE_PYRAMIDS_COMPLETED,
-  IMG_BADGE_BLOODLINE_COLLECTION,
-  IMG_BADGE_BUY_ITEM,
-  IMG_BADGE_C_CRIME_TOTAL,
-  IMG_BADGE_C_MISSION_TOTAL,
-  IMG_BADGE_COLLECT_ITEM,
-  IMG_BADGE_COMPLETE_SPECIFIC_QUEST,
-  IMG_BADGE_CRAFT_SPECIFIC_ITEM,
-  IMG_BADGE_CRAFTING_EXPERIENCE,
-  IMG_BADGE_CREATURES_HUNTED,
-  IMG_BADGE_D_CRIME_TOTAL,
-  IMG_BADGE_D_MISSION_TOTAL,
-  IMG_BADGE_DAMAGE_DEALT,
-  IMG_BADGE_DAYS_IN_VILLAGE,
-  IMG_BADGE_DEFEAT_OPPONENTS,
-  IMG_BADGE_DIALOG,
-  IMG_BADGE_DUNGEONS_COMPLETED,
-  IMG_BADGE_ERRANDS_TOTAL,
-  IMG_BADGE_ESPIONAGE,
-  IMG_BADGE_EVENTS_COMPLETED,
-  IMG_BADGE_EXCLUSIVE_RAID,
-  IMG_BADGE_FAIL_QUEST,
-  IMG_BADGE_FARMING_COLLECTION_LOG,
-  IMG_BADGE_FARMING_LEVEL,
-  IMG_BADGE_GATHERING_EXPERIENCE,
-  IMG_BADGE_HERBS_GATHERED,
-  IMG_BADGE_HUNTING_EXPERIENCE,
-  IMG_BADGE_ITEMS_CRAFTED,
-  IMG_BADGE_JUTSUS_MASTERED,
-  IMG_BADGE_MEDICAL_EXPERIENCE,
-  IMG_BADGE_MINUTES_PASSED,
-  IMG_BADGE_MINUTES_TRAINING,
-  IMG_BADGE_MOVE_TO_LOCATION,
-  IMG_BADGE_NEW_QUEST,
-  IMG_BADGE_OPEN_RAID,
-  IMG_BADGE_OVERWORLD_AI_FOUGHT,
-  IMG_BADGE_OVERWORLD_QUESTS_COMPLETED,
-  IMG_BADGE_PLANTS_FERTILIZED,
-  IMG_BADGE_PLANTS_HARVESTED,
-  IMG_BADGE_PLANTS_WATERED,
-  IMG_BADGE_PVP_PARTICIPATED,
-  IMG_BADGE_PVPKILLS,
-  IMG_BADGE_RAIDS_COMPLETED,
-  IMG_BADGE_RANDOM_ENCOUNTER_WINS,
-  IMG_BADGE_RANKED_PARTICIPATED,
-  IMG_BADGE_RANKED_WINS,
-  IMG_BADGE_REPUTATION_POINTS,
-  IMG_BADGE_RESET_QUEST,
-  IMG_BADGE_SABOTAGE,
-  IMG_BADGE_SEEDS_PLANTED,
-  IMG_BADGE_SPARS_PARTICIPATED,
-  IMG_BADGE_SPARS_WON,
-  IMG_BADGE_START_BATTLE,
-  IMG_BADGE_STATS_TRAINED,
-  IMG_BADGE_STORIES_COMPLETED,
-  IMG_BADGE_TAG_USAGE_WIN,
-  IMG_BADGE_TRAIN_SPECIFIC_JUTSU,
-  IMG_BADGE_USE_ITEM_COMBAT,
-  IMG_BADGE_USE_JUTSU_COMBAT,
-  IMG_BADGE_USER_LEVEL,
-  IMG_BADGE_WIN_QUEST,
-  LetterRanks,
-  MAX_PLAYER_LEVEL,
-  MasteryTypes,
-  MEDNIN_RANKS,
-  QUEST_PARTY_TYPES,
-  type QuestRewardMode,
-  QuestTypes,
-  RetryQuestDelays,
-  SAGE_MASTERY_RANKS,
-  SECTOR_MAP_MAX_DIMENSION,
-} from "@/drizzle/constants";
+import { FARMING_MAX_LEVEL, GATHERING_RANKS, HUNTING_RANKS, IMG_BADGE_A_CRIME_TOTAL, IMG_BADGE_A_MISSION_TOTAL, IMG_BADGE_ARENAKILLS, IMG_BADGE_B_CRIME_TOTAL, IMG_BADGE_B_MISSION_TOTAL, IMG_BADGE_BATTLE_PYRAMIDS_COMPLETED, IMG_BADGE_BLOODLINE_COLLECTION, IMG_BADGE_BUY_ITEM, IMG_BADGE_C_CRIME_TOTAL, IMG_BADGE_C_MISSION_TOTAL, IMG_BADGE_COLLECT_ITEM, IMG_BADGE_COMPLETE_SPECIFIC_QUEST, IMG_BADGE_CRAFT_SPECIFIC_ITEM, IMG_BADGE_CRAFTING_EXPERIENCE, IMG_BADGE_CREATURES_HUNTED, IMG_BADGE_D_CRIME_TOTAL, IMG_BADGE_D_MISSION_TOTAL, IMG_BADGE_DAMAGE_DEALT, IMG_BADGE_DAYS_IN_VILLAGE, IMG_BADGE_DEFEAT_OPPONENTS, IMG_BADGE_DIALOG, IMG_BADGE_DUNGEONS_COMPLETED, IMG_BADGE_ERRANDS_TOTAL, IMG_BADGE_ESPIONAGE, IMG_BADGE_EVENTS_COMPLETED, IMG_BADGE_EXCLUSIVE_RAID, IMG_BADGE_FAIL_QUEST, IMG_BADGE_FARMING_COLLECTION_LOG, IMG_BADGE_FARMING_LEVEL, IMG_BADGE_GATHERING_EXPERIENCE, IMG_BADGE_HERBS_GATHERED, IMG_BADGE_HUNTING_EXPERIENCE, IMG_BADGE_ITEMS_CRAFTED, IMG_BADGE_JUTSUS_MASTERED, IMG_BADGE_MEDICAL_EXPERIENCE, IMG_BADGE_MINUTES_PASSED, IMG_BADGE_MINUTES_TRAINING, IMG_BADGE_MOVE_TO_LOCATION, IMG_BADGE_NEW_QUEST, IMG_BADGE_OPEN_RAID, IMG_BADGE_OVERWORLD_AI_FOUGHT, IMG_BADGE_OVERWORLD_QUESTS_COMPLETED, IMG_BADGE_PLANTS_FERTILIZED, IMG_BADGE_PLANTS_HARVESTED, IMG_BADGE_PLANTS_WATERED, IMG_BADGE_PVP_PARTICIPATED, IMG_BADGE_PVPKILLS, IMG_BADGE_RAIDS_COMPLETED, IMG_BADGE_RANDOM_ENCOUNTER_WINS, IMG_BADGE_RANKED_PARTICIPATED, IMG_BADGE_RANKED_WINS, IMG_BADGE_REPUTATION_POINTS, IMG_BADGE_RESET_QUEST, IMG_BADGE_SABOTAGE, IMG_BADGE_SEEDS_PLANTED, IMG_BADGE_SPARS_PARTICIPATED, IMG_BADGE_SPARS_WON, IMG_BADGE_START_BATTLE, IMG_BADGE_STATS_TRAINED, IMG_BADGE_STORIES_COMPLETED, IMG_BADGE_TAG_USAGE_WIN, IMG_BADGE_TRAIN_SPECIFIC_JUTSU, IMG_BADGE_USE_ITEM_COMBAT, IMG_BADGE_USE_JUTSU_COMBAT, IMG_BADGE_USER_LEVEL, IMG_BADGE_WIN_QUEST, LetterRanks, MAX_PLAYER_LEVEL, MasteryTypes, MEDNIN_RANKS, QUEST_PARTY_TYPES, type QuestRewardMode, QuestTypes, RetryQuestDelays, SAGE_MASTERY_RANKS, SECTOR_MAP_MAX_DIMENSION, isPetTaskQuestType, isSharedRunQuestType } from "@/drizzle/constants";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
@@ -95,8 +15,14 @@ import {
   QuestReward,
   type QuestRewardType,
   questRewardFields,
+  rewardPayloads,
 } from "@/validators/rewardPackages";
-import { questRewardModeFields } from "@/validators/rewards";
+import {
+  hasPromotionRank,
+  hasUnpairedMasteryPromotion,
+  MASTERY_PROMOTION_PAIR_MESSAGE,
+  questRewardModeFields,
+} from "@/validators/rewards";
 import { villageMissionContentError } from "@/validators/villageMission";
 
 /** Event counters retain progress before an achievement's first reward claim. */
@@ -181,7 +107,7 @@ export const InstantTasks = [
 export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
 export type RaidTask = (typeof RaidTasks)[number];
 
-// Curated subset of combat effect types (`effectFilters` in @/validators/combat) that can
+// Curated subset of combat effect types (`tagTypes` in @/validators/combat) that can
 // be applied during a winnable battle, used by the tag_usage_win objective picker + schema.
 // Excludes non-combat / out-of-battle tag types (noncombat*, marriage, reskin,
 // unlockitemvariant, repair, rollbloodline) AND combat tags that never resolve on a user
@@ -578,7 +504,7 @@ const SECTOR_TYPES = [
   "enemy_village",
 ] as const;
 export type SectorType = (typeof SECTOR_TYPES)[number];
-export const LOCATION_TYPES = ["specific", "random"] as const;
+const LOCATION_TYPES = ["specific", "random"] as const;
 
 const complexObjectiveFields = {
   // Location type fields
@@ -975,7 +901,7 @@ const questSuperRefine = (
         "Public structures need a fixed, visible location without an NPC placement binding",
       );
   });
-  if (val.petTaskMinutes !== null && !["hunting", "gathering"].includes(val.questType))
+  if (val.petTaskMinutes !== null && !isPetTaskQuestType(val.questType))
     ctx.addIssue({
       code: "custom",
       path: ["petTaskMinutes"],
@@ -1004,7 +930,7 @@ const questSuperRefine = (
   }
   if (
     val.content.entryItems.length > 0 &&
-    ["raid", "village_mission", "achievement"].includes(val.questType)
+    isSharedRunQuestType(val.questType)
   ) {
     ctx.addIssue({
       code: "custom",
@@ -1084,12 +1010,8 @@ const questSuperRefine = (
       (val.retryDelay && val.retryDelay !== "none") ||
       val.content.rewardMode !== "all" ||
       [
-        reward,
-        ...(reward.reward_packages ?? []).map((pack) => pack.rewards),
-        ...val.content.objectives.flatMap((objective) => [
-          objective,
-          ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-        ]),
+        ...rewardPayloads(reward),
+        ...val.content.objectives.flatMap((objective) => rewardPayloads(objective)),
       ].some((part) => part.reward_rank !== "NONE") ||
       !(reward.reward_stats && reward.reward_stats > 0)
     ) {
@@ -1118,25 +1040,16 @@ const questSuperRefine = (
       message:
         "Milestone levels and combat stats belong on the completed quest, not individual objectives.",
     });
-  const hasPromotionStat =
-    !!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None";
-  const hasPromotionRank =
-    !!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE";
-  if (hasPromotionStat !== hasPromotionRank) {
+  if (hasUnpairedMasteryPromotion(reward)) {
     ctx.addIssue({
       code: "custom",
-      message: "Select both the mastery and its rank reward",
+      message: MASTERY_PROMOTION_PAIR_MESSAGE,
       path: ["content", "reward"],
     });
   }
   if (
     val.content.objectives.some((objective) =>
-      [
-        objective,
-        ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-      ].some(
-        (reward) => reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE",
-      ),
+      rewardPayloads(objective).some(hasPromotionRank),
     )
   ) {
     ctx.addIssue({
@@ -1241,7 +1154,7 @@ export const QuestFormRawSchema = QuestValidatorRawSchema.extend(
  */
 export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
   ...val,
-  petTaskMinutes: ["hunting", "gathering"].includes(val.questType)
+  petTaskMinutes: isPetTaskQuestType(val.questType)
     ? val.petTaskMinutes
     : null,
   content: {
@@ -1254,7 +1167,7 @@ export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
       reward_stats: val.reward_stats,
     },
     rewardMode: val.rewardMode,
-    entryItems: ["raid", "village_mission", "achievement"].includes(val.questType)
+    entryItems: isSharedRunQuestType(val.questType)
       ? []
       : val.entryItems,
     isolated: val.questType === "battlepyramid" && val.isolated,

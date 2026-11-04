@@ -1,15 +1,10 @@
 import { z } from "zod";
 import { baseServerResponse } from "@/validators/base";
-import { rewardFields } from "./rewards";
-
-// Possible rewards are the same as for objectives, so that we can re-use code
-export const rewardSchema = z.object(rewardFields);
-export type RankedSeasonReward = z.infer<typeof rewardSchema>;
-export type RankedSeasonRewardInput = z.input<typeof rewardSchema>;
+import { ObjectiveReward } from "./rewards";
 
 export const divisionRewardSchema = z.object({
   division: z.string(),
-  rewards: rewardSchema,
+  rewards: ObjectiveReward,
 });
 export type RankedSeasonDivisionReward = z.infer<typeof divisionRewardSchema>;
 

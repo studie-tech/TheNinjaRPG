@@ -4,7 +4,11 @@ import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { attemptCapReached } from "@/libs/quest";
 import { periodStart } from "@/utils/time";
-import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
+import type {
+  DungeonContent,
+  DungeonFloor,
+  DungeonRunState,
+} from "@/validators/dungeon";
 import { dungeonRequirementsSchema } from "@/validators/dungeon";
 
 /** Navigation for the player's unique active dungeon reservation. */
@@ -22,7 +26,7 @@ export type DungeonBattleState = {
   runVersion: number;
   runState: DungeonRunState;
   totalFloors: number;
-  roomKind: "floor" | "mini-boss" | "boss";
+  roomKind: DungeonFloor["kind"];
   expiresAt: number;
   /** Last explicit player action; timed-out turns and summoned allies do not count. */
   lastActionRound: Record<string, number>;

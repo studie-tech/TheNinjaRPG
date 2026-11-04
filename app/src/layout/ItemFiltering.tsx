@@ -16,7 +16,7 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 // Inline schema (single source of truth)
 const itemFilteringSchema = defineFilteringSchema({
@@ -27,7 +27,7 @@ const itemFilteringSchema = defineFilteringSchema({
       label: "Effects",
       type: "multi-select",
       defaultValue: [],
-      options: toOptions(effectFilters),
+      options: toOptions(tagTypes),
     },
     {
       id: "itemType",
