@@ -2,7 +2,6 @@ import type { Grid } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import type { AttackTargets, ElementName, UserRank } from "@/drizzle/constants";
 import {
-  DURABILITY_USABILITY_THR,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_SFX_CLEANSE,
@@ -71,6 +70,7 @@ import {
   isUserImmobilized,
   isUserStealthed,
   isUserSummonPrevented,
+  wearItem,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
@@ -79,7 +79,7 @@ import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { spriteActionAnimation } from "@/libs/lpc/actions";
 import { withSpriteEquipment } from "@/libs/lpc/appearance";
-import { hasMasteryRequirements } from "@/libs/mastery";
+import { hasMasteryRequirements, hasUsableDurability } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import {
@@ -272,8 +272,7 @@ export const availableUserActions = (
             if (item.itemType === "WEAPON") {
               // Hide weapons when disarmed
               if (isDisarmed) return false;
-              const current = Math.min(ui.durability, item.maxDurability);
-              return current > DURABILITY_USABILITY_THR;
+              return hasUsableDurability(ui, item);
             }
             return true;
           })
@@ -1402,11 +1401,7 @@ export const performBattleAction = (props: {
     const used = user.items.find((i) => i.itemId === action.id);
     const usedItem = used ? getItem(battle, used.itemId) : undefined;
     if (used && usedItem?.itemType === "WEAPON") {
-      const currentDurability = Math.min(used.durability, usedItem.maxDurability);
-      used.durability = Math.max(0, currentDurability - 3);
-      if (used.durability <= DURABILITY_USABILITY_THR) {
-        used.equipped = "NONE" as const;
-      }
+      wearItem(used, usedItem, 3);
     }
   }
 

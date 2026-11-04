@@ -134,6 +134,7 @@ import {
   maskBattle,
   mergeExtraState,
   reconcileLobbyPools,
+  createEmptyExtraState,
   refreshMasteries,
   resetMasteriesToBase,
   rollInitiative,
@@ -4588,24 +4589,10 @@ export const processUsersForBattle = async (
 
   // Build extraState from all users
   const extraState: ExtraState = {
-    jutsus: {},
-    jutsuReskins: {},
-    items: {},
-    bloodlines: {},
+    ...createEmptyExtraState(),
     enemySkills,
-    sageModes: {},
-    villages: {},
-    anbuSquads: {},
-    keystoneItems: {},
     wars: Object.fromEntries(info.wars.map((w) => [w.id, w])),
-    aiProfiles: {},
     relations: Object.fromEntries(info.relations.map((r) => [r.id, r])),
-    clans: {},
-    userQuests: {},
-    completedQuests: {},
-    questData: {},
-    bounties: {},
-    bountySignups: {},
   };
 
   // Add default AI profile

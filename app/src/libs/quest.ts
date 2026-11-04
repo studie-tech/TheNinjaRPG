@@ -50,6 +50,7 @@ import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { BloodlineCollectionProgress } from "@/libs/bloodline";
 import { eliteJoninMilestoneBlockMessage } from "@/libs/eliteJonin";
 import { getFarmingLevel } from "@/libs/farming";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getGatheringRank } from "@/libs/gathering";
 import { calcMedninRank } from "@/libs/hospital";
 import { getHuntingRank } from "@/libs/hunting";
@@ -92,7 +93,7 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { availableQuestLetterRanks, hasRequiredRank } from "@/libs/train";
 import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
-import { isInArray } from "@/utils/array";
+import { isInArray, shuffle } from "@/utils/array";
 import { getUnique } from "@/utils/grouping";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -318,9 +319,10 @@ export const rollObjectiveAttackers = (
       objective.attackers_max_per_battle > 0 &&
       opponents.length > objective.attackers_max_per_battle
     ) {
-      opponents = opponents
-        .sort(() => random() - 0.5)
-        .slice(0, objective.attackers_max_per_battle);
+      opponents = shuffle(opponents, (n) => Math.floor(random() * n)).slice(
+        0,
+        objective.attackers_max_per_battle,
+      );
     }
     if (opponents.length > 0) {
       return {
@@ -635,13 +637,8 @@ export const getReward = (
 
       // Apply mission experience multiplier if available (for missions, crimes, and medical missions)
       if (settings && (missionLike || userQuest.quest.questType === "medical")) {
-        const missionSetting = settings.find((s) => s.name === "missionExpMultiplier");
-        if (missionSetting) {
-          const secondsLeft = -secondsPassed(missionSetting.time);
-          if (secondsLeft > 0 && missionSetting.value > 0) {
-            target.reward_exp = Math.floor(target.reward_exp * missionSetting.value);
-          }
-        }
+        const boost = getGameSettingBoost("missionExpMultiplier", settings);
+        if (boost) target.reward_exp = Math.floor(target.reward_exp * boost.value);
       }
     };
     scaleRewards(rawRewards);

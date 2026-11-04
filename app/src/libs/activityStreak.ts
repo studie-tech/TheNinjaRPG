@@ -1,5 +1,5 @@
 import { STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
-import { DAY_S, HOUR_S, nextUtcDayAt } from "@/utils/time";
+import { DAY_S, HOUR_S, nextUtcDayAt, secondsFromDate } from "@/utils/time";
 export type ActivityStreakPopupState = {
   isOpen: boolean;
   isLoading: boolean;
@@ -123,7 +123,7 @@ export const normalizeRecurringStreakProgress = <
 
 const streakContinuityEndsAt = (lastClaimDate: Date | null) =>
   lastClaimDate
-    ? new Date(lastClaimDate.getTime() + STREAK_CONTINUITY_HOURS * HOUR_S * 1000)
+    ? secondsFromDate(STREAK_CONTINUITY_HOURS * HOUR_S, lastClaimDate)
     : null;
 
 export const isStreakContinuous = (lastClaimDate: Date | null, now = new Date()) =>

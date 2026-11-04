@@ -1491,6 +1491,8 @@ export const USER_CAPS: Record<
 
 // OpenAI models
 export const OPENAI_REVIEW_MODEL = "gpt-6-luna";
+/** OpenAI's moderation endpoint model, used as the text gate and for image screening. */
+export const OPENAI_OMNI_MODERATION_MODEL = "omni-moderation-latest";
 export const OPENAI_MODERATION_MODEL = "gpt-4o-mini";
 export const MODERATION_PROMPT_VERSION = "evidence-v1";
 export const MODERATION_SCAN_RETENTION_DAYS = 90;

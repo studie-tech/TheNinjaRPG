@@ -3,6 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateText, Output, type UserContent } from "ai";
 import sharp from "sharp";
 import { OPENAI_REVIEW_MODEL, type PetGender } from "@/drizzle/constants";
+import { MAX_PET_IMAGE_PIXELS } from "@/libs/pets/sprite";
 import { petAppearanceQualitySchema } from "@/validators/pets";
 
 const PET_QUALITY_INSTRUCTIONS = `You inspect animal sprites for a fantasy ninja game. Judge the visible CANDIDATE image against these objective requirements. The neutral gray checkerboard is an inspection background showing transparency; ignore it in every check. The animal is stylized pixel art; fantasy colours, species-appropriate tufts, crests, accessories and contained chakra are allowed.
@@ -104,7 +105,7 @@ export const validatePetAppearanceQuality = (
 /** Give vision an opaque transparency preview without changing the stored sprite. */
 const createPetReviewImage = async (image: Buffer) => {
   const { width, height } = await sharp(image, {
-    limitInputPixels: 1024 * 1024,
+    limitInputPixels: MAX_PET_IMAGE_PIXELS,
   }).metadata();
   if (!width || !height) throw new Error("Could not read pet image dimensions");
   const checkerboard = Buffer.from(

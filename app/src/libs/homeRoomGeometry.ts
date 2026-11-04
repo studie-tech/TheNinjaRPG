@@ -20,8 +20,8 @@ export type HomePoint = { x: number; y: number };
 
 /** Finish contours also define usable placement ground, including concave rooms and door cutouts. */
 export type HomeArtPlan = {
-  /** Paintings without an override use 4:3; mansion and palace artwork uses 3:2. */
-  aspectRatio?: number;
+  /** Painted canvas width over height: mansion and palace artwork uses 3:2, the rest 4:3. */
+  aspectRatio: number;
   /** World extent at 100% camera scale; larger properties retain useful furniture proportions. */
   size: number;
   floors: readonly HomeArtRect[];
@@ -39,6 +39,7 @@ export type HomeArtPlan = {
 // biome-ignore format: Keep measured coordinate pairs together for comparison with the painting.
 export const HOME_ART_PLANS: Record<HomeType, HomeArtPlan> = {
   NONE: {
+    aspectRatio: 4 / 3,
     size: 180,
     floors: [
       [32, 18, 67, 42],
@@ -78,6 +79,7 @@ export const HOME_ART_PLANS: Record<HomeType, HomeArtPlan> = {
     ],
   },
   STUDIO_APARTMENT: {
+    aspectRatio: 4 / 3,
     size: 220,
     floors: [
       [22, 21, 57, 46.5],
@@ -116,6 +118,7 @@ export const HOME_ART_PLANS: Record<HomeType, HomeArtPlan> = {
     ],
   },
   ONE_BED_APARTMENT: {
+    aspectRatio: 4 / 3,
     size: 260,
     floors: [
       [20, 16, 52, 51],
@@ -165,6 +168,7 @@ export const HOME_ART_PLANS: Record<HomeType, HomeArtPlan> = {
     ],
   },
   TWO_BED_HOUSE: {
+    aspectRatio: 4 / 3,
     size: 290,
     floors: [
       [18, 41, 59, 51],
@@ -224,6 +228,7 @@ export const HOME_ART_PLANS: Record<HomeType, HomeArtPlan> = {
     ],
   },
   TOWN_HOUSE: {
+    aspectRatio: 4 / 3,
     size: 300,
     floors: [
       [40, 25, 59.5, 55.5],

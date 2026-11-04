@@ -246,7 +246,7 @@ export const isWornGearDisabled = (
   wearer: MasteryBuffUser & { isAi: boolean },
   isRankedBattle = false,
 ) =>
-  !hasUsableDurability(ui) ||
+  !hasUsableDurability(ui, ui.item) ||
   (!wearer.isAi && !isRankedBattle && !!gearMissingMastery(ui, wearer));
 
 /** Armor, accessories and keystones: the gear whose effects apply for the whole battle. */
@@ -264,11 +264,14 @@ const isMasteryTag = (tag: ZodAllTags): tag is MasteryTag =>
 export const isActiveWornGear = (ui: MasteryGear, bloodlineId: string | null) =>
   ui.equipped !== "NONE" &&
   isWornGear(ui.item) &&
-  hasUsableDurability(ui) &&
+  hasUsableDurability(ui, ui.item) &&
   (!ui.item.bloodlineId || ui.item.bloodlineId === bloodlineId);
 
-const hasUsableDurability = (ui: Pick<MasteryGear, "durability" | "item">) =>
-  Math.min(ui.durability, ui.item.maxDurability) > DURABILITY_USABILITY_THR;
+/** Durability above the threshold under which gear stops counting; capped at the item's max. */
+export const hasUsableDurability = (
+  ui: { durability: number },
+  item: { maxDurability: number },
+) => Math.min(ui.durability, item.maxDurability) > DURABILITY_USABILITY_THR;
 
 /** The gear's effects plus its finished imbuements, merged as processUsersForBattle does. */
 export const wornGearTags = (ui: MasteryGear) => {

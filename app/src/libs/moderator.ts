@@ -6,6 +6,7 @@ import type { AutomoderationCategory } from "@/drizzle/constants";
 import {
   type BanStates,
   OPENAI_MODERATION_MODEL,
+  OPENAI_OMNI_MODERATION_MODEL,
   TERR_BOT_ID,
 } from "@/drizzle/constants";
 import {
@@ -58,7 +59,7 @@ export const moderateContent = async (
 ) => {
   const { content, userId, relationType, relationId, contextId } = info;
   const scanId = nanoid();
-  const gateModel = "omni-moderation-latest";
+  const gateModel = OPENAI_OMNI_MODERATION_MODEL;
   await insertModerationScanForModerateContent(
     client,
     scanId,
@@ -286,7 +287,7 @@ export const classifyNsfwImage = async (
   signal?.throwIfAborted();
   const moderation = await openai.moderations.create(
     {
-      model: "omni-moderation-latest",
+      model: OPENAI_OMNI_MODERATION_MODEL,
       input: [{ type: "image_url", image_url: { url: imageUrl } }],
     },
     signal ? { signal, timeout: 30_000, maxRetries: 0 } : undefined,

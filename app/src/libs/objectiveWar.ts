@@ -4,6 +4,7 @@ import {
   WAR_OBJECTIVES_PER_SIDE,
 } from "@/drizzle/constants";
 import type { SectorType, War } from "@/drizzle/schema";
+import { shuffle } from "@/utils/array";
 import type { WarObjectiveState, WarRules } from "@/validators/war";
 
 /**
@@ -132,12 +133,8 @@ export const selectWarObjectives = (
       !excludedSectors.includes(s.sector) &&
       (!s.boostLockedUntil || new Date(s.boostLockedUntil) <= new Date()),
   );
-  // Fisher-Yates avoids the bias of random comparator sorting.
-  for (let i = eligible.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [eligible[i], eligible[j]] = [eligible[j]!, eligible[i]!];
-  }
-  return eligible.slice(0, WAR_OBJECTIVES_PER_SIDE).map((s) => ({
+  const shuffled = shuffle(eligible, (n) => Math.floor(random() * n));
+  return shuffled.slice(0, WAR_OBJECTIVES_PER_SIDE).map((s) => ({
     sector: s.sector,
     villageId,
     hp: rules.shrineHp,

@@ -11,7 +11,6 @@ import type {
 import {
   BasicElementName,
   CombatStatNames,
-  DURABILITY_USABILITY_THR,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
   ElementNames,
   FED_GOLD_JUTSU_SLOTS,
@@ -49,11 +48,15 @@ import type {
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { elementalGainRoom } from "@/libs/elementalMastery";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
-import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  applyGameSettingMultiplier,
+  getGameSettingBoost,
+} from "@/libs/gameSettingBoost";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import {
   effectiveMasteries,
   hasMasteryRequirements,
+  hasUsableDurability,
   missingMasteryRequirement,
 } from "@/libs/mastery";
 import { masteryGainRoom } from "@/libs/masteryProgression";
@@ -293,7 +296,7 @@ export const checkJutsuBloodlineItem = (
       ui.item.itemType === "ACCESSORY" ||
       ui.item.itemType === "KEYSTONE"
     ) {
-      return Math.min(ui.durability, ui.item.maxDurability) > DURABILITY_USABILITY_THR;
+      return hasUsableDurability(ui, ui.item);
     }
     return true;
   });
@@ -821,10 +824,10 @@ export const battleJutsuExp = (
 
   // Apply battle arena exp multiplier if available
   if (battleType === "ARENA" || battleType === "COMBAT") {
-    baseExp = applyExpMultiplierSetting(baseExp, "battleExpMultiplier", settings);
+    baseExp = applyGameSettingMultiplier(baseExp, "battleExpMultiplier", settings);
   }
   // Apply jutsu exp multiplier if available
-  baseExp = applyExpMultiplierSetting(baseExp, "jutsuExpMultiplier", settings);
+  baseExp = applyGameSettingMultiplier(baseExp, "jutsuExpMultiplier", settings);
 
   return Math.floor(baseExp);
 };
@@ -839,15 +842,8 @@ export const battleItemExp = (
     return 0;
   }
   const baseExp = didWin ? ITEM_XP_ON_WIN : ITEM_XP_ON_LOSS;
-  return Math.floor(applyExpMultiplierSetting(baseExp, "itemExpMultiplier", settings));
+  return Math.floor(applyGameSettingMultiplier(baseExp, "itemExpMultiplier", settings));
 };
-
-/** Multiply exp by an active gain-multiplier game setting. */
-const applyExpMultiplierSetting = (
-  baseExp: number,
-  settingName: string,
-  settings?: GameSetting[],
-): number => baseExp * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);
 
 type StatTrainingUser = UserStatData &
   Pick<

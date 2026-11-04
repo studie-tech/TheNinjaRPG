@@ -85,6 +85,23 @@ export const updateModerationScanForModerateContent3 = (
     })
     .where(eq(moderationScan.id, scanId));
 
+/** The author and message columns moderation context reads from either comment table. */
+const additionalContextColumns = (
+  table: typeof conversationComment | typeof forumPost,
+) => ({
+  userId: table.userId,
+  authorId: table.authorId,
+  username: userData.username,
+  avatar: userData.avatar,
+  level: userData.level,
+  rank: userData.rank,
+  federalStatus: userData.federalStatus,
+  isOutlaw: userData.isOutlaw,
+  role: userData.role,
+  content: table.content,
+  createdAt: table.createdAt,
+});
+
 /**
  * Build the `conversationComment` selection for `getAdditionalContext`, using
  * predicates on `conversationId`, `id`, `createdAt`.
@@ -96,19 +113,7 @@ export const selectConversationCommentForGetAdditionalContext = (
   timestamp: undefined | null | Date,
 ) =>
   client
-    .select({
-      userId: conversationComment.userId,
-      authorId: conversationComment.authorId,
-      username: userData.username,
-      avatar: userData.avatar,
-      level: userData.level,
-      rank: userData.rank,
-      federalStatus: userData.federalStatus,
-      isOutlaw: userData.isOutlaw,
-      role: userData.role,
-      content: conversationComment.content,
-      createdAt: conversationComment.createdAt,
-    })
+    .select(additionalContextColumns(conversationComment))
     .from(conversationComment)
     .innerJoin(userData, eq(conversationComment.userId, userData.userId))
     .where(
@@ -122,7 +127,7 @@ export const selectConversationCommentForGetAdditionalContext = (
     .limit(REPORT_CONTEXT_WINDOW);
 
 /**
- * Build the `forumPost` selection for `umPostForGetAdditionalContext`, using
+ * Build the `forumPost` selection for `getAdditionalContext`, using
  * predicates on `threadId`, `id`, `createdAt`.
  */
 export const selectForumPostForGetAdditionalContext = (
@@ -132,19 +137,7 @@ export const selectForumPostForGetAdditionalContext = (
   timestamp: undefined | null | Date,
 ) =>
   client
-    .select({
-      userId: forumPost.userId,
-      authorId: forumPost.authorId,
-      username: userData.username,
-      avatar: userData.avatar,
-      level: userData.level,
-      rank: userData.rank,
-      federalStatus: userData.federalStatus,
-      isOutlaw: userData.isOutlaw,
-      role: userData.role,
-      content: forumPost.content,
-      createdAt: forumPost.createdAt,
-    })
+    .select(additionalContextColumns(forumPost))
     .from(forumPost)
     .innerJoin(userData, eq(forumPost.userId, userData.userId))
     .where(

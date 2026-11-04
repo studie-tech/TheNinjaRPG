@@ -16,6 +16,22 @@ export const getRandomElement = <T>(arr?: T[] | readonly T[]) => {
 };
 
 /**
+ * Fisher-Yates shuffle into a new array.
+ * @param randomIndex - Source of an integer in [0, n); defaults to Math.random
+ */
+export const shuffle = <T>(
+  items: readonly T[],
+  randomIndex: (n: number) => number = (n) => Math.floor(Math.random() * n),
+): T[] => {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled;
+};
+
+/**
  * Splits an array into bounded batches without mutating the input.
  */
 export const chunkArray = <T>(values: readonly T[], batchSize: number): T[][] => {

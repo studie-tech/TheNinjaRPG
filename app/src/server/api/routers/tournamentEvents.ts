@@ -56,6 +56,7 @@ import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
+import { shuffle } from "@/utils/array";
 import { canManageTournaments } from "@/utils/permissions";
 import {
   type EventParticipant,
@@ -197,11 +198,10 @@ export const eventTournamentProcedures = {
           const entrants = event.participants.filter((p) => p.accepted && !p.withdrawn);
           if (entrants.length < 2)
             return "At least two accepted participants are required to start early";
-          const shuffled = entrants.map((p) => p.id);
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = randomInt(i + 1);
-            [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-          }
+          const shuffled = shuffle(
+            entrants.map((p) => p.id),
+            (n) => randomInt(n),
+          );
           generateEventBracket(event, shuffled);
         } else if (input.action === "BEGIN") {
           if (!["PREPARED", "RUNNING"].includes(event.status))

@@ -14,6 +14,7 @@ import { upsertQuestEntries } from "@/routers/quests";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { shuffle } from "@/utils/array";
 import { periodStart, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-quest";
@@ -81,15 +82,13 @@ export async function GET(request: Request) {
       if (village && questRanks.length > 0) {
         const requiredVillage =
           village.type === "OUTLAW" ? VILLAGE_SYNDICATE_ID : village.id;
-        const newDaily = [...dailies]
-          .sort(() => Math.random() - 0.5)
-          .find(
-            (q) =>
-              questRanks.includes(q.questRank) &&
-              (!q.requiredVillage || q.requiredVillage === requiredVillage) &&
-              q.requiredLevel <= level &&
-              getQuestMaxLevel(q) >= level,
-          );
+        const newDaily = shuffle(dailies).find(
+          (q) =>
+            questRanks.includes(q.questRank) &&
+            (!q.requiredVillage || q.requiredVillage === requiredVillage) &&
+            q.requiredLevel <= level &&
+            getQuestMaxLevel(q) >= level,
+        );
         if (newDaily) {
           const entry = memory.find((m) => m.quest.id === newDaily.id);
           if (!entry) {

@@ -64,16 +64,9 @@ export const pvpExperienceReward = (
 export const boostPvpGain = (gain: number, percent: number) =>
   gain > 0 ? (gain * (100 + percent)) / 100 : gain;
 
-const integerPvpRewardFields = new Set<string>([
-  "reward_pet_experience",
-  "reward_money",
-  "reward_clanpoints",
-  "reward_exp",
-  "reward_tokens",
-  "reward_hunting_experience",
-  "reward_crafting_experience",
-  "reward_gathering_experience",
-  "reward_sage_mastery_experience",
+const fractionalPvpRewardFields = new Set<string>([
+  "reward_prestige",
+  ...MASTERY_EXPERIENCE_FIELDS,
 ]);
 
 const pvpRewardFields = [
@@ -101,7 +94,7 @@ export const boostPvpRewards = (
     if (typeof gain === "number") {
       const amount = boostPvpGain(gain, percent);
       rewards[field] =
-        floorIntegers && integerPvpRewardFields.has(field)
+        floorIntegers && !fractionalPvpRewardFields.has(field)
           ? Math.floor(amount)
           : amount;
     }

@@ -4,6 +4,7 @@ import {
   DISCORD_NICKNAME_MAX_LENGTH,
   DISCORD_UNLINK_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
+import { addDays } from "@/utils/time";
 
 /**
  * Outcomes of the Discord linking flow. The OAuth callback redirects to
@@ -176,7 +177,7 @@ export const discordSnowflakeCreatedAt = (snowflake: string): Date => {
 
 /** The earliest time a Discord account created at `createdAt` may be linked. */
 export const discordAccountEligibleAt = (createdAt: Date) =>
-  new Date(createdAt.getTime() + DISCORD_MIN_ACCOUNT_AGE_DAYS * 86_400_000);
+  addDays(createdAt, DISCORD_MIN_ACCOUNT_AGE_DAYS);
 
 /**
  * Keep the first and last character so the owner recognizes the name without revealing it to

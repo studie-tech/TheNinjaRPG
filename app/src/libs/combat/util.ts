@@ -4,6 +4,7 @@ import type {
   BattleType,
   CombatStatType,
   ElementName,
+  ItemSlot,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -11,6 +12,7 @@ import {
   AutoBattleTypes,
   BATTLE_TAG_STACKING,
   CombatStatTypes,
+  DURABILITY_USABILITY_THR,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
   ID_ANIMATION_HEAL,
@@ -72,12 +74,12 @@ import { isSummonTemplate, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { dungeonCombatResult } from "@/libs/dungeon";
+import { applyGameSettingMultiplier } from "@/libs/gameSettingBoost";
 import { getWarSide } from "@/libs/objectiveWar";
 import { boostPvpGain, pvpExperienceReward } from "@/libs/pvpExperience";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { randomInt, round, secureRandomInt } from "@/utils/math";
-import { secondsPassed } from "@/utils/time";
 import { countBoostingShrines, getShrineBoost, getStrucBoost } from "@/utils/village";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
@@ -999,6 +1001,38 @@ export const getBattleGrid = (
   battle: ReturnedBattle,
   origin?: { x: number; y: number },
 ) => createHexGrid(hexsize, battle.width, battle.height, origin).map(nameArenaTile);
+
+/** The required maps of a battle's extra state, empty; callers fill in what they preload. */
+export const createEmptyExtraState = () =>
+  ({
+    jutsus: {},
+    jutsuReskins: {},
+    items: {},
+    bloodlines: {},
+    sageModes: {},
+    villages: {},
+    anbuSquads: {},
+    keystoneItems: {},
+    wars: {},
+    aiProfiles: {},
+    relations: {},
+    clans: {},
+    userQuests: {},
+    completedQuests: {},
+    questData: {},
+    bounties: {},
+    bountySignups: {},
+  }) satisfies ExtraState;
+
+/** Lose durability, unequipping the item once it reaches the usability threshold. */
+export const wearItem = (
+  ui: { durability: number; equipped: ItemSlot },
+  item: { maxDurability: number },
+  amount: number,
+) => {
+  ui.durability = Math.max(0, Math.min(ui.durability, item.maxDurability) - amount);
+  if (ui.durability <= DURABILITY_USABILITY_THR) ui.equipped = "NONE";
+};
 
 /**
  * Finds a user in the battle state based on location
@@ -2014,14 +2048,12 @@ export const calcBattleResult = (
       experience *= battle.rewardScaling * shrineBoostFactor * (1 + pvpPercent / 100);
 
       // Apply battle arena exp multiplier if available
-      if (settings && (battleType === "ARENA" || battleType === "COMBAT")) {
-        const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
-        if (arenaSetting) {
-          const secondsLeft = -secondsPassed(arenaSetting.time);
-          if (secondsLeft > 0 && arenaSetting.value > 0) {
-            experience *= arenaSetting.value;
-          }
-        }
+      if (battleType === "ARENA" || battleType === "COMBAT") {
+        experience = applyGameSettingMultiplier(
+          experience,
+          "battleExpMultiplier",
+          settings,
+        );
       }
       experience *= percentageMultiplier(pvpRewardBoost);
 

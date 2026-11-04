@@ -21,6 +21,7 @@ import type {
   SessionState,
   SessionUpgrade,
 } from "./bindings/types";
+import type { CreateSessionParams } from "./bindings/types/reducers";
 import { getSpacetimeDBConfig, type SpacetimeDBConfig } from "./config";
 import { sleep } from "@/utils/time";
 
@@ -584,36 +585,7 @@ export class SpacetimeDBConnection {
    * The definitions JSON fields contain data from MySQL, signed as part of
    * the session signature to prevent tampering.
    */
-  async createSession(params: {
-    ninjarpgUserId: string;
-    seed: string;
-    nonce: string;
-    sessionSignature: string;
-    upgradeDefinitionsJson: string;
-    enemyDefinitionsJson: string;
-    abilityDamage: number;
-    abilityRange: number;
-    abilityCooldownMs: number;
-    abilityCritChance: number;
-    abilityDamagePerTile: number;
-    playerMaxHealth: number;
-    healthRegen: number;
-    defensePercent: number;
-    defenseFlat: number;
-    lifestealPercent: number;
-    knockbackChance: number;
-    knockbackForce: number;
-    tokensPerWave: number;
-    tokensPerKill: number;
-    interestPerWave: number;
-    skipEnemyChance: number;
-    scorePerKill: number;
-    scoreToPointsRatio: number;
-    initialGridSize: number;
-    maxGridSize: number;
-    gridExpandFreq: number;
-    rangeVisualFactor: number;
-  }): Promise<void> {
+  async createSession(params: CreateSessionParams): Promise<void> {
     if (!this.connection || this.connectionState !== "connected") {
       throw new Error("Not connected to SpacetimeDB");
     }

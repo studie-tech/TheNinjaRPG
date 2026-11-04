@@ -88,7 +88,7 @@ export const HomePropertyBackdrop = ({
                 y={0}
                 width={32}
                 height={24}
-                patternTransform={`scale(${1 / (plan.aspectRatio ?? 4 / 3)} 1)`}
+                patternTransform={`scale(${1 / plan.aspectRatio} 1)`}
               >
                 {/* The painting supplies the floor if this optional finish fails to load. */}
                 <image

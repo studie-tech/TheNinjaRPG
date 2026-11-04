@@ -7,7 +7,11 @@ import type {
   ReturnedUserState,
   UserEffect,
 } from "@/libs/combat/types";
-import { getBattleGrid, getDefaultBattleSizes } from "@/libs/combat/util";
+import {
+  createEmptyExtraState,
+  getBattleGrid,
+  getDefaultBattleSizes,
+} from "@/libs/combat/util";
 import {
   BATTLEFIELD_VIEWPORTS,
   type BattlefieldEffect,
@@ -431,25 +435,7 @@ const previewBattle = (
     round: 1,
     rewardScaling: 1,
     forceKeepPools: false,
-    extraState: {
-      jutsus: {},
-      jutsuReskins: {},
-      items: {},
-      bloodlines: {},
-      sageModes: {},
-      villages: {},
-      anbuSquads: {},
-      keystoneItems: {},
-      wars: {},
-      aiProfiles: {},
-      relations: {},
-      clans: {},
-      userQuests: {},
-      completedQuests: {},
-      questData: {},
-      bounties: {},
-      bountySignups: {},
-    },
+    extraState: createEmptyExtraState(),
   };
 };
 

@@ -62,6 +62,7 @@ import {
   registrationSchema,
   skin_colors,
 } from "@/validators/register";
+import { shuffle } from "@/utils/array";
 
 /**
  * Wrapper component that handles the loading state and authenticated user redirect.
@@ -858,7 +859,7 @@ const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => 
 
 /** Helper to get randomized initial form values */
 const getRandomizedFormValues = () => {
-  const shuffledAttributes = [...attributes].sort(() => 0.5 - Math.random());
+  const shuffledAttributes = shuffle(attributes);
   const [attr1, attr2, attr3] = shuffledAttributes
     .filter(
       (attribute, index, all) =>

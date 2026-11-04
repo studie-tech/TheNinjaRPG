@@ -53,38 +53,53 @@ type JutsuLoadoutExclusion = {
 
 type JutsuCapMatchInput = Pick<Jutsu, "effects" | "jutsuType">;
 
+/** What puts a jutsu in a category; equip caps turn the same descriptor into SQL. */
+type JutsuCategoryMatch =
+  | { kind: "residual" }
+  | { kind: "effect"; effectType: string }
+  | { kind: "jutsuType"; jutsuType: string };
+
 /** Category predicates shared by normal equip and ranked loadout limits. */
 export const JUTSU_CATEGORY_DEFS: {
   key: string;
   label: string;
-  matches: (jutsu: JutsuCapMatchInput) => boolean;
+  match: JutsuCategoryMatch;
 }[] = [
   {
     key: "residual",
     label: "residual",
-    matches: (jutsu) =>
-      jutsu.effects.some(
-        (effect) => "residualModifier" in effect && effect.residualModifier,
-      ),
+    match: { kind: "residual" },
   },
   {
     key: "event",
     label: "event",
-    matches: (jutsu) => jutsu.jutsuType === "EVENT",
+    match: { kind: "jutsuType", jutsuType: "EVENT" },
   },
   {
     key: "forbidden",
     label: "forbidden",
-    matches: (jutsu) => jutsu.jutsuType === "FORBIDDEN",
+    match: { kind: "jutsuType", jutsuType: "FORBIDDEN" },
   },
   ...tagTypes.map((tag) => ({
     key: tag,
     label:
       tag === "pierce" ? "piercing" : tag === "increasepoolcost" ? "increasecost" : tag,
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((effect) => effect.type === tag),
+    match: { kind: "effect" as const, effectType: tag },
   })),
 ];
+
+const matchesJutsuCategory = (match: JutsuCategoryMatch, jutsu: JutsuCapMatchInput) => {
+  switch (match.kind) {
+    case "residual":
+      return jutsu.effects.some(
+        (effect) => "residualModifier" in effect && !!effect.residualModifier,
+      );
+    case "jutsuType":
+      return jutsu.jutsuType === match.jutsuType;
+    case "effect":
+      return jutsu.effects.some((effect) => effect.type === match.effectType);
+  }
+};
 
 export type JutsuCapFlagKey = (typeof JUTSU_CATEGORY_DEFS)[number]["key"];
 export type JutsuCapFlags = Record<JutsuCapFlagKey, boolean>;
@@ -99,17 +114,14 @@ export const getJutsuCategoryDef = (key: JutsuCapFlagKey): JutsuCategoryDef => {
 /** Which categories a jutsu counts against (equip + ranked). */
 export const getJutsuCapFlags = (jutsu: JutsuCapMatchInput): JutsuCapFlags =>
   Object.fromEntries(
-    JUTSU_CATEGORY_DEFS.map((def) => [def.key, def.matches(jutsu)]),
+    JUTSU_CATEGORY_DEFS.map((def) => [def.key, matchesJutsuCategory(def.match, jutsu)]),
   ) as JutsuCapFlags;
 
 export type JutsuEquipCap = {
   key: string;
   max: number;
   countAlias: string;
-  sql:
-    | { kind: "residual" }
-    | { kind: "effect"; effectType: string }
-    | { kind: "jutsuType"; jutsuType: string };
+  sql: JutsuCategoryMatch;
 };
 
 /** Resolve the applicable limits; null explicitly means unlimited. */
@@ -120,24 +132,8 @@ export const buildJutsuEquipCaps = (
   rules.flatMap((rule, index) => {
     const max = mode === "ranked" ? rule.rankedMaxEquipped : rule.unrankedMaxEquipped;
     if (max === null) return [];
-    const category = rule.category;
-    const def = getJutsuCategoryDef(category);
-    return [
-      {
-        key: def.key,
-        max,
-        countAlias: `cap_${index}`,
-        sql:
-          category === "residual"
-            ? { kind: "residual" as const }
-            : category === "event" || category === "forbidden"
-              ? { kind: "jutsuType" as const, jutsuType: category.toUpperCase() }
-              : {
-                  kind: "effect" as const,
-                  effectType: category,
-                },
-      },
-    ];
+    const def = getJutsuCategoryDef(rule.category);
+    return [{ key: def.key, max, countAlias: `cap_${index}`, sql: def.match }];
   });
 
 export type JutsuCapCounts = Record<string, number>;
@@ -156,12 +152,20 @@ export const countEquippedByCap = (
 ): JutsuCapCounts => {
   const counts = emptyCapCounts(caps);
   for (const uj of equippedJutsus) {
-    const flags = getJutsuCapFlags(uj.jutsu);
-    for (const cap of caps) {
-      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
-    }
+    addCapCounts(counts, getJutsuCapFlags(uj.jutsu), caps);
   }
   return counts;
+};
+
+/** Count one more equipped jutsu against every capped category it belongs to. */
+const addCapCounts = (
+  counts: JutsuCapCounts,
+  flags: JutsuCapFlags,
+  caps: JutsuEquipCap[],
+) => {
+  for (const cap of caps) {
+    if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
+  }
 };
 
 /** Whether `flags` fit under `equippedCounts` for every normal-equip capped category. */
@@ -169,7 +173,7 @@ export const canEquipUnderCaps = (
   flags: JutsuCapFlags,
   equippedCounts: JutsuCapCounts,
   caps: JutsuEquipCap[],
-) => caps.every((cap) => !flags[cap.key] || (equippedCounts[cap.key] ?? 0) < cap.max);
+) => !findExceededJutsuEquipCap(flags, equippedCounts, caps);
 
 /** First exceeded normal-equip cap for error messaging, if any. */
 export const findExceededJutsuEquipCap = (
@@ -219,7 +223,7 @@ export const computeJutsuLoadoutCapAssignments = (args: {
   // jutsuId, so duplicates must not consume slots or category capacity.
   const uniqueJutsuIds = [...new Set(jutsuIds)];
 
-  jutsuLoop: for (const jutsuId of uniqueJutsuIds) {
+  for (const jutsuId of uniqueJutsuIds) {
     const userJutsu = userjutsus.find((entry) => entry.jutsuId === jutsuId);
     if (!userJutsu) {
       exclude(jutsuId, "Jutsu not found", "not-owned");
@@ -241,21 +245,18 @@ export const computeJutsuLoadoutCapAssignments = (args: {
       exclude(jutsuId, `${userJutsu.jutsu.name}: equip limit reached`, "equip-limit");
       continue;
     }
-    for (const cap of caps) {
-      if (flags[cap.key] && (counts[cap.key] ?? 0) >= cap.max) {
-        exclude(
-          jutsuId,
-          `${userJutsu.jutsu.name}: ${getJutsuCategoryDef(cap.key).label} jutsu limit reached`,
-          "equip-limit",
-        );
-        continue jutsuLoop;
-      }
+    const exceeded = findExceededJutsuEquipCap(flags, counts, caps);
+    if (exceeded) {
+      exclude(
+        jutsuId,
+        `${userJutsu.jutsu.name}: ${exceeded.label} jutsu limit reached`,
+        "equip-limit",
+      );
+      continue;
     }
 
     equipIds.push(jutsuId);
-    for (const cap of caps) {
-      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
-    }
+    addCapCounts(counts, flags, caps);
   }
 
   return { equipIds, invalidJutsus };

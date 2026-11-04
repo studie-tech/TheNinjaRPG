@@ -1,7 +1,6 @@
 import { nanoid } from "nanoid";
 import {
   DMG_REDUCTION_CAP,
-  DURABILITY_USABILITY_THR,
   ID_ANIMATION_SMOKE,
   isPreBattleGearFromType,
   isPreBattleKeystoneFromType,
@@ -157,6 +156,7 @@ import {
   resetMasteriesToBase,
   resolveDamageCreditUser,
   sortEffects,
+  wearItem,
 } from "./util";
 
 /**
@@ -1109,80 +1109,23 @@ export const applyEffects = (
               });
             }
           }
-          // Reduce armor durability by 1 when hit (skip for battles that don't lose durability)
-          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
-            const t = newUsersState.find((u) => u.userId === target.userId);
-            t?.items.forEach((ui) => {
-              const item = getItem(battle, ui.itemId);
-              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(ui.durability, item.maxDurability);
-                ui.durability = Math.max(0, currentDurability - 1);
-                if (ui.durability <= DURABILITY_USABILITY_THR) {
-                  ui.equipped = "NONE" as const;
-                }
-              }
-            });
-          }
+          wearEquippedArmor(battle, target);
         }
-        if (c.residual !== undefined && c.residual >= 0) {
-          accumulateCurseConsequence(
-            c,
-            "residual",
-            newUsersEffects,
-            newUsersState,
-            round,
-          );
-          creditConsequenceEnmity(c, "residual", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "residual", target);
-          target.curHealth -= c.residual;
+        for (const key of ["residual", "wound"] as const) {
+          const amount = c[key];
+          if (amount === undefined || amount < 0) continue;
+          accumulateCurseConsequence(c, key, newUsersEffects, newUsersState, round);
+          creditConsequenceEnmity(c, key, newUsersState, usersEffects);
+          accumulateSiphonShield(c, key, target);
+          target.curHealth -= amount;
           target.curHealth = Math.max(0, target.curHealth);
-          creditDamageDealt(damageCreditUser, target, c.residual);
+          creditDamageDealt(damageCreditUser, target, amount);
           actionEffects.push({
-            txt: `${target.username} takes ${c.residual.toFixed(2)} residual damage`,
+            txt: `${target.username} takes ${amount.toFixed(2)} ${key} damage`,
             color: "red",
             types: c.types,
           });
-          // Track armor hits from residual damage as well (skip for battles that don't lose durability)
-          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
-            const t = newUsersState.find((u) => u.userId === target.userId);
-            t?.items.forEach((ui) => {
-              const item = getItem(battle, ui.itemId);
-              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(ui.durability, item.maxDurability);
-                ui.durability = Math.max(0, currentDurability - 1);
-                if (ui.durability <= DURABILITY_USABILITY_THR) {
-                  ui.equipped = "NONE" as const;
-                }
-              }
-            });
-          }
-        }
-        if (c.wound !== undefined && c.wound >= 0) {
-          accumulateCurseConsequence(c, "wound", newUsersEffects, newUsersState, round);
-          creditConsequenceEnmity(c, "wound", newUsersState, usersEffects);
-          accumulateSiphonShield(c, "wound", target);
-          target.curHealth -= c.wound;
-          target.curHealth = Math.max(0, target.curHealth);
-          creditDamageDealt(damageCreditUser, target, c.wound);
-          actionEffects.push({
-            txt: `${target.username} takes ${c.wound.toFixed(2)} wound damage`,
-            color: "red",
-            types: c.types,
-          });
-          // Track armor hits from wound damage as well (skip for battles that don't lose durability)
-          if (!NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) {
-            const t = newUsersState.find((u) => u.userId === target.userId);
-            t?.items.forEach((ui) => {
-              const item = getItem(battle, ui.itemId);
-              if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") {
-                const currentDurability = Math.min(ui.durability, item.maxDurability);
-                ui.durability = Math.max(0, currentDurability - 1);
-                if (ui.durability <= DURABILITY_USABILITY_THR) {
-                  ui.equipped = "NONE" as const;
-                }
-              }
-            });
-          }
+          wearEquippedArmor(battle, target);
         }
         if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
           target.curHealth += c.heal_hp;
@@ -2883,3 +2826,12 @@ function applyInstantSageAfterEffects(
     }
   });
 }
+
+/** Each hit costs worn armor 1 durability, unless the battle type spares it. */
+const wearEquippedArmor = (battle: CompleteBattle, target: BattleUserState) => {
+  if (NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) return;
+  for (const ui of target.items) {
+    const item = getItem(battle, ui.itemId);
+    if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") wearItem(ui, item, 1);
+  }
+};

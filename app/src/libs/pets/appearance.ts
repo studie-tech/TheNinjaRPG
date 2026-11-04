@@ -17,7 +17,11 @@ import {
   classifyPetAppearanceImage,
   validatePetAppearanceQuality,
 } from "@/libs/pets/quality";
-import { hasBackgroundHaze, normalizePetSprite } from "@/libs/pets/sprite";
+import {
+  hasBackgroundHaze,
+  MAX_PET_IMAGE_PIXELS,
+  normalizePetSprite,
+} from "@/libs/pets/sprite";
 import {
   generateNanoBananaImage,
   generateSpriteGPT,
@@ -56,9 +60,14 @@ Clean sprite composition overrides cinematic lighting: ${
 } Redraw clean hard pixel boundaries; never trace or copy background pixels, grey/black fringe, shadows or artifacts from a reference. Express the selected aura only as this rank's aura stage allows, ON the animal, never as an exterior glow, outline, cloud, smoke, orbiting ring, floating particles or haze. No dark backdrop, gradient, ground patch, floor, pedestal, platform, cast/contact shadow, scenery, frame, text, watermark, humanoid body, weapons, blood, gore, sexual content, cartoon or chibi proportions, soft shading or smoothed edges.`;
 
 const MAX_PET_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_PET_IMAGE_PIXELS = 1024 * 1024;
 /** Neutral backdrop for references and cutout input; matches the Nano Banana prompt. */
 const PET_REFERENCE_BACKDROP = "#f0f0f0";
+
+const flattenOnBackdrop = (image: Buffer) =>
+  sharp(image, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
+    .flatten({ background: PET_REFERENCE_BACKDROP })
+    .png()
+    .toBuffer();
 
 /** Only authored catalogue text enters the model; the player's chosen name is never a prompt. */
 export const getPetAppearancePrompt = (
@@ -188,10 +197,7 @@ const renderPetSprite = async (config: {
   signal.throwIfAborted();
   // Explicit opaque reference pixels prevent transparent gaps being interpreted as black fur.
   const reference = config.referenceImage
-    ? await sharp(config.referenceImage, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
-        .flatten({ background: PET_REFERENCE_BACKDROP })
-        .png()
-        .toBuffer()
+    ? await flattenOnBackdrop(config.referenceImage)
     : undefined;
   signal.throwIfAborted();
   let cutout: Buffer;
@@ -212,11 +218,7 @@ const renderPetSprite = async (config: {
   } else {
     cutout = await generateSpriteGPT({ prompt, reference, userId, signal });
     if (!(await isCleanCutout(cutout))) {
-      const flattened = await sharp(cutout, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
-        .flatten({ background: PET_REFERENCE_BACKDROP })
-        .png()
-        .toBuffer();
-      cutout = await removeBackgroundToBuffer(flattened, signal);
+      cutout = await removeBackgroundToBuffer(await flattenOnBackdrop(cutout), signal);
     }
   }
   signal.throwIfAborted();
