@@ -76,6 +76,17 @@ const renderInspector = (props: Partial<Parameters<typeof ItemInspector>[0]> = {
   return { onClose };
 };
 
+it("renders rich descriptions as formatted text in the inspector", () => {
+  const item = userItem();
+  item.item.description = "<p>A <strong>tempered</strong> blade &amp; guard.</p>";
+  renderInspector({ userItem: item });
+  const emphasis = screen.getByText("tempered");
+  expect(emphasis.tagName).toBe("STRONG");
+  expect(emphasis.parentElement?.tagName).toBe("P");
+  expect(emphasis.parentElement?.textContent).toBe("A tempered blade & guard.");
+  expect(emphasis.parentElement?.parentElement?.tagName).toBe("DIV");
+});
+
 it("offers no equip for items without an equipment slot", () => {
   renderInspector({ userItem: userItem({ itemType: "MATERIAL" }) });
   expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();

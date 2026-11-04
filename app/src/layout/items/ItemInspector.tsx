@@ -51,6 +51,7 @@ import { getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
+import { parseHtml } from "@/utils/parse";
 
 interface ItemInspectorProps {
   userItem: UserItemWithRelations;
@@ -225,7 +226,9 @@ export function ItemInspector({
         </div>
       </div>
       {look.description && (
-        <p className="line-clamp-3 text-muted-foreground text-sm">{look.description}</p>
+        <div data-reading-text className="line-clamp-3 text-muted-foreground text-sm">
+          {parseHtml(look.description)}
+        </div>
       )}
       <div className="text-sm">
         {showsItemLevelBadge(useritem.item) && useritem.level < ITEM_LEVEL_CAP && (
