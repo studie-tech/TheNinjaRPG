@@ -12,8 +12,6 @@ import { showMutationToast } from "@/libs/toast";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-const loadoutsKey = getQueryKey(api.item.getItemLoadouts, undefined, "query");
-
 interface ItemLoadoutSelectorProps {
   size?: "small" | "large";
   label?: string;
@@ -44,6 +42,8 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   const queryResult = api.item.getItemLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
+  // Built on render so the module loads where tests replace the tRPC client.
+  const loadoutsKey = getQueryKey(api.item.getItemLoadouts, undefined, "query");
   const loadoutsCache =
     useQueryCacheUpdate<RouterOutputs["item"]["getItemLoadouts"]>(loadoutsKey);
 
