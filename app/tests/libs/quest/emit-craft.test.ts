@@ -4,7 +4,7 @@ import {
   trackerGoalValue as goalValue,
 } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
-import { getNewTrackers } from "@/libs/quest";
+import { getCraftTrackerTasks, getNewTrackers } from "@/libs/quest";
 
 const itemsCraftedObjective = (id: string, value = 5) => ({
   id,
@@ -23,12 +23,8 @@ const craftSpecificObjective = (id: string, ids: string[], value = 5) => ({
   successDescription: "",
 });
 
-// Exact task-update array the craft mutation emits for quantity=3, itemId="itemA".
-const craftEmit = (quantity: number, itemId: string) => [
-  { task: "crafting_experience_gained" as const, increment: 10 },
-  { task: "items_crafted" as const, increment: quantity },
-  { task: "craft_specific_item" as const, increment: quantity, contentId: itemId },
-];
+const craftEmit = (quantity: number, itemId: string) =>
+  getCraftTrackerTasks(10, quantity, itemId);
 
 describe("craft mutation tracker emits", () => {
   it("items_crafted counter increments by the crafted quantity", () => {

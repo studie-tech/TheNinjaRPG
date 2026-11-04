@@ -19,15 +19,21 @@ import {
   type userItem,
   userQueue,
 } from "@/drizzle/schema";
-import { getClanBoost } from "@/libs/clanBoost";
+import { getCraftingExperienceGain } from "@/libs/crafting";
 import {
   countsTowardInventoryStorage,
   getInventoryBucket,
   getInventoryBucketCapacity,
+  splitIntoStacks,
 } from "@/libs/item";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
-import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getPvpBoost } from "@/libs/pvpExperience";
+import {
+  filterQuestTrackersForDbPersist,
+  getCraftTrackerTasks,
+  getJutsuLearnedTrackerTasks,
+  getNewTrackers,
+} from "@/libs/quest";
 import {
   getNextQueueSchedule,
   getQueuedJobStart,
@@ -43,7 +49,7 @@ import {
   checkJutsuVillage,
   masteryTrainingFields,
 } from "@/libs/train";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { insertUserItems } from "@/queries/item";
 import { debitUserMoney, incrementUserMoney } from "@/queries/profile";
 import { fetchStudents } from "@/queries/sensei";
@@ -788,15 +794,7 @@ const startQueuedJutsu = async (
     refund: entry.reservedRyo - cost,
     trackers: owned
       ? undefined
-      : [
-          { task: "jutsus_mastered", increment: 1 },
-          {
-            task: "train_specific_jutsu",
-            increment: 1,
-            contentId: entry.jutsuId,
-            masteryTypes: jutsuMasteryTypes(info),
-          },
-        ],
+      : getJutsuLearnedTrackerTasks(entry.jutsuId, jutsuMasteryTypes(info)),
   });
   return { finishesAt };
 };
@@ -825,17 +823,16 @@ const startQueuedCraft = async (
     startsAt.getTime() +
       Math.max(1, Math.round(entry.durationSeconds * (1 - territoryBoost))) * 1000,
   );
-  const outputs: (typeof userItem.$inferInsert)[] = [];
-  const stackSize = Math.max(1, entry.item.stackSize);
-  for (let remaining = entry.quantity; remaining > 0; remaining -= stackSize) {
-    outputs.push({
-      id: nanoid(),
-      userId: entry.userId,
-      itemId: entry.itemId,
-      quantity: Math.min(remaining, stackSize),
-      craftingFinishedAt: finishesAt,
-    });
-  }
+  const outputs: (typeof userItem.$inferInsert)[] = splitIntoStacks(
+    entry.quantity,
+    entry.item.stackSize,
+  ).map((quantity) => ({
+    id: nanoid(),
+    userId: entry.userId,
+    itemId: entry.itemId,
+    quantity,
+    craftingFinishedAt: finishesAt,
+  }));
   // Cooking output must still fit the carried cooking bucket when the craft starts.
   if (getInventoryBucket(entry.item) === "cooking") {
     const carried = user.items.filter(
@@ -865,27 +862,15 @@ const startQueuedCraft = async (
     );
     return { finishesAt };
   }
-  // Clan boosts apply to the experience as they do for a direct craft.
-  const clanBoost = getClanBoost(user, "craftingExpBoost");
-  const expGain = Math.floor(
-    boostPvpGain(
-      (entry.item.craftingExperience ?? 0) *
-        entry.quantity *
-        (1 + clanBoost + territoryBoost),
-      getPvpBoost(user, [average]).totalPercent,
-    ),
+  const expGain = getCraftingExperienceGain(
+    (entry.item.craftingExperience ?? 0) * entry.quantity,
+    user,
+    territoryBoost,
+    getPvpBoost(user, [average]).totalPercent,
   );
   await updateQueueOwner(client, user, {
     craftingExperience: expGain,
-    trackers: [
-      { task: "crafting_experience_gained", increment: expGain },
-      { task: "items_crafted", increment: entry.quantity },
-      {
-        task: "craft_specific_item",
-        increment: entry.quantity,
-        contentId: entry.itemId,
-      },
-    ],
+    trackers: getCraftTrackerTasks(expGain, entry.quantity, entry.itemId),
   });
   return { finishesAt };
 };
@@ -941,7 +926,7 @@ const updateQueueOwner = async (
         }
       : {}),
   };
-  const nextSnapshot = nextSnapshotAtSql(userData.updatedAt);
+  const nextSnapshot = nextSnapshotSql(userData.updatedAt);
   let user = owner;
   for (let attempt = 0; trackers && attempt < QUEST_WRITE_ATTEMPTS; attempt++) {
     const questData = filterQuestTrackersForDbPersist(

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getUnchangedHuntingUserUpdate } from "@/deltas/hunting";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
+import { getEffectiveStackSize } from "@/libs/item";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
 import { listAiUserIds } from "@/queries/ai";
 import {
@@ -474,7 +475,7 @@ export const huntingRouter = createTRPCRouter({
             huntingExperience: user.huntingExperience,
             materialNames: Object.fromEntries(materials.map((m) => [m.id, m.name])),
             materialStacks: Object.fromEntries(
-              materials.map((m) => [m.id, m.canStack ? Math.max(1, m.stackSize) : 1]),
+              materials.map((m) => [m.id, getEffectiveStackSize(m)]),
             ),
           },
         },

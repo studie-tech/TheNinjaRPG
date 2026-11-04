@@ -4,7 +4,7 @@ import {
   trackerGoalValue as goalValue,
 } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
-import { getNewTrackers } from "@/libs/quest";
+import { getJutsuLearnedTrackerTasks, getNewTrackers } from "@/libs/quest";
 
 const masteredObjective = (id: string, value = 5) => ({
   id,
@@ -23,11 +23,7 @@ const trainSpecificObjective = (id: string, ids: string[], value = 1) => ({
   successDescription: "",
 });
 
-// Exact array both jutsu sites emit (train-new / evolve) for a given jutsuId.
-const trainEmit = (jutsuId: string) => [
-  { task: "jutsus_mastered" as const, increment: 1 },
-  { task: "train_specific_jutsu" as const, increment: 1, contentId: jutsuId },
-];
+const trainEmit = (jutsuId: string) => getJutsuLearnedTrackerTasks(jutsuId, []);
 
 describe("train_specific_jutsu emit", () => {
   it("credits jutsus_mastered and the matching specific jutsu", () => {

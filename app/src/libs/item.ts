@@ -348,6 +348,20 @@ export const getEquipBlockReason = (
   return null;
 };
 
+/** Largest quantity one inventory row of this item holds. */
+export const getEffectiveStackSize = (item: Pick<Item, "canStack" | "stackSize">) =>
+  item.canStack ? Math.max(1, item.stackSize) : 1;
+
+/** Row quantities that hold `quantity` items at `stackSize` per row. */
+export const splitIntoStacks = (quantity: number, stackSize: number) => {
+  const size = Math.max(1, stackSize);
+  const stacks: number[] = [];
+  for (let remaining = quantity; remaining > 0; remaining -= size) {
+    stacks.push(Math.min(remaining, size));
+  }
+  return stacks;
+};
+
 /**
  * Whether a user item can be equipped from the normal inventory. Derived from
  * getEquipBlockReason so the inventory picker and loadout paths stay in sync.

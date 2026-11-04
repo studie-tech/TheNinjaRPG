@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { STORE_ORDER_RESERVATION_MINUTES } from "@/drizzle/constants";
 import type { userData, userItem } from "@/drizzle/schema";
+import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { insertUserItems } from "@/queries/item";
 import {
   findUserDataForAuthorize,
@@ -140,13 +141,13 @@ export const deliverStoreOrder = async (
   for (const reward of contents.items) {
     const definition = items.find((i) => i.id === reward.id);
     if (!definition) throw new Error(STORE_DELIVERY_ERRORS.itemUnavailable);
-    const stackSize = definition.canStack ? Math.max(1, definition.stackSize) : 1;
-    for (let remaining = reward.quantity; remaining > 0; remaining -= stackSize)
+    const stacks = splitIntoStacks(reward.quantity, getEffectiveStackSize(definition));
+    for (const quantity of stacks)
       grants.push({
         id: nanoid(),
         userId: order.recipientId,
         itemId: reward.id,
-        quantity: Math.min(remaining, stackSize),
+        quantity,
       });
   }
   // Capture uniqueness lives on the order; its claim must commit with the allowance

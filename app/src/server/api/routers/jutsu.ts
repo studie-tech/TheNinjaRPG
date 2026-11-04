@@ -70,6 +70,7 @@ import { effectiveMasteries } from "@/libs/mastery";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import {
   filterQuestTrackersForDbPersist,
+  getJutsuLearnedTrackerTasks,
   getNewTrackers,
   getPublicQuestUser,
 } from "@/libs/quest";
@@ -893,15 +894,13 @@ export const jutsuRouter = createTRPCRouter({
           "You don't have the required bloodline item equipped for this evolution",
         );
       // Quest tracking
-      const { trackers, consequences, questIdsUpdated } = getNewTrackers(user, [
-        { task: "jutsus_mastered", increment: 1 },
-        {
-          task: "train_specific_jutsu",
-          increment: 1,
-          contentId: input.evolutionJutsuId,
-          masteryTypes: jutsuMasteryTypes(evolutionJutsu),
-        },
-      ]);
+      const { trackers, consequences, questIdsUpdated } = getNewTrackers(
+        user,
+        getJutsuLearnedTrackerTasks(
+          input.evolutionJutsuId,
+          jutsuMasteryTypes(evolutionJutsu),
+        ),
+      );
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
       const isRestrictedEquipType =
@@ -1462,15 +1461,10 @@ export const jutsuRouter = createTRPCRouter({
       // Quests
       let questDataFull = user.questData ?? [];
       if (!userjutsuObj) {
-        const { trackers } = getNewTrackers(user, [
-          { task: "jutsus_mastered", increment: 1 },
-          {
-            task: "train_specific_jutsu",
-            increment: 1,
-            contentId: input.jutsuId,
-            masteryTypes: jutsuMasteryTypes(info),
-          },
-        ]);
+        const { trackers } = getNewTrackers(
+          user,
+          getJutsuLearnedTrackerTasks(input.jutsuId, jutsuMasteryTypes(info)),
+        );
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);

@@ -15,8 +15,23 @@ import {
   getRankForExperience,
   getRankProgress,
 } from "@/libs/occupationRank";
+import { getClanBoost } from "@/libs/clanBoost";
+import { boostPvpGain } from "@/libs/pvpExperience";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { reduceActivitySeconds } from "@/utils/time";
+
+/** Experience for a craft: clan boosts skip outlaws, and the PvP boost applies last. */
+export const getCraftingExperienceGain = (
+  baseExperience: number,
+  user: Parameters<typeof getClanBoost>[0],
+  territoryBoost: number,
+  pvpBoostPercent: number,
+) => {
+  const clanBoost = getClanBoost(user, "craftingExpBoost");
+  return Math.floor(
+    boostPvpGain(baseExperience * (1 + clanBoost + territoryBoost), pvpBoostPercent),
+  );
+};
 
 /**
  * Complete non-meal job duration, including quantity, rounded before the passive reduction.

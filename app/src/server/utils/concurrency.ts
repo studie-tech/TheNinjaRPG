@@ -71,7 +71,7 @@ export const claimUserSnapshot = async ({
 };
 
 type UpdateUserItemQuantityAtomicallyParams = {
-  client: DrizzleClient;
+  client: Pick<DrizzleClient, "update" | "delete">;
   userId: string;
   userItemId: string;
   expectedQuantity: number;
