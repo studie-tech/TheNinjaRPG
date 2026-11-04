@@ -29,6 +29,8 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  compatibleEquipSlots,
+  findFreeEquipSlot,
   isEquippableUserItem,
   showsItemLevelBadge,
   userItemActionBadges,
@@ -42,6 +44,18 @@ import type { ZodAllTags } from "@/validators/combat";
 const NOW = new Date("2026-06-17T00:00:00Z");
 const PAST = new Date("2026-06-16T00:00:00Z");
 const FUTURE = new Date("2026-06-18T00:00:00Z");
+
+describe("findFreeEquipSlot", () => {
+  it("returns the last free compatible slot", () => {
+    expect(findFreeEquipSlot("ITEM", [])).toBe("ITEM_6");
+    expect(findFreeEquipSlot("ITEM", [{ equipped: "ITEM_6" }])).toBe("ITEM_5");
+    expect(findFreeEquipSlot("HEAD", [{ equipped: "HEAD" }])).toBeUndefined();
+  });
+  it("never resolves the NONE sentinel", () => {
+    expect(findFreeEquipSlot("NONE", [])).toBeUndefined();
+    expect(compatibleEquipSlots("NONE")).toEqual([]);
+  });
+});
 
 describe("isEquippableUserItem", () => {
   it("accepts a carried, non-auction, non-crafting item", () => {

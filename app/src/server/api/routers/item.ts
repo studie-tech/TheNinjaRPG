@@ -29,7 +29,6 @@ import {
 } from "@/deltas/item";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
-  ANBU_ITEMSHOP_DISCOUNT_PERC,
   CACHE_MAX_GRANTED_ITEMS,
   DURABILITY_MAX_DEFAULT,
   EVOLUTION_MAX_CHILDREN,
@@ -43,6 +42,9 @@ import {
   MAX_MARRIAGE_SLOTS,
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
+  VARIANT_CURRENCY_FIELD,
+  type VariantCurrency,
+  type VariantCurrencyField,
 } from "@/drizzle/constants";
 import {
   type Item,
@@ -58,6 +60,7 @@ import {
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
+import { hasAppearAnimation } from "@/libs/combat/util";
 import {
   deletedReason,
   editedReason,
@@ -76,9 +79,11 @@ import {
   calcItemRepairCost,
   calcItemSellingPrice,
   canEquipAdditional,
+  compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
   countsTowardInventoryStorage,
+  findFreeEquipSlot,
   getHomeStorageBucket,
   getHomeStorageBucketCapacity,
   getHomeStorageBucketFullMessage,
@@ -86,6 +91,8 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   getItemStackMergeBucketKey,
+  isCompatibleEquipSlot,
+  isImbuing,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   readItemListFilterSlot,
@@ -116,18 +123,21 @@ import {
 } from "@/libs/quest";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
-import { shopItemDiscountFactor } from "@/libs/shop";
+import {
+  getShopDiscounts,
+  getShopStackPrice,
+  isItemAvailableInStore,
+  shopItemDiscountFactor,
+} from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
-import {
-  getVillageLoyaltyBonuses,
-  getVillageLoyaltyShopCost,
-} from "@/libs/villageLoyalty";
+import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
   cacheItemChance,
   isRestrictedCacheReward,
+  isWeightedCacheEffect,
   resolveWeightedCache,
 } from "@/libs/weightedCache";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/queries/bloodline";
@@ -158,7 +168,6 @@ import {
   fetchUserEquipmentSnapshot,
   fetchUserItem,
   fetchUserItemWithVariants,
-  fetchUserQuestState,
   fetchVariantOwnership,
   findHuntingSessionForDelete,
   findItemForUpdate,
@@ -261,10 +270,14 @@ import {
   debitUserMoney,
   fetchLoadoutUser,
   fetchUser,
-  findUserRoleById,
+  fetchViewerRole,
   incrementUserMoney,
 } from "@/queries/profile";
-import { fetchQuest, fetchUserQuestByQuestId } from "@/queries/quests";
+import {
+  fetchQuest,
+  fetchQuestTrackerState,
+  fetchUserQuestByQuestId,
+} from "@/queries/quests";
 import {
   fetchMasterySources,
   fetchUserSkills,
@@ -292,12 +305,14 @@ import {
   MERGE_STACK_CLAIM_TIMEOUT_MS,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
+  runRewardTasks,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -313,7 +328,6 @@ import {
 import { sanitizeVariantText } from "@/utils/sanitize";
 import { validateUrlForSsrf } from "@/utils/ssrf";
 import type { QueryCondition } from "@/utils/typeutils";
-import { getStrucBoost } from "@/utils/village";
 import { getUtcDayKey } from "@/utils/time";
 import {
   HealTag,
@@ -331,6 +345,7 @@ import {
 } from "@/validators/inventory";
 import {
   adjustUserItemSchema,
+  displayCostType,
   evolveItemSchema,
   furnitureImageMeasurementSchema,
   getItemEvolutionsSchema,
@@ -359,7 +374,7 @@ import {
   type WeightedCache,
   weightedCacheSchema,
 } from "@/validators/weightedCache";
-import { assignQuestToUser, runRewardTasks, updateRewards } from "./quests";
+import { assignQuestToUser, nameGrantedRewards, updateRewards } from "./quests";
 
 export const itemRouter = createTRPCRouter({
   /** Content authoring needs source alpha bounds even for generated and historical uploads. */
@@ -433,11 +448,7 @@ export const itemRouter = createTRPCRouter({
       return items.map(({ bloodlineId, effects, ...entry }) => ({
         ...entry,
         /** Distinguish weighted caches from other reward consumables in content selectors. */
-        isCache: effects.some(
-          (effect) =>
-            effect.type === "noncombatconsumereward" &&
-            effect.rewardMode === "weightedCache",
-        ),
+        isCache: effects.some(isWeightedCacheEffect),
         isRestrictedCacheReward: isRestrictedCacheReward({ bloodlineId, effects }),
         /** Variant bindings let content selectors offer only compatible unlock tokens. */
         unlockVariantIds: effects.flatMap((effect) =>
@@ -775,19 +786,14 @@ export const itemRouter = createTRPCRouter({
       const requiresAnimation =
         input.data.itemType === "WEAPON" ||
         (input.data.itemType === "CONSUMABLE" && !input.data.preventBattleUsage);
-      if (requiresAnimation) {
-        const hasValidAnimation = input.data.effects.some(
-          (effect) =>
-            "appearAnimation" in effect &&
-            effect.appearAnimation &&
-            "appearSfx" in effect &&
-            effect.appearSfx,
+      if (
+        requiresAnimation &&
+        !input.data.hidden &&
+        !hasAppearAnimation(input.data.effects)
+      ) {
+        return errorResponse(
+          "Weapons and battle-usable consumables must have at least one effect with both appearAnimation and appearSfx defined",
         );
-        if (!input.data.hidden && !hasValidAnimation) {
-          return errorResponse(
-            "Weapons and battle-usable consumables must have at least one effect with both appearAnimation and appearSfx defined",
-          );
-        }
       }
       // Server-side enforcement: preserve existing reward_reputation for users without permission
       // Match effects by content (excluding reward_reputation) to handle reordering
@@ -896,9 +902,7 @@ export const itemRouter = createTRPCRouter({
         [entry.id],
         editedReason("ITEM", entry.name, user.username),
       );
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-      }
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
 
@@ -910,12 +914,11 @@ export const itemRouter = createTRPCRouter({
     })
     .input(getItemEvolutionsSchema)
     .query(async ({ ctx, input }) => {
-      const [user, evolutions] = await Promise.all([
-        ctx.userId ? findUserRoleById(ctx.drizzle, ctx.userId) : Promise.resolve(null),
+      const [viewerRole, evolutions] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         listItemForGetEvolutions(ctx.drizzle, input),
       ]);
-      const canViewHidden = !!user && canChangeContent(user.role);
-      return filterVisibleEvolutions(evolutions, canViewHidden);
+      return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
     }),
 
   evolveItem: protectedProcedure
@@ -983,8 +986,7 @@ export const itemRouter = createTRPCRouter({
       const canKeepEquipped =
         hasRequiredSkill(evolutionItem, user) &&
         (userItemObj.equipped === "NONE" ||
-          userItemObj.equipped === evolutionItem.slot ||
-          userItemObj.equipped.startsWith(`${evolutionItem.slot}_`));
+          isCompatibleEquipSlot(userItemObj.equipped, evolutionItem.slot));
 
       let didEvolveThisCall = false;
       if (!alreadyEvolved) {
@@ -1087,14 +1089,13 @@ export const itemRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build where conditions using the generalized filter
       const baseFilters = itemDatabaseFilter(input);
 
       const results = await listItemForGetAll(ctx.drizzle, skip, input, baseFilters);
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -2157,16 +2158,9 @@ export const itemRouter = createTRPCRouter({
           jutsus: petJutsus,
         });
       }
-      const cacheEffects = useritem.item.effects.filter(
-        (effect) =>
-          effect.type === "noncombatconsumereward" &&
-          effect.rewardMode === "weightedCache",
-      );
       const caches: WeightedCache[] = [];
-      for (const effect of cacheEffects) {
-        const parsed = weightedCacheSchema.safeParse(
-          "weightedCache" in effect ? effect.weightedCache : undefined,
-        );
+      for (const effect of useritem.item.effects.filter(isWeightedCacheEffect)) {
+        const parsed = weightedCacheSchema.safeParse(effect.weightedCache);
         if (!parsed.success)
           return errorResponse(
             "This cache has an invalid reward configuration. Please contact staff.",
@@ -2548,7 +2542,7 @@ export const itemRouter = createTRPCRouter({
           ...mutations.map((mutate) => () => mutate(client)),
         ];
         const [granted] = await runRewardTasks(inTransaction)([rewardTask, ...tasks]);
-        const { items, jutsus, bloodlines, badges, sageModes, titles } = granted;
+        const { items } = granted;
         if (inTransaction) {
           // Catalog deletion after validation must roll back the debit and every partial grant.
           const expected = new Map<string, number>();
@@ -2568,14 +2562,11 @@ export const itemRouter = createTRPCRouter({
         }
         // Prettify rewards
         if (grantedRewards) {
+          nameGrantedRewards(grantedRewards, granted);
+          // Consumption receipts list each unit rather than each stack.
           grantedRewards.reward_items = items.flatMap((i) =>
             Array<string>(i.quantity).fill(i.name),
           );
-          grantedRewards.reward_jutsus = jutsus.map((i) => i.name);
-          grantedRewards.reward_bloodlines = bloodlines.map((i) => i.name);
-          grantedRewards.reward_sage_modes = sageModes.map((i) => i.name);
-          grantedRewards.reward_badges = badges.map((i) => i.name);
-          grantedRewards.reward_titles = titles.map((i) => i.name);
         }
         // A plain consumable changes only the claimed scalar fields and its equipped stack.
         // Grants that select content or reward relations retain profile reconciliation.
@@ -3125,21 +3116,13 @@ export const itemRouter = createTRPCRouter({
           fetchItem(ctx.drizzle, iid),
           fetchUserItems(ctx.drizzle, uid),
           fetchStructures(ctx.drizzle, input.villageId),
-          fetchUserQuestState(ctx.drizzle, ctx.userId),
+          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
           fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
         ]);
-      const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
-      const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
-      const loyaltyDiscount = getVillageLoyaltyBonuses(user).shopDiscount;
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
       if (!info) return errorResponse("Item not found");
-      const factor = shopItemDiscountFactor(
-        info,
-        sDiscount,
-        aDiscount,
-        loyaltyDiscount,
-      );
+      const factor = shopItemDiscountFactor(getShopDiscounts(user, structures, info));
       const allowance = getItemPurchaseAllowance(info, purchaseCounters, purchaseTime);
       if (allowance.remaining != null && input.stack > allowance.remaining) {
         return errorResponse(itemPurchaseLimitMessage(allowance));
@@ -3176,12 +3159,14 @@ export const itemRouter = createTRPCRouter({
           return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
       }
-      if (info.expireFromStoreAt && new Date(info.expireFromStoreAt) < new Date()) {
+      if (!isItemAvailableInStore(info.expireFromStoreAt)) {
         return errorResponse("Item has expired");
       }
-      const ryoCost = Math.ceil(info.cost * input.stack * factor);
-      const repsCost = Math.ceil(info.repsCost * input.stack);
-      const seichiSilverCost = Math.ceil(info.seichiSilverCost * input.stack);
+      const { ryoCost, repsCost, seichiSilverCost } = getShopStackPrice(
+        info,
+        input.stack,
+        factor,
+      );
       // Figure out if we equip this
       let equipped: ItemSlot = "NONE";
       const instancesEquipped = useritems.filter(
@@ -3206,11 +3191,7 @@ export const itemRouter = createTRPCRouter({
         ) === null;
 
       if (canAutoEquip) {
-        ItemSlots.forEach((slot) => {
-          if (slot.includes(info.slot) && !useritems.find((i) => i.equipped === slot)) {
-            equipped = slot;
-          }
-        });
+        equipped = findFreeEquipSlot(info.slot, useritems) ?? "NONE";
       }
       // Resolve auto-equip first: a purchase placed directly into an equipment
       // slot can succeed even when the backpack is full.
@@ -3226,7 +3207,7 @@ export const itemRouter = createTRPCRouter({
         }
       }
       // buy_item quest tracker. Source questData + userQuests/completedQuests together from
-      // the single fetchUserQuestState read above (NOT fetchUpdatedUser, which pulls
+      // the single fetchQuestTrackerState read above (NOT fetchUpdatedUser, which pulls
       // achievements/wars/raids and runs regen writes) — one snapshot keeps the tracker read
       // internally consistent, instead of pairing questData from one fetch with userQuests
       // from another. If that fetch failed (null), SKIP tracking entirely — writing an empty
@@ -3238,7 +3219,7 @@ export const itemRouter = createTRPCRouter({
       // unchanged snapshot — and since this read-modify-write has no CAS on
       // questData, that write could clobber a concurrent tracker update for no
       // benefit. Objectives already marked done are skipped for the same reason:
-      // completed achievements stay in fetchUserQuestState's result forever, so
+      // completed achievements stay in fetchQuestTrackerState's result forever, so
       // without the done-check every later matching purchase would re-open the
       // redundant-write window. When it does advance, the full-snapshot write
       // matches every other tracker path (hospital/jutsu/occupation), which all
@@ -3703,58 +3684,21 @@ export const getItemRelations = async (client: DrizzleClient, itemId: string) =>
 };
 export type ItemRelations = Awaited<ReturnType<typeof getItemRelations>>;
 
-// Currency types whose cost is drawn from a user balance (excludes VARIANT_TOKEN,
-// which is gated by consuming a Variant Token item instead).
-type VariantCurrencyType =
-  | "MONEY"
-  | "REPUTATION"
-  | "SEICHI_SILVER"
-  | "VILLAGE_PRESTIGE";
-
-// Single source of truth for variant currency handling: the user's current balance,
-// the CAS guard for an atomic deduct, and the decrement/increment update sets.
-// Adding a new currency only requires extending the map below in one place.
+// The user's balance, the CAS guard for an atomic deduct, and the decrement/increment update
+// sets for one variant currency.
 const getVariantCurrencyOps = (
-  costType: VariantCurrencyType,
+  costType: VariantCurrency,
   cost: number,
-  user: {
-    money: number;
-    reputationPoints: number;
-    seichiSilver: number;
-    villagePrestige: number;
-  },
+  user: Record<VariantCurrencyField, number>,
 ) => {
-  const ops = {
-    MONEY: {
-      label: "Ryo",
-      balance: user.money,
-      where: gte(userData.money, cost),
-      decrementSet: { money: sql`${userData.money} - ${cost}` },
-      incrementSet: { money: sql`${userData.money} + ${cost}` },
-    },
-    REPUTATION: {
-      label: "Reputation",
-      balance: user.reputationPoints,
-      where: gte(userData.reputationPoints, cost),
-      decrementSet: { reputationPoints: sql`${userData.reputationPoints} - ${cost}` },
-      incrementSet: { reputationPoints: sql`${userData.reputationPoints} + ${cost}` },
-    },
-    SEICHI_SILVER: {
-      label: "Seichi Silver",
-      balance: user.seichiSilver,
-      where: gte(userData.seichiSilver, cost),
-      decrementSet: { seichiSilver: sql`${userData.seichiSilver} - ${cost}` },
-      incrementSet: { seichiSilver: sql`${userData.seichiSilver} + ${cost}` },
-    },
-    VILLAGE_PRESTIGE: {
-      label: "Prestige",
-      balance: user.villagePrestige,
-      where: gte(userData.villagePrestige, cost),
-      decrementSet: { villagePrestige: sql`${userData.villagePrestige} - ${cost}` },
-      incrementSet: { villagePrestige: sql`${userData.villagePrestige} + ${cost}` },
-    },
+  const field = VARIANT_CURRENCY_FIELD[costType];
+  return {
+    label: costType === "VILLAGE_PRESTIGE" ? "Prestige" : displayCostType(costType),
+    balance: user[field],
+    where: gte(userData[field], cost),
+    decrementSet: { [field]: sql`${userData[field]} - ${cost}` },
+    incrementSet: { [field]: sql`${userData[field]} + ${cost}` },
   };
-  return ops[costType];
 };
 
 const restoreStaleMergeStackClaims = async (client: DrizzleClient, userId: string) =>
@@ -3870,12 +3814,11 @@ export const toggleEquipItem = async (
     if (useritem.isInAuction) {
       return errorResponse("Cannot equip item in auction");
     }
-    const currentlyImbuing = useritem.imbuements.filter(
-      (imbuement) =>
-        imbuement.craftingFinishedAt && imbuement.craftingFinishedAt > new Date(),
-    );
-    if (currentlyImbuing.length > 0) {
+    if (isImbuing(useritem)) {
       return errorResponse("Cannot equip item because it is being imbued");
+    }
+    if (slot && !isCompatibleEquipSlot(slot, useritem.item.slot)) {
+      return errorResponse("This item does not fit that slot");
     }
   }
   const info = useritem.item;
@@ -3905,29 +3848,17 @@ export const toggleEquipItem = async (
     }
   }
   // Determine equipment slot (first empty slots, then any slot)
-  let newEquipSlot = slot;
-  if (newEquipSlot === undefined) {
-    ItemSlots.forEach((slot) => {
-      if (slot.includes(info.slot) && !newUserItems.find((i) => i.equipped === slot)) {
-        newEquipSlot = slot;
-      }
-    });
-    if (newEquipSlot === undefined) {
-      ItemSlots.forEach((slot) => {
-        if (slot.includes(info.slot)) {
-          newEquipSlot = slot;
-        }
-      });
-    }
-  }
+  const newEquipSlot =
+    slot ??
+    findFreeEquipSlot(info.slot, newUserItems) ??
+    compatibleEquipSlots(info.slot).at(-1);
   // We need to have a slot
-  if (!newEquipSlot) return errorResponse("No slot found");
+  if (doEquip && !newEquipSlot) return errorResponse("No slot found");
   // Gated on the gear worn after the swap, so the item it displaces unlocks nothing
-  if (doEquip) {
-    const targetSlot = newEquipSlot;
+  if (doEquip && newEquipSlot) {
     const missingMastery = gearMissingMastery(useritem, {
       ...user,
-      items: user.items.filter((ui) => ui.equipped !== targetSlot),
+      items: user.items.filter((ui) => ui.equipped !== newEquipSlot),
     });
     if (missingMastery) {
       return errorResponse(
@@ -3939,7 +3870,7 @@ export const toggleEquipItem = async (
   let message = "";
   const changedIds = [useritem.id];
   // Mutate
-  if (doEquip) {
+  if (doEquip && newEquipSlot) {
     const userItemInSlot = newUserItems.find(
       (ui) => ui.equipped === newEquipSlot && ui.id !== useritem.id,
     );
@@ -4025,12 +3956,7 @@ export const itemDatabaseFilter = (
     // Timed store listings: match Shop's client hide so paged catalogs do not
     // fill a page with expired rows and stall the infinite-scroll sentinel.
     ...(input?.excludeExpiredFromStore
-      ? [
-          or(
-            isNull(item.expireFromStoreAt),
-            gt(item.expireFromStoreAt, getUtcDayKey()),
-          ),
-        ]
+      ? [or(isNull(item.expireFromStoreAt), gt(item.expireFromStoreAt, getUtcDayKey()))]
       : []),
 
     // Hidden filter (default to false if not specified)
