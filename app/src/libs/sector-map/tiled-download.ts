@@ -3,6 +3,7 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import {
+  findTilesetTile,
   propertiesToRecord,
   spriteGroundingOffset,
   TILED_TILE_HEIGHT,
@@ -481,28 +482,6 @@ export const addDecorationTileset = (
  * the cell height, and game-convention offsetY properties flip sign for
  * display. Already-mirrored maps pass through unchanged.
  */
-/** Native sprite height of the tileset tile a gid points at, from raw JSON */
-const nativeTileHeightOf = (
-  map: Record<string, unknown>,
-  gid: number,
-): number | undefined => {
-  const tilesets = Array.isArray(map.tilesets)
-    ? (map.tilesets as { firstgid?: number; tiles?: Record<string, unknown>[] }[])
-    : [];
-  let owner: (typeof tilesets)[number] | undefined;
-  for (const candidate of tilesets) {
-    const firstgid = Number(candidate.firstgid) || 0;
-    if (firstgid <= gid && (!owner || firstgid > (Number(owner.firstgid) || 0))) {
-      owner = candidate;
-    }
-  }
-  const tile = owner?.tiles?.find(
-    (candidate) => (Number(owner?.firstgid) || 0) + (Number(candidate.id) || 0) === gid,
-  );
-  const imageheight = tile ? Number(tile.imageheight) : Number.NaN;
-  return Number.isFinite(imageheight) ? imageheight : undefined;
-};
-
 export const toWysiwygTiledJson = (rawTiledJson: unknown): Record<string, unknown> => {
   const map = JSON.parse(JSON.stringify(rawTiledJson)) as Record<string, unknown>;
   if (map.staggerindex === "even") return map;
@@ -541,7 +520,7 @@ export const toWysiwygTiledJson = (rawTiledJson: unknown): Record<string, unknow
         let anchorFix = 0;
         const gid = Number(object.gid);
         if (Number.isFinite(gid) && typeof object.height === "number") {
-          const native = nativeTileHeightOf(map, gid);
+          const native = findTilesetTile(rawTilesets(map), gid)?.imageheight;
           const isNative =
             native !== undefined && Math.abs(object.height - native) <= 1;
           const spriteScale = isNative ? 1 : object.height / oldTileHeight;
@@ -631,3 +610,10 @@ export const downloadSectorForTiled = async (
   // creator so they can re-download instead of authoring with a partial palette
   return { missingSprites: failedKeys };
 };
+
+/** A raw map's tilesets; stored maps passed TiledMapSchema when they were uploaded. */
+const rawTilesets = (map: Record<string, unknown>) =>
+  (Array.isArray(map.tilesets) ? map.tilesets : []) as {
+    firstgid: number;
+    tiles?: { id: number; imageheight?: number }[];
+  }[];

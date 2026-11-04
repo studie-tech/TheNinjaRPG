@@ -48,6 +48,7 @@ import {
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
+  chebyshevDistance,
   findNearestWalkableCoordinate,
   isReachableCoordinate,
   isWalkableCoordinate,
@@ -62,7 +63,6 @@ import {
   filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   findLandingNear,
-  maxDistance,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import {
@@ -1015,12 +1015,8 @@ export const travelRouter = createTRPCRouter({
       const location = isVillage ? "Village" : "";
       const travelLength =
         crossing && entryTile
-          ? 1 +
-            maxDistance({ longitude: entryTile.x, latitude: entryTile.y }, destination)
-          : maxDistance(
-              { longitude: curLongitude, latitude: curLatitude },
-              destination,
-            );
+          ? 1 + chebyshevDistance(entryTile, destination)
+          : chebyshevDistance({ x: curLongitude, y: curLatitude }, destination);
       // Optimistic update & query simultaneously
       const moveOutcome = await Promise.all([
         updateUserDataForMoveInSector(
