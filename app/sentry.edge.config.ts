@@ -4,11 +4,13 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
-import { SENTRY_BASE_OPTIONS, SENTRY_SERVER_ENVIRONMENT } from "@/libs/sentryOptions";
+import { SENTRY_BASE_OPTIONS } from "@/libs/sentryOptions";
 
 Sentry.init({
   ...SENTRY_BASE_OPTIONS,
-  environment: SENTRY_SERVER_ENVIRONMENT,
+  // NODE_ENV is "production" for every Vercel build, so VERCEL_ENV is what separates
+  // production from preview deployments.
+  environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
 
   // Which edge errors to ignore
   ignoreErrors: [

@@ -980,7 +980,7 @@ const isOwnAppFrame = (frame: { filename?: string; abs_path?: string }): boolean
   }
 };
 
-/** Whether fetch breadcrumb data reports this status; SDK versions log it as text or a number. */
+/** Whether fetch breadcrumb data reports this status, stored as a number or a string. */
 const hasStatusCode = (data: Record<string, unknown> | undefined, status: number) =>
   data?.status_code === status || data?.status_code === String(status);
 

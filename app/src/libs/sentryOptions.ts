@@ -19,9 +19,3 @@ export const SENTRY_BASE_OPTIONS = {
     stackFrameVariables: false,
   },
 };
-
-/**
- * Server-side environment. NODE_ENV is "production" for every Vercel build, so VERCEL_ENV
- * is what separates production from preview deployments.
- */
-export const SENTRY_SERVER_ENVIRONMENT = process.env.VERCEL_ENV ?? process.env.NODE_ENV;

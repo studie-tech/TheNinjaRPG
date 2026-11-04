@@ -13,8 +13,6 @@ import {
   MAX_ITEM_STACK_SIZE,
   MAX_PLAYER_LEVEL,
   RetryQuestDelays,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
 } from "@/drizzle/constants";
 import { type CoopRoster, encounterWaveSchema } from "@/validators/coop";
 import { mapLocationFields } from "@/validators/mapLocation";
