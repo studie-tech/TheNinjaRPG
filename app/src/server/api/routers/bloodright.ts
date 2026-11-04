@@ -17,7 +17,7 @@ import { findSkillWithFolderById } from "@/queries/skillTree";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { getResetAllowance, isSkillVisible } from "@/routers/skillTree";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { canAccessHiddenSkillTree, isStaffMember } from "@/utils/permissions";
+import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 

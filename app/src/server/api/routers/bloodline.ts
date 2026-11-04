@@ -281,7 +281,6 @@ export const bloodlineRouter = createTRPCRouter({
       // Check for free swap eligibility
       const {
         federalStatus,
-        freeSwapsUsed,
         hasFreeSwapAvailable,
         isFree: isFreeSwap,
         isStaffFree: isStaffFreeSwap,
