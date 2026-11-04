@@ -18,7 +18,7 @@ describe("prebaked world assets", () => {
     for (const [key] of Object.entries(sources).filter(([key]) => JSON.parse(key).length === 5)) {
       const [image, frame, , material, basis] = JSON.parse(key);
       const original = texture(1024, 1024), view = new Texture({source:original.source,frame:new Rectangle(frame.x,frame.y,frame.width,frame.height)});
-      const shadowTexture = texture(16,8), glow = texture(1024,1024), scale = .25;
+      const shadowTexture = texture(1024,1024), glow = texture(1024,1024), scale = .25;
       const description = {id:"wall",kind:"village_wall_panel",image,worldMaterial:material,size:frame.height*scale,width:frame.width*scale*basis[0],shearY:basis[1]/basis[0],shadowCaster:"wall",x:100,y:-40,groundY:-40} as WorldSpriteDescription;
       const sprite = new Sprite(view);sprite.anchor.set(.4,.7);
       const pose = new Matrix(basis[0]*scale,basis[1]*scale,0,-scale,100,-40);
@@ -43,13 +43,17 @@ describe("prebaked world assets", () => {
       expect(entry).toBeDefined();
       const [key, source] = entry!;
       const { data, info } = await sharp(readFileSync(new URL(`../../../public${source.atlas}`, import.meta.url))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      const cellWidth = info.width / 4, cellHeight = info.height / 2;
+      const cellWidth = source.cellWidth, cellHeight = source.cellHeight;
       for (let direction = 0; direction < 8; direction++) {
         let x0 = cellWidth, y0 = cellHeight, x1 = -1, y1 = -1;
-        for (let y = 0; y < cellHeight; y++) for (let x = 0; x < cellWidth; x++)
-          if (data[((Math.floor(direction / 4) * cellHeight + y) * info.width + direction % 4 * cellWidth + x) * 4 + 3]! >= 128) {
+        const [fx, fy, w, h] = source.directions[direction]!.frame;
+        const [tx, ty] = source.directions[direction]!.trim;
+        for (let iy = 0; iy < h!; iy++) for (let ix = 0; ix < w!; ix++) {
+          const x = ix + tx!, y = iy + ty!;
+          if (data[((fy! + iy) * info.width + fx! + ix) * 4 + 3]! >= 128) {
             x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
           }
+        }
         expect(x1 - x0).toBeGreaterThan(2); expect(y1 - y0).toBeGreaterThan(2);
         if (direction === 0 || direction === 4) expect((y1 - y0) * 2 / (x1 - x0)).toBeGreaterThan(.2);
       }
@@ -59,22 +63,29 @@ describe("prebaked world assets", () => {
       finally { view.destroy(false); original.destroy(true); }
     }
   });
-  it("publishes complete eight-direction PNG atlases and matching warm overlays within the atlas size budget", () => {
+  it("publishes every compass mask as a trimmed view within bounded shared pages", async () => {
+    const pages = new Map<string, { width: number; height: number }>();
     for (const source of Object.values(sources)) {
-      const atlas = readFileSync(new URL(`../../../public${source.atlas}`, import.meta.url));
-      const emission = "emission" in source ? readFileSync(new URL(`../../../public${source.emission}`, import.meta.url)) : null;
-      for (const png of [atlas, ...(emission ? [emission] : [])]) { expect(png.subarray(1, 4).toString()).toBe("PNG"); expect(png.readUInt32BE(16)).toBeLessThanOrEqual(4096); expect(png.readUInt32BE(20)).toBeLessThanOrEqual(4096); }
-      const width = atlas.readUInt32BE(16), height = atlas.readUInt32BE(20);
-      expect(width % 4).toBe(0); expect(height % 2).toBe(0);
-      expect(source.bytes).toBe(width * height * 4 + ("emissionBytes" in source ? source.emissionBytes : 0));
-      if (emission && "emissionFrame" in source) {
-        const [x,y,w,h] = source.emissionFrame;
-        expect(x!+w!).toBeLessThanOrEqual(emission.readUInt32BE(16));
-        expect(y!+h!).toBeLessThanOrEqual(emission.readUInt32BE(20));
-        expect(source.emissionBytes).toBe(w!*h!*4);
+      let page = pages.get(source.atlas);
+      if (!page) {
+        const m = await sharp(readFileSync(new URL(`../../../public${source.atlas}`, import.meta.url))).metadata();
+        page = {width:m.width!,height:m.height!}; pages.set(source.atlas,page);
       }
-      if (emission) expect(source.emitters.length).toBeGreaterThan(0);
+      expect(page.width).toBeLessThanOrEqual(1024); expect(page.height).toBeLessThanOrEqual(1024);
+      expect(source.directions).toHaveLength(8);
+      for (const direction of source.directions) {
+        const [x,y,w,h] = direction.frame, [tx,ty,tw,th] = direction.trim;
+        expect(x!+w!).toBeLessThanOrEqual(page.width); expect(y!+h!).toBeLessThanOrEqual(page.height);
+        expect([w,h]).toEqual([tw,th]); expect(tx!+tw!).toBeLessThanOrEqual(source.cellWidth); expect(ty!+th!).toBeLessThanOrEqual(source.cellHeight);
+      }
+      if ("emission" in source) {
+        const m = await sharp(readFileSync(new URL(`../../../public${source.emission}`,import.meta.url))).metadata();
+        const [x,y,w,h] = source.emissionFrame;
+        expect(x!+w!).toBeLessThanOrEqual(m.width!); expect(y!+h!).toBeLessThanOrEqual(m.height!);
+        expect(source.emissionBytes).toBe(w!*h!*4); expect(source.emitters.length).toBeGreaterThan(0);
+      }
     }
+    expect(pages.size).toBeLessThan(40);
   });
 
   it("invalidates a bake when artwork, material metadata, or the atlas frame changes", () => {
@@ -92,14 +103,16 @@ describe("prebaked world assets", () => {
   });
 
   it("loads every direction together without a renderer or live shadow calculation and releases only its views", async () => {
-    const [key, metadata] = first(), atlas = texture(16, 8), emission = texture(1024, 1024);
+    const [key, metadata] = first(), atlas = texture(1024, 1024), emission = texture(1024, 1024);
     const load = mock(async (path: string) => path === metadata.atlas ? atlas : emission);
     const game = { assets: { acquireTexture: (path: string) => ({resource:load(path),release:vi.fn()}) }, signal: new AbortController().signal, isDisposed: () => false } as unknown as GameRenderer;
     try {
       const result = await loadBakedShadowAtlas(game, key);
       expect(load.mock.calls.map(([path]) => path)).toEqual([metadata.atlas, ...("emission" in metadata ? [metadata.emission] : [])]);
       expect(result.views).toHaveLength(8); expect(new Set(result.views.map(view => view.source)).size).toBe(1);
-      expect(result.views.map(view => [view.frame.x, view.frame.y])).toEqual([[0, 0], [4, 0], [8, 0], [12, 0], [0, 4], [4, 4], [8, 4], [12, 4]]);
+      expect(result.views.map(view => [view.frame.x, view.frame.y,view.frame.width,view.frame.height])).toEqual(metadata.directions.map(d=>d.frame));
+      expect(result.views.every(view=>view.orig.width===metadata.cellWidth&&view.orig.height===metadata.cellHeight)).toBe(true);
+      expect(result.views.map(view=>[view.trim!.x,view.trim!.y,view.trim!.width,view.trim!.height])).toEqual(metadata.directions.map(d=>d.trim));
       result.destroy(); expect(result.views.every(view => view.destroyed)).toBe(true);
       expect(atlas.destroyed).toBe(false); expect(emission.destroyed).toBe(false);
     } finally { atlas.destroy(true); emission.destroy(true); }
@@ -116,7 +129,7 @@ describe("prebaked world assets", () => {
     const [key, metadata] = first(), [image, frame, orig, material] = JSON.parse(key);
     const original = texture(frame.x + frame.width, frame.y + frame.height);
     const view = new Texture({ source: original.source, frame: new Rectangle(frame.x, frame.y, frame.width, frame.height), orig: new Rectangle(orig.x, orig.y, orig.width, orig.height) });
-    const atlas = texture(16, 8), emission = texture(1024, 1024), world = new Container(), cleanups: (() => void)[] = [];
+    const atlas = texture(1024, 1024), emission = texture(1024, 1024), world = new Container(), cleanups: (() => void)[] = [];
     const game = { renderer: { resolution: 1 }, assets: { acquireTexture: (path: string) => ({resource:Promise.resolve(path === metadata.atlas ? atlas : emission),release:vi.fn()}) },
       visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, signal: new AbortController().signal, isDisposed: () => false, invalidate: () => {},
       own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;

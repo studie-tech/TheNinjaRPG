@@ -4,12 +4,14 @@ import { Assets, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import type { GroundEffect } from "@/libs/combat/types";
 import { getBattlefieldHeightRatio } from "@/libs/combat/util";
+import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatScene, type CombatSceneSnapshot } from "@/libs/rendering/scenes/combat";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
 
 const cleanups: (() => void)[] = [];
+const originalTerrain=combatTerrain.prepareCombatTerrain;
 beforeEach(() => {
   vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
   vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
@@ -30,7 +32,7 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
     visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     stage: new Container(), canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
-    renderer: { width: 390, height }, assets: { texture: async () => Texture.WHITE },
+    renderer: { width: 390, height, render: vi.fn() }, assets: { texture: async () => Texture.WHITE },
     own: (callback: () => void) => owned.add(callback), disown: (callback: () => void) => owned.delete(callback),
     isDisposed: () => disposed, invalidate() {}, setAnimating() {},
     setUpdate: (callback: typeof update) => { update = callback; },
@@ -55,6 +57,18 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
 };
 
 describe("combat camera gestures", () => {
+  it.each([false,true])("keeps fighters usable while border scenery loads and ignores cancelled artwork (%s)", async cancel=>{
+    vi.spyOn(combatTerrain,"prepareCombatTerrain").mockImplementation((...args)=>({...originalTerrain(...args),scenery:[{id:"pending-border",kind:"decoration",image:"pending-combat-border.png",size:20,x:30,y:30,groundY:20}]}));
+    let release!:(texture:Texture)=>void;const pending=new Promise<Texture>(resolve=>{release=resolve});
+    vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("pending-combat-border")?pending:Texture.WHITE);
+    const fixture=await setup(2,false);
+    expect(fixture.game.isDisposed()).toBe(false);expect(fixture.world.getChildByLabel("combat-health",true)).not.toBeNull();
+    expect(fixture.world.getChildByLabel("pending-border",true)).toBeNull();
+    if(cancel)fixture.scene.dispose();release(Texture.WHITE);await new Promise(resolve=>setTimeout(resolve,0));
+    if(cancel)expect(fixture.world.destroyed).toBe(true);
+    else {expect(fixture.world.getChildByLabel("pending-border",true)).not.toBeNull();await fixture.scene.renderAt(1000);expect(fixture.game.isDisposed()).toBe(false);}
+  });
+
   it("reports character details only on a tap and clears the character hit on empty terrain", async () => {
     const { world, user, event, tick, onTap, game } = await setup();
     const actor = world.getChildByLabel(user.userId, true)!;

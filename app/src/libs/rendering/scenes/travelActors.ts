@@ -119,50 +119,58 @@ export const createTravelActors = (
       else if (bounds[axis] > value) range[0] = Math.max(range[0], value);
       else range[0] = range[1] = value;
     };
-    const visibleUsers = !bounds
-      ? snapshot.users
-      : snapshot.users.filter((user) => {
-          const tile = snapshot.grid.getHex({
-            col: user.longitude,
-            row: user.latitude,
-          });
-          if (tile) {
-            const x = -tile.center.x,
-              y = -tile.center.y;
-            // Membership can change only when a viewport edge crosses a padding or artwork boundary.
-            boundary("minX", x + tile.width * 3);
-            boundary("minX", x + tile.width * 2);
-            boundary("maxX", x - tile.width * 3);
-            boundary("maxX", x - tile.width);
-            boundary("minY", y + tile.height * 3);
-            boundary("minY", y + tile.height * 2.4);
-            boundary("maxY", y - tile.height * 3);
-            boundary("maxY", y - tile.height);
-          }
-          if (user.userId === snapshot.viewer?.userId) return true;
-          return (
-            tile &&
-            -tile.center.x >= bounds.minX - tile.width * 3 &&
-            -tile.center.x <= bounds.maxX + tile.width * 3 &&
-            -tile.center.y >= bounds.minY - tile.height * 3 &&
-            -tile.center.y <= bounds.maxY + tile.height * 3
-          );
-        });
+    // Occupants share tile geometry and the exact camera boundaries that change membership.
+    const tiles = new Map<
+      string,
+      { visible: boolean; onScreen: boolean } | undefined
+    >();
+    const tileFor = (user: SectorUser) => {
+      const key = `${user.longitude},${user.latitude}`;
+      if (tiles.has(key)) return tiles.get(key);
+      const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
+      if (!tile) {
+        tiles.set(key, undefined);
+        return undefined;
+      }
+      const x = -tile.center.x,
+        y = -tile.center.y,
+        width = tile.width,
+        height = tile.height;
+      boundary("minX", x + width * 3);
+      boundary("minX", x + width * 2);
+      boundary("maxX", x - width * 3);
+      boundary("maxX", x - width);
+      boundary("minY", y + height * 3);
+      boundary("minY", y + height * 2.4);
+      boundary("maxY", y - height * 3);
+      boundary("maxY", y - height);
+      const entry = {
+        visible:
+          !bounds ||
+          (x >= bounds.minX - width * 3 &&
+            x <= bounds.maxX + width * 3 &&
+            y >= bounds.minY - height * 3 &&
+            y <= bounds.maxY + height * 3),
+        onScreen:
+          !bounds ||
+          boundsOverlap(bounds, {
+            minX: x - width,
+            maxX: x + width * 2,
+            minY: y - height,
+            maxY: y + height * 2.4,
+          }),
+      };
+      tiles.set(key, entry);
+      return entry;
+    };
+    const visibleUsers = snapshot.users.filter((user) => {
+      const tile = tileFor(user);
+      return user.userId === snapshot.viewer?.userId || !!tile?.visible;
+    });
     const candidates = visibleUsers.flatMap((user) => {
       if (!canShowUser(snapshot, user) || user.status !== "AWAKE") return [];
-      const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
-      if (!tile) return [];
-      const x = -tile.center.x,
-        y = -tile.center.y;
-      const onScreen =
-        !bounds ||
-        boundsOverlap(bounds, {
-          minX: x - tile.width,
-          maxX: x + tile.width * 2,
-          minY: y - tile.height,
-          maxY: y + tile.height * 2.4,
-        });
-      return [{ user, key: userActorKey(user), onScreen }];
+      const tile = tileFor(user);
+      return tile ? [{ user, key: userActorKey(user), onScreen: tile.onScreen }] : [];
     });
     const key = candidates
       .map((entry) => `${entry.key}:${Number(entry.onScreen)}`)
@@ -373,6 +381,7 @@ export const createTravelActors = (
       const target = record.recipe.user;
       const isHovered = key === hovered && !!viewer && target?.userId !== viewer.userId;
       const alone =
+        isHovered &&
         target &&
         users.filter(
           (candidate) =>
@@ -382,7 +391,7 @@ export const createTravelActors = (
             candidate.latitude === target.latitude,
         ).length === 1;
       const actions =
-        target && viewer
+        isHovered && target && viewer
           ? travelActionAvailability(viewer, target, friendlyAttack)
           : { attack: false, heal: false, info: false };
       for (const entry of record.art?.entries ?? []) {
@@ -598,7 +607,11 @@ export const createTravelActors = (
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
   const sync = (snapshot: TravelActorsSnapshot) => {
-    if (sourceSnapshot?.sector !== snapshot.sector) movementOrder.clear();
+    if (sourceSnapshot?.sector !== snapshot.sector) {
+      movementOrder.clear();
+      selectionKey = null;
+    }
+    if (sourceSnapshot?.viewer?.userId !== snapshot.viewer?.userId) selectionKey = null;
     const present = new Set<string>();
     for (const user of snapshot.users) {
       const key = userActorKey(user),
@@ -612,6 +625,8 @@ export const createTravelActors = (
           previous.y !== user.latitude ||
           previous.sector !== user.sector);
       const newStep = step !== undefined && step !== previous?.step;
+      if (previous && !moved && !newStep) continue;
+      selectionKey = null;
       movementOrder.set(key, {
         x: user.longitude,
         y: user.latitude,
@@ -624,7 +639,6 @@ export const createTravelActors = (
     }
     for (const key of movementOrder.keys())
       if (!present.has(key)) movementOrder.delete(key);
-    selectionKey = null;
     sourceSnapshot = snapshot;
     const visible = visibleSnapshot(snapshot);
     visibleKey = userKey(visible);

@@ -14,16 +14,17 @@ afterEach(() => {
 const fixture = (cached?: typeof lpcAssets) => {
   let resolve!: (assets: typeof lpcAssets) => void;
   let reject!: (error: Error) => void;
-  const pending = new Promise<typeof lpcAssets>((complete, fail) => {
-    resolve = complete;
+  const pending = new Promise<ReturnType<typeof buildLpcCatalog>>((complete, fail) => {
+    resolve = assets => complete(buildLpcCatalog(assets));
     reject = fail;
   });
+  let compiled = cached ? buildLpcCatalog(cached) : undefined;
   const fetch = vi.fn(async () => {
-    cached = await pending;
-    return cached;
+    compiled = await pending;
+    return compiled;
   });
   const utils = {
-    gameAsset: { getLpcCatalog: { getData: () => cached, fetch } },
+    gameAsset: { getLpcSceneCatalog: { getData: () => compiled, fetch } },
   };
   Object.assign(vi.spyOn(client, "api" as never), { useUtils: () => utils });
   return { resolve, reject, fetch, pending };

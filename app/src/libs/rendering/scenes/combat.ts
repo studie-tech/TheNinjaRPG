@@ -88,13 +88,6 @@ export const createCombatScene = async (options: {
   });
   game.setAnimating(false);
   try {
-    const preloads = createRenderScope(game);
-    const textureIds = new Set(initial.battle.extraState.textureAssets ?? []);
-    void Promise.allSettled(
-      initial.assets
-        .filter((asset) => textureIds.has(asset.id) && asset.image)
-        .map((asset) => preloads.assets.texture(asset.image)),
-    ).then(() => preloads.dispose());
     const width = options.viewport?.width ?? game.renderer.width;
     const data = prepareCombatTerrain(
       width,
@@ -113,10 +106,11 @@ export const createCombatScene = async (options: {
     const groundLayer = new RenderLayer(),
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
-    const [terrain, art] = await Promise.all([
+    const [terrain, emptyArt] = await Promise.all([
       createHexTerrain(game, data.terrain, false),
-      createWorldSprites(game, data.scenery, shadows),
+      createWorldSprites(game, [], shadows),
     ]);
+    let art = emptyArt;
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
     const labels = new Container();
@@ -298,6 +292,30 @@ export const createCombatScene = async (options: {
     sync(initial, true);
     await Promise.all([actors.ready(), effectsReady]);
     initialized = true;
+    // Fighters and active effects become usable before optional border scenery and future effect art.
+    const sceneryReady = createWorldSprites(game, data.scenery, shadows)
+      .then((next) => {
+        if (game.isDisposed()) return;
+        const position = world.getChildIndex(art.container);
+        art.dispose();
+        art = next;
+        world.addChildAt(art.container, position);
+        art.attachLayers({ ground: groundLayer, world: depthLayer, ui: uiLayer });
+        sync(options.getSnapshot(), false);
+        game.invalidate();
+      })
+      .catch((error: unknown) => {
+        if (!game.isDisposed())
+          console.warn("Combat scenery unavailable; fighters remain usable", error);
+      });
+    const preloads = createRenderScope(game);
+    const textureIds = new Set(initial.battle.extraState.textureAssets ?? []);
+    void Promise.allSettled(
+      initial.assets
+        .filter((asset) => textureIds.has(asset.id) && asset.image)
+        .map((asset) => preloads.assets.texture(asset.image)),
+    ).then(() => preloads.dispose());
+
     game.own(() => {
       if (zoomTimer !== null) clearTimeout(zoomTimer);
     });
@@ -519,7 +537,7 @@ export const createCombatScene = async (options: {
         if (game.isDisposed()) return;
         clock = Math.max(0, timeMs);
         sync(options.getSnapshot(), !rendered);
-        await Promise.all([actors.ready(), effectsReady]);
+        await Promise.all([actors.ready(), effectsReady, sceneryReady]);
         if (game.isDisposed()) return;
         updateFrame({ now: clock, delta: 0, reducedMotion: false }, true);
         game.renderer.render({ container: game.stage });

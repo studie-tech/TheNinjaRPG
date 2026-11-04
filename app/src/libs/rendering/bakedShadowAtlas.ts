@@ -106,19 +106,15 @@ export const loadBakedShadowAtlas = async (
           trim: new Rectangle(...source.emissionTrim),
         })
       : emissionSource;
-  const width = atlas.width / 4,
-    height = atlas.height / 2;
-  const views = Array.from(
-    { length: SHADOW_DIRECTIONS },
-    (_, index) =>
+  const width = source.cellWidth,
+    height = source.cellHeight;
+  const views = source.directions.map(
+    (direction) =>
       new Texture({
         source: atlas.source,
-        frame: new Rectangle(
-          (index % 4) * width,
-          Math.floor(index / 4) * height,
-          width,
-          height,
-        ),
+        frame: new Rectangle(...direction.frame),
+        orig: new Rectangle(0, 0, width, height),
+        trim: new Rectangle(...direction.trim),
       }),
   );
   return {
@@ -231,6 +227,12 @@ type BakedSource = {
     normal?: [number, number];
   }[];
   atlas: string;
+  cellWidth: number;
+  cellHeight: number;
+  directions: {
+    frame: [number, number, number, number];
+    trim: [number, number, number, number];
+  }[];
   emission?: string;
   emissionFrame?: [number, number, number, number];
   emissionTrim?: [number, number, number, number];

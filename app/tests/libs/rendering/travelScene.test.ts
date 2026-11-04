@@ -206,6 +206,21 @@ describe("travel scene ground depth", () => {
     }
   });
 
+  it.each([false,true])("prioritizes occupied artwork across repeated window updates and cancellation (%s)", async cancel => {
+    const state=snapshotFixture(),neighbor=windowEntry(725,1); state.window.push(neighbor);
+    state.window[0]!.structures[0]!.image="priority-current.png"; neighbor.structures[0]!.image="priority-neighbor.png";
+    let release!: (texture:Texture)=>void;const pending=new Promise<Texture>(resolve=>{release=resolve});
+    const load=vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("priority-current")?pending:Texture.WHITE);
+    const fixture=gameFixture(),ready=vi.fn();
+    const scene=await createTravelScene({mount:document.createElement("div"),signal:fixture.game.signal,lightLayout:false,getSnapshot:()=>state,onReady:ready,onError:error=>{throw error},onTap(){},onHover(){},onZoom(){},initialZoom:1});
+    await scene.updateWindow();await settle();
+    expect(scene.sectors.size).toBe(2);expect(ready).toHaveBeenCalled();
+    expect(load.mock.calls.some(([input])=>JSON.stringify(input).includes("priority-neighbor"))).toBe(false);
+    if(cancel)scene.dispose();release(Texture.WHITE);await settle();await settle();
+    expect(load.mock.calls.some(([input])=>JSON.stringify(input).includes("priority-neighbor"))).toBe(!cancel);
+    if(!cancel)expect(scene.sectors.get(725)!.art.entries.some(entry=>entry.description.id==="building")).toBe(true);
+  });
+
   it("grounds border walls in neighboring water and refreshes their retained terrain after a layout change", async () => {
     const state=snapshotFixture(),water=state.window[0]!,village=windowEntry(725,1);
     const ocean=(entry:TravelWindowEntry)=>{

@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { api } from "@/app/_trpc/client";
-import { buildLpcCatalog } from "@/libs/lpc/catalog";
 
 /** Share the staff design discovery query across equipment and design editors. */
 export const useLpcDesigns = () => api.gameAsset.getLpcCatalog.useQuery();
@@ -17,16 +16,16 @@ export const useLpcCatalogLoader = ({
   const utils = api.useUtils();
   return useCallback(async () => {
     const cached = revalidateInBackground
-      ? utils.gameAsset.getLpcCatalog.getData()
+      ? utils.gameAsset.getLpcSceneCatalog.getData()
       : undefined;
-    const fresh = utils.gameAsset.getLpcCatalog.fetch(undefined, {
+    const fresh = utils.gameAsset.getLpcSceneCatalog.fetch(undefined, {
       staleTime: 0,
     });
     if (cached) {
       // Cached artwork remains usable if revalidation fails; a later scene retries.
       void fresh.catch(() => undefined);
-      return buildLpcCatalog(cached);
+      return cached;
     }
-    return buildLpcCatalog(await fresh);
+    return fresh;
   }, [utils, revalidateInBackground]);
 };

@@ -170,6 +170,7 @@ export const createTravelScene = async (options: {
       }
     };
     const pending = new Set<GameRenderer>();
+    let currentSceneryReady: Promise<void> = Promise.resolve();
     let generation = 0,
       disposed = false,
       zoom = options.initialZoom;
@@ -506,10 +507,23 @@ export const createTravelScene = async (options: {
             cachedSectorData.delete(oldest);
           }
           // Artwork and material maps must not hold walking or live actors behind a loading screen.
-          const scenery = createWorldSprites(scope, descriptions, shadows, true).then(
-            (art) => ({ art }),
-            (error: unknown) => ({ error }),
-          );
+          const loadScenery = () => {
+            if (scope.isDisposed())
+              return Promise.resolve({
+                error: new DOMException("Scenery cancelled", "AbortError"),
+              });
+            return createWorldSprites(scope, descriptions, shadows, true).then(
+              (art) => ({ art }),
+              (error: unknown) => ({ error }),
+            );
+          };
+          // The occupied sector's artwork gets bandwidth and decoding time before the surrounding window.
+          const scenery =
+            entry.sector === snapshot.sector
+              ? loadScenery()
+              : currentSceneryReady.then(loadScenery);
+          if (entry.sector === snapshot.sector)
+            currentSceneryReady = scenery.then(() => {});
           const [terrain, art] = await Promise.all([
             createHexTerrain(scope, data),
             createWorldSprites(scope, [], shadows, true),

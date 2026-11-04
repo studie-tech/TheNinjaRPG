@@ -74,6 +74,27 @@ describe("travel actor artwork loading", () => {
     expect(ground.renderLayerChildren).toHaveLength(2);
     expect(ground.renderLayerChildren.every(effect => !effect.destroyed)).toBe(true);
   });
+  it("resolves visibility once per occupied tile while retaining the entire crowd count", () => {
+    holdCharacters();const {actors,grid,snapshot}=fixture();
+    const users=Array.from({length:264},(_,i)=>player(i,{longitude:4,latitude:4}));
+    const tile=grid.getHex({col:4,row:4})!;
+    actors.setViewport({minX:-tile.center.x,maxX:-tile.center.x+100,minY:-tile.center.y,maxY:-tile.center.y+100});
+    const lookup=vi.spyOn(grid,"getHex");actors.sync(snapshot(users));
+    expect(lookup.mock.calls.length).toBeLessThan(10);expect(actors.container.children.filter(root=>root.label.startsWith("user:"))).toHaveLength(20);
+    const badge=actors.container.getChildByLabel("count:4,4")!;
+    expect((badge.children[0]!.children.find(child=>child instanceof Text) as Text).text).toBe("264");
+  });
+
+  it("keeps hover eligibility current after occupancy and health updates",async()=>{
+    const {actors,snapshot}=fixture();const target=player(0,{longitude:4,latitude:4}),neighbor=player(1,{longitude:5,latitude:4});
+    actors.sync(snapshot([target,neighbor]));await settle();const root=actors.container.getChildByLabel("user:loading-0")!;
+    const info=root.getChildByLabel("info",true)!,heal=root.getChildByLabel("heal",true)!;
+    expect(info.visible).toBe(false);actors.hover("user:loading-0");expect(info.visible).toBe(true);expect(heal.visible).toBe(true);
+    actors.sync(snapshot([target,{...neighbor,longitude:4}]));expect(info.visible).toBe(false);expect(heal.visible).toBe(false);
+    actors.sync(snapshot([{...target,curHealth:target.maxHealth},neighbor]));expect(info.visible).toBe(true);expect(heal.visible).toBe(false);
+    actors.hover(null);expect(info.visible).toBe(false);
+  });
+
   it("retains a crowd badge and loaded actors when its count changes", async () => {
     holdCharacters();
     const { actors, snapshot } = fixture();
