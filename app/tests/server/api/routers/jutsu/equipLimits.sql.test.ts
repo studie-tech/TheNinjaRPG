@@ -10,7 +10,11 @@ import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("configured equipment limits", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    // The table is shared across suites, and a leftover cap breaks their loadouts.
+    await resetTables(jutsuEquipLimit);
+  });
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request" });
     await resetTables(jutsuEquipLimit, userJutsu, jutsu, userData);
