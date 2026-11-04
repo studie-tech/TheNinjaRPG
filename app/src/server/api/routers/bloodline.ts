@@ -115,10 +115,7 @@ import { offsetPage } from "@/server/utils/pagination";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
-import {
-  canChangeContent,
-  canRemoveBloodlineFromPool,
-} from "@/utils/permissions";
+import { canChangeContent, canRemoveBloodlineFromPool } from "@/utils/permissions";
 import {
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
