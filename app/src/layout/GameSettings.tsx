@@ -1,4 +1,6 @@
-"use client";
+import { getRandomElement } from "@/utils/array";
+
+("use client");
 
 import { RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
 import {
@@ -116,11 +118,7 @@ const shouldPlayButtonSfxForTarget = (target: EventTarget | null) => {
   );
 };
 
-const getRandomButtonSfxUrl = () => {
-  return BUTTON_CLICK_SFX_URLS[
-    Math.floor(Math.random() * BUTTON_CLICK_SFX_URLS.length)
-  ];
-};
+const getRandomButtonSfxUrl = () => getRandomElement(BUTTON_CLICK_SFX_URLS);
 
 /**
  * Global context for sharing audio instance across all components

@@ -15,6 +15,7 @@ import {
   WALLPAPER_VARIANTS,
   type WallpaperVariant,
 } from "@/libs/wallpaperExperiment";
+import { getRandomElement } from "@/utils/array";
 
 /**
  * The application shell is prerendered once per variant and served from the CDN.
@@ -169,9 +170,7 @@ export const chooseShell = (
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
   if (client === "web" && isLandingVisit && !wallpaper) {
-    wallpaper =
-      request.drawWallpaper?.() ??
-      WALLPAPER_VARIANTS[Math.floor(Math.random() * WALLPAPER_VARIANTS.length)];
+    wallpaper = request.drawWallpaper?.() ?? getRandomElement(WALLPAPER_VARIANTS);
     if (wallpaper) assigned[WALLPAPER_EXPERIMENT] = wallpaper;
   }
   return {

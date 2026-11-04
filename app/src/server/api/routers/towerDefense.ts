@@ -76,6 +76,7 @@ import {
   type SessionParams,
   signSessionParams,
 } from "@/server/utils/towerDefenseCrypto";
+import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
 import { validateUrlForSsrf } from "@/utils/ssrf";
 import { idSchema } from "@/validators/misc";
@@ -1011,10 +1012,7 @@ function initiateSession(input: {
   const signature = signSessionParams(sessionParams);
 
   // Pick a random player character (or null if none configured)
-  const playerCharacter =
-    playerCharactersDb.length > 0
-      ? playerCharactersDb[Math.floor(Math.random() * playerCharactersDb.length)]
-      : null;
+  const playerCharacter = getRandomElement(playerCharactersDb) ?? null;
 
   return {
     seed,

@@ -1,4 +1,6 @@
-"use client";
+import { getRandomElement } from "@/utils/array";
+
+("use client");
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
@@ -873,10 +875,9 @@ const getRandomizedFormValues = () => {
     attribute_1: attr1 ?? attributes[0],
     attribute_2: attr2 ?? attributes[1],
     attribute_3: attr3 ?? attributes[2],
-    hair_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
-    eye_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
-    skin_color:
-      skin_colors[Math.floor(Math.random() * skin_colors.length)] ?? skin_colors[0],
+    hair_color: getRandomElement(colors) ?? colors[0],
+    eye_color: getRandomElement(colors) ?? colors[0],
+    skin_color: getRandomElement(skin_colors) ?? skin_colors[0],
     gender: genders[secureRandomInt(genders.length)] ?? genders[0],
   };
 };

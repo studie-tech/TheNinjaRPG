@@ -42,6 +42,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
 import {
   acceptHuntingContractSchema,
@@ -265,7 +266,7 @@ export const huntingRouter = createTRPCRouter({
               findNearestReachableCoordinate(m.normalizedJson, { x: 0, y: 0 }),
           ),
       );
-      const sector = locations[Math.floor(Math.random() * locations.length)];
+      const sector = getRandomElement(locations);
       if (sector === undefined)
         return errorResponse(
           "There are no approved reachable locations for this contract.",

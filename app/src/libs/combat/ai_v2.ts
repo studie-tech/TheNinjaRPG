@@ -27,6 +27,7 @@ import {
 } from "@/libs/combat/util";
 import type { Point2D, UserLocation } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
+import { getRandomElement } from "@/utils/array";
 import { secureRandomInt } from "@/utils/math";
 import type { ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
 import { ActionEndTurn, enforceExtraRules, getBackupRules } from "@/validators/ai";
@@ -162,8 +163,8 @@ export const performAIaction = (
     const allies = combatants.filter((u) => areBattleAllies(u, user));
     // Derived for convenience
     const userWithDistance = { ...user, path: undefined, distance: 0 };
-    const randomEnemy = enemies[Math.floor(Math.random() * enemies.length)];
-    const randomAlly = allies[Math.floor(Math.random() * allies.length)];
+    const randomEnemy = getRandomElement(enemies);
+    const randomAlly = getRandomElement(allies);
     const distances = new Map<TerrainHex, number>();
     const getDistance = (target: { hex?: TerrainHex; distance?: number }) => {
       if (target.distance !== undefined) return target.distance;
