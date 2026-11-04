@@ -27,7 +27,7 @@ import {
 import { fetchItem } from "@/queries/item";
 import { findUserById } from "@/queries/profile";
 import { errorResponse, protectedProcedure } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { tradeUpdate } from "@/server/utils/push/messages";
@@ -265,7 +265,7 @@ const offerUserError = (user: typeof userData.$inferSelect | undefined | null) =
   return null;
 };
 
-const claimOfferUser = async (tx: OfferTransaction, id: string) => {
+const claimOfferUser = async (tx: DrizzleTransaction, id: string) => {
   const result = await updateUserDataForClaimOfferUser(tx, id);
   requireOfferWrite(result.rowsAffected, "Trading access changed; please refresh");
 };
@@ -288,7 +288,7 @@ const offerItemError = (row: UserItemWithRelations | undefined, quantity: number
 
 /** Unlike standalone splitting, this split must roll back with the offer and both payments. */
 const moveOfferItem = async (
-  tx: OfferTransaction,
+  tx: DrizzleTransaction,
   row: UserItemWithRelations,
   quantity: number,
   recipientId: string,
@@ -331,7 +331,7 @@ const requireOfferWrite = (rowsAffected: number, message: string) => {
 
 const runOfferMutation = async (
   database: DrizzleClient,
-  work: (tx: OfferTransaction) => Promise<UserDeltaResponse>,
+  work: (tx: DrizzleTransaction) => Promise<UserDeltaResponse>,
 ) => {
   try {
     // These cross-user exchanges need multiple rows to commit together; a lone guarded update
@@ -344,4 +344,3 @@ const runOfferMutation = async (
   }
 };
 
-type OfferTransaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];

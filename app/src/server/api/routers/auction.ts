@@ -66,7 +66,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { deferPushToUsers } from "@/server/utils/push/defer";
@@ -818,7 +818,7 @@ const settleAuctionWithoutRefunds = async (
 
 /** Shares the bid transaction so a buyout debit and settlement commit together. */
 const settleAuction = async (
-  tx: AuctionTransaction,
+  tx: DrizzleTransaction,
   auctionId: string,
   winnerId?: string,
 ) => {
@@ -960,8 +960,6 @@ const recordBidActivity = async (
 const requireAuctionSettlementWrite = (rowsAffected: number, message: string) => {
   if (rowsAffected !== 1) throwAuctionSettlementConflict(message);
 };
-
-type AuctionTransaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];
 
 type AuctionSettlementSnapshot = NonNullable<
   Awaited<ReturnType<typeof fetchAuctionListing>>

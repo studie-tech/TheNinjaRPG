@@ -70,7 +70,7 @@ import {
   updateUserQueueForRescheduleWaiting,
 } from "@/queries/train";
 import type { UserWithRelations } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
@@ -97,8 +97,7 @@ import type {
  * users without rows pay no extra query, and timed jobs only cost writes when one is due.
  */
 
-type Transaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];
-type QueueClient = DrizzleClient | Transaction;
+type QueueClient = DrizzleClient | DrizzleTransaction;
 
 type JobOutcome = { finishesAt: Date } | "dropped" | "conflict";
 
@@ -657,7 +656,7 @@ const settleWaitingJobs = async <
   waiting: T[];
   now: Date;
   lastFinish: Date | null;
-  start: (client: Transaction, entry: T, startsAt: Date) => Promise<JobOutcome>;
+  start: (client: DrizzleTransaction, entry: T, startsAt: Date) => Promise<JobOutcome>;
 }) => {
   const { client, userId, kind, waiting, now, start } = props;
   if (props.lastFinish && props.lastFinish > now) {
@@ -735,7 +734,7 @@ const rescheduleWaiting = async (
  * is refunded. A level that can no longer be trained is dropped with a full refund.
  */
 const startQueuedJutsu = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedJutsu,
   startsAt: Date,
   students: Awaited<ReturnType<typeof fetchStudents>>,
@@ -807,7 +806,7 @@ const startQueuedJutsu = async (
  * materials were taken on enqueue; a craft that is no longer possible returns them.
  */
 const startQueuedCraft = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedCraft,
   startsAt: Date,
   average: GameSetting,
@@ -901,7 +900,7 @@ const claimQueueRow = async (client: QueueClient, id: string) => {
  * cancelled instead and its ryo or materials are returned.
  */
 const restoreQueueRow = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedJutsu | QueuedCraft,
 ) => {
   const { jutsu: _jutsu, item: _item, ...row } = entry as QueuedJutsu & QueuedCraft;
