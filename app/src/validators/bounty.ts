@@ -11,10 +11,6 @@ export const signupBountySchema = z.object({
   targetUserId: z.string().min(1),
 });
 
-export const resignBountySchema = z.object({
-  claimId: z.string().min(1),
-});
-
 export const retractBountySchema = z.object({
   bountyId: z.string().min(1),
 });

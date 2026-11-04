@@ -8,13 +8,12 @@ import {
 } from "@/drizzle/constants";
 import {
   deleteBountyContribution,
-  deleteBountySignupForResign,
+  deleteBountySignupForStopTracking,
   deleteBountySignups,
   findBountyById,
   findBountyForCreate,
   findBountyForRemoveAllTrackers,
   findBountySignup,
-  findBountySignupForResign,
   findBountySignupForSignup,
   insertActionLogForRemoveAllTrackers,
   insertBountyContribution,
@@ -47,7 +46,6 @@ import {
   bountyBoardFilterSchema,
   collectBountySchema,
   createBountySchema,
-  resignBountySchema,
   retractBountySchema,
   signupBountySchema,
 } from "@/validators/bounty";
@@ -195,22 +193,6 @@ export const bountyRouter = createTRPCRouter({
       return { success: true, message: "Tracking this bounty" };
     }),
 
-  resign: protectedProcedure
-    .meta({ mcp: { description: "Resign from bounty tracking" } })
-    .input(resignBountySchema)
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Query
-      const claim = await findBountySignupForResign(ctx.drizzle, input);
-      if (!claim) return errorResponse("Claim not found");
-      if (claim.hunterUserId !== ctx.userId) return errorResponse("Not your claim");
-      const curBounty = await findBountyById(ctx.drizzle, claim.bountyId);
-      if (!curBounty || curBounty.status !== "OPEN")
-        return errorResponse("Bounty closed");
-      await deleteBountySignupForResign(ctx.drizzle, claim);
-      return { success: true, message: "Claim withdrawn" };
-    }),
-
   stopTracking: protectedProcedure
     .meta({ mcp: { description: "Stop tracking a bounty" } })
     .input(z.object({ bountyId: z.string() }))
@@ -228,7 +210,7 @@ export const bountyRouter = createTRPCRouter({
       if (curBounty.status !== "OPEN") return errorResponse("Bounty closed");
 
       // Stop tracking the bounty
-      await deleteBountySignupForResign(ctx.drizzle, userSignup);
+      await deleteBountySignupForStopTracking(ctx.drizzle, userSignup);
       return { success: true, message: "Stopped tracking bounty" };
     }),
 
