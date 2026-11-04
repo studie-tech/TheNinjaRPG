@@ -27,6 +27,7 @@ import type { Quest } from "@/drizzle/schema";
 import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
+import { expandAiCopies } from "@/libs/quest";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
 import { objectKeys } from "@/utils/typeutils";
@@ -142,9 +143,9 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
           objective.item_name = subset.map((i) => i.name).join(", ");
         }
       } else if (objective.task === "defeat_opponents") {
-        const opponentIds = objective.opponentAIs
-          .flatMap((o) => Array(o.number).fill(o.ids).flat() as string[])
-          .filter((id): id is string => id !== undefined);
+        const opponentIds = expandAiCopies(objective.opponentAIs).filter(
+          (id): id is string => id !== undefined,
+        );
         const ai = ais?.find((u) => opponentIds.includes(u.userId));
         if (ai?.avatar) {
           objective.image = ai.avatar;

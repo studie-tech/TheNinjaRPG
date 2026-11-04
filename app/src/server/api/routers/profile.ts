@@ -118,6 +118,7 @@ import {
   publishedAchievementsOf,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
   getRaidObjectiveData,
@@ -161,6 +162,7 @@ import {
   fetchAttributes,
   fetchHasUnvotedPolls,
   fetchUser,
+  fetchViewerRole,
   findAbEventForUpdateTutorialStep,
   findOwnedUserPet,
   findSageModeForUpdateUser,
@@ -168,7 +170,6 @@ import {
   findUserById,
   findUserDataForFetchUpdatedUserOnce,
   findUserDataForGetAi,
-  fetchViewerRole,
   findUserDataForGetPublicUser2,
   findUserDataForGetSeichiSilverForStaff,
   findUserDataForGetUsername,
@@ -890,7 +891,7 @@ export const profileRouter = createTRPCRouter({
           );
           return (
             entry.quest.teamEnabled &&
-            entry.id !== `party-${user.questPartyId}` &&
+            !isQuestPartyHelperAttempt(entry, user.questPartyId) &&
             !entry.endAt &&
             !entry.completed &&
             tracker &&

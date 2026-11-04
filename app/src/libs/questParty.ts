@@ -3,6 +3,34 @@ import { isInArray } from "@/utils/array";
 import type { ObjectiveTrackerType, QuestTrackerType } from "@/validators/objectives";
 import { PassiveSnapshotTasks } from "@/validators/objectives";
 
+const PARTY_CLAIM_PREFIX = "claiming:";
+
+/** How long a party battle reservation blocks others before synchronization may release it. */
+export const PARTY_CLAIM_TTL_MS = 60_000;
+
+/**
+ * Party `battleId` placeholder `claiming:<epochMs>:<suffix>`, held while a battle or a departure
+ * is being settled. The suffix is the reserved battle's id, or a nonce matching no battle.
+ */
+export const createPartyClaimId = (suffix: string) =>
+  `${PARTY_CLAIM_PREFIX}${Date.now()}:${suffix}`;
+
+/** Decode a reservation; a real battle id or an empty slot yields null. */
+export const parsePartyClaim = (battleId: string | null | undefined) => {
+  if (!battleId?.startsWith(PARTY_CLAIM_PREFIX)) return null;
+  const [, issuedAt, reservedBattleId] = battleId.split(":");
+  return { issuedAt: Number(issuedAt), reservedBattleId };
+};
+
+/** Id of the in-memory active row standing in for a completed helper's finished attempt. */
+export const questPartyHelperAttemptId = (partyId: string | null) => `party-${partyId}`;
+
+/** Whether an attempt row is that synthetic helper projection rather than a real attempt. */
+export const isQuestPartyHelperAttempt = (
+  attempt: { id: string } | undefined,
+  partyId: string | null,
+) => attempt?.id === questPartyHelperAttemptId(partyId);
+
 /** Record personal deltas in the outgoing trackers in place; copied team totals never contribute. */
 export const recordPartyContributions = (
   before: QuestTrackerType[],

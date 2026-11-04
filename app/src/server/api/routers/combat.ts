@@ -114,6 +114,7 @@ import type {
 import {
   alignBattle,
   calcBattleResult,
+  createEmptyExtraState,
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
@@ -124,7 +125,6 @@ import {
   maskBattle,
   mergeExtraState,
   reconcileLobbyPools,
-  createEmptyExtraState,
   refreshMasteries,
   resetMasteriesToBase,
   rollInitiative,
@@ -177,7 +177,7 @@ import {
   getNewTrackers,
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
-import { projectPartyTracker } from "@/libs/questParty";
+import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
@@ -2229,7 +2229,7 @@ export const initiateBattle = async (
       ];
       if (!participant.userQuests.some((entry) => entry.questId === party.quest.id))
         participant.userQuests.push({
-          id: `party-${party.id}`,
+          id: questPartyHelperAttemptId(party.id),
           userId: participant.userId,
           questId: party.quest.id,
           questType: party.quest.questType,

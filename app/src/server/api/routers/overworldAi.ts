@@ -21,6 +21,7 @@ import {
 } from "@/libs/overworldAi";
 import {
   attemptCapReached,
+  expandAiCopies,
   getBoundObjectiveCandidates,
   getNewTrackers,
   getReward,
@@ -497,12 +498,7 @@ export const overworldAiRouter = createTRPCRouter({
                 (entry.questType === "battlepyramid" ||
                   !!entry.quest.content.entryItems?.length),
             ),
-            allyAiIds:
-              "allyAIs" in full
-                ? full.allyAIs.flatMap((ally) =>
-                    Array(ally.number).fill(ally.ids).flat(),
-                  )
-                : [],
+            allyAiIds: "allyAIs" in full ? expandAiCopies(full.allyAIs) : [],
           });
           return battle.success
             ? {

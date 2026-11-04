@@ -1,7 +1,13 @@
 import { eq, ne } from "drizzle-orm";
 import { type Quest, type QuestParty, type UserData, userData } from "@/drizzle/schema";
 
-import { mergePartyProgress, projectPartyTracker } from "@/libs/questParty";
+import {
+  mergePartyProgress,
+  PARTY_CLAIM_TTL_MS,
+  parsePartyClaim,
+  projectPartyTracker,
+  questPartyHelperAttemptId,
+} from "@/libs/questParty";
 import {
   findQuestPartyForSynchronizeQuestParty,
   findUserDataForSaveQuestPartyMember,
@@ -32,6 +38,14 @@ export type LoadedQuestParty = QuestParty & {
     | "battleId"
   >[];
 };
+
+/** Synchronize a party whose quest still exists; a deleted quest has nothing to merge. */
+export const synchronizeExistingQuestParty = async <
+  T extends LoadedQuestParty | undefined,
+>(
+  client: DrizzleClient,
+  loaded: T,
+) => (loaded?.quest ? synchronizeQuestParty(client, loaded) : loaded);
 
 /**
  * Merge contributions through party CAS, confirming missing members before pruning.
@@ -76,14 +90,11 @@ export const synchronizeQuestParty = async (
       ? party.leaderId
       : (memberIds[0] ?? party.leaderId);
     const next = mergePartyProgress(party, members, party.quest);
-    const isFreshClaim =
-      party.battleId?.startsWith("claiming:") &&
-      Number(party.battleId.split(":")[1]) > Date.now() - 60_000;
+    const claim = parsePartyClaim(party.battleId);
+    const isFreshClaim = !!claim && claim.issuedAt > Date.now() - PARTY_CLAIM_TTL_MS;
     // A failed publication retains the encoded reservation. The preloaded members prove
     // whether that exact battle committed, without another database fetch.
-    const reservedBattleId = party.battleId?.startsWith("claiming:")
-      ? party.battleId.split(":")[2]
-      : undefined;
+    const reservedBattleId = claim?.reservedBattleId;
     const boundBattleId =
       reservedBattleId &&
       liveMembers.some((member) => member.battleId === reservedBattleId)
@@ -238,7 +249,7 @@ export const applyQuestParty = (
   ) {
     // A completed helper has a temporary active projection, never a reopened reward receipt.
     user.userQuests.push({
-      id: `party-${party.id}`,
+      id: questPartyHelperAttemptId(party.id),
       userId: user.userId,
       questId: party.questId,
       questType: party.quest.questType,
