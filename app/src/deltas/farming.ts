@@ -1,5 +1,6 @@
 import {
   applyWaterReduction,
+  EMPTY_PLOT,
   type FarmPlotWithSeed,
   getFarmingLevel,
   mapPlotToState,
@@ -48,13 +49,9 @@ export const getHarvestedFarmPlots = (plots: FarmPlotWithSeed[], now: Date) =>
     after: mapPlotToState(
       {
         ...plot,
-        seedItemId: null,
+        ...EMPTY_PLOT,
         seedItem: null,
         yieldItem: null,
-        plantedAt: null,
-        finishAt: null,
-        lastWateredAt: null,
-        fertilizerApplied: false,
       },
       now,
     ),

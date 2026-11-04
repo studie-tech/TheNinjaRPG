@@ -19,6 +19,7 @@ import { getWorldCycleState } from "@/libs/dayNight";
 import {
   applyFertilizerReduction,
   applyWaterReduction,
+  EMPTY_PLOT,
   getFarmGrowTimeSeconds,
   getFarmHarvestExperience,
   getFarmingLevel,
@@ -34,10 +35,13 @@ import {
 } from "@/libs/farming";
 import {
   countsTowardInventoryStorage,
+  getEffectiveStackSize,
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   type InventoryBucket,
+  isEquippableUserItem,
+  splitIntoStacks,
 } from "@/libs/item";
 import {
   filterQuestTrackersForDbPersist,
@@ -68,18 +72,12 @@ import {
   updateFarmExtractionForPayOutExtractions,
   updateFarmExtractionForPayOutExtractions2,
   updateFarmExtractionForPayOutExtractions3,
-  updateFarmPlotForApplyFertilizer,
-  updateFarmPlotForApplyFertilizer2,
   updateFarmPlotForBuildFarmState,
-  updateFarmPlotForFertilizeAll,
-  updateFarmPlotForHarvestAll,
-  updateFarmPlotForHarvestPlot,
-  updateFarmPlotForPlantAllEmpty,
-  updateFarmPlotForPlantSeed,
-  updateFarmPlotForPlantSeed2,
+  updateFarmPlotForFertilize,
   updateFarmPlotForRollbackBulkFertilizer,
-  updateFarmPlotForWaterAll,
-  updateFarmPlotForWaterPlot,
+  updateFarmPlotForWater,
+  updateFarmPlotsForHarvest,
+  updateFarmPlotsForPlant,
   updateUserDataForAwardFarmingProgress,
   updateUserDataForBuyShopItem,
   updateUserDataForBuyShopItem2,
@@ -151,30 +149,17 @@ export const farmingRouter = createTRPCRouter({
       if (!plot) return errorResponse("Plot not found");
       if (plot.seedItemId) return errorResponse("This plot already has a crop");
       if (!seedItem?.isFarmSeed) return errorResponse("This item is not a farm seed");
-      if (!hasRequiredSkill(seedItem, { userSkills }))
-        return errorResponse("Activate the required skill to plant this seed");
-      if (!seedItem.farmYieldItemId)
-        return errorResponse("Seed has no crop configured");
-      if (seedItem.farmGrowTimeSeconds <= 0) {
-        return errorResponse("Seed has invalid grow time");
-      }
-
-      const farmingLevel = getFarmingLevel(user.farmingExperience);
-      if (farmingLevel < seedItem.farmMinLevel) {
-        return errorResponse(`Requires farming level ${seedItem.farmMinLevel}`);
-      }
+      const seedGuard = guardPlantableSeed(seedItem, user, userSkills);
+      if (seedGuard) return seedGuard;
 
       const seedQuantity = getTotalItemQuantity(userItems, input.seedItemId);
       if (seedQuantity < 1) return errorResponse("You do not have this seed");
 
-      const seedStack = userItems.find(
-        (ui) =>
-          ui.itemId === input.seedItemId &&
-          ui.quantity > 0 &&
-          !ui.storedAtHome &&
-          !ui.isInAuction &&
-          (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
-      );
+      const seedStack = getAvailableFarmItemStacks(
+        userItems,
+        input.seedItemId,
+        new Date(),
+      )[0];
       if (!seedStack) return errorResponse("Seed not available in inventory");
 
       const claim = await claimUserSnapshot({
@@ -196,27 +181,19 @@ export const farmingRouter = createTRPCRouter({
       const finishAt = new Date(now.getTime() + growTimeSeconds * 1000);
       const baseXpGain = getFarmPlantExperience(seedItem);
 
-      const plantResult = await updateFarmPlotForPlantSeed(
+      const planted = await plantFarmPlots(
         ctx.drizzle,
-        input,
+        ctx.userId,
+        seedItem.id,
+        [plot.id],
+        [seedStack],
         now,
         finishAt,
-        plot,
-        ctx,
       );
-      if (plantResult.rowsAffected !== 1) {
+      if (planted === "plotsChanged") {
         return errorResponse("Could not plant — please try again");
       }
-
-      const consumed = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: seedStack.id,
-        expectedQuantity: seedStack.quantity,
-        nextQuantity: seedStack.quantity - 1,
-      });
-      if (!consumed) {
-        await updateFarmPlotForPlantSeed2(ctx.drizzle, plot, ctx, input);
+      if (planted === "seedsChanged") {
         return errorResponse("Could not consume seed — please try again");
       }
 
@@ -279,21 +256,8 @@ export const farmingRouter = createTRPCRouter({
 
       const now = new Date();
       const newFinishAt = applyWaterReduction(plot.finishAt, now);
-      const waterResult = await updateFarmPlotForWaterPlot(
-        ctx.drizzle,
-        newFinishAt,
-        now,
-        {
-          id: plot.id,
-          seedItemId: plot.seedItemId,
-          finishAt: plot.finishAt,
-          lastWateredAt: plot.lastWateredAt,
-        },
-        ctx,
-      );
-      if (waterResult.rowsAffected !== 1) {
-        return errorResponse("Could not water — please try again");
-      }
+      const [watered] = await waterFarmPlots(ctx.drizzle, ctx.userId, [plot], now);
+      if (!watered) return errorResponse("Could not water — please try again");
 
       const xpGain = await awardFarmingProgress(
         ctx.drizzle,
@@ -345,9 +309,7 @@ export const farmingRouter = createTRPCRouter({
         (ui) =>
           ui.id === input.userItemId &&
           ui.quantity > 0 &&
-          !ui.storedAtHome &&
-          !ui.isInAuction &&
-          (!ui.craftingFinishedAt || ui.craftingFinishedAt < availableAt),
+          isEquippableUserItem(ui, availableAt),
       );
       if (!fertilizerStack) {
         return errorResponse("Fertilizer not found");
@@ -374,30 +336,17 @@ export const farmingRouter = createTRPCRouter({
       );
       const baseXpGain = getFertilizerExperience(fertilizerStack.item);
 
-      const fertilizeResult = await updateFarmPlotForApplyFertilizer(
+      const fertilized = await fertilizeFarmPlots(
         ctx.drizzle,
-        newFinishAt,
+        ctx.userId,
+        [plot],
+        fertilizerStack,
         now,
-        { id: plot.id, seedItemId: plot.seedItemId, finishAt: plot.finishAt },
-        ctx,
       );
-      if (fertilizeResult.rowsAffected !== 1) {
+      if (fertilized === "plotsChanged") {
         return errorResponse("Could not apply fertilizer — please try again");
       }
-
-      const consumed = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: fertilizerStack.id,
-        expectedQuantity: fertilizerStack.quantity,
-        nextQuantity: fertilizerStack.quantity - 1,
-      });
-      if (!consumed) {
-        await updateFarmPlotForApplyFertilizer2(
-          ctx.drizzle,
-          { finishAt: plot.finishAt, id: plot.id, seedItemId: plot.seedItemId },
-          ctx,
-        );
+      if (fertilized === "stackChanged") {
         return errorResponse("Could not consume fertilizer — please try again");
       }
 
@@ -459,49 +408,26 @@ export const farmingRouter = createTRPCRouter({
       const baseXpGain = getFarmHarvestExperience(plot.yieldItem);
       const now = new Date();
 
-      const harvestResult = await updateFarmPlotForHarvestPlot(
+      const harvest = await settleFarmHarvest(
         ctx.drizzle,
+        user,
+        userItems,
+        [plot.id],
+        [{ item: plot.yieldItem, quantity: 1 }],
+        baseXpGain,
+        questState,
         now,
-        plot,
-        ctx,
       );
-      if (harvestResult.rowsAffected !== 1) {
+      if (harvest.outcome === "plotsChanged") {
         return errorResponse("Could not harvest — please try again");
       }
-
-      const itemAwarded = await awardItemToUser(
-        ctx.drizzle,
-        ctx.userId,
-        plot.yieldItem,
-        1,
-        userItems,
-      );
-      if (!itemAwarded) {
+      if (harvest.outcome === "grantFailed") {
         return errorResponse("Harvested crop but failed to grant item");
       }
-
-      const harvestRecorded = recordFirstFarmHarvests(
-        ctx.drizzle,
-        ctx.userId,
-        [plot.yieldItem.id],
-        now,
-      );
-      const [xpGain] = await Promise.all([
-        awardFarmingProgress(
-          ctx.drizzle,
-          user,
-          baseXpGain,
-          questState,
-          "plants_harvested",
-          1,
-          () =>
-            harvestRecorded.then(() => getFarmCollectionCount(ctx.drizzle, ctx.userId)),
-        ),
-        harvestRecorded,
-      ]);
-      if (xpGain === null) {
+      if (harvest.outcome === "progressFailed") {
         return errorResponse("Harvested crop but failed to update farming progress");
       }
+      const { xpGain } = harvest;
 
       return {
         success: true,
@@ -510,16 +436,7 @@ export const farmingRouter = createTRPCRouter({
             ? `Harvested ${plot.yieldItem.name} (+${xpGain} farming XP)`
             : `Harvested ${plot.yieldItem.name}`,
         updatedPlot: mapPlotToState(
-          {
-            ...plot,
-            seedItemId: null,
-            plantedAt: null,
-            finishAt: null,
-            lastWateredAt: null,
-            fertilizerApplied: false,
-            seedItem: null,
-            yieldItem: null,
-          },
+          { ...plot, ...EMPTY_PLOT, seedItem: null, yieldItem: null },
           now,
         ),
         farmingExperienceDelta: xpGain,
@@ -552,17 +469,8 @@ export const farmingRouter = createTRPCRouter({
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
       if (!seedItem?.isFarmSeed) return errorResponse("This item is not a farm seed");
-      if (!hasRequiredSkill(seedItem, { userSkills }))
-        return errorResponse("Activate the required skill to plant this seed");
-      if (!seedItem.farmYieldItemId)
-        return errorResponse("Seed has no crop configured");
-      if (seedItem.farmGrowTimeSeconds <= 0) {
-        return errorResponse("Seed has invalid grow time");
-      }
-      const farmingLevel = getFarmingLevel(user.farmingExperience);
-      if (farmingLevel < seedItem.farmMinLevel) {
-        return errorResponse(`Requires farming level ${seedItem.farmMinLevel}`);
-      }
+      const seedGuard = guardPlantableSeed(seedItem, user, userSkills);
+      if (seedGuard) return seedGuard;
 
       const totalPlots = getTotalFarmPlots(user.farmPlotsPurchased);
       const openPlots = plots.filter(
@@ -594,40 +502,19 @@ export const farmingRouter = createTRPCRouter({
         farmingReductionPercent,
       );
       const finishAt = new Date(now.getTime() + growTimeSeconds * 1000);
-      const emptyPlotIds = emptyPlots.map((plot) => plot.id);
-      const plantResult = await updateFarmPlotForPlantAllEmpty(
-        ctx.drizzle,
-        seedItem,
-        now,
-        finishAt,
-        ctx,
-        emptyPlotIds,
-      );
-      if (plantResult.rowsAffected !== emptyPlots.length) {
-        await rollbackBulkPlant(
-          ctx.drizzle,
-          ctx.userId,
-          emptyPlotIds,
-          seedItem.id,
-          now,
-        );
-        return errorResponse("Could not plant all — please try again");
-      }
-
-      const consumed = await consumeFarmItemQuantity(
+      const planted = await plantFarmPlots(
         ctx.drizzle,
         ctx.userId,
+        seedItem.id,
+        emptyPlots.map((plot) => plot.id),
         seedStacks,
-        emptyPlots.length,
+        now,
+        finishAt,
       );
-      if (!consumed) {
-        await rollbackBulkPlant(
-          ctx.drizzle,
-          ctx.userId,
-          emptyPlotIds,
-          seedItem.id,
-          now,
-        );
+      if (planted === "plotsChanged") {
+        return errorResponse("Could not plant all — please try again");
+      }
+      if (planted === "seedsChanged") {
         return errorResponse("Could not consume seeds — please try again");
       }
 
@@ -676,20 +563,7 @@ export const farmingRouter = createTRPCRouter({
       );
       if (waterable.length === 0) return errorResponse("No plots need water");
 
-      const results = await Promise.all(
-        waterable.map(async (plot) => {
-          if (!plot.finishAt) return false;
-          const newFinishAt = applyWaterReduction(plot.finishAt, now);
-          const result = await updateFarmPlotForWaterAll(
-            ctx.drizzle,
-            newFinishAt,
-            now,
-            { id: plot.id, finishAt: plot.finishAt, lastWateredAt: plot.lastWateredAt },
-            ctx,
-          );
-          return result.rowsAffected === 1;
-        }),
-      );
+      const results = await waterFarmPlots(ctx.drizzle, ctx.userId, waterable, now);
       const wateredCount = results.filter(Boolean).length;
       if (wateredCount === 0)
         return errorResponse("Could not water all — please try again");
@@ -734,11 +608,7 @@ export const farmingRouter = createTRPCRouter({
 
       const now = new Date();
       const fertilizerStack = userItems.find(
-        (stack) =>
-          stack.id === input.userItemId &&
-          !stack.storedAtHome &&
-          !stack.isInAuction &&
-          (!stack.craftingFinishedAt || stack.craftingFinishedAt < now),
+        (stack) => stack.id === input.userItemId && isEquippableUserItem(stack, now),
       );
       if (!fertilizerStack?.item.isFarmFertilizer) {
         return errorResponse("Fertilizer not found");
@@ -774,38 +644,17 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not fertilize all — please try again");
       }
 
-      const updates = await Promise.all(
-        fertilizable.map(async (plot) => {
-          if (!plot.finishAt) return false;
-          const newFinishAt = applyFertilizerReduction(
-            plot.finishAt,
-            fertilizerStack.item.farmTimeReductionSeconds,
-            now,
-          );
-          const result = await updateFarmPlotForFertilizeAll(
-            ctx.drizzle,
-            newFinishAt,
-            now,
-            { id: plot.id, finishAt: plot.finishAt },
-            ctx,
-          );
-          return result.rowsAffected === 1;
-        }),
+      const fertilized = await fertilizeFarmPlots(
+        ctx.drizzle,
+        ctx.userId,
+        fertilizable,
+        fertilizerStack,
+        now,
       );
-      if (updates.some((updated) => !updated)) {
-        await rollbackBulkFertilizer(ctx.drizzle, ctx.userId, fertilizable, now);
+      if (fertilized === "plotsChanged") {
         return errorResponse("Could not fertilize all — please try again");
       }
-
-      const consumed = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: fertilizerStack.id,
-        expectedQuantity: fertilizerStack.quantity,
-        nextQuantity: fertilizerStack.quantity - fertilizable.length,
-      });
-      if (!consumed) {
-        await rollbackBulkFertilizer(ctx.drizzle, ctx.userId, fertilizable, now);
+      if (fertilized === "stackChanged") {
         return errorResponse("Could not consume fertilizer — please try again");
       }
 
@@ -874,60 +723,31 @@ export const farmingRouter = createTRPCRouter({
       ]);
       if (inventoryGuard) return inventoryGuard;
 
-      const readyPlotIds = readyPlots.map((plot) => plot.id);
-      const harvestResult = await updateFarmPlotForHarvestAll(
-        ctx.drizzle,
-        now,
-        ctx,
-        readyPlotIds,
-      );
-      if (harvestResult.rowsAffected !== readyPlots.length) {
-        return errorResponse("Could not harvest all — please try again");
-      }
-
-      // Distinct crops land in distinct stacks, so the grants do not contend and can
-      // run together instead of paying one inventory round-trip per crop type.
-      const awards = await Promise.all(
-        [...harvests.values()].map((harvest) =>
-          awardItemToUser(
-            ctx.drizzle,
-            ctx.userId,
-            harvest.item,
-            harvest.quantity,
-            userItems,
-          ),
-        ),
-      );
-      if (awards.some((awarded) => !awarded)) {
-        return errorResponse("Harvested crops but failed to grant items");
-      }
-      const harvestRecorded = recordFirstFarmHarvests(
-        ctx.drizzle,
-        ctx.userId,
-        [...harvests.keys()],
-        now,
-      );
       const baseXpGain = readyPlots.reduce(
         (sum, plot) =>
           sum + (plot.yieldItem ? getFarmHarvestExperience(plot.yieldItem) : 0),
         0,
       );
-      const [xpGain] = await Promise.all([
-        awardFarmingProgress(
-          ctx.drizzle,
-          user,
-          baseXpGain,
-          questState,
-          "plants_harvested",
-          readyPlots.length,
-          () =>
-            harvestRecorded.then(() => getFarmCollectionCount(ctx.drizzle, ctx.userId)),
-        ),
-        harvestRecorded,
-      ]);
-      if (xpGain === null) {
+      const harvest = await settleFarmHarvest(
+        ctx.drizzle,
+        user,
+        userItems,
+        readyPlots.map((plot) => plot.id),
+        [...harvests.values()],
+        baseXpGain,
+        questState,
+        now,
+      );
+      if (harvest.outcome === "plotsChanged") {
+        return errorResponse("Could not harvest all — please try again");
+      }
+      if (harvest.outcome === "grantFailed") {
+        return errorResponse("Harvested crops but failed to grant items");
+      }
+      if (harvest.outcome === "progressFailed") {
         return errorResponse("Harvested crops but failed to update farming progress");
       }
+      const { xpGain, awards } = harvest;
       return {
         success: true,
         message: `Harvested ${readyPlots.length} plot${readyPlots.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
@@ -966,11 +786,7 @@ export const farmingRouter = createTRPCRouter({
 
       const cropStack = userItems.find((ui) => ui.id === input.userItemId);
       if (!cropStack) return errorResponse("Item not found");
-      if (
-        cropStack.storedAtHome ||
-        cropStack.isInAuction ||
-        (cropStack.craftingFinishedAt && cropStack.craftingFinishedAt >= new Date())
-      ) {
+      if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
       if (cropStack.item.isFarmSeed || cropStack.item.isFarmFertilizer) {
@@ -1177,11 +993,7 @@ export const farmingRouter = createTRPCRouter({
       if (!cropStack || cropStack.quantity < input.quantity) {
         return errorResponse("Crop not found");
       }
-      if (
-        cropStack.storedAtHome ||
-        cropStack.isInAuction ||
-        (cropStack.craftingFinishedAt && cropStack.craftingFinishedAt >= new Date())
-      ) {
+      if (!isEquippableUserItem(cropStack)) {
         return errorResponse("Crop is not available in inventory");
       }
       if (
@@ -1268,6 +1080,8 @@ export const farmingRouter = createTRPCRouter({
     }),
 });
 
+type FarmUserItems = Awaited<ReturnType<typeof fetchUserItems>>;
+
 const guardFarmingMutation = (user: Awaited<ReturnType<typeof fetchUser>>) => {
   if (user.isBanned) return errorResponse("You are banned");
   if (user.status !== "AWAKE") {
@@ -1279,6 +1093,24 @@ const guardFarmingMutation = (user: Awaited<ReturnType<typeof fetchUser>>) => {
   return null;
 };
 
+/** Reject a farm seed the user cannot plant yet. */
+const guardPlantableSeed = (
+  seedItem: Item,
+  user: Awaited<ReturnType<typeof fetchUser>>,
+  userSkills: Parameters<typeof hasRequiredSkill>[1]["userSkills"],
+) => {
+  if (!hasRequiredSkill(seedItem, { userSkills }))
+    return errorResponse("Activate the required skill to plant this seed");
+  if (!seedItem.farmYieldItemId) return errorResponse("Seed has no crop configured");
+  if (seedItem.farmGrowTimeSeconds <= 0) {
+    return errorResponse("Seed has invalid grow time");
+  }
+  if (getFarmingLevel(user.farmingExperience) < seedItem.farmMinLevel) {
+    return errorResponse(`Requires farming level ${seedItem.farmMinLevel}`);
+  }
+  return null;
+};
+
 const getAvailableFarmItemStacks = (
   userItems: Awaited<ReturnType<typeof fetchUserItems>>,
   itemId: string,
@@ -1286,11 +1118,7 @@ const getAvailableFarmItemStacks = (
 ) =>
   userItems.filter(
     (stack) =>
-      stack.itemId === itemId &&
-      stack.quantity > 0 &&
-      !stack.storedAtHome &&
-      !stack.isInAuction &&
-      (!stack.craftingFinishedAt || stack.craftingFinishedAt < now),
+      stack.itemId === itemId && stack.quantity > 0 && isEquippableUserItem(stack, now),
   );
 
 const consumeFarmItemQuantity = async (
@@ -1337,6 +1165,157 @@ const consumeFarmItemQuantity = async (
     ),
   );
   return false;
+};
+
+/**
+ * Plant the plots and debit their seeds. A plot write that falls short or a failed debit
+ * clears the plots this request planted; a plot write that missed every row has none to clear.
+ */
+const plantFarmPlots = async (
+  client: DrizzleClient,
+  userId: string,
+  seedItemId: string,
+  plotIds: string[],
+  seedStacks: FarmUserItems,
+  now: Date,
+  finishAt: Date,
+) => {
+  const planted = await updateFarmPlotsForPlant(
+    client,
+    seedItemId,
+    now,
+    finishAt,
+    { userId },
+    plotIds,
+  );
+  if (planted.rowsAffected !== plotIds.length) {
+    if (planted.rowsAffected > 0) {
+      await rollbackBulkPlant(client, userId, plotIds, seedItemId, now);
+    }
+    return "plotsChanged" as const;
+  }
+  const consumed = await consumeFarmItemQuantity(
+    client,
+    userId,
+    seedStacks,
+    plotIds.length,
+  );
+  if (!consumed) {
+    await rollbackBulkPlant(client, userId, plotIds, seedItemId, now);
+    return "seedsChanged" as const;
+  }
+  return "planted" as const;
+};
+
+/** Water each plot behind its own CAS; the result says which writes landed. */
+const waterFarmPlots = (
+  client: DrizzleClient,
+  userId: string,
+  plots: {
+    id: string;
+    seedItemId: string | null;
+    finishAt: Date | null;
+    lastWateredAt: Date | null;
+  }[],
+  now: Date,
+) =>
+  Promise.all(
+    plots.map(async ({ id, seedItemId, finishAt, lastWateredAt }) => {
+      if (!seedItemId || !finishAt) return false;
+      const result = await updateFarmPlotForWater(
+        client,
+        applyWaterReduction(finishAt, now),
+        now,
+        { id, seedItemId, finishAt, lastWateredAt },
+        { userId },
+      );
+      return result.rowsAffected === 1;
+    }),
+  );
+
+/** Fertilize every plot from one stack, all or nothing. */
+const fertilizeFarmPlots = async (
+  client: DrizzleClient,
+  userId: string,
+  plots: { id: string; seedItemId: string | null; finishAt: Date | null }[],
+  stack: FarmUserItems[number],
+  now: Date,
+) => {
+  const updates = await Promise.all(
+    plots.map(async ({ id, seedItemId, finishAt }) => {
+      if (!seedItemId || !finishAt) return false;
+      const result = await updateFarmPlotForFertilize(
+        client,
+        applyFertilizerReduction(finishAt, stack.item.farmTimeReductionSeconds, now),
+        now,
+        { id, seedItemId, finishAt },
+        { userId },
+      );
+      return result.rowsAffected === 1;
+    }),
+  );
+  if (updates.some((updated) => !updated)) {
+    if (updates.some(Boolean)) await rollbackBulkFertilizer(client, userId, plots, now);
+    return "plotsChanged" as const;
+  }
+  const consumed = await updateUserItemQuantityAtomically({
+    client,
+    userId,
+    userItemId: stack.id,
+    expectedQuantity: stack.quantity,
+    nextQuantity: stack.quantity - plots.length,
+  });
+  if (!consumed) {
+    await rollbackBulkFertilizer(client, userId, plots, now);
+    return "stackChanged" as const;
+  }
+  return "fertilized" as const;
+};
+
+/** Clear the plots, grant their crops, then record the harvest and award its progress. */
+const settleFarmHarvest = async (
+  client: DrizzleClient,
+  user: Awaited<ReturnType<typeof fetchUser>>,
+  userItems: FarmUserItems,
+  plotIds: string[],
+  harvests: { item: Item; quantity: number }[],
+  baseXpGain: number,
+  questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
+  now: Date,
+) => {
+  const { userId } = user;
+  const cleared = await updateFarmPlotsForHarvest(client, now, { userId }, plotIds);
+  if (cleared.rowsAffected !== plotIds.length) {
+    return { outcome: "plotsChanged" as const };
+  }
+  // Distinct crops land in distinct stacks, so the grants do not contend and can
+  // run together instead of paying one inventory round-trip per crop type.
+  const awards = await Promise.all(
+    harvests.map((harvest) =>
+      awardItemToUser(client, userId, harvest.item, harvest.quantity, userItems),
+    ),
+  );
+  if (awards.some((awarded) => !awarded)) return { outcome: "grantFailed" as const };
+  const harvestRecorded = recordFirstFarmHarvests(
+    client,
+    userId,
+    harvests.map((harvest) => harvest.item.id),
+    now,
+  );
+  const [xpGain] = await Promise.all([
+    awardFarmingProgress(
+      client,
+      user,
+      baseXpGain,
+      questState,
+      "plants_harvested",
+      plotIds.length,
+      () => harvestRecorded.then(() => getFarmCollectionCount(client, userId)),
+    ),
+    harvestRecorded,
+  ]);
+  if (xpGain === null) return { outcome: "progressFailed" as const };
+  return { outcome: "harvested" as const, xpGain, awards };
 };
 
 const rollbackBulkFertilizer = async (
@@ -1597,16 +1576,7 @@ const buildFarmState = async (
   );
   const plotsForState = plotsRaw.map((plot) =>
     clearedOrphanIds.has(plot.id)
-      ? {
-          ...plot,
-          seedItemId: null,
-          plantedAt: null,
-          finishAt: null,
-          lastWateredAt: null,
-          fertilizerApplied: false,
-          updatedAt: now,
-          seedItem: null,
-        }
+      ? { ...plot, ...EMPTY_PLOT, updatedAt: now, seedItem: null }
       : plot,
   );
 
@@ -1624,12 +1594,7 @@ const buildFarmState = async (
   const levelInfo = getFarmingLevelProgress(user.farmingExperience);
   const farmingLevel = levelInfo.level;
 
-  const eligibleItems = userItems.filter(
-    (ui) =>
-      !ui.storedAtHome &&
-      !ui.isInAuction &&
-      (!ui.craftingFinishedAt || ui.craftingFinishedAt < now),
-  );
+  const eligibleItems = userItems.filter((ui) => isEquippableUserItem(ui, now));
 
   const availableSeedsByItemId = new Map<
     string,
@@ -1948,30 +1913,44 @@ const ensureFarmPlots = async (
   return existing;
 };
 
+/** The carried stack an award of this item tops up before opening new rows. */
+const findTopUpStack = (userItems: FarmUserItems, item: Item, now: Date) =>
+  item.canStack
+    ? userItems.find(
+        (ui) =>
+          ui.itemId === item.id &&
+          ui.equipped === "NONE" &&
+          ui.item.canStack &&
+          isEquippableUserItem(ui, now),
+      )
+    : undefined;
+
+/** Rows an award opens once its top-up stack is full. */
+const getNewStacksRequired = (
+  userItems: FarmUserItems,
+  item: Item,
+  quantity: number,
+  now: Date,
+) => {
+  const stackSize = getEffectiveStackSize(item);
+  const existingStack = findTopUpStack(userItems, item, now);
+  const reusableStackSpace = existingStack
+    ? Math.max(0, stackSize - existingStack.quantity)
+    : 0;
+  return Math.ceil(Math.max(0, quantity - reusableStackSpace) / stackSize);
+};
+
 const guardItemAwardInventoryCapacity = (
   user: Awaited<ReturnType<typeof fetchUser>>,
   userItems: Awaited<ReturnType<typeof fetchUserItems>>,
   itemInfo: Item,
   quantity: number,
 ) => {
-  const stackSize = itemInfo.canStack ? Math.max(1, itemInfo.stackSize) : 1;
-  const now = new Date();
-  const existingStack = itemInfo.canStack
-    ? userItems.find(
-        (ui) =>
-          ui.itemId === itemInfo.id &&
-          ui.equipped === "NONE" &&
-          !ui.storedAtHome &&
-          !ui.isInAuction &&
-          ui.item.canStack &&
-          (!ui.craftingFinishedAt || ui.craftingFinishedAt < now),
-      )
-    : undefined;
-  const reusableStackSpace = existingStack
-    ? Math.max(0, stackSize - existingStack.quantity)
-    : 0;
-  const newStacksRequired = Math.ceil(
-    Math.max(0, quantity - reusableStackSpace) / stackSize,
+  const newStacksRequired = getNewStacksRequired(
+    userItems,
+    itemInfo,
+    quantity,
+    new Date(),
   );
 
   const inventoryItems = userItems.filter(countsTowardInventoryStorage);
@@ -2010,25 +1989,12 @@ const guardBulkItemAwardInventoryCapacity = (
   }
 
   for (const award of merged.values()) {
-    const stackSize = award.item.canStack ? Math.max(1, award.item.stackSize) : 1;
-    const existingStack = award.item.canStack
-      ? userItems.find(
-          (userItem) =>
-            userItem.itemId === award.item.id &&
-            userItem.equipped === "NONE" &&
-            !userItem.storedAtHome &&
-            !userItem.isInAuction &&
-            userItem.item.canStack &&
-            (!userItem.craftingFinishedAt || userItem.craftingFinishedAt < now),
-        )
-      : undefined;
-    const reusableStackSpace = existingStack
-      ? Math.max(0, stackSize - existingStack.quantity)
-      : 0;
-    const newStacks = Math.ceil(
-      Math.max(0, award.quantity - reusableStackSpace) / stackSize,
+    requiredStacks[getInventoryBucket(award.item)] += getNewStacksRequired(
+      userItems,
+      award.item,
+      award.quantity,
+      now,
     );
-    requiredStacks[getInventoryBucket(award.item)] += newStacks;
   }
 
   for (const bucket of Object.keys(requiredStacks) as InventoryBucket[]) {
@@ -2063,18 +2029,10 @@ const awardItemToUser = async (
 ): Promise<false | { inventoryChanges?: InventoryQuantityChange[] }> => {
   let remaining = quantity;
   const inventoryChanges: InventoryQuantityChange[] = [];
-  const stackSize = itemInfo.canStack ? Math.max(1, itemInfo.stackSize) : 1;
+  const stackSize = getEffectiveStackSize(itemInfo);
 
   if (itemInfo.canStack) {
-    const existing = userItems.find(
-      (ui) =>
-        ui.itemId === itemInfo.id &&
-        ui.equipped === "NONE" &&
-        !ui.storedAtHome &&
-        !ui.isInAuction &&
-        ui.item.canStack &&
-        (!ui.craftingFinishedAt || ui.craftingFinishedAt < new Date()),
-    );
+    const existing = findTopUpStack(userItems, itemInfo, new Date());
     // A lost CAS means the snapshot went stale under a concurrent grant. Re-read that one
     // stack and try again rather than falling through to the insert: opening a fresh row
     // for a quantity that belongs in the existing stack puts the player past the cap.
@@ -2109,18 +2067,13 @@ const awardItemToUser = async (
     }
   }
 
-  const inserts = [];
-  while (remaining > 0) {
-    const qty = Math.min(remaining, stackSize);
-    inserts.push({
-      id: nanoid(),
-      userId,
-      itemId: itemInfo.id,
-      quantity: qty,
-      equipped: "NONE" as const,
-    });
-    remaining -= qty;
-  }
+  const inserts = splitIntoStacks(remaining, stackSize).map((qty) => ({
+    id: nanoid(),
+    userId,
+    itemId: itemInfo.id,
+    quantity: qty,
+    equipped: "NONE" as const,
+  }));
   if (inserts.length > 0) {
     await insertUserItems(client, inserts);
   }

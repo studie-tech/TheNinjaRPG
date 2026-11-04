@@ -377,3 +377,12 @@ export const getFertilizerExperience = (
   const applyXp = Number(fertilizerItem.farmFertilizerExperience) || 0;
   return applyXp > 0 ? applyXp : 0;
 };
+
+/** Columns of a plot with nothing planted on it. */
+export const EMPTY_PLOT = {
+  seedItemId: null,
+  plantedAt: null,
+  finishAt: null,
+  lastWateredAt: null,
+  fertilizerApplied: false,
+} as const;
