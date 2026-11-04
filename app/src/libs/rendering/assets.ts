@@ -110,11 +110,14 @@ export const readTexturePixels = (texture: Texture, width: number, height: numbe
 
 const occupiedFrames = new WeakMap<Texture["source"], Map<string, OccupiedFrame>>();
 
-/** Shared atlas views cache occupied bounds without retaining a second pixel buffer. */
+/** Occupied source-pixel bounds are shared by atlas views; readPixels supplies full-source RGBA bytes. */
 export const textureOpaqueFrame = (texture: Texture, readPixels?: () => Uint8Array) =>
   occupiedFrame(texture, readPixels).bounds;
 
-/** The lowest covered row identifies an upright cutout's foot in untrimmed texture pixels. */
+/**
+ * Returns the weighted center of the lowest solid row in untrimmed pixels, before sprite transforms.
+ * Empty or unreadable art uses its frame's bottom center; readPixels supplies full-source RGBA bytes.
+ */
 export const textureGroundContact = (
   texture: Texture,
   readPixels?: () => Uint8Array,
@@ -126,6 +129,7 @@ export const textureGroundContact = (
   };
 };
 
+/** Cache bounds and solid-foot metadata by source/frame, without retaining decoded RGBA buffers. */
 const occupiedFrame = (
   texture: Texture,
   readPixels?: () => Uint8Array,

@@ -236,6 +236,7 @@ describe("travel actor artwork loading", () => {
     const root = actors.container.children[0]!;
     const figure = root.getChildByLabel("avatar",true) as Sprite;
     const foot = figure.y + figure.scale.y * figure.texture.orig.height * (1 - figure.anchor.y);
+    // A depth crossing makes retained ordering publish the loaded avatar's ground contact.
     const obstacle = new Container();obstacle.zIndex = (root.zIndex - root.y - foot) / 2;
     stage.addChild(obstacle);depth.attach(obstacle);depth.sortRenderLayerChildren();
     for (const offset of [0, 500, -200]) {

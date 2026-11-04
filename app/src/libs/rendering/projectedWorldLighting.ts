@@ -297,6 +297,7 @@ export const createProjectedWorldLighting = (
             description.shadowCaster === "column";
           const x = record.contact.x - source.anchor.x * source.texture.orig.width,
             y = record.contact.y - source.anchor.y * source.texture.orig.height;
+          // Upright roots follow the visible texel foot; structural entrances keep their authored plane.
           const base = parent.apply(
             upright
               ? {
@@ -471,6 +472,7 @@ export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLight
 
 type ProjectedShadowRecord = {
   source: Sprite;
+  /** Anchor-free contact in untrimmed texture pixels, shared by fallback placement and culling. */
   contact: { x: number; y: number };
   shadow: Sprite | undefined;
   atlas: BakedShadowAtlas | null;

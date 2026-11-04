@@ -1007,6 +1007,7 @@ type ActorRecipe = {
 };
 type ActorRecord = {
   depth: number;
+  /** Actor-local foot Y, updated when the visible avatar cutout finishes loading. */
   contactY: number;
   tile: TerrainHex;
   path: TerrainHex[];

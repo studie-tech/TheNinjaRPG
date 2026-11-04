@@ -117,6 +117,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     cache.set(node, matrix);
     return matrix;
   };
+  /** Each active light owns one ground-layer silhouette. */
   const shadowSprite = (target = ground) => {
     const sprite = new Sprite(Texture.EMPTY);
     sprite.tint = 0x14202a;
@@ -392,7 +393,10 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   return {
     ...base,
     kind: "baked" as const,
-    /** Ambient grounding remains until a registered building bake has actually installed. */
+    /**
+     * Reports whether lighting supplies a replacement for the ambient contact ellipse.
+     * Pending keeps it until the bake settles; failed or unsupported replacements preserve it.
+     */
     contactShadowReplacement: (
       source: Sprite | undefined,
       description: WorldSpriteDescription,

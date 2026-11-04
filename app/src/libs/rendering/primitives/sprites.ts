@@ -66,11 +66,12 @@ export const createWorldSprites = async (
 ) => {
   const simpleLighting =
     worldShadows?.kind === "projected" || worldShadows?.kind === "baked";
+  /** Only fixed, non-character scenery can share a retained lighting owner. */
   const sceneryOwner = (description: WorldSpriteDescription) =>
     staticScenery && !description.motion && description.shadowCaster !== "character"
       ? container
       : undefined;
-  // Lighting owns replacement state; asynchronous bakes retain grounding while pending or failed.
+  /** Lighting owns replacement state; asynchronous bakes retain grounding while pending or failed. */
   const contactReplacement = (description: WorldSpriteDescription, source?: Sprite) =>
     worldShadows?.kind === "baked"
       ? worldShadows.contactShadowReplacement(
@@ -79,6 +80,7 @@ export const createWorldSprites = async (
           sceneryOwner(description),
         )
       : "preserve";
+  /** Keep ambient grounding unless the lighting provider supplies its replacement footprint. */
   const needsContactShadow = (description: WorldSpriteDescription, source?: Sprite) =>
     description.shadow &&
     !(
@@ -208,6 +210,7 @@ export const createWorldSprites = async (
   let shadows: Container | null = null,
     lights: Container | null = null;
   const sourcePixels = new Map<Texture["source"], Uint8Array>();
+  /** Decode each shared sheet once per scenery load; only occupied metadata survives this batch. */
   const readSourcePixels = (texture: Texture) => {
     let pixels = sourcePixels.get(texture.source);
     if (!pixels) {
@@ -220,6 +223,7 @@ export const createWorldSprites = async (
     }
     return pixels;
   };
+  /** Resolve occupied source-pixel bounds with the shared batch readback. */
   const opaqueFrame = (texture: Texture) =>
     textureOpaqueFrame(texture, () => readSourcePixels(texture));
   for (const result of settled) {
@@ -566,6 +570,7 @@ export const createWorldSprites = async (
           if (entry.light) layers.ground?.attach(entry.light);
         }
         entry.sprite.zIndex = -(entry.groundY + offsetY);
+        // Ground cover stays below actors at every zoom; screen size controls only its fade.
         if (
           entry.description.small &&
           layers.ground &&
