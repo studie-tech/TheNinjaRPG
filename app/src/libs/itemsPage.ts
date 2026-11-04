@@ -9,7 +9,7 @@ import {
 } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { applyActiveVariant } from "@/libs/combat/util";
-import { byItemName } from "@/libs/item";
+import { byItemName, isCompatibleEquipSlot } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 
 /** Orders the backpack can be shown in. */
@@ -141,14 +141,10 @@ export const backpackFilterChips = (
 
 /** Equipment slots an item can go into; none for meals, furniture and unslotted items. */
 export const fittingSlots = (item: Pick<Item, "slot" | "itemType">): ItemSlot[] => {
-  if (
-    item.slot === "NONE" ||
-    item.itemType === "MEAL" ||
-    item.itemType === "FURNITURE"
-  ) {
+  if (item.itemType === "MEAL" || item.itemType === "FURNITURE") {
     return [];
   }
-  return ItemSlots.filter((slot) => slot !== "NONE" && slot.includes(item.slot));
+  return ItemSlots.filter((slot) => isCompatibleEquipSlot(slot, item.slot));
 };
 
 /**
