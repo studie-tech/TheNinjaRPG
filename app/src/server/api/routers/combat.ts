@@ -3390,7 +3390,9 @@ export const initiateBattle = async (
   }
   const equipCaps = buildJutsuEquipCaps(
     jutsuEquipLimits,
-    battleType === "RANKED_PVP" ? "ranked" : "unranked",
+    battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING"
+      ? "ranked"
+      : "unranked",
   );
   for (const participant of usersState) {
     if (participant.isAi) continue;

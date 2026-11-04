@@ -1,5 +1,3 @@
-import { combatSharedCooldown, jutsuEquipLimit } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getTableColumns } from "drizzle-orm";
 import {
@@ -9,12 +7,15 @@ import {
   ManualStartBattleTypes,
   PvpBattleTypes,
 } from "@/drizzle/constants";
-import { battle, userData } from "@/drizzle/schema";
-import type { CompleteBattle } from "@/libs/combat/types";
+import type { Jutsu } from "@/drizzle/schema";
+import { battle, combatSharedCooldown, jutsu, jutsuEquipLimit, userData } from "@/drizzle/schema";
+import type { CombatQueryUserJutsu, CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
+import { HealTag } from "@/validators/combat";
 import { makeUser } from "../../../../libs/combat/helpers/battleScenario";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 
 const participant = (
   userId: string,
@@ -41,7 +42,7 @@ const participant = (
   defaultAutoCombat: opts.defaultAutoCombat ?? true,
   inArena: opts.isAi ?? false,
   items: [],
-  jutsus: [],
+  jutsus: [] as CombatQueryUserJutsu[],
   userSkills: [],
   queue: [],
   cookingJobs: [],
@@ -64,6 +65,7 @@ const startBattle = async (
   battleType: BattleType,
   users: Participant[],
   info: Partial<Parameters<typeof initiateBattle>[0]>,
+  equipLimits = equipLimitFixture,
 ) => {
   let saved: CompleteBattle | undefined;
   const client = {
@@ -82,7 +84,7 @@ const startBattle = async (
     select: () => ({
       from: (table: object) => {
         if (table === combatSharedCooldown) return { orderBy: async () => [] };
-        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimitFixture };
+        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimits };
         const rows = table === userData ? [{ average: 0 }] : [{ count: 0 }];
         const builder = {
           innerJoin: () => builder,
@@ -112,9 +114,12 @@ const startBattle = async (
   );
   expect(result.success).toBe(true);
   if (!saved) throw new Error("Battle was not inserted");
-  return Object.fromEntries(
-    saved.usersState.map((user) => [user.controllerId, !!user.isAutoCombat]),
-  ) as Record<string, boolean>;
+  return {
+    auto: Object.fromEntries(
+      saved.usersState.map((user) => [user.controllerId, !!user.isAutoCombat]),
+    ) as Record<string, boolean>,
+    usersState: saved.usersState,
+  };
 };
 
 describe("auto combat battle type eligibility", () => {
@@ -159,7 +164,7 @@ describe("initiateBattle auto combat start", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("starts a random encounter (hunting) on auto combat for a player who prefers it", async () => {
-    const auto = await startBattle(
+    const { auto } = await startBattle(
       "RANDOM_ENCOUNTER",
       [participant("hunter"), participant("beast", { isAi: true, villageId: "b" })],
       { autoCombatUserIds: ["hunter"] },
@@ -169,7 +174,7 @@ describe("initiateBattle auto combat start", () => {
   });
 
   it("keeps a PvP battle manual even when auto combat is requested", async () => {
-    const auto = await startBattle(
+    const { auto } = await startBattle(
       "COMBAT",
       [participant("attacker"), participant("defender", { isAi: true, villageId: "b" })],
       { autoCombatUserIds: ["attacker"] },
@@ -178,7 +183,7 @@ describe("initiateBattle auto combat start", () => {
   });
 
   it("reads each group member's own preference when starting from defaults", async () => {
-    const auto = await startBattle(
+    const { auto } = await startBattle(
       "RANDOM_ENCOUNTER",
       [
         participant("keen", { defaultAutoCombat: true }),
@@ -189,4 +194,61 @@ describe("initiateBattle auto combat start", () => {
     );
     expect(auto).toEqual({ keen: true, manual: false, boss: false });
   });
+});
+
+describe("initiateBattle jutsu equipment limits", () => {
+  beforeEach(() => {
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["RANKED_SPARRING", "RANKED_PVP", "SPARRING"] as const)(
+    "uses the matching equipment limits for %s",
+    async (battleType) => {
+      const player = participant("player");
+      if (battleType === "RANKED_PVP") player.status = "QUEUED";
+      const definition = {
+        ...Object.fromEntries(
+          Object.entries(getTableColumns(jutsu)).map(([key, column]) => [
+            key,
+            column.default && typeof column.default === "object" && "queryChunks" in column.default
+              ? new Date()
+              : (column.default ?? null),
+          ]),
+        ),
+        id: "ranked-heal",
+        name: "Ranked Heal",
+        effects: [HealTag.parse({})],
+        jutsuType: "NORMAL",
+        battleUsageType: "BOTH",
+      } as Jutsu;
+      player.jutsus = [
+        {
+          id: "owned-heal",
+          userId: player.userId,
+          jutsuId: definition.id,
+          level: 25,
+          experience: 0,
+          equipped: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          trainingStartedAt: null,
+          finishTraining: null,
+          reskinId: null,
+          jutsu: definition,
+        },
+      ];
+      const { usersState } = await startBattle(
+        battleType,
+        [player, participant("opponent", { isAi: true, villageId: "b" })],
+        {},
+        [{ category: "heal", unrankedMaxEquipped: 0, rankedMaxEquipped: 3 }],
+      );
+      expect(
+        usersState
+          .find((user) => user.controllerId === player.userId)
+          ?.jutsus.map((entry) => entry.jutsuId),
+      ).toEqual(battleType === "SPARRING" ? [] : [definition.id]);
+    },
+  );
 });
