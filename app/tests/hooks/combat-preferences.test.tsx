@@ -24,6 +24,7 @@ afterEach(() => {
 
 it("restores the desktop panel preference independently of battle focus", () => {
   const first = renderHook(useCombatPreferences);
+  expect(first.result.current.battleFocus).toBe(false);
   expect(first.result.current.swapFocusPanels).toBe(false);
   act(() => first.result.current.setSwapFocusPanels(true));
   act(() => first.result.current.setBattleFocus(false));
@@ -34,4 +35,6 @@ it("restores the desktop panel preference independently of battle focus", () => 
   expect(restored.result.current.battleFocus).toBe(false);
   act(() => restored.result.current.setBattleFocus(true));
   expect(restored.result.current.swapFocusPanels).toBe(true);
+  restored.unmount();
+  expect(renderHook(useCombatPreferences).result.current.battleFocus).toBe(true);
 });

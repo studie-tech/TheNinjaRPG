@@ -343,10 +343,10 @@ export const useCombatPreferences = () => {
     DEFAULT_LAYOUT_ORDER,
   );
   const [useTabs, setUseTabs] = useLocalStorage<boolean>("combatUseTabs", false);
-  // Battle dialog; off shows the battle inside the game layout.
+  // The battle dialog is opt-in; keep the game layout until explicitly enabled.
   const [battleFocus, setBattleFocus] = useLocalStorage<boolean>(
     "combatBattleFocus",
-    true,
+    false,
   );
   const [swapFocusPanels, setSwapFocusPanels] = useLocalStorage<boolean>(
     "combatFocusSwapActionsAndLog",

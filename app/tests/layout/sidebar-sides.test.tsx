@@ -280,6 +280,9 @@ describe("game settings categories", () => {
     expect(dialog.getByRole("tab", { name: "Visual effects" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.mouseDown(dialog.getByRole("tab", { name: "Layout" }), { button: 0, ctrlKey: false });
     const battleFocus = dialog.getByRole("switch", { name: "Battle focus" });
+    expect(battleFocus.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(battleFocus);
+    expect(localStorage.getItem("combatBattleFocus")).toBe("true");
     expect(battleFocus.getAttribute("aria-checked")).toBe("true");
     expect(dialog.queryByRole("switch", { name: "Show timeline" })).toBeNull();
     expect(dialog.getByRole("switch", { name: "Show basic actions" }).hasAttribute("disabled")).toBe(false);
