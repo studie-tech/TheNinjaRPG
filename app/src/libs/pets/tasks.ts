@@ -1,5 +1,10 @@
 /** Shared eligibility for Content-authored companion profession contracts. */
-import { PET_TASK_MAX_MINUTES, PET_TASK_MIN_RANK, isPetTaskQuestType, PET_TASK_QUEST_TYPES } from "@/drizzle/constants";
+import {
+  PET_TASK_MAX_MINUTES,
+  PET_TASK_MIN_RANK,
+  isPetTaskQuestType,
+  PET_TASK_QUEST_TYPES,
+} from "@/drizzle/constants";
 import type { Quest, UserData, UserPet } from "@/drizzle/schema";
 import { getMaxPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
 import type { PetTask } from "@/validators/petTasks";

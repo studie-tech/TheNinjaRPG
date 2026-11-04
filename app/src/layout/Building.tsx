@@ -28,6 +28,7 @@ import {
   calcStructureUpgrade,
   getEffectiveStructureLevel,
   getRaidStructureMultiplier,
+  type StructureAttribute,
 } from "@/utils/village";
 
 interface BuildingProps {
@@ -181,25 +182,8 @@ const RestoreStructureButton = ({
   );
 };
 
-type StructureBonusKey =
-  | "anbuSquadsPerLvl"
-  | "arenaRewardPerLvl"
-  | "bankInterestPerLvl"
-  | "blackDiscountPerLvl"
-  | "clansPerLvl"
-  | "hospitalSpeedupPerLvl"
-  | "itemDiscountPerLvl"
-  | "missionRewardPerLvl"
-  | "patrolsPerLvl"
-  | "ramenDiscountPerLvl"
-  | "regenIncreasePerLvl"
-  | "sleepRegenPerLvl"
-  | "structureDiscountPerLvl"
-  | "trainBoostPerLvl"
-  | "villageDefencePerLvl";
-
 interface StructureBonus {
-  key: StructureBonusKey;
+  key: StructureAttribute;
   label: string;
   unit: string;
   scale?: number;

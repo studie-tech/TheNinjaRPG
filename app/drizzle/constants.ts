@@ -1419,7 +1419,7 @@ export const RECRUIT_RANK_MILESTONES = [
   { rank: "CHUNIN", reputation: 5 },
   { rank: "JONIN", reputation: 10 },
   { rank: "ELITE JONIN", reputation: 10 },
-] as const;
+] as const satisfies readonly { rank: RecruitMilestoneRank; reputation: number }[];
 export const RECRUIT_MILESTONE_RANKS = ["GENIN", "CHUNIN", "JONIN", "ELITE JONIN"] as const;
 export type RecruitMilestoneRank = (typeof RECRUIT_MILESTONE_RANKS)[number];
 
@@ -1596,7 +1596,7 @@ export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
   LEGENDARY: 450000,
 };
 /** Hard cap on `userData.sageMasteryExperience` (Legendary threshold). */
-export const SAGE_MASTERY_EXP_CAP = 450_000;
+export const SAGE_MASTERY_EXP_CAP = SAGE_MASTERY_REQUIRED_EXP.LEGENDARY;
 
 /** Daily Activation uses allowed at each mastery rank. NONE and INITIATE share 10. */
 export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
@@ -2278,22 +2278,6 @@ export const CLAN_POINT_RYO_RATE = 200;
 // Clan boost system - Ryo-based
 export const CLAN_BOOST_MAX_LEVEL = 10;
 export const CLAN_BOOST_PERCENT_PER_LEVEL = 2;
-export const CLAN_TRAINING_BOOST_BASE_COST = 100000;
-export const CLAN_TRAINING_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_RYO_BOOST_BASE_COST = 50000;
-export const CLAN_RYO_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_REGEN_BOOST_BASE_COST = 50000;
-export const CLAN_REGEN_BOOST_PER_LEVEL_COST = 20000;
-export const CLAN_MISSION_BOOST_BASE_COST = 100000;
-export const CLAN_MISSION_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_CRAFTING_TIME_BOOST_BASE_COST = 200000;
-export const CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_CRAFTING_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST = 40000;
-export const CLAN_HUNTER_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST = 40000;
-export const CLAN_GATHERER_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST = 40000;
 
 export const ClanBoostTypes = [
   "trainingBoost",
@@ -2309,55 +2293,55 @@ export type ClanBoostType = (typeof ClanBoostTypes)[number];
 
 export const CLAN_BOOST_CONFIG: Record<
   ClanBoostType,
-  { baseCost: number; perLevelCost: number; label: string; factionOnly: boolean }
+  { baseCost: number; perLevelCost: number; label: string; villageOnly: boolean }
 > = {
   trainingBoost: {
-    baseCost: CLAN_TRAINING_BOOST_BASE_COST,
-    perLevelCost: CLAN_TRAINING_BOOST_PER_LEVEL_COST,
+    baseCost: 100000,
+    perLevelCost: 30000,
     label: "Training boost",
-    factionOnly: false,
+    villageOnly: false,
   },
   ryoBoost: {
-    baseCost: CLAN_RYO_BOOST_BASE_COST,
-    perLevelCost: CLAN_RYO_BOOST_PER_LEVEL_COST,
-    label: "Ryo boost",
-    factionOnly: false,
+    baseCost: 50000,
+    perLevelCost: 30000,
+    label: "Ryo gain boost",
+    villageOnly: false,
   },
   regenBoost: {
-    baseCost: CLAN_REGEN_BOOST_BASE_COST,
-    perLevelCost: CLAN_REGEN_BOOST_PER_LEVEL_COST,
+    baseCost: 50000,
+    perLevelCost: 20000,
     label: "Regen boost",
-    factionOnly: false,
+    villageOnly: true,
   },
   missionRewardBoost: {
-    baseCost: CLAN_MISSION_BOOST_BASE_COST,
-    perLevelCost: CLAN_MISSION_BOOST_PER_LEVEL_COST,
+    baseCost: 100000,
+    perLevelCost: 30000,
     label: "Mission reward boost",
-    factionOnly: false,
+    villageOnly: true,
   },
   craftingTimeBoost: {
-    baseCost: CLAN_CRAFTING_TIME_BOOST_BASE_COST,
-    perLevelCost: CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST,
+    baseCost: 200000,
+    perLevelCost: 30000,
     label: "Crafting time reduction",
-    factionOnly: false,
+    villageOnly: false,
   },
   craftingExpBoost: {
-    baseCost: CLAN_CRAFTING_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST,
-    label: "Crafting experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Crafting exp boost",
+    villageOnly: true,
   },
   hunterExpBoost: {
-    baseCost: CLAN_HUNTER_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST,
-    label: "Hunter experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Hunter exp boost",
+    villageOnly: true,
   },
   gathererExpBoost: {
-    baseCost: CLAN_GATHERER_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST,
-    label: "Gatherer experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Gatherer exp boost",
+    villageOnly: true,
   },
 };
 
@@ -2450,16 +2434,20 @@ export const RANKED_RANKS = [
   "Sannin",
 ] as const;
 export type RankedRank = (typeof RANKED_RANKS)[number];
+export const RANKED_LEGEND_LP_REQUIREMENT = 900;
 export const RANKED_DIVISIONS = [
   { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
   { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
   { key: "ADEPT", name: "Adept", rankedLp: 300, kFactor: 32 },
   { key: "MASTER", name: "Master", rankedLp: 600, kFactor: 24 },
-  { key: "LEGEND", name: "Legend", rankedLp: 900, kFactor: 16 },
+  { key: "LEGEND", name: "Legend", rankedLp: RANKED_LEGEND_LP_REQUIREMENT, kFactor: 16 },
   { key: "SANNIN", name: "Sannin", rankedLp: Infinity, kFactor: 16 },
-] as const;
-export const RANKED_LEGEND_LP_REQUIREMENT =
-  RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
+] as const satisfies readonly {
+  key: string;
+  name: RankedRank;
+  rankedLp: number;
+  kFactor: number;
+}[];
 /** Masteries are maxed on purpose, because ranked waives progression gates. */
 export const RANKED_PVP_STATS = {
   strength: MAX_GENS_CAP,
@@ -3226,12 +3214,12 @@ export const HOME_FURNITURE_POSITION_MAX = 1000;
 export const HOME_FURNITURE_MIN_WIDTH = 6;
 export const HOME_FURNITURE_MAX_WIDTH = 40;
 export const HOME_FURNITURE_MAX_PLACEMENTS = 50;
+export const HOME_ROOM_IDS = ["main", "room-1", "room-2", "room-3", "room-4", "room-5", "room-6", "room-7", "room-8", "room-9", "yard"] as const;
 /** A property's room limit includes its yard; room identities remain stable across tiers. */
-export const HOME_MAX_ROOMS = 11;
+export const HOME_MAX_ROOMS = HOME_ROOM_IDS.length;
 export const HOME_MAX_INVITATIONS = 100;
 /** Pending home invitations follow the request cleaner’s one-day retention. */
 export const HOME_INVITATION_EXPIRY_SECONDS = 24 * 3600;
-export const HOME_ROOM_IDS = ["main", "room-1", "room-2", "room-3", "room-4", "room-5", "room-6", "room-7", "room-8", "room-9", "yard"] as const;
 /** Persist palette keys so editor choices and rendered wall finishes share one source. */
 export const HOME_WALL_PAINTS = { ivory: "#ddd0ac", sage: "#a9ba9a", indigo: "#8b96b7", rose: "#cfaaa3", charcoal: "#777b80" } as const;
 /** Complete property paintings share their source with every foreground depth mask. */
@@ -3372,15 +3360,8 @@ export const SUPPORT_TICKET_LIMITS = {
   TITLE_MAX_LENGTH: 255,
   DESCRIPTION_MIN_LENGTH: 50,
   DESCRIPTION_MAX_LENGTH: 5000,
-  COMMENT_MIN_LENGTH: 1,
-  COMMENT_MAX_LENGTH: 5000,
   MAX_TAGS: 20,
-  MAX_TAG_LENGTH: 50,
-  MAX_ATTACHMENT_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_SUGGESTIONS: 10,
-  MAX_SEARCH_RESULTS: 50,
-  MAX_BULK_ACTIONS: 100,
-};
+} as const;
 
 // Support Ticket Status Transitions
 export const SUPPORT_TICKET_STATUS_TRANSITIONS: Record<

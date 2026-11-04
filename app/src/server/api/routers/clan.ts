@@ -1217,8 +1217,8 @@ export const clanRouter = createTRPCRouter({
       const cost = config.baseCost + currentLevel * config.perLevelCost;
       // Guard
       if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (config.factionOnly && !user.isOutlaw) {
-        return errorResponse("Only available for factions");
+      if (config.villageOnly && user.isOutlaw) {
+        return errorResponse("Only available for village clans");
       }
       if (user.clanId !== clanData.id) {
         return errorResponse(`Not in the ${groupLabel}`);

@@ -51,30 +51,16 @@ import {
   CLAN_ASSASSIN_SLOTS,
   CLAN_BATTLE_REWARD_POINTS,
   CLAN_BATTLE_REWARD_RYO,
+  CLAN_BOOST_CONFIG,
+  ClanBoostTypes,
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
   CLAN_COLOR_CHANGE_REP_COST,
-  CLAN_CRAFTING_EXP_BOOST_BASE_COST,
-  CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST,
-  CLAN_CRAFTING_TIME_BOOST_BASE_COST,
-  CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST,
-  CLAN_GATHERER_EXP_BOOST_BASE_COST,
-  CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST,
-  CLAN_HUNTER_EXP_BOOST_BASE_COST,
-  CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST,
   CLAN_LOBBY_SECONDS,
   CLAN_MAX_MEMBERS,
-  CLAN_MISSION_BOOST_BASE_COST,
-  CLAN_MISSION_BOOST_PER_LEVEL_COST,
   CLAN_MPVP_MAX_USERS_PER_SIDE,
   CLAN_POINT_RYO_RATE,
   CLAN_RANK_REQUIREMENT,
-  CLAN_REGEN_BOOST_BASE_COST,
-  CLAN_REGEN_BOOST_PER_LEVEL_COST,
-  CLAN_RYO_BOOST_BASE_COST,
-  CLAN_RYO_BOOST_PER_LEVEL_COST,
-  CLAN_TRAINING_BOOST_BASE_COST,
-  CLAN_TRAINING_BOOST_PER_LEVEL_COST,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
@@ -2063,108 +2049,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
           {/* Clans and factions share training, Ryo and crafting speed boosts. */}
           {
             <div className="mt-4 grid grid-cols-2 gap-x-4">
-              <BoostRow
-                label="Training boost"
-                currentBoost={clanData.trainingBoost}
-                baseCost={CLAN_TRAINING_BOOST_BASE_COST}
-                perLevelCost={CLAN_TRAINING_BOOST_PER_LEVEL_COST}
-                clanBank={clanData.bank}
-                canPurchase={leaderLike}
-                isPending={isPurchasingBoost}
-                onPurchase={() => purchaseBoost({ clanId, boostType: "trainingBoost" })}
-              />
-              <BoostRow
-                label="Ryo gain boost"
-                currentBoost={clanData.ryoBoost}
-                baseCost={CLAN_RYO_BOOST_BASE_COST}
-                perLevelCost={CLAN_RYO_BOOST_PER_LEVEL_COST}
-                clanBank={clanData.bank}
-                canPurchase={leaderLike}
-                isPending={isPurchasingBoost}
-                onPurchase={() => purchaseBoost({ clanId, boostType: "ryoBoost" })}
-              />
-              {!userData.isOutlaw && (
+              {ClanBoostTypes.filter(
+                (boostType) =>
+                  !userData.isOutlaw || !CLAN_BOOST_CONFIG[boostType].villageOnly,
+              ).map((boostType) => (
                 <BoostRow
-                  label="Regen boost"
-                  currentBoost={clanData.regenBoost}
-                  baseCost={CLAN_REGEN_BOOST_BASE_COST}
-                  perLevelCost={CLAN_REGEN_BOOST_PER_LEVEL_COST}
+                  key={boostType}
+                  label={CLAN_BOOST_CONFIG[boostType].label}
+                  currentBoost={clanData[boostType]}
+                  baseCost={CLAN_BOOST_CONFIG[boostType].baseCost}
+                  perLevelCost={CLAN_BOOST_CONFIG[boostType].perLevelCost}
                   clanBank={clanData.bank}
                   canPurchase={leaderLike}
                   isPending={isPurchasingBoost}
-                  onPurchase={() =>
-                    purchaseBoost({ clanId: clanData.id, boostType: "regenBoost" })
-                  }
+                  onPurchase={() => purchaseBoost({ clanId, boostType })}
                 />
-              )}
-              {!userData.isOutlaw && (
-                <BoostRow
-                  label="Mission reward boost"
-                  currentBoost={clanData.missionRewardBoost}
-                  baseCost={CLAN_MISSION_BOOST_BASE_COST}
-                  perLevelCost={CLAN_MISSION_BOOST_PER_LEVEL_COST}
-                  clanBank={clanData.bank}
-                  canPurchase={leaderLike}
-                  isPending={isPurchasingBoost}
-                  onPurchase={() =>
-                    purchaseBoost({ clanId, boostType: "missionRewardBoost" })
-                  }
-                />
-              )}
-              <BoostRow
-                label="Crafting time reduction"
-                currentBoost={clanData.craftingTimeBoost}
-                baseCost={CLAN_CRAFTING_TIME_BOOST_BASE_COST}
-                perLevelCost={CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST}
-                clanBank={clanData.bank}
-                canPurchase={leaderLike}
-                isPending={isPurchasingBoost}
-                onPurchase={() =>
-                  purchaseBoost({ clanId, boostType: "craftingTimeBoost" })
-                }
-              />
-              {!userData.isOutlaw && (
-                <BoostRow
-                  label="Crafting exp boost"
-                  currentBoost={clanData.craftingExpBoost}
-                  baseCost={CLAN_CRAFTING_EXP_BOOST_BASE_COST}
-                  perLevelCost={CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST}
-                  clanBank={clanData.bank}
-                  canPurchase={leaderLike}
-                  isPending={isPurchasingBoost}
-                  onPurchase={() =>
-                    purchaseBoost({ clanId, boostType: "craftingExpBoost" })
-                  }
-                />
-              )}
-              {!userData.isOutlaw && (
-                <BoostRow
-                  label="Hunter exp boost"
-                  currentBoost={clanData.hunterExpBoost}
-                  baseCost={CLAN_HUNTER_EXP_BOOST_BASE_COST}
-                  perLevelCost={CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST}
-                  clanBank={clanData.bank}
-                  canPurchase={leaderLike}
-                  isPending={isPurchasingBoost}
-                  onPurchase={() =>
-                    purchaseBoost({ clanId, boostType: "hunterExpBoost" })
-                  }
-                />
-              )}
-              {!userData.isOutlaw && (
-                <BoostRow
-                  label="Gatherer exp boost"
-                  currentBoost={clanData.gathererExpBoost}
-                  baseCost={CLAN_GATHERER_EXP_BOOST_BASE_COST}
-                  perLevelCost={CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST}
-                  clanBank={clanData.bank}
-                  canPurchase={leaderLike}
-                  isPending={isPurchasingBoost}
-                  onPurchase={() =>
-                    purchaseBoost({ clanId, boostType: "gathererExpBoost" })
-                  }
-                />
-              )}
+              ))}
             </div>
           }
           {/* Elder Nomination - only for non-outlaw clans */}

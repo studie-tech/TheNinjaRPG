@@ -1,18 +1,13 @@
-import { eq, sql } from "drizzle-orm";
-import { promises as fs } from "fs";
+import { eq } from "drizzle-orm";
 import { MAP_WAKE_ISLAND_SECTOR, PET_SANCTUARY_NAME, PET_SANCTUARY_IMAGE, PET_SANCTUARY_LONGITUDE, PET_SANCTUARY_LATITUDE } from "@/drizzle/constants";
 import { village, villageStructure } from "@/drizzle/schema";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import type { DrizzleClient } from "@/server/db";
+import { executeSqlDump } from "./sqlDump";
 
 export const seedVillages = async (client: DrizzleClient) => {
   console.log("\nSyncing villages...");
-  const villageData = await fs.readFile(process.cwd() + "/data/villages.sql", "utf8");
-  for (const statement of villageData.split(";")) {
-    if (statement.trim()) {
-      await client.execute(sql.raw(`${statement.trim()};`));
-    }
-  }
+  await executeSqlDump(client, "villages.sql");
 
   // villages.sql is a production-shaped legacy dump. Normalize its geographic
   // references after import so `make dbpush && make seed` cannot put globe
