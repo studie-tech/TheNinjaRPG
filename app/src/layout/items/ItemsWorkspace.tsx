@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
@@ -59,7 +60,7 @@ export function ItemsWorkspace({
     bag,
     view: { kind: "backpack" },
   });
-  const [phoneTab, setPhoneTab] = useState<"equipment" | "backpack">("equipment");
+  const [phoneTab, setPhoneTab] = useState("equipment");
   const [dragging, setDragging] = useState<UserItemWithRelations | null>(null);
   const [isNarrow, setIsNarrow] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -238,30 +239,28 @@ export function ItemsWorkspace({
   );
 
   return (
-    <div ref={rootRef} className="@container">
+    <Tabs
+      ref={rootRef}
+      value={phoneTab}
+      onValueChange={setPhoneTab}
+      className="@container"
+    >
       {hotkeyDialog}
-      <div
-        role="tablist"
+      <TabsList
         aria-label="Items view"
-        className="flex gap-1.5 px-3 pt-3 @min-[600px]:hidden"
+        className="flex-nowrap gap-1.5 rounded-none bg-transparent px-3 pt-3 pb-0 @min-[600px]:hidden"
       >
-        <PhoneTab
-          selected={phoneTab === "equipment"}
-          onSelect={() => setPhoneTab("equipment")}
-        >
-          Equipment
-        </PhoneTab>
-        <PhoneTab
-          selected={phoneTab === "backpack"}
-          onSelect={() => setPhoneTab("backpack")}
-        >
-          Backpack · {choosableBag.length}
-        </PhoneTab>
-      </div>
+        <PhoneTab value="equipment">Equipment</PhoneTab>
+        <PhoneTab value="backpack">Backpack · {choosableBag.length}</PhoneTab>
+      </TabsList>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
-        <div
+        {/* Keep both panels mounted for the wide layout and durable opener refs. */}
+        <TabsContent
+          value="equipment"
+          forceMount
+          tabIndex={isNarrow ? 0 : -1}
           className={cn(
-            "min-w-0 p-3",
+            "mt-0 min-w-0 p-3",
             phoneTab === "backpack" && "@max-[600px]:hidden",
           )}
         >
@@ -288,10 +287,13 @@ export function ItemsWorkspace({
               }
             />
           </div>
-        </div>
-        <div
+        </TabsContent>
+        <TabsContent
+          value="backpack"
+          forceMount
+          tabIndex={isNarrow ? 0 : -1}
           className={cn(
-            "min-w-0 overflow-y-auto border-t-2 border-dashed bg-poppopover p-3 @min-[600px]:max-h-[600px] @min-[600px]:border-t-0 @min-[600px]:border-l-2",
+            "mt-0 min-w-0 overflow-y-auto border-t-2 border-dashed bg-poppopover p-3 @min-[600px]:max-h-[600px] @min-[600px]:border-t-0 @min-[600px]:border-l-2",
             phoneTab === "equipment" && "@max-[600px]:hidden",
             hasPanel && !isNarrow && "@min-[600px]:hidden",
           )}
@@ -309,7 +311,7 @@ export function ItemsWorkspace({
             onDragItem={hasFinePointer ? setDragging : undefined}
             wrapCard={withMenu}
           />
-        </div>
+        </TabsContent>
         {hasPanel && !isNarrow && (
           <div
             ref={panelRef}
@@ -342,31 +344,17 @@ export function ItemsWorkspace({
           </SheetContent>
         </Sheet>
       )}
-    </div>
+    </Tabs>
   );
 }
 
-function PhoneTab({
-  selected,
-  onSelect,
-  children,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  children: React.ReactNode;
-}) {
+function PhoneTab({ value, children }: { value: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={selected}
-      onClick={onSelect}
-      className={cn(
-        "h-11 flex-1 rounded-lg font-semibold text-sm",
-        selected ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
-      )}
+    <TabsTrigger
+      value={value}
+      className="h-11 flex-1 rounded-lg bg-muted font-semibold text-foreground text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
     >
       {children}
-    </button>
+    </TabsTrigger>
   );
 }

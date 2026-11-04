@@ -22,16 +22,18 @@ const bags = [
 
 it("names each bag with its item count and marks the open one", () => {
   render(<BagTabs bags={bags} active="normal" onChange={vi.fn()} />);
-  const tabs = screen.getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["All · 58", "Gear · 16", "Event · 2", "Materials · 31", "Cooking · 9"]);
-  expect(tabs[1]?.getAttribute("aria-selected")).toBe("true");
-  expect(tabs[0]?.getAttribute("aria-selected")).toBe("false");
+  expect(screen.getByRole("group", { name: "Bags" })).toBeDefined();
+  expect(screen.queryByRole("tablist")).toBeNull();
+  const buttons = screen.getAllByRole("button");
+  expect(buttons.map((button) => button.textContent)).toEqual(["All · 58", "Gear · 16", "Event · 2", "Materials · 31", "Cooking · 9"]);
+  expect(buttons[1]?.getAttribute("aria-pressed")).toBe("true");
+  expect(buttons[0]?.getAttribute("aria-pressed")).toBe("false");
 });
 
 it("switches bags and remembers the choice", () => {
   const onChange = vi.fn();
   render(<BagTabs bags={bags} active="normal" onChange={onChange} />);
-  fireEvent.click(screen.getByRole("tab", { name: "Materials · 31" }));
+  fireEvent.click(screen.getByRole("button", { name: "Materials · 31" }));
   expect(onChange).toHaveBeenCalledWith("materials");
   expect(window.localStorage.getItem("backpackSelection")).toBe("materials");
 });
@@ -61,7 +63,7 @@ it("explains a bag over its limit", () => {
   );
 });
 
-it("marks a bag over its limit in its tab", () => {
+it("marks a bag over its limit in its button", () => {
   render(
     <BagTabs
       bags={[
@@ -72,8 +74,8 @@ it("marks a bag over its limit in its tab", () => {
       onChange={vi.fn()}
     />,
   );
-  const gear = screen.getByRole("tab", { name: /^Gear · 37/ });
+  const gear = screen.getByRole("button", { name: /^Gear · 37/ });
   expect(gear.getAttribute("data-over")).toBe("true");
   expect(gear.textContent).toBe("Gear · 37 (over limit)");
-  expect(screen.getByRole("tab", { name: "All · 40" }).getAttribute("data-over")).toBeNull();
+  expect(screen.getByRole("button", { name: "All · 40" }).getAttribute("data-over")).toBeNull();
 });

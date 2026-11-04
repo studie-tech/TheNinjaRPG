@@ -248,7 +248,7 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   expect(equipmentTab?.getAttribute("aria-selected")).toBe("true");
   expect(backpackTab?.textContent).toBe("Backpack · 2");
   act(() => {
-    fireEvent.click(backpackTab!);
+    fireEvent.mouseDown(backpackTab!, { button: 0, ctrlKey: false });
   });
   expect(backpackTab?.getAttribute("aria-selected")).toBe("true");
   act(() => {
@@ -262,6 +262,36 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   expect(document.querySelector("[data-items-panel]")).toBeNull();
 });
 
+it("navigates phone panels with arrows, Home and End while retaining their triggers", async () => {
+  containerWidth = 390;
+  renderWorkspace();
+  const equipment = screen.getByRole("tab", { name: "Equipment" });
+  const backpack = screen.getByRole("tab", { name: "Backpack · 2" });
+  const equipmentPanel = screen.getByRole("tabpanel", { name: "Equipment" });
+  const backpackPanel = screen.getByRole("tabpanel", { name: "Backpack · 2" });
+  const equipmentTrigger = slotOf("HAND_1");
+  const backpackTrigger = card("Raijin Tanto");
+  expect(equipment.getAttribute("aria-controls")).toBe(equipmentPanel.id);
+  expect(backpack.getAttribute("aria-controls")).toBe(backpackPanel.id);
+  expect(equipmentPanel.getAttribute("aria-labelledby")).toBe(equipment.id);
+  expect(backpackPanel.getAttribute("aria-labelledby")).toBe(backpack.id);
+  act(() => equipment.focus());
+  for (const [key, target] of [
+    ["ArrowRight", backpack],
+    ["ArrowLeft", equipment],
+    ["End", backpack],
+    ["Home", equipment],
+  ] as const) {
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key });
+    await waitFor(() => expect(document.activeElement === target).toBe(true));
+    expect(target.getAttribute("aria-selected")).toBe("true");
+    expect(target.tabIndex).toBe(0);
+    expect((target === equipment ? backpack : equipment).tabIndex).toBe(-1);
+    expect(slotOf("HAND_1")).toBe(equipmentTrigger);
+    expect(card("Raijin Tanto")).toBe(backpackTrigger);
+  }
+});
+
 it("names the phone inspector sheet with the active variant name", () => {
   containerWidth = 400;
   const sword = {
@@ -270,7 +300,7 @@ it("names the phone inspector sheet with the active variant name", () => {
     item: { ...tanto.item, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Tanto" }] },
   } as UserItemWithRelations;
   renderWorkspace({ userItems: [sword] });
-  act(() => fireEvent.click(screen.getAllByRole("tab")[1]!));
+  act(() => fireEvent.mouseDown(screen.getAllByRole("tab")[1]!, { button: 0, ctrlKey: false }));
   act(() => fireEvent.click(card("Blue Tanto")));
   expect(screen.getByRole("dialog", { name: "Blue Tanto" })).toBeDefined();
 });
@@ -357,7 +387,7 @@ it("opens the phone sheet with focus on the sheet, not its close button", () => 
   containerWidth = 390;
   renderWorkspace();
   act(() => {
-    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    fireEvent.mouseDown(screen.getAllByRole("tab")[1]!, { button: 0, ctrlKey: false });
   });
   act(() => {
     fireEvent.click(card("Raijin Tanto"));
@@ -374,7 +404,7 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
   ));
   renderWorkspace();
   act(() => {
-    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    fireEvent.mouseDown(screen.getAllByRole("tab")[1]!, { button: 0, ctrlKey: false });
   });
   act(() => {
     fireEvent.click(card("Raijin Tanto"));

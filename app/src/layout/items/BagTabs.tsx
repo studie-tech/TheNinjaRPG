@@ -36,10 +36,9 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
   }, []);
 
   return (
-    <div
-      role="tablist"
+    <fieldset
       aria-label="Bags"
-      className="flex max-w-full gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5"
+      className="flex min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-lg bg-muted p-0.5"
     >
       {bags.map((bag) => {
         const selected = bag.value === active;
@@ -47,8 +46,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
           <button
             key={bag.value}
             type="button"
-            role="tab"
-            aria-selected={selected}
+            aria-pressed={selected}
             data-over={bag.over ? "true" : undefined}
             onClick={() => {
               safeLocalStorageSetItem(BAG_STORAGE_KEY, bag.value);
@@ -67,7 +65,7 @@ export function BagTabs({ bags, active, onChange }: BagTabsProps) {
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 
