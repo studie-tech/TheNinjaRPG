@@ -46,6 +46,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { canDeleteConceptArt, getBanOrSilenceRestriction } from "@/utils/permissions";
 import {
   conceptArtFilterSchema,
@@ -380,8 +381,7 @@ export const conceptartRouter = createTRPCRouter({
         .extend(conceptArtFilterSchema.shape),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const userSearch = ctx.userId ?? "none";
       const secondsBack = getTimeFrameinSeconds(input.time_frame);
       const results = await listConceptImageForGetAll(
@@ -391,7 +391,7 @@ export const conceptartRouter = createTRPCRouter({
         secondsBack,
         skip,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,

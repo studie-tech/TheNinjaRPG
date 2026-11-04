@@ -216,6 +216,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   cancelQueuedJutsuTraining,
   enqueueJutsuLevels,
@@ -427,8 +428,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build the base DB filter
       const baseFilters = jutsuDatabaseFilter(input);
@@ -439,7 +439,7 @@ export const jutsuRouter = createTRPCRouter({
       const filtered = filterByEffectConstraints(results, input);
 
       // Next cursor if more rows
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
 
       return {
         data: filtered,
@@ -2238,8 +2238,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build the base DB filter (on underlying jutsu)
       const baseFilters = jutsuDatabaseFilter(input);
@@ -2277,7 +2276,7 @@ export const jutsuRouter = createTRPCRouter({
           },
         }));
 
-      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(rows);
       return {
         data: results,
         nextCursor,

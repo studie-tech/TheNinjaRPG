@@ -25,6 +25,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
@@ -127,14 +128,13 @@ export const bankRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const transfers = await listBankTransfersForGetTransfers(
         ctx.drizzle,
         input,
         skip,
       );
-      const nextCursor = transfers.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(transfers);
       return {
         data: transfers,
         nextCursor: nextCursor,

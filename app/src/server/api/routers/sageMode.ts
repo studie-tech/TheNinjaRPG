@@ -34,6 +34,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
+import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
@@ -82,8 +83,7 @@ export const sageModeRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
       const allowHiddenFilter = user ? canChangeContent(user.role) : false;
       const baseFilters = sageModeDatabaseFilter(input, allowHiddenFilter);
@@ -93,7 +93,7 @@ export const sageModeRouter = createTRPCRouter({
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,

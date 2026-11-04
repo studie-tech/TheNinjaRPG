@@ -72,6 +72,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
+import { offsetPage } from "@/server/utils/pagination";
 import { fetchUserReport } from "@/server/utils/reports";
 import { updateSanctionReport } from "@/server/utils/sanctionTombstone";
 import {
@@ -159,8 +160,7 @@ export const reportsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
       const staffUser = canModerateRoles.includes(user.role);
@@ -174,7 +174,7 @@ export const reportsRouter = createTRPCRouter({
         skip,
       );
 
-      const nextCursor = reports.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(reports);
       return {
         data: reports,
         nextCursor: nextCursor,

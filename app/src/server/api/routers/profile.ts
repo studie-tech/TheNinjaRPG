@@ -287,6 +287,7 @@ import {
 } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
+import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import {
@@ -2059,15 +2060,14 @@ export const profileRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const results = await listRecruitmentRewardsForGetRecruitmentRewards(
         ctx.drizzle,
         ctx,
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: results, nextCursor };
     }),
   // Rank milestone eligibility and payouts for the current user's recruits

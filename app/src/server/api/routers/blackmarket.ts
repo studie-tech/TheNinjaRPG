@@ -75,6 +75,7 @@ import {
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { offsetPage } from "@/server/utils/pagination";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
 import {
@@ -102,9 +103,8 @@ export const blackMarketRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input?.cursor ? input.cursor : 0;
       const limit = input?.limit ? input.limit : 100;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage({ cursor: input.cursor, limit });
 
       const results = await selectRyoTradeForGetRyoOffers(
         ctx.drizzle,
@@ -112,7 +112,7 @@ export const blackMarketRouter = createTRPCRouter({
         limit,
         skip,
       );
-      const nextCursor = results.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: results, nextCursor };
     }),
   getGraph: protectedProcedure

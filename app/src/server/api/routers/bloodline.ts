@@ -111,6 +111,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -158,8 +159,7 @@ export const bloodlineRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build where conditions using the abstracted filter function
       const baseFilters = bloodlineDatabaseFilter(input);
@@ -170,7 +170,7 @@ export const bloodlineRouter = createTRPCRouter({
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -541,8 +541,7 @@ export const bloodlineRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const baseFilters = bloodlineDatabaseFilter(input);
       const rows = await selectBloodlineReskinForGetAllReskins(
         ctx.drizzle,
@@ -555,7 +554,7 @@ export const bloodlineRouter = createTRPCRouter({
         userUsername: row.userUsername,
         bloodline: row.base,
       }));
-      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(rows);
       return { data: results, nextCursor };
     }),
   // Delete a bloodline

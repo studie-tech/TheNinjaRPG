@@ -73,6 +73,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   notifyConversationMentions,
   notifyPrivateConversation,
@@ -126,15 +127,14 @@ export const commentsRouter = createTRPCRouter({
         throw serverError("NOT_FOUND", "Report not found");
       }
       // Get comments
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const comments = await listUserReportCommentForGetReportComments(
         ctx.drizzle,
         skip,
         input,
         report,
       );
-      const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(comments);
       // If not able to see secret data, hide reporter
       if (!canSeeSecretData(user.role)) maskStaffReportCommentAuthors(comments);
       return {
@@ -403,8 +403,7 @@ export const commentsRouter = createTRPCRouter({
         ),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       // Fetch data
       const [user, convo] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -471,7 +470,7 @@ export const commentsRouter = createTRPCRouter({
           : []),
       ]);
       // Fetch
-      const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(comments);
       return {
         restrictionMessage: null,
         convo: { ...convo, ...(lastReadAt && { lastReadAt }) },

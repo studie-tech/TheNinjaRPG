@@ -231,17 +231,33 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
   // Missing settings were inserted above, so every name resolves to a row
   const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
 
-  return {
-    stats_scaling: get("DMG_STATS_SCALING"),
-    base_hits: get("DMG_BASE_HITS"),
-    curve: get("DMG_CURVE"),
-    amplitude: get("DMG_AMPLITUDE"),
-    ep_normalization: get("DMG_EP_NORMALIZATION"),
-    gen_weight: get("DMG_GEN_WEIGHT"),
-    advantage_min: get("DMG_ADVANTAGE_MIN"),
-    advantage_max: get("DMG_ADVANTAGE_MAX"),
-  };
+  return Object.fromEntries(
+    dmgConfigSettings().map(([key, name]) => [key, get(name)]),
+  ) as DmgConfig;
 };
+
+/** Saves every DMG config value to its gameSetting row. */
+export const updateDmgConfig = (client: DrizzleClient, config: DmgConfig) =>
+  Promise.all(
+    dmgConfigSettings().map(([key, name]) =>
+      updateGameSetting(client, name, config[key], new Date()),
+    ),
+  );
+
+/** GameSetting row behind each DmgConfig field. */
+const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
+  stats_scaling: "DMG_STATS_SCALING",
+  base_hits: "DMG_BASE_HITS",
+  curve: "DMG_CURVE",
+  amplitude: "DMG_AMPLITUDE",
+  ep_normalization: "DMG_EP_NORMALIZATION",
+  gen_weight: "DMG_GEN_WEIGHT",
+  advantage_min: "DMG_ADVANTAGE_MIN",
+  advantage_max: "DMG_ADVANTAGE_MAX",
+};
+
+const dmgConfigSettings = () =>
+  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, string][];
 
 /**
  * Handles errors that occur during endpoint processing.

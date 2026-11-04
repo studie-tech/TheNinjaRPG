@@ -56,6 +56,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
@@ -480,8 +481,7 @@ export const paypalRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       // Defaulting to the session means a self-view can never send a stale user id
       const targetUserId = input.userId ?? ctx.userId;
       const [user, transactions] = await Promise.all([
@@ -496,7 +496,7 @@ export const paypalRouter = createTRPCRouter({
       if (!canSeeSecretData(user.role) && ctx.userId !== targetUserId) {
         throw serverError("UNAUTHORIZED", "You are not allowed to see this data");
       }
-      const nextCursor = transactions.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(transactions);
       return {
         data: transactions,
         nextCursor: nextCursor,

@@ -30,6 +30,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
+import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { BadgeValidator } from "@/validators/badge";
@@ -52,11 +53,10 @@ export const badgeRouter = createTRPCRouter({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input?.cursor ? input.cursor : 0;
       const limit = input?.limit ? input.limit : 100;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage({ cursor: input?.cursor, limit });
       const results = await listBadgeForGetAll(ctx.drizzle, skip, limit);
-      const nextCursor = results.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,

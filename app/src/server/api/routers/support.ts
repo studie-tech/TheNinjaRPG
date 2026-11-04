@@ -41,6 +41,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { offsetPage } from "@/server/utils/pagination";
 import { logError } from "@/server/utils/sentry";
 import { reduceByKey } from "@/utils/grouping";
 import {
@@ -73,9 +74,8 @@ export const supportRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Pagination handling
-      const currentCursor = input.cursor ? input.cursor : 0;
       const limit = input.limit;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const isStaff = user.role !== "USER";
       // Run filtered query
       const tickets = await getSupportTicketsWithRelations({
@@ -91,7 +91,7 @@ export const supportRouter = createTRPCRouter({
         ? tickets
         : tickets.map((ticket) => sanitizeSupportTicketForPublic(ticket, user));
 
-      const nextCursor = tickets.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(tickets);
 
       return { data: processedTickets, nextCursor };
     }),
