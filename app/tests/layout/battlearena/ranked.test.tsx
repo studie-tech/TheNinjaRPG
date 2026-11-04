@@ -1,0 +1,115 @@
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
+import { RANKED_ENTRY_COST } from "@/drizzle/constants";
+import * as queueCount from "@/hooks/useRankedQueueCount";
+import { RankedMode } from "@/layout/battlearena/RankedMode";
+import * as pvpRank from "@/layout/PvpRank";
+import * as toast from "@/libs/toast";
+import * as userContext from "@/utils/UserContext";
+
+const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
+const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
+const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
+let user: Record<string, unknown>;
+let inQueue = false;
+let season: unknown;
+
+beforeEach(() => {
+  for (const key of browserGlobals) {
+    if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
+  }
+  user = { userId: "me", status: "AWAKE", rankedLp: 180, villagePrestige: 50000, isBanned: false };
+  inQueue = false;
+  season = { name: "Season 4", paused: false };
+  for (const name of ["enterRankedSeason", "queueForRankedPvp", "leaveRankedPvpQueue", "checkRankedPvpMatches"]) {
+    mutations[name] = vi.fn();
+  }
+  const useMutation = (name: string) => () => ({ mutate: mutations[name], isPending: false });
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({}),
+    pvpRank: {
+      getRankedPvpQueue: { useQuery: () => ({ data: { inQueue, queueCount: 4, createdAt: new Date() } }) },
+      getCurrentSeason: { useQuery: () => ({ data: season }) },
+      getRankedLoadout: {
+        useQuery: () => ({ data: { loadout: { jutsuIds: Array(12).fill("j"), weaponIds: ["w", "w"], consumableIds: ["c"] } } }),
+      },
+      enterRankedSeason: { useMutation: useMutation("enterRankedSeason") },
+      queueForRankedPvp: { useMutation: useMutation("queueForRankedPvp") },
+      leaveRankedPvpQueue: { useMutation: useMutation("leaveRankedPvpQueue") },
+      checkRankedPvpMatches: { useMutation: useMutation("checkRankedPvpMatches") },
+    },
+  });
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+    () => ({ data: user, prepareUserUpdate: vi.fn(), updateUser: vi.fn() }) as never,
+  );
+  vi.spyOn(queueCount, "useRankedQueueCountCache").mockReturnValue({ refreshRankedQueueCount: vi.fn() } as never);
+  vi.spyOn(pvpRank, "RankedLoadoutSelector").mockImplementation(() => <p>Ranked loadout picker</p>);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined as never);
+});
+
+afterEach(() => {
+  cleanup();
+  document.body.innerHTML = "";
+  vi.restoreAllMocks();
+  browserGlobals.forEach((key, index) => {
+    const descriptor = browserDescriptors[index];
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  });
+});
+
+it("shows the division and LP to the next one", () => {
+  render(<RankedMode />);
+  expect(screen.getByRole("heading", { name: "Wood" })).toBeDefined();
+  expect(screen.getByText("180 LP")).toBeDefined();
+  expect(screen.getByText("120 LP to Adept")).toBeDefined();
+  expect(screen.getByText("Jutsu 12 / 15 · Weapons 2 / 2 · Consumables 1 / 4")).toBeDefined();
+});
+
+it("queues and leaves the queue", () => {
+  render(<RankedMode />);
+  fireEvent.click(screen.getByRole("button", { name: "Find ranked match" }));
+  expect(mutations.queueForRankedPvp).toHaveBeenCalled();
+  cleanup();
+  inQueue = true;
+  render(<RankedMode />);
+  expect(screen.getByText(/Waiting for an opponent/)).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Leave queue" }));
+  expect(mutations.leaveRankedPvpQueue).toHaveBeenCalled();
+});
+
+it("refuses to queue during a battle", () => {
+  user = { ...user, status: "BATTLE" };
+  render(<RankedMode />);
+  fireEvent.click(screen.getByRole("button", { name: "Find ranked match" }));
+  expect(mutations.queueForRankedPvp).not.toHaveBeenCalled();
+  expect(toast.showMutationToast).toHaveBeenCalledWith({
+    success: false,
+    message: "You cannot queue while in battle. Please finish your current battle first.",
+  });
+});
+
+it("offers to enter the season", () => {
+  user = { ...user, rankedLp: 0 };
+  render(<RankedMode />);
+  const enter = screen.getByRole("button", { name: /Enter season/ });
+  expect(enter.textContent).toContain(RANKED_ENTRY_COST.toLocaleString());
+  fireEvent.click(enter);
+  expect(mutations.enterRankedSeason).toHaveBeenCalled();
+});
+
+it("says when the season is paused", () => {
+  season = { name: "Season 4", paused: true };
+  render(<RankedMode />);
+  expect(screen.getByText(/Season 4.*paused/)).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Find ranked match" })).toBeNull();
+});
+
+it("opens the ranked loadout editor", () => {
+  render(<RankedMode />);
+  act(() => {
+    fireEvent.click(screen.getByRole("button", { name: "Edit loadout" }));
+  });
+  expect(screen.getByText("Ranked loadout picker")).toBeDefined();
+});
