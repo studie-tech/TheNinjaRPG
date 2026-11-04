@@ -4,7 +4,6 @@ import {
   ID_ANIMATION_SMOKE,
   isPreBattleGearFromType,
   isPreBattleKeystoneFromType,
-  NO_DURABILITY_LOSS_COMBATS,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
   OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION,
   PARRY_MAX_PERCENTAGE,
@@ -22,7 +21,7 @@ import {
   getSageModeActivationCost,
 } from "@/libs/sageMode";
 import { nonStackingTimedStatEffect } from "@/libs/timedBuffs";
-import type { ShieldTagType } from "@/validators/combat";
+import type { ShieldTagType, ZodAllTags } from "@/validators/combat";
 import { ShieldTag, VisualTag } from "@/validators/combat";
 import { creditConsequenceEnmity, creditDamageEnmity } from "./aggro";
 import {
@@ -47,18 +46,15 @@ import {
   adjustDamageTaken,
   afterburn,
   applyFinalStandDamage,
-  buffPrevent,
+  applyPreventTag,
   calcDmgModifier,
   cleanse,
-  cleansePrevent,
   clear,
-  clearPrevent,
   clone,
   copy,
   curse,
   damageBarrier,
   damageUser,
-  debuffPrevent,
   decreaseCooldown,
   decreaseDamageGiven,
   decreaseDamageTaken,
@@ -67,17 +63,14 @@ import {
   decreaseMaxPools,
   decreasepoolcost,
   decreaseStats,
-  disarm,
   drain,
   elementalseal,
   finalStand,
   flee,
-  fleePrevent,
   getDamageModifierPreventState,
   getEfficiencyRatio,
   getPower,
   heal,
-  healPrevent,
   immunity,
   increaseCooldown,
   increaseDamageGiven,
@@ -89,33 +82,27 @@ import {
   increaseRange,
   increaseStats,
   injectjutsus,
+  invertPower,
+  isPreventEffect,
   lifesteal,
   mirror,
   move,
-  movePrevent,
   onehitkill,
-  onehitkillPrevent,
   parry,
   poison,
   potency,
-  realizeTag,
+  realizePassiveEffect,
   recoil,
   redirection,
   reflect,
   registerShieldConversion,
   rob,
-  robPrevent,
   seal,
-  sealCheck,
-  sealPrevent,
   shield,
   stealth,
   stun,
-  stunPrevent,
   summon,
-  summonPrevent,
-  timeCompression,
-  timeDilation,
+  temporalShift,
   updateStatUsage,
   vamp,
   weakness,
@@ -136,7 +123,6 @@ import type {
   UserEffect,
 } from "./types";
 import {
-  applyPoolAdjustmentsToBase,
   calcApplyRatio,
   calcEffectRoundInfo,
   canStackEffect,
@@ -144,6 +130,7 @@ import {
   creditDamageDealt,
   findBarrier,
   findUser,
+  getActiveSealEffects,
   getBattleGrid,
   getEffectiveMaxPool,
   getEffectStackKey,
@@ -155,8 +142,10 @@ import {
   refreshMasteries,
   resetMasteriesToBase,
   resolveDamageCreditUser,
+  sealCheck,
   sortEffects,
-  wearItem,
+  syncPoolAdjustments,
+  wearBattleItem,
 } from "./util";
 
 /**
@@ -721,10 +710,8 @@ export const applyEffects = (
           );
           break;
         case "decreasedamagegiven":
-          effect.power = -Math.abs(effect.power);
-          effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
           info = adjustDamageGiven(
-            effect,
+            invertPower(effect),
             usersEffects,
             modifierInfoConsequences,
             targetUser,
@@ -739,10 +726,8 @@ export const applyEffects = (
           );
           break;
         case "decreasedamagetaken":
-          effect.power = -Math.abs(effect.power);
-          effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
           info = adjustDamageTaken(
-            effect,
+            invertPower(effect),
             usersEffects,
             modifierInfoConsequences,
             targetUser,
@@ -1109,7 +1094,7 @@ export const applyEffects = (
               });
             }
           }
-          wearEquippedArmor(battle, target);
+          wearArmor(battle, target);
         }
         for (const key of ["residual", "wound"] as const) {
           const amount = c[key];
@@ -1125,7 +1110,7 @@ export const applyEffects = (
             color: "red",
             types: c.types,
           });
-          wearEquippedArmor(battle, target);
+          wearArmor(battle, target);
         }
         if (c.heal_hp !== undefined && c.heal_hp >= 0 && target.curHealth > 0) {
           target.curHealth += c.heal_hp;
@@ -1377,25 +1362,7 @@ export const applyEffects = (
     });
   });
 
-  // Apply pool adjustments to base values for all users with pool effects
-  newUsersState.forEach((user) => {
-    const hasPoolEffects = newUsersEffects.some(
-      (e) =>
-        e.targetId === user.userId &&
-        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
-        isEffectActive(e),
-    );
-    // Check if we have tracking fields from a previous adjustment
-    const hadPoolEffects =
-      user._prevHealthAdj !== undefined ||
-      user._prevChakraAdj !== undefined ||
-      user._prevStaminaAdj !== undefined;
-
-    // Call if we have pool effects now OR had them last round (to apply delta on expiration)
-    if (hasPoolEffects || hadPoolEffects) {
-      applyPoolAdjustmentsToBase(user, newUsersEffects);
-    }
-  });
+  syncPoolAdjustments(newUsersState, newUsersEffects);
 
   // Eligibility for the next action must reflect seals and removals settled by this action.
   // Ground-derived effects apply at the user's current tile but are not persisted as user tags.
@@ -1413,6 +1380,16 @@ export const applyEffects = (
     },
     actionEffects,
   };
+};
+
+/** Every hit on a user wears each piece of armor they have equipped by 1. */
+const wearArmor = (battle: CompleteBattle, wearer: BattleUserState) => {
+  wearer.items.forEach((userItem) => {
+    const item = getItem(battle, userItem.itemId);
+    if (item?.itemType === "ARMOR" && userItem.equipped !== "NONE") {
+      wearBattleItem(battle, userItem, item, 1);
+    }
+  });
 };
 
 /**
@@ -1516,7 +1493,7 @@ export const applySingleEffect = (
         recordUsedTag(newUsersState, newUser, effect.type);
         // Tags only applied when target is user or new
         if (isTargetOrNew) {
-          if (effect.type === "damage" && isTargetOrNew) {
+          if (effect.type === "damage") {
             const modifier = calcDmgModifier(effect, curTarget, usersEffects);
             info = damageUser(
               effect,
@@ -1526,7 +1503,7 @@ export const applySingleEffect = (
               modifier,
               config,
             );
-          } else if (effect.type === "pierce" && isTargetOrNew) {
+          } else if (effect.type === "pierce") {
             const modifier =
               calcDmgModifier(effect, curTarget, usersEffects) *
               getCurseDamageMultiplier(newUsersEffects, effect.creatorId, usersEffects);
@@ -1538,23 +1515,19 @@ export const applySingleEffect = (
               modifier,
               config,
             );
-          } else if (effect.type === "heal" && isTargetOrNew) {
+          } else if (effect.type === "heal") {
             info = heal(effect, getPreventionEffects(), curTarget, consequences, ratio);
-          } else if (
-            effect.type === "flee" &&
-            isTargetOrNew &&
-            !battle.extraState.dungeon
-          ) {
+          } else if (effect.type === "flee" && !battle.extraState.dungeon) {
             info = flee(effect, getPreventionEffects(), newTarget);
-          } else if (effect.type === "increasepoolcost" && isTargetOrNew) {
+          } else if (effect.type === "increasepoolcost") {
             info = increasepoolcost(effect, curTarget);
-          } else if (effect.type === "decreasepoolcost" && isTargetOrNew) {
+          } else if (effect.type === "decreasepoolcost") {
             info = decreasepoolcost(effect, curTarget);
-          } else if (effect.type === "drain" && isTargetOrNew) {
+          } else if (effect.type === "drain") {
             info = drain(effect, usersEffects, consequences, curTarget);
-          } else if (effect.type === "clear" && isTargetOrNew) {
+          } else if (effect.type === "clear") {
             info = clear(effect, usersEffects, curTarget, instantConsumeIds);
-          } else if (effect.type === "cleanse" && isTargetOrNew) {
+          } else if (effect.type === "cleanse") {
             info = cleanse(effect, usersEffects, curTarget);
           } else if (effect.type === "increasedamagegiven") {
             info = increaseDamageGiven(effect, usersEffects, consequences, curTarget);
@@ -1655,36 +1628,12 @@ export const applySingleEffect = (
           info = lifesteal(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "vamp") {
           info = vamp(effect, usersEffects, consequences, curTarget);
-        } else if (effect.type === "fleeprevent") {
-          info = fleePrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "healprevent") {
-          info = healPrevent(effect, usersEffects, curTarget);
+        } else if (isPreventEffect(effect)) {
+          info = applyPreventTag(effect, usersEffects, curTarget);
         } else if (effect.type === "stealth") {
           info = stealth(effect, curTarget);
         } else if (effect.type === "elementalseal") {
           info = elementalseal(effect, curTarget);
-        } else if (effect.type === "buffprevent") {
-          info = buffPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "debuffprevent") {
-          info = debuffPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "onehitkillprevent") {
-          info = onehitkillPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "robprevent") {
-          info = robPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "cleanseprevent") {
-          info = cleansePrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "clearprevent") {
-          info = clearPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "sealprevent") {
-          info = sealPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "stunprevent") {
-          info = stunPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "moveprevent") {
-          info = movePrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "summonprevent") {
-          info = summonPrevent(effect, usersEffects, curTarget);
-        } else if (effect.type === "disarm") {
-          info = disarm(effect, usersEffects, curTarget);
         } else if (effect.type === "weakness") {
           info = weakness(effect, curTarget);
         } else if (
@@ -1724,10 +1673,11 @@ export const applySingleEffect = (
           info = copy(effect, usersEffects, curUser, curTarget);
         } else if (effect.type === "mirror") {
           info = mirror(effect, usersEffects, curUser, curTarget);
-        } else if (effect.type === "timecompression") {
-          info = timeCompression(effect, usersEffects, curTarget);
-        } else if (effect.type === "timedilation") {
-          info = timeDilation(effect, usersEffects, curTarget);
+        } else if (
+          effect.type === "timecompression" ||
+          effect.type === "timedilation"
+        ) {
+          info = temporalShift(effect, usersEffects, curTarget);
         } else if (effect.type === "redirection") {
           info = redirection(
             battle,
@@ -1914,9 +1864,6 @@ export const consolidatePreBattleDamageModifiers = (
 
 const isBloodlineDamageMod = (effect: UserEffect): boolean =>
   "fromType" in effect && effect.fromType === "bloodline";
-
-const getActiveSealEffects = (usersEffects: UserEffect[]) =>
-  usersEffects.filter((e) => e.type === "seal" && !e.isNew && isEffectActive(e));
 
 /** Which packet id field to compare against effect.targetId (pair-dependent). */
 type DamageModifierPacketSide = "attacker" | "defender";
@@ -2538,7 +2485,7 @@ export const applyDamageModifierPipelineToConsequences = ({
  * @param props.battle - Current battle (round + extra state).
  */
 function realizeSageTags(props: {
-  tags: unknown[];
+  tags: readonly ZodAllTags[];
   user: BattleUserState;
   fromType: "sageMode" | "sageModeAfter";
   rounds: number;
@@ -2552,25 +2499,22 @@ function realizeSageTags(props: {
   );
   return sorted.map((raw) => {
     const tag = structuredClone(raw) as UserEffect;
-    const realized = realizeTag({
+    const realized = realizePassiveEffect({
       tag,
       user,
       actionId,
       level,
+      fromType,
       round: battle.round,
       battle,
     });
     realized.longitude = user.longitude;
     realized.latitude = user.latitude;
-    realized.fromType = fromType;
-    realized.targetId = user.userId;
     if (realized.rounds !== 0) {
       realized.rounds = rounds;
       realized.timeTracker = {};
       realized.createdRound = Math.max(0, battle.round - 1);
     }
-    realized.isNew = false;
-    realized.castThisRound = false;
     return realized;
   });
 }
@@ -2766,8 +2710,9 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
 
 /**
  * Run one-shot (`rounds === 0`) exhaustion tags through `applySingleEffect` with
- * the sage as actor, then fold heal/damage/drain onto pools. Lasting tags must
- * not be passed here — they stay queued on `usersEffects`.
+ * the sage as actor, then fold heal/damage/drain onto pools. These resolve silently,
+ * with no combat log lines, and pool changes bypass shields, Final Stand, enmity and
+ * damage credit. Lasting tags must not be passed here — they stay queued on `usersEffects`.
  *
  * @param battle - Live battle mutated in place.
  * @param sageUserId - Actor/target for the after-effects.
@@ -2781,7 +2726,6 @@ function applyInstantSageAfterEffects(
   const consequences = new Map<string, Consequence>();
   const newUsersEffects: UserEffect[] = [];
   const newGroundEffects: GroundEffect[] = [];
-  const actionEffects: ActionEffect[] = [];
   const appliedEffects = new Set<string>();
   for (const tag of instant) {
     applySingleEffect(
@@ -2789,7 +2733,7 @@ function applyInstantSageAfterEffects(
       battle.usersState,
       newUsersEffects,
       newGroundEffects,
-      actionEffects,
+      [],
       appliedEffects,
       battle,
       sageUserId,
@@ -2826,12 +2770,3 @@ function applyInstantSageAfterEffects(
     }
   });
 }
-
-/** Each hit costs worn armor 1 durability, unless the battle type spares it. */
-const wearEquippedArmor = (battle: CompleteBattle, target: BattleUserState) => {
-  if (NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) return;
-  for (const ui of target.items) {
-    const item = getItem(battle, ui.itemId);
-    if (item?.itemType === "ARMOR" && ui.equipped !== "NONE") wearItem(ui, item, 1);
-  }
-};

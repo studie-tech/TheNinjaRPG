@@ -1163,6 +1163,42 @@ export const updateRaidProgress = async (
 };
 
 /**
+ * Settlement writes of one action or poll tick, spread into the caller's single mutation
+ * phase. Each is a no-op without a result; hunting and dungeon payouts settle in
+ * updateBattle. Keeps updateUser first so callers can read its quest updates.
+ * @param battleOver - from the version claim, which already committed terminal event outcomes
+ * @param fromAction - also record usage statistics and clan leadership challenges
+ */
+export const settlementWrites = (
+  client: DrizzleClient,
+  pusher: PusherClient,
+  battle: CompleteBattle,
+  result: CombatResult | null,
+  userId: string,
+  battleOver: boolean,
+  fromAction = false,
+): [ReturnType<typeof updateUser>, ...Promise<unknown>[]] => [
+  updateUser(client, pusher, battle, result, userId),
+  ...(!battle.extraState.dungeon && !battle.extraState.hunting
+    ? [
+        ...(fromAction
+          ? [
+              saveUsage(client, battle, result, userId),
+              updateClanLeaders(client, battle, result, userId),
+            ]
+          : []),
+        updateKage(client, battle, result),
+        updateVillageAnbuClan(client, battle, result, userId),
+        updateWars(client, pusher, battle, result, userId),
+        ...(battleOver && battle.extraState.tournamentGameId
+          ? []
+          : [updateTournament(client, battle, result, userId)]),
+        ...(result ? [updateRaidProgress(client, battle, userId)] : []),
+      ]
+    : []),
+];
+
+/**
  * Persist player recovery and progression from the preloaded combat result.
  * Hunting calls may set settlingHunt only inside settleHuntingBattle's transaction;
  * ordinary action/poll callbacks skip those rewards to prevent a second settlement.
