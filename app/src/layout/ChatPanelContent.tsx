@@ -36,6 +36,7 @@ import { useActivityDock } from "@/hooks/useActivityDock";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
+import { useTavernIds } from "@/hooks/useTavernActivity";
 import { useTaverns } from "@/hooks/useTaverns";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -52,6 +53,8 @@ import {
   type ChatTab,
   chatMentionsAtom,
   chatPanelAtom,
+  chatTavernActivityAtom,
+  combineChatCounts,
   getInboxNews,
   isConversationUnread,
 } from "@/libs/chatPanel";
@@ -83,6 +86,7 @@ export default function ChatPanelBody({
   const { data: userData, notifications } = useUserData();
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
+  const tavernActivity = useAtomValue(chatTavernActivityAtom);
   const mutes = useChatMutes();
   const { swapSides, setSwapSides } = useActivityDock();
   // Phones show a list of chats first, then one conversation with a back button.
@@ -106,7 +110,7 @@ export default function ChatPanelBody({
   const inboxNews = mutes.chatMuted ? 0 : getInboxNews(notifications);
   const tavernMentions = mutes.chatMuted
     ? 0
-    : Object.entries(mentions)
+    : Object.entries(combineChatCounts(mentions, tavernActivity))
         .filter(([id]) => !mutes.isSilenced(id))
         .reduce((sum, [, count]) => sum + count, 0);
   const activeTab: ChatTab =
@@ -267,6 +271,7 @@ function TavernPane({
   const { data: userData } = useUserData();
   const { availTaverns, localTavern, canAccessGlobal, isLoading } =
     useTaverns(userData);
+  const tavernUnread = useTavernUnread();
   // Shared with the tavern page, so both open the same tavern.
   const [selected, setSelected] = useLocalStorage<string | undefined>(
     "selectedTavern2",
@@ -309,6 +314,7 @@ function TavernPane({
         {availTaverns.map((name) => (
           <SelectItem key={name} value={name}>
             {name}
+            {tavernUnread(name).count > 0 && ` · ${tavernUnread(name).count}`}
           </SelectItem>
         ))}
       </SelectContent>
@@ -330,6 +336,7 @@ function TavernPane({
           )}
         >
           {name}
+          <UnreadCount count={tavernUnread(name).count} />
         </button>
       ))}
     </fieldset>
@@ -705,6 +712,7 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
   const setPanel = useSetAtom(chatPanelAtom);
   const mutes = useChatMutes();
   const { availTaverns, isLoading } = useTaverns(userData);
+  const tavernUnread = useTavernUnread();
   const { data: conversations, isPending } = useInboxConversations();
   if (!userData || isLoading) return <Loader explanation="Loading chats" />;
   const rowClass =
@@ -714,19 +722,30 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
       <h3 className="text-muted-foreground px-[12px] pt-[12px] pb-[4px] text-[11px] font-semibold tracking-wide uppercase">
         Taverns
       </h3>
-      {availTaverns.map((name) => (
-        <button
-          key={name}
-          type="button"
-          className={rowClass}
-          onClick={() => onOpen({ kind: "tavern", tavern: name })}
-        >
-          <span className="bg-muted text-muted-foreground flex h-[36px] w-[36px] items-center justify-center rounded-full font-bold">
-            #
-          </span>
-          <span className="text-[13px] font-semibold">{name}</span>
-        </button>
-      ))}
+      {availTaverns.map((name) => {
+        const { count, muted } = tavernUnread(name);
+        return (
+          <button
+            key={name}
+            type="button"
+            className={rowClass}
+            aria-label={`${name}${count > 0 ? `, ${count} unread` : ""}${muted ? ", muted" : ""}`}
+            onClick={() => onOpen({ kind: "tavern", tavern: name })}
+          >
+            <span className="bg-muted text-muted-foreground flex h-[36px] w-[36px] items-center justify-center rounded-full font-bold">
+              #
+            </span>
+            <span className="flex-1 text-[13px] font-semibold">{name}</span>
+            {muted && (
+              <BellOff
+                className="text-muted-foreground h-[16px] w-[16px]"
+                aria-hidden
+              />
+            )}
+            <UnreadCount count={count} />
+          </button>
+        );
+      })}
       <h3 className="text-muted-foreground px-[12px] pt-[16px] pb-[4px] text-[11px] font-semibold tracking-wide uppercase">
         Messages
       </h3>
@@ -839,6 +858,35 @@ function MuteButton({
         <Bell className="h-[16px] w-[16px]" />
       )}
     </Button>
+  );
+}
+
+/**
+ * New messages per tavern name: its new messages or mentions, whichever is higher.
+ * Muted taverns count nothing.
+ */
+function useTavernUnread() {
+  const { data: userData } = useUserData();
+  const taverns = useTavernIds(userData);
+  const mentions = useAtomValue(chatMentionsAtom);
+  const tavernActivity = useAtomValue(chatTavernActivityAtom);
+  const mutes = useChatMutes();
+  const counts = combineChatCounts(mentions, tavernActivity);
+  return (name: string) => {
+    const id = taverns?.find((tavern) => tavern.title === name)?.id;
+    const muted = !!id && mutes.isSilenced(id);
+    return { count: id && !muted ? (counts[id] ?? 0) : 0, muted };
+  };
+}
+
+/** Red count of new messages, hidden at zero. */
+function UnreadCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-[4px] rounded-full bg-red-500 px-[6px] text-[11px] leading-4 text-white">
+      {count > 99 ? "99+" : count}
+      <span className="sr-only"> unread</span>
+    </span>
   );
 }
 

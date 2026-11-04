@@ -15,6 +15,8 @@ import {
   CHAT_PANEL_PHONE_MEDIA_QUERY,
   chatMentionsAtom,
   chatPanelAtom,
+  chatTavernActivityAtom,
+  combineChatCounts,
   countChatNotifications,
   getInboxNews,
 } from "@/libs/chatPanel";
@@ -39,6 +41,7 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const { data: userData, notifications } = useUserData();
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
+  const tavernActivity = useAtomValue(chatTavernActivityAtom);
   const isPhone = useMediaQuery(CHAT_PANEL_PHONE_MEDIA_QUERY);
   const [isWide, setIsWide] = useState(false);
   const { swapSides } = useActivityDock();
@@ -47,7 +50,11 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const canUseChat = !!userData && userData.level >= MESSAGING_MIN_LEVEL;
   const open = canUseChat && panel.owner === id;
 
-  const badge = countChatNotifications(userData, getInboxNews(notifications), mentions);
+  const badge = countChatNotifications(
+    userData,
+    getInboxNews(notifications),
+    combineChatCounts(mentions, tavernActivity),
+  );
   const showReminder = hasTutorialReminder(userData);
   const setOpen = (next: boolean) =>
     setPanel((current) => ({

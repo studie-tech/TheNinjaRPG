@@ -9,6 +9,7 @@ import { useController } from "react-hook-form";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import * as mutes from "@/hooks/useChatMutes";
+import * as tavernActivity from "@/hooks/useTavernActivity";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import * as taverns from "@/hooks/useTaverns";
 import * as conversationComments from "@/layout/ConversationComments";
@@ -44,6 +45,8 @@ const conversation = (id: string, title: string) => ({
 });
 
 beforeEach(() => {
+  // Tavern counts are covered by their own suites.
+  vi.spyOn(tavernActivity, "useTavernIds").mockReturnValue([]);
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },

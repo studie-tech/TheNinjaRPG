@@ -12,8 +12,9 @@ import { findVillageUserRelationship } from "@/utils/alliance";
  * for staff every village tavern.
  */
 export const useTaverns = (userData: UserWithRelations | null | undefined) => {
+  // Only staff list every village tavern.
   const { data: villages } = api.village.getAll.useQuery(undefined, {
-    enabled: !!userData,
+    enabled: !!userData && userData.role !== "USER",
   });
   const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
   const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =

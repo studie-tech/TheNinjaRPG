@@ -6,6 +6,7 @@ import {
   CHAT_PANEL_PHONE_MEDIA_QUERY,
   chatMentionsAtom,
   chatPanelAtom,
+  chatTavernActivityAtom,
   chatViewedConversationsAtom,
 } from "@/libs/chatPanel";
 
@@ -29,6 +30,9 @@ export const useConversationViewing = (
       updateConversationViewCount(current, conversationId, 1),
     );
     store.set(chatMentionsAtom, (current) =>
+      clearConversationMentions(current, conversationId),
+    );
+    store.set(chatTavernActivityAtom, (current) =>
       clearConversationMentions(current, conversationId),
     );
     return () => {

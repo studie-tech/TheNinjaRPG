@@ -46,6 +46,7 @@ import {
   insertUser2conversationForCreateConvo,
   insertUserReportCommentForCreateReportComment,
   listNotificationUserCandidates,
+  listPublicConversationsByTitle,
   listUserReportCommentForGetReportComments,
   selectConversationCommentForFetchConversationComment,
   selectConversationCommentForGetConversationComments,
@@ -231,6 +232,18 @@ export const commentsRouter = createTRPCRouter({
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
       // Return filtered conversations
       return filteredConverations ?? [];
+    }),
+  getTavernIds: protectedProcedure
+    .meta({ mcp: { description: "Get the conversation ids of taverns by name" } })
+    .input(z.object({ titles: z.array(z.string().min(1).max(30)).min(1).max(50) }))
+    .query(async ({ ctx, input }) => {
+      const [taverns, policies] = await Promise.all([
+        listPublicConversationsByTitle(ctx.drizzle, input.titles),
+        fetchCommunicationPolicies(ctx.drizzle, [ctx.userId]),
+      ]);
+      const tavernRules = { isPublic: true, isStaffAvailable: false, users: [] };
+      if (conversationReadRestriction(policies[0], tavernRules)) return [];
+      return taverns.flatMap(({ id, title }) => (title ? [{ id, title }] : []));
     }),
   createConversation: protectedProcedure
     .meta({ mcp: { description: "Create a new private conversation" } })
