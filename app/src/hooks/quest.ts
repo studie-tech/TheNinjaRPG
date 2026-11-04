@@ -40,10 +40,7 @@ import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 // A merged type for quest with its rewards, so that we can show both in the same form
 export type ZodCombinedQuest = ZodQuestFormType;
 
-/**
- * Hook used when creating frontend forms for editing items
- * @param data
- */
+/** Manage quest fields, objective layouts and validated content saves in one form. */
 export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {
   const submitInFlight = useRef(false);
 
@@ -253,7 +250,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     control: form.control,
   }) as ZodCombinedQuest;
 
-  // Handle updating of effects
+  /** Replace objectives while retaining saved positions only for remaining nodes. */
   const setObjectives = (values: AllObjectivesType[]) => {
     // Cast content to output type for proper typing
     const newContent = {
@@ -270,6 +267,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     form.setValue("content", newContent, { shouldDirty: true });
   };
 
+  /** Include graph arrangements in the next quest save without changing objectives. */
   const setNodePositions = useCallback(
     (positions: QuestNodePositions) => {
       form.setValue("content.nodePositions", positions, { shouldDirty: true });

@@ -345,6 +345,7 @@ interface ObjectiveFlowGraphProps {
   isUpdating: boolean;
 }
 
+/** Keep objective selection and shared layout coordinates synchronized with the quest form. */
 const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
   nodePositions = emptyNodePositions,
   setNodePositions,
@@ -462,8 +463,8 @@ const ObjectiveFlowGraph: React.FC<ObjectiveFlowGraphProps> = ({
       topRightContent={<div className="flex flex-row">{addObjectiveIcon}</div>}
     >
       <p className="text-muted-foreground mb-2 text-sm">
-        Drag objectives to organize the graph, then use Save to Database to save the
-        layout for everyone who opens this quest.
+        Drag objectives to organize the graph. Layouts are shared when a content editor
+        saves the quest.
       </p>
       <div
         ref={containerRef}
