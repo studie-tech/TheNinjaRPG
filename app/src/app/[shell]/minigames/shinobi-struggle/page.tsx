@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { noindexMetadata } from "@/libs/seo";
-import ShinobiStruggleClient from "./ShinobiStruggleClient";
+import { ShinobiStruggleRoute } from "./ShinobiStruggleClient";
 
 export const metadata: Metadata = noindexMetadata("Shinobi Struggle");
 
-export default async function ShinobiStrugglePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ match?: string | string[] }>;
-}) {
-  const { match } = await searchParams;
+export default function ShinobiStrugglePage() {
   return (
-    <ShinobiStruggleClient
-      initialMatchId={typeof match === "string" ? match : undefined}
-    />
+    <Suspense fallback={<p role="status">Loading Shinobi Struggle…</p>}>
+      <ShinobiStruggleRoute />
+    </Suspense>
   );
 }

@@ -1,15 +1,12 @@
-// @vitest-environment node
 import { randomBytes } from "node:crypto";
-import { auth } from "@clerk/nextjs/server";
-import { getVercelOidcToken } from "@vercel/oidc";
+import * as clerk from "@clerk/nextjs/server";
+import * as vercelOidc from "@vercel/oidc";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { NextRequest } from "next/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DELETE, GET, POST } from "./route";
+import { DELETE, GET, POST } from "@/app/api/minigames/blockstruggle/[...path]/route";
 
-vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
-vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: vi.fn() }));
-const mockAuth = auth as unknown as ReturnType<typeof vi.fn>;
-const mockOidc = getVercelOidcToken as unknown as ReturnType<typeof vi.fn>;
+const mockAuth = vi.fn();
+const mockOidc = vi.fn();
 
 const route = "https://rpg.example/api/minigames/blockstruggle/session";
 const context = { params: Promise.resolve({ path: ["session"] }) };
@@ -32,6 +29,9 @@ const request = (cookie?: string) =>
 
 describe("Block Struggle Next.js route boundary", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(clerk, "auth").mockImplementation(mockAuth as never);
+    vi.spyOn(vercelOidc, "getVercelOidcToken").mockImplementation(mockOidc);
     process.env.BLOCKSTRUGGLE_API_ORIGIN = "https://puzzle.example";
     process.env.BLOCKSTRUGGLE_RPG_ORIGIN = "https://rpg.example";
     process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY = randomBytes(32).toString("base64url");
@@ -45,7 +45,7 @@ describe("Block Struggle Next.js route boundary", () => {
       else process.env[name] = value;
     });
     globalThis.fetch = originalFetch;
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("keeps the puzzle bearer secret while rechecking Clerk for every request", async () => {
@@ -54,7 +54,7 @@ describe("Block Struggle Next.js route boundary", () => {
       userId: "rpg-user",
       sessionId: "rpg-session",
       getToken,
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     let exchanges = 0;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       if (new URL(String(input)).pathname.endsWith("/exchange")) {
@@ -85,7 +85,7 @@ describe("Block Struggle Next.js route boundary", () => {
     const second = await GET(request(setCookie.split(";")[0]), context);
     expect(second.status).toBe(200);
     expect(second.headers.get("set-cookie")).toBeNull();
-    expect(auth).toHaveBeenCalledTimes(2);
+    expect(mockAuth).toHaveBeenCalledTimes(2);
     expect(exchanges).toBe(1);
     expect(getToken).toHaveBeenCalledWith({ template: "blockstruggle_ninja" });
     expect(mockOidc).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe("Block Struggle Next.js route boundary", () => {
     mockAuth.mockResolvedValue({
       userId: null,
       sessionId: null,
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     const signedOut = await GET(request(setCookie.split(";")[0]), context);
     expect(signedOut.status).toBe(401);
     expect(signedOut.headers.get("set-cookie")).toContain("Max-Age=0");
@@ -107,7 +107,7 @@ describe("Block Struggle Next.js route boundary", () => {
       userId: "rpg-user",
       sessionId: "rpg-session",
       getToken,
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     const response = await GET(request(), context);
     expect(response.status).toBe(503);
     expect(getToken).not.toHaveBeenCalled();
@@ -118,7 +118,7 @@ describe("Block Struggle Next.js route boundary", () => {
       userId: "rpg-user",
       sessionId: "rpg-session",
       getToken: async () => "clerk.proof",
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     let revokeSucceeds = false;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname;
@@ -157,7 +157,7 @@ describe("Block Struggle Next.js route boundary", () => {
       userId: "rpg-user",
       sessionId: "rpg-session",
       getToken: async () => "clerk.proof",
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     let status = 409;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(new URL(String(input)).pathname).toBe("/api/ninja/identity-link/redeem");
@@ -203,7 +203,7 @@ describe("Block Struggle Next.js route boundary", () => {
       userId: "rpg-user",
       sessionId: "rpg-session",
       getToken: async () => "clerk.proof",
-    } as unknown as Awaited<ReturnType<typeof auth>>);
+    } as unknown as Awaited<ReturnType<typeof clerk.auth>>);
     let calls = 0;
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       calls++;
