@@ -7,6 +7,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   getTableColumns,
   inArray,
   like,
@@ -17,7 +18,14 @@ import {
 import { nanoid } from "nanoid";
 import type { GameAssetType } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { actionLog, gameAsset, item, itemVariant } from "@/drizzle/schema";
+import {
+  actionLog,
+  contentTag,
+  gameAsset,
+  gameAssetTag,
+  item,
+  itemVariant,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { ZodGameAssetType } from "@/validators/asset";
 
@@ -89,6 +97,15 @@ export const listGameAssetForGetAllNames = (
     where: input.type ? eq(gameAsset.type, input.type) : ne(gameAsset.type, "LPC"),
   });
 
+/** List content tags assigned to assets for public tag discovery. */
+export const selectDistinctGameAssetTagForGetAllGameAssetContentTagNames = (
+  client: Pick<DrizzleClient, "selectDistinct">,
+) =>
+  client
+    .selectDistinct({ name: contentTag.name })
+    .from(gameAssetTag)
+    .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id));
+
 /** Count all nonempty folders, optionally within one media type, without pagination. */
 export const selectGameAssetForGetAllFolders = (
   client: Pick<DrizzleClient, "select">,
@@ -119,6 +136,7 @@ export const selectGameAssetForGetAll = (
   input: {
     name?: undefined | string;
     type?: GameAssetType | undefined;
+    tags?: string[];
     nameTokens?: undefined | string[];
     folder?: undefined | string;
     includeAnimations?: boolean;
@@ -139,6 +157,21 @@ export const selectGameAssetForGetAll = (
           : input.includeAnimations
             ? []
             : [ne(gameAsset.type, "ANIMATION"), ne(gameAsset.type, "LPC")]),
+        // A matching tag qualifies an asset once, even when several selected tags match.
+        input.tags
+          ? exists(
+              client
+                .select({ id: gameAssetTag.id })
+                .from(gameAssetTag)
+                .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id))
+                .where(
+                  and(
+                    eq(gameAssetTag.assetId, gameAsset.id),
+                    inArray(contentTag.name, input.tags),
+                  ),
+                ),
+            )
+          : undefined,
         ...(input.nameTokens
           ? input.nameTokens.map((t) => like(gameAsset.name, `%${t}%`))
           : []),

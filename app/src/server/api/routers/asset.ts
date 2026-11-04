@@ -21,6 +21,7 @@ import {
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
   listLpcAssets,
+  selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
   selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
   updateGameAssetForUpdate,
@@ -126,6 +127,16 @@ export const gameAssetRouter = createTRPCRouter({
       // Return
       return assets;
     }),
+  /** List assigned content tags for discovery and asset filtering. */
+  getAllGameAssetContentTagNames: publicProcedure
+    .meta({
+      mcp: { description: "Get all game asset content tag names" },
+    })
+    .query(async ({ ctx }) => {
+      return await selectDistinctGameAssetTagForGetAllGameAssetContentTagNames(
+        ctx.drizzle,
+      );
+    }),
   getAllFolders: publicProcedure
     .meta({ mcp: { description: "Get all game asset folders" } })
     .input(z.object({ type: z.enum(GameAssetTypes).optional() }).nullish())
@@ -138,6 +149,7 @@ export const gameAssetRouter = createTRPCRouter({
     .input(
       z.object({
         name: z.string().optional(),
+        tags: z.array(z.string()).optional(),
         type: z.enum(GameAssetTypes).optional(),
         folder: z.string().optional(),
         cursor: z.number().int().min(0).nullish(),

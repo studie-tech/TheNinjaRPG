@@ -46,6 +46,7 @@ import {
   listTowerDefenseCharacterForInitiateSecureSession,
   listTowerDefenseCharacterForInitiateSecureSession2,
   listTowerDefenseRunForGetLeaderboard,
+  listTowerDefenseRunForGetRunHistory,
   listTowerDefenseUpgradeForGetUpgrades,
   listTowerDefenseUpgradeForInitiateSecureSession,
   listUserTowerDefenseUpgradeForGetUserUpgrades,
@@ -233,6 +234,30 @@ export const towerDefenseRouter = createTRPCRouter({
         playerCharactersDb,
         isGuest: true,
       });
+    }),
+
+  /**
+   * List the caller's past runs in stable chronological pages.
+   */
+  getRunHistory: protectedProcedure
+    .meta({
+      mcp: { description: "Get user's tower defense run history" },
+    })
+    .use(ratelimitMiddleware)
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().min(1).max(50).prefault(10),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const runs = await listTowerDefenseRunForGetRunHistory(ctx.drizzle, ctx, input);
+
+      const hasMore = runs.length > input.limit;
+      const items = hasMore ? runs.slice(0, -1) : runs;
+      const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
+
+      return { items, nextCursor };
     }),
 
   /**

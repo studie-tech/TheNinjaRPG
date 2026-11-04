@@ -52,6 +52,16 @@ describe("asset library queries", () => {
     expect(query.sql).toContain(`order by ${order}, \`GameAsset\`.\`id\` asc limit ? offset ?`);
   });
 
+  it("filters assigned content tags without duplicating matching assets", () => {
+    const query = listing({ includeAnimations: true, tags: ["Fire", "Water"] });
+    expect(query.sql).toContain("exists (select");
+    expect(query.sql).toContain("`GameAssetTag`.`assetId` = `GameAsset`.`id`");
+    expect(query.sql).toContain("`ContentTag`.`name` in (?, ?)");
+    expect(query.sql).not.toContain("group by");
+    expect(query.params).toEqual(["Fire", "Water", 49, 48]);
+    expect(listing({ tags: [] }).sql).toContain("false");
+  });
+
   it("creates an asset with the chosen name, media type and folder", () => {
     const query = insertGameAssetForCreate(client, "asset-id", { userId: "creator" }, { name: "Forest rain", type: "SFX", folder: "Weather" }).toSQL();
     for (const value of ["asset-id", "Forest rain", "SFX", "Weather", "creator"]) expect(query.params).toContain(value);

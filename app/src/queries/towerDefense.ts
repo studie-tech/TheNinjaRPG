@@ -1,7 +1,8 @@
 /**
  * Database access for tower defense; authorization and transaction scopes stay in callers.
  */
-import { and, asc, desc, eq, gte, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, lt, or, type SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   towerDefenseCharacter,
@@ -71,6 +72,48 @@ export const listTowerDefenseCharacterForInitiateSecureSession2 = (
   client.query.towerDefenseCharacter.findMany({
     where: eq(towerDefenseCharacter.isPlayer, true),
   });
+
+/**
+ * List a caller's runs after an ID cursor using the same timestamp/ID order as the page.
+ * The cursor lookup stays in the statement and cannot reference another user's history.
+ */
+export const listTowerDefenseRunForGetRunHistory = (
+  client: Pick<DrizzleClient, "select">,
+  ctx: { userId: string },
+  input: { cursor?: string; limit: number },
+) => {
+  const cursorRun = alias(towerDefenseRun, "cursorRun");
+  return client
+    .select()
+    .from(towerDefenseRun)
+    .where(
+      and(
+        eq(towerDefenseRun.userId, ctx.userId),
+        input.cursor
+          ? exists(
+              client
+                .select({ id: cursorRun.id })
+                .from(cursorRun)
+                .where(
+                  and(
+                    eq(cursorRun.id, input.cursor),
+                    eq(cursorRun.userId, ctx.userId),
+                    or(
+                      lt(towerDefenseRun.startedAt, cursorRun.startedAt),
+                      and(
+                        eq(towerDefenseRun.startedAt, cursorRun.startedAt),
+                        lt(towerDefenseRun.id, cursorRun.id),
+                      ),
+                    ),
+                  ),
+                ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(towerDefenseRun.startedAt), desc(towerDefenseRun.id))
+    .limit(input.limit + 1);
+};
 
 /** Build the `towerDefenseRun` listing for `getLeaderboard`, using predicates on `status`. */
 export const listTowerDefenseRunForGetLeaderboard = (

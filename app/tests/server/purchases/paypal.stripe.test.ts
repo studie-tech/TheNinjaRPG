@@ -225,6 +225,8 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect((await target())?.reputationPoints).toBe(20);
     expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(20);
     expect(await (await getTestDatabase()).query.paypalTransaction.findMany()).toHaveLength(1);
+    expect((await paypal.resolveOrder({ orderId: order.orderId })).success).toBe(true);
+    expect((await target())?.reputationPoints).toBe(20);
   });
   it.each(["RESERVED", "CAPTURING", "DELIVERY_PENDING"])("retains compatibility allowance for historical %s receipts", async (status) => {
     const db = await getTestDatabase();
@@ -488,6 +490,22 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "CANCELLED", updatedAt: paidAt });
     await reconcileFederalStatuses(db); expect((await target())?.federalStatus).toBe("GOLD");
   });
+  it("recovers a legacy purchase from its order ID without a reporting lookup or capture", async () => {
+    const db = await getTestDatabase();
+    const orderId = "LEGACY00000000000";
+    const invoiceId = nanoid();
+    const amount = { value: reps2dollars(20).toFixed(2), currency_code: "USD" };
+    orders.set(orderId, { id: orderId, status: "COMPLETED", purchase_units: [{ custom_id: `${BUYER}-${TARGET}`, invoice_id: invoiceId, amount, payments: { captures: [{ id: "legacy_recovered_capture", status: "COMPLETED", amount, update_time: new Date().toISOString() }] } }] });
+    await db.insert(paypalTransaction).values({ id: invoiceId, createdById: BUYER, affectedUserId: TARGET, transactionId: `reservation_${invoiceId}`, orderId, invoiceId, transactionUpdatedDate: new Date().toISOString(), amount: reps2dollars(20), reputationPoints: 20, currency: "USD", status: "RESERVED", type: "REP_PURCHASE", rawData: {} });
+    const buyer = await callerFor(paypalRouter, BUYER);
+    expect((await (await callerFor(paypalRouter, OTHER)).resolveOrder({ orderId })).success).toBe(false);
+    expect((await target())?.reputationPoints).toBe(0);
+    expect((await buyer.resolveOrder({ orderId })).success).toBe(true);
+    expect((await buyer.resolveOrder({ orderId })).success).toBe(true);
+    expect((await target())?.reputationPoints).toBe(20);
+    expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
+    expect(fetchProvider.mock.calls.some(([url]) => url.endsWith("/capture") || url.includes("/reporting/"))).toBe(false);
+  });
   it.each([{ refunded: false, migrated: false }, { refunded: true, migrated: false }, { refunded: false, migrated: true }])("legacy reporting and order recovery verify capture status and ownership: %j", async ({ refunded, migrated }) => {
     const orderId = "ORDER000000000000";
     const invoiceId = nanoid();
@@ -501,6 +519,8 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     }
     const info = { transaction_id: "legacy_capture", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: amount, transaction_updated_date: new Date().toISOString(), invoice_id: invoiceId };
     expect(await syncTransactions(db, [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject([{ success: !refunded }]);
+    const paypal = await callerFor(paypalRouter, migrated ? OTHER : BUYER);
+    expect((await paypal.resolveOrder({ orderId })).success).toBe(!refunded);
     expect((await target())?.reputationPoints).toBe(refunded ? 0 : 20);
     expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
   });
