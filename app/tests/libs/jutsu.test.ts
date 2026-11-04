@@ -309,7 +309,7 @@ describe("computeJutsuLoadoutCapAssignments", () => {
 
     expect(canEquipUnderCaps(flags, counts, caps)).toBe(false);
     expect(findExceededJutsuEquipCap(flags, counts, caps)).toMatchObject({
-      key: "isParry",
+      key: "parry",
       label: "parry",
       max: 1,
     });

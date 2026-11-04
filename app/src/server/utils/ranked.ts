@@ -1,5 +1,5 @@
 import type { Item, Jutsu, RankedLoadout } from "@/drizzle/schema";
-import { getJutsuCapFlags } from "@/libs/jutsu";
+import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { listItemsByIds } from "@/queries/item";
 import { listJutsuByIds } from "@/queries/jutsu";
 import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
@@ -83,19 +83,13 @@ const filterProhibitedRankedSelections = async (
       removedItemIds,
     ),
   };
-  const counts: Record<string, number> = {};
-  cleanedLoadout.jutsuIds = cleanedLoadout.jutsuIds.filter((id) => {
-    const entry = selectedJutsus.find((jutsu) => jutsu.id === id);
-    if (!entry) return false;
-    const flags = getJutsuCapFlags(entry);
-    if (caps.some((cap) => flags[cap.key] && (counts[cap.key] ?? 0) >= cap.max)) {
-      removedJutsuIds.push(id);
-      return false;
-    }
-    for (const cap of caps)
-      if (flags[cap.key]) counts[cap.key] = (counts[cap.key] ?? 0) + 1;
-    return true;
-  });
+  cleanedLoadout.jutsuIds = computeJutsuLoadoutCapAssignments({
+    caps,
+    jutsuIds: cleanedLoadout.jutsuIds,
+    userjutsus: selectedJutsus.map((jutsu) => ({ jutsuId: jutsu.id, jutsu })),
+    maxEquip: cleanedLoadout.jutsuIds.length,
+    onExcluded: ({ jutsuId }) => removedJutsuIds.push(jutsuId),
+  }).equipIds;
   // Duplicate ids change the loadout without being reported as removals.
   const hasChanges = (
     [

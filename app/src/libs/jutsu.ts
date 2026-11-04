@@ -53,105 +53,37 @@ type JutsuLoadoutExclusion = {
 
 type JutsuCapMatchInput = Pick<Jutsu, "effects" | "jutsuType">;
 
-/**
- * All jutsu category predicates (normal equip + ranked-only). Single definition of
- * what counts as residual / heal / poison / etc. so equip and ranked caps stay aligned.
- */
-const namedCategories = [
-  {
-    key: "isResidual",
-    label: "residual",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => "residualModifier" in e && e.residualModifier),
-  },
-  {
-    key: "isPierce",
-    label: "piercing",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "pierce"),
-  },
-  {
-    key: "isEvent",
-    label: "event",
-    matches: (jutsu: JutsuCapMatchInput) => jutsu.jutsuType === "EVENT",
-  },
-  {
-    key: "isForbidden",
-    label: "forbidden",
-    matches: (jutsu: JutsuCapMatchInput) => jutsu.jutsuType === "FORBIDDEN",
-  },
-  {
-    key: "isBarrier",
-    label: "barrier",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "barrier"),
-  },
-  {
-    key: "isStun",
-    label: "stun",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "stun"),
-  },
-  {
-    key: "isShield",
-    label: "shield",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "shield"),
-  },
-  {
-    key: "isHeal",
-    label: "heal",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "heal"),
-  },
-  {
-    key: "isPoison",
-    label: "poison",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "poison"),
-  },
-  {
-    key: "isParry",
-    label: "parry",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "parry"),
-  },
-  {
-    key: "isIncreaseCost",
-    label: "increasecost",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "increasepoolcost"),
-  },
-  {
-    key: "isSummon",
-    label: "summon",
-    matches: (jutsu: JutsuCapMatchInput) =>
-      jutsu.effects.some((e) => e.type === "summon"),
-  },
-] as const;
-
+/** Category predicates shared by normal equip and ranked loadout limits. */
 export const JUTSU_CATEGORY_DEFS: {
   key: string;
   label: string;
   matches: (jutsu: JutsuCapMatchInput) => boolean;
 }[] = [
-  ...namedCategories,
-  ...tagTypes
-    .filter(
-      (tag) =>
-        !namedCategories.some(
-          (def) =>
-            def.label === tag ||
-            (tag === "pierce" && def.key === "isPierce") ||
-            (tag === "increasepoolcost" && def.key === "isIncreaseCost"),
-        ),
-    )
-    .map((tag) => ({
-      key: tag,
-      label: tag,
-      matches: (jutsu: JutsuCapMatchInput) =>
-        jutsu.effects.some((effect) => effect.type === tag),
-    })),
+  {
+    key: "residual",
+    label: "residual",
+    matches: (jutsu) =>
+      jutsu.effects.some(
+        (effect) => "residualModifier" in effect && effect.residualModifier,
+      ),
+  },
+  {
+    key: "event",
+    label: "event",
+    matches: (jutsu) => jutsu.jutsuType === "EVENT",
+  },
+  {
+    key: "forbidden",
+    label: "forbidden",
+    matches: (jutsu) => jutsu.jutsuType === "FORBIDDEN",
+  },
+  ...tagTypes.map((tag) => ({
+    key: tag,
+    label:
+      tag === "pierce" ? "piercing" : tag === "increasepoolcost" ? "increasecost" : tag,
+    matches: (jutsu: JutsuCapMatchInput) =>
+      jutsu.effects.some((effect) => effect.type === tag),
+  })),
 ];
 
 export type JutsuCapFlagKey = (typeof JUTSU_CATEGORY_DEFS)[number]["key"];
@@ -188,30 +120,21 @@ export const buildJutsuEquipCaps = (
   rules.flatMap((rule, index) => {
     const max = mode === "ranked" ? rule.rankedMaxEquipped : rule.unrankedMaxEquipped;
     if (max === null) return [];
-    const special = rule.category;
-    const tag =
-      special === "increasepoolcost"
-        ? "increasecost"
-        : special === "pierce"
-          ? "piercing"
-          : special;
-    const def = JUTSU_CATEGORY_DEFS.find(
-      (entry) => entry.label === special || entry.label === tag,
-    );
-    if (!def) throw new Error("Unknown equip limit category");
+    const category = rule.category;
+    const def = getJutsuCategoryDef(category);
     return [
       {
         key: def.key,
         max,
         countAlias: `cap_${index}`,
         sql:
-          special === "residual"
+          category === "residual"
             ? { kind: "residual" as const }
-            : special === "event" || special === "forbidden"
-              ? { kind: "jutsuType" as const, jutsuType: special.toUpperCase() }
+            : category === "event" || category === "forbidden"
+              ? { kind: "jutsuType" as const, jutsuType: category.toUpperCase() }
               : {
                   kind: "effect" as const,
-                  effectType: special,
+                  effectType: category,
                 },
       },
     ];
