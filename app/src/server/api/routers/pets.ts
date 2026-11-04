@@ -245,19 +245,10 @@ export const petsRouter = createTRPCRouter({
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
         findUserItemForFeedPet(ctx.drizzle, input, ctx),
       ]);
-      const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
-      if (pet.rank > getMaxPetRank(user.rank))
-        return errorResponse("Your rank does not support this companion rank.");
-      if (!isPetAppearanceReady(pet))
-        return errorResponse("Finish your companion's appearance before feeding it.");
       const now = new Date();
-      const feedAvailableAt = getPetFeedAvailableAt(pet.lastFedAt);
-      if (feedAvailableAt && feedAvailableAt > now)
-        return errorResponse(
-          `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.`,
-        );
+      const feedBlock = petFeedBlockMessage(user, pet, now);
+      if (feedBlock || !user || !pet)
+        return errorResponse(feedBlock ?? "Pet not found");
       if (
         meal?.item?.itemType !== "MEAL" ||
         meal.storedAtHome ||
@@ -385,13 +376,7 @@ export const petsRouter = createTRPCRouter({
             experience: PET_FEED_EXPERIENCE_BY_RARITY[meal.item.rarity],
           })),
         feedAvailableAt,
-        canFeed: Boolean(
-          pet &&
-            !feedAvailableAt &&
-            !petMutationBlockMessage(user, pet) &&
-            isPetAppearanceReady(pet) &&
-            pet.rank <= getMaxPetRank(user.rank),
-        ),
+        canFeed: !petFeedBlockMessage(user, pet, now),
         options,
         dayKey,
         optionCount: PET_OPTION_COUNTS[federalStatus],
@@ -992,6 +977,24 @@ const petMutationBlockMessage = (
   if (user.isBanned) return "You are banned";
   if (user.status !== "AWAKE" || user.battleId)
     return "You must be awake and out of combat to change your companion.";
+  return null;
+};
+
+/** Why a companion cannot be fed right now, ahead of any meal checks. */
+const petFeedBlockMessage = (
+  user: UserData | undefined,
+  pet: UserPet | undefined,
+  now: Date,
+) => {
+  const restriction = petMutationBlockMessage(user, pet);
+  if (restriction || !user || !pet) return restriction ?? "Pet not found";
+  if (pet.rank > getMaxPetRank(user.rank))
+    return "Your rank does not support this companion rank.";
+  if (!isPetAppearanceReady(pet))
+    return "Finish your companion's appearance before feeding it.";
+  const feedAvailableAt = getPetFeedAvailableAt(pet.lastFedAt);
+  if (feedAvailableAt && feedAvailableAt > now)
+    return `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.`;
   return null;
 };
 
