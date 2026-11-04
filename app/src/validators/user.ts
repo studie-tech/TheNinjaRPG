@@ -135,6 +135,10 @@ export const getPublicUsersSchema = z.object({
   isWarCamp: z.boolean().optional(),
   isSummon: z.boolean().optional(),
   inShrines: z.boolean().optional(),
+  minLevel: z.number().int().optional(),
+  maxLevel: z.number().int().optional(),
+  /** Only players active within this many minutes. */
+  activeWithinMinutes: z.number().int().min(1).optional(),
 });
 export type GetPublicUsersSchema = z.infer<typeof getPublicUsersSchema>;
 

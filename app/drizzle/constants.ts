@@ -1924,6 +1924,10 @@ export const EVOLUTION_MAX_DEPTH = 3;
 
 // Combat config
 export const BATTLE_ARENA_DAILY_LIMIT = 99999;
+/** Levels above or below your own that count as "near my level" when finding spar opponents. */
+export const SPARRING_NEAR_LEVEL_RANGE = 5;
+/** Minutes since a player's last activity during which they count as online. */
+export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
