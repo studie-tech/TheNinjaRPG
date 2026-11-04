@@ -47,8 +47,15 @@ export const useTavernActivity = (
     .map((tavern) => tavern.id)
     .join(",");
 
+  // Counts belong to one account; another account starts without them.
+  useEffect(() => {
+    if (!userId) return;
+    return () => store.set(chatTavernActivityAtom, {});
+  }, [userId, store]);
+
   useEffect(() => {
     if (!pusher || !userId || !followed) return;
+    let isFollowing = true;
     const unsubscribes = followed.split(",").map((conversationId) =>
       subscribeConversation(pusher, conversationId, "tavern-activity", (event) => {
         const senderId = event.fromId;
@@ -58,6 +65,7 @@ export const useTavernActivity = (
           .fetch(undefined, { staleTime: Infinity })
           .catch(() => [])
           .then((blocked) => {
+            if (!isFollowing) return;
             if (blocked.some((entry) => entry.targetUserId === senderId)) return;
             store.set(chatTavernActivityAtom, (current) =>
               addConversationMention(current, conversationId),
@@ -66,6 +74,7 @@ export const useTavernActivity = (
       }),
     );
     return () => {
+      isFollowing = false;
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
   }, [pusher, userId, followed, store, utils]);

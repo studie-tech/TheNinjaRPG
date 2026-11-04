@@ -97,3 +97,24 @@ it("ignores own messages, other events, open taverns and blocked players", async
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(activity()).toEqual({ global: 1 });
 });
+
+it("starts fresh for another account and drops messages still being checked", async () => {
+  let release!: () => void;
+  const pending = new Promise<{ targetUserId: string }[]>((resolve) => {
+    release = () => resolve([]);
+  });
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ profile: { getBlacklist: { fetch: () => pending } } }),
+  });
+  store.set(chatTavernActivityAtom, { global: 4 });
+  const other = { ...(player() as object), userId: "other" } as never;
+  const { rerender } = renderHook(({ user }) => useTavernActivity(pusher, user), {
+    initialProps: { user: player() },
+  });
+  handlers.global?.({ message: "new", fromId: "sora" });
+  rerender({ user: other });
+  expect(activity()).toEqual({});
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(activity()).toEqual({});
+});
