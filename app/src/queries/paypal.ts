@@ -18,7 +18,10 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { STORE_ORDER_RESERVATION_MINUTES } from "@/drizzle/constants";
+import {
+  PAYPAL_PAID_PERIOD_DAYS,
+  STORE_ORDER_RESERVATION_MINUTES,
+} from "@/drizzle/constants";
 import {
   actionLog,
   item,
@@ -254,7 +257,10 @@ export const findPaypalSubscriptionForUpgradeSubscription = (
       eq(paypalSubscription.federalStatus, target.federalStatus),
       eq(paypalSubscription.affectedUserId, target.userId),
       eq(paypalSubscription.createdById, ctx.userId),
-      gte(paypalSubscription.updatedAt, sql`NOW() - INTERVAL 31 DAY`),
+      gte(
+        paypalSubscription.updatedAt,
+        sql`NOW() - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`,
+      ),
     ),
   });
 
@@ -282,7 +288,7 @@ export const executeResultForUpgradeSubscription = (
           AND p.createdById = ${ctx.userId} AND p.federalStatus = ${subscription.federalStatus}
           AND p.status IN ('ACTIVE', 'CANCELLED')
           AND p.updatedAt = ${subscription.updatedAt}
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY`);
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`);
 
 /** Build the `paypalSubscription` lookup for `cancelPaypalSubscription`, using predicates on `subscriptionId`. */
 export const findPaypalSubscriptionForCancelPaypalSubscription = (

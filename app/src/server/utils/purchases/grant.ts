@@ -7,13 +7,27 @@
  */
 
 import * as Sentry from "@sentry/node";
-import { and, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type FederalStatus,
   FederalStatuses,
+  PAYPAL_PAID_PERIOD_DAYS,
   STORE_FEDERAL_PRODUCTS,
   STORE_PLATFORMS,
+  STORE_RECEIPT_FALLBACK_DAYS,
   STORE_REP_PRODUCTS,
   type StorePlatform,
 } from "@/drizzle/constants";
@@ -77,6 +91,7 @@ import {
   updateStorePurchaseTransferForMigrateStorePurchaseTransfers2,
   updateStorePurchaseTransferForMigrateStorePurchaseTransfers3,
   updateUserDataForSetFederalStatusWithStoreFloor,
+  userFederalRankSql,
 } from "@/queries/purchases";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -84,6 +99,8 @@ import {
   isMysqlDuplicateKeyError,
   retryOnDeadlock,
 } from "@/server/utils/mysqlErrors";
+
+import { DAY_S } from "@/utils/time";
 
 export interface StoreGrant {
   userId: string;
@@ -175,6 +192,15 @@ export const canonicalStoreUserId = async (
   }
 };
 
+/** Resolve aliases for a RevenueCat id list, dropping blanks and repeats. */
+const canonicalStoreUserIds = async (client: DrizzleClient, userIds: string[]) => {
+  const canonical: string[] = [];
+  for (const id of userIds.filter(Boolean)) {
+    canonical.push(await canonicalStoreUserId(client, id));
+  }
+  return [...new Set(canonical)];
+};
+
 /**
  * Follow durable RevenueCat ownership redirects, including a partially-flattened chain.
  *
@@ -203,8 +229,7 @@ const transferredUserId = async (
     );
     const redirect = redirects.find((candidate) => {
       if (candidate.transferredAt.getTime() > cursor.getTime()) return true;
-      const key = `${candidate.eventId}\0${candidate.sourceUserId}\0${candidate.destinationUserId}\0${candidate.id}`;
-      return cursorKey === null || key > cursorKey;
+      return cursorKey === null || transferEdgeKey(candidate) > cursorKey;
     });
     if (!redirect || redirect.destinationUserId === current) return current;
     if (visitedEdges.has(redirect.id)) {
@@ -214,55 +239,65 @@ const transferredUserId = async (
     }
     visitedEdges.add(redirect.id);
     cursor = redirect.transferredAt;
-    cursorKey = `${redirect.eventId}\0${redirect.sourceUserId}\0${redirect.destinationUserId}\0${redirect.id}`;
+    cursorKey = transferEdgeKey(redirect);
     current = redirect.destinationUserId;
   }
 };
 
+/** Total order over transfers sharing a timestamp. */
+const transferEdgeKey = (edge: {
+  id: string;
+  eventId: string;
+  sourceUserId: string;
+  destinationUserId: string;
+}) => `${edge.eventId}\0${edge.sourceUserId}\0${edge.destinationUserId}\0${edge.id}`;
+
 /** Every original owner whose chronological transfer path could reach sourceUserId. */
-const transferPredecessorUserIds = async (
+const transferPredecessorUserIds = (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
   isSandbox: boolean,
-): Promise<string[]> => {
-  const visited = new Set<string>();
-  const pending = [sourceUserId];
-  while (pending.length > 0) {
-    const current = pending.shift();
-    if (!current || visited.has(current)) continue;
-    visited.add(current);
-    const predecessors = await listStorePurchaseTransferForTransferPredecessorUserIds(
+) =>
+  walkTransferGraph(sourceUserId, async (current) => {
+    const redirects = await listStorePurchaseTransferForTransferPredecessorUserIds(
       client,
       current,
       store,
       isSandbox,
     );
-    pending.push(...predecessors.map((redirect) => redirect.sourceUserId));
-  }
-  return [...visited];
-};
+    return redirects.map((redirect) => redirect.sourceUserId);
+  });
 
 /** Every account which may currently hold a receipt originally attached to sourceUserId. */
-const transferChainUserIds = async (
+const transferChainUserIds = (
   client: DrizzleClient,
   sourceUserId: string,
   store: StorePlatform,
   isSandbox: boolean,
-): Promise<string[]> => {
-  const visited = new Set<string>();
-  const pending = [sourceUserId];
-  while (pending.length > 0) {
-    const current = pending.shift();
-    if (!current || visited.has(current)) continue;
-    visited.add(current);
+) =>
+  walkTransferGraph(sourceUserId, async (current) => {
     const redirects = await listStorePurchaseTransferForTransferChainUserIds(
       client,
       current,
       store,
       isSandbox,
     );
-    pending.push(...redirects.map((redirect) => redirect.destinationUserId));
+    return redirects.map((redirect) => redirect.destinationUserId);
+  });
+
+/** Breadth-first walk over transfer edges, one direction at a time. */
+const walkTransferGraph = async (
+  start: string,
+  neighbours: (userId: string) => Promise<string[]>,
+): Promise<string[]> => {
+  const visited = new Set<string>();
+  const pending = [start];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(await neighbours(current)));
   }
   return [...visited];
 };
@@ -423,32 +458,23 @@ const applyStorePurchase = async (
     );
   }
 
-  let inserted = true;
   try {
-    await insertStorePurchaseForApplyStorePurchase(
-      client,
-      recipientUserId,
-      originalUserId,
-      grant,
-      reps,
-      federal,
-      accepted,
-    );
-  } catch (error) {
-    if (isMysqlDuplicateKeyError(error)) inserted = false;
-    else {
-      if (!isMysqlDeadlockError(error)) {
-        Sentry.captureException(error, {
-          level: "error",
-          tags: { source: "grantStorePurchase" },
-          extra: { transactionId: grant.transactionId, productId: grant.productId },
-        });
-      }
-      throw error;
+    let inserted = true;
+    try {
+      await insertStorePurchaseForApplyStorePurchase(
+        client,
+        recipientUserId,
+        originalUserId,
+        grant,
+        reps,
+        federal,
+        accepted,
+      );
+    } catch (error) {
+      if (!isMysqlDuplicateKeyError(error)) throw error;
+      inserted = false;
     }
-  }
 
-  try {
     const storedReceipt = await findStorePurchaseForApplyStorePurchase(client, grant);
     if (!storedReceipt)
       throw new Error(`Missing receipt ${grant.transactionId} after insert`);
@@ -489,8 +515,7 @@ const applyStorePurchase = async (
     if (federal) {
       // An effective downgrade arrives as a purchase/renewal, without requiring an
       // expiration webhook for the old tier. Include accepted receipts on retries too.
-      const paypal = await paypalFederalFloor(client, recipientUserId);
-      await setFederalStatusWithStoreFloor(client, recipientUserId, paypal);
+      await rederiveFederalStatus(client, recipientUserId);
     }
     if (receipt.grantedAt) return { status: "duplicate" };
 
@@ -566,8 +591,7 @@ export const settleRecordedLedger = async (
       // Reported by grantStorePurchase; the receipt stays pending for the next attempt.
     }
   }
-  const paypal = await paypalFederalFloor(client, userId);
-  await setFederalStatusWithStoreFloor(client, userId, paypal);
+  await rederiveFederalStatus(client, userId);
 };
 
 /**
@@ -678,8 +702,7 @@ const applyStoreExtension = async (
   // whoever holds the receipt now, since a transfer can have moved it while this ran.
   const holder = await findStorePurchaseForApplyStoreExtension2(client, receipt);
   for (const owner of new Set([receipt.userId, holder?.userId ?? receipt.userId])) {
-    const paypal = await paypalFederalFloor(client, owner);
-    await setFederalStatusWithStoreFloor(client, owner, paypal);
+    await rederiveFederalStatus(client, owner);
   }
 };
 
@@ -737,8 +760,7 @@ const applyFederalRevocation = async (
   // PlanetScale. A retry must repair the second write if the first delivery failed after
   // stamping revokedAt.
   if (exact?.revokedAt) {
-    const paypal = await paypalFederalFloor(client, exact.userId);
-    await setFederalStatusWithStoreFloor(client, exact.userId, paypal);
+    await rederiveFederalStatus(client, exact.userId);
     return;
   }
   // A renewal period commonly begins at the exact millisecond the previous period ends.
@@ -847,8 +869,7 @@ const applyFederalRevocation = async (
   // paying subscriber with a live receipt and nothing to show for it, until their next
   // renewal.
   for (const owner of retired) {
-    const paypal = await paypalFederalFloor(client, owner);
-    await setFederalStatusWithStoreFloor(client, owner, paypal);
+    await rederiveFederalStatus(client, owner);
   }
 };
 
@@ -1012,16 +1033,8 @@ const applyStoreTransfer = async (
   client: DrizzleClient,
   transfer: StoreTransfer,
 ): Promise<{ destinationUserId: string; rowsAffected: number }> => {
-  const canonicalFromIds: string[] = [];
-  for (const id of transfer.fromUserIds.filter(Boolean)) {
-    canonicalFromIds.push(await canonicalStoreUserId(client, id));
-  }
-  const fromIds = [...new Set(canonicalFromIds)];
-  const canonicalToIds: string[] = [];
-  for (const id of transfer.toUserIds.filter(Boolean)) {
-    canonicalToIds.push(await canonicalStoreUserId(client, id));
-  }
-  const toIds = [...new Set(canonicalToIds)];
+  const fromIds = await canonicalStoreUserIds(client, transfer.fromUserIds);
+  const toIds = await canonicalStoreUserIds(client, transfer.toUserIds);
   if (toIds.length === 0) throw new Error("RevenueCat transfer has no destination");
   const destinations = await selectStoreUserIds(client, toIds);
   // The destination may have deleted its character. The receipts move all the same, so
@@ -1116,8 +1129,7 @@ const applyStoreTransfer = async (
     ...knownSources.map((row) => row.userId),
     ...effectiveDestinations,
   ])) {
-    const paypal = await paypalFederalFloor(client, userId);
-    await setFederalStatusWithStoreFloor(client, userId, paypal);
+    await rederiveFederalStatus(client, userId);
   }
 
   return { destinationUserId, rowsAffected };
@@ -1168,19 +1180,8 @@ export const retireStoreUserId = async (
 /** Where a status sits on the ladder, so two sources can be compared. */
 const rankOf = (status: FederalStatus): number => FederalStatuses.indexOf(status);
 
-/** The window PayPal reconciliation has always used, and which /api/cleaner mirrors. */
-const PAYPAL_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
-
-/**
- * The same idea for the stores, but wider, because a receipt is the only evidence there is
- * and a subscription can go a long time without producing one. A failed renewal opens a
- * billing-retry grace period — up to 16 days on the App Store and 30 on Play — during
- * which the player is still entitled and no RENEWAL arrives. A monthly cycle plus that
- * grace exceeds 31 days, so the narrower window would strip someone the store still
- * considers a subscriber. Revocation does not depend on this: EXPIRATION revokes on the
- * event, and this window is only the backstop for a webhook that never arrived.
- */
-const STORE_WINDOW_MS = 63 * 24 * 60 * 60 * 1000;
+/** How long an ACTIVE PayPal row vouches for its tier after its last payment. */
+const PAYPAL_WINDOW_MS = PAYPAL_PAID_PERIOD_DAYS * DAY_S * 1000;
 
 const highest = (statuses: FederalStatus[]): FederalStatus =>
   statuses.reduce<FederalStatus>(
@@ -1212,6 +1213,12 @@ const paypalFederalFloor = async (
   return highest(rows.map((row) => row.federalStatus));
 };
 
+/** Recompute a player's tier from everything that vouches for it now. */
+const rederiveFederalStatus = async (client: DrizzleClient, userId: string) => {
+  const paypal = await paypalFederalFloor(client, userId);
+  await setFederalStatusWithStoreFloor(client, userId, paypal);
+};
+
 /**
  * Set the shared federal-status column without leaving a gap between reading the store
  * receipts and writing the user. Store grants update the receipt and user in one statement
@@ -1223,73 +1230,24 @@ export const setFederalStatusWithStoreFloor = async (
   userId: string,
   paypalStatus: FederalStatus,
 ) => {
-  const liveStoreReceipt = and(
-    eq(storePurchase.userId, userId),
-    isNotNull(storePurchase.acceptedAt),
-    ...(isSandboxGrantee(userId) ? [] : [eq(storePurchase.isSandbox, false)]),
-    isNull(storePurchase.revokedAt),
-    or(
-      gte(storePurchase.expiresAt, new Date()),
-      and(
-        isNull(storePurchase.expiresAt),
-        gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
-      ),
-    ),
-  );
-  const hasTier = (tier: FederalStatus) => sql`EXISTS (
-    SELECT 1 FROM ${storePurchase}
-    WHERE ${liveStoreReceipt}
-      AND ${storePurchase.federalStatus} = ${tier}
-  ) OR EXISTS (
-    SELECT 1 FROM ${stripePayment}
-    WHERE ${stripePayment.affectedUserId} = ${userId}
-      AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = ${tier}
-      AND ${stripePayment.grantedAt} IS NOT NULL
-      ${env.NODE_ENV === "production" ? sql`AND ${stripePayment.isSandbox} = FALSE` : sql``}
-      AND ${stripePayment.purchasedAt} <= CURRENT_TIMESTAMP(3)
-      AND ${stripePayment.expiresAt} > CURRENT_TIMESTAMP(3)
-  ) OR EXISTS (
-    SELECT 1 FROM ${paypalSubscription}
-    WHERE ${paypalSubscription.affectedUserId} = ${userId}
-      AND ${paypalSubscription.status} = 'ACTIVE'
-      AND ${paypalSubscription.updatedAt} >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-      AND ${paypalSubscription.federalStatus} = ${tier}
-  )`;
-  const paypalRank = rankOf(paypalStatus);
-  // The same grace reconcileFederalStatuses applies, and for the same reason: cancelling on
-  // the web leaves the row CANCELLED without moving updatedAt, so paypalFederalFloor --
-  // which counts only ACTIVE rows -- reports NONE for a period the player has already paid
-  // for. Without this, a store grant, revocation or transfer arriving inside that window
-  // writes NONE, and the reconcile deliberately never restores a cleared tier, so the rest
-  // of the paid period would be gone.
-  //
-  // Gated on the tier the column already holds, so it can only preserve, never restore.
+  const sandboxRule = isSandboxGrantee(userId)
+    ? undefined
+    : eq(storePurchase.isSandbox, false);
   // Only when the caller reports no PayPal tier at all. That is the case the grace exists
   // for: paypalFederalFloor counts only ACTIVE rows, so a web cancellation reads as NONE
   // while the period the player paid for is still running. A caller naming a real tier is
   // asserting one; other current ACTIVE subscriptions are independently protected by
-  // hasTier, while this grace only preserves coverage when no PayPal tier was supplied.
-  //
-  // "At least this tier" rather than "exactly", because the column may have been raised
-  // above the PayPal tier by a store receipt. Gated on equality, a store subscription
-  // ending would leave the CASE unable to see the PayPal period underneath it and would
-  // destroy time the player had paid for. The comparison still cannot raise anyone: it
-  // only permits a tier at or below what they already hold.
+  // tierEvidence, while this grace only preserves coverage when no PayPal tier was supplied.
+  // Without it, a store grant, revocation or transfer arriving inside that window writes
+  // NONE, and the reconcile deliberately never restores a cleared tier.
   const paypalGrace = (tier: FederalStatus) =>
-    paypalStatus === "NONE"
-      ? sql`(FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= ${rankOf(tier) + 1} AND EXISTS (
-          SELECT 1 FROM ${paypalSubscription}
-          WHERE ${paypalSubscription.affectedUserId} = ${userId}
-            AND ${paypalSubscription.updatedAt} >= ${new Date(Date.now() - PAYPAL_WINDOW_MS)}
-            AND ${paypalSubscription.federalStatus} = ${tier}
-        ))`
-      : sql`FALSE`;
+    paypalStatus === "NONE" ? paidPaypalPeriodGrace(userId, tier) : sql`FALSE`;
 
   return await updateUserDataForSetFederalStatusWithStoreFloor(
     client,
-    paypalRank,
+    rankOf(paypalStatus),
     rankOf,
-    hasTier,
+    (tier) => tierEvidence(userId, tier, sandboxRule),
     paypalGrace,
     userId,
   );
@@ -1306,141 +1264,24 @@ export const reconcileFederalStatuses = async (
   client: Pick<DrizzleClient, "select" | "execute">,
 ) => {
   const sandboxUserIds = sandboxGranteeUserIds();
-  const sandboxEligibility = sandboxUserIds.length
-    ? sql`AND (s.isSandbox = FALSE OR s.userId IN (${sql.join(
-        sandboxUserIds.map((userId) => sql`${userId}`),
-        sql`, `,
-      )}))`
-    : sql`AND s.isSandbox = FALSE`;
-  const federalStatus = sql`CASE
-      WHEN EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = ${userData.userId}
-          AND p.status = 'ACTIVE'
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-          AND p.federalStatus = 'GOLD'
-      ) OR EXISTS (
-        SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = ${userData.userId}
-          AND s.federalStatus = 'GOLD'
-          AND s.acceptedAt IS NOT NULL
-          ${sandboxEligibility}
-          AND s.revokedAt IS NULL
-          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
-      ) OR (
-        -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Bounded by the tier they currently hold, so it
-        -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
-        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
-        -- hide the paid period underneath it when that receipt ends.
-        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 4 AND EXISTS (
-          SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = ${userData.userId}
-            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-            AND p.federalStatus = 'GOLD'
-        )
-      ) OR EXISTS (
-        SELECT 1 FROM ${stripePayment} sp
-        WHERE sp.affectedUserId = ${userData.userId}
-          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'GOLD'
-          AND sp.grantedAt IS NOT NULL
-          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
-          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
-          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
-      ) THEN 'GOLD'
-      WHEN EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = ${userData.userId}
-          AND p.status = 'ACTIVE'
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-          AND p.federalStatus = 'SILVER'
-      ) OR EXISTS (
-        SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = ${userData.userId}
-          AND s.federalStatus = 'SILVER'
-          AND s.acceptedAt IS NOT NULL
-          ${sandboxEligibility}
-          AND s.revokedAt IS NULL
-          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
-      ) OR (
-        -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Bounded by the tier they currently hold, so it
-        -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
-        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
-        -- hide the paid period underneath it when that receipt ends.
-        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 3 AND EXISTS (
-          SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = ${userData.userId}
-            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-            AND p.federalStatus = 'SILVER'
-        )
-      ) OR EXISTS (
-        SELECT 1 FROM ${stripePayment} sp
-        WHERE sp.affectedUserId = ${userData.userId}
-          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'SILVER'
-          AND sp.grantedAt IS NOT NULL
-          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
-          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
-          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
-      ) THEN 'SILVER'
-      WHEN EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = ${userData.userId}
-          AND p.status = 'ACTIVE'
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-          AND p.federalStatus = 'NORMAL'
-      ) OR EXISTS (
-        SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = ${userData.userId}
-          AND s.federalStatus = 'NORMAL'
-          AND s.acceptedAt IS NOT NULL
-          ${sandboxEligibility}
-          AND s.revokedAt IS NULL
-          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
-      ) OR (
-        -- Cancelling on the web sets status without moving updatedAt, and the player has
-        -- already paid through the period. Bounded by the tier they currently hold, so it
-        -- can only keep what they have -- never hand a tier back to someone the reconcile
-        -- has already cleared, which is what the ACTIVE predicate above is guarding. "At
-        -- least", not "exactly", so a store receipt sitting above the PayPal tier does not
-        -- hide the paid period underneath it when that receipt ends.
-        FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') >= 2 AND EXISTS (
-          SELECT 1 FROM ${paypalSubscription} p
-          WHERE p.affectedUserId = ${userData.userId}
-            AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-            AND p.federalStatus = 'NORMAL'
-        )
-      ) OR EXISTS (
-        SELECT 1 FROM ${stripePayment} sp
-        WHERE sp.affectedUserId = ${userData.userId}
-          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'NORMAL'
-          AND sp.grantedAt IS NOT NULL
-          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
-          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
-          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
-      ) THEN 'NORMAL'
-      ELSE 'NONE'
-    END`;
+  const sandboxRule = or(
+    eq(storePurchase.isSandbox, false),
+    sandboxUserIds.length ? inArray(storePurchase.userId, sandboxUserIds) : undefined,
+  );
+  const tierCases = FederalStatuses.slice(1)
+    .reverse()
+    .map(
+      (tier) => sql`WHEN ${tierEvidence(userData.userId, tier, sandboxRule)}
+        OR ${paidPaypalPeriodGrace(userData.userId, tier)} THEN ${tier}`,
+    );
+  const federalStatus = sql`CASE ${sql.join(tierCases, sql` `)} ELSE 'NONE' END`;
   const eligible = sql`(${userData.federalStatus} != 'NONE'
-      OR EXISTS (SELECT 1 FROM ${stripePayment} sp WHERE sp.affectedUserId = ${userData.userId} AND sp.grantedAt IS NOT NULL ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``} AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
-          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
-      )
+      OR EXISTS (SELECT 1 FROM ${stripePayment} WHERE ${liveStripePeriod(userData.userId)})
+      OR EXISTS (SELECT 1 FROM ${paypalSubscription} WHERE ${activePaypalRow(userData.userId)})
       OR EXISTS (
-        SELECT 1 FROM ${paypalSubscription} p
-        WHERE p.affectedUserId = ${userData.userId}
-          AND p.status = 'ACTIVE'
-          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
-      )
-      OR EXISTS (
-        SELECT 1 FROM ${storePurchase} s
-        WHERE s.userId = ${userData.userId}
-          AND s.federalStatus IS NOT NULL
-          AND s.acceptedAt IS NOT NULL
-          ${sandboxEligibility}
-          AND s.revokedAt IS NULL
-          AND (s.expiresAt >= CURRENT_TIMESTAMP(3) OR (s.expiresAt IS NULL AND s.createdAt >= CURRENT_TIMESTAMP(3) - INTERVAL 63 DAY))
+        SELECT 1 FROM ${storePurchase}
+        WHERE ${liveStoreReceipt(userData.userId, sandboxRule)}
+          AND ${storePurchase.federalStatus} IS NOT NULL
       ))`;
   // Discover candidates with a consistent read, then evaluate the latest receipts
   // and tier in each bounded write so concurrent grants/revocations still win.
@@ -1452,3 +1293,86 @@ export const reconcileFederalStatuses = async (
     );
   }
 };
+
+/** The player a tier predicate is about: one bound id, or the row of the enclosing UPDATE. */
+type UserReference = string | typeof userData.userId;
+
+const databaseNow = sql`CURRENT_TIMESTAMP(3)`;
+const paypalWindowStart = sql`${databaseNow} - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`;
+
+const activePaypalRow = (user: UserReference) =>
+  and(
+    eq(paypalSubscription.affectedUserId, user),
+    eq(paypalSubscription.status, "ACTIVE"),
+    gte(paypalSubscription.updatedAt, paypalWindowStart),
+  );
+
+const liveStripePeriod = (user: UserReference) =>
+  and(
+    eq(stripePayment.affectedUserId, user),
+    isNotNull(stripePayment.grantedAt),
+    env.NODE_ENV === "production" ? eq(stripePayment.isSandbox, false) : undefined,
+    lte(stripePayment.purchasedAt, databaseNow),
+    gt(stripePayment.expiresAt, databaseNow),
+  );
+
+/**
+ * A receipt with no expiry falls back to a window wider than PayPal's, because a receipt is
+ * the only evidence there is and a subscription can go a long time without producing one. A
+ * failed renewal opens a billing-retry grace period — up to 16 days on the App Store and 30
+ * on Play — during which the player is still entitled and no RENEWAL arrives. A monthly
+ * cycle plus that grace exceeds 31 days, so the narrower window would strip someone the
+ * store still considers a subscriber. Revocation does not depend on this: EXPIRATION
+ * revokes on the event, and this window is only the backstop for a webhook that never
+ * arrived.
+ */
+const liveStoreReceipt = (user: UserReference, sandboxRule: SQL | undefined) =>
+  and(
+    eq(storePurchase.userId, user),
+    isNotNull(storePurchase.acceptedAt),
+    sandboxRule,
+    isNull(storePurchase.revokedAt),
+    or(
+      gte(storePurchase.expiresAt, databaseNow),
+      and(
+        isNull(storePurchase.expiresAt),
+        gte(
+          storePurchase.createdAt,
+          sql`${databaseNow} - INTERVAL ${STORE_RECEIPT_FALLBACK_DAYS} DAY`,
+        ),
+      ),
+    ),
+  );
+
+/** Whether an active PayPal row, a live store receipt or a paid Stripe period vouches. */
+const tierEvidence = (
+  user: UserReference,
+  tier: FederalStatus,
+  sandboxRule: SQL | undefined,
+) => sql`EXISTS (
+    SELECT 1 FROM ${paypalSubscription}
+    WHERE ${activePaypalRow(user)} AND ${paypalSubscription.federalStatus} = ${tier}
+  ) OR EXISTS (
+    SELECT 1 FROM ${storePurchase}
+    WHERE ${liveStoreReceipt(user, sandboxRule)} AND ${storePurchase.federalStatus} = ${tier}
+  ) OR EXISTS (
+    SELECT 1 FROM ${stripePayment}
+    WHERE ${liveStripePeriod(user)}
+      AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = ${tier}
+  )`;
+
+/**
+ * Cancelling on the web sets status without moving updatedAt, and the player has already
+ * paid through the period. Bounded by the tier they currently hold, so it can only keep what
+ * they have -- never hand a tier back to someone the reconcile has already cleared, which is
+ * what the ACTIVE predicate above is guarding. "At least", not "exactly", so a store receipt
+ * sitting above the PayPal tier does not hide the paid period underneath it when that
+ * receipt ends.
+ */
+const paidPaypalPeriodGrace = (user: UserReference, tier: FederalStatus) =>
+  sql`(${userFederalRankSql()} >= ${rankOf(tier) + 1} AND EXISTS (
+    SELECT 1 FROM ${paypalSubscription}
+    WHERE ${paypalSubscription.affectedUserId} = ${user}
+      AND ${paypalSubscription.updatedAt} >= ${paypalWindowStart}
+      AND ${paypalSubscription.federalStatus} = ${tier}
+  ))`;

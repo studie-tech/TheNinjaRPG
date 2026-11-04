@@ -8,6 +8,7 @@ import {
 import {
   FEDERAL_MONTHLY_USD_CENTS,
   FederalStatuses,
+  PAYPAL_PAID_PERIOD_DAYS,
   type TransactionType,
 } from "@/drizzle/constants";
 
@@ -90,7 +91,7 @@ import {
   reps2dollars,
 } from "@/utils/paypal";
 import { canManageStore, canSeeSecretData } from "@/utils/permissions";
-import { addDays, secondsFromNow } from "@/utils/time";
+import { addDays, DAY_S, secondsFromNow } from "@/utils/time";
 import type { JsonData } from "@/utils/typeutils";
 import {
   searchPaypalTransactionSchema,
@@ -731,7 +732,7 @@ export const updateSubscription = async (input: {
     // confirmed payment advances the paid marker without inventing another billing date.
     const retainsPeriod =
       current &&
-      current.updatedAt > secondsFromNow(-3600 * 24 * 31) &&
+      current.updatedAt > secondsFromNow(-PAYPAL_PAID_PERIOD_DAYS * DAY_S) &&
       (!input.lastPayment ||
         input.lastPayment <= current.updatedAt ||
         FederalStatuses.indexOf(current.federalStatus) >
@@ -1002,7 +1003,7 @@ export const getPaypalSubscriptionStatus = (
 ): { newStatus: FederalStatus; lastPayment: Date } => {
   const lastPayment = new Date(subscription.billing_info.last_payment.time);
   const fedStatus = plan2FedStatus(subscription.plan_id);
-  const stillActive = lastPayment > secondsFromNow(-3600 * 24 * 31);
+  const stillActive = lastPayment > secondsFromNow(-PAYPAL_PAID_PERIOD_DAYS * DAY_S);
   const newStatus = stillActive ? fedStatus : "NONE";
   return { newStatus, lastPayment };
 };

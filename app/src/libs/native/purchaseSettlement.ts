@@ -1,3 +1,6 @@
+import { STORE_RECEIPT_FALLBACK_DAYS } from "@/drizzle/constants";
+import { DAY_S } from "@/utils/time";
+
 export interface StorePurchaseSettlement {
   id: string;
   transactionId: string;
@@ -176,7 +179,8 @@ export const storeRestoreReconciliation = (
     purchase.revokedAt === null &&
     (purchase.expiresAt !== null
       ? purchase.expiresAt.getTime() > now.getTime()
-      : purchase.createdAt.getTime() >= now.getTime() - 63 * 24 * 60 * 60 * 1000);
+      : purchase.createdAt.getTime() >=
+        now.getTime() - STORE_RECEIPT_FALLBACK_DAYS * DAY_S * 1000);
   if (receiptsByProduct.every((receipts) => receipts.some(hasLiveEntitlement))) {
     return "reconciled";
   }
