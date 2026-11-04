@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -30,6 +30,7 @@ import { canAwardReputation } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
+  QuestNodePositions,
   ZodQuestFormInput,
   ZodQuestFormType,
 } from "@/validators/objectives";
@@ -39,10 +40,7 @@ import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 // A merged type for quest with its rewards, so that we can show both in the same form
 export type ZodCombinedQuest = ZodQuestFormType;
 
-/**
- * Hook used when creating frontend forms for editing items
- * @param data
- */
+/** Manage quest fields, objective layouts and validated content saves in one form. */
 export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {
   const submitInFlight = useRef(false);
 
@@ -161,6 +159,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       endsAt: data.endsAt ? data.endsAt : null,
       startsAt: data.startsAt ? data.startsAt : null,
       content: {
+        nodePositions: data.content.nodePositions,
         entryItems: data.content.entryItems,
         isolated: data.content.isolated,
         sceneBackground: data.sceneBackground,
@@ -251,15 +250,30 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     control: form.control,
   }) as ZodCombinedQuest;
 
-  // Handle updating of effects
+  /** Replace objectives while retaining saved positions only for remaining nodes. */
   const setObjectives = (values: AllObjectivesType[]) => {
     // Cast content to output type for proper typing
     const newContent = {
       ...(content as ZodCombinedQuest["content"]),
       objectives: values,
+      nodePositions: content.nodePositions
+        ? Object.fromEntries(
+            values.flatMap(({ id }) =>
+              content.nodePositions?.[id] ? [[id, content.nodePositions[id]]] : [],
+            ),
+          )
+        : undefined,
     };
     form.setValue("content", newContent, { shouldDirty: true });
   };
+
+  /** Include graph arrangements in the next quest save without changing objectives. */
+  const setNodePositions = useCallback(
+    (positions: QuestNodePositions) => {
+      form.setValue("content.nodePositions", positions, { shouldDirty: true });
+    },
+    [form],
+  );
 
   // Are we loading data
   const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10 || l11;
@@ -602,6 +616,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     formData,
     loading,
     setObjectives,
+    setNodePositions,
     handleQuestSubmit,
     getSuggestionData,
     isUpdating,

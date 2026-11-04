@@ -46,6 +46,29 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("quest run editor validation and payload", () => {
+  it("saves layout-only edits and reloads their shared positions", async () => {
+    const positions = { floor: { x: -125.5, y: 300 } };
+    const { result, unmount } = renderHook(() => useQuestEditForm(structuredClone(savedQuest), async () => undefined));
+    await act(async () => { result.current.setNodePositions(positions); });
+    expect(result.current.getSuggestionData()).toMatchObject({ content: { nodePositions: positions } });
+    await act(async () => { await result.current.handleQuestSubmit(); });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0]?.[0]).toMatchObject({ data: { content: { nodePositions: positions } } });
+    unmount();
+    const reopened = { ...structuredClone(savedQuest), content: { ...savedQuest.content, nodePositions: positions } };
+    const next = renderHook(() => useQuestEditForm(reopened, async () => undefined));
+    expect(next.result.current.currentValues.content.nodePositions).toEqual(positions);
+  });
+
+  it("retains arranged nodes when adding objectives and removes deleted coordinates", async () => {
+    const quest = { ...structuredClone(savedQuest), content: { ...savedQuest.content, nodePositions: { floor: { x: 40, y: 90 } } } };
+    const { result } = renderHook(() => useQuestEditForm(quest, async () => undefined));
+    await act(async () => { result.current.setObjectives([floor, { ...floor, id: "copy" }]); });
+    expect(result.current.currentValues.content.nodePositions).toEqual(quest.content.nodePositions);
+    await act(async () => { result.current.setObjectives([{ ...floor, id: "copy" }]); });
+    expect(result.current.getSuggestionData()?.content.nodePositions).toEqual({});
+  });
+
   it.each(["raid", "village_mission", "achievement", "story"] as const)(
     "converts a saved ticketed isolated Pyramid to %s before validation",
     async (questType) => {
