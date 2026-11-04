@@ -6,6 +6,7 @@ import {
   listItemForGetFarmCollectionState2,
 } from "@/queries/farming";
 import type { DrizzleClient } from "@/server/db";
+import { queryInTransaction } from "@/server/utils/concurrency";
 
 type FarmCollectionSeed = Pick<Item, "farmYieldItemId" | "farmMinLevel">;
 type FarmCollectionItem = Pick<Item, "id" | "name" | "image">;
@@ -99,9 +100,8 @@ export const getFarmCollectionState = async (
     listItemForGetFarmCollectionState2(client, yieldItemIds),
     listFarmCollectionLogForGetFarmCollectionState(client, userId, yieldItemIds),
   ] as const;
-  // Both builders stay lazy until awaited; a shared transaction session needs ordered queries.
   const [yieldItems, collectionRows] = inTransaction
-    ? [await queries[0], await queries[1]]
+    ? await queryInTransaction(queries)
     : await Promise.all(queries);
 
   return buildFarmCollectionState(seeds, yieldItems, collectionRows);
