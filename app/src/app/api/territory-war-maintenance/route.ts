@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
   const timer = await lockWithMinuteTimer(drizzleDB, "territory-war-maintenance");
+  // A failure keeps the minute; the next minute's run retries.
   return runClaimedCron(
     timer,
     "/api/territory-war-maintenance",
@@ -16,7 +17,6 @@ export async function GET(request: Request) {
       await syncTerritoryWars(drizzleDB);
       await syncDiscordEvents(drizzleDB);
       return Response.json({ success: true });
-      // The next minute's run retries; failed work does not repeat inside this one.
     },
     { keepClaimOnError: true },
   );

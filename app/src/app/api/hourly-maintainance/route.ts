@@ -28,6 +28,7 @@ export async function GET(request: Request) {
   // Check timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
 
+  // A failure keeps the hour, so bounty refunds never rerun within it.
   return runClaimedCron(
     timerCheck,
     "/api/hourly-maintainance",
@@ -50,7 +51,6 @@ export async function GET(request: Request) {
         expiredAnalytics,
         villageMaintenance,
       });
-      // The hour stays claimed: the bounty refunds are not guarded against a rerun.
     },
     { keepClaimOnError: true },
   );
