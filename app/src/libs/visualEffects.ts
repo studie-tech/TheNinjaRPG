@@ -24,17 +24,33 @@ export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
   spriteAnimations: true,
 };
 
-/** Missing or malformed preferences keep the full visual presentation enabled. */
-export const readVisualEffects = (): VisualEffects =>
-  Object.fromEntries(
+/** Seeds independent choices from saved groups; missing or malformed values default on. */
+export const readVisualEffects = (): VisualEffects => {
+  const effects = Object.fromEntries(
     Object.entries(VISUAL_EFFECT_KEYS).map(([effect, key]) => [
       effect,
       safeLocalStorageGetItem(key) !== "false",
     ]),
   ) as VisualEffects;
+  for (const [effect, group] of [
+    ["sunlight", "dayNight"],
+    ["localLights", "dayNight"],
+    ["weather", "spriteAnimations"],
+    ["wind", "spriteAnimations"],
+  ] as const) {
+    const key = VISUAL_EFFECT_KEYS[effect];
+    if (safeLocalStorageGetItem(key) === null) {
+      effects[effect] = effects[group];
+      safeLocalStorageSetItem(key, JSON.stringify(effects[effect]));
+    }
+  }
+  return effects;
+};
 
 /** Publishes immediately to active scenes, including when browser storage is unavailable. */
 export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
+  // Save sibling choices before changing a key also used by a grouped preference.
+  readVisualEffects();
   const key = VISUAL_EFFECT_KEYS[effect];
   const value = JSON.stringify(enabled);
   safeLocalStorageSetItem(key, value);
