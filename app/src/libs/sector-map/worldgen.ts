@@ -13,8 +13,14 @@
  */
 import alea from "alea";
 import { createNoise3D } from "simplex-noise";
+import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
+import {
+  sectorGeographicBounds,
+  sectorGridNeighbors,
+  sectorGridPosition,
+} from "@/libs/sector-map/world-grid";
 
-/** Sphere radius; matches scripts/generate-globe.ts and the tile corner data */
+/** Sphere radius of the globe and its tile corner data */
 export const WORLDGEN_RADIUS = 30;
 export const WORLDGEN_LAND_THRESHOLD = -0.2;
 // A sector is roughly 2.5 world units tall. Extending protection 2.2 units
@@ -52,6 +58,42 @@ const projectToSphere = (p: Vec3): Vec3 => {
     x: (p.x / len) * WORLDGEN_RADIUS,
     y: (p.y / len) * WORLDGEN_RADIUS,
     z: (p.z / len) * WORLDGEN_RADIUS,
+  };
+};
+
+/** Hermite blend of `t`, already clamped to 0-1. */
+const smoothBlend = (t: number) => t * t * (3 - 2 * t);
+
+/** Clamped Hermite interpolation of `value` between `low` and `high`. */
+export const smoothstep = (low: number, high: number, value: number) =>
+  smoothBlend(Math.max(0, Math.min(1, (value - low) / (high - low))));
+
+/** Spherical point with +Y as north and longitude rotating around the Y axis. */
+export const sphericalPoint = (longitude: number, latitude: number): Vec3 => {
+  const lon = (longitude * Math.PI) / 180;
+  const lat = (latitude * Math.PI) / 180;
+  const horizontal = Math.cos(lat) * WORLDGEN_RADIUS;
+  return {
+    x: Math.cos(lon) * horizontal,
+    y: Math.sin(lat) * WORLDGEN_RADIUS,
+    z: Math.sin(lon) * horizontal,
+  };
+};
+
+/** Spherical quad of a sector in canonical [NW, NE, SE, SW] order, with its center. */
+export const sectorGeometry = (sector: number) => {
+  const bounds = sectorGeographicBounds(sector);
+  return {
+    corners: [
+      sphericalPoint(bounds.west, bounds.north),
+      sphericalPoint(bounds.east, bounds.north),
+      sphericalPoint(bounds.east, bounds.south),
+      sphericalPoint(bounds.west, bounds.south),
+    ] as [Vec3, Vec3, Vec3, Vec3],
+    center: sphericalPoint(
+      (bounds.west + bounds.east) / 2,
+      (bounds.north + bounds.south) / 2,
+    ),
   };
 };
 
@@ -171,9 +213,41 @@ export const createWorldLandScore = (options: WorldLandScoreOptions) => {
       ((options.wakeIslandRadius - wakeDistance) / options.wakeIslandRadius) * 0.25;
     if (wakeDistance <= wakeBlendStart) return islandScore;
     const t = (wakeDistance - wakeBlendStart) / (wakeBlendEnd - wakeBlendStart);
-    const smoothT = t * t * (3 - 2 * t);
-    return islandScore + (naturalScore - islandScore) * smoothT;
+    return islandScore + (naturalScore - islandScore) * smoothBlend(t);
   };
+};
+
+/**
+ * The land score of the sector grid, with protected land around `protectedSectors` and
+ * Wake Island sized by its immediate neighbors. The globe and the local sector maps both
+ * derive it here, so they make the same decision for every point.
+ */
+export const createSectorGridLandScore = (protectedSectors: number[]) => {
+  const wakeIslandCenter = sectorGeometry(MAP_WAKE_ISLAND_SECTOR).center;
+  const distanceToWake = (point: Vec3) =>
+    Math.hypot(
+      wakeIslandCenter.x - point.x,
+      wakeIslandCenter.y - point.y,
+      wakeIslandCenter.z - point.z,
+    );
+  const wakeNeighbors = sectorGridNeighbors(MAP_WAKE_ISLAND_SECTOR)
+    .filter((sector) => sector >= 0)
+    .map(sectorGeometry);
+  return createWorldLandScore({
+    protectedCenters: protectedSectors
+      .filter(
+        (sector) =>
+          sector !== MAP_WAKE_ISLAND_SECTOR && sectorGridPosition(sector) !== null,
+      )
+      .map((sector) => sectorGeometry(sector).center),
+    wakeIslandCenter,
+    wakeIslandRadius:
+      Math.min(...wakeNeighbors.map(({ center }) => distanceToWake(center))) *
+      WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
+    wakeMoatRadius: Math.max(
+      ...wakeNeighbors.flatMap(({ corners }) => corners.map(distanceToWake)),
+    ),
+  });
 };
 
 /**

@@ -31,3 +31,11 @@
 - We use [gitmoji](https://github.com/carloscuesta/gitmoji) for commits, to make things a bit more 🔥
 
 - It is expected that code complies with the biome linting and formatting settings in this repo.
+
+- Query endpoints return only the data they need and hide sensitive information from anyone without the proper permissions: hide IPs from everyone but admins, and do not reveal quest solutions unnecessarily. Let their output types be inferred.
+
+- Optimise image assets before including them: scale the image and export it as a 70% quality `.webp` file. This often takes a 1 MB image down to 40 KB, which helps slower mobile devices.
+
+- Be mindful of new fields, both in data models and in JSON fields such as questData or effects. Avoid them when you can, and consider what happens at 100X the current load.
+
+- Try UI changes across all screen widths.

@@ -6,7 +6,7 @@
  * pointing a `tnr-preview/*` branch at an empty snapshot commit (same tree as
  * the source SHA) so the GitHub integration builds a unique preview SHA.
  */
-import { toTrustedPreviewUrl } from "./ci-helpers.mjs";
+import { encodeHeadsRef, setOutput, toTrustedPreviewUrl } from "./ci-helpers.mjs";
 
 /** Vercel names the preview environment `Preview` or `Preview – tnr`. */
 export const PREVIEW_ENVIRONMENT_REGEX = /^Preview(\s+[–-]\s+tnr)?$/i;
@@ -39,8 +39,92 @@ export const withRetry = async (fn, { attempts = 3, delayMs = 5_000 } = {}) => {
   throw lastError;
 };
 
-export const encodeHeadsRef = (branch) =>
-  branch.split("/").map(encodeURIComponent).join("/");
+/** Write the outputs of a snapshot preview that could not be made ready. */
+export const reportPreviewNotReady = (reason) => {
+  setOutput("is_ready", "false");
+  setOutput("reason", reason);
+  setOutput("preview_url", "");
+  setOutput("check_name", "");
+  setOutput("details_url", "");
+  setOutput("head_sha", "");
+};
+
+/** Write the outputs of a ready snapshot preview. */
+export const reportPreviewReady = ({ url, reason, checkName, detailsUrl, headSha }) => {
+  setOutput("is_ready", "true");
+  setOutput("reason", reason ?? "");
+  setOutput("preview_url", url);
+  setOutput("check_name", checkName ?? "");
+  setOutput("details_url", detailsUrl ?? "");
+  setOutput("head_sha", headSha ?? "");
+};
+
+/**
+ * Reuse or wait on the snapshot of `sourceSha` already on `branch`, otherwise build a fresh
+ * one. The snapshot SHA is unique, so Vercel treats it as new work even with an identical tree.
+ *
+ * @param {object} options
+ * @param {ReturnType<typeof createPreviewDeploymentClient>} options.preview
+ * @param {string} options.sourceSha
+ * @param {string} options.branch
+ * @param {string} options.label - How outputs and logs name the source, such as `main`
+ * @param {string} options.snapshotMessage
+ * @param {{ pollIntervalMs: number, deadline: number }} options.waitOptions
+ * @returns {Promise<{ url: string, reason: string, checkName: string, detailsUrl: string }>}
+ */
+export const ensureSnapshotPreview = async ({
+  preview,
+  sourceSha,
+  branch,
+  label,
+  snapshotMessage,
+  waitOptions,
+}) => {
+  const describe = (successful, reason) => ({
+    url: successful.url,
+    reason,
+    checkName: successful.environment,
+    detailsUrl: successful.detailsUrl,
+  });
+
+  // A previous run may already have a unique snapshot commit of this SHA.
+  const currentBranchSha = await preview.readBranchSha(branch);
+  if (currentBranchSha && (await preview.isSnapshotOf(currentBranchSha, sourceSha))) {
+    const snapshotPreview = await withRetry(() =>
+      preview.inspectPreview(currentBranchSha),
+    );
+    if (snapshotPreview.successful) {
+      return describe(
+        snapshotPreview.successful,
+        `Reusing snapshot preview of ${label} on ${branch}`,
+      );
+    }
+    if (snapshotPreview.inProgress) {
+      const waited = await preview.waitForPreview(currentBranchSha, waitOptions);
+      if (waited.successful) {
+        return describe(
+          waited.successful,
+          `Waited for in-progress snapshot preview of ${label}`,
+        );
+      }
+      if (!waited.failed) requirePreview(waited, currentBranchSha);
+      console.log(
+        `Snapshot preview build failed (${waited.failed}); creating a fresh snapshot`,
+      );
+    }
+  }
+
+  const snapshotSha = await preview.createSnapshotCommit(sourceSha, snapshotMessage);
+  await preview.pointBranchAtSha(branch, snapshotSha);
+  console.log(
+    `Created snapshot ${snapshotSha.slice(0, 7)} of ${label} ${sourceSha.slice(0, 7)} on ${branch}`,
+  );
+  const successful = requirePreview(
+    await preview.waitForPreview(snapshotSha, waitOptions),
+    snapshotSha,
+  );
+  return describe(successful, `Created Vercel Preview snapshot of ${label} via ${branch}`);
+};
 
 /**
  * @param {object} options

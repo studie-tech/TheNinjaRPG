@@ -41,7 +41,7 @@ html[data-game-layout="17-obsidian-council"] {
   --theme-muted: #b8bdc7;
   --theme-accent: #d9c08b;
   --theme-line: #4b5667;
-  --theme-heading-font: "Marcellus", Georgia, serif;
+  --theme-heading-font: "Marcellus", serif;
   --theme-body-font: "Manrope", system-ui, sans-serif;
 }
 html[data-game-layout="17-obsidian-council"]:not([data-reading-palette]) {
@@ -77,7 +77,7 @@ html[data-game-layout="20-eclipse-observatory"] {
   --theme-muted: #bbb5d9;
   --theme-accent: #d0baef;
   --theme-line: #48466b;
-  --theme-heading-font: "Sora", system-ui, sans-serif;
+  --theme-heading-font: "Sora", sans-serif;
   --theme-body-font: "Manrope", system-ui, sans-serif;
 }
 html[data-game-layout="20-eclipse-observatory"]:not([data-reading-palette]) {

@@ -25,11 +25,12 @@
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready, preview_url, reason, check_name, details_url, head_sha
  */
-import { setOutput, createGithubClient } from "./ci-helpers.mjs";
+import { createGithubClient, encodeHeadsRef } from "./ci-helpers.mjs";
 import {
   createPreviewDeploymentClient,
-  requirePreview,
-  withRetry,
+  ensureSnapshotPreview,
+  reportPreviewNotReady,
+  reportPreviewReady,
 } from "./preview-deployments.mjs";
 
 const githubToken = process.env.GITHUB_TOKEN;
@@ -67,33 +68,14 @@ const preview = createPreviewDeploymentClient({
 
 const waitOptions = { pollIntervalMs, deadline: waitBudgetDeadline };
 
-const notReady = (reason, extras = {}) => {
-  setOutput("is_ready", "false");
-  setOutput("reason", reason);
-  setOutput("preview_url", extras.preview_url ?? "");
-  setOutput("check_name", extras.check_name ?? "");
-  setOutput("details_url", extras.details_url ?? "");
-  setOutput("head_sha", extras.head_sha ?? "");
-};
-
-const ready = ({ previewUrl, reason, checkName, detailsUrl, headSha }) => {
-  setOutput("is_ready", "true");
-  setOutput("reason", reason ?? "");
-  setOutput("preview_url", previewUrl);
-  setOutput("check_name", checkName ?? "");
-  setOutput("details_url", detailsUrl ?? "");
-  setOutput("head_sha", headSha ?? "");
-};
-
 const fetchDefaultBranchSha = async () => {
   const repoInfo = await githubRequest(`/repos/${owner}/${repo}`);
   const defaultBranch = repoInfo?.default_branch;
   if (!defaultBranch) {
     throw new Error("Could not determine the repository default branch");
   }
-  const encoded = defaultBranch.split("/").map(encodeURIComponent).join("/");
   const ref = await githubRequest(
-    `/repos/${owner}/${repo}/git/refs/heads/${encoded}`,
+    `/repos/${owner}/${repo}/git/refs/heads/${encodeHeadsRef(defaultBranch)}`,
   );
   const sha = ref?.object?.sha;
   if (!sha) {
@@ -107,76 +89,19 @@ const main = async () => {
     ? { sha: process.env.MAIN_SHA }
     : await fetchDefaultBranchSha();
 
-  // A previous run may already have a unique snapshot commit of this main SHA.
-  const currentBranchSha = await preview.readBranchSha(previewBranch);
-  if (currentBranchSha) {
-    const snapshotOfMain = await preview.isSnapshotOf(
-      currentBranchSha,
-      resolvedSha,
-    );
-    if (snapshotOfMain) {
-      const snapshotPreview = await withRetry(() =>
-        preview.inspectPreview(currentBranchSha),
-      );
-      if (snapshotPreview.successful) {
-        ready({
-          previewUrl: snapshotPreview.successful.url,
-          reason: `Reusing snapshot preview of main on ${previewBranch}`,
-          checkName: snapshotPreview.successful.environment,
-          detailsUrl: snapshotPreview.successful.detailsUrl,
-          headSha: resolvedSha,
-        });
-        return;
-      }
-      if (snapshotPreview.inProgress) {
-        const waited = await preview.waitForPreview(
-          currentBranchSha,
-          waitOptions,
-        );
-        if (waited.successful) {
-          ready({
-            previewUrl: waited.successful.url,
-            reason: `Waited for in-progress snapshot preview of main`,
-            checkName: waited.successful.environment,
-            detailsUrl: waited.successful.detailsUrl,
-            headSha: resolvedSha,
-          });
-          return;
-        }
-        if (!waited.failed) requirePreview(waited, currentBranchSha);
-        console.log(
-          `Snapshot preview build failed (${waited.failed}); creating a fresh snapshot`,
-        );
-      }
-    }
-  }
-
-  // No reusable preview: build one from a fresh snapshot commit. The unique
-  // SHA guarantees Vercel treats it as new work, even though the tree is
-  // identical to main.
-  const snapshotSha = await preview.createSnapshotCommit(
-    resolvedSha,
-    `tnr-preview: snapshot of ${resolvedSha.slice(0, 7)}`,
-  );
-  await preview.pointBranchAtSha(previewBranch, snapshotSha);
-  console.log(
-    `Created snapshot ${snapshotSha.slice(0, 7)} of main ${resolvedSha.slice(0, 7)} on ${previewBranch}`,
-  );
-  const successful = requirePreview(
-    await preview.waitForPreview(snapshotSha, waitOptions),
-    snapshotSha,
-  );
-  ready({
-    previewUrl: successful.url,
-    reason: `Created Vercel Preview snapshot of main via ${previewBranch}`,
-    checkName: successful.environment,
-    detailsUrl: successful.detailsUrl,
-    headSha: resolvedSha,
+  const result = await ensureSnapshotPreview({
+    preview,
+    sourceSha: resolvedSha,
+    branch: previewBranch,
+    label: "main",
+    snapshotMessage: `tnr-preview: snapshot of ${resolvedSha.slice(0, 7)}`,
+    waitOptions,
   });
+  reportPreviewReady({ ...result, headSha: resolvedSha });
 };
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  notReady(message);
+  reportPreviewNotReady(message);
   console.error(message);
 });

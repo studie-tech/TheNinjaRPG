@@ -14,11 +14,12 @@
  * Outputs (via GITHUB_OUTPUT):
  *   is_ready, preview_url, reason, check_name, details_url, head_sha
  */
-import { setOutput, createGithubClient } from "./ci-helpers.mjs";
+import { createGithubClient } from "./ci-helpers.mjs";
 import {
   createPreviewDeploymentClient,
-  requirePreview,
-  withRetry,
+  ensureSnapshotPreview,
+  reportPreviewNotReady,
+  reportPreviewReady,
 } from "./preview-deployments.mjs";
 
 const githubToken = process.env.GITHUB_TOKEN;
@@ -60,24 +61,6 @@ const preview = createPreviewDeploymentClient({
 
 const waitOptions = { pollIntervalMs, deadline: waitBudgetDeadline };
 
-const notReady = (reason, extras = {}) => {
-  setOutput("is_ready", "false");
-  setOutput("reason", reason);
-  setOutput("preview_url", extras.preview_url ?? "");
-  setOutput("check_name", extras.check_name ?? "");
-  setOutput("details_url", extras.details_url ?? "");
-  setOutput("head_sha", extras.head_sha ?? "");
-};
-
-const ready = ({ previewUrl, reason, checkName, detailsUrl, headSha }) => {
-  setOutput("is_ready", "true");
-  setOutput("reason", reason ?? "");
-  setOutput("preview_url", previewUrl);
-  setOutput("check_name", checkName ?? "");
-  setOutput("details_url", detailsUrl ?? "");
-  setOutput("head_sha", headSha ?? "");
-};
-
 const fetchPullRequestHead = async () => {
   const pullRequest = await githubRequest(
     `/repos/${owner}/${repo}/pulls/${prNumber}`,
@@ -94,70 +77,19 @@ const fetchPullRequestHead = async () => {
 
 const main = async () => {
   const headSha = await fetchPullRequestHead();
-
-  const currentBranchSha = await preview.readBranchSha(previewBranch);
-  if (currentBranchSha) {
-    const snapshotOfHead = await preview.isSnapshotOf(currentBranchSha, headSha);
-    if (snapshotOfHead) {
-      const snapshotPreview = await withRetry(() =>
-        preview.inspectPreview(currentBranchSha),
-      );
-      if (snapshotPreview.successful) {
-        ready({
-          previewUrl: snapshotPreview.successful.url,
-          reason: `Reusing snapshot preview of PR #${prNumber} on ${previewBranch}`,
-          checkName: snapshotPreview.successful.environment,
-          detailsUrl: snapshotPreview.successful.detailsUrl,
-          headSha,
-        });
-        return;
-      }
-      if (snapshotPreview.inProgress) {
-        const waited = await preview.waitForPreview(
-          currentBranchSha,
-          waitOptions,
-        );
-        if (waited.successful) {
-          ready({
-            previewUrl: waited.successful.url,
-            reason: `Waited for in-progress snapshot preview of PR #${prNumber}`,
-            checkName: waited.successful.environment,
-            detailsUrl: waited.successful.detailsUrl,
-            headSha,
-          });
-          return;
-        }
-        if (!waited.failed) requirePreview(waited, currentBranchSha);
-        console.log(
-          `Snapshot preview build failed (${waited.failed}); creating a fresh snapshot`,
-        );
-      }
-    }
-  }
-
-  const snapshotSha = await preview.createSnapshotCommit(
-    headSha,
-    `tnr-preview: snapshot of PR #${prNumber} ${headSha.slice(0, 7)}`,
-  );
-  await preview.pointBranchAtSha(previewBranch, snapshotSha);
-  console.log(
-    `Created snapshot ${snapshotSha.slice(0, 7)} of PR #${prNumber} ${headSha.slice(0, 7)} on ${previewBranch}`,
-  );
-  const successful = requirePreview(
-    await preview.waitForPreview(snapshotSha, waitOptions),
-    snapshotSha,
-  );
-  ready({
-    previewUrl: successful.url,
-    reason: `Created Vercel Preview snapshot of PR #${prNumber} via ${previewBranch}`,
-    checkName: successful.environment,
-    detailsUrl: successful.detailsUrl,
-    headSha,
+  const result = await ensureSnapshotPreview({
+    preview,
+    sourceSha: headSha,
+    branch: previewBranch,
+    label: `PR #${prNumber}`,
+    snapshotMessage: `tnr-preview: snapshot of PR #${prNumber} ${headSha.slice(0, 7)}`,
+    waitOptions,
   });
+  reportPreviewReady({ ...result, headSha });
 };
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  notReady(message);
+  reportPreviewNotReady(message);
   console.error(message);
 });

@@ -61,8 +61,6 @@ jobs:
             mobile
             scripts
             .github
-            .agents
-            .vscode
 
       - uses: ./.github/actions/setup-app
 

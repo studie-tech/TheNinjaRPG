@@ -1,22 +1,3 @@
-@font-face {
-  font-family: "Sora";
-  src: url("/fonts/layouts/sora.woff2") format("woff2");
-  font-weight: 100 800;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Marcellus";
-  src: url("/fonts/layouts/marcellus.woff2") format("woff2");
-  font-weight: 400;
-  font-display: swap;
-}
-html[data-game-layout="17-obsidian-council"] {
-  --theme-heading-font: "Marcellus", serif;
-}
-html[data-game-layout="20-eclipse-observatory"] {
-  --theme-heading-font: "Sora", sans-serif;
-}
-
 .theme-main {
   position: relative;
 }

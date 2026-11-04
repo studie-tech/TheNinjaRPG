@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 import { nativeAllowNavigation } from "./origin.mjs";
+import packageJson from "./package.json" with { type: "json" };
 
 /**
- * Shell version. Keep in step with `version` in package.json — it is appended to the
- * WebView user agent, and the server reads it to gate features and to require an update
- * when a binary falls too far behind.
+ * Shell version. It is appended to the WebView user agent, and the server reads it to
+ * gate features and to require an update when a binary falls too far behind.
  */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = packageJson.version;
 
 const config: CapacitorConfig = {
   appId: process.env.TNR_APP_ID ?? "com.theninjarpg.app",

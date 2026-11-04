@@ -65,6 +65,20 @@ export const sectorGridEntryEdges = (
   ];
 };
 
+/** Geographic bounds of one row-major sector. */
+export const sectorGeographicBounds = (sector: number) => {
+  const position = sectorGridPosition(sector);
+  if (!position) throw new Error(`Invalid sector ${sector}`);
+  const longitudeStep = 360 / MAP_WORLD_COLUMNS;
+  const latitudeStep = (MAP_NAVIGABLE_LATITUDE_LIMIT * 2) / MAP_WORLD_ROWS;
+  return {
+    west: -180 + position.column * longitudeStep,
+    east: -180 + (position.column + 1) * longitudeStep,
+    north: MAP_NAVIGABLE_LATITUDE_LIMIT - position.row * latitudeStep,
+    south: MAP_NAVIGABLE_LATITUDE_LIMIT - (position.row + 1) * latitudeStep,
+  };
+};
+
 /**
  * Sector covering a geographic position, or -1 for the non-navigable polar
  * caps. Exact inverse of the generator's uniform longitude/latitude layout, so
