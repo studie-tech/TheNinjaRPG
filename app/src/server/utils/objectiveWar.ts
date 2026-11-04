@@ -12,7 +12,7 @@ import {
   war,
   type warKill,
 } from "@/drizzle/schema";
-import { isObjectiveWarActive } from "@/libs/objectiveWar";
+import { getObjectiveWarDeadline, isObjectiveWarActive } from "@/libs/objectiveWar";
 import {
   executeClaimedForApplyObjectiveWarAction,
   executeRowsForApplyObjectiveWarAction,
@@ -177,8 +177,7 @@ export const applyObjectiveWarDecay = async (
     activeWar.combatStartedAt > now
   )
     return;
-  const deadline =
-    activeWar.combatStartedAt.getTime() + activeWar.rules.durationDays * 86400000;
+  const deadline = getObjectiveWarDeadline(activeWar.combatStartedAt, activeWar.rules);
   const intervals = Math.floor(
     (Math.min(now.getTime(), deadline) - activeWar.lastTokenReductionAt.getTime()) /
       86400000,
@@ -203,8 +202,7 @@ export const settleObjectiveWarSchedule = async (
   preloadedCamps?: WarCamp[],
 ) => {
   if (!activeWar.rules || !activeWar.combatStartedAt || activeWar.endedAt) return;
-  const deadline =
-    activeWar.combatStartedAt.getTime() + activeWar.rules.durationDays * 86400000;
+  const deadline = getObjectiveWarDeadline(activeWar.combatStartedAt, activeWar.rules);
   const cutoff = Math.min(now.getTime(), deadline);
   const camps =
     preloadedCamps ??

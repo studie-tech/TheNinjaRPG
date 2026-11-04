@@ -91,10 +91,6 @@ import {
   insertNotificationForCancelWarDeclaration,
   insertNotificationForDeclareSectorWar,
   insertNotificationForDeclareVillageWarOrRaid,
-  insertNotificationForVoteOnWarDeclaration,
-  insertNotificationForVoteOnWarDeclaration2,
-  insertNotificationForVoteOnWarDeclaration3,
-  insertNotificationForVoteOnWarDeclaration4,
   insertVillageElderVoteForDeclareVillageWarOrRaid,
   listAcceptedWarMercenaries,
   listQuestForGetObjectiveWarInfo,
@@ -123,7 +119,6 @@ import {
   updateUserDataForFinishWarSettlement,
   updateUserDataForStartWarMission,
   updateVillageElderVoteForCancelWarDeclaration,
-  updateVillageElderVoteForVoteOnWarDeclaration2,
   updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
 import { initiateBattle } from "@/routers/combat";
@@ -141,9 +136,11 @@ import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objective
 import { notifyWarVillages } from "@/server/utils/push/war";
 import {
   handleWarEnd,
-  startApprovedVoteWar,
+  notifyWarDeclarationInitiator,
+  startClaimedWarDeclaration,
   startDeclaredWar,
   startSectorWar,
+  warDeclarationRejectedMessage,
 } from "@/server/utils/war";
 import {
   acceptWarAllyOffer,
@@ -1902,64 +1899,18 @@ export const warRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
 
-        // Re-check war involvement — a village may have entered a war during the voting window
-        if (
-          isVillageInvolvedInAnyWar(
-            currentActiveWars,
-            voteRecord.villageId,
-            undefined,
-            ["VILLAGE_WAR", "WAR_RAID"],
-          ) ||
-          isVillageInvolvedInAnyWar(currentActiveWars, voteRecord.targetId, undefined, [
-            "VILLAGE_WAR",
-            "WAR_RAID",
-          ])
-        ) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
+        const result = await startClaimedWarDeclaration(ctx.drizzle, voteRecord, {
+          attackerVillage,
+          defenderVillage,
+          activeWars: currentActiveWars,
+        });
+        if (result === "VILLAGE_IN_WAR") {
           return errorResponse("A village is already involved in an active war");
         }
-
-        // Start the war and deduct tokens
-        if (!attackerVillage) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration2(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
-          return errorResponse("Village no longer has enough tokens to declare war");
+        if (result === "ATTACKER_MISSING") {
+          return errorResponse("The attacking village no longer exists");
         }
-        const started = await startApprovedVoteWar(ctx.drizzle, input.voteId, {
-          attackerVillageId: voteRecord.villageId,
-          attackerVillageName: attackerVillage.name,
-          defenderVillageId: voteRecord.targetId,
-          defenderVillageName: defenderVillage?.name ?? "another village",
-          defenderKageId: defenderVillage?.kageId,
-          initiatedByUserId: voteRecord.initiatedByUserId,
-          warType: voteRecord.warType ?? "VILLAGE_WAR",
-          targetStructureRoute: voteRecord.targetStructureRoute ?? "/townhall",
-        });
-        if (!started) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration3(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
+        if (result === "NOT_STARTED") {
           return errorResponse(
             "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
           );
@@ -1983,14 +1934,11 @@ export const warRouter = createTRPCRouter({
             message: "War declaration vote already resolved",
           };
         }
-        await Promise.all([
-          insertNotificationForVoteOnWarDeclaration4(
-            ctx.drizzle,
-            voteRecord,
-            targetVillage,
-          ),
-          incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-        ]);
+        await notifyWarDeclarationInitiator(
+          ctx.drizzle,
+          voteRecord,
+          warDeclarationRejectedMessage(targetVillage?.name),
+        );
         return {
           success: true,
           message: "War declaration rejected by the elders",

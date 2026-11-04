@@ -5,6 +5,7 @@ import {
 } from "@/drizzle/constants";
 import type { SectorType, War } from "@/drizzle/schema";
 import { shuffle } from "@/utils/array";
+import { DAY_S } from "@/utils/time";
 import type { WarObjectiveState, WarRules } from "@/validators/war";
 
 /** Whether the user holds a mercenary appointment in any of the wars. */
@@ -45,6 +46,12 @@ export const getWarSide = (
   );
 };
 
+/** The moment a war's combat window closes. */
+export const getObjectiveWarDeadline = (
+  combatStartedAt: Date,
+  rules: Pick<WarRules, "durationDays">,
+) => new Date(combatStartedAt).getTime() + rules.durationDays * DAY_S * 1000;
+
 /** Exclude expired and defeated wars even before background settlement finishes. */
 export const isObjectiveWarOpen = (
   activeWar: Pick<
@@ -64,9 +71,7 @@ export const isObjectiveWarOpen = (
   !activeWar.endedAt &&
   !!activeWar.rules &&
   !!activeWar.combatStartedAt &&
-  now.getTime() <
-    new Date(activeWar.combatStartedAt).getTime() +
-      activeWar.rules.durationDays * 86400000;
+  now.getTime() < getObjectiveWarDeadline(activeWar.combatStartedAt, activeWar.rules);
 
 /** The notice period permits hiring and anonymity; combat starts at its own deadline. */
 export const isObjectiveWarActive = (
@@ -113,6 +118,71 @@ export const areWarObjectivesRevealed = (
   activeWar: Pick<War, "objectiveState" | "attackerVillageId">,
   sideVillageId: string,
 ) => getWarEspionage(activeWar, sideVillageId) >= WAR_ESPIONAGE_TARGET;
+
+/** The war, in any state, that holds an objective on the sector. */
+export const findObjectiveWarForSector = <
+  T extends Pick<War, "rules" | "objectiveState">,
+>(
+  wars: T[],
+  sector: number | null,
+) =>
+  wars.find(
+    (w) => w.rules && w.objectiveState?.objectives.some((o) => o.sector === sector),
+  );
+
+/**
+ * The war that lets a player fight at this sector's shrine. Objective wars need a live,
+ * revealed, intact enemy objective; sector wars admit attackers only; village wars and
+ * raids admit either side at the opposing village. `allowDefend` also admits a side at
+ * its own village while its shrine is damaged, restoring shrine HP.
+ */
+export const findShrineAttackWar = <T extends ShrineWar>(
+  wars: T[],
+  villageId: string | null,
+  userId: string | undefined,
+  sector: number,
+  { allowDefend = false }: { allowDefend?: boolean } = {},
+) =>
+  wars.find((w) => {
+    if (w.status !== "ACTIVE") return false;
+    const side = getWarSide(w, villageId, userId);
+    const isUserOnAttackerSide = side === w.attackerVillageId;
+    const isUserOnDefenderSide = side === w.defenderVillageId;
+
+    if (w.rules) {
+      return (
+        !!side &&
+        isObjectiveWarActive(w) &&
+        areWarObjectivesRevealed(w, side) &&
+        !!w.objectiveState?.objectives.some(
+          (o) => o.sector === sector && o.villageId !== side && !o.destroyed,
+        )
+      );
+    }
+
+    if (w.type === "SECTOR_WAR") {
+      return w.sector === sector && isUserOnAttackerSide;
+    }
+
+    if (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") {
+      const atDefenderVillage = w.defenderVillage?.sector === sector;
+      const atAttackerVillage = w.attackerVillage?.sector === sector;
+      const canAttack =
+        (atDefenderVillage && isUserOnAttackerSide) ||
+        (atAttackerVillage && isUserOnDefenderSide);
+      const canDefend =
+        allowDefend &&
+        ((atAttackerVillage &&
+          isUserOnAttackerSide &&
+          w.attackerShrineHp < w.attackerShrineMaxHp) ||
+          (atDefenderVillage &&
+            isUserOnDefenderSide &&
+            w.defenderShrineHp < w.defenderShrineMaxHp));
+      return canAttack || canDefend;
+    }
+
+    return false;
+  });
 
 /**
  * Choose distinct, usable shrines. Ordinary ownership blocks reserve fallback even
@@ -196,3 +266,19 @@ export const getWarRelationship = (
     if (firstSide && secondSide) return firstSide === secondSide ? "ALLY" : "ENEMY";
   }
 };
+
+type ShrineWar = Parameters<typeof isObjectiveWarActive>[0] &
+  Parameters<typeof getWarSide>[0] &
+  Pick<
+    War,
+    | "objectiveState"
+    | "type"
+    | "sector"
+    | "attackerShrineHp"
+    | "attackerShrineMaxHp"
+    | "defenderShrineHp"
+    | "defenderShrineMaxHp"
+  > & {
+    attackerVillage?: { sector: number } | null;
+    defenderVillage?: { sector: number } | null;
+  };

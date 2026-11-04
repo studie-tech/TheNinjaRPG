@@ -24,14 +24,18 @@ import {
   type WarType,
 } from "@/drizzle/constants";
 import { mpvpBattleQueue, type War, war, warAlly } from "@/drizzle/schema";
-import { selectWarObjectives } from "@/libs/objectiveWar";
+import { getObjectiveWarDeadline, selectWarObjectives } from "@/libs/objectiveWar";
 import {
   getRaidDeclarationBlock,
   isFactionVillage,
   isVillageInvolvedInAnyWar,
   shouldEndRaid,
 } from "@/libs/war";
-import { incrementNotificationCounters } from "@/queries/misc";
+import { updateVillageElderVoteForRejectWarDeclaration } from "@/queries/elder";
+import {
+  incrementNotificationCounters,
+  insertNotificationForSubmitNotification,
+} from "@/queries/misc";
 import { findSectorByNumber } from "@/queries/shrine";
 import {
   deleteMpvpBattleQueueForFinishWarSettlement,
@@ -88,12 +92,15 @@ export const handleWarEnd = async (
   } = {},
 ): Promise<FetchActiveWarsReturnType> => {
   let current = activeWar;
+  // Rules and the combat start never change, so the deadline survives the reloads below.
+  const combatDeadline =
+    activeWar.rules && activeWar.combatStartedAt
+      ? getObjectiveWarDeadline(activeWar.combatStartedAt, activeWar.rules)
+      : null;
   if (
-    current.rules &&
+    combatDeadline !== null &&
     !current.endedAt &&
-    current.combatStartedAt &&
-    (Date.now() >=
-      current.combatStartedAt.getTime() + current.rules.durationDays * DAY_S * 1000 ||
+    (Date.now() >= combatDeadline ||
       Date.now() >= current.lastTokenReductionAt.getTime() + DAY_S * 1000)
   ) {
     await settleObjectiveWarSchedule(client, current);
@@ -114,11 +121,7 @@ export const handleWarEnd = async (
       return current;
 
     const now = new Date();
-    const deadline =
-      current.rules && current.combatStartedAt
-        ? current.combatStartedAt.getTime() + current.rules.durationDays * DAY_S * 1000
-        : now.getTime();
-    const endedAt = new Date(Math.min(now.getTime(), deadline));
+    const endedAt = new Date(Math.min(now.getTime(), combatDeadline ?? now.getTime()));
     const isRaid = current.type === "WAR_RAID";
     const canSurrenderRaid = isRaid && !shouldEndRaid(current, endedAt);
     const losingVillageId =
@@ -129,12 +132,7 @@ export const handleWarEnd = async (
       !options.losingVillageId &&
       !options.shrineBuilderId &&
       !options.resolveByHealth &&
-      !(
-        current.rules &&
-        current.combatStartedAt &&
-        Date.now() >=
-          current.combatStartedAt.getTime() + current.rules.durationDays * DAY_S * 1000
-      ) &&
+      !(combatDeadline !== null && Date.now() >= combatDeadline) &&
       (current.rules || current.attackerVillage.tokens > 0) &&
       (current.rules || current.defenderVillage.tokens > 0) &&
       current.attackerWarHealth > 0 &&
@@ -669,6 +667,111 @@ export const startApprovedVoteWar = async (
     throw error;
   }
 };
+
+/**
+ * Run a declaration whose vote this caller just claimed as APPROVED: the wars of both
+ * villages are checked again, since either may have entered one during the voting window.
+ * Anything but a started war cancels the motion and tells its initiator.
+ */
+export const startClaimedWarDeclaration = async (
+  client: DrizzleClient,
+  vote: WarDeclarationVote & {
+    villageId: string;
+    targetId: string;
+    warType: Parameters<typeof startDeclaredWar>[1]["warType"] | null;
+    targetStructureRoute: string | null;
+  },
+  {
+    attackerVillage,
+    defenderVillage,
+    activeWars,
+  }: {
+    attackerVillage: { name: string } | null | undefined;
+    defenderVillage: { name: string; kageId: string | null } | undefined;
+    activeWars: FetchActiveWarsReturnType[];
+  },
+) => {
+  const defenderName = defenderVillage?.name ?? "another village";
+  const cancel = (reason: string) =>
+    rejectWarDeclaration(
+      client,
+      vote,
+      `War declaration against ${defenderName} was cancelled — ${reason}.`,
+      "APPROVED",
+    );
+  const warTypes = ["VILLAGE_WAR", "WAR_RAID"] satisfies War["type"][];
+  if (
+    isVillageInvolvedInAnyWar(activeWars, vote.villageId, undefined, warTypes) ||
+    isVillageInvolvedInAnyWar(activeWars, vote.targetId, undefined, warTypes)
+  ) {
+    await cancel("a village is already involved in an active war");
+    return "VILLAGE_IN_WAR";
+  }
+  if (!attackerVillage) {
+    await cancel("the attacking village no longer exists");
+    return "ATTACKER_MISSING";
+  }
+  const started = await startApprovedVoteWar(client, vote.id, {
+    attackerVillageId: vote.villageId,
+    attackerVillageName: attackerVillage.name,
+    defenderVillageId: vote.targetId,
+    defenderVillageName: defenderName,
+    defenderKageId: defenderVillage?.kageId,
+    initiatedByUserId: vote.initiatedByUserId,
+    warType: vote.warType ?? "VILLAGE_WAR",
+    targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+  });
+  if (started) return "STARTED";
+  await cancel(
+    "a village is already involved in a war or there are no longer enough tokens",
+  );
+  return "NOT_STARTED";
+};
+
+type WarDeclarationVote = {
+  id: string;
+  endsAt: Date;
+  initiatedByUserId: string;
+};
+
+/** The feed entry for a declaration the elders voted down. */
+export const warDeclarationRejectedMessage = (defenderName: string | undefined) =>
+  `War declaration against ${defenderName ?? "another village"} was rejected by the elders.`;
+
+/**
+ * Reject a declaration still in `fromStatus` and tell its initiator once. A motion rejected
+ * inside its voting window starts its cooldown now, not at the scheduled end.
+ */
+export const rejectWarDeclaration = async (
+  client: DrizzleClient,
+  vote: WarDeclarationVote,
+  content: string,
+  fromStatus: "PENDING" | "APPROVED",
+) => {
+  const claim = await updateVillageElderVoteForRejectWarDeclaration(
+    client,
+    vote,
+    new Date(Math.min(Date.now(), vote.endsAt.getTime())),
+    fromStatus,
+  );
+  if (claim.rowsAffected > 0)
+    await notifyWarDeclarationInitiator(client, vote, content);
+};
+
+/** One feed row addressed to the initiator through their unread counter. */
+export const notifyWarDeclarationInitiator = (
+  client: DrizzleClient,
+  vote: { initiatedByUserId: string },
+  content: string,
+) =>
+  Promise.all([
+    insertNotificationForSubmitNotification(
+      client,
+      { userId: vote.initiatedByUserId },
+      { content },
+    ),
+    incrementNotificationCounters(client, [vote.initiatedByUserId]),
+  ]);
 
 /** A timestamp CAS makes retries of a daily raid drain harmless. Treasury tokens are unaffected. */
 export const applyRaidHealthDecay = async (

@@ -18,7 +18,12 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { WarMercenaries } from "@/layout/WarMercenaries";
-import { getWarEspionage, getWarSide } from "@/libs/objectiveWar";
+import {
+  getObjectiveWarDeadline,
+  getWarEspionage,
+  getWarSide,
+  isObjectiveWarOpen,
+} from "@/libs/objectiveWar";
 import { pushToCombat } from "@/utils/routing";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -113,9 +118,7 @@ export const ObjectiveWarPanel = ({
   });
   const endsAt =
     data?.war.combatStartedAt && data.war.rules
-      ? new Date(
-          data.war.combatStartedAt.getTime() + data.war.rules.durationDays * 86400000,
-        )
+      ? new Date(getObjectiveWarDeadline(data.war.combatStartedAt, data.war.rules))
       : undefined;
   // Boundary refreshes unlock actions on server time, without waiting for the next poll.
   useRefreshAt(
@@ -151,12 +154,7 @@ export const ObjectiveWarPanel = ({
   const isRevealed = getWarEspionage(w, side) >= WAR_ESPIONAGE_TARGET;
   const enemyVillage =
     side === w.attackerVillageId ? w.defenderVillage : w.attackerVillage;
-  const hasEnded =
-    w.status !== "ACTIVE" ||
-    !!w.endedAt ||
-    w.attackerWarHealth <= 0 ||
-    w.defenderWarHealth <= 0 ||
-    !!(endsAt && endsAt.getTime() <= now);
+  const hasEnded = !isObjectiveWarOpen(w, new Date(now));
   const busy =
     start.isPending ||
     finish.isPending ||

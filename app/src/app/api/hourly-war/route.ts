@@ -13,17 +13,11 @@ import {
   lockWithHourlyTimer,
   runClaimedCron,
 } from "@/libs/gamesettings";
-import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import {
   fetchExpiredElderVotes,
   listVillageForProcessExpiredElderVotes,
   selectUserDataForProcessExpiredElderVotes,
-  updateVillageElderVoteForRejectWithNotification,
 } from "@/queries/elder";
-import {
-  incrementNotificationCounters,
-  insertNotificationForSubmitNotification,
-} from "@/queries/misc";
 import { updateVillageStructureForClearExpiredStructureBonuses } from "@/queries/village";
 import {
   approvePendingWarDeclaration,
@@ -45,8 +39,10 @@ import { settleObjectiveWarSchedule, syncWarCamps } from "@/server/utils/objecti
 import {
   applyRaidHealthDecay,
   handleWarEnd,
+  rejectWarDeclaration,
   resumePendingWarSettlements,
-  startApprovedVoteWar,
+  startClaimedWarDeclaration,
+  warDeclarationRejectedMessage,
 } from "@/server/utils/war";
 
 const ENDPOINT_NAME = "hourly-war";
@@ -316,28 +312,22 @@ async function handleExpiredWarDeclaration(
   const attackerVillage = villagesById.get(vote.villageId);
   const defenderName = defenderVillage?.name ?? "another village";
 
-  const rejectWithNotification = async (content: string) => {
-    await Promise.all([
-      updateVillageElderVoteForRejectWithNotification(drizzleDB, vote),
-      insertNotificationForSubmitNotification(
-        drizzleDB,
-        { userId: vote.initiatedByUserId },
-        { content },
-      ),
-      incrementNotificationCounters(drizzleDB, [vote.initiatedByUserId]),
-    ]);
-  };
-
   if (outcome === "REJECTED") {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was rejected by the elders.`,
+    await rejectWarDeclaration(
+      drizzleDB,
+      vote,
+      warDeclarationRejectedMessage(defenderVillage?.name),
+      "PENDING",
     );
     return;
   }
 
   if (elderCount < ELDER_MIN_VOTING_COUNT) {
-    await rejectWithNotification(
+    await rejectWarDeclaration(
+      drizzleDB,
+      vote,
       `War declaration against ${defenderName} was cancelled — not enough elders in position.`,
+      "PENDING",
     );
     return;
   }
@@ -346,45 +336,11 @@ async function handleExpiredWarDeclaration(
   const warClaimResult = await approvePendingWarDeclaration(drizzleDB, vote.id);
   if (warClaimResult.rowsAffected === 0) return;
 
-  if (!attackerVillage) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — village no longer has enough tokens.`,
-    );
-    return;
-  }
-
-  // Use pre-fetched active wars for involvement check
-  if (
-    isVillageInvolvedInAnyWar(activeWars, vote.villageId, undefined, [
-      "VILLAGE_WAR",
-      "WAR_RAID",
-    ]) ||
-    isVillageInvolvedInAnyWar(activeWars, vote.targetId, undefined, [
-      "VILLAGE_WAR",
-      "WAR_RAID",
-    ])
-  ) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — a village is already involved in an active war.`,
-    );
-    return;
-  }
-
-  const started = await startApprovedVoteWar(drizzleDB, vote.id, {
-    attackerVillageId: vote.villageId,
-    attackerVillageName: attackerVillage.name,
-    defenderVillageId: vote.targetId,
-    defenderVillageName: defenderName,
-    defenderKageId: defenderVillage?.kageId,
-    initiatedByUserId: vote.initiatedByUserId,
-    warType: vote.warType ?? "VILLAGE_WAR",
-    targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+  await startClaimedWarDeclaration(drizzleDB, vote, {
+    attackerVillage,
+    defenderVillage,
+    activeWars,
   });
-  if (!started) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
-    );
-  }
 }
 
 /**
