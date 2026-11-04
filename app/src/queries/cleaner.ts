@@ -1,6 +1,7 @@
 /**
  * Database access for cleaner; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   eq,
@@ -50,7 +51,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
-import { selectClaimedRankedQueueEntry } from "@/queries/concurrency";
+import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
@@ -99,7 +100,7 @@ export const updateUserDataForGET = (
       // Missing battle metadata falls back to base Energy recovery.
       curEnergy: sql`CASE WHEN ${userData.status} = 'BATTLE' THEN ${combatEnergyRecoverySql()} ELSE ${userData.curEnergy} END`,
       regenAt: sql`CASE WHEN ${userData.status} = 'BATTLE' THEN NOW(3) ELSE ${userData.regenAt} END`,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
       bracketImmunityPausedAt: null,
       battleId: null,

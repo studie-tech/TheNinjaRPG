@@ -6,6 +6,7 @@ import { AUCTION_HOUSE_MIN_LEVEL } from "@/drizzle/constants";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { userItem } from "@/drizzle/schema";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import type { getAuctionOffersSchema } from "@/validators/auction";
 
@@ -213,7 +214,7 @@ export const updateUserDataForClaimOfferUser = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userData.updatedAt),
     })
     .where(eligibleOfferUser(id));
 

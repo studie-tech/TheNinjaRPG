@@ -32,6 +32,7 @@ import {
   webStoreOrder,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import {
   completedQuestHistoryRelation,
@@ -118,7 +119,7 @@ export const updateUserDataForLockPurchaseBuyer = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), ${userData.updatedAt} + INTERVAL 1000 MICROSECOND)`,
+      updatedAt: nextSnapshotAtSql(userData.updatedAt),
     })
     .where(eq(userData.userId, buyerId));
 

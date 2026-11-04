@@ -43,6 +43,7 @@ import {
   checkJutsuVillage,
   masteryTrainingFields,
 } from "@/libs/train";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import { insertUserItems } from "@/queries/item";
 import { debitUserMoney, incrementUserMoney } from "@/queries/profile";
 import { fetchStudents } from "@/queries/sensei";
@@ -940,7 +941,7 @@ const updateQueueOwner = async (
         }
       : {}),
   };
-  const nextSnapshot = sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`;
+  const nextSnapshot = nextSnapshotAtSql(userData.updatedAt);
   let user = owner;
   for (let attempt = 0; trackers && attempt < QUEST_WRITE_ATTEMPTS; attempt++) {
     const questData = filterQuestTrackersForDbPersist(

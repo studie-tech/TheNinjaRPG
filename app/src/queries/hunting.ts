@@ -14,6 +14,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { HuntingHabitatContent, HuntingReceipt } from "@/validators/hunting";
 
@@ -121,7 +122,7 @@ export const updateHuntingHabitatForSave = (
     .set({
       content,
       // Same-millisecond saves must invalidate admission's captured revision.
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${huntingHabitat.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(huntingHabitat.updatedAt),
     })
     .where(eq(huntingHabitat.id, id));
 

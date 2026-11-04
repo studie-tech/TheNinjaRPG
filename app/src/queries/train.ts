@@ -18,6 +18,7 @@ import {
   userJutsu,
   userQueue,
 } from "@/drizzle/schema";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import {
   completedQuestHistoryRelation,
@@ -319,7 +320,7 @@ export const updateUserDataForSettleWaitingJobs = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userData.updatedAt),
     })
     .where(eq(userData.userId, userId));
 

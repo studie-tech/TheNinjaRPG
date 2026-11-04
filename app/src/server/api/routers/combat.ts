@@ -238,6 +238,7 @@ import {
   updateUserJutsuForUpdateCombatLoadout,
   updateVillageForInitiateBattle,
 } from "@/queries/combat";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import { fetchItemLoadouts, listItemsByIds } from "@/queries/item";
 import {
   fetchBloodlineJutsuReskins,
@@ -3210,7 +3211,7 @@ export const initiateBattle = async (
     queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
       userData.userId,
       queuedParticipants.map((entry) => entry.user.userId),
-    )} THEN GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})) ELSE ${userData.updatedAt} END`;
+    )} THEN ${nextSnapshotAtSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
     const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
     const recoveryParticipants = info.tournamentGame
       ? queuedParticipants

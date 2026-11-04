@@ -91,6 +91,7 @@ import {
   warKill,
   webStoreOrder,
 } from "@/drizzle/schema";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
@@ -246,7 +247,7 @@ export const executeRecoverySqlForForceAwake = (
               ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
               ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
               ${questHistory.endAt} = ${endedAt},
-              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
+              ${userData.updatedAt} = ${nextSnapshotAtSql(userData.updatedAt)}
           WHERE ${userData.userId} = ${targetUser.userId}
             AND ${userData.battleId} <=> ${targetUser.battleId}
             AND ${huntingSession.id} <=> ${hunt?.id ?? null}

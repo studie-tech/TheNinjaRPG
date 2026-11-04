@@ -58,6 +58,7 @@ import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import { lpcDesignAssignmentGuard } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -1356,7 +1357,7 @@ export const updateUserItemForUnequipAllItems = (
     .update(userItem)
     .set({
       equipped: "NONE",
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1784,7 +1785,7 @@ export const updateUserItemForSelectItemLoadout = (
     .set({
       equipped,
       // Even an unchanged loadout must acknowledge the hunting guard.
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1900,7 +1901,7 @@ export const updateUserItemForToggleEquipItem = (
     .update(userItem)
     .set({
       equipped: sql`CASE WHEN ${userItem.id} = ${useritem.id} THEN ${useritem.equipped} ELSE 'NONE' END`,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -2266,7 +2267,7 @@ export const executeRowsForSettleCookingExperience = (
           UPDATE ${userData}
           INNER JOIN ${userCookingJob} ON ${userCookingJob.userId} = ${userData.userId}
           SET ${userData.cookingExperience} = ${userData.cookingExperience} + ${job.experience},
-              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})),
+              ${userData.updatedAt} = ${nextSnapshotAtSql(userData.updatedAt)},
               ${userCookingJob.experience} = 0
           WHERE ${userData.userId} = ${userId}
             AND ${userCookingJob.id} = ${job.id}

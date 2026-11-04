@@ -1,6 +1,7 @@
 /**
  * Database access for pvprank; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -33,6 +34,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import {
+  nextSnapshotSql,
   selectClaimedRankedQueueEntry,
   selectUnresolvedClanLobbyEntry,
 } from "@/queries/concurrency";
@@ -277,7 +279,7 @@ export const updateRankedLoadoutForUpdateRankedLoadout = (
     .update(rankedLoadout)
     .set({
       loadout,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${rankedLoadout.updatedAt}))`,
+      updatedAt: nextSnapshotSql(rankedLoadout.updatedAt),
     })
     .where(eq(rankedLoadout.id, currentLoadout.id));
 

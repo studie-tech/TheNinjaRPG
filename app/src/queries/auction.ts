@@ -26,6 +26,7 @@ import {
   userItem,
 } from "@/drizzle/schema";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -461,9 +462,9 @@ export const executeResultForSettleAuctionWithoutRefunds2 = (
           ${userItem.updatedAt} = CURRENT_TIMESTAMP(3),
           ${auctionBid.amount} = ${winningBid.amount}, ${auctionBid.status} = 'WON',
           ${sellerBalance} = ${sellerBalance} + ${getAuctionSellerPayout(winningBid.amount)},
-          ${seller.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${seller.updatedAt})),
+          ${seller.updatedAt} = ${nextSnapshotAtSql(seller.updatedAt)},
           ${buyerBalance} = ${buyerBalance} - ${raise?.amountToDeduct ?? 0},
-          ${userData.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
+          ${userData.updatedAt} = ${nextSnapshotAtSql(userData.updatedAt)}
       WHERE ${and(
         listingGuard,
         itemGuard,
@@ -490,7 +491,7 @@ export const updateAuctionListingForSettleAuction = (
   client
     .update(auctionListing)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${auctionListing.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(auctionListing.updatedAt),
     })
     .where(
       and(
@@ -549,7 +550,7 @@ export const updateUserDataForSettleAuction = (
       ...(auction.currencyType === "MONEY"
         ? { bank: sql`${userData.bank} + ${amounts}` }
         : { reputationPoints: sql`${userData.reputationPoints} + ${amounts}` }),
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userData.updatedAt),
     })
     .where(
       inArray(

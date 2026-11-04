@@ -4,6 +4,7 @@
 import {
   and,
   eq,
+  getTableColumns,
   gt,
   gte,
   isNull,
@@ -14,6 +15,7 @@ import {
   type SQLWrapper,
   sql,
 } from "drizzle-orm";
+import type { AnyMySqlColumn, MySqlTable } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -27,6 +29,40 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
+
+/** SQL twin of `getNextUserSnapshotAt`: it has to advance a CAS snapshot the same way. */
+export const nextSnapshotSql = (column: AnyMySqlColumn) =>
+  sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${column}))`;
+
+/**
+ * INSERT ... SELECT of only the given columns, written when `guard` holds. Drizzle's builder
+ * requires every table column for SELECT, including defaults, so this is parameterized SQL.
+ */
+export const insertValuesWhere = (
+  client: Pick<DrizzleClient, "execute">,
+  table: MySqlTable,
+  values: Record<string, unknown>,
+  guard: SQL | undefined,
+  { ignoreDuplicate = false } = {},
+) => {
+  const columns = getTableColumns(table);
+  const inserted = Object.entries(values).flatMap(([key, value]) => {
+    const column = columns[key];
+    return column ? [{ column, value }] : [];
+  });
+  return client.execute(sql`
+    INSERT INTO ${table} (${sql.join(
+      inserted.map(({ column }) => sql.identifier(column.name)),
+      sql`, `,
+    )})
+    SELECT ${sql.join(
+      inserted.map(({ column, value }) => sql.param(value ?? null, column)),
+      sql`, `,
+    )}
+    WHERE ${guard}
+    ${ignoreDuplicate ? sql`ON DUPLICATE KEY UPDATE id = id` : sql``}
+  `);
+};
 
 /** Build the `userData` lookup for `enforceRateLimit`, selecting `money` and `bank`. */
 export const fetchUserDataForEnforceRateLimit = (

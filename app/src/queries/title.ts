@@ -4,6 +4,7 @@
 import { and, asc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actionLog, title, userData, userTitle } from "@/drizzle/schema";
+import { nextSnapshotAtSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `userData` update for `grant`, setting `updatedAt`, using predicates on `userId`. */
@@ -14,7 +15,7 @@ export const updateUserDataForGrant = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotAtSql(userData.updatedAt),
     })
     .where(eq(userData.userId, userId));
 
