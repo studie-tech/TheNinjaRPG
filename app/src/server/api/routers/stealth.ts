@@ -100,20 +100,7 @@ export const stealthRouter = createTRPCRouter({
       }
 
       // Broadcast with stealthActive: true so other clients remove this user from their map
-      void updateUserOnMap(pusher, user.sector, {
-        userId: user.userId,
-        sector: user.sector,
-        longitude: user.longitude,
-        latitude: user.latitude,
-        location: user.location,
-        villageId: user.villageId,
-        battleId: user.battleId,
-        level: user.level,
-        experience: user.experience,
-        rank: user.rank,
-        status: user.status,
-        stealthActive: true,
-      });
+      void broadcastStealth(user, true);
 
       const duration = calcStealthDuration(user.stealth);
       return {
@@ -146,20 +133,7 @@ export const stealthRouter = createTRPCRouter({
       }
 
       // Broadcast with stealthActive: false so other clients show this user on their map
-      void updateUserOnMap(pusher, user.sector, {
-        userId: user.userId,
-        sector: user.sector,
-        longitude: user.longitude,
-        latitude: user.latitude,
-        location: user.location,
-        villageId: user.villageId,
-        battleId: user.battleId,
-        level: user.level,
-        experience: user.experience,
-        rank: user.rank,
-        status: user.status,
-        stealthActive: false,
-      });
+      void broadcastStealth(user, false);
 
       return { success: true, message: "Stealth deactivated" };
     }),
@@ -234,20 +208,7 @@ export const stealthRouter = createTRPCRouter({
       if (detectedUsers.length > 0) {
         const broadcasts = detectedUsers.flatMap((detectedUser) => [
           // Broadcast to sector so they appear on the map for everyone
-          updateUserOnMap(pusher, detectedUser.sector, {
-            userId: detectedUser.userId,
-            sector: detectedUser.sector,
-            longitude: detectedUser.longitude,
-            latitude: detectedUser.latitude,
-            location: detectedUser.location,
-            villageId: detectedUser.villageId,
-            battleId: detectedUser.battleId,
-            level: detectedUser.level,
-            experience: detectedUser.experience,
-            rank: detectedUser.rank,
-            status: detectedUser.status,
-            stealthActive: false,
-          }),
+          broadcastStealth(detectedUser, false),
           // Notify the detected user that their stealth was broken
           pusher.trigger(detectedUser.userId, "event", {
             type: "userMessage",
@@ -428,6 +389,26 @@ export const stealthRouter = createTRPCRouter({
       return { success: true, message: "Training cancelled" };
     }),
 });
+
+/** Tell the sector whether a user is hidden; other clients add or drop them from the map. */
+const broadcastStealth = (
+  user: Omit<Parameters<typeof updateUserOnMap>[2], "stealthActive">,
+  stealthActive: boolean,
+) =>
+  updateUserOnMap(pusher, user.sector, {
+    userId: user.userId,
+    sector: user.sector,
+    longitude: user.longitude,
+    latitude: user.latitude,
+    location: user.location,
+    villageId: user.villageId,
+    battleId: user.battleId,
+    level: user.level,
+    experience: user.experience,
+    rank: user.rank,
+    status: user.status,
+    stealthActive,
+  });
 
 /**
  * Break stealth for a user when stealth-breaking actions occur.

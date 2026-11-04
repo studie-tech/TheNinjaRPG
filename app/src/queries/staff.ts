@@ -2,7 +2,8 @@
  * Database access for staff; authorization and transaction scopes stay in callers.
  */
 import type { Client as PlanetScaleClient } from "@planetscale/database";
-import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -146,44 +147,48 @@ export const findContentBackupForPushBackupToDev = (
     where: eq(contentBackup.id, input.id),
   });
 
+/** Exclude rows owned by AI users from a bulk write. */
+const excludingAiUsers = (
+  client: Pick<DrizzleClient, "select">,
+  column: AnyMySqlColumn,
+) =>
+  notInArray(
+    column,
+    client
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(eq(userData.isAi, true)),
+  );
+
 /**
  * Build the `userJutsu` update for `unequipAllJutsus`, setting `equipped`, using
  * predicates on `equipped`, `userId`, `isAi`.
  */
 export const updateUserJutsuForUnequipAllJutsus = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
 ) =>
   client
     .update(userJutsu)
     .set({ equipped: false })
     .where(
-      and(
-        ne(userJutsu.equipped, false),
-        sql`${userJutsu.userId} NOT IN (
-                SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
-              )`,
-      ),
+      and(ne(userJutsu.equipped, false), excludingAiUsers(client, userJutsu.userId)),
     );
 
 /** Build the `jutsuLoadout` update for `unequipAllJutsus`, setting `jutsuIds`, using predicates on `userId` and `isAi`. */
 export const updateJutsuLoadoutForUnequipAllJutsus = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
 ) =>
   client
     .update(jutsuLoadout)
     .set({ jutsuIds: [] })
-    .where(
-      sql`${jutsuLoadout.userId} NOT IN (
-              SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
-            )`,
-    );
+    .where(excludingAiUsers(client, jutsuLoadout.userId));
 
 /**
  * Build the `userItem` update for `unequipAllGear`, setting `equipped`, including
  * predicates on `equipped`, `quantity`, `userId`.
  */
 export const updateUserItemForUnequipAllGear = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
 ) =>
   client
     .update(userItem)
@@ -194,24 +199,18 @@ export const updateUserItemForUnequipAllGear = (
         // Skip rows held by a stack-merge claim (negative quantity) so this bulk write
         // cannot change a claimed row's equipped slot mid-merge-publish.
         gt(userItem.quantity, 0),
-        sql`${userItem.userId} NOT IN (
-                SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
-              )`,
+        excludingAiUsers(client, userItem.userId),
       ),
     );
 
 /** Build the `itemLoadout` update for `unequipAllGear`, setting `itemData`, using predicates on `userId` and `isAi`. */
 export const updateItemLoadoutForUnequipAllGear = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
 ) =>
   client
     .update(itemLoadout)
     .set({ itemData: [] })
-    .where(
-      sql`${itemLoadout.userId} NOT IN (
-              SELECT ${userData.userId} FROM ${userData} WHERE ${userData.isAi} = true
-            )`,
-    );
+    .where(excludingAiUsers(client, itemLoadout.userId));
 
 /** Build the `mpvpBattleUser` lookup for `forceAwake`, using predicates on `userId`. */
 export const findMpvpBattleUserForForceAwake = (

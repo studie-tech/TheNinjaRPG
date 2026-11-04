@@ -565,27 +565,18 @@ export const ticketCategoryToGithubType = (category: SupportTicketCategory) => {
  * @param category - The support ticket category
  * @returns The GitHub label
  */
-export const ticketCategoryToGithubLabel = (category: SupportTicketCategory) => {
-  switch (category) {
-    case "BUG_REPORT":
-      return "bug";
-    case "FEATURE_REQUEST":
-      return "new feature";
-    case "ACCOUNT_ISSUE":
-      return "account issue";
-    case "GAMEPLAY_QUESTION":
-      return "question";
-    case "PAYMENT_ISSUE":
-      return "payment";
-    case "TECHNICAL_SUPPORT":
-      return "technical support";
-    case "MODERATION_SUPPORT":
-      return "moderation support";
-    case "OTHER":
-      return "other";
-    default:
-      return "other";
-  }
+export const ticketCategoryToGithubLabel = (category: SupportTicketCategory) =>
+  TICKET_CATEGORY_LABELS[category];
+
+const TICKET_CATEGORY_LABELS: Record<SupportTicketCategory, string> = {
+  BUG_REPORT: "bug",
+  FEATURE_REQUEST: "new feature",
+  ACCOUNT_ISSUE: "account issue",
+  GAMEPLAY_QUESTION: "question",
+  PAYMENT_ISSUE: "payment",
+  TECHNICAL_SUPPORT: "technical support",
+  MODERATION_SUPPORT: "moderation support",
+  OTHER: "other",
 };
 
 /**
@@ -593,18 +584,8 @@ export const ticketCategoryToGithubLabel = (category: SupportTicketCategory) => 
  * @param priority - The support ticket priority
  * @returns The GitHub label
  */
-export const ticketPriorityToGithubLabel = (priority: SupportTicketPriority) => {
-  switch (priority) {
-    case "LOW":
-      return "low";
-    case "MEDIUM":
-      return "medium";
-    case "HIGH":
-      return "high";
-    case "URGENT":
-      return "urgent";
-  }
-};
+export const ticketPriorityToGithubLabel = (priority: SupportTicketPriority) =>
+  priority.toLowerCase();
 
 /**
  * Get a support ticket with relations
@@ -628,7 +609,7 @@ export type SupportTicketWithRelations = Awaited<
 >;
 
 /**
- * Get support tickets with relations. Abstracted out in case we need it for AI integration.
+ * Get support tickets with relations.
  * @param client - The database client
  * @param skip - The number of tickets to skip
  * @param limit - The maximum number of tickets to return

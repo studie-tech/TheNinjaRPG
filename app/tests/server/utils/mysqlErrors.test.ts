@@ -1,5 +1,5 @@
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import {
   isMysqlDuplicateKeyError,
   retryOnDeadlock,
@@ -69,6 +69,30 @@ describe("retryOnDeadlock", () => {
       }, 2),
     ).rejects.toThrow(/Deadlock/);
     expect(calls).toBe(2);
+  });
+
+  it("backs off exponentially from the base delay plus jitter", async () => {
+    const delays: (number | undefined)[] = [];
+    const timer = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      resolve: () => void,
+      ms?: number,
+    ) => {
+      delays.push(ms);
+      resolve();
+    }) as unknown as typeof setTimeout);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    await expect(
+      retryOnDeadlock(
+        async () => {
+          throw deadlock();
+        },
+        3,
+        { baseDelayMs: 100, jitterMs: 100 },
+      ),
+    ).rejects.toThrow(/Deadlock/);
+    timer.mockRestore();
+    random.mockRestore();
+    expect(delays).toEqual([150, 250]);
   });
 
   it("retries nothing else", async () => {
