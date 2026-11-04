@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/context-menu";
 import { type ItemSlot, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
-import { canSetHotkeys } from "@/libs/combat/hotkeys";
+import { hasFinePointer } from "@/libs/combat/hotkeys";
 import { nonCombatConsume } from "@/libs/item";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -103,7 +103,7 @@ function ItemMenuEntries({
   const canSetHotkey =
     !!onSetHotkey &&
     !!equippedIn &&
-    canSetHotkeys() &&
+    hasFinePointer() &&
     userItem.quantity > 0 &&
     !NonActionItemTypes.includes(item.itemType);
   const hotkeyEntry = canSetHotkey && (
