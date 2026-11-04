@@ -148,7 +148,7 @@ export function BattleFocusView({
 
   const fieldBox = (
     // Size the battlefield to whichever runs out first: width or height.
-    <div className="@container/field [container-type:size] flex min-h-0 flex-1 items-center justify-center">
+    <div className="@container/field [container-type:size] flex min-h-0 flex-1 items-start justify-center">
       <div
         className={cn("w-full", fieldRatio === undefined && "h-full overflow-y-auto")}
         style={
