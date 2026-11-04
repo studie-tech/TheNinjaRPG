@@ -75,8 +75,10 @@ const profileTabs = [
   "Sharing",
 ] as const;
 const iconProfileTabs = ["Achievements", "History", "Settings", "Sharing"] as const;
-/** Remembered tab names that now open another tab. */
-const profileTabAliases = { "Edit Character": "Settings" };
+/** Remembered or linked tab names that now open another tab. */
+const profileTabAliases: Partial<Record<string, ProfileTab>> = {
+  "Edit Character": "Settings",
+};
 const tutorialProfileTabs = ["Character", "Pet", ...iconProfileTabs] as const;
 type ProfileTab = (typeof profileTabs)[number];
 const profileTabValues: Record<ProfileTab, string> = {
@@ -95,7 +97,10 @@ export function Profile() {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const urlTab = profileTabs.find(
-    (option) => option === requestedTab || profileTabValues[option] === requestedTab,
+    (option) =>
+      option === requestedTab ||
+      profileTabValues[option] === requestedTab ||
+      (requestedTab !== null && profileTabAliases[requestedTab] === option),
   );
 
   if (!userData) return <Loader explanation="Loading profile page..." />;
