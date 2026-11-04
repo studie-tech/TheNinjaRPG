@@ -75,7 +75,7 @@ interface ItemInspectorProps {
 /**
  * Everything about one carried item and every action on it: effects and level, equip or
  * unequip, stacks, meals and consumables, repair, variants, evolution, imbuements and
- * selling. Each action keeps its confirmation; a finished action returns to the backpack.
+ * selling. Each action keeps its confirmation; a finished action closes the inspector.
  */
 export function ItemInspector({
   userItem: useritem,
@@ -188,7 +188,7 @@ export function ItemInspector({
     >
       <div className="flex items-center gap-2">
         <Button variant="link" className="h-9 px-0" onClick={onClose}>
-          ← Backpack
+          ← Back
         </Button>
         <div className="grow" />
         <Button
@@ -349,7 +349,7 @@ export function ItemInspector({
                     <Merge className="mr-2 h-5 w-5" />
                     Merge Stacks
                   </Button>
-                  {useritem.quantity > 1 && (
+                  {useritem.quantity > 1 && useritem.equipped === "NONE" && (
                     <Button
                       variant="outline"
                       onClick={() => {

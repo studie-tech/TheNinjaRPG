@@ -162,7 +162,7 @@ it.each([1000, 390])("returns focus to the equipment tile after inspecting from 
   act(() => inspect.focus());
   act(() => fireEvent.click(inspect));
   expect(inspect.isConnected).toBe(false);
-  const close = await screen.findByRole("button", { name: "← Backpack" });
+  const close = await screen.findByRole("button", { name: "← Back" });
   await waitFor(() => expect(document.activeElement === close).toBe(true));
   act(() => fireEvent.keyDown(close, { key: "Escape" }));
   await waitFor(() => expect(document.activeElement === trigger).toBe(true));
@@ -192,7 +192,7 @@ it.each(["backpack", "equipment"])("returns focus to the %s trigger after inspec
   const inspect = screen.getByRole("menuitem", { name: "Inspect" });
   act(() => inspect.focus());
   act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
-  const close = await screen.findByRole("button", { name: "← Backpack" });
+  const close = await screen.findByRole("button", { name: "← Back" });
   await waitFor(() => expect(document.activeElement === close).toBe(true));
   expect(inspect.isConnected).toBe(false);
   act(() => fireEvent.keyDown(close, { key: "Escape" }));
@@ -220,7 +220,7 @@ it("focuses the inspector when its equipment menu selects the already inspected 
   act(() => inspect.focus());
   act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "← Backpack" })).toBe(true));
+  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "← Back" })).toBe(true));
 });
 
 it("equips from the slot picker into that slot", () => {
@@ -425,7 +425,7 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
     fireEvent.click(card("Raijin Tanto"));
   });
   const sheet = screen.getByRole("dialog");
-  // One close button, beside "← Backpack", instead of the sheet's own above it.
+  // One close button in the panel header, instead of the sheet's own above it.
   expect(within(sheet).getAllByRole("button", { name: /close/i }).map((b) => b.textContent)).toEqual(["Close inspector"]);
 });
 
@@ -477,7 +477,7 @@ it("keeps an inspector equip guarded across backpack reopen and releases it when
   const { rerender } = renderWorkspace();
   act(() => fireEvent.click(card("Raijin Tanto")));
   fireEvent.click(screen.getByRole("button", { name: "Equip" }));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "← Backpack" })));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "← Back" })));
   act(() => fireEvent.click(card("Raijin Tanto")));
   fireEvent.click(screen.getByRole("button", { name: "Equip" }));
   expect(equip).toHaveBeenCalledTimes(1);

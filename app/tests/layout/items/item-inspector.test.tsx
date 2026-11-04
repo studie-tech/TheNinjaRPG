@@ -134,6 +134,12 @@ it("shows split only for stacks of 2+", () => {
   expect(screen.getByRole("button", { name: /Split Stack/ })).toBeDefined();
 });
 
+it("hides split for equipped stacks while preserving merge", () => {
+  renderInspector({ userItem: userItem({ canStack: true, quantity: 4, equipped: "HAND_1" }) });
+  expect(screen.queryByRole("button", { name: /Split Stack/ })).toBeNull();
+  expect(screen.getByRole("button", { name: /Merge Stacks/ })).toBeDefined();
+});
+
 it("shows drop for event or non-shop items and sell otherwise", () => {
   const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(nativeButton("Sell Item [120 ryo]")).toBeDefined();
@@ -163,10 +169,10 @@ it("shows the mastery warning of an equipped item", () => {
   expect(screen.getByText("Unusable in battle: requires 500 Bukijutsu (you have 10)")).toBeDefined();
 });
 
-it("returns to the backpack on Escape and from the back link", () => {
+it("closes the inspector on Escape and from the back link", () => {
   const { onClose } = renderInspector();
   fireEvent.keyDown(screen.getByRole("region", { name: "Twin Fang Blade" }), { key: "Escape" });
-  fireEvent.click(screen.getByRole("button", { name: "← Backpack" }));
+  fireEvent.click(screen.getByRole("button", { name: "← Back" }));
   expect(onClose).toHaveBeenCalledTimes(2);
 });
 

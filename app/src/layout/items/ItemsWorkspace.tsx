@@ -332,7 +332,7 @@ export function ItemsWorkspace({
           <SheetContent
             ref={panelRef}
             side="bottom"
-            // The panels draw their own close button beside "← Backpack".
+            // The panels draw their own close button in their header.
             showCloseButton={false}
             className="max-h-[85dvh] rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] outline-none"
             // Focus the sheet itself so the close button does not open with a focus ring.
