@@ -75,9 +75,7 @@ export const petSpeciesRouter = createTRPCRouter({
       }
       const changes = calculateContentDiff({}, input);
       await insertActionLogForCreate(ctx.drizzle, ctx, changes, id, input);
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, input.name, changes);
-      }
+      await callDiscordContent(user.username, input.name, changes);
       return { success: true, message: id };
     }),
 
@@ -125,9 +123,7 @@ export const petSpeciesRouter = createTRPCRouter({
         throw error;
       }
       await insertActionLogForUpdate(ctx.drizzle, ctx, changes, species);
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, input.data.name, changes);
-      }
+      await callDiscordContent(user.username, input.data.name, changes);
       return { success: true, message: "Companion species updated." };
     }),
 });

@@ -43,6 +43,8 @@ export const callDiscordContent = async (
   diff: string[],
   image_url?: string | null,
 ) => {
+  // Local content edits must not reach the content channel
+  if (process.env.NODE_ENV === "development") return;
   return postDiscordWebhook(process.env.DISCORD_CONTENT_UPDATES, "content updates", {
     avatar_url: discordAvatar(image_url),
     content: `**${username} updated ${updated_name}**\n* ${diff.join("\n* ")}`,

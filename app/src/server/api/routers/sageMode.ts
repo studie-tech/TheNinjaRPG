@@ -204,9 +204,7 @@ export const sageModeRouter = createTRPCRouter({
           updateSageModeForUpdate(ctx.drizzle, newData, input),
           insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
         ]);
-        if (process.env.NODE_ENV !== "development") {
-          await callDiscordContent(user.username, entry.name, diff, entry.image);
-        }
+        await callDiscordContent(user.username, entry.name, diff, entry.image);
         return { success: true, message: `Data updated: ${diff.join(". ")}` };
       } else {
         return { success: false, message: `Not allowed to edit sage mode` };

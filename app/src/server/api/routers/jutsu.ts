@@ -1208,9 +1208,7 @@ export const jutsuRouter = createTRPCRouter({
         saved.ids,
         editedReason("JUTSU", entry.name, user.username),
       );
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-      }
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
 

@@ -69,6 +69,12 @@ describe("social posting under the test runner", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("keeps content updates off the channel in development", async () => {
+    env.NODE_ENV = "development";
+    await callDiscordContent("Staff", "Fixture", ["Updated: {}"]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("still posts outside the test runner", async () => {
     env.NODE_ENV = "production";
     await postEverywhere();

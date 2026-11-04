@@ -1585,9 +1585,7 @@ export const profileRouter = createTRPCRouter({
       );
 
       // Update discord channel
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, ai.username, diff, ai.avatar);
-      }
+      await callDiscordContent(user.username, ai.username, diff, ai.avatar);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   /** Save a cosmetic choice as an absolute user patch; stale guards return recoverable responses. */
