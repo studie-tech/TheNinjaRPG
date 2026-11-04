@@ -12,6 +12,7 @@ import {
 } from "@/libs/sector-map/village-walls";
 import { fetchUser } from "@/queries/profile";
 import {
+  archiveOlderPublishedSectorMaps,
   fetchTerrainRegistry,
   findSectorMapForGetNextSectorMapVersion,
   findSectorMapForGetSectorMapById,
@@ -22,7 +23,6 @@ import {
   listSectorMapForListSectorMaps,
   updateSectorMapForArchiveSectorMap,
   updateSectorMapForPublishSectorMap,
-  updateSectorMapForSaveTiledSectorMap,
   updateVillageStructureForMoveStructure,
 } from "@/queries/worldMap";
 import {
@@ -232,10 +232,7 @@ export const worldMapRouter = createTRPCRouter({
 
   /**
    * Normalize a Tiled JSON upload and insert it as a NEW versioned row, either
-   * as a draft or published immediately. When publishing, the new row is
-   * inserted before older published rows are archived, so a failed insert
-   * leaves the existing map live. Only strictly-older versions are archived
-   * so concurrent publishes cannot archive each other.
+   * as a draft or published immediately; see `archiveOlderPublishedMaps`.
    */
   saveTiledSectorMap: protectedProcedure
     .input(
@@ -292,11 +289,7 @@ export const worldMapRouter = createTRPCRouter({
       const id = nanoid();
       const now = new Date();
 
-      // Mutation: insert the new version FIRST, then (if publishing) archive the
-      // previously-published rows for this sector. A failed insert leaves the
-      // existing map live; readers pick the highest version if two briefly overlap
-      // (fetchPublishedSectorMaps).
-      // A same-version race collides on the unique index and is caught below.
+      // Mutation. A same-version race collides on the unique index and is caught below.
       try {
         await insertSectorMapForSaveTiledSectorMap(
           ctx.drizzle,
@@ -316,12 +309,7 @@ export const worldMapRouter = createTRPCRouter({
         );
       }
       if (input.publish) {
-        // Archive only strictly-older published rows. The new row has the
-        // highest version, so a concurrent publish (which gets an even higher
-        // version) is never archived by this query — preventing two concurrent
-        // publishes from archiving each other and leaving the sector unpublished.
-        await updateSectorMapForSaveTiledSectorMap(ctx.drizzle, now, input, version);
-        invalidatePublishedMapCache(input.sector);
+        await archiveOlderPublishedMaps(ctx.drizzle, now, input, version);
       }
 
       return {
@@ -339,8 +327,7 @@ export const worldMapRouter = createTRPCRouter({
    * Promote an EXISTING row to published (including re-publishing an older
    * version). The row's raw Tiled JSON is re-normalized through the current
    * importer first, so republishing also picks up importer improvements.
-   * Promotes to a new highest version before archiving strictly-older
-   * published rows, so a failed promotion leaves the existing published map live.
+   * Promotes to a new highest version; see `archiveOlderPublishedMaps`.
    */
   publishSectorMap: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
@@ -379,13 +366,7 @@ export const worldMapRouter = createTRPCRouter({
       );
       if (locationError) return errorResponse(locationError);
       const now = new Date();
-      // Mutation: promote this map to a NEW highest version FIRST, then archive strictly-
-      // older published rows. Bumping to the top version makes this compose
-      // with saveTiledSectorMap (which also
-      // archives version < its own new version): the globally-highest published
-      // row is never archived by anyone, so concurrent publishes can never leave
-      // the sector with zero published maps. Re-publishing an older version still
-      // works — it becomes the new highest and everything below is archived.
+      // Mutation: re-publishing an older version makes it the new highest.
       const version = await getNextSectorMapVersion(ctx.drizzle, candidate.sector);
       try {
         await updateSectorMapForPublishSectorMap(
@@ -402,8 +383,7 @@ export const worldMapRouter = createTRPCRouter({
           "Another version was published at the same time. Please retry.",
         );
       }
-      await updateSectorMapForSaveTiledSectorMap(ctx.drizzle, now, candidate, version);
-      invalidatePublishedMapCache(candidate.sector);
+      await archiveOlderPublishedMaps(ctx.drizzle, now, candidate, version);
 
       return { success: true, message: "Map published" };
     }),
@@ -544,10 +524,26 @@ const hashTiledJson = (json: unknown) => {
 };
 
 /**
+ * Retire a sector's published maps below a version that has just gone live. Publishing
+ * writes the new highest version first, so a failed write leaves the existing map live
+ * and readers (fetchPublishedSectorMaps) pick the highest version while two overlap.
+ * Only strictly-older rows are archived, so concurrent publishes never archive each
+ * other: the highest published row survives and the sector always keeps a map.
+ */
+const archiveOlderPublishedMaps = async (
+  client: DrizzleClient,
+  now: Date,
+  map: { sector: number },
+  version: number,
+) => {
+  await archiveOlderPublishedSectorMaps(client, now, map, version);
+  invalidatePublishedMapCache(map.sector);
+};
+
+/**
  * Next candidate version for a sector: max(version) + 1. The read and subsequent
  * write are separate; the unique (sector, version) index rejects a same-version
- * race, which callers report as a retryable conflict. Readers select the highest
- * version when different published versions briefly overlap.
+ * race, which callers report as a retryable conflict.
  */
 const getNextSectorMapVersion = async (client: DrizzleClient, sector: number) => {
   const latest = await findSectorMapForGetNextSectorMapVersion(client, sector);
