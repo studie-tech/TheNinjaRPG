@@ -116,20 +116,17 @@ export const DmgConfigDialog = () => {
           <DialogTitle>Battle Config</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="damage" className="flex min-h-0 flex-col">
-          <TabsList
-            aria-label="Battle configuration sections"
-            className="grid shrink-0 grid-cols-2"
-          >
-            <TabsTrigger value="damage" className="min-h-10">
+          <TabsList aria-label="Battle configuration sections" className="shrink-0">
+            <TabsTrigger value="damage" className="min-h-10 flex-1">
               Damage
             </TabsTrigger>
-            <TabsTrigger value="cooldowns" className="min-h-10">
+            <TabsTrigger value="cooldowns" className="min-h-10 flex-1">
               Cooldowns
             </TabsTrigger>
-            <TabsTrigger value="limits" className="min-h-10">
+            <TabsTrigger value="limits" className="min-h-10 flex-1">
               Equip Limits
             </TabsTrigger>
-            <TabsTrigger value="war" className="min-h-10">
+            <TabsTrigger value="war" className="min-h-10 flex-1">
               War Rules
             </TabsTrigger>
           </TabsList>
