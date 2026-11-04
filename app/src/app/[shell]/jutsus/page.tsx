@@ -1262,7 +1262,7 @@ export default function MyJutsu() {
         )}
       </ContentBox>
       {userJutsus && (
-        // Touch-only devices have no keyboard to press battle keys with.
+        // Keep hotkey setup out of the way without a mouse or trackpad.
         <div className="not-any-pointer-fine:hidden">
           <ContentBox
             title="Battle Hotkeys"

@@ -74,7 +74,7 @@ interface ActionSelectorSettingsProps {
   userId?: string;
   /** Battle key per action id, shown as a badge on the tile. */
   hotkeys?: Record<string, string>;
-  /** Right-click or long-press on a tile opens key assignment for it. */
+  /** Right-click on a tile opens key assignment when a fine pointer is available. */
   onAssignHotkey?: (item: ActionItemProps) => void;
 }
 
