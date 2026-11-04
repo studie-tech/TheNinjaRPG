@@ -344,6 +344,7 @@ export default function CombatPage() {
       },
     });
 
+  /** Reserves one retry, allowing a successful heal to hand off before its mutation settles. */
   const handleStartArenaBattle = (source: "repeat" | "post-heal") => {
     if (
       arenaStartInFlightRef.current ||
@@ -361,6 +362,7 @@ export default function CombatPage() {
     });
   };
 
+  /** Reserves one paid heal for this result before handing off to the next match. */
   const handleArenaHealAndGo = () => {
     if (
       arenaHealInFlightRef.current ||

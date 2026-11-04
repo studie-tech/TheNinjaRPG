@@ -22,6 +22,7 @@ const Combat = dynamic(loadCombat, {
   loading: () => <Loader explanation="Loading Battlefield" />,
 });
 
+/** Renders the embedded battle viewer while preserving live-combat layout preferences. */
 export default function BattleLog(props: { params: Promise<{ battleid: string }> }) {
   const params = use(props.params);
   // State
