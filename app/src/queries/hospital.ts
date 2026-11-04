@@ -18,10 +18,6 @@ import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
 
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
 const recipient = alias(userData, "recipient");
-/** Build the `villageAlliance` listing for `getHospitalizedUsers`. */
-export const listVillageAllianceForGetHospitalizedUsers = (
-  client: Pick<DrizzleClient, "query">,
-) => client.query.villageAlliance.findMany();
 
 /** Build the `userData` listing for `getHospitalizedUsers`, including predicates on `sector`, `villageId`, `status`. */
 export const listUserDataForGetHospitalizedUsers = (

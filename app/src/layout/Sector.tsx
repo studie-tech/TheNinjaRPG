@@ -110,7 +110,7 @@ import { hasRequiredRank } from "@/libs/train";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
+import { getAllyStatus, isMapUserAlly } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
@@ -2885,14 +2885,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const village = data?.find((v) => v.id === user.villageId);
           const villageName = village ? village.name : "Unknown";
           const villageColor = village ? village.hexColor : "gray";
-          const relationship =
-            userData.village &&
-            findVillageUserRelationship(userData.village, user.villageId);
-          const isAlly =
-            user.allianceStatus === "ALLY" ||
-            (user.allianceStatus !== "ENEMY" &&
-              (user.villageId === userData.villageId ||
-                relationship?.status === "ALLY"));
+          const isAlly = isMapUserAlly(userData, user);
           const isPvpRestrictedRank = RANKS_RESTRICTED_FROM_PVP.includes(user.rank);
           const showAttack = !isPvpRestrictedRank && (props.allyAttack || !isAlly);
           const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;

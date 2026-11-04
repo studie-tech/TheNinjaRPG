@@ -19,6 +19,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { getAlliedVillageIds } from "@/utils/alliance";
 
 const pusher = getServerPusher();
 
@@ -171,15 +172,7 @@ export const stealthRouter = createTRPCRouter({
       }
 
       // Derived - get all allied village IDs (same village + formal allies)
-      const alliedVillageIds = alliances
-        .filter(
-          (a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId,
-        )
-        .filter((a) => a.status === "ALLY")
-        .flatMap((a) => [a.villageIdA, a.villageIdB]);
-      const alliedSet = new Set(
-        user.villageId ? [user.villageId, ...alliedVillageIds] : [],
-      );
+      const alliedSet = new Set(getAlliedVillageIds(alliances, user.villageId));
 
       // Filter out allied users, then roll for detection
       const detectedUsers: (typeof stealthedUsers)[number][] = [];

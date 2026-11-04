@@ -108,7 +108,7 @@ import {
   optimisticGlobalTravelStart,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
-import { findVillageUserRelationship } from "@/utils/alliance";
+import { isMapUserAlly } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import {
@@ -1896,11 +1896,7 @@ const RevealedPlayerCard = ({
   const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
   const villageColor = village?.hexColor ?? "gray";
 
-  const relationship =
-    userData?.village &&
-    findVillageUserRelationship(userData.village, player.villageId);
-  const isAlly =
-    player.villageId === userData?.villageId || relationship?.status === "ALLY";
+  const isAlly = isMapUserAlly(userData, { villageId: player.villageId });
   const showAttack = sensoryAllyAttack || !isAlly;
 
   return (
