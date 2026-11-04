@@ -66,7 +66,7 @@ describe("quest run editor validation and payload", () => {
     await act(async () => { result.current.setObjectives([floor, { ...floor, id: "copy" }]); });
     expect(result.current.currentValues.content.nodePositions).toEqual(quest.content.nodePositions);
     await act(async () => { result.current.setObjectives([{ ...floor, id: "copy" }]); });
-    expect(result.current.getSuggestionData().content.nodePositions).toEqual({});
+    expect(result.current.getSuggestionData()?.content.nodePositions).toEqual({});
   });
 
   it.each(["raid", "village_mission", "achievement", "story"] as const)(
