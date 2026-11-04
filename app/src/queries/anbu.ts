@@ -8,9 +8,7 @@ import { nanoid } from "nanoid";
 import {
   ANBU_ESPIONAGE_POINTS_COST,
   ANBU_ESPIONAGE_PRESTIGE_COST,
-  ANBU_ESPIONAGE_UPGRADE_COST,
   ANBU_MAX_MEMBERS,
-  ANBU_STEALTH_UPGRADE_COST,
   IMG_AVATAR_DEFAULT,
   KAGE_ANBU_DELETE_COST,
   type UserRequestState,
@@ -343,42 +341,30 @@ export const updateAnbuSquadForEditSquad = (
     .where(and(eq(anbuSquad.id, squad.id), eq(anbuSquad.name, squad.name)));
 
 /**
- * Build the `anbuSquad` update for `purchaseEspionageUpgrade`, setting
- * `espionageLevel` and `points`, using predicates on `id` and `points`.
+ * Build the `anbuSquad` update for a level upgrade, setting the level and `points`,
+ * guarding the balance and the level cap in the write.
  */
-export const updateAnbuSquadForPurchaseEspionageUpgrade = (
+export const updateAnbuSquadForPurchaseUpgrade = (
   client: Pick<DrizzleClient, "update">,
   squad: { id: string },
+  upgrade: {
+    levelColumn: "espionageLevel" | "stealthLevel";
+    cost: number;
+    maxLevel: number;
+  },
 ) =>
   client
     .update(anbuSquad)
     .set({
-      espionageLevel: sql`${anbuSquad.espionageLevel} + 1`,
-      points: sql`${anbuSquad.points} - ${ANBU_ESPIONAGE_UPGRADE_COST}`,
+      [upgrade.levelColumn]: sql`${anbuSquad[upgrade.levelColumn]} + 1`,
+      points: sql`${anbuSquad.points} - ${upgrade.cost}`,
     })
     .where(
       and(
         eq(anbuSquad.id, squad.id),
-        gte(anbuSquad.points, ANBU_ESPIONAGE_UPGRADE_COST),
+        gte(anbuSquad.points, upgrade.cost),
+        lt(anbuSquad[upgrade.levelColumn], upgrade.maxLevel),
       ),
-    );
-
-/**
- * Build the `anbuSquad` update for `purchaseStealthUpgrade`, setting `stealthLevel`
- * and `points`, using predicates on `id` and `points`.
- */
-export const updateAnbuSquadForPurchaseStealthUpgrade = (
-  client: Pick<DrizzleClient, "update">,
-  squad: { id: string },
-) =>
-  client
-    .update(anbuSquad)
-    .set({
-      stealthLevel: sql`${anbuSquad.stealthLevel} + 1`,
-      points: sql`${anbuSquad.points} - ${ANBU_STEALTH_UPGRADE_COST}`,
-    })
-    .where(
-      and(eq(anbuSquad.id, squad.id), gte(anbuSquad.points, ANBU_STEALTH_UPGRADE_COST)),
     );
 
 /**
