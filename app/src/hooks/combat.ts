@@ -1,5 +1,5 @@
 import { hashKey, useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
+import { getMutationKey, getQueryKey } from "@trpc/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import superjson from "superjson";
 import { api, type RouterInputs } from "@/app/_trpc/client";
@@ -57,7 +57,14 @@ export const useCombatUpdates = (state: BattleState) => {
   /** Reserve the action and capture its exact battle-query revision before sending it. */
   const startAction = useCallback(
     (id: string) => {
-      if (pendingActionRef.current) return false;
+      // The shared mutation outlives battlefield remounts and pending-state polls.
+      if (
+        pendingActionRef.current ||
+        queryClient.isMutating({
+          mutationKey: getMutationKey(api.combat.performAction),
+        })
+      )
+        return false;
       pendingActionRef.current = {
         battleId: id,
         version: 0,
@@ -65,7 +72,7 @@ export const useCombatUpdates = (state: BattleState) => {
       };
       return true;
     },
-    [prepareBattleUpdate],
+    [prepareBattleUpdate, queryClient],
   );
 
   /** Reuse the committed response unless an error, cache race or newer event requires recovery. */
