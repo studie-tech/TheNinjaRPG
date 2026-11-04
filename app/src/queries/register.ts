@@ -11,7 +11,6 @@ import {
 import {
   activityStreakConfig,
   bloodlineRolls,
-  historicalIp,
   paypalSubscription,
   questHistory,
   recruitReferral,
@@ -49,23 +48,6 @@ export const findVisitorLogForSetReferralSource = (
     where: eq(visitorLog.ipHash, hashIp(ip)),
   });
 
-/** Build the `historicalIp` lookup for `setReferralSource`, using predicates on `ip` and `userId`. */
-export const findHistoricalIpForSetReferralSource = (
-  client: Pick<DrizzleClient, "query">,
-  ip: string,
-  ctx: { userId: string },
-) =>
-  client.query.historicalIp.findFirst({
-    where: and(eq(historicalIp.ip, ip), eq(historicalIp.userId, ctx.userId)),
-  });
-
-/** Build a historical IP insert with its matching IP hash. */
-export const insertUserHistoricalIp = (
-  client: Pick<DrizzleClient, "insert">,
-  userId: string,
-  ip: string,
-) => client.insert(historicalIp).values({ userId: userId, ip, ipHash: hashIp(ip) });
-
 /** Build the `referralSource` insert for `setReferralSource`. */
 export const insertReferralSourceForSetReferralSource = (
   client: Pick<DrizzleClient, "insert">,
@@ -91,18 +73,6 @@ export const findUserDataForCreateCharacter2 = (
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.username, input.username),
-  });
-
-/** Build the `historicalIp` lookup for `createCharacter`, using predicates on `ip` and `userId`. */
-export const findHistoricalIpForCreateCharacter = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userIp: string; userId: string },
-) =>
-  client.query.historicalIp.findFirst({
-    where: and(
-      eq(historicalIp.ip, ctx.userIp ?? ""),
-      eq(historicalIp.userId, ctx.userId),
-    ),
   });
 
 /** Build the `storePurchase` lookup for `createCharacter`, selecting only `id`, using predicates on `userId`. */

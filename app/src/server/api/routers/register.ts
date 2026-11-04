@@ -3,13 +3,15 @@ import { IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
 import type { userData } from "@/drizzle/schema";
 import { fetchBloodline } from "@/queries/bloodline";
 import { findUserEmailReminder } from "@/queries/emailReminder";
-import { deleteUserAttributes, findUserById } from "@/queries/profile";
+import {
+  deleteUserAttributes,
+  findUserById,
+  upsertHistoricalIp,
+} from "@/queries/profile";
 import { findStoreUserIdAlias } from "@/queries/purchases";
 import {
   deleteStoreUserIdAliasForCreateCharacter,
   executeCreatedUserForCreateCharacter,
-  findHistoricalIpForCreateCharacter,
-  findHistoricalIpForSetReferralSource,
   findPaypalSubscriptionForCreateCharacter,
   findReferralSourceForSetReferralSource,
   findStorePurchaseForCreateCharacter,
@@ -24,7 +26,6 @@ import {
   insertReferralSourceForSetReferralSource,
   insertStarterHomeItems,
   insertUserAttributeForCreateCharacter,
-  insertUserHistoricalIp,
   listUserReportForCreateCharacter,
   updateUserDataForCreateCharacter,
 } from "@/queries/register";
@@ -69,12 +70,10 @@ export const registerRouter = createTRPCRouter({
       // Determine source: provided utmSource or fallback from visitorLog by IP
       const provided = (input?.utmSource ?? "").trim();
       let source = provided;
-      if (!source) {
-        const ip = ctx.userIp ?? "unknown";
-        if (ip !== "unknown") {
-          const visit = await findVisitorLogForSetReferralSource(ctx.drizzle, ip);
-          source = (visit?.utmSource ?? "").trim();
-        }
+      const ip = ctx.userIp ?? "unknown";
+      if (!source && ip !== "unknown") {
+        const visit = await findVisitorLogForSetReferralSource(ctx.drizzle, ip);
+        source = (visit?.utmSource ?? "").trim();
       }
 
       if (!source) {
@@ -82,17 +81,7 @@ export const registerRouter = createTRPCRouter({
       }
 
       // Ensure we map IP -> user for later analytics joins
-      const ip = ctx.userIp ?? "unknown";
-      if (ip !== "unknown") {
-        const currentIp = await findHistoricalIpForSetReferralSource(
-          ctx.drizzle,
-          ip,
-          ctx,
-        );
-        if (!currentIp) {
-          await insertUserHistoricalIp(ctx.drizzle, ctx.userId, ip);
-        }
-      }
+      if (ip !== "unknown") await upsertHistoricalIp(ctx.drizzle, ctx.userId, ip);
 
       await insertReferralSourceForSetReferralSource(ctx.drizzle, ctx, source);
       return { success: true, message: "Referral source set" };
@@ -111,7 +100,6 @@ export const registerRouter = createTRPCRouter({
         usernameTaken,
         reminder,
         selectedBloodline,
-        currentIp,
         moderationResult,
         storeAlias,
         storeHistory,
@@ -126,7 +114,6 @@ export const registerRouter = createTRPCRouter({
         findUserDataForCreateCharacter2(ctx.drizzle, input),
         findUserEmailReminder(ctx.drizzle, ctx),
         fetchBloodline(ctx.drizzle, input.bloodlineId),
-        findHistoricalIpForCreateCharacter(ctx.drizzle, ctx),
         checkForBadWords(input.username),
         findStoreUserIdAlias(ctx.drizzle, ctx.userId),
         findStorePurchaseForCreateCharacter(ctx.drizzle, ctx),
@@ -150,16 +137,17 @@ export const registerRouter = createTRPCRouter({
       const hasLedger = Boolean(
         storeAlias || storeHistory || paypalHistory || stripeHistory,
       );
+      const settleLedger = () =>
+        Promise.all([
+          settleRecordedLedger(ctx.drizzle, ctx.userId),
+          settleStripePayments(ctx.drizzle, ctx.userId),
+        ]);
 
       // Guard
       if (!moderationResult.success) return moderationResult;
       if (existingUser) {
         // A retry after registration failed part-way settles what it did not get to.
-        if (hasLedger)
-          await Promise.all([
-            settleRecordedLedger(ctx.drizzle, ctx.userId),
-            settleStripePayments(ctx.drizzle, ctx.userId),
-          ]);
+        if (hasLedger) await settleLedger();
         return errorResponse("Character already created for this account");
       }
       if (usernameTaken) return errorResponse("Username already taken");
@@ -251,17 +239,20 @@ export const registerRouter = createTRPCRouter({
         earnedExperience: reminder ? 10000 : 0,
       } satisfies typeof userData.$inferInsert;
 
+      const discardSanctions = () =>
+        discardUnpublishedSanctions(
+          ctx.drizzle,
+          ctx.userId,
+          sanctions.map((match) => carryoverReportId(ctx.userId, match)),
+        );
+
       // INSERT SELECT publishes flags only with durable cases and unchanged sources.
       // Drizzle's builder requires every table column for SELECT, including defaults.
       const createdUser = await retryOnDeadlock(() =>
         executeCreatedUserForCreateCharacter(ctx.drizzle, values, sanctionGuard, input),
       ).catch(async (error: unknown) => {
         if (isMysqlDuplicateKeyError(error)) return { rowsAffected: 0 };
-        await discardUnpublishedSanctions(
-          ctx.drizzle,
-          ctx.userId,
-          sanctions.map((match) => carryoverReportId(ctx.userId, match)),
-        );
+        await discardSanctions();
         throw error;
       });
       if (createdUser.rowsAffected === 0) {
@@ -271,11 +262,7 @@ export const registerRouter = createTRPCRouter({
           input,
         );
         if (!currentUser || currentUser.userId !== ctx.userId) {
-          await discardUnpublishedSanctions(
-            ctx.drizzle,
-            ctx.userId,
-            sanctions.map((match) => carryoverReportId(ctx.userId, match)),
-          );
+          await discardSanctions();
           return errorResponse(
             currentUser
               ? "Username already taken"
@@ -287,11 +274,7 @@ export const registerRouter = createTRPCRouter({
         await deleteStoreUserIdAliasForCreateCharacter(ctx.drizzle, ctx, storeAlias);
       }
       // The row exists either way now, so settle before answering a duplicate.
-      if (hasLedger)
-        await Promise.all([
-          settleRecordedLedger(ctx.drizzle, ctx.userId),
-          settleStripePayments(ctx.drizzle, ctx.userId),
-        ]);
+      if (hasLedger) await settleLedger();
       if (createdUser.rowsAffected === 0) {
         return errorResponse("Character already created for this account");
       }
@@ -304,8 +287,8 @@ export const registerRouter = createTRPCRouter({
           id: selectedBloodline.id,
           rank: selectedBloodline.rank,
         }),
-        ...(ctx.userIp && !currentIp
-          ? [insertUserHistoricalIp(ctx.drizzle, ctx.userId, ctx.userIp)]
+        ...(ctx.userIp
+          ? [upsertHistoricalIp(ctx.drizzle, ctx.userId, ctx.userIp)]
           : []),
         ...(input.recruiter_userid
           ? [

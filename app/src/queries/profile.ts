@@ -2064,8 +2064,8 @@ export const updateUserDataForFetchUpdatedUserOnce2 = (
     .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
     .where(eq(userData.userId, user.userId));
 
-/** Build the `historicalIp` insert for `persistPassiveRegenToDb`, updating duplicate keys. */
-export const insertHistoricalIpForPersistPassiveRegenToDb = (
+/** Build the `historicalIp` upsert recording that a user was seen on an IP. */
+export const upsertHistoricalIp = (
   client: Pick<DrizzleClient, "insert">,
   userId: string,
   userIp: string,

@@ -171,20 +171,45 @@ const USER_DELTA_CAPS = {
   sageMasteryExperience: SAGE_MASTERY_EXP_CAP,
 };
 
+/**
+ * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
+ *
+ * Achievements are global static content: every player is handed the same definitions, and
+ * `mockAchievementHistoryEntries` attaches the whole `Quest` row - every objective with its
+ * description, scene assets and reward spec - to a progress row that is otherwise a handful of
+ * counters. Sending that from `profile.getUser` re-serialised, re-transferred and re-parsed tens
+ * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
+ * progress against `quests.getAchievementCatalogue`, which it holds for the session.
+ *
+ * A row moves exactly when `publishedIds` names its definition, which makes the two halves a
+ * partition by construction: nothing is sent twice, and nothing is stranded as a progress row the
+ * client cannot resolve. Everything else - a hidden achievement, one the overworld still needs,
+ * an orphaned row whose quest was deleted - stays on the user object untouched.
+ */
+export const splitAchievementProgress = (
+  user: { userQuests: (AchievementProgress & { quest?: unknown })[] },
+  publishedIds: ReadonlySet<string>,
+) => {
+  const progress: AchievementProgress[] = [];
+  user.userQuests = user.userQuests.filter((userQuest) => {
+    if (!publishedIds.has(userQuest.questId)) return true;
+    const { quest: _definition, ...rest } = userQuest;
+    progress.push(rest);
+    return false;
+  });
+  return progress;
+};
+
 /** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
 export const getUserProgressionUpdate = (
   user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
   publishedAchievementIds: readonly string[],
 ) => {
   const publicUser = getPublicQuestUser(user);
-  const publishedIds = new Set(publishedAchievementIds);
-  const achievementProgress: AchievementProgress[] = [];
-  publicUser.userQuests = publicUser.userQuests.filter((entry) => {
-    if (!publishedIds.has(entry.questId)) return true;
-    const { quest: _definition, ...progress } = entry;
-    achievementProgress.push(progress);
-    return false;
-  });
+  const achievementProgress = splitAchievementProgress(
+    publicUser,
+    new Set(publishedAchievementIds),
+  );
   return {
     achievementProgress,
     userPatch: {

@@ -1,12 +1,10 @@
 
 import { beforeEach, describe, expect, it } from "bun:test";
+import { splitAchievementProgress } from "@/deltas/profile";
 import { quest } from "@/drizzle/schema";
 import { questHasOverworldObjectives } from "@/libs/quest";
 import type { UserWithRelations } from "../../../../../src/server/api/routers/profile";
-import {
-  fetchPublishedAchievements,
-  splitAchievementProgress,
-} from "../../../../../src/server/api/routers/profile";
+import { fetchPublishedAchievements } from "../../../../../src/server/api/routers/profile";
 import { insertQuests } from "../../../../setup/factories";
 import {
   describeWithDatabase,
@@ -65,9 +63,7 @@ const counterAchievement = asQuest("ach-counter", "achievement", [
 const dailyQuest = asQuest("daily-1", "daily", [
   asObjective({ task: "collect_item", sector: 12 }),
 ]);
-const published = [counterAchievement] as unknown as Parameters<
-  typeof splitAchievementProgress
->[1];
+const published = new Set(["ach-counter"]);
 
 describe("splitAchievementProgress", () => {
   it("moves the rows the catalogue publishes and drops their definition", () => {

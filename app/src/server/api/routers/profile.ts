@@ -15,6 +15,7 @@ import {
   getUpdateUsernameUserUpdate,
   getUserProgressionUpdate,
   getUseUnusedExperiencePointsUserUpdate,
+  splitAchievementProgress,
 } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
@@ -113,7 +114,7 @@ import {
   getQuestTargetSectorsToCheck,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
-  questHasOverworldObjectives,
+  publishedAchievementsOf,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
 import { getIsolatedPyramid } from "@/libs/questRun";
@@ -189,7 +190,6 @@ import {
   insertActionLogForUpdateUser,
   insertActionLogForUpdateUser2,
   insertActionLogForUpdateUsername,
-  insertHistoricalIpForPersistPassiveRegenToDb,
   insertRecruitmentRewardsForLevelUp,
   insertTrainingLogForPersistPassiveRegenToDb,
   insertTrainingLogForPersistPassiveRegenToDb2,
@@ -249,6 +249,7 @@ import {
   updateUserPetForResetPetImageGeneration,
   updateUserVoteForClaimVotes,
   updateVillageForFetchUpdatedUserOnce,
+  upsertHistoricalIp,
 } from "@/queries/profile";
 import {
   fetchBloodlineCollectionRolls,
@@ -792,7 +793,6 @@ export const profileRouter = createTRPCRouter({
         initialUser,
         readyFarmPlotsResult,
         waterableFarmPlotsResult,
-        publishedAchievements,
         questInvitations,
         tournamentNoticeState,
         activeDungeonRuns,
@@ -800,7 +800,6 @@ export const profileRouter = createTRPCRouter({
         fetchUser(),
         selectFarmPlotForGetUser(ctx.drizzle, ctx, now),
         selectFarmPlotForGetUser2(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
-        fetchPublishedAchievements(ctx.drizzle),
         listQuestPartyForGetUser(ctx.drizzle, ctx),
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
         findActiveDungeonRun(ctx.drizzle, ctx.userId),
@@ -824,7 +823,7 @@ export const profileRouter = createTRPCRouter({
       const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
       // Ship achievement progress on its own; the definitions come from the catalogue query
       const achievementProgress = user
-        ? splitAchievementProgress(user, publishedAchievements)
+        ? splitAchievementProgress(user, new Set(updatedUser.publishedAchievementIds))
         : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
@@ -2622,9 +2621,9 @@ const fetchUpdatedUserOnce = async (
     fetchBloodlineCollectionCatalogue(client),
     fetchBloodlineCollectionRolls(client, userId),
   ]);
-  const publishedAchievementIds = achievements
-    .filter((entry) => !questHasOverworldObjectives(entry))
-    .map((entry) => entry.id);
+  const publishedAchievementIds = publishedAchievementsOf(achievements).map(
+    (entry) => entry.id,
+  );
   if (props.rejectIsolatedPyramid && getIsolatedPyramid(fetchedUser)) {
     return {
       user: undefined,
@@ -3376,8 +3375,8 @@ const persistPassiveRegenToDb = async ({
   // Persist history before appending: concurrent deletion either reads this IP or creates
   // a retained source in time for the append to preserve it before history is removed.
   if (userIp && user.lastIp !== userIp) {
-    await insertHistoricalIpForPersistPassiveRegenToDb(client, userId, userIp).then(
-      () => retainSanctionIps(client, userId, [userIp]),
+    await upsertHistoricalIp(client, userId, userIp).then(() =>
+      retainSanctionIps(client, userId, [userIp]),
     );
   }
 
@@ -3497,23 +3496,9 @@ const persistPassiveRegenToDb = async ({
   return claim.success;
 };
 
-/**
- * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
- * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
- *
- * Both sides read this one list rather than re-deciding with a predicate: by the time `getUser`
- * runs, `fetchUpdatedUser` has rewritten the objectives on its own copy of these quests - trackers
- * write resolved coordinates back onto them, and location hiding rewrites them again - so a
- * predicate applied there and a predicate applied to the raw row can disagree, and a progress row
- * whose definition the catalogue withholds renders nothing at all.
- *
- * Inside a request scope the underlying read is memoized, so a caller that has already gone
- * through `fetchUpdatedUser` pays nothing for this.
- */
+/** The achievements `quests.getAchievementCatalogue` publishes; see `publishedAchievementsOf`. */
 export const fetchPublishedAchievements = async (client: DrizzleClient) =>
-  (await fetchAchievementCatalogue(client)).filter(
-    (achievement) => !questHasOverworldObjectives(achievement),
-  );
+  publishedAchievementsOf(await fetchAchievementCatalogue(client));
 
 /** A user's progress on one quest, without the static definition it belongs to. */
 export type AchievementProgress = Omit<UserQuest, "quest">;
@@ -3549,36 +3534,6 @@ export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
  * leaving a filter out can only let a call through that would have been skipped, never the
  * reverse. A `true` still goes to insertNextQuest, which remains the authority.
  */
-
-/**
- * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
- *
- * Achievements are global static content: every player is handed the same definitions, and
- * `mockAchievementHistoryEntries` attaches the whole `Quest` row - every objective with its
- * description, scene assets and reward spec - to a progress row that is otherwise a handful of
- * counters. Sending that from `profile.getUser` re-serialised, re-transferred and re-parsed tens
- * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
- * progress against `quests.getAchievementCatalogue`, which it holds for the session.
- *
- * A row moves exactly when `published` carries its definition, which makes the two halves a
- * partition by construction: nothing is sent twice, and nothing is stranded as a progress row the
- * client cannot resolve. Everything else - a hidden achievement, one the overworld still needs,
- * an orphaned row whose quest was deleted - stays on the user object untouched.
- */
-export const splitAchievementProgress = (
-  user: NonNullable<UserWithRelations>,
-  published: Quest[],
-) => {
-  const publishedIds = new Set(published.map((achievement) => achievement.id));
-  const progress: AchievementProgress[] = [];
-  user.userQuests = user.userQuests.filter((userQuest) => {
-    if (!publishedIds.has(userQuest.questId)) return true;
-    const { quest: _definition, ...rest } = userQuest;
-    progress.push(rest);
-    return false;
-  });
-  return progress;
-};
 
 /**
  * Scale an edited AI row to its level before it is saved. Changed combat stats are the
