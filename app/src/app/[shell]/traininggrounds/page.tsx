@@ -1025,7 +1025,7 @@ const StatsTraining: React.FC<
                         {stat === "sageMastery" && (
                           <div className="font-normal text-muted-foreground text-xs">
                             Trains Sage Mastery for jutsu and item requirements. Sage
-                            Mode rank comes from quests.
+                            Mode rank comes from rewards, including quests.
                           </div>
                         )}
                       </div>
