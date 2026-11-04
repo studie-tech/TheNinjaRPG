@@ -3,7 +3,7 @@
 import "@blockstruggle/game-ui/style.css";
 import { useAuth } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const NinjaMiniGame = dynamic(
@@ -73,6 +73,16 @@ export default function ShinobiStruggleClient({
     </>
   );
 }
+
+/** Reads the match deep link on the client, as the shell is prerendered; a repeated parameter opens the lobby. */
+export const ShinobiStruggleRoute = () => {
+  const matches = useSearchParams().getAll("match");
+  return (
+    <ShinobiStruggleClient
+      initialMatchId={matches.length === 1 ? matches[0] : undefined}
+    />
+  );
+};
 
 const IdentityLinkForm = ({
   fetchGame,

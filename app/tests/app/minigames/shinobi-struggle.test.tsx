@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import * as clerk from "@clerk/nextjs";
 import {
   act,
   cleanup,
@@ -7,36 +7,45 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
-import { ensureDom } from "../../../../../tests/setup-dom.mjs";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as dynamic from "next/dynamic";
+import * as navigation from "next/navigation";
 
-vi.mock("next/dynamic", () => ({
-  default: () => () => <div>Shinobi game</div>,
-}));
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
 const authState = { sessionId: "session-1" };
-vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({
-    getToken: async () => "clerk-session-token",
-    isLoaded: true,
-    sessionId: authState.sessionId,
-  }),
-}));
 
-// Bun executes module imports before test mocks; load the host only after its
-// Clerk and dynamic-component adapters have been installed.
+// Keep the real host, substituting only its dynamically loaded game.
+const gameProps: { initialMatchId?: string }[] = [];
+const game = vi.spyOn(dynamic, "default").mockReturnValue(((props: {
+  initialMatchId?: string;
+}) => {
+  gameProps.push(props);
+  return <div>Shinobi game</div>;
+}) as never);
 const {
   default: ShinobiStruggleClient,
   fetchAuthenticatedGame,
   ninjaSignInUrl,
-} = await import("./ShinobiStruggleClient");
+  ShinobiStruggleRoute,
+} = await import("@/app/[shell]/minigames/shinobi-struggle/ShinobiStruggleClient");
+game.mockRestore();
+
+beforeEach(() => {
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  vi.spyOn(clerk, "useAuth").mockImplementation(
+    () =>
+      ({
+        getToken: async () => "clerk-session-token",
+        isLoaded: true,
+        sessionId: authState.sessionId,
+      }) as never,
+  );
+});
 
 const originalFlag = process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED;
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   authState.sessionId = "session-1";
   if (originalFlag === undefined)
     delete process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED;
@@ -86,14 +95,12 @@ it("sends the Clerk session only to the same-origin game bridge", async () => {
 });
 
 it("keeps account linking hidden until enabled", () => {
-  ensureDom();
   process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = "false";
   const view = render(<ShinobiStruggleClient />);
   expect(view.queryByRole("button", { name: /Link an existing/ })).toBeNull();
 });
 
 it("redeems a code through the same-origin route and keeps a conflict recoverable", async () => {
-  ensureDom();
   process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = "true";
   let status = 409;
   const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
@@ -174,11 +181,10 @@ it("discards the response body when an in-flight request belongs to a previous s
       () => current,
     ),
   ).rejects.toMatchObject({ name: "AbortError" });
-  expect(cancel).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledTimes(1);
 });
 
 it("clears link input and ignores a previous account's delayed success after switching accounts", async () => {
-  ensureDom();
   process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = "true";
   let release!: (response: Response) => void;
   const pending = new Promise<Response>((resolve) => {
@@ -192,7 +198,7 @@ it("clears link input and ignores a previous account's delayed success after swi
     target: { value: "c".repeat(43) },
   });
   fireEvent.click(view.getByRole("button", { name: "Link accounts" }));
-  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
   authState.sessionId = "session-2";
   view.rerender(<ShinobiStruggleClient />);
   expect(view.queryByRole("textbox", { name: "Block Struggle link code" })).toBeNull();
@@ -218,4 +224,16 @@ it("clears link input and ignores a previous account's delayed success after swi
       }),
     ).queryByRole("alert"),
   ).toBeNull();
+});
+
+it.each([
+  ["match=abc", "abc"],
+  ["match=abc&match=def", undefined],
+  ["", undefined],
+])("opens the game for the deep link ?%s", (query, expected) => {
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams(query) as never,
+  );
+  render(<ShinobiStruggleRoute />);
+  expect(gameProps.at(-1)?.initialMatchId).toBe(expected);
 });

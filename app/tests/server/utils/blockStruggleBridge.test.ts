@@ -1,8 +1,10 @@
-// @vitest-environment node
 import { randomBytes } from "node:crypto";
+import { describe, expect, it } from "bun:test";
 import { Effect, Either } from "effect";
-import { describe, expect, it } from "vitest";
-import { makeBlockStruggleBridge, type RpgIdentity } from "../blockStruggleBridge";
+import {
+  makeBlockStruggleBridge,
+  type RpgIdentity,
+} from "@/server/utils/blockStruggleBridge";
 
 const config = () => ({
   apiOrigin: "https://puzzle.example",
