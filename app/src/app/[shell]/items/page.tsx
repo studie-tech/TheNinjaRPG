@@ -62,6 +62,7 @@ import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
@@ -620,31 +621,34 @@ export default function MyItems() {
         </div>
       </div>
       {userItems && (
-        <ContentBox
-          title="Battle Hotkeys"
-          subtitle="Keys for your equipped items"
-          initialBreak={true}
-        >
-          <LoadoutHotkeysPanel
-            kind="item"
-            actions={userItems
-              .filter(
-                (ui) =>
-                  ui.equipped !== "NONE" &&
-                  ui.quantity > 0 &&
-                  !NonActionItemTypes.includes(ui.item.itemType),
-              )
-              .map((ui) => ({
-                id: ui.itemId,
-                name: ui.item.name,
-                hidden: ui.item.hidden,
-              }))
-              .filter(
-                (action, index, list) =>
-                  list.findIndex((other) => other.id === action.id) === index,
-              )}
-          />
-        </ContentBox>
+        // Keep hotkey setup out of the way without a mouse or trackpad.
+        <div className="not-any-pointer-fine:hidden">
+          <ContentBox
+            title="Battle Hotkeys"
+            subtitle="Keys for your equipped items"
+            initialBreak={true}
+          >
+            <LoadoutHotkeysPanel
+              kind="item"
+              actions={userItems
+                .filter(
+                  (ui) =>
+                    ui.equipped !== "NONE" &&
+                    ui.quantity > 0 &&
+                    !NonActionItemTypes.includes(ui.item.itemType),
+                )
+                .map((ui) => ({
+                  id: ui.itemId,
+                  name: ui.item.name,
+                  hidden: ui.item.hidden,
+                }))
+                .filter(
+                  (action, index, list) =>
+                    list.findIndex((other) => other.id === action.id) === index,
+                )}
+            />
+          </ContentBox>
+        </div>
       )}
     </>
   );
@@ -1902,6 +1906,8 @@ const Equip: React.FC<EquipProps> = (props) => {
       onContextMenu={
         canAssignHotkey && props.onAssignHotkey
           ? (event) => {
+              // A long press on a touch screen also opens the context menu.
+              if (!canSetHotkeys(event)) return;
               event.preventDefault();
               props.onAssignHotkey?.(item);
             }
@@ -1918,7 +1924,7 @@ const Equip: React.FC<EquipProps> = (props) => {
             className=""
           />
           {canAssignHotkey && hotkey && (
-            <kbd className="pointer-events-none absolute top-[2px] left-[2px] z-10 rounded-[3px] border border-black/40 bg-white/90 px-[3px] font-mono text-[10px] font-bold text-black leading-[14px]">
+            <kbd className="pointer-events-none absolute top-[2px] left-[2px] z-10 rounded-[3px] not-any-pointer-fine:hidden border border-black/40 bg-white/90 px-[3px] font-mono text-[10px] font-bold text-black leading-[14px]">
               {hotkey.toUpperCase()}
             </kbd>
           )}

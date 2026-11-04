@@ -15,6 +15,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import { getActionPointCost } from "@/libs/combat/actions";
+import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
@@ -73,7 +74,7 @@ interface ActionSelectorSettingsProps {
   userId?: string;
   /** Battle key per action id, shown as a badge on the tile. */
   hotkeys?: Record<string, string>;
-  /** Right-click or long-press on a tile opens key assignment for it. */
+  /** Right-click on a tile opens key assignment when a fine pointer is available. */
   onAssignHotkey?: (item: ActionItemProps) => void;
 }
 
@@ -204,6 +205,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
               onContextMenu={
                 props.onAssignHotkey
                   ? (event) => {
+                      // A long press on a touch screen also opens the context menu.
+                      if (!canSetHotkeys(event)) return;
                       event.preventDefault();
                       props.onAssignHotkey?.(item);
                     }
@@ -214,7 +217,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                 {props.hotkeys?.[item.id] && (
                   <kbd
                     title={`Hotkey ${(props.hotkeys[item.id] ?? "").toUpperCase()}`}
-                    className="pointer-events-none absolute top-[2px] left-[2px] z-10 min-w-[16px] rounded-[3px] border border-black/40 bg-white/90 px-[3px] text-center font-bold font-mono text-[10px] text-black leading-[14px] shadow-sm"
+                    className="pointer-events-none absolute top-[2px] left-[2px] z-10 min-w-[16px] not-any-pointer-fine:hidden rounded-[3px] border border-black/40 bg-white/90 px-[3px] text-center font-bold font-mono text-[10px] text-black leading-[14px] shadow-sm"
                   >
                     {(props.hotkeys[item.id] ?? "").toUpperCase()}
                   </kbd>
