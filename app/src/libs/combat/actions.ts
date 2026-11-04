@@ -1469,7 +1469,6 @@ export const applyActionCooldowns = (
           : longest,
       0,
     );
-  const applyGcd = !!action.cooldown && action.cooldown > 0;
   // Mirrors availableUserActions, which treats a falsy lastUsedRound as never used
   const lockedFor = (lastUsedRound: number, cooldown: number) =>
     lastUsedRound ? lastUsedRound + cooldown - round : 0;
@@ -1480,7 +1479,7 @@ export const applyActionCooldowns = (
     if (uj.jutsuId === action.id && action.type === "jutsu") {
       uj.lastUsedRound = round;
       uj.originalCooldown = jutsu.cooldown;
-    } else if (applyGcd && sharedRounds(jutsu.effects) > 0) {
+    } else if (sharedRounds(jutsu.effects) > 0) {
       const rounds = sharedRounds(jutsu.effects);
       if (lockedFor(uj.lastUsedRound, uj.originalCooldown) < rounds) {
         uj.lastUsedRound = round;
@@ -1495,10 +1494,7 @@ export const applyActionCooldowns = (
     if (ui.itemId === action.id && action.type === "item") {
       ui.lastUsedRound = round;
       ui.originalCooldown = item.cooldown;
-    } else if (
-      applyGcd &&
-      sharedRounds([...item.effects, ...(ui.imbuementEffects ?? [])]) > 0
-    ) {
+    } else if (sharedRounds([...item.effects, ...(ui.imbuementEffects ?? [])]) > 0) {
       const rounds = sharedRounds([...item.effects, ...(ui.imbuementEffects ?? [])]);
       if (lockedFor(ui.lastUsedRound, ui.originalCooldown) < rounds) {
         ui.lastUsedRound = round;
@@ -1513,7 +1509,7 @@ export const applyActionCooldowns = (
       if (!tracking) return;
       tracking.lastUsedRound = round;
       delete tracking.cooldown;
-    } else if (applyGcd && sharedRounds(ba.effects) > 0) {
+    } else if (sharedRounds(ba.effects) > 0) {
       const rounds = sharedRounds(ba.effects);
       const lastUsedRound = tracking?.lastUsedRound ?? ba.lastUsedRound ?? 0;
       const cooldown = ba.cooldown;

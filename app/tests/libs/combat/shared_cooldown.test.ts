@@ -112,6 +112,34 @@ const usableRounds = (battle: CompleteBattle, actionId: string, from: number, to
   });
 
 describe("global cooldown", () => {
+  it("shares configured movement cooldowns in both directions and restores Move's zero cooldown", () => {
+    const battle = makeGcdBattle([]);
+    battle.extraState.sharedCooldowns = { move: 3 };
+    perform(battle, 1, "replacementTechnique");
+    expect(usableRounds(battle, "move", 1, 5)).toEqual([4, 5]);
+    perform(battle, 4, "move");
+    expect(usableRounds(battle, "replacementTechnique", 4, 8)).toEqual([7, 8]);
+    expect(usableRounds(battle, "move", 4, 8)).toEqual([4, 5, 6, 7, 8]);
+    expect(
+      battle.usersState[0]!.basicActions.find((action) => action.id === "move")?.cooldown,
+    ).toBeUndefined();
+  });
+
+  it("triggers shared cooldowns when the performed basic action's cooldown is reduced to zero", () => {
+    const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")]);
+    battle.extraState.sharedCooldowns = { clear: 3 };
+    battle.usersEffects.push(
+      makeEffect(
+        "decreasecooldown",
+        { power: 10, rounds: 20, actionsAffected: ["clear"] },
+        { targetId: USER },
+      ),
+    );
+    perform(battle, 1, "clear");
+    expect(usableRounds(battle, "rip", 1, 5)).toEqual([4, 5]);
+    expect(usableRounds(battle, "clear", 1, 5)).toEqual([1, 2, 3, 4, 5]);
+  });
+
   it("uses the configured basic-action lock under cooldown reduction", () => {
     const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")]);
     battle.extraState.sharedCooldowns = { clear: 5 };
