@@ -67,6 +67,15 @@ export const payQuestEntryAtStart = async ({
     questId,
   );
   if (receipt.rowsAffected !== 1) return false;
+  return debitQuestEntryCharges(client, userId, charges);
+};
+
+/** Debit each stack under its allocation's CAS guards, stopping at the first that moved. */
+const debitQuestEntryCharges = async (
+  client: DrizzleClient,
+  userId: string,
+  charges: NonNullable<ReturnType<typeof getQuestEntryCharges>>,
+) => {
   for (const charge of charges) {
     const debited = await updateUserItemQuantityAtomically({
       client,
@@ -179,20 +188,8 @@ export const commitQuestEntryBattle = async <T>({
       if (receipt.rowsAffected !== 1) {
         reject("This quest changed or ended. Abandon it and start again.");
       }
-      for (const charge of charges) {
-        const debited = await updateUserItemQuantityAtomically({
-          client: tx,
-          userId: attempt.userId,
-          userItemId: charge.id,
-          expectedQuantity: charge.expectedQuantity,
-          nextQuantity: charge.expectedQuantity - charge.quantity,
-          where: [
-            eq(userItem.itemId, charge.itemId),
-            eq(userItem.storedAtHome, false),
-            eq(userItem.isInAuction, false),
-          ],
-        });
-        if (!debited) reject("Your entry items changed. Please try again.");
+      if (!(await debitQuestEntryCharges(tx, attempt.userId, charges))) {
+        reject("Your entry items changed. Please try again.");
       }
     },
   });
