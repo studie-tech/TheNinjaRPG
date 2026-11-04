@@ -8,6 +8,7 @@ import {
   Fingerprint,
   Flame,
   Handshake,
+  Info,
   Loader2,
   Medal,
   RefreshCw,
@@ -958,7 +959,7 @@ const StatsTraining: React.FC<
                   const cap = masteryRank
                     ? MASTERY_RANK_CAPS[masteryRank]
                     : ELEMENTAL_MASTERY_CAP;
-                  return (
+                  const tile = (
                     <button
                       type="button"
                       id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
@@ -1027,6 +1028,30 @@ const StatsTraining: React.FC<
                         <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
                       )}
                     </button>
+                  );
+                  if (stat !== "sageMastery") return tile;
+                  // The info button sits beside the tile, not inside it, so opening
+                  // it can never start training.
+                  return (
+                    <div key={`${stat}-${i}`} className="relative">
+                      {tile}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-0 left-0 size-7"
+                            aria-label="About Sage training"
+                          >
+                            <Info className="size-4" aria-hidden="true" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="max-w-64 text-sm">
+                          Trains Sage Mastery for jutsu and item requirements. Sage Mode
+                          rank comes from rewards, including quests.
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   );
                 },
               )}
