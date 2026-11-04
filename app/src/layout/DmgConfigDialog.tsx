@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JutsuEquipLimitsForm } from "@/layout/JutsuEquipLimitsForm";
 import { SharedCooldownForm } from "@/layout/SharedCooldownForm";
 import { WarRulesForm } from "@/layout/WarRulesForm";
@@ -65,7 +66,7 @@ const DMG_FIELDS = [
 type ConfSchemaInput = z.input<typeof confSchema>;
 type ConfSchemaOutput = z.infer<typeof confSchema>;
 
-/** Admin-only dialog for editing the damage formula config stored in the DB */
+/** Admin-only sections for damage, cooldown, equip limit and war settings. */
 export const DmgConfigDialog = () => {
   const [open, setOpen] = useState(false);
 
@@ -110,46 +111,73 @@ export const DmgConfigDialog = () => {
           </span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Battle Config</DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              {DMG_FIELDS.map((f) => (
-                <FormField
-                  key={f.name}
-                  control={form.control}
-                  name={f.name}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">{f.label}</FormLabel>
-                      <FormControl>
-                        <NumberInput
-                          step="any"
-                          {...field}
-                          value={field.value as number}
-                          onValueChange={field.onChange}
-                        />
-                      </FormControl>
-                      <p className="text-muted-foreground text-[10px]">
-                        {f.description}
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
-            </div>
-            <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? "Saving..." : "Save Config"}
-            </Button>
-          </form>
-        </Form>
-        <SharedCooldownForm />
-        <JutsuEquipLimitsForm />
-        <WarRulesForm />
+        <Tabs defaultValue="damage" className="flex min-h-0 flex-col">
+          <TabsList
+            aria-label="Battle configuration sections"
+            className="grid shrink-0 grid-cols-2"
+          >
+            <TabsTrigger value="damage" className="min-h-10">
+              Damage
+            </TabsTrigger>
+            <TabsTrigger value="cooldowns" className="min-h-10">
+              Cooldowns
+            </TabsTrigger>
+            <TabsTrigger value="limits" className="min-h-10">
+              Equip Limits
+            </TabsTrigger>
+            <TabsTrigger value="war" className="min-h-10">
+              War Rules
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="damage" className="min-h-0 overflow-y-auto">
+            <Form {...form}>
+              <form onSubmit={onSubmit} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {DMG_FIELDS.map((f) => (
+                    <FormField
+                      key={f.name}
+                      control={form.control}
+                      name={f.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">{f.label}</FormLabel>
+                          <FormControl>
+                            <NumberInput
+                              step="any"
+                              {...field}
+                              value={field.value as number}
+                              onValueChange={field.onChange}
+                            />
+                          </FormControl>
+                          <p className="text-muted-foreground text-[10px]">
+                            {f.description}
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? "Saving..." : "Save Config"}
+                </Button>
+              </form>
+            </Form>
+          </TabsContent>
+          <TabsContent value="cooldowns" className="min-h-0 overflow-y-auto">
+            <SharedCooldownForm />
+          </TabsContent>
+          <TabsContent value="limits" className="min-h-0 overflow-y-auto">
+            <JutsuEquipLimitsForm />
+          </TabsContent>
+          <TabsContent value="war" className="min-h-0 overflow-y-auto">
+            <WarRulesForm />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

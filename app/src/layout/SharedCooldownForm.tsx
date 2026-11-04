@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { sharedCooldownSchema } from "@/validators/sharedCooldown";
 export const SharedCooldownForm = () => {
   const { query, save, remove } = useSharedCooldowns();
   const [message, setMessage] = useState("");
+  const editorRef = useRef<HTMLFormElement>(null);
   const form = useForm<z.infer<typeof sharedCooldownSchema>>({
     defaultValues: { tag: "", rounds: 1 },
     resolver: zodResolver(sharedCooldownSchema),
@@ -40,7 +41,7 @@ export const SharedCooldownForm = () => {
     onError: (error: { message: string }) => setMessage(error.message),
   };
   return (
-    <section className="mt-6 space-y-3 border-t pt-4">
+    <section className="space-y-3">
       <h3 className="text-lg font-semibold">Shared Cooldowns</h3>
       <p className="text-muted-foreground text-sm">
         Changes apply to new battles. When actions share multiple tags, the longest
@@ -74,7 +75,12 @@ export const SharedCooldownForm = () => {
                       variant="ghost"
                       size="sm"
                       disabled={pending}
-                      onClick={() => form.reset(row)}
+                      onClick={() => {
+                        form.reset(row);
+                        // Keep the editor reachable below long rule tables.
+                        editorRef.current?.focus({ preventScroll: true });
+                        editorRef.current?.scrollIntoView({ block: "start" });
+                      }}
                     >
                       Edit
                     </Button>
@@ -94,6 +100,9 @@ export const SharedCooldownForm = () => {
           </table>
           <Form {...form}>
             <form
+              ref={editorRef}
+              aria-label="Shared cooldown editor"
+              tabIndex={-1}
               className="space-y-3"
               onSubmit={form.handleSubmit((values) => save.mutate(values, feedback))}
             >

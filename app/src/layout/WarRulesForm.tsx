@@ -47,7 +47,7 @@ export const WarRulesForm = () => {
     onError: (error) => setMessage(error.message),
   });
   return (
-    <section className="mt-6 border-t pt-4">
+    <section className="space-y-3">
       <h3 className="font-semibold text-lg">Village war settings</h3>
       <p className="mb-3 text-muted-foreground text-sm">
         Rules are frozen when elders approve a declaration. Existing wars keep their

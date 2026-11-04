@@ -46,7 +46,12 @@ describe("shared cooldown form", () => {
 
   it("edits a saved duration, displays rejection and clears pending controls", async () => {
     const view = render(<SharedCooldownForm />);
+    const editor = view.getByRole("form", { name: "Shared cooldown editor" });
+    const scrollIntoView = vi.fn();
+    editor.scrollIntoView = scrollIntoView;
     fireEvent.click(view.getByRole("button", { name: "Edit" }));
+    expect(document.activeElement).toBe(editor);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
     fireEvent.input(view.getByRole("spinbutton", { name: "GCD rounds" }), { target: { value: "5" } });
     fireEvent.click(view.getByRole("button", { name: "Save Tag" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));

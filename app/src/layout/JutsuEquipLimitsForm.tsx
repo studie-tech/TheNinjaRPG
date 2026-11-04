@@ -1,6 +1,6 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,6 +32,7 @@ import {
 export const JutsuEquipLimitsForm = () => {
   const { query, save, remove } = useJutsuEquipLimits();
   const [message, setMessage] = useState("");
+  const editorRef = useRef<HTMLFormElement>(null);
   const form = useForm<JutsuEquipLimit>({
     defaultValues: { category: "", unrankedMaxEquipped: null, rankedMaxEquipped: null },
     resolver: zodResolver(jutsuEquipLimitSchema),
@@ -42,7 +43,7 @@ export const JutsuEquipLimitsForm = () => {
     onError: (error: { message: string }) => setMessage(error.message),
   };
   return (
-    <section className="mt-6 space-y-3 border-t pt-4">
+    <section className="space-y-3">
       <h3 className="text-lg font-semibold">Jutsu Equip Limits</h3>
       <p className="text-sm text-muted-foreground">
         Zero blocks a category. Unlimited removes its cap. Changes apply when equipping
@@ -78,7 +79,12 @@ export const JutsuEquipLimitsForm = () => {
                       variant="ghost"
                       size="sm"
                       disabled={pending}
-                      onClick={() => form.reset(row)}
+                      onClick={() => {
+                        form.reset(row);
+                        // Keep the editor reachable below long rule tables.
+                        editorRef.current?.focus({ preventScroll: true });
+                        editorRef.current?.scrollIntoView({ block: "start" });
+                      }}
                     >
                       Edit
                     </Button>
@@ -100,6 +106,9 @@ export const JutsuEquipLimitsForm = () => {
           </table>
           <Form {...form}>
             <form
+              ref={editorRef}
+              aria-label="Jutsu equip limit editor"
+              tabIndex={-1}
               className="space-y-3"
               onSubmit={form.handleSubmit((values) => save.mutate(values, feedback))}
             >
