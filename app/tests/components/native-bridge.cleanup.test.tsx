@@ -4,9 +4,6 @@ import {
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 const capacitorWindow = window as typeof window & {
   Capacitor?: {

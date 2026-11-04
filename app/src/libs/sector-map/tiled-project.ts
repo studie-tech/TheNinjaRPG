@@ -19,13 +19,6 @@ interface TiledMember {
   propertyType?: string;
 }
 
-// gridX/gridY pin the exact hex cell an object sits on (authoritative for the
-// importer). Fresh array per class so there is no shared-reference aliasing.
-const gridMembers = (): TiledMember[] => [
-  { name: "gridX", type: "int", value: 0 },
-  { name: "gridY", type: "int", value: 0 },
-];
-
 /** One Tiled propertyTypes "class" entry: an object class with editor color and filled drawing */
 const objectClass = (
   id: number,
@@ -67,21 +60,18 @@ export const buildTiledProject = (assets: DecorationAsset[]) => ({
       { name: "assetKey", type: "string", value: "", propertyType: "AssetKey" },
       { name: "scale", type: "float", value: 1 },
       { name: "offsetX", type: "float", value: 0 },
-      ...gridMembers(),
     ]),
     // anchor / structure / shrine keys come from the object's NAME
-    objectClass(3, "anchor", "#2196f3", gridMembers()),
-    objectClass(4, "structure", "#9c27b0", gridMembers()),
-    objectClass(5, "shrine", "#e91e63", gridMembers()),
+    objectClass(3, "anchor", "#2196f3", []),
+    objectClass(4, "structure", "#9c27b0", []),
+    objectClass(5, "shrine", "#e91e63", []),
     objectClass(6, "exit", "#ff9800", [
       { name: "targetSector", type: "int", value: 0 },
       { name: "targetAnchor", type: "string", value: "spawn.default" },
       { name: "travelCost", type: "float", value: 1 },
-      ...gridMembers(),
     ]),
     objectClass(7, "landmark", "#795548", [
       { name: "route", type: "string", value: "" },
-      ...gridMembers(),
     ]),
   ],
 });
@@ -117,9 +107,7 @@ EDIT A SECTOR
        (e.g. spawn.default, structure.hospital, shrine.default).
      - EXIT: name it with its key (e.g. exit.north) and set targetSector,
        targetAnchor and travelCost.
-     - THE GAME reads each object's hex cell from its gridX / gridY property
-       when set; objects placed by hand without it (e.g. dragged decorations)
-       are snapped to the hex under their position on import.
+     - THE GAME places each object on the hex under its position on import.
 
 PUBLISH
   1. Save the .json in Tiled (File > Save).

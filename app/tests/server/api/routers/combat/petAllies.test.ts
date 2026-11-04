@@ -73,10 +73,9 @@ describeWithDatabase("companion ally passives at battle initiation", () => {
       const effects = initialized.usersEffects.filter((effect) => effect.actionId === allies.id && effect.type === type);
       expect(effects.map((effect) => effect.targetId).sort()).toEqual(["caster", "ally", pet.userId].sort());
       for (const effect of effects) {
-        const target = initialized.usersState.find((actor) => actor.userId === effect.targetId)!;
         expect(effect).toMatchObject({
           creatorId: caster.userId, level: caster.level,
-          highestGenerals: caster.highestGenerals, targetHighestGenerals: target.highestGenerals,
+          highestGenerals: caster.highestGenerals,
           fromType: "skill", isNew: false, castThisRound: false,
         });
       }

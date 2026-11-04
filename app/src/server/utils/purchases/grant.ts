@@ -58,14 +58,12 @@ import {
   listStorePurchaseForApplyStoreExtension2,
   listStorePurchaseForApplyStoreTransfer,
   listStorePurchaseForSettleRecordedLedger,
-  listStorePurchaseForStoreFederalFloor,
   listStorePurchaseTransferForMigrateStorePurchaseTransfers,
   listStorePurchaseTransferForTransferChainUserIds,
   listStorePurchaseTransferForTransferPredecessorUserIds,
   listStorePurchaseTransferForTransferredUserId,
   selectStorePurchaseForReconcileStorePurchaseOwner,
   selectStoreUserIds,
-  selectUserDataForApplyStorePurchase2,
   selectUserDataForReconcileFederalStatuses,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations,
   updateStoreEntitlementRevocationForMigrateStoreEntitlementRevocations2,
@@ -99,7 +97,7 @@ export interface StoreGrant {
 }
 
 export type GrantOutcome =
-  | { status: "granted"; reputationPoints?: number; federalStatus?: FederalStatus }
+  | { status: "granted" }
   | { status: "duplicate" }
   | { status: "ignored"; reason: string };
 
@@ -540,13 +538,7 @@ const applyStorePurchase = async (
       throw new Error(`Could not apply store receipt ${grant.transactionId}`);
     }
 
-    if (reps) return { status: "granted", reputationPoints: reps.reputationPoints };
-    const target = federal?.federalStatus ?? "NONE";
-    const [updated] = await selectUserDataForApplyStorePurchase2(
-      client,
-      recipientUserId,
-    );
-    return { status: "granted", federalStatus: updated?.federalStatus ?? target };
+    return { status: "granted" };
   } catch (error) {
     if (!isMysqlDeadlockError(error)) {
       Sentry.captureException(error, {
@@ -565,8 +557,8 @@ export interface StoreExtension {
   productId: string;
   expirationAt: Date;
   transactionId?: string | null;
-  /** Match the receipt environment when the lifecycle event supplies it. */
-  isSandbox?: boolean;
+  /** Match the receipt environment. */
+  isSandbox: boolean;
 }
 
 /**
@@ -620,7 +612,7 @@ const applyStoreExtension = async (
   extension: StoreExtension,
 ): Promise<void> => {
   const canonicalUserId = await canonicalStoreUserId(client, extension.userId);
-  const isSandbox = extension.isSandbox ?? false;
+  const { isSandbox } = extension;
   const exact = extension.transactionId
     ? await findStorePurchaseForApplyStoreExtension(
         client,
@@ -717,17 +709,17 @@ const applyStoreExtension = async (
 
 export interface RevocationScope {
   /** Stable webhook event id, used to deduplicate the durable expiry fact. */
-  eventId?: string;
+  eventId: string;
   /** The moment the store says the subscription ended. */
   occurredAt: Date;
   /** The product that expired. Absent only on payloads that do not name one. */
   productId?: string | null;
   /** The store it expired on, so an Apple lapse cannot retire a Google receipt. */
-  store?: StorePlatform | null;
+  store: StorePlatform;
   /** The expiring store transaction, when RevenueCat supplies it. */
   transactionId?: string | null;
   /** Match the receipt environment rather than trusting the payload account's allowlist. */
-  isSandbox?: boolean;
+  isSandbox: boolean;
 }
 
 /**
@@ -755,18 +747,16 @@ const applyFederalRevocation = async (
   scope: RevocationScope,
 ): Promise<void> => {
   userId = await canonicalStoreUserId(client, userId);
-  const { occurredAt, productId, store, transactionId } = scope;
-  const isSandbox = scope.isSandbox ?? false;
-  const exact =
-    transactionId && store
-      ? await findStorePurchaseForApplyFederalRevocation(
-          client,
-          transactionId,
-          store,
-          productId,
-          isSandbox,
-        )
-      : undefined;
+  const { eventId, occurredAt, productId, store, transactionId, isSandbox } = scope;
+  const exact = transactionId
+    ? await findStorePurchaseForApplyFederalRevocation(
+        client,
+        transactionId,
+        store,
+        productId,
+        isSandbox,
+      )
+    : undefined;
   // Revoking the receipt and recomputing the shared status are separate writes on
   // PlanetScale. A retry must repair the second write if the first delivery failed after
   // stamping revokedAt.
@@ -797,9 +787,7 @@ const applyFederalRevocation = async (
   // Anything bought after it is a resubscribe, and survives.
   //
   // The event's own timestamp is the fallback for a payload that names no product.
-  const possibleOwners = store
-    ? await transferChainUserIds(client, userId, store, isSandbox)
-    : [userId];
+  const possibleOwners = await transferChainUserIds(client, userId, store, isSandbox);
   const candidates =
     !exact && productId
       ? await listStorePurchaseForApplyFederalRevocation(
@@ -813,9 +801,13 @@ const applyFederalRevocation = async (
       : [];
   let spent = exact;
   for (const candidate of candidates) {
-    const owner = store
-      ? await transferredUserId(client, userId, store, isSandbox, candidate.purchasedAt)
-      : userId;
+    const owner = await transferredUserId(
+      client,
+      userId,
+      store,
+      isSandbox,
+      candidate.purchasedAt,
+    );
     if (owner === candidate.userId) {
       spent = candidate;
       break;
@@ -823,9 +815,6 @@ const applyFederalRevocation = async (
   }
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
   const applicableTransactionId = transactionId ?? spent?.transactionId ?? null;
-  const eventId =
-    scope.eventId ??
-    `scope:${applicableTransactionId ?? productId ?? "all"}:${occurredAt.toISOString()}`;
   const receiptId = exact?.id ?? spent?.id ?? null;
   // A transfer can move the receipt while this runs, and a stamp scoped to an owner it has
   // left retires nothing. So each pass stamps the current holder and then reads the
@@ -837,34 +826,30 @@ const applyFederalRevocation = async (
   let ownerUserId =
     exact?.userId ??
     spent?.userId ??
-    (store
-      ? await transferredUserId(client, userId, store, isSandbox, occurredAt)
-      : userId);
+    (await transferredUserId(client, userId, store, isSandbox, occurredAt));
   for (let pass = 0; pass < 5; pass++) {
     retired.add(ownerUserId);
-    if (store) {
-      await insertStoreEntitlementRevocationForApplyFederalRevocation(
-        client,
-        eventId,
-        ownerUserId,
-        store,
-        isSandbox,
-        productId,
-        applicableTransactionId,
-        cutoff,
-        occurredAt,
-      );
-      // Persist the cutoff before touching receipts. If the purchase webhook has not
-      // inserted its row yet, or races this handler, the grant's atomic claim checks this
-      // watermark and cannot resurrect a subscription period the store has already ended.
-      await insertStoreEntitlementStateForApplyFederalRevocation(
-        client,
-        ownerUserId,
-        store,
-        isSandbox,
-        cutoff,
-      );
-    }
+    await insertStoreEntitlementRevocationForApplyFederalRevocation(
+      client,
+      eventId,
+      ownerUserId,
+      store,
+      isSandbox,
+      productId,
+      applicableTransactionId,
+      cutoff,
+      occurredAt,
+    );
+    // Persist the cutoff before touching receipts. If the purchase webhook has not
+    // inserted its row yet, or races this handler, the grant's atomic claim checks this
+    // watermark and cannot resurrect a subscription period the store has already ended.
+    await insertStoreEntitlementStateForApplyFederalRevocation(
+      client,
+      ownerUserId,
+      store,
+      isSandbox,
+      cutoff,
+    );
     await updateStorePurchaseForApplyFederalRevocation(
       client,
       ownerUserId,
@@ -898,8 +883,8 @@ export interface StoreTransfer {
   toUserIds: string[];
   /** Missing when neither RevenueCat's store nor configured app id identifies a platform. */
   store?: StorePlatform | null;
-  /** RevenueCat environment. Omitted legacy callers are treated as production. */
-  isSandbox?: boolean;
+  /** RevenueCat environment. */
+  isSandbox: boolean;
   /** RevenueCat event time, used to reject a delayed older ownership redirect. */
   occurredAt: Date;
 }
@@ -1080,7 +1065,7 @@ const applyStoreTransfer = async (
   }
   const sourceIds = fromIds.filter((id) => id !== destinationUserId);
   const stores = transfer.store ? [transfer.store] : [...STORE_PLATFORMS];
-  const isSandbox = transfer.isSandbox ?? false;
+  const { isSandbox } = transfer;
 
   let rowsAffected = 0;
   const effectiveDestinations = new Set<string>([destinationUserId]);
@@ -1249,29 +1234,6 @@ const paypalFederalFloor = async (
     PAYPAL_WINDOW_MS,
   );
   return highest(rows.map((row) => row.federalStatus));
-};
-
-/**
- * The tier a store subscription still vouches for, or `NONE`.
- *
- * A receipt outlives the subscription it paid for, so the row alone cannot say whether the
- * player is still a subscriber — `revokedAt` is what separates the two, stamped by
- * `revokeFederalStatus` when the store reports the subscription has ended. Reading it here
- * rather than inferring from the player's current status is what lets the PayPal writers
- * take a tier away once all sources have finished, while still refusing to take one away
- * from a store subscription that is very much alive.
- */
-export const storeFederalFloor = async (
-  client: DrizzleClient,
-  userId: string,
-): Promise<FederalStatus> => {
-  const rows = await listStorePurchaseForStoreFederalFloor(
-    client,
-    userId,
-    isSandboxGrantee,
-    STORE_WINDOW_MS,
-  );
-  return highest(rows.map((row) => row.federalStatus ?? "NONE"));
 };
 
 /**

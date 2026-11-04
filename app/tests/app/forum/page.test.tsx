@@ -11,7 +11,6 @@ import Forum from "@/app/[shell]/forum/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 let params: URLSearchParams;
@@ -20,7 +19,6 @@ let queryClient: QueryClient;
 let requests: RouterInputs["forum"]["getThreads"][];
 
 beforeEach(() => {
-  ensureDom();
   originalUrl = window.location.href;
   params = new URLSearchParams("view=latest&tag=guide&board=board&author=reader&since=2026-01-01&until=2026-12-31");
   requests = [];

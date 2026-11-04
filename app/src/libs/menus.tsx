@@ -25,7 +25,6 @@ import { type ReactNode, useMemo } from "react";
 import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
-import { calcIsInVillage } from "@/libs/travel";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
@@ -35,10 +34,8 @@ export interface NavBarDropdownLink {
   href: string;
   name: string;
   requireAwake?: boolean;
-  className?: string;
   color?: "default" | "red" | "green" | "blue" | "toast" | "hidden";
   icon?: ReactNode;
-  onClick?: () => Promise<void>;
   group?: string;
   notificationCount?: number;
   /** If true, notification will be shown even when user is on the same page as href */
@@ -97,6 +94,7 @@ export const BUGS_NAV_LINK: NavBarDropdownLink = {
   icon: <Bug className="h-6 w-6" />,
 };
 
+/** Build game navigation from the current player state, public route and notifications. */
 export const useGameMenu = () => {
   const { data: userData } = useUserDataSelector((user) => ({
     sector: user.sector,
@@ -228,14 +226,11 @@ export const useGameMenu = () => {
     !!sector &&
     findVillageUserRelationship(sector, userData?.villageId ?? "syndicate")?.status ===
       "ALLY";
-  // Position matters only when it changes village access or the structure offered by the menu.
+  // Position matters only when it changes the structure offered by the menu.
   const { data: arrival } = useUserDataSelector((user) => ({
     canVisit:
       !!sector &&
-      ((calcIsInVillage({ x: user.longitude, y: user.latitude }) &&
-        (ownSector || isAllied)) ||
-        user.isOutlaw ||
-        sector.type === "SAFEZONE"),
+      (ownSector || isAllied || user.isOutlaw || sector.type === "SAFEZONE"),
     structureId:
       pathname === "/travel" && (ownSector || isAllied)
         ? sector?.structures?.find(

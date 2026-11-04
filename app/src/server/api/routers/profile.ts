@@ -623,16 +623,8 @@ export const profileRouter = createTRPCRouter({
       const targetName = target.username;
       // Mutate
       if (!entry) {
-        const result = await insertUserBlackListForToggleBlacklistEntry(
-          ctx.drizzle,
-          ctx,
-          input,
-        );
-        if (result.rowsAffected === 0) {
-          return { success: false, message: `Failed to add ${targetName}` };
-        } else {
-          return { success: true, message: `Added ${targetName} to blacklist` };
-        }
+        await insertUserBlackListForToggleBlacklistEntry(ctx.drizzle, ctx, input);
+        return { success: true, message: `Added ${targetName} to blacklist` };
       } else {
         await deleteUserBlackListForToggleBlacklistEntry(ctx.drizzle, entry);
         return { success: true, message: `Removed ${targetName} from blacklist` };
@@ -1282,7 +1274,7 @@ export const profileRouter = createTRPCRouter({
         return errorResponse(
           "This AI is used by a hunting contract. Remove the target first.",
         );
-      if (ai?.isAi) {
+      if (ai.isAi) {
         const rejected = await deleteUser(ctx.drizzle, ai.userId);
         if (rejected) return rejected;
         await outdateProposalsFor(
@@ -1305,7 +1297,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village, sageExists, _villages] = await Promise.all([
+      const [user, target, village, sageExists] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForUpdateUser(ctx.drizzle, input),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
@@ -1314,7 +1306,6 @@ export const profileRouter = createTRPCRouter({
               data: { sageModeId: input.data.sageModeId },
             })
           : Promise.resolve(null),
-        fetchVillages(ctx.drizzle),
       ]);
       // Basic existence guards
       if (!village) return errorResponse("Village not found");
@@ -2283,7 +2274,7 @@ export const profileRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForGetSeichiSilverForStaff(ctx.drizzle, input),
       ]);
-      if (!actor || actor.isBanned || !canEditSeichiSilver(actor.role)) return 0;
+      if (actor.isBanned || !canEditSeichiSilver(actor.role)) return 0;
       return target?.seichiSilver ?? 0;
     }),
   // Adjust Seichi Silver for a user (staff only)
@@ -2297,7 +2288,6 @@ export const profileRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, input.userId),
       ]);
       // Guards
-      if (!actor || !target) return errorResponse("User not found");
       if (actor.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canEditSeichiSilver(actor.role)) {
@@ -2351,10 +2341,6 @@ export const profileRouter = createTRPCRouter({
       ]);
 
       // Guards
-      if (!awarder || !target) {
-        return errorResponse("User not found");
-      }
-
       if (awarder.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canAwardExperience(awarder)) {
@@ -3133,16 +3119,6 @@ const fetchUpdatedUserOnce = async (
     const now = new Date();
     const newDay = isDifferentDay(now, user.updatedAt);
 
-    // Check if travel should be completed automatically
-    if (user.status === "TRAVEL" && user.travelFinishAt && user.travelFinishAt <= now) {
-      user.status = "AWAKE";
-      user.travelFinishAt = null;
-      forceRegen = true;
-      requiresUserRefresh = true;
-      requiresProgressionRefresh = true;
-      toastMessages.push("You have arrived at your destination!");
-    }
-
     // Figure out if we're running update
     const sinceUpdate = secondsPassed(user.updatedAt);
     const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
@@ -3625,7 +3601,6 @@ export const splitAchievementProgress = (
   });
   return progress;
 };
-export type FetchedPublicUsers = Awaited<ReturnType<typeof fetchPublicUsers>>;
 
 /**
  * Scale an edited AI row to its level before it is saved. Changed combat stats are the

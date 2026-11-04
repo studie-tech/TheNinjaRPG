@@ -98,7 +98,7 @@ describeWithDatabase("Elite Jonin jutsu progression", () => {
     await db.update(userJutsu).set({ level: 24, experience: 900 }).where(eq(userJutsu.id, "owned-ordinary"));
     await db.update(userData).set({ status: "BATTLE", battleId: "xp-battle" }).where(eq(userData.userId, USER));
     const snapshot = makeCompleteBattle({ id: "xp-battle", rewardScaling: 1, extraState: { jutsus: { elite: definition("elite") as never, ordinary: definition("ordinary", "JONIN") as never } }, usersState: [
-      makeBattleUser(USER, { isAi: false, isSummon: false, rank: "ELITE JONIN", pvpStreak: 0, sector: 335, villageId: "red", curHealth: 100, originalMoney: 0, usedActions: [{ id: "elite", type: "jutsu" }, { id: "ordinary", type: "jutsu" }] }),
+      makeBattleUser(USER, { isAi: false, isSummon: false, rank: "ELITE JONIN", pvpStreak: 0, sector: 335, villageId: "red", curHealth: 100, usedActions: [{ id: "elite", type: "jutsu" }, { id: "ordinary", type: "jutsu" }] }),
       makeBattleUser("opponent", { curHealth: 0, isAi: false, isSummon: false, rank: "ELITE JONIN", pvpStreak: 0, sector: 335, villageId: "blue" }),
     ] });
     const result = calcBattleResult(snapshot, USER, []);

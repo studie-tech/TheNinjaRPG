@@ -1,6 +1,5 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { cookies } from "next/headers";
 import { OPENAI_REVIEW_MODEL, TERR_BOT_ID } from "@/drizzle/constants";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import { listUserDataForGET, listUserReviewForGET } from "@/queries/reports";
@@ -19,9 +18,6 @@ const TIMER_NAME = "timer-720h";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const frequency = 24 * 30;

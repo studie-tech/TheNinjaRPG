@@ -38,15 +38,6 @@ export const listSageModeForGetAllNames = (
     orderBy: (table, { asc }) => [asc(table.name)],
   });
 
-/** Build the `sageMode` listing for `getAllNamesForEdit`. */
-export const listSageModeForGetAllNamesForEdit = (
-  client: Pick<DrizzleClient, "query">,
-) =>
-  client.query.sageMode.findMany({
-    columns: { id: true, name: true, image: true },
-    orderBy: (table, { asc }) => [asc(table.name)],
-  });
-
 /** Build the `sageMode` listing for `getAll`, using the configured predicates. */
 export const listSageModeForGetAll = (
   client: Pick<DrizzleClient, "query">,

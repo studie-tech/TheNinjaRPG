@@ -386,6 +386,7 @@ export const paypalRouter = createTRPCRouter({
       };
     }),
 
+  /** Reconcile an existing provider order without initiating or retrying payment capture. */
   resolveOrder: protectedProcedure
     .input(z.strictObject({ orderId: z.string().min(15).max(20) }))
     .output(baseServerResponse)
@@ -394,38 +395,38 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse("Use the in-app store to purchase in the native app.");
       const token = await getPaypalAccessToken();
       const order = await getPaypalOrder({ orderId: input.orderId, token: token });
-      // Guarding
       if (order === undefined) {
         throw serverError("INTERNAL_SERVER_ERROR", "Could not fetch order");
       }
       const unit = order.purchase_units?.[0];
       const snapshotId = readStoreCustomId(unit?.custom_id);
       if (snapshotId) {
-        const capture = unit?.payments?.captures?.[0];
+        const snapshot = await findWebStoreOrderById(ctx.drizzle, snapshotId);
+        if (!snapshot || snapshot.buyerId !== ctx.userId)
+          return errorResponse("This checkout belongs to another account");
+        if (
+          order.purchase_units?.length !== 1 ||
+          unit?.invoice_id !== snapshot.id ||
+          unit.amount?.currency_code !== "USD" ||
+          !unit.amount.value ||
+          !/^\d+(?:\.\d{1,2})?$/.test(unit.amount.value) ||
+          Math.round(Number(unit.amount.value) * 100) !== snapshot.priceCents
+        )
+          return errorResponse("Payment does not match this checkout.");
+        const capture = unit.payments?.captures?.[0];
         if (isDeclinedStoreCapture(capture?.status)) {
-          const snapshot = await findWebStoreOrderById(ctx.drizzle, snapshotId);
-          if (
-            snapshot?.buyerId === ctx.userId &&
-            snapshot.captureAttemptId &&
-            order.purchase_units?.length === 1 &&
-            unit?.invoice_id === snapshot.id &&
-            unit.amount?.currency_code === "USD" &&
-            unit.amount.value &&
-            /^\d+(?:\.\d{1,2})?$/.test(unit.amount.value) &&
-            Math.round(Number(unit.amount.value) * 100) === snapshot.priceCents
-          ) {
+          if (snapshot.captureAttemptId)
             await releaseDeclinedStoreCapture(
               ctx.drizzle,
               snapshotId,
               ctx.userId,
               snapshot.captureAttemptId,
             );
-          }
           return errorResponse(
             "PayPal declined the payment. No payment was captured. Start a new checkout with another payment method.",
           );
         }
-        if (capture?.status !== "COMPLETED")
+        if (unit.payments?.captures?.length !== 1 || capture?.status !== "COMPLETED")
           return errorResponse(
             "Payment is not completed yet. Retry using Lookup Transaction after it clears.",
           );

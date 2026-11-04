@@ -361,7 +361,6 @@ describeWithDatabase("committed profile cache patches", () => {
   });
 
   it("keeps full refreshes for pending energy queue settlement", async () => {
-    const db = await getTestDatabase();
     await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
     const caller = await callerFor(blackMarketRouter, userId);
     expect((await caller.buyItemSlot()).userDelta).toBeUndefined();

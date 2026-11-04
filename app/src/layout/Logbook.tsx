@@ -753,7 +753,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                     : undefined
                 }
               />
-              <EventTimer quest={quest} tracker={tracker} />
+              <EventTimer quest={quest} />
             </div>
             {!["tier", "daily"].includes(quest.questType) && quest.description && (
               <div data-reading-text>{parseHtml(quest.description)}</div>

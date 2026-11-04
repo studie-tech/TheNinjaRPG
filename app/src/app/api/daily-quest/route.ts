@@ -1,5 +1,4 @@
 import { and, eq, gte, or, sql } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { questHistory, userData } from "@/drizzle/schema";
 import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
@@ -33,33 +32,9 @@ const ACTIVE_WINDOW_SECONDS = 60 * 60 * 24 * 7;
 /** Timer value marking a run that closed the dailies but did not finish assigning them. */
 const RESUME_PENDING = 1;
 
-/**
-TO VALIDATE USERS WITH DAILIES RUN: 
-
-SELECT 
-    u.userId,
-    u.username,
-    u.`rank`,
-    u.`level`,
-    u.villageId
-FROM `UserData` u
-WHERE u.isAi = 0 AND u.level > 6
-AND u.userId NOT IN (
-    SELECT qh.userId 
-    FROM `QuestHistory` qh 
-    WHERE qh.questType = 'daily' 
-        AND qh.completed = 0 
-        AND qh.endedAt IS NULL
-)
-ORDER BY u.`rank`, u.`level`;
-*/
-
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
@@ -89,7 +64,7 @@ export async function GET(request: Request) {
 
     // Book-keeping to do upsert afterwards more efficiently
     const memory: {
-      questId: string;
+      quest: (typeof dailies)[number];
       size: number;
       combos: {
         rank: UserRank;
@@ -101,13 +76,11 @@ export async function GET(request: Request) {
     // For each user rank+village+level combo, get a random daily quest
     for (const config of userRankPerVillageLevel) {
       const { rank, villageId, level, count } = config;
-      const village = villages?.find(
-        (v: (typeof villages)[number]) => v.id === villageId,
-      );
+      const village = villages.find((v) => v.id === villageId);
       const questRanks = availableQuestLetterRanks(rank);
       if (village && questRanks.length > 0) {
         const requiredVillage =
-          village.type === "OUTLAW" ? VILLAGE_SYNDICATE_ID : (village.id ?? "");
+          village.type === "OUTLAW" ? VILLAGE_SYNDICATE_ID : village.id;
         const newDaily = [...dailies]
           .sort(() => Math.random() - 0.5)
           .find(
@@ -118,10 +91,10 @@ export async function GET(request: Request) {
               getQuestMaxLevel(q) >= level,
           );
         if (newDaily) {
-          const entry = memory.find((m) => m.questId === newDaily.id);
+          const entry = memory.find((m) => m.quest.id === newDaily.id);
           if (!entry) {
             memory.push({
-              questId: newDaily.id,
+              quest: newDaily,
               size: count,
               combos: [{ rank, villageId: village.id, level }],
             });
@@ -153,15 +126,11 @@ export async function GET(request: Request) {
     // scratch; running out of budget instead leaves a resume marker for the next tick.
     memory.sort((a, b) => a.size - b.size);
     for (const m of memory) {
-      const newDaily = dailies.find(
-        (q: (typeof dailies)[number]) => q.id === m.questId,
-      );
-      if (!newDaily) continue;
       const finished =
         Date.now() < deadline &&
         (await upsertQuestEntries(
           drizzleDB,
-          newDaily,
+          m.quest,
           and(
             eq(userData.isAi, false),
             gte(userData.updatedAt, activeSince),

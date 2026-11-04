@@ -1,7 +1,6 @@
 import sgMail from "@sendgrid/mail";
 import * as Sentry from "@sentry/nextjs";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/hourly-emails-reminder/route";
 import { EMAIL_REMINDER_EXPERIENCE_REWARD } from "@/drizzle/constants";
 import { emailReminder, userData } from "@/drizzle/schema";
@@ -35,7 +34,6 @@ describeWithDatabase("hourly email reminders", () => {
     });
     stubDatabase(db);
     stubCronAuth(() => null);
-    vi.spyOn(headers, "cookies").mockResolvedValue({} as never);
     vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({
       ...timerClaimFixture(),
       release: vi.fn(async () => true),

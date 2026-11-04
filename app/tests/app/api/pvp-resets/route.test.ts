@@ -1,4 +1,3 @@
-import * as nextHeaders from "next/headers";
 import * as gameSettings from "@/libs/gamesettings";
 import {
   resetServerModuleStubs,
@@ -52,7 +51,6 @@ describe("PvP reset crons", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(nextHeaders, "cookies").mockResolvedValue(undefined as never);
     vi.spyOn(gameSettings, "lockWithDailyTimer").mockImplementation(
       mocks.dailyLock,
     );

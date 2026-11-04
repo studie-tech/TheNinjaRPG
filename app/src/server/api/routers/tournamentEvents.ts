@@ -327,9 +327,6 @@ export const eventTournamentProcedures = {
               game.deadline = now + EVENT_TOURNAMENT_READY_SECONDS * 1000;
             }
           }
-        } else if (input.action === "RECOVER") {
-          // Launch recovery is handled by sync: never relaunch a battle with the same ID.
-          return "Recovery synchronized; unfinished battles remain under combat ownership";
         }
         audit(
           event,
@@ -481,8 +478,9 @@ const editEvent = async (
 };
 
 /**
- * Reconcile combat results, recover abandoned launches and apply scheduled starts or event
- * expiry. Terminal events retry unpaid rewards; unscheduled rounds remain under staff control.
+ * Reconcile combat results, recover abandoned launches (never relaunching a battle with the
+ * same ID) and apply scheduled starts or event expiry. Terminal events retry unpaid rewards;
+ * unscheduled rounds remain under staff control.
  * Return whether a write or competing claim requires readers to refresh their loaded snapshot.
  */
 export const syncEventTournament = async (

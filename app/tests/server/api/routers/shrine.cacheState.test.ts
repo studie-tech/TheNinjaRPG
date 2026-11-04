@@ -58,9 +58,6 @@ describeWithDatabase("committed shrine cache state", () => {
       shrineLevel: 3,
       nextMaintainanceDueDate: maintenanceAt,
     });
-    stubProfile("fetchUser", async (_client: unknown, id: string) =>
-      db.query.userData.findFirst({ where: eq(userData.userId, id) }),
-    );
     stubProfile("fetchUpdatedUser", async () => {
       const [user, currentVillage] = await Promise.all([
         db.query.userData.findFirst({ where: eq(userData.userId, userId) }),

@@ -28,7 +28,6 @@ rm -f "$nvm_installer"
 . ~/.nvm/nvm.sh
 nvm install 18
 nvm use 18
-source ~/.bashrc
 node -e "console.log('Running Node.js ' + process.version)"
 
 # Install Soketi & pm2
@@ -42,7 +41,6 @@ pm2 start soketi -- start --config=config.json
 # Install nginx
 sudo yum install nginx -y
 sudo systemctl start nginx.service
-#sudo systemctl status nginx.service
 
 # Copy in nginx config
 sudo cp -rf nginx.conf /etc/nginx/

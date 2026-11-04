@@ -1,6 +1,6 @@
 import { canBootstrapQuestType } from "@/deltas/profile";
 
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";
 import { fetchQuestBootstrap } from "../../../../../src/server/api/routers/profile";
 import { fetchUncompletedQuests } from "../../../../../src/server/api/routers/quests";

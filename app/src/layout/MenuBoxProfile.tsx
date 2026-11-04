@@ -244,10 +244,8 @@ const MenuBoxProfile: React.FC = () => {
           <Link href="/profile">
             <AvatarImage
               href={userData?.avatar}
-              userId={userData?.userId}
               alt={userData?.username}
               className="theme-player-avatar"
-              refetchUserData={true}
               size={100}
               hover_effect={true}
               priority
@@ -955,124 +953,99 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const sealEffects = filteredEffects.filter((e) => e.type === "seal" && !e.isNew);
 
   // Collapse consequences based on their type & calculation type
-  const collapsedEffects: CollapsedEffect[] =
-    filteredEffects
-      .filter(isEffectActive)
-      .filter((e) => e.targetId === userId)
-      .filter((e) => e.rounds === undefined || e.rounds > 0)
-      .reduce((acc, val) => {
-        const masteryTypes = ("masteryTypes" in val && val?.masteryTypes) || [];
-        const stats = [
-          ...getStatTypeLabels(val),
-          ...masteryTypes,
-          ...(("generalTypes" in val && val?.generalTypes) || []),
-          ...(("elements" in val && val?.elements) || []),
-          ...(("actionsAffected" in val && val?.actionsAffected) || []),
-          ...(("poolsAffected" in val && val?.poolsAffected) || []),
-        ];
-        const isSealed = sealCheck(val, sealEffects);
-        let cats = stats.length === 0 ? ["All"] : stats;
-        const JUTSU_CATS = ["Taijutsu", "Ninjutsu", "Genjutsu", "Bukijutsu"];
-        // Masteries also span Bloodline and Sage, so four jutsu masteries are not "All".
-        if (masteryTypes.length === 0 && JUTSU_CATS.every((jc) => cats.includes(jc))) {
-          cats = cats.filter((c) => !JUTSU_CATS.includes(c));
-          cats.push("All");
-        }
-        const dual = val.type.includes("increase") || val.type.includes("decrease");
-        let baseType = dual
-          ? val.type.replace("increase", "").replace("decrease", "")
-          : val.type;
-        // Normalize maxpools to pools for display
-        if (baseType === "maxpools") {
-          baseType = "pools";
-        }
-        const sign = val.type.includes("decrease") ? -1 : 1;
+  const collapsedEffects: CollapsedEffect[] = filteredEffects
+    .filter(isEffectActive)
+    .filter((e) => e.targetId === userId)
+    .filter((e) => e.rounds === undefined || e.rounds > 0)
+    .reduce((acc, val) => {
+      const masteryTypes = ("masteryTypes" in val && val?.masteryTypes) || [];
+      const stats = [
+        ...getStatTypeLabels(val),
+        ...masteryTypes,
+        ...(("generalTypes" in val && val?.generalTypes) || []),
+        ...(("elements" in val && val?.elements) || []),
+        ...(("actionsAffected" in val && val?.actionsAffected) || []),
+        ...(("poolsAffected" in val && val?.poolsAffected) || []),
+      ];
+      const isSealed = sealCheck(val, sealEffects);
+      let cats = stats.length === 0 ? ["All"] : stats;
+      const JUTSU_CATS = ["Taijutsu", "Ninjutsu", "Genjutsu", "Bukijutsu"];
+      // Masteries also span Bloodline and Sage, so four jutsu masteries are not "All".
+      if (masteryTypes.length === 0 && JUTSU_CATS.every((jc) => cats.includes(jc))) {
+        cats = cats.filter((c) => !JUTSU_CATS.includes(c));
+        cats.push("All");
+      }
+      const dual = val.type.includes("increase") || val.type.includes("decrease");
+      let baseType = dual
+        ? val.type.replace("increase", "").replace("decrease", "")
+        : val.type;
+      // Normalize maxpools to pools for display
+      if (baseType === "maxpools") {
+        baseType = "pools";
+      }
+      const sign = val.type.includes("decrease") ? -1 : 1;
 
-        // Clean, targeted handling for wound effects only
-        let value: number;
+      // Clean, targeted handling for wound effects only
+      let value: number;
 
-        if (val.type === "wound" && val.timeTracker?.originalDamage !== undefined) {
-          // Convert wound percentage to actual damage amount
-          const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
-          const od = val.timeTracker.originalDamage || 0;
-          value = -Math.floor(od * (woundPower / 100));
-        } else if (val.type === "parry" || val.type === "curse") {
-          value = Math.abs(getEffectPower(val));
-        } else {
-          // Standard processing for all other effects
-          value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
-          if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
-        }
-        cats.forEach((cat) => {
-          const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
-          const found = acc.find(
-            (e: CollapsedEffect) =>
-              e.type === baseType &&
-              e.calculation === val.calculation &&
-              e.category === cat &&
-              e.sealed === isSealed &&
-              e.blocks === valBlocks,
-          );
-          if (found) {
-            // Diffuse uses the strongest active percentage rather than adding effects.
-            found.value =
-              val.type === "diffuse"
-                ? Math.max(found.value, value)
-                : found.value + value;
-            if (val.type === "parry") {
-              found.value = Math.min(PARRY_MAX_PERCENTAGE, found.value);
-            }
-            if (val.rounds) found.rounds.push(val.rounds);
-          } else {
-            acc.push({
-              type: baseType,
-              value: isSealed ? 0 : value,
-              category: cat as EffectCategory,
-              calculation: val.calculation,
-              upDownEffect: dual,
-              rounds: val.rounds ? [val.rounds] : [],
-              sealed: isSealed,
-              blocks: valBlocks,
-            });
+      if (val.type === "wound" && val.timeTracker?.originalDamage !== undefined) {
+        // Convert wound percentage to actual damage amount
+        const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
+        const od = val.timeTracker.originalDamage || 0;
+        value = -Math.floor(od * (woundPower / 100));
+      } else if (val.type === "parry" || val.type === "curse") {
+        value = Math.abs(getEffectPower(val));
+      } else {
+        // Standard processing for all other effects
+        value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
+        if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
+      }
+      cats.forEach((cat) => {
+        const valBlocks = "blocks" in val ? (val.blocks as string) : undefined;
+        const found = acc.find(
+          (e: CollapsedEffect) =>
+            e.type === baseType &&
+            e.calculation === val.calculation &&
+            e.category === cat &&
+            e.sealed === isSealed &&
+            e.blocks === valBlocks,
+        );
+        if (found) {
+          // Diffuse uses the strongest active percentage rather than adding effects.
+          found.value =
+            val.type === "diffuse" ? Math.max(found.value, value) : found.value + value;
+          if (val.type === "parry") {
+            found.value = Math.min(PARRY_MAX_PERCENTAGE, found.value);
           }
-        });
-        return acc;
-      }, [] as CollapsedEffect[]) || [];
+          if (val.rounds) found.rounds.push(val.rounds);
+        } else {
+          acc.push({
+            type: baseType,
+            value: isSealed ? 0 : value,
+            category: cat as EffectCategory,
+            calculation: val.calculation,
+            upDownEffect: dual,
+            rounds: val.rounds ? [val.rounds] : [],
+            sealed: isSealed,
+            blocks: valBlocks,
+          });
+        }
+      });
+      return acc;
+    }, [] as CollapsedEffect[]);
 
   // ------------ UI helpers ------------
   const valueTxt = (e: CollapsedEffect) => {
-    // Special handling for wound effects - show actual damage instead of percentage
-    if (e.type === "wound") {
-      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}`;
-    }
-    // Special handling for heal effects - show as multiplicative
-    if (e.type === "heal" && e.calculation === "percentage") {
-      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}%`;
-    }
-    // Special handling for pools - show pool name in the value text
-    if (e.type === "pools") {
-      return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${e.calculation === "percentage" ? "%" : ""}`;
-    }
-    // Standard handling for all other effects
-    return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${e.calculation === "percentage" ? "%" : ""}`;
+    // Wound values are already converted to damage amounts
+    const pct = e.type !== "wound" && e.calculation === "percentage" ? "%" : "";
+    return `${e.value > 0 ? "+" : ""}${Math.round(e.value)}${pct}`;
   };
   const roundsTxt = (e: CollapsedEffect) =>
     e.rounds.length > 0 ? `↻ ${Math.max(...e.rounds)}` : "";
 
   const renderCompact = (e: CollapsedEffect, i: number) => {
-    // Determine if this effect is beneficial (green) or detrimental (red)
-    const isPositiveEffect = (() => {
-      switch (e.type) {
-        case "damagegiven":
-          return e.value > 0; // More damage dealt is good
-        case "damagetaken":
-          return e.value < 0; // Less damage taken is good
-        case "heal":
-          return e.value > 0; // More heal given is good
-        default:
-          return e.value > 0; // Fallback for other types
-      }
-    })();
+    // Less damage taken is good; for everything else, more is good
+    const isPositiveEffect = e.type === "damagetaken" ? e.value < 0 : e.value > 0;
 
     return (
       <div
@@ -1118,7 +1091,6 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     "stunprevent",
     "moveprevent",
     "sealprevent",
-    "rangeprevent",
     "range",
     "onehitkillprevent",
     "summonprevent",
@@ -1207,10 +1179,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     drain: "Drain",
     poison: "Poison",
     lifesteal: "Lifesteal",
-    wound: "Wound",
-    increaserange: "Increase Range",
-    increasecooldown: "Increase Cooldown",
-    decreasecooldown: "Decrease Cooldown",
+    range: "Range",
     fleeprevent: "Cannot Flee",
     robprevent: "Cannot be Robbed",
     buffprevent: "Cannot be Buffed",
@@ -1231,7 +1200,6 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
     finalstand: "Final Stand",
     clear: "Clear Positives",
     cleanse: "Cleanse Debuffs",
-    injectjutsus: "Added Action",
     timecompression: "Time Compression",
     timedilation: "Time Dilation",
     redirection: "Redirection",
@@ -1474,10 +1442,7 @@ const EffectRow: React.FC<EffectRowProps> = ({
   );
 };
 
-/**
- * Simplified effect visualization for ground effects
- * Shares logic with VisualizeEffects but without user-specific filtering
- */
+/** Ground effects grouped into buffs, debuffs and other effects */
 interface VisualizeGroundEffectsProps {
   effects: GroundEffect[];
 }
@@ -1487,44 +1452,29 @@ export const VisualizeGroundEffects: React.FC<VisualizeGroundEffectsProps> = ({
 }) => {
   if (effects.length === 0) return null;
 
-  // Group effects by type and classify as positive/negative
-  const groupedEffects = effects.reduce(
-    (acc, effect) => {
-      const isPositive = isPositiveUserEffect(effect);
-      const isNegative = isNegativeUserEffect(effect);
-      const category = isPositive ? "positive" : isNegative ? "negative" : "neutral";
+  const classified = effects.map((effect) => ({
+    effect,
+    isPositive: isPositiveUserEffect(effect),
+    isNegative: isNegativeUserEffect(effect),
+  }));
+  const positiveEffects = classified.filter((c) => c.isPositive);
+  const negativeEffects = classified.filter((c) => !c.isPositive && c.isNegative);
+  const neutralEffects = classified.filter((c) => !c.isPositive && !c.isNegative);
 
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(effect);
-      return acc;
-    },
-    {} as Record<string, GroundEffect[]>,
+  const renderEffect = (
+    { effect, isPositive, isNegative }: (typeof classified)[number],
+    index: number,
+  ) => (
+    <EffectRow
+      key={`${effect.id}-${index}`}
+      type={effect.type}
+      power={Math.abs(effect.power + effect.level * effect.powerPerLevel)}
+      calculation={effect.calculation}
+      roundsLeft={effect.rounds ?? 0}
+      isPositive={isPositive}
+      isNegative={isNegative}
+    />
   );
-
-  const renderEffect = (effect: GroundEffect, index: number) => {
-    const power = effect.power ?? 0;
-    const level = effect.level ?? 0;
-    const powerPerLevel = effect.powerPerLevel ?? 0;
-    const totalPower = Math.abs(power + level * powerPerLevel);
-
-    return (
-      <EffectRow
-        key={`${effect.id}-${index}`}
-        type={effect.type}
-        power={totalPower}
-        calculation={effect.calculation}
-        roundsLeft={effect.rounds ?? 0}
-        isPositive={isPositiveUserEffect(effect)}
-        isNegative={isNegativeUserEffect(effect)}
-      />
-    );
-  };
-
-  const positiveEffects = groupedEffects.positive || [];
-  const negativeEffects = groupedEffects.negative || [];
-  const neutralEffects = groupedEffects.neutral || [];
 
   return (
     <div className="flex flex-col gap-2 text-sm">

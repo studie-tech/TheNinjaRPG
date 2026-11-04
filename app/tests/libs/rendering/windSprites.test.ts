@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { BatchableSprite, BatcherPipe, BufferImageSource, InstructionSet, Matrix, Rectangle, type Renderer, type Shader, Sprite, Texture, type UniformGroup, type WebGLRenderer } from "pixi.js";
 import { createWindSprite, updateWindSprites, WindSprite, WindSpritePipe } from "@/libs/rendering/primitives/windSprites";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 beforeEach(() => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null));
 afterEach(() => vi.restoreAllMocks());
 

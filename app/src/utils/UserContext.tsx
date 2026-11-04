@@ -401,11 +401,9 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   // Get user information
   const {
     data: userData,
-    notifications,
     timeDiff,
     prepareUserUpdate,
     updateUser,
-    updateNotifications,
   } = useRequiredUserData();
   const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
   const isSectorKnown = !isLoadingSector;
@@ -429,10 +427,8 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   }, [userData, sectorVillage, router, isSectorKnown, structureRoute, ownVillage]);
   return {
     userData,
-    notifications,
     prepareUserUpdate,
     updateUser,
-    updateNotifications,
     sectorVillage,
     ownVillage,
     timeDiff,

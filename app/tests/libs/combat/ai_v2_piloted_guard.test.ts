@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
@@ -44,7 +44,6 @@ const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
     highestGenerals: [],
     iAmHere: true,
     originalLevel: 1,
-    originalMoney: 0,
     originalLongitude: 1,
     originalLatitude: 1,
     isOriginal: false,

@@ -7,11 +7,8 @@ import {
 } from "@/queries/farming";
 import type { DrizzleClient } from "@/server/db";
 
-type FarmCollectionSeed = Pick<
-  Item,
-  "isFarmSeed" | "hidden" | "farmYieldItemId" | "farmMinLevel" | "farmGrowTimeSeconds"
->;
-type FarmCollectionItem = Pick<Item, "id" | "name" | "image" | "hidden">;
+type FarmCollectionSeed = Pick<Item, "farmYieldItemId" | "farmMinLevel">;
+type FarmCollectionItem = Pick<Item, "id" | "name" | "image">;
 type FarmCollectionRow = Pick<FarmCollectionLog, "itemId" | "firstHarvestedAt">;
 
 export type FarmCollectionState = {
@@ -27,8 +24,9 @@ export type FarmCollectionState = {
 };
 
 /**
- * Builds the canonical crop catalog from item configuration. A crop appears once even
- * when multiple eligible seeds yield it, ordered by its lowest configured farming level.
+ * Builds the canonical crop catalog from eligible seeds and their visible yield items,
+ * as filtered by the catalog queries. A crop appears once even when multiple seeds
+ * yield it, ordered by its lowest configured farming level.
  */
 export const buildFarmCollectionState = (
   seeds: readonly FarmCollectionSeed[],
@@ -37,14 +35,7 @@ export const buildFarmCollectionState = (
 ): FarmCollectionState => {
   const minimumLevelByYieldId = new Map<string, number>();
   for (const seed of seeds) {
-    if (
-      !seed.isFarmSeed ||
-      seed.hidden ||
-      !seed.farmYieldItemId ||
-      seed.farmGrowTimeSeconds <= 0
-    ) {
-      continue;
-    }
+    if (!seed.farmYieldItemId) continue;
     const previous = minimumLevelByYieldId.get(seed.farmYieldItemId);
     if (previous === undefined || seed.farmMinLevel < previous) {
       minimumLevelByYieldId.set(seed.farmYieldItemId, seed.farmMinLevel);
@@ -55,7 +46,7 @@ export const buildFarmCollectionState = (
     collectionRows.map((row) => [row.itemId, row.firstHarvestedAt]),
   );
   const items = yieldItems
-    .filter((yieldItem) => !yieldItem.hidden && minimumLevelByYieldId.has(yieldItem.id))
+    .filter((yieldItem) => minimumLevelByYieldId.has(yieldItem.id))
     .sort((a, b) => {
       const levelDifference =
         (minimumLevelByYieldId.get(a.id) ?? 0) - (minimumLevelByYieldId.get(b.id) ?? 0);

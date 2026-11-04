@@ -10,14 +10,12 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
-import { ensureDom } from "../setup/dom.mjs";
 
 const createPoll = vi.fn<(data: CreatePollSchema) => void>();
 const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   createPoll.mockClear();

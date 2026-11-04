@@ -8,7 +8,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 
 type Result = UserDeltaResponse;
@@ -70,7 +69,6 @@ vi.mock("@/layout/ContentBox", () => ({
 vi.mock("@/libs/toast", createToastMock);
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   mocks.invalidate.mockImplementation(async () => undefined);
   mocks.client = undefined;
@@ -196,7 +194,6 @@ describe("Energy queue captcha recovery", () => {
       <EnergyTrainingQueue
         user={{ ...user, queue: queuedOffence }}
         availableEnergy={0}
-        getGuess={() => "answer"}
         refreshCaptcha={refreshCaptcha}
       />,
     );
@@ -214,7 +211,7 @@ describe("Energy queue captcha recovery", () => {
     expect(mocks.invalidate).not.toHaveBeenCalled();
   });
   it("refreshes when a successful save requires broader automatic reconciliation", async () => {
-    render(<EnergyTrainingQueue user={user} availableEnergy={100} getGuess={() => ""} refreshCaptcha={async () => {}} />);
+    render(<EnergyTrainingQueue user={user} availableEnergy={100} refreshCaptcha={async () => {}} />);
     await act(async () => {
       await mocks.callbacks?.onSettled({ success: true, message: "Training queue saved" }, null, { entries: [] }, mocks.callbacks?.onMutate());
     });
@@ -228,7 +225,7 @@ describe("Energy queue captcha recovery", () => {
 describe("Energy queue capped stats", () => {
   it("keeps queue removal available when all stats cap", () => {
     const { stats_cap, gens_cap } = getUserCaps(user.rank);
-    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
+    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} refreshCaptcha={async () => {}} />);
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [] }));
   });
@@ -267,7 +264,7 @@ describe("Energy queue profile recovery", () => {
     const observer = new QueryObserver(client, { queryKey: profileKey, queryFn: read, staleTime: Infinity });
     subscriptions.push(observer.subscribe(() => {}));
     mocks.invalidate.mockImplementation((_input, _filters, options) => client.invalidateQueries({ queryKey: profileKey }, options));
-    const props = { user: snapshot().userData, availableEnergy: 0, getGuess: () => "", refreshCaptcha: async () => {} };
+    const props = { user: snapshot().userData, availableEnergy: 0, refreshCaptcha: async () => {} };
     const view = render(<EnergyTrainingQueue {...props} />);
     return { client, read, snapshot, props, view };
   };

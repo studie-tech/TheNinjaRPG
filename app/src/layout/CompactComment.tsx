@@ -21,7 +21,7 @@ import type { ConversationComment } from "@/drizzle/schema";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
-import EmojiPicker from "@/layout/EmojiPicker";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import { getPostUserClasses, type PostProps } from "@/layout/Post";
@@ -279,7 +279,6 @@ function UserMenu({
       >
         <AvatarImage
           href={user.avatar}
-          userId={user.userId}
           alt={user.username}
           size={36}
           className="w-full rounded-lg"
@@ -295,7 +294,6 @@ function UserMenu({
         <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
           <AvatarImage
             href={user.avatar}
-            userId={user.userId}
             alt={user.username}
             size={160}
             className="mb-2 w-full rounded-lg"

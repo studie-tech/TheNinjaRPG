@@ -10,20 +10,12 @@
  *
  * Authored/rendered sector maps use the opposite vertical axis (larger y is
  * visually north). `resolveSectorMapEdgeCrossing` is the adapter for all game
- * movement and must be used instead of the raw globe-space primitive there.
+ * movement.
  *
  * The cylindrical world graph only uses aligned neighbors: crossing north lands
  * on the neighbor's south edge at the same column, and east/west behaves likewise.
- * The generic entry-edge primitives remain useful for map-axis conversion and
- * differently sized authored maps.
- *
- * The edge geometry is bound to the tile's 3D corners b = [NW, NE, SE, SW] via
- * the grid corners (x0,y0)=NW, (xW,y0)=NE, (xW,yH)=SE, (x0,yH)=SW - the binding
- * that reproduces the existing aligned crossing behaviour. EDGE_DIR records, per
- * edge, whether the along-edge parameter runs in the same direction as the tile's
- * clockwise corner order (N: b0->b1 and E: b1->b2 do; S: b3->b2 and W: b0->b3 are
- * reversed). Consistent manifold orientation means a shared edge is traversed in
- * opposite corner order by the two tiles, which is what `paramFlips` encodes.
+ * The entry-edge primitives stay generic so the adapter handles map-axis
+ * conversion and differently sized authored maps.
  */
 
 export type EdgeIndex = 0 | 1 | 2 | 3;
@@ -42,9 +34,6 @@ export const EDGE_WEST = 3;
  */
 export const sectorMapEdgeForGlobeEdge = (edge: EdgeIndex): EdgeIndex =>
   edge === EDGE_NORTH ? EDGE_SOUTH : edge === EDGE_SOUTH ? EDGE_NORTH : edge;
-
-/** +1 if the along-edge parameter follows clockwise corner order, else -1 */
-const EDGE_DIR: readonly number[] = [1, 1, -1, -1];
 
 /** Length (cell count) of an edge: N/S run along width, E/W along height */
 export const edgeLength = (edge: EdgeIndex, width: number, height: number): number =>
@@ -73,41 +62,11 @@ export const edgeCell = (
   }
 };
 
-/**
- * Whether the along-edge parameter reverses when crossing from `exitEdge` of one
- * tile to `entryEdge` of the neighbour. Derived purely from the two edge indices
- * using the clockwise corner correspondence of a consistently oriented manifold:
- * A.corner[eA] == B.corner[(eB+1)%4] and A.corner[(eA+1)%4] == B.corner[eB].
- */
-export const paramFlips = (exitEdge: EdgeIndex, entryEdge: EdgeIndex): boolean => {
-  // Clockwise corner index where the exit parameter starts (p = 0)
-  const exitStartCorner = EDGE_DIR[exitEdge]! > 0 ? exitEdge : (exitEdge + 1) % 4;
-  // The same 3D corner expressed as a clockwise corner index on the neighbour
-  const entryEquivCorner =
-    exitStartCorner === exitEdge ? (entryEdge + 1) % 4 : entryEdge;
-  // Clockwise corner index where the entry parameter starts (p = 0)
-  const entryStartCorner = EDGE_DIR[entryEdge]! > 0 ? entryEdge : (entryEdge + 1) % 4;
-  return entryEquivCorner !== entryStartCorner;
-};
-
 /** Map an exit parameter (0..lenA-1) to the neighbour's entry parameter (0..lenB-1) */
-export const mapParam = (
-  pA: number,
-  lenA: number,
-  lenB: number,
-  flip: boolean,
-): number => {
+export const mapParam = (pA: number, lenA: number, lenB: number): number => {
   const frac = lenA <= 1 ? 0 : pA / (lenA - 1);
-  const eff = flip ? 1 - frac : frac;
-  return Math.round(eff * Math.max(0, lenB - 1));
+  return Math.round(frac * Math.max(0, lenB - 1));
 };
-
-/**
- * Number of clockwise quarter turns relative to an aligned neighbor. Production
- * cylindrical topology always returns 0; the helper remains as a geometry check.
- */
-export const seamRotation = (exitEdge: EdgeIndex, entryEdge: EdgeIndex): number =>
-  (((entryEdge - ((exitEdge + 2) % 4)) % 4) + 4) % 4;
 
 export interface CrossingResult {
   entryEdge: EdgeIndex;
@@ -116,34 +75,10 @@ export interface CrossingResult {
 }
 
 /**
- * Resolve where a crossing lands in the neighbour. Given the exit edge, the cell
- * on that edge, this tile's map size and the neighbour's entry edge + map size,
- * returns the entry edge and interior-most entry cell in the neighbour.
- */
-export const resolveEdgeCrossing = (
-  exitEdge: EdgeIndex,
-  exitX: number,
-  exitY: number,
-  fromWidth: number,
-  fromHeight: number,
-  entryEdge: EdgeIndex,
-  toWidth: number,
-  toHeight: number,
-): CrossingResult => {
-  const pA = edgeParam(exitEdge, exitX, exitY);
-  const lenA = edgeLength(exitEdge, fromWidth, fromHeight);
-  const lenB = edgeLength(entryEdge, toWidth, toHeight);
-  const flip = paramFlips(exitEdge, entryEdge);
-  const pB = mapParam(pA, lenA, lenB, flip);
-  const cell = edgeCell(entryEdge, pB, toWidth, toHeight);
-  return { entryEdge, entryX: cell.x, entryY: cell.y };
-};
-
-/**
  * Resolve a baked globe-edge crossing into rendered sector-map coordinates.
- * The vertical reflection reverses the along-edge parameter on east/west map
- * edges, so parameters are converted to globe orientation before applying the
- * seam handedness and converted back on the destination.
+ * Neighbours are aligned, so the along-edge parameter carries across the seam;
+ * the vertical reflection reverses it on east/west map edges, so parameters are
+ * converted to globe orientation and back on the destination.
  */
 export const resolveSectorMapEdgeCrossing = (
   globeExitEdge: EdgeIndex,
@@ -164,12 +99,7 @@ export const resolveSectorMapEdgeCrossing = (
     globeExitEdge === EDGE_EAST || globeExitEdge === EDGE_WEST
       ? lenA - 1 - mapExitParam
       : mapExitParam;
-  const globeEntryParam = mapParam(
-    globeExitParam,
-    lenA,
-    lenB,
-    paramFlips(globeExitEdge, globeEntryEdge),
-  );
+  const globeEntryParam = mapParam(globeExitParam, lenA, lenB);
   const mapEntryParam =
     globeEntryEdge === EDGE_EAST || globeEntryEdge === EDGE_WEST
       ? lenB - 1 - globeEntryParam

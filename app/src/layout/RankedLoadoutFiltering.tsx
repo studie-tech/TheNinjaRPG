@@ -62,9 +62,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setTypes: cf.setters.types,
-    setName: cf.setters.name,
-    setMinCount: cf.setters.minCount,
   };
 };
 

@@ -41,7 +41,7 @@ export const discordRouter = createTRPCRouter({
     if (!link) return { enabled: true, link: null };
     // Depends on the link's Discord id; ordered like the sync, which picks the first.
     const links = await listDiscordLinkForGetStatus(ctx.drizzle, link);
-    const { syncError, discordId: _discordId, isPrimary: _isPrimary, ...rest } = link;
+    const { syncError, discordId: _discordId, ...rest } = link;
     const sibling = links.find((entry) => entry.userId !== ctx.userId);
     return {
       enabled: true,

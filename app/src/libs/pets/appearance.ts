@@ -63,7 +63,7 @@ const PET_REFERENCE_BACKDROP = "#f0f0f0";
 /** Only authored catalogue text enters the model; the player's chosen name is never a prompt. */
 export const getPetAppearancePrompt = (
   pet: AppearancePet,
-  provider: PetArtProvider = "GPT",
+  provider: PetArtProvider,
 ) => {
   const { species, palette, characteristic, aura } = getPetAppearanceTraits(pet);
   const rank = getPetRank(pet.rank);
@@ -109,7 +109,7 @@ export const generatePetAppearance = async (
     candidatePrompt: string,
     referenceImage?: Buffer,
   ) => {
-    const { image } = await renderPetSprite({
+    const image = await renderPetSprite({
       provider,
       prompt: candidatePrompt,
       referenceImage,
@@ -177,7 +177,7 @@ export const generatePetAppearance = async (
  * image flattened on the neutral backdrop before the cutout is rejected. Every cutout must
  * pass the transparency check before it is trimmed and padded onto the shared canvas.
  */
-export const renderPetSprite = async (config: {
+const renderPetSprite = async (config: {
   provider: PetArtProvider;
   prompt: string;
   referenceImage?: Buffer;
@@ -195,7 +195,6 @@ export const renderPetSprite = async (config: {
     : undefined;
   signal.throwIfAborted();
   let cutout: Buffer;
-  let usedCutoutFallback = false;
   if (provider === "NANO_BANANA") {
     // Inline bytes reuse the downloaded image without another upload or provider request.
     cutout = await generateNanoBananaImage({
@@ -213,7 +212,6 @@ export const renderPetSprite = async (config: {
   } else {
     cutout = await generateSpriteGPT({ prompt, reference, userId, signal });
     if (!(await isCleanCutout(cutout))) {
-      usedCutoutFallback = true;
       const flattened = await sharp(cutout, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
         .flatten({ background: PET_REFERENCE_BACKDROP })
         .png()
@@ -227,7 +225,7 @@ export const renderPetSprite = async (config: {
     throw new Error("Scene character background was not removed cleanly");
   const image = await normalizePetSprite(cutout);
   signal.throwIfAborted();
-  return { image, usedCutoutFallback };
+  return image;
 };
 
 /** Whether a native-transparency cutout passes the corner and haze checks unaided. */
@@ -317,10 +315,8 @@ const getPetAppearanceTraits = (pet: AppearancePet) => {
  * Streaming enforces the byte cap even if upstream misstates Content-Length;
  * decoding and content checks are performed separately before acceptance.
  */
-export const downloadPetImage = async (imageUrl: string, signal?: AbortSignal) => {
-  const downloadSignal = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-    : AbortSignal.timeout(30_000);
+export const downloadPetImage = async (imageUrl: string, signal: AbortSignal) => {
+  const downloadSignal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
   downloadSignal.throwIfAborted();
   const response = await fetch(imageUrl, { signal: downloadSignal });
   if (!response.ok || !response.body)
@@ -350,20 +346,11 @@ export const downloadPetImage = async (imageUrl: string, signal?: AbortSignal) =
   return Buffer.concat(chunks, total);
 };
 
-/** Bound decoding, identify the actual image format and fail closed on unsafe/absent moderation. */
+/** Fail closed on unsafe moderation of the normalized WebP sprite. */
 const checkModeration = async (image: Buffer, signal: AbortSignal) => {
   signal.throwIfAborted();
-  if (image.byteLength > MAX_PET_IMAGE_BYTES)
-    throw new Error("The generated image is too large");
-  const metadata = await sharp(image, {
-    limitInputPixels: MAX_PET_IMAGE_PIXELS,
-  }).metadata();
-  if (!metadata.format || !["jpeg", "png", "webp"].includes(metadata.format))
-    throw new Error("The generated image has an unsupported format");
-  // Fresh uploads may not yet be reachable by OpenAI. Send the bytes already
-  // downloaded by this server, with the MIME type detected from their contents.
-  const dataUrl = `data:image/${metadata.format};base64,${image.toString("base64")}`;
+  // Fresh uploads may not yet be reachable by OpenAI, so send the sprite bytes inline.
+  const dataUrl = `data:image/webp;base64,${image.toString("base64")}`;
   const result = await classifyNsfwImage(dataUrl, true, signal);
-  if (!result || result.isNsfw)
-    throw new Error("The generated image did not pass content review");
+  if (result.isNsfw) throw new Error("The generated image did not pass content review");
 };

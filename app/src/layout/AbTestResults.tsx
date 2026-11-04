@@ -133,24 +133,12 @@ const DistributionChart: React.FC<{
   );
 };
 
-const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
-  const { a, b, ambiguous } = useMemo(
-    () => inferControlTreatment(exp.variants),
-    [exp.variants],
-  );
-
-  const haveTwo = !!a && !!b;
-  const aV: VariantAgg = a ?? {
-    variant: exp.variants[0]?.variant ?? "Variant A",
-    loaded: 0,
-    register: 0,
-  };
-  const bV: VariantAgg = b ?? {
-    variant: exp.variants[1]?.variant ?? "Variant B",
-    loaded: 0,
-    register: 0,
-  };
-
+const ExperimentRow: React.FC<{
+  experiment: string;
+  control: VariantAgg;
+  treatment: VariantAgg;
+  ambiguous: boolean;
+}> = ({ experiment, control: aV, treatment: bV, ambiguous }) => {
   const aPost = betaPosterior(aV.register, aV.loaded);
   const bPost = betaPosterior(bV.register, bV.loaded);
   const aMean = aPost.mean;
@@ -248,26 +236,13 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
   const hasWarnings =
     unbalancedTraffic || insufficientConversions || insufficientExposures;
 
-  const moreThanTwo = exp.variants.length > 2;
-
   const aLabel =
-    exp.experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(aV.variant) : aV.variant;
+    experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(aV.variant) : aV.variant;
   const bLabel =
-    exp.experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(bV.variant) : bV.variant;
+    experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(bV.variant) : bV.variant;
 
   return (
     <div className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-2">
-      {!haveTwo && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-2 text-red-900 text-xs md:col-span-2">
-          Need at least two variants to compare. Showing placeholders.
-        </div>
-      )}
-      {moreThanTwo && (
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-blue-900 text-xs md:col-span-2">
-          More than two variants detected. Showing a pairwise comparison. Consider
-          running pairwise comparisons across all variants for full insight.
-        </div>
-      )}
       {ambiguous && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900 text-xs md:col-span-2">
           Control/Treatment naming is ambiguous; ordering may be arbitrary.
@@ -434,7 +409,8 @@ export default AbTestResults;
 
 const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
   const panelId = useId();
-  const baseline = inferControlTreatment(exp.variants).a ?? exp.variants[0];
+  const inferred = inferControlTreatment(exp.variants);
+  const baseline = inferred.a ?? exp.variants[0];
   const defaultVariant =
     exp.variants.find((arm) => arm.variant !== baseline?.variant) ?? baseline;
   const [selectedVariant, setSelectedVariant] = useState(defaultVariant?.variant);
@@ -528,7 +504,10 @@ const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
           ) : (
             <ExperimentRow
               key={selected.variant}
-              exp={{ experiment: exp.experiment, variants: [baseline, selected] }}
+              experiment={exp.experiment}
+              control={baseline}
+              treatment={selected}
+              ambiguous={inferred.ambiguous}
             />
           )}
         </section>

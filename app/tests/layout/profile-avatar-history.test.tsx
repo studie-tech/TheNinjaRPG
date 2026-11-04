@@ -6,7 +6,6 @@ import * as Modal from "@/layout/Modal";
 import { HistoricalAiAvatar } from "@/layout/ProfileEdit";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 let avatars: { id: number; avatar: string }[];
 let isPending: boolean;
@@ -19,7 +18,6 @@ const refetch = vi.fn();
 const fetchNextPage = vi.fn();
 
 beforeEach(() => {
-  ensureDom();
   avatars = [];
   isPending = false;
   isError = false;

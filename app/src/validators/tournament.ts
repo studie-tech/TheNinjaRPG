@@ -75,7 +75,6 @@ export const eventTournamentActionSchema = eventTournamentIdSchema.extend({
     "INVITE",
     "REMOVE_INVITE",
     "SUBSTITUTE",
-    "RECOVER",
   ]),
   userId: z.string().optional(),
   seatId: z.string().optional(),

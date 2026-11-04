@@ -20,7 +20,6 @@ export const createAuctionListingSchema = z
     listingType: z.enum(AUCTION_LISTING_TYPES),
     startingPrice: z.number().int().min(1),
     buyoutPrice: z.number().int().min(1).optional(),
-    buyerId: z.string().optional(), // For direct sales
     targetUserId: z.string().optional(), // For direct auctions to specific users
     durationHours: z.number().min(1).max(168), // 1 hour to 7 days
     currencyType: z.enum(TRADEABLE_CURRENCY_TYPES).prefault("MONEY"),
@@ -93,7 +92,6 @@ export const getAuctionListingsSchema = z.object({
   listingType: z.enum(AUCTION_LISTING_TYPES).optional(),
   onlyMine: z.boolean().optional(),
   onlyBidOn: z.boolean().optional(),
-  sellerId: z.string().optional(),
   status: z.enum(AUCTION_LISTING_STATES).optional(),
 });
 
@@ -135,7 +133,6 @@ export const auctionListingSchemaForItem = (
 
 // Type exports
 export type CreateAuctionListingSchema = z.infer<typeof createAuctionListingSchema>;
-export type GetAuctionListingsSchema = z.infer<typeof getAuctionListingsSchema>;
 
 const offerQuantity = z.int().min(1).max(MAX_ITEM_STACK_SIZE);
 export const createAuctionOfferSchema = z.discriminatedUnion("offerType", [

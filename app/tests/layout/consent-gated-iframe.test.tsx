@@ -3,9 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "bun:test";
 import { parseHtml } from "@/utils/parse";
 import { getIframeProviderName, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 const EMBED =
   '<iframe src="https://www.youtube.com/embed/KgXxLOb-lEk?si=abc" width="560" height="315"></iframe>';

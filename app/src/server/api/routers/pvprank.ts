@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getEnterRankedSeasonUserUpdate } from "@/deltas/pvprank";
@@ -59,6 +58,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -99,9 +99,6 @@ export const pvpRankRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Guard
-      if (!user) {
-        return errorResponse("User not found");
-      }
       if (rewards.length === 0) {
         return errorResponse("No unclaimed season rewards");
       }
@@ -157,7 +154,7 @@ export const pvpRankRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const season = await findRankedSeasonById(ctx.drizzle, input.id);
       if (!season) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Season not found" });
+        throw serverError("NOT_FOUND", "Season not found");
       }
       return season;
     }),
@@ -171,7 +168,7 @@ export const pvpRankRouter = createTRPCRouter({
       return await fetchCurrentSeason(ctx.drizzle);
     }),
 
-  // Get the current season
+  // Get the LP values of the top Legend players that decide the Sannin rank
   getCurrentTopPlayers: protectedProcedure
     .meta({
       mcp: {

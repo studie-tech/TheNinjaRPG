@@ -13,7 +13,6 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import type { CreatePollSchema } from "@/validators/poll";
-import { ensureDom } from "../setup/dom.mjs";
 
 type Response = { success: boolean; message: string };
 let onSuccess: (response: Response) => void;
@@ -27,7 +26,6 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   vi.clearAllMocks();

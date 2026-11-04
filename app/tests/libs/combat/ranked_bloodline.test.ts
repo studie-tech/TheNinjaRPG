@@ -21,7 +21,6 @@ describe("ranked bloodline damage boost", () => {
       const boost = realizeTag({
         tag: { ...RANKED_BLOODLINE_DAMAGE_TAG } as UserEffect,
         user: attacker,
-        target: attacker,
         actionId: "ranked-bloodline",
         level: attacker.level,
       });

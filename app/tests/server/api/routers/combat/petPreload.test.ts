@@ -148,7 +148,7 @@ const startBattle = (client: DrizzleClient) => initiateBattle({ client, userIds:
 
 const adoptionInput = async (database: DrizzleClient) => {
   const data = await callerForDatabase(petsRouter, ownerId, database).getPet();
-  return { name: "Kumo", gender: "MALE" as const, dayKey: data.dayKey, speciesId: data.options.species[0]!.id, paletteIndex: data.options.palettes[0]!.index, characteristicIndex: data.options.characteristics[0]!.index, auraIndex: data.options.auras[0]!.index };
+  return { currency: "REPUTATION" as const, name: "Kumo", gender: "MALE" as const, dayKey: data.dayKey, speciesId: data.options.species[0]!.id, paletteIndex: data.options.palettes[0]!.index, characteristicIndex: data.options.characteristics[0]!.index, auraIndex: data.options.auras[0]!.index };
 };
 
 /** Complete real companion reads before a successful account mutation and the participant read. */

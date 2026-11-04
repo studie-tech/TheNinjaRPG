@@ -74,12 +74,10 @@ export const fedItemLoadouts = (
   return base;
 };
 
-// Returns the monthly reputation cap for a user, scaling with account age.
-// Formula: MAX_REPS_PER_MONTH + MAX_REPS_EXTRA_PER_MONTH * months_active
+/** Scale the monthly reputation cap with completed account-age months, never below base. */
 export const dynamicMonthlyRepCap = (user?: UserData): number => {
   if (!user?.createdAt) return MAX_REPS_PER_MONTH;
-  const created =
-    typeof user.createdAt === "string" ? new Date(user.createdAt) : user.createdAt;
+  const created = user.createdAt;
   const now = new Date();
   // Calculate full months between created and now
   const monthsActive =

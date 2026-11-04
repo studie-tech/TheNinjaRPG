@@ -27,7 +27,6 @@ describe("pet visual quality", () => {
   it.each([
     { previousRank: 1, hasPrevious: true, required: true },
     { previousRank: 2, hasPrevious: true, required: false },
-    { previousRank: undefined, hasPrevious: true, required: false },
     { previousRank: 1, hasPrevious: false, required: false },
   ])("requires visible progression only for a known lower-rank reference: %j", async ({ previousRank, hasPrevious, required }) => {
     const model = vi.spyOn(ai, "generateText").mockResolvedValue({ output: accepted } as never);
@@ -36,7 +35,7 @@ describe("pet visual quality", () => {
     expect(model).toHaveBeenCalledTimes(1);
     const content = model.mock.calls[0]![0].messages?.[0]?.content;
     if (!Array.isArray(content) || content[0]?.type !== "text") throw new Error("Expected review context");
-    expect(JSON.parse(content[0].text)).toMatchObject({ rank: candidate.rank, previousRank: previousRank ?? null, evolutionRequired: required, images: hasPrevious ? ["PREVIOUS", "CANDIDATE"] : ["CANDIDATE"] });
+    expect(JSON.parse(content[0].text)).toMatchObject({ rank: candidate.rank, previousRank, evolutionRequired: required, images: hasPrevious ? ["PREVIOUS", "CANDIDATE"] : ["CANDIDATE"] });
   });
 
   it("passes the requested sex to review only when the companion has one", async () => {
@@ -141,7 +140,7 @@ describe("pet visual quality", () => {
   });
 });
 
-const input = async () => ({ image: await fixture(), species: "A nimble fox", identity: "Jade green with a star marking", rank: 2 });
+const input = async () => ({ image: await fixture(), species: "A nimble fox", identity: "Jade green with a star marking", rank: 2, previousRank: 2 });
 
 const fixture = async (color = [32, 180, 96]) => {
   const data = Buffer.alloc(64 * 64 * 4);

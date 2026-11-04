@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/daily-emails-sync/route";
 import * as gamesettings from "@/libs/gamesettings";
 import { timerClaimFixture } from "../../../setup/gameTimers";
@@ -33,7 +32,6 @@ describe("daily-emails-sync cron", () => {
       insert,
       execute,
     });
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(
       vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({
         ...timerClaimFixture(),

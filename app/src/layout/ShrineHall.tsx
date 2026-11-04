@@ -140,14 +140,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
   const { timeDiff } = useUserInfo();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
-  const { data: shrineData } = api.travel.getSectorData.useQuery(
-    { sector: user.sector ?? 0 },
-    {
-      enabled: isActive,
-      refetchInterval: isActive ? 30_000 : false,
-    },
-  );
-
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
@@ -172,7 +164,8 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     timeDiff,
   });
 
-  if (!shrineData) return <Loader explanation="Loading shrine data" />;
+  if (user.villageId && !capturedSectors)
+    return <Loader explanation="Loading shrine data" />;
 
   const activeShrines = (capturedSectors || []).filter(
     (s) => s.shrineLevel && s.shrineLevel > 0,
@@ -182,7 +175,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
     sector: number;
     shrineLevel: number;
     health: React.ReactNode;
-    capturedAt: Date;
     action?: React.ReactNode;
   };
 
@@ -234,7 +226,6 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
             ))}
           </div>
         ),
-      capturedAt: shrine.capturedAt ? new Date(shrine.capturedAt) : new Date(),
       action: isKage ? (
         shrine.shrineLevel < SHRINE_MAX_LEVEL ? (
           user.village?.tokens !== undefined &&
@@ -312,11 +303,6 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const currentDayOfWeek = now.getUTCDay();
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
 
-  const { data: sectorData } = api.travel.getSectorData.useQuery(
-    { sector: user.sector ?? 0 },
-    { enabled: isActive && typeof user.sector === "number" },
-  );
-
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId || "" },
     { enabled: isActive && !!user.villageId },
@@ -377,7 +363,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     refreshBoostState,
   );
 
-  if (!sectorData) return <Loader explanation="Loading shrine data" />;
+  if (user.villageId && !capturedSectors)
+    return <Loader explanation="Loading shrine data" />;
 
   const isKage = user.userId === user.village?.kageId;
   const isElder = user.rank === "ELDER";
@@ -390,10 +377,10 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const boostSettings = user.village?.shrineSettings?.activeBoosts;
   const activeBoosts = Object.entries(boostSettings || {})
     .map(([boostType, expiry]) => {
-      const secondsLeft = expiry ? new Date(expiry).getTime() - nowMs : 0;
-      return { boostType, secondsLeft };
+      const msLeft = expiry ? new Date(expiry).getTime() - nowMs : 0;
+      return { boostType, msLeft };
     })
-    .filter(({ secondsLeft }) => secondsLeft > 0);
+    .filter(({ msLeft }) => msLeft > 0);
   // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
   const boostPercentage =
     level3Shrines > 0
@@ -414,10 +401,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
         <CardContent>
           {activeBoosts.length > 0 ? (
             <div className="space-y-2">
-              {activeBoosts.map(({ boostType, secondsLeft }, i) => {
-                const timeLeft = getTimeLeftStr(
-                  ...getDaysHoursMinutesSeconds(secondsLeft),
-                );
+              {activeBoosts.map(({ boostType, msLeft }, i) => {
+                const timeLeft = getTimeLeftStr(...getDaysHoursMinutesSeconds(msLeft));
 
                 return (
                   <div
@@ -780,12 +765,10 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
                   const isOverdue = dueDate <= new Date();
 
-                  const secondsToNextPayment = dueDate
-                    ? dueDate.getTime() - Date.now()
-                    : 0;
+                  const msToNextPayment = dueDate.getTime() - Date.now();
 
                   const nextPaymentAt = getTimeLeftStr(
-                    ...getDaysHoursMinutesSeconds(secondsToNextPayment),
+                    ...getDaysHoursMinutesSeconds(msToNextPayment),
                   );
 
                   return (
@@ -1053,9 +1036,6 @@ const BoostTemplateGrid = ({
   };
 
   const fillAllDay = (day: number, boosts: string[]) => {
-    // Defense in depth: the UI disables Fill Day when boosts is empty, but never let a
-    // future caller silently wipe a day by passing an empty list.
-    if (boosts.length === 0) return;
     setLocalTemplate((prev) => {
       const filtered = prev.filter((e) => e.dayOfWeek !== day);
       const newEntries: BoostTemplateEntry[] = [];

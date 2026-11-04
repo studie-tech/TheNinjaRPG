@@ -490,6 +490,22 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "CANCELLED", updatedAt: paidAt });
     await reconcileFederalStatuses(db); expect((await target())?.federalStatus).toBe("GOLD");
   });
+  it("recovers a legacy purchase from its order ID without a reporting lookup or capture", async () => {
+    const db = await getTestDatabase();
+    const orderId = "LEGACY00000000000";
+    const invoiceId = nanoid();
+    const amount = { value: reps2dollars(20).toFixed(2), currency_code: "USD" };
+    orders.set(orderId, { id: orderId, status: "COMPLETED", purchase_units: [{ custom_id: `${BUYER}-${TARGET}`, invoice_id: invoiceId, amount, payments: { captures: [{ id: "legacy_recovered_capture", status: "COMPLETED", amount, update_time: new Date().toISOString() }] } }] });
+    await db.insert(paypalTransaction).values({ id: invoiceId, createdById: BUYER, affectedUserId: TARGET, transactionId: `reservation_${invoiceId}`, orderId, invoiceId, transactionUpdatedDate: new Date().toISOString(), amount: reps2dollars(20), reputationPoints: 20, currency: "USD", status: "RESERVED", type: "REP_PURCHASE", rawData: {} });
+    const buyer = await callerFor(paypalRouter, BUYER);
+    expect((await (await callerFor(paypalRouter, OTHER)).resolveOrder({ orderId })).success).toBe(false);
+    expect((await target())?.reputationPoints).toBe(0);
+    expect((await buyer.resolveOrder({ orderId })).success).toBe(true);
+    expect((await buyer.resolveOrder({ orderId })).success).toBe(true);
+    expect((await target())?.reputationPoints).toBe(20);
+    expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
+    expect(fetchProvider.mock.calls.some(([url]) => url.endsWith("/capture") || url.includes("/reporting/"))).toBe(false);
+  });
   it.each([{ refunded: false, migrated: false }, { refunded: true, migrated: false }, { refunded: false, migrated: true }])("legacy reporting and order recovery verify capture status and ownership: %j", async ({ refunded, migrated }) => {
     const orderId = "ORDER000000000000";
     const invoiceId = nanoid();

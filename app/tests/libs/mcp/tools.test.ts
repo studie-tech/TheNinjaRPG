@@ -18,7 +18,6 @@ const staffProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 const write = vi.fn(() => ({ success: true }));
-const transform = () => [{ type: "text" as const, text: "custom response" }];
 const router = t.router({
   profile: t.router({
     read: t.procedure.query(() => ({ username: "ninja" })),
@@ -27,7 +26,7 @@ const router = t.router({
       .input(z.object({ search: z.string().optional() }))
       .query(({ input }) => ({ filtered: input })),
     described: t.procedure
-      .meta({ mcp: { description: "A custom description", transformMcpProcedure: transform } })
+      .meta({ mcp: { description: "A custom description" } })
       .query(() => ({ success: true })),
   }),
   staff: t.router({ update: staffProcedure.input(idSchema).mutation(write) }),
@@ -35,6 +34,7 @@ const router = t.router({
 
 const tools = extractToolsFromProcedures(router);
 const registry = buildToolRegistry(tools);
+const toolAt = (path: string) => tools.find((tool) => tool.pathInRouter.join(".") === path);
 const call = (endpointName: string, input?: Record<string, unknown>, isStaff = false) =>
   handleCallEndpoint(
     registry,
@@ -50,14 +50,13 @@ describe("universal MCP exposure", () => {
     expect(tools.map((tool) => tool.pathInRouter.join(".")).sort()).toEqual(
       Object.keys(router._def.procedures).sort(),
     );
-    expect(tools.find((tool) => tool.name === "profile_read")?.isMutation).toBe(false);
-    expect(tools.find((tool) => tool.name === "profile_update")?.isMutation).toBe(true);
-    expect(tools.find((tool) => tool.name === "profile_update")?.inputSchema?.required).toEqual(["id"]);
+    expect(toolAt("profile.read")?.isMutation).toBe(false);
+    expect(toolAt("profile.update")?.isMutation).toBe(true);
+    expect(toolAt("profile.update")?.inputSchema.required).toEqual(["id"]);
   });
 
-  it("keeps custom descriptions and response transformations", async () => {
-    expect(tools.find((tool) => tool.name === "profile_described")?.description).toBe("A custom description");
-    expect((await call("profile.described")).content).toEqual(transform());
+  it("keeps custom descriptions", () => {
+    expect(toolAt("profile.described")?.description).toBe("A custom description");
   });
 
   it("invokes newly exposed queries and validated mutations", async () => {

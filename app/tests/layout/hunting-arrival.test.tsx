@@ -3,7 +3,6 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { createStore, Provider } from "jotai";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
-import * as dialog from "@/components/ui/dialog";
 import * as ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { HuntingArrival } from "@/layout/HuntingArrival";
@@ -12,7 +11,6 @@ import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
 import * as routing from "@/utils/routing";
 import { huntingContract } from "../setup/hunting";
-import { actualDialog, actualModal } from "../setup/preload";
 
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
@@ -61,11 +59,6 @@ beforeEach(() => {
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
   vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(() => <p>Hunting preparation</p>);
   vi.spyOn(ActivityStreakPanel, "default").mockImplementation(() => <p>Reward claims</p>);
-  // Keep the real dialogs even when a preceding Bun suite mocked their exports.
-  vi.spyOn(Modal, "default").mockImplementation(actualModal);
-  for (const key of Object.keys(actualDialog) as (keyof typeof actualDialog)[]) {
-    vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
-  }
 });
 
 afterEach(async () => {

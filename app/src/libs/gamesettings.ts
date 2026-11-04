@@ -195,26 +195,6 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
   };
 };
 
-/**
- * Checks the game timer and returns a response indicating how much time is left before the game can be run again.
- * @param client - The database client used to read or initialize the timer.
- * @param timerName - Stable game-setting name, independent of the duration.
- * @param durationMs - The timer duration in milliseconds.
- * @returns A JSON response indicating the time left before the game can be run again.
- */
-export const checkGameTimer = async (
-  client: DrizzleClient,
-  timerName: string,
-  durationMs: number,
-) => {
-  const timer = await getGameSetting(client, timerName);
-  const deltaTime = durationMs * 0.9999;
-  if (timer.time > new Date(Date.now() - deltaTime)) {
-    return gameTimerWaitResponse(timer.time, deltaTime);
-  }
-  return false;
-};
-
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");
@@ -255,9 +235,8 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
     settings.push(...newSettings);
   }
 
-  // Convert to DmgConfig, falling back to defaults for safety
-  const get = (name: string) =>
-    settings.find((s) => s.name === name)?.value ?? DMG_SETTING_DEFAULTS[name] ?? 0;
+  // Missing settings were inserted above, so every name resolves to a row
+  const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
 
   return {
     stats_scaling: get("DMG_STATS_SCALING"),

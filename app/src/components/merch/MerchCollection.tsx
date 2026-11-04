@@ -416,7 +416,7 @@ export function MerchCollection() {
 export function MerchProductCard({ product }: { product: MerchProduct }) {
   const image = preferredMerchImage(product);
   return (
-    <article className="merch-product-card">
+    <article>
       <Link href={`/merch/${product.handle}`} className="merch-product-image">
         {image ? (
           <Image src={image.url} alt={image.alt} width={380} height={430} />

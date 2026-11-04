@@ -72,7 +72,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
   const [isManagementOpen, setIsManagementOpen] = useState(false);
 
   // Derived
-  const isStaff = userData?.role ? isStaffRole(userData.role) : false;
+  const isStaff = isStaffRole(userData?.role);
 
   // Get utils
   const utils = api.useUtils();
@@ -90,10 +90,9 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
   const availableStaff = staffData?.data || [];
 
   // Query for canned responses
-  const { data: cannedResponses, refetch: refetchCannedResponses } =
-    api.support.getCannedResponses.useQuery(undefined, {
-      enabled: isStaff && canEditCannedResponses(userData?.role),
-    });
+  const { data: cannedResponses } = api.support.getCannedResponses.useQuery(undefined, {
+    enabled: canEditCannedResponses(userData?.role),
+  });
 
   // Update ticket mutation
   const updateTicket = api.support.updateTicket.useMutation({
@@ -171,10 +170,6 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
       });
   };
 
-  const handleCannedResponsesChange = () => {
-    void refetchCannedResponses();
-  };
-
   // Derived pass 2
   const canUpdateTicket =
     ticket &&
@@ -229,29 +224,27 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
                   </Button>
                 </Link>
               )}
-              {isStaff &&
-                canEscalateToGithub(userData?.role) &&
-                !ticket.githubIssueUrl && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            "Are you sure you want to escalate this ticket to GitHub?",
-                          )
-                        ) {
-                          escalateToGithub.mutate({ ticketId: params.ticketId });
-                        }
-                      }}
-                      disabled={escalateToGithub.isPending}
-                    >
-                      <SiGithub className="mr-2 text-black" size={10} />
-                      {escalateToGithub.isPending ? "Escalating" : "Escalate to GitHub"}
-                    </Button>
-                  </div>
-                )}
+              {canEscalateToGithub(userData?.role) && !ticket.githubIssueUrl && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Are you sure you want to escalate this ticket to GitHub?",
+                        )
+                      ) {
+                        escalateToGithub.mutate({ ticketId: params.ticketId });
+                      }
+                    }}
+                    disabled={escalateToGithub.isPending}
+                  >
+                    <SiGithub className="mr-2 text-black" size={10} />
+                    {escalateToGithub.isPending ? "Escalating" : "Escalate to GitHub"}
+                  </Button>
+                </div>
+              )}
             </>
           }
         >
@@ -649,7 +642,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
       />
 
       {/* Canned Responses */}
-      {isStaff && canEditCannedResponses(userData?.role) && (
+      {canEditCannedResponses(userData?.role) && (
         <ContentBox
           title="Canned Responses"
           subtitle="Quick response templates"
@@ -738,11 +731,10 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
       )}
 
       {/* Canned Responses Management Dialog */}
-      {isStaff && canEditCannedResponses(userData?.role) && (
+      {canEditCannedResponses(userData?.role) && (
         <CannedResponsesManagement
           isOpen={isManagementOpen}
           setIsOpen={setIsManagementOpen}
-          onResponsesChange={handleCannedResponsesChange}
         />
       )}
     </div>

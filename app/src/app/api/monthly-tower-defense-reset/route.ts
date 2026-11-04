@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { handleEndpointError, lockWithMonthlyTimer } from "@/libs/gamesettings";
 import { deleteTowerDefenseRunForGET } from "@/queries/towerDefense";
 import { drizzleDB } from "@/server/db";
@@ -9,9 +8,6 @@ const ENDPOINT_NAME = "monthly-tower-defense-reset";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // Disable cache for this server action
-  await cookies();
 
   // Check timer - only run once per month
   const timerCheck = await lockWithMonthlyTimer(drizzleDB, ENDPOINT_NAME);

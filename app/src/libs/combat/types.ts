@@ -183,10 +183,10 @@ export type CombatUserFields = {
   /** Damage already deferred by Diffuse; survives the granting effect's expiry. */
   diffuseDamage?: {
     attackerId: string;
-    /** Original damage actor; absent for recoil or debts without threat attribution. */
+    /** Original damage actor; absent for recoil. */
     enmityUserId?: string;
     /** Actual caster, retained separately from controller quest credit. */
-    sourceUserId?: string;
+    sourceUserId: string;
     remainingDamage: number;
     remainingTurns: number;
     lastAppliedRound: number;
@@ -200,7 +200,6 @@ export type CombatUserFields = {
   round: number;
   iAmHere: boolean;
   originalLevel: number;
-  originalMoney: number;
   originalLongitude: number;
   originalLatitude: number;
   actionPoints: number;
@@ -654,9 +653,7 @@ export type Consequence = {
   heal_sp?: number;
   heal_cp?: number;
   damage?: number;
-  rawDamage?: number;
   residual?: number;
-  rawResidual?: number;
   /** HP already removed by an instant kill, pending Curse accounting after passive resolution. */
   instantKillDamage?: number;
   /** Base damage value used for additive percentage modifier calculations (e.g., increaseDamageGiven) */
@@ -734,7 +731,6 @@ export type BattleEffect = ZodAllTags & {
   targetType?: "user" | "barrier";
   power?: number;
   highestGenerals?: (typeof GenNames)[number][];
-  targetHighestGenerals?: (typeof GenNames)[number][];
   longitude: number;
   latitude: number;
   barrierAbsorb: number;
@@ -764,8 +760,6 @@ export type UserEffect = BattleEffect & {
   fromEffectId?: string;
   fromGround?: boolean;
   elements?: ElementName[];
-  cpSpent?: number;
-  spSpent?: number;
 };
 
 export type ActionEffect = {

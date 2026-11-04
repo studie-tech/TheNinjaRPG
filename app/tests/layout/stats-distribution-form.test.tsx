@@ -5,7 +5,6 @@ import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
-import { ensureDom } from "../setup/dom.mjs";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -16,7 +15,6 @@ let savedEvent: typeof Event;
 let savedCustomEvent: typeof CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   savedEvent = globalThis.Event;
   savedCustomEvent = globalThis.CustomEvent;
   globalThis.Event = window.Event;

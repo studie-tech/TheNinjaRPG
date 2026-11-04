@@ -2,7 +2,6 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       DATABASE_URL: string;
-      DISCORD_TICKETS: string;
       DISCORD_CONTENT_UPDATES: string;
       DISCORD_NEWS_UPDATES: string;
       FACEBOOK_PAGE_ID: string;
@@ -17,7 +16,6 @@ declare global {
       TWITTER_ACCESS_TOKEN: string;
       TWITTER_ACCESS_SECRET: string;
       REPLICATE_API_TOKEN: string;
-      CAPTCHA_SALT: string;
       PUSHER_APP_ID: string;
       PUSHER_APP_SECRET: string;
       NEXT_PUBLIC_PUSHER_APP_KEY: string;
@@ -32,8 +30,6 @@ declare global {
     }
   }
 }
-
-declare module "@g-loot/react-tournament-brackets";
 
 // We must export something for it to be a module
 export {};

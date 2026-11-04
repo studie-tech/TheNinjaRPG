@@ -28,8 +28,6 @@ import {
 import { getPotencyDescription } from "@/libs/combat/potency";
 import { getEffectPower } from "@/libs/combat/power";
 import {
-  isClone,
-  isLiveSummon,
   shouldPilotSummon,
   summonCastBlockedReason,
   summonsAllowedInBattle,
@@ -93,13 +91,12 @@ export const realizeTag = <T extends BattleEffect>(props: {
   tag: T;
   user: RealizeTagUser;
   actionId: string;
-  target?: RealizeTagUser | undefined;
   level: number | undefined;
   round?: number;
   barrierAbsorb?: number;
   battle?: Battle; // Make battle optional since it's not always needed
 }): T => {
-  const { user, target, level, round, barrierAbsorb, battle } = props;
+  const { user, level, round, barrierAbsorb, battle } = props;
   // Passive effects also enter here without passing through action selection or insertion.
   const tag = resolveElementalDamage(props.tag, user) as T;
   if ("rounds" in tag || tag.type === "increaseaggro" || tag.type === "decreaseaggro") {
@@ -126,9 +123,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
     if (tag.curHealth > tag.maxHealth) {
       tag.curHealth = tag.maxHealth;
     }
-  }
-  if (target) {
-    tag.targetHighestGenerals = target.highestGenerals;
   }
   if (battle && "rounds" in tag) {
     tag.createdRound = battle.round; // Use battle round if available
@@ -565,22 +559,16 @@ export const debuffPrevent = (
  * @param effect - the effect to describe
  * Damage modifiers can match elements. Other stat tags describe unified Offence/Defence.
  */
-export const getAffected = (effect: UserEffect, type?: "offence" | "defence") => {
+export const getAffected = (effect: UserEffect) => {
   if (damageModifierTypes.includes(effect.type))
     return "elements" in effect && effect.elements?.length
       ? `${effect.elements.join(", ")} damage`
       : "all damage";
   const stats: string[] = [];
   if ("statTypes" in effect && effect.statTypes?.length) {
-    if (type) {
-      effect.statTypes.forEach((stat: StatType) => {
-        stats.push(stat);
-      });
-    } else {
-      const direction = "direction" in effect ? effect.direction : "both";
-      if (direction === "offence" || direction === "both") stats.push("Offence");
-      if (direction === "defence" || direction === "both") stats.push("Defence");
-    }
+    const direction = "direction" in effect ? effect.direction : "both";
+    if (direction === "offence" || direction === "both") stats.push("Offence");
+    if (direction === "defence" || direction === "both") stats.push("Defence");
   }
   if ("masteryTypes" in effect && effect.masteryTypes) {
     stats.push(...effect.masteryTypes);
@@ -903,7 +891,7 @@ export const adjustDamageGiven = (
   target: BattleUserState,
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
-  const affected = getAffected(effect, "offence");
+  const affected = getAffected(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
       const damageKey =
@@ -988,7 +976,7 @@ export const adjustDamageTaken = (
   target: BattleUserState,
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
-  const affected = getAffected(effect, "offence");
+  const affected = getAffected(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
       const damageKey =
@@ -1202,7 +1190,6 @@ const removeEffects = (
     text += `${target.username} could not be cleared of ${type} status effects this round. `;
   }
 
-  // Note: add !effect.castThisRound && to remove effects only after the round
   if (effect.power === 100) {
     // Remove user effects
     usersEffects
@@ -1549,8 +1536,6 @@ export const damageUser = (
   // Only apply barrier absorption to instant damage, not residual damage
   const damage = instant ? rawDamage * (1 - (effect.barrierAbsorb ?? 0)) : rawDamage;
 
-  // Find out if target has any weakness tag related to this damage effect
-  // const weaknessTags =
   // Fetch types to show to the user
   const types = [
     effect.type,
@@ -1570,14 +1555,12 @@ export const damageUser = (
       ...(instant
         ? {
             damage: damage,
-            rawDamage: rawDamage,
             baseDamageForModifiers: damage,
           }
         : {}),
       ...(residual
         ? {
             residual: damage,
-            rawResidual: rawDamage,
             baseDamageForModifiers: damage,
           }
         : {}),
@@ -1964,7 +1947,6 @@ export const reflect = (
                   ? consequence.damage
                   : power,
             ) * ratio;
-          // consequence.damage -= convert;
           consequence.reflect = (consequence.reflect || 0) + dmgConvert;
         }
       }
@@ -2529,18 +2511,15 @@ export const move = (
   usersEffects: UserEffect[],
   usersState: BattleUserState[],
   groundEffects: GroundEffect[],
-) => {
+): void => {
   const user = usersState.find((u) => u.userId === effect.creatorId);
-  let info: ActionEffect | undefined;
   if (user) {
     // Prevent?
     const { pass } = preventCheck(usersEffects, "moveprevent", user);
-    if (!pass) return preventResponse(effect, user, "resisted being stunned");
-    // Update movement information
-    info = {
-      txt: `${user.username} moves to [${effect.latitude}, ${effect.longitude}]`,
-      color: "blue",
-    };
+    if (!pass) {
+      effect.rounds = 0;
+      return;
+    }
     // This is related to users stepping into/out of ground effects
     groundEffects.forEach((g) => {
       if (g.timeTracker && user.userId in g.timeTracker) {
@@ -2556,13 +2535,9 @@ export const move = (
         g.timeTracker[user.userId] = effect.createdRound;
       }
     });
-    // Update user location. If someone else is already standing on the spot,
-    // move to the nearest available spot on the most direct line between
-    // the current and target location
     user.longitude = effect.longitude;
     user.latitude = effect.latitude;
   }
-  return info;
 };
 
 /** Prevent target from moving */
@@ -3334,7 +3309,6 @@ export const summon = (
         user.userId,
         effect.aiId,
         wantsPilot,
-        userEffects,
       );
       if (blocked) {
         effect.rounds = 0;
@@ -3395,7 +3369,6 @@ export const summon = (
               tag: bloodlineEffect as BattleEffect,
               user: newAi,
               actionId: "initial",
-              target: newAi,
               level: newAi.level,
               round: battle.round,
               battle,
@@ -3413,7 +3386,6 @@ export const summon = (
             tag: aiEffect as BattleEffect,
             user: newAi,
             actionId: "initial",
-            target: newAi,
             level: newAi.level,
             round: battle.round,
             battle,
@@ -3455,26 +3427,7 @@ export const summon = (
     // Remove exactly the creature this effect spawned. aiId stays pointed at the
     // clone-source template (so re-cast works), so the spawned id is carried on
     // summonedUserId instead.
-    let idx = usersState.findIndex((u) => u.userId === effect.summonedUserId);
-    if (idx === -1 && effect.summonedUserId === undefined) {
-      // Battles already in flight when summonedUserId was introduced. Match on
-      // controllerId and prefer a non-live summon: a re-cast inserts the new
-      // live summon ahead of an older dead one, so a plain first-match could
-      // remove the live one. Clones share isSummon and controllerId, so they are
-      // excluded here too. Safe to delete once no pre-upgrade battles remain.
-      idx = usersState.findIndex(
-        (u) =>
-          u.isSummon &&
-          !isClone(u) &&
-          u.controllerId === effect.creatorId &&
-          !isLiveSummon(u, usersState, userEffects),
-      );
-      if (idx === -1) {
-        idx = usersState.findIndex(
-          (u) => u.isSummon && !isClone(u) && u.controllerId === effect.creatorId,
-        );
-      }
-    }
+    const idx = usersState.findIndex((u) => u.userId === effect.summonedUserId);
     if (idx > -1) {
       const removed = usersState[idx];
       usersState.splice(idx, 1);

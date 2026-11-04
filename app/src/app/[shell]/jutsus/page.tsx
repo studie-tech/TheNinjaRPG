@@ -99,7 +99,6 @@ export default function MyJutsu() {
   >(undefined);
   const transferCost = canTransferJutsu(userData) ? 0 : JUTSU_TRANSFER_COST;
   const [transferValue, setTransferValue] = useState<number>(1);
-  const [modalType, setModalType] = useState<string | null>(null);
   const [reskinData, setReskinData] = useState<JutsuReskinCreateSchema | null>(null);
   const [pendingOrder, setPendingOrder] = useState<{
     jutsuId: string;
@@ -201,7 +200,6 @@ export default function MyJutsu() {
   const freeTransferResetTime = getFreeTransferResetTime();
 
   const onSettled = () => {
-    document.body.style.cursor = "default";
     setIsOpen(false);
     setUserJutsu(undefined);
     setTransferTarget(undefined);
@@ -462,7 +460,6 @@ export default function MyJutsu() {
     !!userjutsu && !!userReskins?.some((r) => r.jutsuId === userjutsu.jutsuId);
 
   // Ryo from forgetting
-  const forgetRyo = 0;
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -471,7 +468,7 @@ export default function MyJutsu() {
   const canUpgrade = userData.reputationPoints >= COST_EXTRA_JUTSU_SLOT;
 
   // Calculate reskin cost based on permissions
-  const reskinCost = canReskinFreely(userData?.role) ? 0 : COST_RESKIN_JUTSU;
+  const reskinCost = canReskinFreely(userData.role) ? 0 : COST_RESKIN_JUTSU;
 
   return (
     <>
@@ -658,7 +655,7 @@ export default function MyJutsu() {
             </p>
           )}
 
-        {isOpen && userData && userjutsu && (
+        {isOpen && userjutsu && (
           <Modal
             title="Edit Jutsu"
             isOpen={isOpen}
@@ -881,23 +878,20 @@ export default function MyJutsu() {
                         ? userjutsu.level - 1
                         : userjutsu.level;
                       // Evolution ignores the weapon and skill use gates, like evolveJutsu.
-                      const evolveWarning = !userData
-                        ? ""
-                        : jutsuRequirementWarning(
-                            evo,
-                            userData,
-                            undefined,
-                            undefined,
-                            true,
-                          ) ||
-                          (canEvolveJutsu(evo, userData)
-                            ? ""
-                            : "You do not meet the stat requirements for this evolution.");
+                      const evolveWarning =
+                        jutsuRequirementWarning(
+                          evo,
+                          userData,
+                          undefined,
+                          undefined,
+                          true,
+                        ) ||
+                        (canEvolveJutsu(evo, userData)
+                          ? ""
+                          : "You do not meet the stat requirements for this evolution.");
                       const evolutionLevel = getJutsuMaxLevel(userjutsu.jutsu);
                       const canEvolve =
-                        !!userData &&
-                        effectiveLevel >= evolutionLevel &&
-                        !evolveWarning;
+                        effectiveLevel >= evolutionLevel && !evolveWarning;
                       return (
                         <Confirm
                           key={evo.id}
@@ -943,7 +937,7 @@ export default function MyJutsu() {
                               <b>
                                 {showUserRank({
                                   rank: evo.requiredRank,
-                                  isOutlaw: userData?.isOutlaw,
+                                  isOutlaw: userData.isOutlaw,
                                 })}
                               </b>
                             </p>
@@ -999,7 +993,6 @@ export default function MyJutsu() {
                         });
                         setIsOpen(false);
                         setIsReskinOpen(true);
-                        setModalType("reskin");
                       }}
                       disabled={
                         isPending ||
@@ -1016,7 +1009,7 @@ export default function MyJutsu() {
                     button={
                       <Button id="return" variant="destructive">
                         <Trash2 className="h-6 w-6 sm:mr-2" />
-                        <p className="hidden sm:block">{`Forget [${forgetRyo} ryo]`}</p>
+                        <p className="hidden sm:block">Forget</p>
                       </Button>
                     }
                     onAccept={(e) => {
@@ -1024,7 +1017,7 @@ export default function MyJutsu() {
                       forget({ id: userjutsu.id });
                     }}
                   >
-                    <p>Confirm to forget this jutsu and get back {forgetRyo} ryo.</p>
+                    <p>Confirm to forget this jutsu.</p>
                   </Confirm>
                 </div>
               </>
@@ -1032,7 +1025,7 @@ export default function MyJutsu() {
             {isPending && <Loader explanation="Processing" />}
           </Modal>
         )}
-        {modalType === "reskin" && userjutsu && isReskinOpen && (
+        {userjutsu && isReskinOpen && (
           <Modal
             title={hasReskinRecord ? "Update Jutsu Reskin" : "Create Jutsu Reskin"}
             isOpen={isReskinOpen}

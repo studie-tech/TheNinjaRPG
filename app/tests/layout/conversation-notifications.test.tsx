@@ -9,7 +9,6 @@ import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
-import * as dialog from "@/components/ui/dialog";
 import * as mastery from "@/hooks/useMasteryQueueRefresh";
 import * as media from "@/hooks/useMediaQuery";
 import * as refresh from "@/hooks/useRefreshAt";
@@ -25,8 +24,7 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
-import { actualDialog, actualUserContext } from "../setup/preload";
+import { actualUserContext } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
@@ -36,7 +34,6 @@ const eventDescriptors = ["Event", "CustomEvent"].map(
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 let pathname = "/tavern";
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },
@@ -65,7 +62,6 @@ beforeEach(() => {
     bfcacheId: "conversation-notifications",
   } as never);
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
-  vi.spyOn(client, "useGlobalOnMutateProtect").mockReturnValue(() => undefined);
   vi.spyOn(mastery, "useMasteryQueueRefresh").mockImplementation(() => {});
   vi.spyOn(refresh, "useRefreshAt").mockImplementation(() => {});
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => {});
@@ -382,9 +378,6 @@ it.each([false, true])(
   "suppresses only visible conversations while phone chat covers the full page (%s)",
   async (isPhone) => {
     vi.spyOn(media, "useMediaQuery").mockReturnValue(isPhone);
-    for (const key of Object.keys(actualDialog) as (keyof typeof actualDialog)[]) {
-      vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
-    }
     vi.spyOn(panelContent, "default").mockImplementation(() => (
       <ChatConversation convoId="private" />
     ));

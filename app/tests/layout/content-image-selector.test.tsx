@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import * as elementSize from "@radix-ui/react-use-size";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
@@ -10,7 +9,6 @@ import { useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import ActivityStreakEditPage from "@/app/[shell]/manual/activityStreak/edit/[configid]/page";
-import * as dialog from "@/components/ui/dialog";
 import * as Avatar from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ContentImageSelector from "@/layout/ContentImageSelector";
@@ -25,7 +23,7 @@ import * as uploadthing from "@/utils/uploadthing";
 import * as UserContext from "@/utils/UserContext";
 import type { ActivityStreakFormType } from "@/validators/activityStreak";
 import type { FurnitureViews } from "@/validators/itemFurniture";
-import { actualContentImageSelector as ActualContentImageSelector, actualDialog } from "../setup/preload";
+import { actualContentImageSelector as ActualContentImageSelector } from "../setup/preload";
 
 type SelectorProps = ComponentProps<typeof ContentImageSelector.default>;
 type GenerationResult = { success: boolean; url?: string; message?: string };
@@ -71,7 +69,6 @@ const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "canc
 ] as const);
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   vi.spyOn(ContentImageSelector, "default").mockImplementation(ActualContentImageSelector);
   requests.length = 0;
@@ -116,9 +113,6 @@ beforeEach(() => {
     return <button type="button" onClick={next.onUploadBegin}>Upload image</button>;
   }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(showToast);
-  for (const name of ["Dialog", "DialogContent", "DialogHeader", "DialogTitle"] as const) {
-    vi.spyOn(dialog, name).mockImplementation(actualDialog[name] as never);
-  }
 });
 afterEach(async () => {
   cleanup();

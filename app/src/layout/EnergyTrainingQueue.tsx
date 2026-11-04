@@ -18,12 +18,10 @@ import { useRequiredUserData } from "@/utils/UserContext";
 export const EnergyTrainingQueue = ({
   user,
   availableEnergy,
-  getGuess,
   refreshCaptcha,
 }: {
   user: NonNullable<UserWithRelations>;
   availableEnergy: number;
-  getGuess: () => string;
   refreshCaptcha: () => Promise<void>;
 }) => {
   const { saveQueue, isPending, error } = useEnergyTrainingQueue(refreshCaptcha);
@@ -85,7 +83,6 @@ export const EnergyTrainingQueue = ({
                     saveQueue({
                       expectedEntries: entries,
                       entries: entries.filter((_, i) => i !== index),
-                      guess: getGuess(),
                     })
                   }
                 >

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
 import { SELF_GUARDED_PYRAMID_PROCEDURES, ISOLATED_PYRAMID_MESSAGE, isPyramidRestrictedProcedure } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { homeRouter } from "@/server/api/routers/home";
@@ -163,7 +162,7 @@ describe("combat deferred rate limit", () => {
     mockLimiter(() => { limiterStarted.resolve(); return limiter.promise; });
     const read = vi.fn(async () => { battleStarted.resolve(); return undefined; });
     let finished = false;
-    const result = caller(combatRouter, withTx({ query: { battle: { findFirst: read } } })).performAction({ battleId: "missing", version: 0 }).then((value) => { finished = true; return value; });
+    const result = caller(combatRouter, withTx({ query: { battle: { findFirst: read } } })).performAction({ battleId: "missing" }).then((value) => { finished = true; return value; });
     await Promise.all([limiterStarted.promise, battleStarted.promise]);
     expect(finished).toBe(false);
     limiter.resolve([59, 60]);
@@ -173,21 +172,19 @@ describe("combat deferred rate limit", () => {
 
   it.each([1, 0])("preserves a single denial penalty with rowsAffected=%i", async (rowsAffected) => {
     mockLimiter(async () => [-1, 60]);
-    const profiler = vi.spyOn(Sentry.profiler, "startProfiler").mockImplementation(() => {});
     const penalty = vi.fn(async () => ({ rowsAffected }));
     const update = vi.fn(() => ({ set: () => ({ where: penalty }) }));
     // Any processing of this sentinel would throw; rate limiting must finish first.
     const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => ({}) }, userData: { findFirst: async () => balance } }, update, insert: logInsert() }));
-    await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
+    await expect(api.performAction({ battleId: "battle" })).rejects.toMatchObject({ code: rowsAffected ? "TOO_MANY_REQUESTS" : "NOT_FOUND" });
     expect(update).toHaveBeenCalledTimes(1);
     expect(penalty).toHaveBeenCalledTimes(1);
-    expect(profiler).not.toHaveBeenCalled();
   });
 
   it("observes a limiter failure even if the first battle read rejects", async () => {
     mockLimiter(async () => ({ error: "ERR limiter unavailable" }));
     const api = caller(combatRouter, withTx({ query: { battle: { findFirst: async () => { throw new Error("battle read failed"); } } } }));
-    await expect(api.performAction({ battleId: "battle", version: 0 })).rejects.toThrow("limiter unavailable");
+    await expect(api.performAction({ battleId: "battle" })).rejects.toThrow("limiter unavailable");
   });
 
   it("keeps limiter rejection ahead of input validation without a battle read", async () => {

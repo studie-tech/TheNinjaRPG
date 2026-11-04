@@ -1,7 +1,6 @@
 import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import * as headers from "next/headers";
 import { STRONGHOLD_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
 import { clan, village } from "@/drizzle/schema";
 import { GET } from "@/app/api/daily-hideout-downgrade/route";
@@ -26,7 +25,6 @@ describeWithDatabase("Stronghold monthly maintenance", () => {
   beforeEach(async () => {
     await resetTables(clan, village);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: new Date(0), prevValue: 0, response: Response.json("Ready") }));
   });
   afterEach(() => {

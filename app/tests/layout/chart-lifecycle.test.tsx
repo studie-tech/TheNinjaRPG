@@ -8,7 +8,6 @@ import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
 import { GraphsTab } from "@/layout/StrengthWeaknesses";
 import type { UserWithRelations } from "@/routers/profile";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const chartDefaults = chartLibrary.Chart.defaults;
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
@@ -27,7 +26,6 @@ const user = {
 } as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },

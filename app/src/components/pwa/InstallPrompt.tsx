@@ -18,8 +18,6 @@ export default function InstallPrompt() {
     deferredPrompt,
     isInstalled,
     isIOS,
-    isMobile,
-    isStandalone,
   } = useInstallPrompt();
 
   const { data: userData } = useUserDataSelector((user) => user.userId);
@@ -32,34 +30,24 @@ export default function InstallPrompt() {
 
     try {
       await deferredPrompt.prompt();
-      const choiceResult = await deferredPrompt.userChoice;
-
-      if (choiceResult.outcome === "accepted") {
-        console.log("User accepted the install prompt");
-      } else {
-        console.log("User dismissed the install prompt");
-      }
-
+      await deferredPrompt.userChoice;
       hidePrompt();
     } catch (error) {
       console.error("Install prompt failed:", error);
     }
   };
 
-  // Don't show if already installed, if user recently dismissed, or if not on mobile
+  // The prompt only becomes visible on mobile browsers outside an installed app. The
+  // install check also covers an auto-show timer that fires after `appinstalled`.
   if (
     isBrowserAuthPath(pathname) ||
-    isStandalone ||
     isInstalled ||
-    !isMobile ||
-    !isVisible
+    !isVisible ||
+    !userData ||
+    currentStep
   ) {
     return null;
   }
-
-  if (!userData) return null;
-
-  if (currentStep && userData) return null;
 
   return (
     <div className="fixed right-4 bottom-4 left-4 z-50 mx-auto max-w-sm">

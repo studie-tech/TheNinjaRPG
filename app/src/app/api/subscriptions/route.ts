@@ -1,8 +1,6 @@
-import { cookies } from "next/headers";
 import { handleEndpointError } from "@/libs/gamesettings";
 import {
   listPaypalSubscriptionForGET,
-  listPaypalSubscriptionForGET2,
   updatePaypalSubscriptionForGET,
 } from "@/queries/paypal";
 import {
@@ -13,21 +11,26 @@ import {
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { DAY_S, secondsFromNow } from "@/utils/time";
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
 
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
-
   // Create context and caller
   try {
-    // PayPal subscriptions have orderIds; reputation subscriptions do not.
-    const [paypalSubscriptions, repSubscriptions] = await Promise.all([
-      listPaypalSubscriptionForGET(drizzleDB),
-      listPaypalSubscriptionForGET2(drizzleDB),
-    ]);
+    // Rows whose last payment is older than one billing period. PayPal subscriptions
+    // have orderIds; reputation subscriptions do not.
+    const due = await listPaypalSubscriptionForGET(
+      drizzleDB,
+      secondsFromNow(-31 * DAY_S),
+    );
+    const paypalSubscriptions = due.filter(
+      (subscription) => subscription.orderId !== null,
+    );
+    const repSubscriptions = due.filter(
+      (subscription) => subscription.orderId === null,
+    );
     const token = paypalSubscriptions.length
       ? getPaypalAccessToken()
       : Promise.resolve("");
@@ -60,14 +63,11 @@ export async function GET(request: Request) {
 
     // Subscriptions without orderIds are from Reputation points
     const repUpdates = repSubscriptions.map(async (subscription) => {
-      const isDone =
-        new Date(subscription.updatedAt) <
-        new Date(Date.now() - 1000 * 60 * 60 * 24 * 31);
-      await updatePaypalSubscriptionForGET(drizzleDB, isDone, subscription);
+      await updatePaypalSubscriptionForGET(drizzleDB, subscription);
       await setFederalStatusWithStoreFloor(
         drizzleDB,
         subscription.affectedUserId,
-        isDone ? "NONE" : subscription.federalStatus,
+        "NONE",
       );
     });
     const results = await Promise.allSettled([...paypalUpdates, ...repUpdates]);

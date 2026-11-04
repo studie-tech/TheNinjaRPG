@@ -20,19 +20,15 @@ export function mergeInputs(
 
 /**
  * Extracts MCP tools from a tRPC router by iterating through all procedures
- * All game procedures are exposed; metadata customizes descriptions and responses.
+ * All game procedures are exposed; metadata customizes descriptions.
  *
  * @param appRouter - The tRPC router to extract tools from
- * @param currentPath - Internal path tracking for nested routers
  * @returns Array of ModelContextProtocolTool objects
  */
 export function extractToolsFromProcedures<
   TRoot extends AnyRootTypes,
   TRecord extends RouterRecord,
->(
-  appRouter: Router<TRoot, TRecord>,
-  currentPath: string[] = [],
-): ModelContextProtocolTool[] {
+>(appRouter: Router<TRoot, TRecord>): ModelContextProtocolTool[] {
   const tools: ModelContextProtocolTool[] = [];
   const procedures = Object.entries(appRouter._def.procedures);
 
@@ -42,7 +38,6 @@ export function extractToolsFromProcedures<
         inputs?: z.ZodObject<z.core.$ZodLooseShape>[];
         meta?: McpMeta;
         type?: "query" | "mutation" | "subscription";
-        mutation?: boolean;
       };
     };
 
@@ -50,39 +45,23 @@ export function extractToolsFromProcedures<
       const inputs = proc._def.inputs;
       const meta = proc._def.meta;
 
-      const pathInRouter = [...currentPath, ...name.split(".")];
+      // Procedures without inputs get an empty object schema. A single input keeps
+      // its own schema so unions, nullable inputs and references survive discovery;
+      // the tRPC caller remains responsible for validating the original schema.
+      const [first, ...rest] = inputs ?? [];
+      const schema = !first
+        ? z.object({})
+        : rest.length > 0
+          ? mergeInputs([first, ...rest])
+          : first;
 
-      // Detect if this is a mutation - check explicit meta first, then procedure type
-      const isMutation =
-        meta?.mcp?.isMutation !== undefined
-          ? meta?.mcp?.isMutation
-          : proc._def.type === "mutation" || proc._def.mutation === true;
-
-      const tool: ModelContextProtocolTool = {
-        name: meta?.mcp?.name ?? name.replace(/\./g, "_"),
+      tools.push({
         description:
           meta?.mcp?.description ?? `${proc._def.type ?? "procedure"} ${name}`,
-        pathInRouter,
-        transformMcpProcedure: meta?.mcp?.transformMcpProcedure,
-        isMutation,
-      };
-
-      // Build input schema from procedure inputs
-      if (inputs && inputs.length > 0) {
-        const schema = inputs.length > 1 ? mergeInputs(inputs) : inputs[0];
-        if (schema) {
-          // Preserve unions, nullable inputs and references for endpoint discovery.
-          // The tRPC caller remains responsible for validating the original schema.
-          tool.inputSchema = z.toJSONSchema(schema, {
-            unrepresentable: "any",
-          });
-        }
-      } else {
-        // Procedure with no inputs gets an empty object schema
-        tool.inputSchema = z.toJSONSchema(z.object({}));
-      }
-
-      tools.push(tool);
+        pathInRouter: name.split("."),
+        inputSchema: z.toJSONSchema(schema, { unrepresentable: "any" }),
+        isMutation: proc._def.type === "mutation",
+      });
     }
   }
 

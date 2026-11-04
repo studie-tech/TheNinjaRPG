@@ -9,7 +9,7 @@ export const PartyRoster = ({
   viewerId,
   disabled,
   onRemove,
-  capacity = members.length,
+  capacity,
 }: PartyRosterProps) => (
   <ul className="grid gap-2 text-sm sm:grid-cols-3" aria-label="Party members">
     {members.map((member) => (
@@ -77,7 +77,7 @@ export const PartyRoster = ({
 /** Activity-owned roster display; omit removal outside editable phases and enforce permissions server-side. */
 type PartyRosterProps = {
   members: { userId: string; username: string; details?: string; isReady?: boolean }[];
-  capacity?: number;
+  capacity: number;
   leaderId: string;
   viewerId: string;
   disabled?: boolean;

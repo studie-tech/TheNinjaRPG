@@ -65,9 +65,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setBattleType: cf.setters.battleType,
-    setStartDate: cf.setters.startDate, // yyyy-mm-dd
-    setEndDate: cf.setters.endDate, // yyyy-mm-dd
   };
 };
 

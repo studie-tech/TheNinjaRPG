@@ -1996,9 +1996,6 @@ const getPendingQuestItemEffects = (
   return { collections: outstanding, deliveries: pendingDeliveries };
 };
 
-// Type returned by getNewTrackers
-export type GetNewTrackersResult = Awaited<ReturnType<typeof getNewTrackers>>;
-
 /**
  * Unfinished goals with concrete map locations. Checked goals can be included in the player's
  * current sector so a republished map cannot leave an active mission on blocked terrain.
@@ -2103,6 +2100,7 @@ export const snapQuestTargetsToReachable = (
   return changed;
 };
 
+/** Build mission-hall categories and copy for village missions or outlaw crimes. */
 export const getMissionHallSettings = (isOutlaw: boolean) => {
   const type = isOutlaw ? "crime" : "mission";
   return [
@@ -2111,7 +2109,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "D",
       name: "Errand",
       image: IMG_MISSION_E,
-      delayMinutes: 1,
       description: `Errands typically involve simple tasks such as fetching an item somewhere in the village, delivering groceries, etc.`,
     },
     {
@@ -2119,7 +2116,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "D",
       name: "D-rank",
       image: IMG_MISSION_D,
-      delayMinutes: 5,
       description: `D-rank ${type}s are the lowest rank of ${type}s. They are usually simple ${type}s that have a low chance of danger, finding & retrieving items, doing manual labor, or fetching a lost cat`,
     },
     {
@@ -2127,7 +2123,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "C",
       name: "C-rank",
       image: IMG_MISSION_C,
-      delayMinutes: 10,
       description: `C-rank ${type}s are the second lowest rank of ${type}s. They are usually ${type}s that have a chance of danger, e.g. escorting a client through friendly territory, etc.`,
     },
     {
@@ -2135,7 +2130,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "B",
       name: "B-rank",
       image: IMG_MISSION_B,
-      delayMinutes: 15,
       description: `B-rank ${type}s are the third highest rank of ${type}s. They are usually ${type}s that have a decent chance of danger, e.g. escorting a client through neutral or enemy territory.`,
     },
     {
@@ -2143,7 +2137,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "A",
       name: "A-rank",
       image: IMG_MISSION_A,
-      delayMinutes: 20,
       description: `A-rank ${type}s are the second highest rank of ${type}s. They usually have a high chance of danger and are considered to be very difficult, e.g. assassinating a target, etc.`,
     },
     ...(isOutlaw
@@ -2153,7 +2146,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
             rank: "S" as const,
             name: "S-rank",
             image: IMG_MISSION_S,
-            delayMinutes: 25,
             description:
               "S-rank crimes are dangerous assignments for the strongest outlaws.",
           },
@@ -2164,7 +2156,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "D",
       name: "Medical",
       image: IMG_MISSION_M,
-      delayMinutes: 5,
       description: `Medical quests are specialized missions for medical ninja. These quests focus on healing, medical research, and providing medical assistance to the village.`,
     },
     {
@@ -2172,7 +2163,6 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
       rank: "S",
       name: "PvP",
       image: IMG_MISSION_PVP,
-      delayMinutes: 0,
       description: `PvP missions involve combat against other players. Test your skills in player versus player battles.`,
     },
   ] as const;

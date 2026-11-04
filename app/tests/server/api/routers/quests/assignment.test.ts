@@ -136,10 +136,7 @@ const makeBulkClient = (
     },
   }));
   const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
-  const values = vi.fn((inserted: { userId: string }[]) => {
-    void inserted;
-    return { onDuplicateKeyUpdate };
-  });
+  const values = vi.fn((_rows: { userId: string }[]) => ({ onDuplicateKeyUpdate }));
   const insert = vi.fn(() => ({ values }));
   const select = vi.fn(() => ({
     from: vi.fn(() => ({

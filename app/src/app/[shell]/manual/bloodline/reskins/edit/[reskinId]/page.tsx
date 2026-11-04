@@ -185,7 +185,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
             showSubmit={true}
             buttonTxt="Save Changes"
             allowImageUpload={true}
-            relationId={reskinData.id || reskinId}
+            relationId={reskinData.id}
             type="bloodline_reskin"
             onAccept={onAccept}
             submitDisabled={!form.formState.isValid || isUpdating}

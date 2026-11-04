@@ -7,9 +7,6 @@ import type { AppRouter } from "@/api/root";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
 import type { RegisterDeviceInput } from "@/validators/push";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 interface NativeLifecycleMocks {
   actionListeners: Array<(payload: unknown) => void>;

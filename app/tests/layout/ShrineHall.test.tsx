@@ -8,14 +8,12 @@ import { ShrineHall } from "@/layout/ShrineHall";
 import * as table from "@/layout/Table";
 import type { UserWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 describe("ShrineHall reserve boost locks", () => {
   let animationFrameDescriptor: PropertyDescriptor | undefined;
   let cancelAnimationFrameDescriptor: PropertyDescriptor | undefined;
 
   beforeEach(() => {
-    ensureDom();
     animationFrameDescriptor = Object.getOwnPropertyDescriptor(
       globalThis,
       "requestAnimationFrame",
@@ -130,7 +128,6 @@ const renderShrineHall = (shrines: object[]) => {
         getBoostTemplate: invalidation,
       },
     }),
-    travel: { getSectorData: { useQuery: () => ({ data: {} }) } },
     shrine: {
       getCapturedSectors: { useQuery: () => ({ data: shrines }) },
       getShrineAis: { useQuery: () => ({ data: [] }) },

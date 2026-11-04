@@ -97,7 +97,6 @@ export const pushActivityUpdate = async (
         token: activity.token,
         payload: buildActivityPayload(state, event),
         pushType: "liveactivity" as const,
-        priority: 10 as const,
       })),
     );
 

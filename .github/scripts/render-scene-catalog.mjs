@@ -22,7 +22,7 @@ const assets = snapshot.assets.filter((asset) =>
   .sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({
-  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: "chrome" }),
+  channel: "chrome",
   args: ["--no-sandbox"],
 });
 const index = [];

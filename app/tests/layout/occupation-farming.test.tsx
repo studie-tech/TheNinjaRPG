@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -7,7 +6,7 @@ import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const refetch = vi.fn(async () => undefined);
 const query = {
-  data: undefined as { success: false; message: string } | undefined,
+  data: undefined,
   isLoading: false,
   isFetching: false,
   refetch,
@@ -96,7 +95,6 @@ const newFarm = {
 } as unknown as FarmStateResponse;
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   query.data = undefined;
   query.isFetching = false;
@@ -127,11 +125,10 @@ describe("OccupationFarming load recovery", () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("shows prerequisite rejection feedback and blocks duplicate retries", () => {
-    query.data = { success: false, message: "You must be awake to use your farm." };
+  it("blocks duplicate retries while a refetch is in flight", () => {
     query.isFetching = true;
     const view = renderFarm();
-    expect(view.getByRole("alert").textContent).toContain(query.data.message);
+    expect(view.getByRole("alert").textContent).toContain("Could not load the farm.");
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(refetch).not.toHaveBeenCalled();
   });

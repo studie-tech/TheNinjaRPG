@@ -6,8 +6,8 @@ import * as image from "@/utils/image";
 import * as uploadthing from "@/utils/uploadthing";
 import * as toast from "@/libs/toast";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
-import { actualDialog, actualRichInput as RichInput } from "../setup/preload";
-import { ensureDom } from "../setup/dom.mjs";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { actualRichInput as RichInput } from "../setup/preload";
 
 const startUpload = vi.fn();
 const submit = vi.fn();
@@ -15,7 +15,6 @@ const uploadPending = vi.fn();
 let spies: { mockRestore: () => void }[];
 const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },
@@ -53,7 +52,7 @@ const editorFor = async (view: ReturnType<typeof render>) => {
 };
 const DialogComposer = () => {
   const [open, setOpen] = useState(true);
-  return <actualDialog.Dialog open={open} onOpenChange={setOpen}><actualDialog.DialogContent><actualDialog.DialogTitle>Compose message</actualDialog.DialogTitle><Composer initial="Draft" /></actualDialog.DialogContent></actualDialog.Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogTitle>Compose message</DialogTitle><Composer initial="Draft" /></DialogContent></Dialog>;
 };
 
 describe("rich input composer", () => {

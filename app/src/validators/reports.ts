@@ -4,7 +4,6 @@ import { BanStates, TimeUnits } from "@/drizzle/constants";
 
 export const systems = [
   "forum_comment",
-  "tavern_comment",
   "conversation_comment",
   "user_profile",
   "concept_art",
@@ -33,8 +32,6 @@ export const reportTimeoutSchema = z.object({
   comment: z.string().min(10).max(5000),
   object_id: z.string(),
 });
-
-export type ReportTimeoutSchema = z.infer<typeof reportTimeoutSchema>;
 
 export const userReviewSchema = z.object({
   staffUserId: z.string(),
@@ -65,7 +62,6 @@ export const reportFilteringSchema = z.object({
   endDate: z.date().optional(),
   system: z.string().optional(),
 });
-export type ReportFilteringSchema = z.infer<typeof reportFilteringSchema>;
 
 export const modBotPerformanceSchema = z.object({
   days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30),

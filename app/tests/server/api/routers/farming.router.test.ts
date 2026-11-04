@@ -121,14 +121,12 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
         finishAt: new Date(now.getTime() + (action === "water" ? 3600000 : -60000)),
       })));
       const api = await caller("farm-user"), before = await api.getFarmState();
-      if (!("plots" in before)) throw new Error(before.message);
       const result = action === "water" ? await api.waterAll() : await api.harvestAll();
       expect(result.success, result.message).toBe(true);
       const next = getFarmBulkMutationUpdate(before, result, action === "water" ? "water" : "harvest");
       if (action === "first collection" || action === "new stack") expect(next).toBeUndefined();
       else {
         const canonical = await api.getFarmState();
-        if (!("plots" in canonical)) throw new Error(canonical.message);
         expect(next).toEqual(canonical);
       }
     } finally { setSystemTime(); }
@@ -405,7 +403,6 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       ]);
       const api = await caller("farm-user");
       const preview = await api.getFarmState();
-      if ("success" in preview) throw Error("Missing farm state");
       const player = await db.query.userData.findFirst({
         where: eq(userData.userId, "farm-user"),
       });
@@ -432,7 +429,6 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
         .set({ equipped: "NONE" })
         .where(eq(userItem.id, "farm-gear-owned"));
       const refreshed = await api.getFarmState();
-      if ("success" in refreshed) throw Error("Missing farm state");
       for (const plot of planted)
         expect(refreshed.plots.find((entry) => entry.id === plot.id)?.finishAt).toEqual(
           plot.finishAt,
@@ -477,9 +473,6 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const api = await caller("farm-user");
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
-    if (!("plots" in state)) {
-      throw new Error("message" in state ? state.message : "getFarmState failed");
-    }
     expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe("Test Crop");
     expect(state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName).toBe(
       "Test Crop",
@@ -566,7 +559,6 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const api = farmingRouter.createCaller({ drizzle: skewed, userId: "farm-user" } as never);
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
-    if (!("plots" in state)) throw new Error("Expected farm state");
     expect(catalogRead).toBe(true);
     expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe("Planted Crop");
     expect(state.availableSeeds.find((seed) => seed.itemId === "seed-inventory")?.yieldName).toBe("Inventory Crop");

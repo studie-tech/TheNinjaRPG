@@ -93,12 +93,6 @@ export const register = async (): Promise<void> => {
   await invoke(PLUGIN, "register");
 };
 
-/** Remove all delivered notifications from the shade. */
-export const clearDelivered = async (): Promise<void> => {
-  if (!isNative()) return;
-  await invoke(PLUGIN, "removeAllDeliveredNotifications");
-};
-
 export const onRegistration = (
   callback: (registration: RegistrationToken) => void,
 ): (() => void) => {
@@ -132,12 +126,6 @@ export const onRegistrationError = (
     listener();
   };
 };
-
-/** Notification delivered while the app is in the foreground. */
-export const onReceived = (callback: (payload: PushPayload) => void): (() => void) =>
-  addNativeListener(PLUGIN, "pushNotificationReceived", (data) => {
-    callback(toPayload(data));
-  });
 
 /** Player tapped a notification; the shell has already foregrounded the app. */
 export const onActionPerformed = (

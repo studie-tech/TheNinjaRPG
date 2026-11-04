@@ -5,7 +5,6 @@ import * as navigation from "next/navigation";
 import { useSyncExternalStore } from "react";
 import * as Link from "@/layout/Link";
 import { ProfileSettingsNavigation, type ProfileSettingsGroup } from "@/layout/ProfileSettingsNavigation";
-import { ensureDom } from "../setup/dom.mjs";
 
 const mounted = vi.fn();
 /** Record rendered editors so navigation tests catch hidden forms mounting eagerly. */
@@ -33,7 +32,6 @@ const subscribe = (callback: () => void) => {
 };
 
 beforeEach(() => {
-  ensureDom();
   window.history.replaceState(null, "", "/profile?tab=edit&petId=companion");
   mounted.mockClear();
   vi.spyOn(navigation, "useSearchParams").mockImplementation(() => {

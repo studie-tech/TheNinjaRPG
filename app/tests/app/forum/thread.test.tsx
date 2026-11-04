@@ -18,7 +18,6 @@ import * as Link from "@/layout/Link";
 import * as Post from "@/layout/Post";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
 
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 const testApi = createTRPCReact<AppRouter>();
@@ -33,7 +32,6 @@ let requestedPages: number[];
 let savedObserver: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  ensureDom();
   failReads = false;
   rejectRemoval = false;
   moderator = false;

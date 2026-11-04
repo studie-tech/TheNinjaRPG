@@ -139,8 +139,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
           <JutsuHelper jutsu={form.getValues() as unknown as ZodJutsuType} />
         }
       >
-        {!jutsu && <p>Could not find this jutsu</p>}
-        {!loading && jutsu && (
+        {!loading && (
           <>
             <p className="mb-4">
               Linked reskins keep their name, descriptions, image, effect visuals and

@@ -84,12 +84,9 @@ import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
 import {
-  AllTags,
   questBuffTypes,
   questDebuffTypes,
   questStartingEffectsSchema,
-  rejectActivityBonuses,
-  SuperRefinePassiveEffects,
 } from "@/validators/combat";
 import { mapLocationFields, supportsMapStructure } from "@/validators/mapLocation";
 import { masteryRequirementFields } from "@/validators/mastery";
@@ -99,11 +96,8 @@ import {
   type QuestRewardType,
   questRewardFields,
 } from "@/validators/rewardPackages";
-import { ObjectiveReward, questRewardModeFields } from "@/validators/rewards";
+import { questRewardModeFields } from "@/validators/rewards";
 import { villageMissionContentError } from "@/validators/villageMission";
-
-// Re-export idsWithNumberField so consumers can import from objectives
-export { idsWithNumberField };
 
 /** Event counters retain progress before an achievement's first reward claim. */
 export const CombatActivityTasks = [
@@ -139,11 +133,6 @@ export const SimpleTasks = [
   "pvp_kills",
   "arena_kills",
   "minutes_passed",
-  // "anbu_kills",
-  // "tournaments_won",
-  // "village_funds_earned",
-  // "any_missions_completed",
-  // "any_crimes_completed",
   "days_as_kage",
   "errands_total",
   "a_missions_total",
@@ -179,7 +168,6 @@ export const SimpleTasks = [
   "plants_harvested",
   "farming_collection_log",
   "farming_level",
-  //"students_trained",
 ] as const;
 export type SimpleTask = (typeof SimpleTasks)[number];
 
@@ -189,7 +177,6 @@ export const InstantTasks = [
   "new_quest",
   "start_battle",
 ] as const;
-export type InstantTasksType = (typeof InstantTasks)[number];
 
 export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
 export type RaidTask = (typeof RaidTasks)[number];
@@ -276,7 +263,6 @@ export const OBJECTIVE_TAG_TYPES = [
   "weakness",
   "wound",
 ] as const;
-export type ObjectiveTagType = (typeof OBJECTIVE_TAG_TYPES)[number];
 
 export const LocationTasks = [
   "move_to_location",
@@ -285,7 +271,6 @@ export const LocationTasks = [
   "deliver_item",
   "defeat_opponents",
 ] as const;
-export type LocationTasksType = (typeof LocationTasks)[number];
 
 export const TrackerObjectiveTasks = [
   "craft_specific_item",
@@ -297,7 +282,6 @@ export const TrackerObjectiveTasks = [
   "tag_usage_win",
   "damage_dealt",
 ] as const;
-export type TrackerObjectiveTask = (typeof TrackerObjectiveTasks)[number];
 
 export const allObjectiveTasks = [
   ...SimpleTasks,
@@ -595,7 +579,6 @@ const SECTOR_TYPES = [
 ] as const;
 export type SectorType = (typeof SECTOR_TYPES)[number];
 export const LOCATION_TYPES = ["specific", "random"] as const;
-export type LocationType = (typeof LOCATION_TYPES)[number];
 
 const complexObjectiveFields = {
   // Location type fields
@@ -656,7 +639,6 @@ export const CollectItem = z.object({
   collect_time_minutes: z.coerce.number().min(0).max(60).prefault(0),
   ...complexObjectiveFields,
 });
-export type CollectItemType = z.infer<typeof CollectItem>;
 
 export const DeliverItem = z.object({
   ...baseObjectiveFields,
@@ -666,7 +648,6 @@ export const DeliverItem = z.object({
   delete_on_complete: z.coerce.boolean().prefault(true),
   ...complexObjectiveFields,
 });
-export type DeliverItemType = z.infer<typeof DeliverItem>;
 
 export const DefeatOpponents = z.object({
   ...baseObjectiveFields,
@@ -1188,36 +1169,13 @@ const questSuperRefine = (
         message: "Raid quests must have exactly one objective",
       });
     }
-    const objective = val.content.objectives[0];
-    const objectiveTask = objective?.task;
+    const objectiveTask = val.content.objectives[0]?.task;
     if (objectiveTask && !["open_raid", "exclusive_raid"].includes(objectiveTask)) {
       ctx.addIssue({
         code: "custom",
         message: "Raid quest objective must be 'open_raid' or 'exclusive_raid'",
       });
     }
-    // Validate opponentAIs is present in objective (handled by schema refinement, but validate here too)
-    const opponentAIs = (objective as { opponentAIs?: { ids: string[] }[] })
-      ?.opponentAIs;
-    if (!opponentAIs || opponentAIs.length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        message:
-          "Raid quest objective must have at least one boss AI (configure opponentAIs in the objective)",
-        path: ["content", "objectives", 0, "opponentAIs"],
-      });
-    }
-
-    // Both raid types require a sector number in the objective
-    const sector = (objective as { sector?: number })?.sector;
-    if (sector === null || sector === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Raids require a sector number in the objective (sector field)",
-        path: ["content", "objectives", 0, "sector"],
-      });
-    }
-
     // Validate raid-specific fields (persisted in quest table)
     if (!val.raidBossMaxHealth || val.raidBossMaxHealth < 1) {
       ctx.addIssue({
@@ -1342,39 +1300,3 @@ export const getObjectiveSchema = (type: string) => {
   }
   throw new Error(`Unknown objective task ${type}`);
 };
-
-export const allObjectiveSchema = z.union([
-  SimpleObjective,
-  MoveToObjective,
-  CollectItem,
-  DeliverItem,
-  DefeatOpponents,
-  CraftSpecificItem,
-  TrainSpecificJutsu,
-  CompleteSpecificQuest,
-  BuyItem,
-  UseSpecificItemCombat,
-  UseSpecificJutsuCombat,
-  TagUsageWin,
-  DamageDealt,
-  BloodlineCollection,
-]);
-
-/**
- * Validator schema for Raid Damage Threshold configuration.
- * Used for creating/updating threshold records via the admin UI.
- */
-export const RaidDamageThresholdValidator = z.object({
-  id: z.string().optional(), // Optional for creates
-  questId: z.string(),
-  damageRequired: z.coerce.number().min(1, "Damage must be at least 1"),
-  sortOrder: z.coerce.number().min(0).max(255).prefault(0),
-  rewards: ObjectiveReward,
-  effects: z
-    .array(AllTags)
-    .prefault([])
-    .superRefine(SuperRefinePassiveEffects)
-    .superRefine(rejectActivityBonuses),
-  effectDurationMinutes: z.coerce.number().min(1).max(10080).prefault(60),
-});
-export type RaidDamageThresholdType = z.infer<typeof RaidDamageThresholdValidator>;

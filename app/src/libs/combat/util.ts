@@ -300,7 +300,7 @@ export const getOpposingBattleWars = (
 /**
  * Get all relations for a user as array
  */
-export const getRelationsArray = (
+const getRelationsArray = (
   battle: CompleteBattle | ReturnedBattle,
   user: BattleUserState,
 ) => {
@@ -504,7 +504,7 @@ export const creditDamageDealt = (
   amount: number,
 ): void => {
   if (amount > 0 && isOpponentDamageTarget(attacker, target)) {
-    attacker.damageDealt = (attacker.damageDealt ?? 0) + amount;
+    attacker.damageDealt += amount;
   }
 };
 
@@ -512,7 +512,7 @@ export const creditDamageDealt = (
  * Records an applied effect tag on the crediting user's `usedTagTypes` for the `tag_usage_win`
  * tracker. Summons/clones credit their controller (resolveDamageCreditUser), matching
  * damage_dealt; everyone else credits themselves. Deduped so a tag re-applied across rounds
- * counts once, and defensively inits the field for battle JSON that predates it. Both write
+ * counts once. Both write
  * sites in process.ts (the resolution branch and the damage-modifier loop) share this helper so
  * they agree on what "applied" means.
  */
@@ -522,7 +522,6 @@ export const recordUsedTag = (
   tagType: EffectType,
 ): void => {
   const creditUser = resolveDamageCreditUser(usersState, caster);
-  creditUser.usedTagTypes = creditUser.usedTagTypes ?? [];
   if (!creditUser.usedTagTypes.includes(tagType)) {
     creditUser.usedTagTypes.push(tagType);
   }
@@ -536,8 +535,8 @@ export const recordUsedTag = (
  * earlier already has leftBattle=true from its own calcBattleResult) — lives in one documented
  * place rather than being re-derived at each call site.
  */
-export const wasDefeated = (u: BattleUserState, effects: UserEffect[]): boolean =>
-  !u.fledBattle && !stillInBattle(u, effects);
+export const wasDefeated = (u: BattleUserState): boolean =>
+  !u.fledBattle && !stillInBattle(u);
 
 /**
  * Whether a battle can pay out the PvP Energy reward for the given user: a non-sparring
@@ -575,8 +574,7 @@ export const isPvpEnergyRewardBattle = (
 export const didKageChallengerWin = (
   challenger: BattleUserState,
   kage: BattleUserState,
-  effects: UserEffect[],
-): boolean => stillInBattle(challenger, effects) && !stillInBattle(kage, effects);
+): boolean => stillInBattle(challenger) && !stillInBattle(kage);
 
 /**
  * Resolve the two sides of a Kage challenge: the challenger is always the
@@ -613,10 +611,7 @@ export const didUserTakeKageSeat = (
   const participants = getKageChallengeParticipants(battle);
   if (!participants) return false;
   const { challenger, kage } = participants;
-  return (
-    challenger.userId === userId &&
-    didKageChallengerWin(challenger, kage, battle.usersEffects)
-  );
+  return challenger.userId === userId && didKageChallengerWin(challenger, kage);
 };
 
 /**
@@ -641,7 +636,7 @@ export const buildCombatTrackerTasks = (
   );
   // Participation is settled once per real match on wins, losses, draws and fleeing.
   // Practice ranked spars and staff tournament exhibitions do not advance competitive counters.
-  if (!curBattle.extraState?.tournamentGameId && !user.isAi && !user.isSummon) {
+  if (!curBattle.extraState.tournamentGameId && !user.isAi && !user.isSummon) {
     if (curBattle.battleType === "COMBAT" && isPvp)
       tasks.push({ task: "pvp_participated", increment: 1 });
     if (curBattle.battleType === "SPARRING" && isPvp)
@@ -683,8 +678,8 @@ export const buildCombatTrackerTasks = (
   // damage_dealt: total damage this user dealt to real opponents this battle (accumulated
   // at consequence application in process.ts; damage from the user's summons/clones is
   // credited here via controllerId). Any outcome; skip a no-op zero emit.
-  if ((user.damageDealt ?? 0) > 0) {
-    tasks.push({ task: "damage_dealt", increment: user.damageDealt ?? 0 });
+  if (user.damageDealt > 0) {
+    tasks.push({ task: "damage_dealt", increment: user.damageDealt });
   }
 
   if (result.didWin > 0) {
@@ -693,13 +688,13 @@ export const buildCombatTrackerTasks = (
     // damage_dealt; wasDefeated wraps the engine's own defeat check plus a flee exclusion. Gating
     // is implicit — these objectives are authored only on hunting-rank quests.
     for (const u of curBattle.usersState) {
-      if (isOpponentDamageTarget(user, u) && wasDefeated(u, curBattle.usersEffects)) {
+      if (isOpponentDamageTarget(user, u) && wasDefeated(u)) {
         tasks.push({ task: "creatures_hunted", increment: 1 });
       }
     }
     // tag_usage_win: one tick per DISTINCT tag type the user APPLIED (resolved) this
     // battle. usedTagTypes is populated at effect resolution in process.ts.
-    for (const t of new Set(user.usedTagTypes ?? [])) {
+    for (const t of new Set(user.usedTagTypes)) {
       tasks.push({ task: "tag_usage_win", increment: 1, contentId: t });
     }
   }
@@ -710,7 +705,7 @@ export const buildCombatTrackerTasks = (
 /**
  * Get bounties from extraState for a user
  */
-export const getUserBounties = (
+const getUserBounties = (
   battle: CompleteBattle | ReturnedBattle,
   controllerId: string,
 ) => {
@@ -720,7 +715,7 @@ export const getUserBounties = (
 /**
  * Get bounty signups from extraState for a user
  */
-export const getUserBountySignups = (
+const getUserBountySignups = (
   battle: CompleteBattle | ReturnedBattle,
   controllerId: string,
 ) => {
@@ -768,7 +763,7 @@ export const getPoolsAffected = (
  * This is a pure calculation - no mutation occurs.
  * If no effects are provided, returns 0 (no adjustment).
  */
-export const getPoolAdjustment = (
+const getPoolAdjustment = (
   user: ReturnedUserState,
   effects: UserEffect[] | undefined,
   pool: PoolType,
@@ -821,7 +816,6 @@ export const getEffectiveMaxPool = (
 /**
  * Get effective current pool value.
  * Use this wherever you need to display or use current pool values in combat.
- * If no effects are provided, returns the base current pool value.
  *
  * Note: Current pool values are directly mutated by applyPoolAdjustmentsToBase,
  * so we return user[cur] directly. The adjustment has already been applied to
@@ -831,7 +825,6 @@ export const getEffectiveMaxPool = (
  */
 export const getEffectiveCurPool = (
   user: ReturnedUserState,
-  _effects: UserEffect[] | undefined,
   pool: PoolType,
 ): number => {
   const { cur } = getPoolKeys(pool);
@@ -1047,11 +1040,9 @@ export const findUser = (
   users: ReturnedUserState[],
   longitude: number,
   latitude: number,
-  effects?: UserEffect[],
 ) => {
   return users.find(
-    (u) =>
-      u.longitude === longitude && u.latitude === latitude && stillInBattle(u, effects),
+    (u) => u.longitude === longitude && u.latitude === latitude && stillInBattle(u),
   );
 };
 
@@ -1065,13 +1056,12 @@ export const getFacingDirection = (
   user: ReturnedUserState,
   users: ReturnedUserState[],
   fallback: AvatarFacing,
-  effects?: UserEffect[],
 ): AvatarFacing => {
   let nearest: ReturnedUserState | undefined;
   let nearestDistance = Infinity;
   for (const other of users) {
     if (other.direction === user.direction) continue;
-    if (!stillInBattle(other, effects) || other.leftBattle) continue;
+    if (!stillInBattle(other) || other.leftBattle) continue;
     const distance = Math.hypot(
       other.longitude - user.longitude,
       other.latitude - user.latitude,
@@ -1350,7 +1340,7 @@ export const getEffectStackKey = (effect: UserEffect) => {
     return `${key}-${effect.aggroMode}-${effect.calculation}`;
   }
   if (effect.type === "increasepotency" || effect.type === "decreasepotency") {
-    const elements = [...new Set(effect.affectedElements ?? [])].sort().join(",");
+    const elements = [...new Set(effect.affectedElements)].sort().join(",");
     return `${key}-${effect.affectedTag}-${effect.calculation}-${elements || "all"}`;
   }
   return key;
@@ -1770,7 +1760,7 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
   if (controlledUsers.some((u) => u.sageModeId))
     jutsuIds.add(SAGE_MODE_ACTIVATION_JUTSU_ID);
   for (const user of battle.usersState) {
-    for (const action of user.usedActions ?? []) {
+    for (const action of user.usedActions) {
       if (action.type === "jutsu") jutsuIds.add(action.id);
       if (action.type === "item") itemIds.add(action.id);
     }
@@ -1793,7 +1783,8 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           effects: definition.effects.map((effect) => {
             const masked = { ...effect } as BattleEffect;
             delete masked.highestGenerals;
-            delete masked.targetHighestGenerals;
+            // Persisted catalog tags can contain private target metadata outside the runtime type.
+            Reflect.deleteProperty(masked, "targetHighestGenerals");
             return masked;
           }),
         },
@@ -1920,8 +1911,8 @@ const maskBattleEffects = <T extends BattleEffect>(
     .map((effect) => {
       const masked = { ...effect };
       if (!controlledIds.has(effect.creatorId)) delete masked.highestGenerals;
-      if (!("targetId" in effect && controlledIds.has(String(effect.targetId))))
-        delete masked.targetHighestGenerals;
+      // Saved effects can carry unused target stats; omit them from every response.
+      Reflect.deleteProperty(masked, "targetHighestGenerals");
       return {
         ...masked,
         // Passive modifiers are visible in the effects panel; their equipment and
@@ -1980,10 +1971,9 @@ export const calcBattleResult = (
         ? loyalty.pvpRewards
         : 0;
     const friends = getBattleTeamMembers(battle, user);
-    const effects = battle.usersEffects;
-    const survivingTargets = targets.filter((t) => stillInBattle(t, effects));
+    const survivingTargets = targets.filter((t) => stillInBattle(t));
     if (
-      !stillInBattle(user, effects) ||
+      !stillInBattle(user) ||
       (survivingTargets.length === 0 &&
         !battle.extraState.encounter?.pendingWaves.length)
     ) {
@@ -1993,7 +1983,7 @@ export const calcBattleResult = (
       // Calculate ELO change
       const uExp = friends.reduce((a, b) => a + b.experience, 0) / friends.length;
       const oExp = targets.reduce((a, b) => a + b.experience, 0) / targets.length;
-      const effectiveHealth = getEffectiveCurPool(user, effects, "Health");
+      const effectiveHealth = getEffectiveCurPool(user, "Health");
       const didWin = effectiveHealth > 0 && !user.fledBattle;
       const maxGain = 32;
 
@@ -2859,7 +2849,7 @@ export const calcBattleResult = (
         );
       result.weeklyPvpKills =
         earnsPvpExperience && outcome === "Won"
-          ? targetUsers.filter((target) => wasDefeated(target, effects)).length
+          ? targetUsers.filter((target) => wasDefeated(target)).length
           : 0;
 
       // Keep the result summary consistent with exhibition settlement's progression bypass.
@@ -2999,15 +2989,6 @@ export const resolveControlledActorId = (
 };
 
 /**
- * Refill action points for all users in the battle
- */
-export const refillActionPoints = (battle: ReturnedBattle) => {
-  battle.usersState.forEach((u) => {
-    u.actionPoints = 100;
-  });
-};
-
-/**
  * Align the round, active actor and action points in place using the battle timer.
  * Expire battlefield entities before exposing the next turn and return teardown effects for history.
  */
@@ -3022,10 +3003,9 @@ export const alignBattle = (
   // the turn ring, or it can be picked as the actor and then removed underneath
   // the caller -- leaving battle.activeUserId pointing at a user that no longer
   // exists and naming a ghost in the "It is now X's turn" line.
-  const orphanedSummons = spliceOrphanedSummons(
-    battle.usersState,
-    battle.usersEffects,
-  ).map((u) => u.username);
+  const orphanedSummons = spliceOrphanedSummons(battle.usersState).map(
+    (u) => u.username,
+  );
   const precomputedActions = userId
     ? availableUserActions(battle as unknown as ReturnedBattle, userId)
     : undefined;
@@ -3050,32 +3030,19 @@ export const alignBattle = (
       (e) =>
         e.type === "curse" && e.rounds === 1 && !e.castThisRound && isEffectActive(e),
     );
-    refillActionPoints(battle);
+    battle.usersState.forEach((u) => {
+      u.actionPoints = 100;
+    });
     battle.round = actionRound;
-    // console.log("Action round: ", actionRound);
     // Effects can be persisted without passing through the pruning gate in
     // applyEffects, so the counter must floor at 0; a negative value survives
     // in the battle row and fails the tag schemas, which all require rounds >= 0.
-    battle.usersEffects.forEach((e) => {
-      if (e.rounds !== undefined) {
-        if (!e.castThisRound) {
-          // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = Math.max(0, e.rounds - 1);
-        }
-        e.isNew = false;
-        e.castThisRound = false;
-      }
-    });
-    battle.groundEffects.forEach((e) => {
-      if (e.rounds !== undefined) {
-        if (!e.castThisRound) {
-          // console.log(`Updating effect ${e.type} round ${e.rounds} -> ${e.rounds - 1}`);
-          e.rounds = Math.max(0, e.rounds - 1);
-        }
-        e.isNew = false;
-        e.castThisRound = false;
-      }
-    });
+    for (const e of [...battle.usersEffects, ...battle.groundEffects]) {
+      if (e.rounds === undefined) continue;
+      if (!e.castThisRound) e.rounds = Math.max(0, e.rounds - 1);
+      e.isNew = false;
+      e.castThisRound = false;
+    }
 
     const actorIndex = battle.usersState.findIndex(
       (user) => user.userId === actor.userId,
@@ -3090,7 +3057,7 @@ export const alignBattle = (
       if (!holder) continue;
       if (
         !battle.usersState.some(
-          (u) => !areBattleAllies(u, holder) && stillInBattle(u, battle.usersEffects),
+          (u) => !areBattleAllies(u, holder) && stillInBattle(u),
         ) &&
         !battle.extraState.encounter?.pendingWaves.length
       ) {
@@ -3111,7 +3078,7 @@ export const alignBattle = (
         nextActors.find(
           (candidate) =>
             battle.usersState.some((user) => user.userId === candidate.userId) &&
-            stillInBattle(candidate, battle.usersEffects),
+            stillInBattle(candidate),
         ) ?? calcActiveUser(battle, userId).actor;
       changedActor = actor.userId !== battle.activeUserId;
     }
@@ -3124,8 +3091,6 @@ export const alignBattle = (
   // Update the active user on the battle
   battle.activeUserId = actor.userId;
   battle.updatedAt = now;
-  // TOOD: Debug
-  // console.log("New Actor: ", actor.username, battle.round, battle.version, Date.now());
   return {
     actor,
     progressRound,
@@ -3482,9 +3447,8 @@ export const getDistanceToClosestEnemy = (
   const user = battle.usersState.find((u) => u.userId === userId);
   if (!user) return null;
 
-  const effects = battle.usersEffects;
   const enemies = battle.usersState.filter(
-    (u) => !areBattleAllies(u, user) && stillInBattle(u, effects),
+    (u) => !areBattleAllies(u, user) && stillInBattle(u),
   );
 
   if (enemies.length === 0) return null;

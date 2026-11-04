@@ -60,7 +60,6 @@ jobs:
             app
             mobile
             scripts
-            spacetimedb-towerdefense
             .github
             .agents
             .vscode

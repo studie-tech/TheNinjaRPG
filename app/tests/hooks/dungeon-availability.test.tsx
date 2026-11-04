@@ -9,7 +9,6 @@ import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
-import { ensureDom } from "../setup/dom.mjs";
 import { dungeonContent } from "../setup/dungeon";
 
 type Available = RouterOutputs["coop"]["dungeon"]["getAvailable"];
@@ -17,7 +16,6 @@ const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 let now = 0;
 beforeEach(() => {
-  ensureDom();
   now = Date.UTC(2026, 10, 1, 12);
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);

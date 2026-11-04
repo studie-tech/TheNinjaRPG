@@ -101,7 +101,7 @@ export const fetchSkillTreeViewer = async (
       })
     : undefined;
 
-import { asc, gte, inArray, lt, not, sql } from "drizzle-orm";
+import { asc, gte, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { COST_SKILL_RESET, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
@@ -546,28 +546,6 @@ export const updateSkillTreeFolderForReorderFolders = (
     .update(skillTreeFolder)
     .set({ order, updatedAt: new Date() })
     .where(eq(skillTreeFolder.id, id));
-
-/**
- * Build the `actionLog` listing for `fetchMonthlyResets`, selecting only `id`,
- * including predicates on `userId`, `tableName`, `relatedMsg`.
- */
-export const listActionLogForFetchMonthlyResets = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-  SKILL_RESET_STAFF_RELATED_MSG: "Free reset for staff member",
-  startOfMonth: Date,
-  startOfNextMonth: Date,
-) =>
-  client.query.actionLog.findMany({
-    where: and(
-      eq(actionLog.userId, userId),
-      eq(actionLog.tableName, "skillReset"),
-      not(eq(actionLog.relatedMsg, SKILL_RESET_STAFF_RELATED_MSG)),
-      gte(actionLog.createdAt, startOfMonth),
-      lt(actionLog.createdAt, startOfNextMonth),
-    ),
-    columns: { id: true },
-  });
 
 /** Build the `skillTree` lookup, selecting only `id` and `pathType`, using predicates on `id`. */
 export const findRequiredSkillTreeEntry = (

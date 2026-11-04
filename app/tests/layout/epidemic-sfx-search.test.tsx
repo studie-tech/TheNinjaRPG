@@ -5,7 +5,6 @@ import * as client from "@/app/_trpc/client";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 type Result = { success: boolean; message: string; assetId?: string };
 type Callbacks = { onMutate: () => void; onSuccess: (result: Result) => Promise<void>; onError: (error: Error) => void; onSettled: () => void };
@@ -19,7 +18,7 @@ const invalidations = {
 };
 
 beforeEach(() => {
-  ensureDom(); request.mockReset();
+  request.mockReset();
   for (const invalidate of Object.values(invalidations)) invalidate.mockReset().mockResolvedValue(undefined);
   request.mockResolvedValue({ success: true, message: "Imported", assetId: "new-sound" });
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: { role: "CONTENT" } } as never);

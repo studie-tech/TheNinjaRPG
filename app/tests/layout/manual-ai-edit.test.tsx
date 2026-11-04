@@ -19,7 +19,6 @@ import * as ais from "@/libs/ais";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const save = vi.fn();
 const names = { useQuery: () => ({ data: [], isPending: false }) };
@@ -29,7 +28,6 @@ let editor: ReturnType<typeof useAiEditForm>;
 let ai: AiWithRelations;
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   // Only editor and validation inputs are needed; unrelated user columns stay absent.
   ai = {

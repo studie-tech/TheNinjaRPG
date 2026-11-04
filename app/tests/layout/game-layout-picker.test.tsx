@@ -6,9 +6,6 @@ import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import { GAME_LAYOUTS, type GameLayoutId } from "@/libs/gameLayouts";
 import { LayoutContextProvider, useActiveLayout } from "@/utils/LayoutContext";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 type PickerRouter = { refresh: ReturnType<typeof vi.fn>; push: ReturnType<typeof vi.fn>; replace: ReturnType<typeof vi.fn> };
 // Module mocks persist across suites, so this file installs its own router.

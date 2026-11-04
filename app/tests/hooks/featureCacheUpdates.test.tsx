@@ -10,9 +10,7 @@ import type { UserItem } from "@/drizzle/schema";
 import { getEquippedInventory } from "@/deltas/item";
 import type { useInventoryCacheUpdate as InventoryCacheHook } from "@/hooks/useInventoryCacheUpdate";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 const testApi = createTRPCReact<AppRouter>();
 let useInventoryCacheUpdate: typeof InventoryCacheHook;
 /** Bind the real typed procedures to this suite's provider without retaining other suites' mocks. */

@@ -206,20 +206,11 @@ export const filterLiveSectorBattleUsers = <
       (user.battleId !== null && liveBattleIds.has(user.battleId)),
   );
 
-/**
- * Whether a position sits in a village zone. When a sector map is provided
- * the tile zone decides; callers without map access treat the whole sector
- * as village (endpoints like train/home that predate zone-based checks).
- */
+/** Whether a position sits on a village-zone tile of the sector map. */
 export const calcIsInVillage = (
   position: SectorPoint,
-  sectorMap?: Pick<NormalizedSectorMap, "tiles">,
-) => {
-  if (sectorMap) {
-    return getSectorTile(sectorMap, position)?.zone === "village";
-  }
-  return true;
-};
+  sectorMap: Pick<NormalizedSectorMap, "tiles">,
+) => getSectorTile(sectorMap, position)?.zone === "village";
 
 // Maximum distance between two set of longitudes / latitudes
 export const maxDistance = (

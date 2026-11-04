@@ -18,7 +18,7 @@ import {
   showTrainingCapcha,
 } from "@/libs/captcha";
 
-import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import { fetchDmgConfig, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 
 import {
@@ -153,15 +153,11 @@ export const miscRouter = createTRPCRouter({
         return errorResponse("You or an AI must be marked as sender");
       }
       // Update database
-      const [result] = await Promise.all([
+      await Promise.all([
         insertNotificationForSubmitNotification(ctx.drizzle, sender, input),
         updateUserDataForSubmitNotification(ctx.drizzle),
       ]);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could insert notificaiton in db" };
-      } else {
-        return { success: true, message: "Notification sent" };
-      }
+      return { success: true, message: "Notification sent" };
     }),
   getPreviousNotifications: protectedProcedure
     .meta({
@@ -219,15 +215,6 @@ export const miscRouter = createTRPCRouter({
         success: true,
         message: `Global tavern ${input.enabled ? "enabled" : "disabled"}`,
       };
-    }),
-  getActivePlayers24h: publicProcedure
-    .meta({
-      mcp: { description: "Get active players in last 24 hours" },
-    })
-    .output(z.number())
-    .query(async ({ ctx }) => {
-      const setting = await getGameSetting(ctx.drizzle, "hourly-active-players");
-      return setting.value;
     }),
   setEventGameSetting: protectedProcedure
     .input(changeSettingSchema)
@@ -364,8 +351,8 @@ export const miscRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input?.cursor ? input.cursor : 0;
-      const limit = input?.limit ? input.limit : 100;
+      const currentCursor = input.cursor ?? 0;
+      const limit = input.limit;
       const skip = currentCursor * limit;
 
       // Resolve username filters to userId arrays (done upfront to keep main query simple)

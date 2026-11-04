@@ -12,16 +12,13 @@ import type { updateAiProfileSchema } from "@/validators/ai";
  *
  * @param client - The DrizzleClient instance used to query the database.
  * @param id - The unique identifier of the AI profile to fetch.
- * @returns The AI profile object, including its associated rules.
- * @throws Will throw an error if the profile with the given ID is not found.
+ * @returns The AI profile object, including its associated rules, or undefined when no
+ * profile has the given ID.
  */
 export const fetchAiProfileById = async (client: DrizzleClient, id: string) => {
   const profile = await client.query.aiProfile.findFirst({
     where: eq(aiProfile.id, id),
   });
-  if (!profile) {
-    throw new Error(`fetchAiProfile: Profile not found: ${id}`);
-  }
   return profile;
 };
 
@@ -40,17 +37,7 @@ export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: stri
 };
 
 import { inArray, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { item, jutsu, quest, userData } from "@/drizzle/schema";
-
-/** Build the `aiProfile` insert for `createAiProfile`. */
-export const insertAiProfileForCreateAiProfile = (
-  client: Pick<DrizzleClient, "insert">,
-  input: { userId: string; rules: import("@/validators/ai").AiRuleType[] },
-) =>
-  client
-    .insert(aiProfile)
-    .values({ id: nanoid(), userId: input.userId, rules: input.rules });
 
 /** Build the `jutsu` listing for `updateAiProfile`, using predicates on `id`. */
 export const listJutsuForUpdateAiProfile = (

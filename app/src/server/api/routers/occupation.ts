@@ -678,13 +678,12 @@ export const occupationRouter = createTRPCRouter({
       // Find target item and crystal from user items
       const targetUserItem = userItems.find((ui) => ui.id === input.userItemId);
       const crystalUserItem = userItems.find((ui) => ui.id === input.userCrystalItemId);
-      const crystalItem = crystalUserItem?.item;
 
       // Derived
       const userCraftingRank = getCraftingRank(user.craftingExperience);
       const maxImbuedItems = getEffectiveMaxImbuements(
         userCraftingRank,
-        targetUserItem?.item?.maxImbueNumber || 1,
+        targetUserItem?.item.maxImbueNumber || 1,
       );
       const curImbuingItemsCount = userItems.filter(
         (ui) =>
@@ -706,9 +705,7 @@ export const occupationRouter = createTRPCRouter({
       if (!crystalUserItem) {
         return errorResponse("Crystal not found");
       }
-      if (!crystalItem) {
-        return errorResponse("Crystal item data not found");
-      }
+      const crystalItem = crystalUserItem.item;
       if (crystalUserItem.quantity <= 0) {
         return errorResponse("You don't have this crystal");
       }
@@ -727,13 +724,13 @@ export const occupationRouter = createTRPCRouter({
         return errorResponse("Selected item is not a crystal");
       }
       if (crystalItem.crystalTargetTypes) {
-        if (crystalItem.crystalTargetTypes !== targetUserItem.item?.itemType) {
+        if (crystalItem.crystalTargetTypes !== targetUserItem.item.itemType) {
           return errorResponse(
             `This crystal can only be applied to ${crystalItem.crystalTargetTypes} items`,
           );
         }
       }
-      if (!targetUserItem.item?.canBeImbued) {
+      if (!targetUserItem.item.canBeImbued) {
         return errorResponse("This item cannot be imbued");
       }
       if (targetUserItem.equipped !== "NONE") {
@@ -748,10 +745,10 @@ export const occupationRouter = createTRPCRouter({
         return errorResponse(
           getImbuementRankCapMessage(
             userCraftingRank,
-            targetUserItem.item?.maxImbueNumber || 1,
+            targetUserItem.item.maxImbueNumber || 1,
             targetUserItem.imbuements.length,
           ) ??
-            `This item already has its maximum of ${targetUserItem.item?.maxImbueNumber || 1} crystals`,
+            `This item already has its maximum of ${targetUserItem.item.maxImbueNumber || 1} crystals`,
         );
       }
       if (

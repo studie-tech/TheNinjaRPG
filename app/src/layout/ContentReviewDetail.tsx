@@ -161,13 +161,13 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   const isBusy =
     approve.isPending || reject.isPending || unreject.isPending || revert.isPending;
 
-  const canDecide = proposal?.status === "PENDING" && proposal.canReview;
-  const hasText = !!proposal?.changes.some((change) =>
+  const canDecide = proposal.status === "PENDING" && proposal.canReview;
+  const hasText = proposal.changes.some((change) =>
     Object.values(change.after).some((value) => typeof value === "string"),
   );
 
   const doApprove = () => {
-    if (!proposal || !canDecide || isBusy) return;
+    if (!canDecide || isBusy) return;
     approve.mutate({
       id: proposal.id,
       expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),
@@ -183,7 +183,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
     });
   };
   const doReject = () => {
-    if (!proposal || !canDecide || isBusy) return;
+    if (!canDecide || isBusy) return;
     reject.mutate({
       id: proposal.id,
       expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),

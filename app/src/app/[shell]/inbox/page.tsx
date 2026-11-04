@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, SquarePen, Trash2, UserRoundX, Users, X } from "lucide-react";
+import { BellRing, SquarePen, Trash2, UserRoundX, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -81,49 +81,44 @@ function InboxContent() {
         topRightContent={topRightContent}
       />
     );
-  } else if (!selectedConvo) {
-    return (
-      <ContentBox
-        title="Inbox"
-        subtitle="Private Conversations"
-        padding={false}
-        topRightContent={topRightContent}
-      >
-        <ShowConversations
-          selectedConvo={selectedConvo}
-          setSelectedConvo={selectConvo}
-        />
-      </ContentBox>
-    );
   }
+  return (
+    <ContentBox
+      title="Inbox"
+      subtitle="Private Conversations"
+      padding={false}
+      topRightContent={topRightContent}
+    >
+      <ShowConversations setSelectedConvo={selectConvo} />
+    </ContentBox>
+  );
 }
 
 /**
  * Component for displaying a conversations
  */
 interface ShowConversationsProps {
-  selectedConvo?: string | null;
   setSelectedConvo: React.Dispatch<React.SetStateAction<string | null>>;
 }
 const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   // Get user data & destructure
   const { data: userData } = useRequiredUserData();
-  const { selectedConvo, setSelectedConvo } = props;
+  const { setSelectedConvo } = props;
   const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
 
-  // This list unmounts while a thread is open, so selectedConvo is always null here
-  // and cannot bust the cache. Refetch on remount so going back after reading or
-  // creating a conversation picks up lastReadAt and new threads. staleTime still
-  // skips window-focus refetches while the list stays mounted.
+  // This list unmounts while a thread is open. Refetch on remount so going back after
+  // reading or creating a conversation picks up lastReadAt and new threads. staleTime
+  // still skips window-focus refetches while the list stays mounted.
   const {
     data: allConversations,
     refetch,
     isPending,
-  } = api.comments.getUserConversations.useQuery(
-    { selectedConvo: selectedConvo },
-    { enabled: !!userData, staleTime: 30_000, refetchOnMount: "always" },
-  );
+  } = api.comments.getUserConversations.useQuery(undefined, {
+    enabled: !!userData,
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
 
   // Mutations
   const {
@@ -158,19 +153,9 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
       {allConversations && (
         <div className="relative">
           <ul className="space-y-2">
-            <li>
-              <button
-                type="button"
-                className="flex w-full items-center rounded-lg p-2 text-left"
-                onClick={() => selectedConvo && setSelectedConvo(null)}
-              >
-                {selectedConvo ? (
-                  <X className="h-6 w-6 hover:text-orange-500" />
-                ) : (
-                  <Users className="h-6 w-6" />
-                )}
-                <span className="ml-3 truncate font-bold">Chats</span>
-              </button>
+            <li className="flex w-full items-center rounded-lg p-2">
+              <Users className="h-6 w-6" />
+              <span className="ml-3 truncate font-bold">Chats</span>
             </li>
 
             <hr />
@@ -181,7 +166,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
               const canExit = !isRaidChatConversationId(convo.id);
               return (
                 <li
-                  className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover ${selectedConvo && selectedConvo === convo.id ? "bg-popover" : ""}`}
+                  className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover`}
                   key={convo.id}
                 >
                   <button
@@ -201,7 +186,6 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                         >
                           <AvatarImage
                             href={user.avatar}
-                            userId={user.userId}
                             alt={user.username}
                             size={50}
                           />

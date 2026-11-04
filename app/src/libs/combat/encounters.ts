@@ -18,17 +18,11 @@ export const advanceEncounterWave = (battle: CompleteBattle, ended = false) => {
   const state = battle.extraState.encounter;
   const next = state?.pendingWaves[0];
   if (!state || !next || ended) return false;
-  if (
-    battle.usersState.some(
-      (u) => u.direction === "right" && stillInBattle(u, battle.usersEffects),
-    )
-  )
+  if (battle.usersState.some((u) => u.direction === "right" && stillInBattle(u)))
     return false;
   if (battle.round < state.waveStartedRound + next.delayRounds) return false;
   // Defeated enemies remain as effect sources until the floor settles.
-  const occupied = battle.usersState.filter((u) =>
-    stillInBattle(u, battle.usersEffects),
-  );
+  const occupied = battle.usersState.filter((u) => stillInBattle(u));
   const locations = getBattleSpawnLocations(
     battle.width,
     battle.height,

@@ -1,4 +1,3 @@
-import * as nextHeaders from "next/headers";
 import * as gameSettings from "@/libs/gamesettings";
 import * as overworld from "@/libs/overworldAi";
 import * as sectorMaps from "@/server/utils/sectorMap";
@@ -54,7 +53,6 @@ describe("daily-overworld-ai route", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(nextHeaders, "cookies").mockResolvedValue(undefined as never);
     vi.spyOn(gameSettings, "lockWithDailyTimer").mockImplementation(mocks.lock);
     vi.spyOn(gameSettings, "handleEndpointError").mockImplementation(mocks.handleError);
     vi.spyOn(overworld, "resolveOverworldPosition").mockImplementation(mocks.resolve);

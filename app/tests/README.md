@@ -49,7 +49,8 @@ A passing subset does not establish that module mocks are isolated. Bun shares
 its module registry across files, so run `make test` after changing shared setup,
 fixtures or module mocks. Prefer restorable spies and the delegating helpers in
 `setup/serverModules.ts`; restore spies and environment/global changes in
-`afterEach`. DOM tests reuse `setup/dom.mjs` and clean up their rendered views.
+`afterEach`. The `setup/dom.mjs` preload installs jsdom before any suite loads;
+DOM tests clean up their rendered views.
 
 ## Database and Redis tests
 

@@ -3,7 +3,7 @@ import { useSetAtom } from "jotai";
 import { Check, HelpCircle, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api, type RouterInputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { combatProfilePatch, getCombatInventoryUpdate } from "@/deltas/combat";
 import {
@@ -166,7 +166,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { currentStep, handleNextStepAsync } = useTutorialStep();
 
   // Mutation protection
-  const onMutateCheck = useGlobalOnMutateProtect();
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
@@ -217,11 +216,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battleState.battle ?? null);
   const aggro = useMemo(
-    () =>
-      getAggroDisplay(
-        battleState.battle?.usersState ?? [],
-        battleState.battle?.usersEffects,
-      ),
+    () => getAggroDisplay(battleState.battle?.usersState ?? []),
     [battleState.battle],
   );
 
@@ -403,12 +398,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           });
           void utils.combat.getBattle.invalidate();
         } else {
-          arenaStartInFlightRef.current = false;
           showMutationToast(result);
         }
       },
       onError: (error) => {
-        arenaStartInFlightRef.current = false;
         showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {
@@ -453,7 +446,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   // User Action
   const { mutate: mutateAction, isPending } = api.combat.performAction.useMutation({
     onMutate: () => {
-      onMutateCheck();
       document.body.style.cursor = "wait";
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
       return {
@@ -667,7 +659,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               message: data.message,
             });
           }
-          void utils.combat.getBattle.invalidate().catch(() => undefined);
+          void utils.combat.getBattle.invalidate();
         }
       } else {
         showMutationToast({
@@ -767,11 +759,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (canPerformAction()) {
             performAction({
               battleId: battleRef.current.id,
-              userId: actor.userId,
+              version: battleRef.current.version,
               actionId: "wait",
               longitude: actor.longitude,
               latitude: actor.latitude,
-              version: battleRef.current.version,
             });
           }
         }
@@ -840,7 +831,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           !user.isSummon &&
           user.isAutoCombat &&
           !user.leftBattle &&
-          stillInBattle(user, battleState.battle?.usersEffects),
+          stillInBattle(user),
       ));
 
   // Hidden manual battles catch up on resume; keep driving auto combat in the
@@ -873,10 +864,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         const { isAITurn } = getTurnControl(actor, suid);
         if (isAITurn && !isPending && !inLobby) {
           if (canPerformAction()) {
-            performAction({
-              battleId: battleRef.current.id,
-              version: battleRef.current.version,
-            });
+            performAction({ battleId: battleRef.current.id });
           }
         } else {
           // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
@@ -1035,11 +1023,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     document.body.style.cursor = "wait";
     performAction({
       battleId: battle.id,
-      userId: userIdRef.current,
+      version: battle.version,
       actionId: action.id,
       longitude: target.col,
       latitude: target.row,
-      version: battle.version,
     });
   };
   const sceneSnapshot = useRef<CombatSceneSnapshot | null>(null);

@@ -9,7 +9,7 @@ const require = createRequire(new URL("../app/package.json", import.meta.url));
 const { run } = require("npm-check-updates");
 const root = fileURLToPath(new URL("..", import.meta.url));
 const checkOnly = process.argv.includes("--check");
-const files = ["app/package.json", "mobile/package.json", "spacetimedb-towerdefense/package.json"];
+const files = ["app/package.json", "mobile/package.json"];
 
 // Query every manifest before writing any of them. Keep contextual overrides such as
 // `$cytoscape` intact; npm-check-updates expects flat version strings in these sections.

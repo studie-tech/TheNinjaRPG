@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
 import {
@@ -25,9 +24,6 @@ const VISITOR_ANALYTICS_RETENTION_S = 13 * MONTH_S;
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);

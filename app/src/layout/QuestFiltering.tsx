@@ -124,14 +124,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setName: cf.setters.name,
-    setObjectives: cf.setters.objectives,
-    setQuestType: cf.setters.questType,
-    setRank: cf.setters.rank,
-    setUserLevel: cf.setters.userLevel,
-    setVillage: cf.setters.village,
-    setBloodline: cf.setters.bloodline,
-    setHidden: cf.setters.hidden,
   };
 };
 

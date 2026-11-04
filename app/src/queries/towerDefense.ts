@@ -1,7 +1,8 @@
 /**
  * Database access for tower defense; authorization and transaction scopes stay in callers.
  */
-import { and, asc, desc, eq, gte, lt, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, lt, or, type SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   towerDefenseCharacter,
@@ -72,20 +73,47 @@ export const listTowerDefenseCharacterForInitiateSecureSession2 = (
     where: eq(towerDefenseCharacter.isPlayer, true),
   });
 
-/** Build the `towerDefenseRun` listing for `getRunHistory`, using predicates on `userId` and `id`. */
+/**
+ * List a caller's runs after an ID cursor using the same timestamp/ID order as the page.
+ * The cursor lookup stays in the statement and cannot reference another user's history.
+ */
 export const listTowerDefenseRunForGetRunHistory = (
-  client: Pick<DrizzleClient, "query">,
+  client: Pick<DrizzleClient, "select">,
   ctx: { userId: string },
-  input: { cursor?: undefined | string; limit: number },
-) =>
-  client.query.towerDefenseRun.findMany({
-    where: and(
-      eq(towerDefenseRun.userId, ctx.userId),
-      input.cursor ? lt(towerDefenseRun.id, input.cursor) : undefined,
-    ),
-    orderBy: [desc(towerDefenseRun.startedAt)],
-    limit: input.limit + 1,
-  });
+  input: { cursor?: string; limit: number },
+) => {
+  const cursorRun = alias(towerDefenseRun, "cursorRun");
+  return client
+    .select()
+    .from(towerDefenseRun)
+    .where(
+      and(
+        eq(towerDefenseRun.userId, ctx.userId),
+        input.cursor
+          ? exists(
+              client
+                .select({ id: cursorRun.id })
+                .from(cursorRun)
+                .where(
+                  and(
+                    eq(cursorRun.id, input.cursor),
+                    eq(cursorRun.userId, ctx.userId),
+                    or(
+                      lt(towerDefenseRun.startedAt, cursorRun.startedAt),
+                      and(
+                        eq(towerDefenseRun.startedAt, cursorRun.startedAt),
+                        lt(towerDefenseRun.id, cursorRun.id),
+                      ),
+                    ),
+                  ),
+                ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(towerDefenseRun.startedAt), desc(towerDefenseRun.id))
+    .limit(input.limit + 1);
+};
 
 /** Build the `towerDefenseRun` listing for `getLeaderboard`, using predicates on `status`. */
 export const listTowerDefenseRunForGetLeaderboard = (
@@ -233,17 +261,6 @@ export const findTowerDefenseCharacterForGetCharacter = (
 ) =>
   client.query.towerDefenseCharacter.findFirst({
     where: eq(towerDefenseCharacter.id, input.id),
-  });
-
-/** Build the `towerDefenseCharacter` listing for `getAllCharacterNames`, using the configured predicates. */
-export const listTowerDefenseCharacterForGetAllCharacterNames = (
-  client: Pick<DrizzleClient, "query">,
-  whereClause: undefined | SQL<unknown>,
-) =>
-  client.query.towerDefenseCharacter.findMany({
-    columns: { id: true, name: true, isPlayer: true },
-    where: whereClause,
-    orderBy: [asc(towerDefenseCharacter.name)],
   });
 
 /** Build the `towerDefenseCharacter` insert for `createCharacter`. */

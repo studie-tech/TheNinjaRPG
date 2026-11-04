@@ -5,10 +5,9 @@ import { conversation, dungeon, dungeonMember, dungeonRun, quest, questHistory, 
 import { profileRouter, fetchUpdatedUser } from "@/routers/profile";
 import * as Sentry from "@sentry/nextjs";
 import type { DrizzleClient } from "@/server/db";
-import { QuestTracker, ObjectiveTracker } from "@/validators/objectives";
+import { AllObjectives, QuestTracker, ObjectiveTracker } from "@/validators/objectives";
 import { coopRouter } from "@/server/api/routers/coop";
 import { Pusher } from "@/libs/pusher";
-import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonContent } from "../../../setup/dungeon";
 import { insertQuests, insertUsers } from "../../../setup/factories";

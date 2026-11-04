@@ -16,7 +16,6 @@ import {
 import { findSkillWithFolderById } from "@/queries/skillTree";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
-  fetchMonthlyResets,
   getFreeResetAmount,
   getMonthlyResetState,
   isSkillVisible,
@@ -154,16 +153,16 @@ export const bloodrightRouter = createTRPCRouter({
   reset: protectedProcedure
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      const [updatedUser, monthlyResets] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchMonthlyResets(ctx.drizzle, ctx.userId),
-      ]);
+      const updatedUser = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
       const { user } = updatedUser;
       if (!user) return errorResponse("User not found");
       if (user.status === "BATTLE")
         return errorResponse("Finish your battle before changing Bloodright");
       if (!user.bloodright.length) return errorResponse("No Bloodright tiers to reset");
-      const allowance = getMonthlyResetState(user, monthlyResets.length);
+      const allowance = getMonthlyResetState(user);
       const isStaff = isStaffMember(user);
       const isFree = isStaff || allowance.count < getFreeResetAmount(user);
       const cost = isFree ? 0 : COST_SKILL_RESET;

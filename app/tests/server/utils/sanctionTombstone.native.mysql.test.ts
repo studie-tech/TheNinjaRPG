@@ -134,7 +134,6 @@ const register = async (userId: string, userIp?: string) => {
         read_tos: true,
         read_privacy: true,
         read_earlyaccess: true,
-        utm_source: null,
         bloodlineId: "native-bloodline",
       }),
   ).toMatchObject({ success: true });

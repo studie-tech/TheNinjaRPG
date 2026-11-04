@@ -28,7 +28,6 @@ import {
 import {
   calculateUpgradeCost,
   directionToSpriteDirection,
-  generateRunSeed,
 } from "@/libs/towerDefense/game";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { findUserRoleById } from "@/queries/profile";
@@ -42,7 +41,6 @@ import {
   insertTowerDefenseClaimReceiptForClaimCompletedRun,
   insertTowerDefenseRunForClaimCompletedRun,
   insertUserTowerDefenseUpgradeForPurchasePermanentUpgrade,
-  listTowerDefenseCharacterForGetAllCharacterNames,
   listTowerDefenseCharacterForGetAssetConfigs,
   listTowerDefenseCharacterForGetCharacters,
   listTowerDefenseCharacterForInitiateSecureSession,
@@ -239,7 +237,7 @@ export const towerDefenseRouter = createTRPCRouter({
     }),
 
   /**
-   * Get past runs with pagination (for leaderboards)
+   * List the caller's past runs in stable chronological pages.
    */
   getRunHistory: protectedProcedure
     .meta({
@@ -547,29 +545,6 @@ export const towerDefenseRouter = createTRPCRouter({
     }),
 
   /**
-   * Get all character names for dropdowns
-   */
-  getAllCharacterNames: publicProcedure
-    .meta({ mcp: { description: "Get tower defense character names" } })
-    .input(
-      z
-        .object({
-          isPlayer: z.boolean().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ ctx, input }) => {
-      const whereClause =
-        input?.isPlayer !== undefined
-          ? eq(towerDefenseCharacter.isPlayer, input.isPlayer)
-          : undefined;
-      return await listTowerDefenseCharacterForGetAllCharacterNames(
-        ctx.drizzle,
-        whereClause,
-      );
-    }),
-
-  /**
    * Create a new character definition
    */
   createCharacter: protectedProcedure
@@ -839,34 +814,6 @@ export const towerDefenseRouter = createTRPCRouter({
       }
     }),
 
-  /**
-   * Update asset config animation settings
-   */
-  updateAssetConfig: protectedProcedure
-    .use(ratelimitMiddleware)
-    .input(
-      z.object({
-        characterId: z.string(),
-        assetConfig: characterAssetConfigSchema,
-      }),
-    )
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const user = await findUserRoleById(ctx.drizzle, ctx.userId);
-
-      if (!user || !canChangeContent(user.role)) {
-        return errorResponse("Not allowed to update asset config");
-      }
-
-      await updateTowerDefenseCharacterAssets(
-        ctx.drizzle,
-        input.assetConfig,
-        input.characterId,
-      );
-
-      return { success: true, message: "Asset config updated" };
-    }),
-
   // ============================================
   // Upgrade Definition Management (Staff Only)
   // ============================================
@@ -1044,7 +991,7 @@ function initiateSession(input: {
 
   // Generate unique identifiers
   const nonce = generateSessionNonce();
-  const seed = generateRunSeed();
+  const seed = crypto.randomUUID();
 
   // Convert to signed formats for SpacetimeDB
   const signedUpgradeDefinitions = toSignedUpgradeDefinitions(upgradeDefinitions);

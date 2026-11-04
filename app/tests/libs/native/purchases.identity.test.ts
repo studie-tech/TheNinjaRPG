@@ -5,9 +5,6 @@ import {
   runPurchaseIdentityOperation,
   syncPurchaseIdentitySnapshot,
 } from "@/libs/native/purchases";
-import { ensureDom } from "../../setup/dom.mjs";
-
-ensureDom();
 
 const capacitorWindow = window as typeof window & {
   Capacitor?: {

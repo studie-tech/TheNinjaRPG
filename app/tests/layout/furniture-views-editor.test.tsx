@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import { useState } from "react";
@@ -48,7 +47,6 @@ const props: ComponentProps<typeof FurnitureViewsEditor> = {
 };
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   measurements.clear();
   measurementCalls.length = 0;

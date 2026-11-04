@@ -202,20 +202,9 @@ export const useFiltering = (defaultRank?: UserRank[]) => {
   return {
     ...cf.values,
     cf,
-    setBloodline: cf.setters.bloodline,
-    setClassification: cf.setters.classification,
     setEffect: cf.setters.effect,
-    setElement: cf.setters.element,
-    setHidden: cf.setters.hidden,
-    setJutsuType: cf.setters.jutsuType,
-    setMethod: cf.setters.method,
-    setName: cf.setters.name,
     setRank: cf.setters.rank,
-    setRarity: cf.setters.rarity,
-    setRequiredLevel: cf.setters.requiredLevel,
     setStat: cf.setters.stat,
-    setTarget: cf.setters.target,
-    setVillageId: cf.setters.villageId,
   };
 };
 

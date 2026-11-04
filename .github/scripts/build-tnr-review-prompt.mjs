@@ -22,7 +22,7 @@ import { setOutput } from "./ci-helpers.mjs";
 const outputPromptPath = process.env.PROMPT_FILE ?? "/tmp/tnr-review-prompt.txt";
 const mode = process.env.MODE || "pr-review";
 const isIssueRepro = mode === "issue-repro";
-const rawPreviewUrl = process.env.PREVIEW_URL ?? "";
+const previewBaseUrl = process.env.PREVIEW_URL ?? "";
 const vercelBypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
 const brokerToken = process.env.AI_TEST_USER_BROKER_TOKEN ?? "";
 const prNumber = process.env.PR_NUMBER ?? "";
@@ -48,11 +48,6 @@ const prTitleSafe = sanitize(prTitle, 256);
 const issueBody = sanitize(issueBodyRaw);
 const issueTitleSafe = sanitize(issueTitle, 256);
 
-// Ensure the URL always has a protocol (Vercel check output sometimes omits it)
-const normalizedPreviewUrl = rawPreviewUrl
-  ? rawPreviewUrl.startsWith("http") ? rawPreviewUrl : `https://${rawPreviewUrl}`
-  : "";
-
 /** Append Vercel bypass query params to a URL using the URL API (handles existing query strings). */
 const appendBypassParams = (base) => {
   if (!base || !vercelBypass) return base;
@@ -68,16 +63,16 @@ const bypassParams = vercelBypass
   : "";
 
 // Full preview URL with bypass params baked in for the agent's first navigation
-const previewUrl = appendBypassParams(normalizedPreviewUrl);
+const previewUrl = appendBypassParams(previewBaseUrl);
 
 // Broker endpoint for provisioning test users on the preview deployment
-const brokerUrl = normalizedPreviewUrl
-  ? new URL("/api/ai-test-user", normalizedPreviewUrl).toString()
+const brokerUrl = previewBaseUrl
+  ? new URL("/api/ai-test-user", previewBaseUrl).toString()
   : "";
 
 // Endpoint for calling tRPC endpoints as a provisioned test user
-const callEndpointUrl = normalizedPreviewUrl
-  ? new URL("/api/ai-test-user/call-endpoint", normalizedPreviewUrl).toString()
+const callEndpointUrl = previewBaseUrl
+  ? new URL("/api/ai-test-user/call-endpoint", previewBaseUrl).toString()
   : "";
 
 // Extra instructions from workflow_dispatch or `/tnr-repro-now <text>`.
@@ -104,7 +99,7 @@ const authBlock =
         "",
         "To provision test users from shell, first seed a bypass cookie, then POST to the broker:",
         "```",
-        `curl -s -c /tmp/vercel.cookie "${appendBypassParams(normalizedPreviewUrl)}" -o /dev/null`,
+        `curl -s -c /tmp/vercel.cookie "${appendBypassParams(previewBaseUrl)}" -o /dev/null`,
         `curl -s -b /tmp/vercel.cookie -X POST "${appendBypassParams(brokerUrl)}" \\`,
         `  -H "Content-Type: application/json" \\`,
         `  -H "x-tnr-reviewer-token: $AI_TEST_USER_BROKER_TOKEN" \\`,
@@ -117,7 +112,7 @@ const authBlock =
         "",
         "The response will be JSON:",
         "```json",
-        '{ "success": true, "users": [{ "key": "player1", "userId": "...", "username": "...", "email": "...", "password": "...", "level": 100, "rank": "JONIN", "villageId": "...", "villageName": "Shine", "isBanned": false, "signInToken": "..." }], "testingToken": "..." }',
+        '{ "success": true, "users": [{ "key": "player1", "userId": "...", "username": "...", "email": "...", "password": "...", "level": 100, "rank": "JONIN", "villageId": "...", "villageName": "Shine", "isBanned": false, "signInToken": "..." }] }',
         "```",
         "",
         "Valid village names are: Shine, Tsukimori, Glacier, Shroud, Current.",
@@ -126,7 +121,7 @@ const authBlock =
         "",
         "Each user in the response includes a `signInToken`. To authenticate in the browser, navigate Playwright to:",
         "```",
-        `${normalizedPreviewUrl}/login?__clerk_ticket=<signInToken>${bypassParams ? "&" + bypassParams : ""}`,
+        `${previewBaseUrl}/login?__clerk_ticket=<signInToken>${bypassParams ? "&" + bypassParams : ""}`,
         "```",
         "This performs a one-time Clerk ticket sign-in. After navigation, wait a few seconds for the redirect to complete, then take a snapshot to confirm the user is logged in.",
         "",
@@ -284,7 +279,7 @@ const prompt = [
   `Command author: @${commandAuthor}`,
   ...(isIssueRepro ? [`Main SHA: ${mainSha}`] : []),
   `Preview URL: ${previewUrl}`,
-  `Preview base URL: ${normalizedPreviewUrl}`,
+  `Preview base URL: ${previewBaseUrl}`,
   isIssueRepro ? `Issue title: ${issueTitleSafe}` : `PR title: ${prTitleSafe}`,
   "",
   isIssueRepro ? "Issue body:" : "PR body:",

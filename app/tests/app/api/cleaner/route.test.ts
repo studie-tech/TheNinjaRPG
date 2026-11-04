@@ -85,7 +85,7 @@ const expireRequests = async (db: DrizzleClient) => {
   vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), release: mocks.reset, isNewHour: true, prevTime: new Date(0), response: Response.json(null) });
   vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ isNewDay: false } as Awaited<ReturnType<typeof gamesettings.lockWithDailyTimer>>);
   vi.spyOn(travel, "completeExpiredGlobalTravel").mockResolvedValue(undefined);
-  vi.spyOn(raids, "cleanupExpiredExclusiveRaids").mockResolvedValue(0);
+  vi.spyOn(raids, "cleanupExpiredExclusiveRaids").mockResolvedValue(undefined);
   vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockResolvedValue({ removed: 0, filesDeleted: 0 });
   vi.spyOn(grant, "reconcileFederalStatuses").mockImplementation(vi.fn());
   vi.spyOn(processor, "processAccountDeletions").mockResolvedValue({ processed: 0, failed: 0 });

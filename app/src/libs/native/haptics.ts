@@ -37,15 +37,3 @@ export const notify = async (type: NotificationStyle = "SUCCESS"): Promise<void>
   if (!isEnabled()) return;
   await invokeSafe("Haptics", "notification", { type });
 };
-
-/** The light tick used while moving through a list or a picker. */
-export const selection = async (): Promise<void> => {
-  if (!isEnabled()) return;
-  await invokeSafe("Haptics", "selectionChanged");
-};
-
-/** Duration in milliseconds. Android honours this; iOS plays a fixed system buzz. */
-export const vibrate = async (duration = 300): Promise<void> => {
-  if (!isEnabled()) return;
-  await invokeSafe("Haptics", "vibrate", { duration });
-};

@@ -85,7 +85,6 @@ export interface ItemWithEffectsProps {
     | GenericObject;
   hideDetails?: boolean;
   showEvolutions?: boolean;
-  imageBorder?: boolean;
   imageExtra?: React.ReactNode;
   showEdit?:
     | "bloodline"
@@ -561,7 +560,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           }),
         )
       : []),
-  ].filter(Boolean);
+  ];
 
   // Define image
   let image =
@@ -663,7 +662,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <Link href={`/manual/${showEdit}/edit/${item.id}`}>
                       <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
                     </Link>
-                    {onDelete && canChangeContent(userData.role) && (
+                    {onDelete && (
                       <Confirm
                         title="Confirm Deletion"
                         button={
@@ -671,7 +670,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         }
                         onAccept={(e) => {
                           e.preventDefault();
-                          if (onDelete) onDelete(item.id);
+                          onDelete(item.id);
                         }}
                       >
                         You are about to delete this. Are you sure? This will affect ALL
@@ -1264,34 +1263,6 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 </p>
               </div>
             )}
-          {/* {objectives.length > 0 && (
-            <div className={`my-2 rounded-lg bg-poppopover p-2`}>
-              <p className="font-bold">Objectives</p>
-              <div className="grid grid-cols-5 md:grid-cols-3 lg:md:grid-cols-5 gap-3 p-2">
-                {objectives
-                  .filter((o) => o.task !== "dialog")
-                  .map((objective, i) => {
-                    const { image, title } = getObjectiveImage(objective);
-                    return (
-                      <div
-                        key={objective.task + i.toString()}
-                        className={`flex flex-col items-center`}
-                      >
-                        <Image
-                          className="basis-1/4"
-                          alt={objective.task}
-                          src={image}
-                          width={60}
-                          height={60}
-                        />
-                        {title}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )} */}
-
           {!isFurniture &&
             !hideEffects &&
             effects?.map((effect, i) => {

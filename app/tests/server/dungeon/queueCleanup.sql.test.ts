@@ -243,7 +243,7 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
             .set({ status: "QUEUED" })
             .where(eq(userData.userId, "a"));
         if (cleanup === "maintenance")
-          expect(await runStaleShrineLobbyCleanup(new Date(), db)).toMatchObject({
+          expect(await runStaleShrineLobbyCleanup(new Date())).toMatchObject({
             usersReset: mode === "live" ? 0 : 1,
             lobbiesCleared: 1,
           });

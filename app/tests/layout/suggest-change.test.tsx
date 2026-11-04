@@ -1,6 +1,5 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -44,7 +43,6 @@ const dialogMocks = {
 
 const spies: { mockRestore: () => void }[] = [];
 beforeEach(() => {
-  ensureDom();
   mutate.mockClear();
   for (const [name, implementation] of Object.entries(dialogMocks)) {
     spies.push(

@@ -56,7 +56,6 @@ const handler = async (req: NextRequest) => {
         router: appRouter,
         createContext() {
           return createAppTRPCContext({
-            req,
             readHeaders,
             readCookies,
             procedureTypes,

@@ -55,7 +55,7 @@ const buildProviderToken = (): string => {
   return jwt;
 };
 
-/** Drop the cached provider token. Used by tests and after an auth failure. */
+/** Drop the cached provider token after an auth rejection. */
 export const resetProviderToken = (): void => {
   cachedToken = null;
 };
@@ -63,7 +63,7 @@ export const resetProviderToken = (): void => {
 const apnsHost = (): string =>
   env.APNS_USE_SANDBOX === "true" ? SANDBOX_HOST : PRODUCTION_HOST;
 
-export type ApnsPushType = "alert" | "liveactivity" | "background";
+export type ApnsPushType = "alert" | "liveactivity";
 
 interface ApnsRequest {
   token: string;
@@ -71,9 +71,6 @@ interface ApnsRequest {
   payload: Record<string, unknown>;
   pushType: ApnsPushType;
   collapseId?: string;
-  /** Unix seconds; 0 tells Apple to attempt delivery once and give up. */
-  expiration?: number;
-  priority?: 5 | 10;
 }
 
 type ApnsAttemptResult = PushResult & {
@@ -123,10 +120,7 @@ const sendOverSession = (
     [constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
     "apns-topic": topic,
     "apns-push-type": request.pushType,
-    "apns-priority": String(request.priority ?? 10),
-    ...(request.expiration === undefined
-      ? {}
-      : { "apns-expiration": String(request.expiration) }),
+    "apns-priority": "10",
     ...(request.collapseId ? { "apns-collapse-id": request.collapseId } : {}),
   });
 

@@ -40,9 +40,6 @@ import {
   listActivityStreakConfigForGetConfigs,
   listUserStreakProgressForGetAvailablePasses,
   listUserStreakProgressForGetUserStreaks,
-  updateActivityStreakConfigForToggleConfigActive,
-  updateActivityStreakConfigForToggleConfigActive2,
-  updateActivityStreakConfigForToggleConfigActive3,
   updateActivityStreakConfigForUpdateConfig,
   updateUserDataForClaimStreakDay,
   updateUserDataForPurchaseEventPass,
@@ -694,7 +691,7 @@ export const activityStreakRouter = createTRPCRouter({
       }
 
       if (titleError) return errorResponse(titleError);
-      // Create config first (insert before deactivation to prevent race condition)
+      // Create config
       const configId = nanoid();
       await insertActivityStreakConfigForCreateConfig(
         ctx.drizzle,
@@ -773,62 +770,6 @@ export const activityStreakRouter = createTRPCRouter({
       await deleteActivityStreakConfigForDeleteConfig(ctx.drizzle, input);
 
       return { success: true, message: "Configuration deleted successfully" };
-    }),
-
-  // Toggle config active status
-  toggleConfigActive: protectedProcedure
-    .input(idSchema)
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch user and config
-      const [user, config] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        findActivityStreakConfigById(ctx.drizzle, input.id),
-      ]);
-
-      // Guard: permission check
-      if (!canChangeContent(user.role)) {
-        return errorResponse(
-          "You don't have permission to modify streak configurations",
-        );
-      }
-
-      if (!config) {
-        return errorResponse("Configuration not found");
-      }
-
-      // If activating a RECURRING config, deactivate ALL RECURRING configs first
-      // to ensure only one can be active (reduces race condition window)
-      if (!config.isActive && config.streakType === "RECURRING") {
-        await updateActivityStreakConfigForToggleConfigActive(ctx.drizzle);
-
-        // Activate only this config with guard to ensure it exists
-        const result = await updateActivityStreakConfigForToggleConfigActive2(
-          ctx.drizzle,
-          input,
-        );
-
-        if (result.rowsAffected === 0) {
-          return errorResponse("Failed to activate configuration");
-        }
-
-        return {
-          success: true,
-          message: "Configuration activated successfully",
-        };
-      }
-
-      // For deactivation or non-RECURRING types, just toggle
-      await updateActivityStreakConfigForToggleConfigActive3(
-        ctx.drizzle,
-        config,
-        input,
-      );
-
-      return {
-        success: true,
-        message: `Configuration ${config.isActive ? "deactivated" : "activated"} successfully`,
-      };
     }),
 });
 

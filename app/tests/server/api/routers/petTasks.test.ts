@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { item, petSpecies, quest, questHistory, userData, userItem, userPet } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { getNewTrackers } from "@/libs/quest";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { DialogObjective, QuestTracker } from "@/validators/objectives";
-import type { PetTask } from "@/validators/petTasks";
+import { DialogObjective } from "@/validators/objectives";
 import { QuestReward } from "@/validators/rewardPackages";
 import { insertItems, insertPetSpecies, insertQuests, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";

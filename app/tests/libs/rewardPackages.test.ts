@@ -4,7 +4,7 @@ import { ADDITIONAL_MISSION_REWARD_MULTIPLIER, QuestRewardMetrics, type QuestTyp
 import { dataRouter } from "@/routers/data";
 import { collapseRewards } from "@/libs/rewards";
 import { getRewardArray } from "@/libs/objectives";
-import { masteryQuestTemplates } from "@/libs/masteryQuests";
+import { masteryQuestTemplates } from "../setup/mastery";
 import { QuestValidator, SimpleObjective } from "@/validators/objectives";
 import { villageMissionContentError } from "@/validators/villageMission";
 import { getNewTrackers, getReward, postProcessRewards } from "@/libs/quest";

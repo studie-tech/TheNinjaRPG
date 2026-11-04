@@ -15,30 +15,6 @@ export const changeSettingSchema = z.object({
 });
 export type ChangeSettingSchema = z.infer<typeof changeSettingSchema>;
 
-export const createTicketSchema = z
-  .strictObject({
-    content: z.string().min(2).max(10000),
-    title: z.string().min(2).max(255),
-  })
-  .required();
-
-export type CreateTicketSchema = z.infer<typeof createTicketSchema>;
-
-export const TicketTypes = [
-  "bug_report",
-  "human_support",
-  "ai_support",
-  "tutorial",
-  "audio_settings",
-] as const;
-export type TicketType = (typeof TicketTypes)[number];
-
-export const captchaVerifySchema = z.object({
-  guess: z.string(),
-});
-
-export type CaptchaVerifySchema = z.infer<typeof captchaVerifySchema>;
-
 // Prestige transfer schema (used in townhall)
 export const createPrestigeTransferSchema = (maxPrestige: number) =>
   z.object({

@@ -9,9 +9,9 @@ interface GraphCombatLogProps {
   userId: string;
 }
 /**
- * cytoscape and its edge-handles plugin are over a megabyte of source for a graph that only
- * appears once someone asks for it, so the boundary sits here rather than at the page: this
- * wrapper's whole job is to feed GraphUsersGeneric, and every consumer gets the deferral.
+ * cytoscape is over a megabyte of source for a graph that only appears once someone asks
+ * for it, so the boundary sits here rather than at the page: this wrapper's whole job is to
+ * feed GraphUsersGeneric, and every consumer gets the deferral.
  */
 const GraphUsersGeneric = dynamic(() => import("@/layout/GraphUsersGeneric"), {
   ssr: false,

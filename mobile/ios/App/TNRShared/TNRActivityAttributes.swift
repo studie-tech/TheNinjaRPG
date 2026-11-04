@@ -1,7 +1,5 @@
-import Foundation
-
-#if canImport(ActivityKit)
 import ActivityKit
+import Foundation
 
 /// The three countdowns worth putting on the Lock Screen.
 ///
@@ -70,4 +68,3 @@ public struct TNRActivityAttributes: ActivityAttributes {
         }
     }
 }
-#endif

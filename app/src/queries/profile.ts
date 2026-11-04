@@ -151,21 +151,20 @@ export const updateUserVoteForHandleVote = (
   siteId: string,
   now: Date,
   secret: string,
-) =>
-  client
+) => {
+  const site = VOTE_POSTBACK_SITES[siteId];
+  return client
     .update(userVote)
-    .set({
-      ...(siteId === "topWebGames" ? { topWebGames: true } : {}), // in review
-      ...(siteId === "top100arena" ? { top100Arena: true } : {}),
-      ...(siteId === "mmohub" ? { mmoHub: true } : {}),
-      ...(siteId === "arenaTop100" ? { arenaTop100: true } : {}),
-      ...(siteId === "xtremeTop100" ? { xtremeTop100: true } : {}), // No postbacks received
-      ...(siteId === "topOnlineMmorpg" ? { topOnlineMmorpg: true } : {}), // Cannot register
-      ...(siteId === "browserMmorpg" ? { browserMmorpg: true } : {}), // Pending approval?
-      ...(siteId === "apexWebGaming" ? { apexWebGaming: true } : {}), // in review
-      lastVoteAt: now,
-    })
+    .set({ ...(site ? { [site]: true } : {}), lastVoteAt: now })
     .where(eq(userVote.secret, secret));
+};
+
+/** Postback site ids, as the vote sites send them, mapped to their UserVote column. */
+const VOTE_POSTBACK_SITES: Record<string, (typeof ACTIVE_VOTING_SITES)[number]> = {
+  mmohub: "mmoHub",
+  arenaTop100: "arenaTop100",
+  topWebGames: "topWebGames",
+};
 
 /**
  * Fetch a user by id
@@ -352,7 +351,6 @@ export const listPublicUserRows = (
       ...(input.recruiterId ? [eq(userData.recruiterId, input.recruiterId)] : []),
       ...(input.orderBy === "Staff" ? [notInArray(userData.role, ["USER"])] : []),
       ...(input.orderBy === "Outlaws" ? [eq(userData.isOutlaw, true)] : []),
-      ...(input.isAi ? [eq(userData.isAi, true)] : []),
       ...(input.inArena !== undefined ? [eq(userData.inArena, !!input.inArena)] : []),
       ...(input.isEvent !== undefined ? [eq(userData.isEvent, !!input.isEvent)] : []),
       ...(input.isWarCamp !== undefined
@@ -1801,7 +1799,7 @@ export const listJutsuForComputeUserContentChanges = (
   newJutsuIds: string[],
 ) =>
   client.query.jutsu.findMany({
-    where: inArray(jutsu.id, oldJutsuIds.concat(newJutsuIds).concat(["non-empty"])),
+    where: inArray(jutsu.id, oldJutsuIds.concat(newJutsuIds)),
     columns: { id: true, name: true },
   });
 
@@ -1812,7 +1810,7 @@ export const listItemForComputeUserContentChanges = (
   newItemIds: string[],
 ) =>
   client.query.item.findMany({
-    where: inArray(item.id, oldItemIds.concat(newItemIds).concat(["non-empty"])),
+    where: inArray(item.id, oldItemIds.concat(newItemIds)),
     columns: { id: true, name: true },
   });
 

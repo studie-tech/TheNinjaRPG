@@ -32,6 +32,6 @@ describeWithDatabase("conversation list blacklist", () => {
 
   it("hides conversations whose only other members are blacklisted players", async () => {
     const me = await callerFor(commentsRouter, "me");
-    expect((await me.getUserConversations({})).map((c) => c.id).sort()).toEqual(["mixed", "solo", "staff"]);
+    expect((await me.getUserConversations()).map((c) => c.id).sort()).toEqual(["mixed", "solo", "staff"]);
   });
 });

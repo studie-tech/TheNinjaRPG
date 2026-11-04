@@ -2,18 +2,13 @@
 
 import { useState } from "react";
 import ReactDOM from "react-dom";
-import { IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
+import { IMG_PIXEL_HERO_POSTER, IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
 import { cn } from "@/libs/shadui";
 import { WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 import type { UserWithRelations } from "@/routers/profile";
 import { bunnyImageUrl } from "@/utils/image";
 import { useWallpaperVariant } from "@/utils/LayoutContext";
-import {
-  getImageSet,
-  getPixelWallpaper,
-  type LayoutVariant,
-  PIXEL_FALLBACK_WALLPAPER,
-} from "./layoutVariants";
+import { getImageSet, getPixelWallpaper, type LayoutVariant } from "./layoutVariants";
 
 interface LayoutBackgroundProps {
   variant: LayoutVariant;
@@ -158,7 +153,7 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
           isAnonymousLayout && "brightness-[0.68]",
           userData && isUserWallpaperLoaded ? "opacity-0" : "opacity-100",
         )}
-        src={PIXEL_FALLBACK_WALLPAPER}
+        src={IMG_PIXEL_HERO_POSTER}
         alt=""
         priority
         ariaHidden

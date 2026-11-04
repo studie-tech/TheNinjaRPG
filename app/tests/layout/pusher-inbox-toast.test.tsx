@@ -13,7 +13,6 @@ import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { chatMentionsAtom, chatPanelAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 const queryClients: QueryClient[] = [];
@@ -23,7 +22,6 @@ const router = {
 };
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), { tournament: testApi.tournament, useUtils: testApi.useUtils });
 });

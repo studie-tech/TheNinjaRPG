@@ -16,7 +16,6 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "activate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deactivate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setNowPlaying", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setRemoteCommandsEnabled", returnType: CAPPluginReturnPromise),
     ]
 
     private var remoteCommandsEnabled = false
@@ -37,9 +36,7 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
             // music is worse than one that pauses it, and the player can just mute ours.
             try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
-            // Nothing else calls this, and without it the Lock Screen buttons are inert:
-            // AudioSettings subscribes to `remoteCommand` but no target was ever installed
-            // to emit one.
+            // Install the Lock Screen targets that emit remoteCommand.
             setRemoteCommands(enabled: true)
             call.resolve()
         } catch {
@@ -83,11 +80,6 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
         if let artworkUrl = call.getString("artworkUrl"), let url = URL(string: artworkUrl) {
             loadArtwork(from: url)
         }
-        call.resolve()
-    }
-
-    @objc func setRemoteCommandsEnabled(_ call: CAPPluginCall) {
-        setRemoteCommands(enabled: call.getBool("enabled") ?? true)
         call.resolve()
     }
 

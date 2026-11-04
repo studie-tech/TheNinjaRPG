@@ -5,7 +5,6 @@ import * as client from "@/app/_trpc/client";
 import { WarRulesForm } from "@/layout/WarRulesForm";
 import * as toast from "@/libs/toast";
 import { defaultWarRules, type WarRules } from "@/validators/war";
-import { ensureDom } from "../setup/dom.mjs";
 
 let rules: WarRules | undefined;
 let isPending: boolean;
@@ -16,7 +15,6 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   rules = undefined;

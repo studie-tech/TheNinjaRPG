@@ -3,19 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { StoreBundles } from "@/app/[shell]/points/StoreBundles";
 import * as checkout from "@/app/[shell]/points/StoreCheckout";
-import * as dialog from "@/components/ui/dialog";
-import * as Modal from "@/layout/Modal";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
-import { actualDialog, actualModal } from "../../setup/preload";
 
 let purchaseCount: number;
 const browserEvents = ["Event", "CustomEvent"] as const;
 const eventDescriptors = browserEvents.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
-  ensureDom();
   for (const key of browserEvents) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   purchaseCount = 0;
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -39,10 +34,6 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { userId: "buyer", role: "CONTENT-ADMIN" } } as never);
   vi.spyOn(UserSearchSelect, "default").mockImplementation(() => <input aria-label="Recipient" />);
   vi.spyOn(checkout, "StoreCheckout").mockImplementation(() => <p>Checkout</p>);
-  vi.spyOn(Modal, "default").mockImplementation(actualModal);
-  for (const key of Object.keys(actualDialog) as (keyof typeof actualDialog)[]) {
-    vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
-  }
 });
 
 afterEach(async () => {

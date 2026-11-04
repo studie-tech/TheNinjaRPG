@@ -149,10 +149,10 @@ describe("moderation report search capabilities", () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it("falls back when the optional embedding table has not been deployed", async () => {
+  it("falls back when the vector functions are unavailable", async () => {
     const { client } = database((query) => {
       if (query.includes("DISTANCE"))
-        throw new Error("Table 'tnr.UserReportEmbedding' doesn't exist");
+        throw new Error("FUNCTION tnr.DISTANCE does not exist");
       return [precedent("fulltext-match")];
     });
     const embed = mock(async () => [[1, 0]]);

@@ -26,7 +26,6 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualRichInput } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
@@ -45,7 +44,6 @@ const conversation = (id: string, title: string) => ({
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
@@ -54,7 +52,6 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments, profile: testApi.profile, reports: testApi.reports, useUtils: testApi.useUtils,
   });
-  vi.spyOn(client, "useGlobalOnMutateProtect").mockReturnValue(() => undefined);
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, notifications: [] } as never);
   vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
@@ -122,12 +119,12 @@ const blacklistPanel = (success: boolean) => {
     }
     throw new Error(`Unexpected request: ${path}`);
   });
-  const affectedKeys = [
+  const seededKeys = [
     getQueryKey(testApi.profile.getBlacklist, undefined, "query"),
     ...[{ convo_id: "private", limit: 10 }, { convo_title: "Global", limit: 15 }].map((input) => getQueryKey(testApi.comments.getConversationComments, input, "infinite")),
-    getQueryKey(testApi.comments.getUserConversations, { selectedConvo: "private" }, "query"),
   ];
-  for (const key of affectedKeys) queryClient.setQueryData(key, []);
+  for (const key of seededKeys) queryClient.setQueryData(key, []);
+  const affectedKeys = [...seededKeys, getQueryKey(testApi.comments.getUserConversations, undefined, "query")];
   getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "inbox", conversationId: "private" });
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ isSilenced: () => false } as never);
   vi.spyOn(chatConversation, "ChatConversation").mockImplementation(({ toolbarStart, toolbarEnd }) => <div>
@@ -347,14 +344,14 @@ it("clears cached unread markers only after authorized reads, including messages
     }
     throw new Error(path);
   });
-  const list = renderHook(() => testApi.comments.getUserConversations.useQuery({ selectedConvo: null }), { wrapper });
+  const list = renderHook(() => testApi.comments.getUserConversations.useQuery(), { wrapper });
   await waitFor(() => expect(list.result.current.data).toHaveLength(1));
   const selected = renderHook(() => useConversation({ convo_id: "chat", refreshKey: 0 }), { wrapper });
   await waitFor(() => expect(finishRead).toBeDefined());
   expect(isConversationUnread(list.result.current.data![0]!)).toBe(true);
   await act(async () => finishRead({ data: [], convo: { id: "chat", isPublic: false, lastReadAt: at(3) }, nextCursor: null }));
   await waitFor(() => expect(isConversationUnread(list.result.current.data![0]!)).toBe(false));
-  const listKey = getQueryKey(testApi.comments.getUserConversations, { selectedConvo: null }, "query");
+  const listKey = getQueryKey(testApi.comments.getUserConversations, undefined, "query");
   await act(async () => {
     queryClient.setQueryData(listKey, [{ ...conversation("chat", "Private"), updatedAt: at(4), lastReadAt: at(3) }]);
     receive({ message: "new", fromId: "friend", commentId: "incoming" });

@@ -4,7 +4,6 @@ import {
   characterAnimationClip,
   sampleAnimationClip,
 } from "@/libs/rendering/animation";
-import type { CharacterAssetConfig } from "@/libs/rendering/characterAssets";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createStatusMeter } from "@/libs/rendering/primitives/statusMeter";
@@ -23,6 +22,7 @@ import {
 } from "@/libs/towerDefense/game";
 import type {
   CharacterAnimationState,
+  CharacterAssetConfig,
   EnemyDirection,
   HexPosition,
   SpriteDirection,
@@ -61,7 +61,13 @@ export const createTowerDefenseActors = (game: GameRenderer) => {
     }
     return promise;
   };
-  const actor = (id: string, config: CharacterAssetConfig, scale: number) => {
+  // Actors without a registered config keep their shadow and health bar; the
+  // config check below rebuilds them with artwork once it is registered.
+  const actor = (
+    id: string,
+    config: CharacterAssetConfig | undefined,
+    scale: number,
+  ) => {
     let record = records.get(id);
     if (record && record.config !== config) {
       record.root.destroy({ children: true, texture: false, textureSource: false });
@@ -113,13 +119,14 @@ export const createTowerDefenseActors = (game: GameRenderer) => {
     frame: GameFrame,
   ) => {
     const key = `${state}:${direction}`;
-    if (record.key !== key) {
+    const { config } = record;
+    if (config && record.key !== key) {
       if (record.state !== state) record.startedAt = frame.now;
       record.state = state;
       record.direction = direction;
       record.key = key;
       const token = ++record.token;
-      void load(record.config, state, direction)
+      void load(config, state, direction)
         .then((frames) => {
           if (!game.isDisposed() && !record.root.destroyed && record.token === token) {
             record.frames = frames;
@@ -247,7 +254,7 @@ type Actor = {
   root: Container;
   sprite: Sprite;
   hp: ReturnType<typeof createStatusMeter>;
-  config: CharacterAssetConfig;
+  config: CharacterAssetConfig | undefined;
   key: string;
   state: CharacterAnimationState;
   direction: SpriteDirection;

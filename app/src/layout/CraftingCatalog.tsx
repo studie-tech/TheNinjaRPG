@@ -127,7 +127,6 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
       userData?.pvpBoost?.totalPercent ?? 0,
     ),
   );
-  const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
   const craftRequestInFlight = useRef(false);
 
   // Craft mutation
@@ -154,11 +153,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     },
     onSettled: () => {
       craftRequestInFlight.current = false;
-      setPendingCraftName(null);
     },
   });
 
-  const isCraftPending = pendingCraftName !== null || craftItemMutation.isPending;
+  const isCraftPending = craftItemMutation.isPending;
 
   // Filter items by category
   const categoryItems = useMemo(() => {
@@ -278,7 +276,6 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
     // React's mutation pending state is asynchronous, so guard synchronously too.
     craftRequestInFlight.current = true;
-    setPendingCraftName(selectedItem.name);
     craftItemMutation.mutate({ itemId: selectedItem.id, quantity: craftQuantity });
   };
 

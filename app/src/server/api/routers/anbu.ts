@@ -33,7 +33,6 @@ import {
   fetchEspionageSquad,
   fetchRecentPendingAnbuRequest,
   fetchSquad,
-  fetchSquadByLeader,
   fetchSquadSummary,
   fetchSquads,
   findAnbuSquadForEditSquad,
@@ -370,7 +369,6 @@ export const anbuRouter = createTRPCRouter({
       await reassignPendingAnbuRequestsOnPromotion(
         ctx.drizzle,
         squad.id,
-        squad.leaderId,
         member.userId,
       );
       // Create
@@ -707,12 +705,9 @@ export async function getAnbuRequests(args: {
       ["ANBU"],
       3600 * 12,
       ctx.userId,
+      squadId,
     );
-    return ownRequests.filter(
-      (request) =>
-        request.senderId === ctx.userId &&
-        isAnbuRequestForSquad(request, squadId, squad.leaderId),
-    );
+    return ownRequests.filter((request) => request.senderId === ctx.userId);
   }
   return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
 }
@@ -846,7 +841,6 @@ export async function acceptAnbuRequest(args: {
       await reassignPendingAnbuRequestsOnPromotion(
         ctx.drizzle,
         squad.id,
-        null,
         requester.userId,
       );
     }
@@ -934,12 +928,7 @@ export const removeFromSquad = async (
   );
   if (clearedLeadership.rowsAffected === 1) {
     const nextLeaderId = await electAnbuLeader(client, squad.id);
-    await reassignPendingAnbuRequestsOnPromotion(
-      client,
-      squad.id,
-      userId,
-      nextLeaderId,
-    );
+    await reassignPendingAnbuRequestsOnPromotion(client, squad.id, nextLeaderId);
   }
 
   return true;
@@ -1058,40 +1047,17 @@ const getConvenienceStatus = (
 };
 
 /**
- * Determines whether an ANBU join request belongs to a squad. The durable
- * related ID is authoritative; the current leader is considered only for
- * legacy requests created before squad IDs were persisted.
- *
- * @param request - The request's durable squad link and legacy receiver.
- * @param squadId - The squad being matched.
- * @param leaderId - The squad's current leader, when one exists.
- * @returns Whether the request belongs to the supplied squad.
- */
-export const isAnbuRequestForSquad = (
-  request: { relatedId: string | null; receiverId: string },
-  squadId: string,
-  leaderId: string | null,
-) =>
-  request.relatedId === squadId ||
-  (!request.relatedId && !!leaderId && request.receiverId === leaderId);
-
-/**
- * Fetches the squad targeted by an ANBU join request. Modern requests resolve
- * directly through their durable related ID; legacy requests fall back to the
- * squad currently led by the stored receiver.
+ * Fetches the squad targeted by an ANBU join request through its durable
+ * related ID.
  *
  * @param client - The Drizzle client used to fetch the squad.
- * @param request - The request's durable squad link and legacy receiver.
- * @returns The matching squad, or null when no squad can be resolved.
+ * @param request - The request's durable squad link.
+ * @returns The matching squad, or undefined when no squad can be resolved.
  */
 export const fetchSquadForAnbuRequest = async (
   client: DrizzleClient,
-  request: { relatedId: string | null; receiverId: string },
-) => {
-  if (request.relatedId) {
-    return await fetchSquadSummary(client, request.relatedId);
-  }
-  return await fetchSquadByLeader(client, request.receiverId);
-};
+  request: { relatedId: string | null },
+) =>
+  request.relatedId ? await fetchSquadSummary(client, request.relatedId) : undefined;
 
 export type AnbuRouter = inferRouterOutputs<typeof anbuRouter>;

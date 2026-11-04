@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { hydrateRoot } from "react-dom/client";
@@ -17,7 +16,6 @@ const Probe = ({ record }: { record?: (width: number) => void }) => {
 
 describe("avatar preference snapshots", () => {
   beforeEach(() => {
-    ensureDom();
     Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
     window.localStorage.clear();
   });

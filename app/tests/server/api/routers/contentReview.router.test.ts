@@ -422,7 +422,7 @@ describeWithDatabase("content review", () => {
 
   it("retains distinct media for multiple new entities of the same type", async () => {
     const database = await getTestDatabase();
-    const collector = vi.spyOn(media, "collectCandidates").mockImplementation(async (client, request) => [{
+    const collector = vi.spyOn(media, "collectCandidates").mockImplementation(async (_client, request) => [{
       kind: "IMAGE", source: "GENERATED", externalId: null,
       title: request.generate!, prompt: request.generate!,
       url: `https://ui0arpl8sm.ufs.sh/f/${request.generate}.webp`,

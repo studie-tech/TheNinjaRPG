@@ -78,5 +78,3 @@ export const getWorldCycleState = (now = new Date()) => {
     dayCycleIndex: getWorldDayCycleIndex(now),
   };
 };
-
-export type WorldCycleState = ReturnType<typeof getWorldCycleState>;

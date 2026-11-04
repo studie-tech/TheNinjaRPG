@@ -5,7 +5,6 @@ import NativeStore from "@/components/native/NativeStore";
 import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
 import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 
 type AsyncMock = ReturnType<
@@ -143,8 +142,6 @@ vi.mock("@/layout/ContentBox", () => ({
 vi.mock("@/layout/Loader", () => ({
   default: ({ explanation }: { explanation: string }) => <span>{explanation}</span>,
 }));
-
-ensureDom();
 
 const STORAGE_KEY = "tnr:unsettled-store-purchases";
 type TestCustomerInfo = {
@@ -831,6 +828,9 @@ describe("NativeStore purchase recovery", () => {
           attempt: {
             productId: "tnr_reps_tier1",
             baselineReceiptIds: ["before"],
+            baselineNativeTransactionIds: [],
+            phase: "charged-or-pending",
+            startedAt: "2026-09-01T12:00:00.000Z",
           },
         },
       ]),

@@ -167,7 +167,6 @@ const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
           <AvatarImage
             href={link.avatar}
             alt={link.username ?? link.userId}
-            userId={link.userId}
             hover_effect={false}
             size={100}
           />

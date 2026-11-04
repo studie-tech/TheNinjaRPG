@@ -136,8 +136,7 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
         defaultBackHref="/manual/sageMode"
         noRightAlign={true}
       >
-        {!sageMode && <p>Could not find this sage mode</p>}
-        {!loading && sageMode && (
+        {!loading && (
           <EditContent
             schema={SageModeValidator}
             form={form}

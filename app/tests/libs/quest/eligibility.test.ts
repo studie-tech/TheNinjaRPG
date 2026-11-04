@@ -157,7 +157,7 @@ describe("fetchUncompletedQuests date-window compatibility", () => {
         villageId: "village-1",
         bloodlineId: null,
       } as never,
-      "mission",
+      "tier",
     );
 
     if (!predicate) throw new Error("query predicate was not captured");

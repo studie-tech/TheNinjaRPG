@@ -43,13 +43,9 @@ export const getKageEligibility = (user: UserData, villageId: string) => {
  * @returns The number of days the user has been in their village.
  */
 const getDaysInVillage = (user: UserData) => {
-  try {
-    if (!user.joinedVillageAt) return 0;
-    const joinDate = new Date(user.joinedVillageAt);
-    return Math.floor((Date.now() - joinDate.getTime()) / (1000 * 3600 * 24));
-  } catch {
-    return 0;
-  }
+  if (!user.joinedVillageAt) return 0;
+  const joinDate = new Date(user.joinedVillageAt);
+  return Math.floor((Date.now() - joinDate.getTime()) / (1000 * 3600 * 24));
 };
 
 /**

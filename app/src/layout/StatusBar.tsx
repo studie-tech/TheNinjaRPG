@@ -116,7 +116,6 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
 
   // Is the user in battle?
   const isInBattle = props.status === "BATTLE";
-  const isAwake = props.status === "AWAKE";
 
   // Calculate initial state
   const [state, setState] = useState(() =>
@@ -175,7 +174,6 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
       clearInterval(interval);
     };
   }, [
-    isAwake,
     regen,
     lastRegenAt,
     current,
@@ -202,7 +200,7 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
           <TooltipTrigger className="w-full">
             <div className={`h-3 w-full border-2 border-black`}>
               <div
-                className={`h-full w-3/6 ${color}`}
+                className={`h-full ${color}`}
                 style={{
                   width: `${state.width.toString()}%`,
                 }}

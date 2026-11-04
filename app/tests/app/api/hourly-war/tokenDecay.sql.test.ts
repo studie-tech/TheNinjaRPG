@@ -1,7 +1,6 @@
 import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/hourly-war/route";
 import { WAR_DAILY_TOKEN_DECAY_PERCENT_BASE } from "@/drizzle/constants";
 import { gameSetting, village, villageStructure, war } from "@/drizzle/schema";
@@ -21,7 +20,6 @@ describeWithDatabase("daily war token decay", () => {
     setSystemTime(now);
     await resetTables(gameSetting, village, villageStructure, war);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") }));
     spies.push(vi.spyOn(gamesettings, "getGameSetting").mockResolvedValue({ id: "daily-timer", name: "daily-war-decay", time: hours(24), value: 0 }));
     const db = await getTestDatabase();

@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useAudio } from "@/hooks/useAudio";
 import * as native from "@/libs/native";
 import * as audioUtils from "@/utils/audio";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 let audio: HTMLAudioElement;
 let play: ReturnType<typeof vi.fn<() => Promise<void>>>;

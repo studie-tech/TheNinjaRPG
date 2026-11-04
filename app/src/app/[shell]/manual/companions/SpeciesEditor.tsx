@@ -41,11 +41,11 @@ export const SpeciesEditor = ({
   species,
   onSaved,
 }: {
-  species?: PetSpecies;
+  species: PetSpecies;
   onSaved: () => void | Promise<void>;
 }) => {
   const editor = usePetSpeciesEditForm(species, onSaved);
-  return <SpeciesForm editor={editor} isNew={!species} />;
+  return <SpeciesForm editor={editor} isNew={false} />;
 };
 
 /** Keep a pending creation open so a rejection returns to the same editable draft. */

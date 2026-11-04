@@ -1028,12 +1028,6 @@ export const farmingRouter = createTRPCRouter({
 
       const farmingLevel = getFarmingLevel(user.farmingExperience);
       if (!shopEntry) return errorResponse("Shop item not found");
-      if (
-        (input.type === "PLOT" || input.type === "EXTRACTOR") &&
-        input.quantity !== 1
-      ) {
-        return errorResponse("Upgrades can only be purchased one at a time");
-      }
       const totalCost = shopEntry.cost * input.quantity;
       if (farmingLevel < shopEntry.minLevel) {
         return errorResponse(`Requires farming level ${shopEntry.minLevel}`);
@@ -1048,9 +1042,6 @@ export const farmingRouter = createTRPCRouter({
           return errorResponse("Plot purchase limit reached for your level");
         }
         const newTotal = FARM_STARTING_PLOTS + user.farmPlotsPurchased + 1;
-        if (newTotal > FARM_MAX_PLOTS) {
-          return errorResponse("Maximum farm size reached");
-        }
 
         const currencyResult = await updateUserDataForBuyShopItem(
           ctx.drizzle,
@@ -1099,7 +1090,6 @@ export const farmingRouter = createTRPCRouter({
         };
       }
 
-      if (!input.itemId) return errorResponse("Item required");
       if (!("itemInfo" in shopEntry)) return errorResponse("Shop item not found");
 
       const inventoryGuard = guardItemAwardInventoryCapacity(
@@ -1507,10 +1497,10 @@ const buildShopEntries = (
   return [...staticEntries, ...dynamicEntries];
 };
 
-export const buildFarmState = async (
+const buildFarmState = async (
   client: DrizzleClient,
   userId: string,
-): Promise<FarmStateResponse | { success: false; message: string }> => {
+): Promise<FarmStateResponse> => {
   const now = new Date();
   const userPromise = fetchUser(client, userId);
   const extractionsPromise = settleFarmExtractions(client, userId, now);
@@ -1931,7 +1921,7 @@ const payOutExtractions = async (
   return new Set(doneIds);
 };
 
-export const ensureFarmPlots = async (
+const ensureFarmPlots = async (
   client: DrizzleClient,
   userId: string,
   totalPlots: number,
@@ -2061,7 +2051,7 @@ const STACK_FILL_ATTEMPTS = 3;
 const awardItemToUser = async (
   client: DrizzleClient,
   userId: string,
-  itemInfo: Item | null | undefined,
+  itemInfo: Item,
   quantity: number,
   /**
    * Inventory snapshot from the caller's opening fetch. Re-reading it here would
@@ -2071,9 +2061,6 @@ const awardItemToUser = async (
    */
   userItems: Awaited<ReturnType<typeof fetchUserItems>>,
 ): Promise<false | { inventoryChanges?: InventoryQuantityChange[] }> => {
-  if (quantity <= 0) return { inventoryChanges: [] };
-  if (!itemInfo) return false;
-
   let remaining = quantity;
   const inventoryChanges: InventoryQuantityChange[] = [];
   const stackSize = itemInfo.canStack ? Math.max(1, itemInfo.stackSize) : 1;

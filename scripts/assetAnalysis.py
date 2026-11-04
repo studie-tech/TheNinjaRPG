@@ -1,13 +1,10 @@
-import os
 import json
 import argparse
 from nanoid import generate
 from tqdm import tqdm
 from sqlalchemy import create_engine
 from sqlalchemy.sql import text
-from dotenv import load_dotenv
 from openai import OpenAI
-from tqdm import tqdm
 
 # Command-line arguments
 parser = argparse.ArgumentParser()
@@ -31,9 +28,6 @@ if __name__ == '__main__':
         result = connection.execute(text("SELECT name FROM ContentTag"))
         allKeywords = [row[0] for row in result]
 
-        # Query for current gameAsset tags
-        #result = connection.execute(text("SELECT b.name FROM GameAssetTag a LEFT JOIN ContentTag b ON a.tagId = b.id LIMIT 1"))
-        #allKeywords = [result[0] for row in result]
         print("allKeywords", allKeywords)
         print("=================")
 

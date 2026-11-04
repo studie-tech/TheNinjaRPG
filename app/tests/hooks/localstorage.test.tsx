@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -7,7 +6,6 @@ const customEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Custo
 
 describe("useLocalStorage URL anchors", () => {
   beforeEach(() => {
-    ensureDom();
     // Events dispatched on jsdom's window must use its own constructors.
     Object.defineProperty(globalThis, "CustomEvent", {
       configurable: true,

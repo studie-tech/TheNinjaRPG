@@ -5,7 +5,6 @@ import { AI_PROFILE_MAX_RULES } from "@/drizzle/constants";
 import {
   fetchAiProfileById,
   fetchAiProfileByUserId,
-  insertAiProfileForCreateAiProfile,
   insertAiProfileForToggleAiProfile,
   listItemForUpdateAiProfile,
   listJutsuForUpdateAiProfile,
@@ -24,7 +23,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
-import { createAiProfileSchema, updateAiProfileSchema } from "@/validators/ai";
+import { updateAiProfileSchema } from "@/validators/ai";
 import { idSchema } from "@/validators/misc";
 
 export const aiRouter = createTRPCRouter({
@@ -49,23 +48,6 @@ export const aiRouter = createTRPCRouter({
       }
       // Return
       return profile;
-    }),
-  createAiProfile: protectedProcedure
-    .input(createAiProfileSchema)
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, profile] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchAiProfileByUserId(ctx.drizzle, input.userId),
-      ]);
-      // Guard
-      if (profile) return errorResponse("Only one AI profile per user is allowed");
-      if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
-      // Mutate
-      await insertAiProfileForCreateAiProfile(ctx.drizzle, input);
-      // Return
-      return { success: true, message: "AiProfile created" };
     }),
   updateAiProfile: protectedProcedure
     .input(updateAiProfileSchema)

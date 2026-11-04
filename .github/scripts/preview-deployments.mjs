@@ -126,9 +126,7 @@ export const createPreviewDeploymentClient = ({
     }
 
     const currentSha = await readBranchSha(branch);
-    if (currentSha === sha) {
-      return { changed: false };
-    }
+    if (currentSha === sha) return;
 
     if (currentSha) {
       await pushRequest(
@@ -138,7 +136,7 @@ export const createPreviewDeploymentClient = ({
           body: JSON.stringify({ sha, force: true }),
         },
       );
-      return { changed: true, action: "updated" };
+      return;
     }
 
     await pushRequest(`/repos/${owner}/${repo}/git/refs`, {
@@ -148,21 +146,14 @@ export const createPreviewDeploymentClient = ({
         sha,
       }),
     });
-    return { changed: true, action: "created" };
   };
 
-  const waitForPreview = async (
-    sha,
-    { pollIntervalMs, deadline, timeoutMs } = {},
-  ) => {
-    const interval = pollIntervalMs ?? 15_000;
-    const waitDeadline =
-      deadline ?? (timeoutMs ? Date.now() + timeoutMs : Date.now() + 25 * 60 * 1000);
+  const waitForPreview = async (sha, { pollIntervalMs, deadline }) => {
     const maxConsecutiveErrors = 5;
     let lastNote = "waiting for Vercel to create a Preview deployment";
     let consecutiveErrors = 0;
 
-    while (Date.now() < waitDeadline) {
+    while (Date.now() < deadline) {
       let inspection;
       try {
         inspection = await inspectPreview(sha);
@@ -176,7 +167,7 @@ export const createPreviewDeploymentClient = ({
         console.log(
           `Transient GitHub API error while polling (${consecutiveErrors}/${maxConsecutiveErrors}): ${error.message}`,
         );
-        await sleep(interval);
+        await sleep(pollIntervalMs);
         continue;
       }
       consecutiveErrors = 0;
@@ -200,7 +191,7 @@ export const createPreviewDeploymentClient = ({
               .join(", ")}`
           : "No Vercel Preview deployment yet for this SHA";
       console.log(lastNote);
-      await sleep(interval);
+      await sleep(pollIntervalMs);
     }
 
     return { successful: null, lastNote };

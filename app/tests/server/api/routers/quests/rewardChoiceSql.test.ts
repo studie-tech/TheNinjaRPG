@@ -142,7 +142,6 @@ describeWithDatabase("quest reward choice against a real MySQL", () => {
   });
 
   it("reconciles queued training when claiming a numeric reward choice", async () => {
-    const database = await getTestDatabase();
     await queueEnergy(PLAYER, [{ stat: "offence", energy: 10 }]);
     const result = await (await caller()).claimRewardChoice({ questId: QUEST, choiceId: "offer-1", cardIds: ["reward_money", "reward_exp"] });
     expect(result.success).toBe(true);

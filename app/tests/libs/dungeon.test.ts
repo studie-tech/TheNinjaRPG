@@ -86,7 +86,7 @@ describe("dungeon combat rules", () => {
     expect(calcBattleResult(battle, "a")).toBeNull();
     const masked = maskBattle(battle, "a");
     expect(masked.usersEffects).toEqual(expect.arrayContaining([expect.objectContaining({creatorId: "enemy", targetId: "a", rounds: 5})]));
-    expect(findUser(masked.usersState, spawn.x, spawn.y, masked.usersEffects)?.userId).toBe("next");
+    expect(findUser(masked.usersState, spawn.x, spawn.y)?.userId).toBe("next");
     expect(calcActiveUser(masked, "a").actor.userId).toBe("a");
     battle.usersState.at(-1)!.curHealth = 0;
     expect(dungeonBattleOutcome(battle)).toBe("won");

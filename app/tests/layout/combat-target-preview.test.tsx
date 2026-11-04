@@ -1,4 +1,3 @@
-import "../setup/dom.mjs";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { CombatTargetPreview } from "@/layout/CombatTargetPreview";

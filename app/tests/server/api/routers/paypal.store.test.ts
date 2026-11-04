@@ -82,6 +82,51 @@ describeWithDatabase("web store payments", () => {
     await insertUsers([{userId:"buyer",username:"Buyer",role:"OWNER", reputationPoints:0, money:0}, {userId:"recipient",username:"Recipient",reputationPoints:0,reputationPointsTotal:0,money:0}]);
     await insertItems([{id:"store-item",name:"Supplies",canStack:true,stackSize:3}]);
   });
+  it("reconciles completed orders without capturing payment and grants each snapshot once", async () => {
+    const db = await getTestDatabase();
+    const snapshot = await reserve();
+    const orderId = "RECOVERY123456789";
+    const unit = {
+      custom_id: `store:${snapshot.id}`,
+      invoice_id: snapshot.id,
+      amount: { currency_code: "USD", value: "12.50" },
+      payments: { captures: [] as { id: string; status: string; amount: { currency_code: string; value: string }; invoice_id: string }[] },
+    };
+    const provider = { id: orderId, status: "APPROVED", purchase_units: [unit] };
+    let capturePosts = 0;
+    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return Response.json({ access_token: "token" });
+      if (String(url).endsWith("/capture")) { capturePosts++; throw new Error("Recovery must never capture payment"); }
+      expect(init?.method).toBe("GET");
+      return Response.json(provider);
+    });
+    try {
+      const buyer = await callerFor(paypalRouter, "buyer");
+      const other = await callerFor(paypalRouter, "recipient");
+      expect((await buyer.resolveOrder({ orderId })).message).toContain("not completed");
+      provider.status = "COMPLETED";
+      unit.payments.captures = [{ id: `recovery-${snapshot.id}`, status: "COMPLETED", amount: { ...unit.amount }, invoice_id: snapshot.id }];
+      expect((await other.resolveOrder({ orderId })).message).toContain("another account");
+      unit.amount.value = "1.00";
+      expect((await buyer.resolveOrder({ orderId })).success).toBe(false);
+      unit.amount.value = "12.50";
+      unit.payments.captures[0]!.amount.currency_code = "EUR";
+      await expect(buyer.resolveOrder({ orderId })).rejects.toThrow("Payment does not match");
+      expect(await db.query.paypalTransaction.findMany()).toHaveLength(0);
+      unit.payments.captures[0]!.amount.currency_code = "USD";
+      const results = await Promise.all([buyer.resolveOrder({ orderId }), buyer.resolveOrder({ orderId })]);
+      expect(results.every(result => result.success)).toBe(true);
+      expect((await buyer.resolveOrder({ orderId })).message).toBe("Purchase already delivered");
+      expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, "recipient") })).toMatchObject({ reputationPoints: 20, money: 500 });
+      expect((await db.query.userItem.findMany()).reduce((total, row) => total + row.quantity, 0)).toBe(7);
+      expect(capturePosts).toBe(0);
+      const native = paypalRouter.createCaller({ drizzle: db, userId: "buyer", userAgent: "TNR-Native/1.0 (ios)" } as Parameters<typeof paypalRouter.createCaller>[0]);
+      fetchMock.mockClear();
+      expect((await native.resolveOrder({ orderId })).message).toContain("in-app store");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { fetchMock.mockRestore(); }
+  });
   it("reserves one lifetime purchase atomically across concurrent gift recipients, including zero-reputation offers", async () => {
     const db = await getTestDatabase();
     const limited = {...offer, contents:{...contents,reputationPoints:0}, bundleId:"limited"};

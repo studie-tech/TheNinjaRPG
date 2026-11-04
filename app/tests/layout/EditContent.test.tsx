@@ -1,6 +1,5 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
-const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -79,7 +78,6 @@ const { useItemEditForm } = await import("@/hooks/item");
 const { useQuestEditForm } = await import("@/hooks/quest");
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   rewardCatalog = { packages: [], nodes: [] };
 });

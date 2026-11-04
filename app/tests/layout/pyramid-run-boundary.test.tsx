@@ -5,7 +5,6 @@ import * as logbook from "@/layout/Logbook";
 import { PyramidRunBoundary } from "@/layout/PyramidRunBoundary";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const replace = vi.fn();
 beforeEach(() => {
@@ -16,7 +15,6 @@ beforeEach(() => {
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     replace, back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(), prefetch: vi.fn(), bfcacheId: "test",

@@ -7,7 +7,7 @@ import { useGameScene } from "@/hooks/game-scene";
 import { useTutorialStep } from "@/hooks/tutorial";
 import WebGlError from "@/layout/WebGLError";
 import { createGlobeScene, type GlobeSceneState } from "@/libs/rendering/scenes/globe";
-import type { GlobalMapData, GlobalTile } from "@/libs/sector-map/world-types";
+import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
 
@@ -20,16 +20,14 @@ interface MapProps {
     avatarLight: string | null;
   }[];
   userLocation?: boolean;
-  intersection: boolean;
   hexasphere: GlobalMapData;
   showOwnership?: boolean;
   /** Slowly spin the globe while the user is idle (default on) */
   autoRotate?: boolean;
   actionExplanation?: string;
   focusSector?: number | null;
-  focusSectorLabel?: string;
-  onTileClick?: (sector: number | null, tile: GlobalTile | null) => void;
-  onTileHover?: (sector: number | null, tile: GlobalTile | null) => void;
+  /** Receive the picked world sector ID for travel, editing or war selection. */
+  onTileClick?: (sector: number) => void;
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
@@ -70,7 +68,6 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     showOwnership,
     ownership: ownershipData,
     autoRotate: props.autoRotate ?? true,
-    intersection: props.intersection,
     isTravelStep: currentStep?.advanceOn === "travelArrive",
     focusSector: props.focusSector,
     questSectors,
@@ -85,18 +82,8 @@ const GlobalMap: React.FC<MapProps> = (props) => {
         signal,
         onError,
         state: current.current.state,
-        onHover: (sector) => {
-          setHoverSector(sector);
-          const tile =
-            sector === null ? null : (current.current.state.map.tiles[sector] ?? null);
-          if (sector !== null && tile)
-            current.current.props.onTileHover?.(sector, tile);
-        },
-        onClick: (sector) =>
-          current.current.props.onTileClick?.(
-            sector,
-            current.current.state.map.tiles[sector] ?? null,
-          ),
+        onHover: (sector) => setHoverSector(sector),
+        onClick: (sector) => current.current.props.onTileClick?.(sector),
       });
       if (!signal.aborted) instance.updateState(current.current.state);
       return instance;
@@ -153,7 +140,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           {props.focusSector !== undefined && props.focusSector !== null && (
             <li className="flex flex-row items-center">
               <span className="mr-1 animate-pulse text-2xl text-purple-500">⬢</span>{" "}
-              {props.focusSectorLabel || "Target"}
+              Target
             </li>
           )}
         </ul>

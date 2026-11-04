@@ -66,7 +66,7 @@ export const createCombatEffects = (
       const user = next.battle.usersState.find(
         (user) => user.userId === effect.targetId,
       );
-      if (!user || !stillInBattle(user, next.battle.usersEffects)) continue;
+      if (!user || !stillInBattle(user)) continue;
       const tile = grid.getHex({ col: user.longitude, row: user.latitude });
       if (tile) displayed.push({ effect, tile });
     }

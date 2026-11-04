@@ -325,7 +325,6 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       id: "entryItems",
       type: "db_values_with_number",
       values: items,
-      multiple: true,
       doubleWidth: true,
       label: "Entry items (quantity consumed on entry)",
     });
@@ -553,7 +552,6 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       id: "reward_items",
       type: "db_values_with_number",
       values: items,
-      multiple: true,
       doubleWidth: true,
       label: "Reward Items [and drop chance%]",
     });

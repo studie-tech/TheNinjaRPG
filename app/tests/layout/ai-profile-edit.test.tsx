@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -31,7 +30,6 @@ vi.mock("@/libs/toast", createToastMock);
 vi.mock("@/layout/ContentBox", () => ({ default: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   mocks.profile = { id: "custom", includeDefaultRules: true, rules: [{ conditions: [], action: ActionEndTurn.parse({}) }, ...getBackupRules()] };
   mocks.role = "CONTENT-ADMIN";

@@ -246,10 +246,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       },
     ];
   }, [notifications, pathname, rankedQueueCount, userId, activeTerritoryWar]);
-  const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
-  const navbarMenuItemsRight = navbarMenuItems.slice(3);
   const isSignedInLayout = isClerkLoaded ? isSignedIn : initialIsSignedIn;
-  const isAnonymousLayout = !isSignedInLayout;
   let accountState: AccountMenuState = null;
   if (isSignedInLayout && !userData) {
     if (!isClerkLoaded || userStatus === "pending") accountState = "loading";
@@ -257,7 +254,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     else if (userId && userStatus === "success") accountState = "create-character";
   }
   const showMobileNotifications = pathname !== "/combat";
-  const mobileNotificationCount = shownNotifications?.length ?? 0;
   const season = getCurrentSeason();
   const wallpaperOverwrite = userData?.wallpaperOverwrite;
   const imageset = useMemo(
@@ -340,15 +336,10 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     children,
     variant,
     userData: layoutUser,
-    isClerkLoaded,
     isSignedInLayout,
-    isAnonymousLayout,
     pathname,
     navbarMenuItems,
-    navbarMenuItemsLeft,
-    navbarMenuItemsRight,
     shownNotifications,
-    systems,
     location,
     leftSideBarOpen,
     onLeftSideBarOpenChange,
@@ -366,7 +357,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     imageset,
     variantClasses,
     showMobileNotifications,
-    mobileNotificationCount,
   };
 
   return (

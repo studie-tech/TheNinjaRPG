@@ -1,7 +1,6 @@
 import { GET as runIndexer } from "@/app/api/indexer/route";
 import * as gameSettings from "@/libs/gamesettings";
 import * as reportSearch from "@/libs/moderation/reportSearch";
-import { stubCronAuth } from "../../../../setup/serverModules";
 import { Moderations } from "openai/resources/moderations";
 import { unflaggedModeration } from "../../../../setup/moderation";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
@@ -12,7 +11,7 @@ import * as moderator from "@/libs/moderator";
 import { forumRouter } from "@/routers/forum";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { insertUsers } from "../../../../setup/factories";
-import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
+import { resetServerModuleStubs, stubCronAuth } from "../../../../setup/serverModules";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const reportInput = { system: "forum_comment" as const, system_id: "target-post", reported_userId: "target", reason: "Reporter allegation, separate from the post." };
@@ -22,7 +21,6 @@ describeWithDatabase("moderation report evidence and dashboard", () => {
     const db = await getTestDatabase();
     await resetTables(automatedModeration, moderationScan, userReport, forumGrant, forumPost, forumThread, forumBoard, forumSection, userData);
     await insertUsers([{ userId: "reporter" }, { userId: "target" }, { userId: "staff", role: "MODERATOR" }]);
-    stubProfile("fetchUser", async (_client: unknown, id: string) => db.query.userData.findFirst({ where: eq(userData.userId, id) }));
     await db.insert(forumSection).values({ id: "section", name: "General", summary: "", policy: {} });
     await db.insert(forumBoard).values({ id: "board", name: "Discussion", summary: "", sectionId: "section" });
     await db.insert(forumThread).values({ id: "thread", boardId: "board", title: "Discussion", userId: "target" });

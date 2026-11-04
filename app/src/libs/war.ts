@@ -12,43 +12,6 @@ import { findRelationship } from "@/utils/alliance";
 import { getUnique } from "@/utils/grouping";
 
 /**
- * Convenience method which checks target wars, and sees if the user village ID is in the war.
- * Returns the given war if found, otherwise undefined.
- * @param targetWars - The wars to check
- * @param targetVillageId - The village ID to check
- * @param userVillageId - The village ID of the user
- * @returns The war if found, otherwise undefined
- */
-export const findWarsWithUser = (
-  targetWars: BattleWar[],
-  userWars: BattleWar[],
-  targetVillageId: string | null | undefined,
-  userVillageId: string | null | undefined,
-) => {
-  return getUnique([...targetWars, ...userWars], "id").filter((w) => {
-    const attackerVillageIds = [
-      w.attackerVillageId,
-      ...w.warAllies
-        .filter((wa) => wa.supportVillageId === w.attackerVillageId)
-        .map((wa) => wa.villageId),
-    ];
-    const defenderVillageIds = [
-      w.defenderVillageId,
-      ...w.warAllies
-        .filter((wa) => wa.supportVillageId === w.defenderVillageId)
-        .map((wa) => wa.villageId),
-    ];
-    const check1 =
-      attackerVillageIds.includes(targetVillageId ?? "") &&
-      defenderVillageIds.includes(userVillageId ?? "");
-    const check2 =
-      defenderVillageIds.includes(targetVillageId ?? "") &&
-      attackerVillageIds.includes(userVillageId ?? "");
-    return check1 || check2;
-  });
-};
-
-/**
  * Checks if two users are war allies
  * @param targetWars - The wars to check
  * @param userWars - The wars to check

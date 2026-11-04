@@ -209,7 +209,6 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       reason: "Gathering reward",
       rewards: PostProcessedRewardSchema.parse({ reward_gathering_items: true }),
     });
-    expect(result.droppedGatheringItems).toHaveLength(3);
     expect(result.items).toEqual(Array(3).fill({ id: "herb-1", name: "Herb", quantity: 1 }));
   });
   it.each([

@@ -16,7 +16,7 @@
   "scripts": {
     "build": "next build --debug",
     "check": "biome check . && tsc --noEmit",
-    "build-stats": "ANALYZE=true next build",
+    "build-stats": "next build --analyze",
     "dev": "next dev",
     "format:check": "biome format .",
     "format:write": "biome format --write .",
@@ -32,7 +32,6 @@
     "emptymigration": "drizzle-kit generate --custom",
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit",
-    "postinstall": "bun run scripts/ensure-map-data.ts",
     "prepare": "cd .. && husky",
     "bundle:report": "node node_modules/nextjs-bundle-analysis/report.js",
     "bundle:compare": "node node_modules/nextjs-bundle-analysis/compare.js"
@@ -45,7 +44,6 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.99",
     "@ai-sdk/react": "^4.0.152",
-    "@builder.io/partytown": "^0.10.3",
     "@clerk/mcp-tools": "^0.6.0",
     "@clerk/nextjs": "^7.9.19",
     "@emoji-mart/data": "^1.2.1",
@@ -54,7 +52,6 @@
     "@hookform/resolvers": "^6.0.0",
     "@icons-pack/react-simple-icons": "^13.15.1",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@next/bundle-analyzer": "16.4.2",
     "@next/third-parties": "16.4.2",
     "@paypal/react-paypal-js": "10.6.0",
     "@planetscale/database": "^2.0.0",
@@ -105,7 +102,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "cytoscape": "^3.34.4",
-    "cytoscape-edgehandles": "^4.0.1",
     "date-fns": "^4.4.0",
     "deep-object-diff": "^1.1.9",
     "dotenv": "^18.0.8",
@@ -162,7 +158,6 @@
     "@testing-library/react": "^16.3.3",
     "@types/bun": "1.4.3",
     "@types/cytoscape": "^3.31.0",
-    "@types/cytoscape-edgehandles": "^4.0.5",
     "@types/cytoscape-popper": "^4.0.0",
     "@types/jszip": "^3.4.1",
     "@types/node": "26.6.5",
@@ -197,9 +192,6 @@
   "packageManager": "bun@1.4.3",
   "overrides": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "@types/cytoscape-edgehandles": {
-      "cytoscape": "$cytoscape"
-    },
     "@types/react-cytoscapejs": {
       "cytoscape": "$cytoscape"
     }

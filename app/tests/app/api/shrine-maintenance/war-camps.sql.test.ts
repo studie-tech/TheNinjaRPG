@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/shrine-maintenance/route";
 import { WAR_CAMP_DURATION_HOURS, WAR_INSTANCE_HEALTH } from "@/drizzle/constants";
 import {
@@ -61,7 +60,6 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       userData,
       village,
     );
-    spies.push(vi.spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(
       vi
         .spyOn(gamesettings, "getGameSetting")
@@ -156,12 +154,11 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
     expect(await db.query.warCamp.findMany()).toHaveLength(1);
   });
 
-  it("authenticates before cookies, timers or camp queries", async () => {
+  it("authenticates before timers or camp queries", async () => {
     const { result, statements } = await recordQueries(() =>
       GET(new Request("http://localhost/api/shrine-maintenance")),
     );
     expect(result.status).toBe(401);
-    expect(headers.cookies).not.toHaveBeenCalled();
     expect(statements).toHaveLength(0);
   });
 

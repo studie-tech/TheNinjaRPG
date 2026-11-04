@@ -20,7 +20,7 @@ export interface GlobalTile {
   /** Row-major sub-sector terrain samples used only for smooth global rendering. */
   v?: number[];
   /** Row-major packed RGB colors at sub-sector grid vertices. */
-  vc?: number[];
+  vc: number[];
   n?: number[]; // neighbors [north, east, south, west]; -1 at a polar boundary
   ne?: number[]; // entry edge on each neighbor; always the opposite edge for a
   // real cylindrical-grid neighbor, and -1 where the polar cap blocks travel
@@ -33,20 +33,20 @@ export interface SectorPoint {
 
 export interface GlobalMapData {
   radius: number;
-  projection?: "cylindrical";
+  projection: "cylindrical";
   generation?: string;
-  visualScale?: number;
-  polarCapColumns?: number;
-  polarCapRows?: number;
-  polarCapColors?: {
+  visualScale: number;
+  polarCapColumns: number;
+  polarCapRows: number;
+  polarCapColors: {
     north: number[];
     south: number[];
   };
   landThreshold?: number;
   protectedLandSectors?: number[];
-  columns?: number;
-  rows?: number;
-  latitudeLimit?: number;
+  columns: number;
+  rows: number;
+  latitudeLimit: number;
   tiles: NonEmptyArray<GlobalTile>;
 }
 

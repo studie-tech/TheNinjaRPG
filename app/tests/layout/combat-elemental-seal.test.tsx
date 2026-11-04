@@ -1,5 +1,5 @@
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it } from "bun:test";
+import { afterEach, expect, it } from "bun:test";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import { availableUserActions } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
@@ -9,9 +9,7 @@ import {
   makeInjectBattle,
   makeTag,
 } from "../libs/combat/helpers/battleScenario";
-import { ensureDom } from "../setup/dom.mjs";
 
-beforeEach(() => ensureDom());
 afterEach(() => cleanup());
 
 const fixture = () => {

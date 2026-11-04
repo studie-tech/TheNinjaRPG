@@ -54,7 +54,6 @@ const queuedJobSchema = z.object({
   startsAt: z.date(),
   finishesAt: z.date(),
 });
-export type QueuedJob = z.infer<typeof queuedJobSchema>;
 
 export const jutsuTrainingQueueOutputSchema = z.object({
   capacity: z.number(),

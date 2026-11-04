@@ -128,8 +128,8 @@ describeWithDatabase("polling combat ground expiry history", () => {
         })));
         await client.insert(battle).values(snapshot);
         const result = await (await callerFor(combatRouter, "caster")).performAction({
-          battleId: snapshot.id, version: 1,
-          ...(withAction ? { actionId: "wait", longitude: 0, latitude: 0 } : {}),
+          battleId: snapshot.id,
+          ...(withAction ? { version: snapshot.version, actionId: "wait", longitude: 0, latitude: 0 } : {}),
         });
         const saved = await client.query.battle.findFirst({ where: eq(battle.id, snapshot.id) });
         const logs = await client.query.battleAction.findMany({ where: eq(battleAction.battleId, snapshot.id) });

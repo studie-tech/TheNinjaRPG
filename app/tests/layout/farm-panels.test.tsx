@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { FarmInventory } from "@/layout/FarmInventory";
@@ -83,7 +82,6 @@ const summary = (patch: Partial<Record<string, number>> = {}) => ({
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
 });
 afterEach(cleanup);

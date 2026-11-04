@@ -609,34 +609,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-
-              {/* <div className="group">
-                <Info className="h-8 w-8 mr-2 cursor-pointer hover:text-orange-500" />
-                <span className="absolute bottom-8 right-0 z-50 rounded-md bg-gray-800 p-2 text-sm text-gray-100 opacity-0 transition-opacity group-hover:opacity-100">
-                  <p>
-                    <b>Created by: </b>
-                    {image.user?.username}
-                  </p>
-                  <p className="mt-2">
-                    <b>Prompt: </b>
-                    {image.prompt}
-                  </p>
-                  {image.negative_prompt && (
-                    <p>
-                      <b>Negative Prompt: </b>
-                      {image.negative_prompt}
-                    </p>
-                  )}
-                  <p className="mt-2">
-                    <b>Seed: </b>
-                    {image.seed}
-                  </p>
-                  <p>
-                    <b>CFG: </b>
-                    {image.guidance_scale}
-                  </p>
-                </span>
-              </div> */}
             </>
           )}
         </div>

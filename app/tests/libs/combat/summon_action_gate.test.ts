@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { summonActionBlockedReason } from "@/libs/combat/summon";
 import { makeBattleUser } from "./helpers/battleScenario";
-import type { BattleUserState, CombatAction, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState, CombatAction } from "@/libs/combat/types";
 
 /**
  * The router calls this before performBattleAction, which spends pools inside
@@ -13,7 +13,6 @@ import type { BattleUserState, CombatAction, UserEffect } from "@/libs/combat/ty
 const DEMON = "ai-demon";
 const TIGER = "ai-tiger";
 const P = "p1";
-const noEffects: UserEffect[] = [];
 
 const player = () => makeBattleUser(P, { curHealth: 100, isAi: false });
 
@@ -39,17 +38,17 @@ describe("actions carrying no summon tag are never blocked", () => {
   const state = [player(), template(DEMON, "Demon"), spawned("s1", DEMON)];
 
   it("passes an action with no effects at all", () => {
-    expect(summonActionBlockedReason(action(), player(), state, noEffects)).toBeNull();
+    expect(summonActionBlockedReason(action(), player(), state)).toBeNull();
   });
 
   it("passes a plain damage action even while the cap is already full", () => {
     const dmg = action({ type: "damage", power: 10 });
-    expect(summonActionBlockedReason(dmg, player(), state, noEffects)).toBeNull();
+    expect(summonActionBlockedReason(dmg, player(), state)).toBeNull();
   });
 
   it("passes a multi-tag action with no summon tag", () => {
     const mixed = action({ type: "damage" }, { type: "heal" }, { type: "clone" });
-    expect(summonActionBlockedReason(mixed, player(), state, noEffects)).toBeNull();
+    expect(summonActionBlockedReason(mixed, player(), state)).toBeNull();
   });
 
   it("ignores an aiId on a NON-summon tag", () => {
@@ -58,7 +57,7 @@ describe("actions carrying no summon tag are never blocked", () => {
     // which is how a dropped guard would break every action carrying an aiId.
     const cloneWithAiId = action({ type: "clone", aiId: DEMON });
     expect(
-      summonActionBlockedReason(cloneWithAiId, player(), state, noEffects),
+      summonActionBlockedReason(cloneWithAiId, player(), state),
     ).toBeNull();
   });
 });
@@ -67,14 +66,14 @@ describe("actions carrying a summon tag go through the caps", () => {
   it("passes when the creature is not out yet", () => {
     const state = [player(), template(DEMON, "Demon")];
     expect(
-      summonActionBlockedReason(action(summonTag(DEMON)), player(), state, noEffects),
+      summonActionBlockedReason(action(summonTag(DEMON)), player(), state),
     ).toBeNull();
   });
 
   it("blocks a duplicate of a creature already out", () => {
     const state = [player(), template(DEMON, "Demon"), spawned("s1", DEMON)];
     expect(
-      summonActionBlockedReason(action(summonTag(DEMON)), player(), state, noEffects),
+      summonActionBlockedReason(action(summonTag(DEMON)), player(), state),
     ).toContain("already summoned");
   });
 
@@ -85,7 +84,7 @@ describe("actions carrying a summon tag go through the caps", () => {
     ];
     expect(
       summonActionBlockedReason(
-        action(summonTag(TIGER, true)), player(), state, noEffects),
+        action(summonTag(TIGER, true)), player(), state),
     ).toContain("only control one summon");
   });
 
@@ -96,14 +95,14 @@ describe("actions carrying a summon tag go through the caps", () => {
     ];
     expect(
       summonActionBlockedReason(
-        action(summonTag(TIGER, false)), player(), state, noEffects),
+        action(summonTag(TIGER, false)), player(), state),
     ).toBeNull();
   });
 
   it("reports the FIRST blocking tag when an action carries several", () => {
     const state = [player(), template(DEMON, "Demon"), spawned("s1", DEMON)];
     const multi = action(summonTag(TIGER), summonTag(DEMON));
-    expect(summonActionBlockedReason(multi, player(), state, noEffects)).toContain(
+    expect(summonActionBlockedReason(multi, player(), state)).toContain(
       "already summoned",
     );
   });
@@ -117,7 +116,7 @@ describe("actions carrying a summon tag go through the caps", () => {
     const state = [ai, template(DEMON, "Demon"), template(TIGER, "Tiger"), aiSummon];
     // wantsPilot resolves false for an AI caster, so the piloted cap cannot trip.
     expect(
-      summonActionBlockedReason(action(summonTag(TIGER, true)), ai, state, noEffects),
+      summonActionBlockedReason(action(summonTag(TIGER, true)), ai, state),
     ).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
-import { type inferRouterOutputs, TRPCError } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 import { after } from "next/server";
 import { z } from "zod";
 import {
@@ -1003,9 +1003,6 @@ export const staffRouter = createTRPCRouter({
       if (!canDeleteReferral(user.role)) {
         return errorResponse("You don't have permission to delete referrals");
       }
-      if (!target) {
-        return errorResponse("Target user not found");
-      }
       if (!target.recruiterId) {
         return errorResponse("User has no recruiter to delete");
       }
@@ -1020,8 +1017,6 @@ export const staffRouter = createTRPCRouter({
       return { success: true, message: `Referral removed from ${target.username}` };
     }),
 });
-
-export type staffRouter = inferRouterOutputs<typeof staffRouter>;
 
 /**
  * Delay execution for a specified number of milliseconds.

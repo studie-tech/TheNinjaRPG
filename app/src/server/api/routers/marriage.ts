@@ -1,6 +1,4 @@
-import type { inferRouterOutputs } from "@trpc/server";
 import { z } from "zod";
-import { getServerPusher } from "@/libs/pusher";
 import {
   deleteAssociation,
   fetchAssociations,
@@ -19,8 +17,6 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import { idSchema } from "@/validators/misc";
-
-const pusher = getServerPusher();
 
 export const marriageRouter = createTRPCRouter({
   createRequest: protectedProcedure
@@ -48,7 +44,6 @@ export const marriageRouter = createTRPCRouter({
         return errorResponse("You are already married to this user");
       // Mutate
       await insertRequest(ctx.drizzle, user.userId, targetUser.userId, "MARRIAGE");
-      void pusher.trigger(targetUser.userId, "event", { type: "marriage" });
       // Create
       return { success: true, message: "You have proposed!" };
     }),
@@ -69,7 +64,6 @@ export const marriageRouter = createTRPCRouter({
       if (request.status !== "PENDING") {
         return errorResponse("You can only reject pending requests");
       }
-      void pusher.trigger(request.senderId, "event", { type: "MARRIAGE" });
       await updateRequestState(ctx.drizzle, input.id, "REJECTED", "MARRIAGE");
       return { success: true, message: "Proposal Rejected" };
     }),
@@ -85,7 +79,6 @@ export const marriageRouter = createTRPCRouter({
       if (request.status !== "PENDING") {
         return errorResponse("You can only cancel pending requests");
       }
-      void pusher.trigger(request.receiverId, "event", { type: "MARRIAGE" });
       await updateRequestState(ctx.drizzle, input.id, "CANCELLED", "MARRIAGE");
       return { success: true, message: "Proposal cancelled" };
     }),
@@ -136,7 +129,6 @@ export const marriageRouter = createTRPCRouter({
         request.receiverId,
         "MARRIAGE",
       );
-      void pusher.trigger(request.senderId, "event", { type: "MARRIAGE" });
       // Create
       return { success: true, message: "Proposal Accepted" };
     }),
@@ -190,5 +182,3 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Divorce finalized" };
     }),
 });
-
-export type MarriageRouter = inferRouterOutputs<typeof marriageRouter>;

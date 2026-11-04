@@ -1,7 +1,7 @@
 import type { GameAsset } from "@/drizzle/schema";
-import type { CharacterAssetConfig } from "@/libs/rendering/characterAssets";
 import type {
   CharacterAnimationState,
+  CharacterAssetConfig,
   SpriteDirection,
 } from "@/validators/towerDefense";
 
@@ -49,11 +49,7 @@ export const characterAnimationClip = (
       : [];
   if (!images?.length) throw new Error(`Character has no ${direction} artwork`);
   return {
-    images: images.map((image) =>
-      /^https?:\/\//.test(image) || !config.basePath
-        ? image
-        : `${config.basePath}/${image}`,
-    ),
+    images,
     columns: 1,
     rows: 1,
     frameCount: images.length,

@@ -87,7 +87,6 @@ clean: # Clean all local application installation folders
 	@echo "${YELLOW}Cleaning local installation folders${RESET}"
 	rm -rf ./app/node_modules
 	rm -rf ./app/.next
-	rm -rf ./app/.turbo
 
 .PHONY: reset
 reset: clean install # Clean and reinstall all dependencies
@@ -131,35 +130,6 @@ build: ensure-env # Build Next.js app
 bundleanalysis: ensure-env # Build Next.js app with bundle analysis
 	@echo "${GREEN}bundleanalysis${RESET}"
 	cd app && node ../scripts/dev-bun.mjs run build-stats
-
-.PHONY: mcp-servers
-mcp-servers: # Start MCP servers
-	@echo "${GREEN}Starting MCP servers${RESET}"
-	npx @agentdeskai/browser-tools-server@1.2.0
-
-.PHONY: openhands
-openhands: # Open OpenHands on http://127.0.0.1:3004
-	@echo "${GREEN}Launch Open Hands${RESET}"
-	$(eval WORKSPACE_BASE := $(shell pwd -P))
-	$(eval SANDBOX_USER_ID := $(shell id -u))
-	@docker run -it --rm --pull=always \
-		-e SANDBOX_RUNTIME_CONTAINER_IMAGE=docker.all-hands.dev/all-hands-ai/runtime:0.19-nikolaik \
-		-e SANDBOX_USER_ID=$(SANDBOX_USER_ID) \
-		-e WORKSPACE_MOUNT_PATH=$(WORKSPACE_BASE) \
-		-v $(WORKSPACE_BASE):/opt/workspace_base \
-		-e LOG_ALL_EVENTS=true \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-v ~/.openhands-state:/.openhands-state \
-		-p 3004:3000 \
-		--add-host host.docker.internal:host-gateway \
-		--name openhands-app \
-		docker.all-hands.dev/all-hands-ai/openhands:0.19
-
---------------AI-helpers----------------: # -------------------------------------------------------
-.PHONY: browser-tools-server
-browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
-	@echo "${GREEN}browser-tools-server${RESET}"
-	npx @agentdeskai/browser-tools-server
 
 --------------Migrations----------------: # -------------------------------------------------------
 .PHONY: dbpush
@@ -215,7 +185,7 @@ typecheck: # Run TypeScript type checking
 
 -------------DEPENDENCIES---------------: # -------------------------------------------------------
 .PHONY: deps-upgrade
-deps-upgrade: install # Upgrade npm manifests and lockfiles across the app, mobile shells and tower defense
+deps-upgrade: install # Upgrade npm manifests and lockfiles across the app and mobile shells
 	@echo "${YELLOW}Upgrading all dependencies ${RESET}"
 	node scripts/deps-upgrade.mjs
 
@@ -312,8 +282,3 @@ git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: 
 	git reset --hard origin/main
 	git apply --reject --whitespace=fix branch.patch
 	rm -f branch.patch
-
-.PHONY: force-push-staging
-force-push-staging: # Force-push the current branch to the remote staging branch
-	@echo "${YELLOW}Force-pushing current branch to origin/dev${RESET}"
-	git push origin HEAD:staging --force

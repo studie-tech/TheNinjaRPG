@@ -20,9 +20,6 @@ import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 // Radix popovers dispatch DOM events, so tests use the window's Event classes.
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
@@ -38,7 +35,6 @@ const SIDEBARS = "Swap sidebars";
 let preferenceCallbacks: Parameters<typeof client.api.profile.updatePreferences.useMutation>[0];
 
 beforeEach(() => {
-  ensureDom();
   window.localStorage.clear();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
@@ -55,14 +51,9 @@ beforeEach(() => {
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
     isPlaying: false,
-    isLoading: false,
-    error: null,
-    canPlay: true,
     requiresInteraction: false,
     enabled: true,
     setEnabled: vi.fn(async () => undefined),
-    toggle: vi.fn(async () => undefined),
-    setVolume: vi.fn(),
   }));
   vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
   vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);

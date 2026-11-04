@@ -4,7 +4,6 @@ import { promises as fs } from "fs";
 import type { DrizzleClient } from "@/server/db";
 
 export const seedAssets = async (client: DrizzleClient) => {
-  const promises: Promise<void>[] = [];
   console.log("\nClearing old gameAssets...");
   await client.delete(gameAsset);
   console.log("\nSyncing assets...");
@@ -15,8 +14,5 @@ export const seedAssets = async (client: DrizzleClient) => {
     }
   }
 
-  // Process all the stuff
-  await Promise.all(promises).then(() => {
-    console.log("Done syncing assets!");
-  });
+  console.log("Done syncing assets!");
 };

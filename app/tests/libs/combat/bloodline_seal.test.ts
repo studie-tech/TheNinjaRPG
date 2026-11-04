@@ -303,7 +303,7 @@ const actionFixture = (
   });
   const action = availableUserActions(battle, "defender", true, true).find(a => a.id === jutsu.id)!;
   const perform = (current: CompleteBattle) => performBattleAction({
-    battle: current, action, grid: getBattleGrid(1, current), actorId: "defender", contextUserId: "defender",
+    battle: current, action, grid: getBattleGrid(1, current), actorId: "defender",
     longitude: user.longitude, latitude: user.latitude,
   });
   return { battle, action, perform };

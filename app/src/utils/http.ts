@@ -43,12 +43,9 @@ export const fetchWithRetry = (
   timeoutMs = 10000,
   retry: RetryOptions = {},
 ): Promise<Response> => {
-  return withRetry(
-    async () => {
-      const response = await fetchWithTimeout(url, options, timeoutMs);
-      if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
-      return response;
-    },
-    { isTransient: () => true, ...retry },
-  );
+  return withRetry(async () => {
+    const response = await fetchWithTimeout(url, options, timeoutMs);
+    if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+    return response;
+  }, retry);
 };

@@ -7,9 +7,7 @@ import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatScene, type CombatSceneSnapshot } from "@/libs/rendering/scenes/combat";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 const cleanups: (() => void)[] = [];
 beforeEach(() => {
   vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);

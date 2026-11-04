@@ -26,5 +26,3 @@ export const anbuRenameSchema = z.object({
 export type AnbuRenameSchema = z.infer<typeof anbuRenameSchema>;
 
 export const anbuEditSchema = anbuRenameSchema.extend({ squadId: z.string() });
-
-export type AnbuEditSchema = z.infer<typeof anbuEditSchema>;

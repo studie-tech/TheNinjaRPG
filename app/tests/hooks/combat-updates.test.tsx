@@ -14,7 +14,6 @@ import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
 const testApi = createTRPCReact<AppRouter>();
@@ -35,7 +34,6 @@ const stateAt = (version: number, patch: Partial<BattleState> = {}) =>
   ({ battle: { id: "battle", version, updatedAt: new Date(0) }, result: null, isPending: false, ...patch }) as BattleState;
 
 beforeEach(() => {
-  ensureDom();
   reads = [];
   finishRead = undefined;
   pauseSuccess = undefined;
@@ -87,7 +85,7 @@ const mount = (initial = stateAt(1)) => {
     });
     performAction = () => {
       if (!startAction("battle")) return;
-      action.mutate({ battleId: "battle" } as never);
+      action.mutate({ battleId: "battle" });
     };
     return null;
   }
@@ -198,6 +196,24 @@ it.each(["failure", "stale", "no-op"])("recovers an event not covered by a %s ac
   await waitFor(() => expect(reads).toHaveLength(2));
   await act(async () => finishRead?.(stateAt(2)));
   await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(reads).toHaveLength(2);
+});
+
+it("refreshes a rejected manual snapshot and releases pending state without an opponent event", async () => {
+  mount();
+  await beginAction();
+  await act(async () => finishAction({
+    updateClient: true,
+    notification: "Battle state changed. Choose your action again.",
+  }));
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(latestState.isPending).toBe(false);
+  expect(reads).toHaveLength(2);
+  await act(async () => finishRead?.(stateAt(2)));
+  await waitFor(() => expect(latestState.battle?.version).toBe(2));
+  await act(async () => performAction());
+  await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+  await respond(3);
   expect(reads).toHaveLength(2);
 });
 

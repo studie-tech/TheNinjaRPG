@@ -9,6 +9,7 @@ import {
 } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -31,6 +32,7 @@ import {
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
+import { storePurchaseLockSchema } from "@/validators/nativePurchases";
 
 /**
  * Backoff while waiting for the grant webhook: roughly 21 seconds in total, which is
@@ -66,10 +68,7 @@ export default function NativeStore() {
   const [bindingRetry, setBindingRetry] = useState(0);
   const bindingGeneration = useRef(0);
   const recentGeneration = useRef(0);
-  const [recentBaseline, setRecentBaseline] = useState<{
-    userId: string;
-    newestId: string | undefined;
-  } | null>(null);
+  const [baselineAccountId, setBaselineAccountId] = useState<string | null>(null);
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
   const [unsettledAttempts, setUnsettledAttempts] = useState<StorePurchaseLock[]>([]);
   const unsettledAttemptsRef = useRef<StorePurchaseLock[]>([]);
@@ -131,11 +130,8 @@ export default function NativeStore() {
       const next = update(unsettledAttemptsRef.current);
       unsettledAttemptsRef.current = next;
       setUnsettledAttempts(next);
-      try {
-        window.localStorage.setItem(PURCHASE_ATTEMPT_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // The in-memory lock still protects this mounted checkout if storage is unavailable.
-      }
+      // The in-memory lock still protects this mounted checkout if storage is unavailable.
+      safeLocalStorageSetItem(PURCHASE_ATTEMPT_STORAGE_KEY, JSON.stringify(next));
     },
     [],
   );
@@ -145,64 +141,13 @@ export default function NativeStore() {
   // remove it and reopen checkout for that product.
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(PURCHASE_ATTEMPT_STORAGE_KEY);
+      const raw = safeLocalStorageGetItem(PURCHASE_ATTEMPT_STORAGE_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : [];
       if (Array.isArray(parsed)) {
+        // Entries are validated one by one so a corrupt entry cannot release the others.
         const stored = parsed.flatMap((entry): StorePurchaseLock[] => {
-          if (!entry || typeof entry !== "object") return [];
-          const value = entry as {
-            accountId?: unknown;
-            attempt?: {
-              transactionId?: unknown;
-              productId?: unknown;
-              baselineReceiptIds?: unknown;
-              baselineNativeTransactionIds?: unknown;
-              phase?: unknown;
-              startedAt?: unknown;
-            };
-          };
-          const valid =
-            typeof value.accountId === "string" &&
-            typeof value.attempt?.productId === "string" &&
-            (value.attempt.transactionId === undefined ||
-              typeof value.attempt.transactionId === "string") &&
-            Array.isArray(value.attempt.baselineReceiptIds) &&
-            value.attempt.baselineReceiptIds.every(
-              (receiptId) => typeof receiptId === "string",
-            );
-          if (!valid || !value.attempt) return [];
-          // Phase-less entries were written after a native callback was already lost in
-          // older builds. Keep them conservatively locked rather than abandoning them.
-          return [
-            {
-              accountId: value.accountId as string,
-              attempt: {
-                transactionId:
-                  typeof value.attempt.transactionId === "string"
-                    ? value.attempt.transactionId
-                    : undefined,
-                productId: value.attempt.productId as string,
-                baselineReceiptIds: value.attempt.baselineReceiptIds as string[],
-                baselineNativeTransactionIds: Array.isArray(
-                  value.attempt.baselineNativeTransactionIds,
-                )
-                  ? value.attempt.baselineNativeTransactionIds.filter(
-                      (id): id is string => typeof id === "string",
-                    )
-                  : [],
-                phase:
-                  value.attempt.phase === "sheet-open" ||
-                  value.attempt.phase === "payment-pending" ||
-                  value.attempt.phase === "charged-or-pending"
-                    ? value.attempt.phase
-                    : "charged-or-pending",
-                startedAt:
-                  typeof value.attempt.startedAt === "string"
-                    ? value.attempt.startedAt
-                    : new Date(0).toISOString(),
-              },
-            },
-          ];
+          const lock = storePurchaseLockSchema.safeParse(entry);
+          return lock.success ? [lock.data] : [];
         });
         recoveredAccounts.current = new Set(stored.map((entry) => entry.accountId));
         unsettledAttemptsRef.current = stored;
@@ -344,9 +289,8 @@ export default function NativeStore() {
     refreshProfile,
   ]);
 
-  // `recent` is the before-checkout watermark used to tell this attempt's receipt from a
-  // terminal receipt already in the list. Refetch it for each signed-in account and keep
-  // checkout closed until that account's baseline has actually completed.
+  // Refetch `recent` for each signed-in account and keep checkout closed until that
+  // account's receipt list has loaded once.
   useEffect(() => {
     const generation = ++recentGeneration.current;
     const accountId = player?.userId;
@@ -356,7 +300,7 @@ export default function NativeStore() {
       .then(({ data, error }) => {
         if (generation !== recentGeneration.current) return;
         if (!data) throw error ?? new Error("Could not verify recent purchases");
-        setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+        setBaselineAccountId(accountId);
       })
       .catch((error: unknown) => {
         if (generation !== recentGeneration.current) return;
@@ -368,9 +312,8 @@ export default function NativeStore() {
       if (generation === recentGeneration.current) recentGeneration.current += 1;
     };
   }, [isNativeShell, player?.userId, refetchRecent]);
-  const purchaseBaseline =
-    recentBaseline?.userId === player?.userId ? recentBaseline : null;
-  const hasRecentBaseline = purchaseBaseline !== null;
+  const hasRecentBaseline =
+    baselineAccountId !== null && baselineAccountId === player?.userId;
 
   /** QueryClient defaults may keep purchase data fresh forever; invalidate first. */
   const fetchRecentFresh = useCallback(
@@ -393,7 +336,7 @@ export default function NativeStore() {
       );
       return;
     }
-    setRecentBaseline({ userId: accountId, newestId: data[0]?.id });
+    setBaselineAccountId(accountId);
   };
 
   // A grant can be retried after the initial wait ends. Keep pending products disabled
@@ -403,13 +346,6 @@ export default function NativeStore() {
     if (!hasPendingPurchase || !accountId) return;
     const timer = window.setInterval(() => {
       void refetchRecent().then(({ data }) => {
-        if (data) {
-          setRecentBaseline((current) =>
-            current?.userId === accountId
-              ? { userId: accountId, newestId: data[0]?.id }
-              : current,
-          );
-        }
         if (data && !data.some(isPendingStorePurchase)) {
           void refreshProfile();
         }
@@ -431,6 +367,7 @@ export default function NativeStore() {
    * The SDK transaction id identifies it when available. On platforms that omit that id,
    * a fresh server baseline means only a newly-visible same-product receipt can release
    * this attempt's lock. No client clock is compared with a database timestamp.
+   * Pending grants return timed-out so the caller keeps the purchase lock for recovery.
    */
   const settleAfterPurchase = useCallback(
     async (attempt: StorePurchaseAttempt, assertCurrent?: () => void) => {
@@ -455,10 +392,7 @@ export default function NativeStore() {
       if (data && observation === "pending") {
         observation = storePurchaseReconciliation(data, attempt);
       }
-      return {
-        newestId: data?.[0]?.id,
-        status: finalStorePurchaseResult(observation),
-      };
+      return finalStorePurchaseResult(observation);
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -586,9 +520,12 @@ export default function NativeStore() {
     verifyPurchaseAttempt,
   ]);
 
+  /**
+   * Reconcile restored products with server receipts, then refresh account data.
+   * Return the domain status for feedback; native restore alone does not prove a grant.
+   */
   const refreshAfterRestore = useCallback(
     async (attempt: StoreRestoreAttempt, assertCurrent?: () => void) => {
-      let newestId: string | undefined;
       let observation = storeRestoreReconciliation([], attempt);
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -601,14 +538,12 @@ export default function NativeStore() {
           )
         ).flat();
         assertCurrent?.();
-        newestId = matching[0]?.id ?? newestId;
         observation = storeRestoreReconciliation(matching, attempt);
         if (observation === "reconciled") break;
       }
-      const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
+      await Promise.all([refetchRecent(), refreshProfile()]);
       assertCurrent?.();
-      newestId = data?.[0]?.id ?? newestId;
-      return { newestId, status: finalStoreRestoreResult(observation) };
+      return finalStoreRestoreResult(observation);
     },
     [fetchRecentFresh, refetchRecent, refreshProfile],
   );
@@ -621,7 +556,7 @@ export default function NativeStore() {
     if (
       !available?.bound ||
       available.userId !== player?.userId ||
-      !purchaseBaseline ||
+      !hasRecentBaseline ||
       !attemptsHydrated
     )
       return;
@@ -642,8 +577,6 @@ export default function NativeStore() {
       ]);
       assertCurrentCheckout();
       if (!visibleRows) throw new Error("Could not verify recent purchases");
-      const previousNewestId = visibleRows[0]?.id;
-      setRecentBaseline({ userId: accountId, newestId: previousNewestId });
       const {
         outcome: result,
         postPurchaseCustomerInfo,
@@ -791,29 +724,24 @@ export default function NativeStore() {
         assertCurrentCheckout,
       );
       assertCurrentCheckout();
-      if (settlement.status !== "timed-out") {
+      if (settlement !== "timed-out") {
         updateUnsettledAttempts((current) =>
           releaseStorePurchaseLock(current, accountId, chargedAttempt),
         );
       }
-      if (settlement.status === "rejected") {
+      if (settlement === "rejected") {
         showMutationToast({
           success: false,
           message:
             "The store completed checkout, but the server rejected the receipt. You were not credited; please contact support.",
         });
-      } else if (settlement.status === "timed-out") {
+      } else if (settlement === "timed-out") {
         showMutationToast({
           success: false,
           message:
             "The charge is still being verified. This item will stay locked until reconciliation finishes.",
         });
       }
-      setRecentBaseline((current) =>
-        current?.userId === accountId
-          ? { userId: accountId, newestId: settlement.newestId }
-          : current,
-      );
     } catch (error) {
       if (checkoutGeneration === bindingGeneration.current) {
         showMutationToast({
@@ -863,31 +791,19 @@ export default function NativeStore() {
           assertCurrentRestore,
         );
         assertCurrentRestore();
-        setRecentBaseline((current) =>
-          current?.userId === accountId
-            ? { userId: accountId, newestId: result.newestId }
-            : current,
-        );
         showMutationToast({
-          success: result.status === "reconciled",
+          success: result === "reconciled",
           message:
-            result.status === "reconciled"
+            result === "reconciled"
               ? "Purchases restored."
-              : result.status === "rejected"
+              : result === "rejected"
                 ? "The store restored a subscription, but the server rejected its receipt. Please contact support."
                 : "The store restored a subscription, but the server is still processing it. Please try again shortly.",
         });
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
-        const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
+        await Promise.all([refetchRecent(), refreshProfile()]);
         assertCurrentRestore();
-        if (data) {
-          setRecentBaseline((current) =>
-            current?.userId === accountId
-              ? { userId: accountId, newestId: data[0]?.id }
-              : current,
-          );
-        }
         showMutationToast({
           success: true,
           message: "No previous purchases found for this store account.",

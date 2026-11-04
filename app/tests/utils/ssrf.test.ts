@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isPrivateIp, isUrlSafeSynchronous } from "@/utils/ssrf";
+import { isPrivateIp, validateUrlForSsrf } from "@/utils/ssrf";
 
 describe("isPrivateIp", () => {
   it.each([
@@ -33,7 +33,7 @@ describe("isPrivateIp", () => {
     "http://[64:ff9b::a9fe:a9fe]/latest/meta-data/",
     "http://[2002:c0a8:0101::1]/",
     "http://[::ffff:127.0.0.1]/",
-  ])("rejects transition address URL %s before DNS resolution", (url) => {
-    expect(isUrlSafeSynchronous(url)).toBe(false);
+  ])("rejects transition address URL %s", async (url) => {
+    expect(await validateUrlForSsrf(url)).toBe(false);
   });
 });

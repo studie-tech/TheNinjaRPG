@@ -201,7 +201,7 @@ describeWithDatabase("parental controls", () => {
       await db.insert(conversationComment).values({ id: `${convo.id}-message`, conversationId: convo.id, content: "Original", userId: convo.id === "support" ? "stranger" : "child", authorId: convo.id === "support" ? "stranger" : "child" });
     }
     const api = await callerFor(commentsRouter, "child");
-    expect((await api.getUserConversations({})).map((c) => c.id).sort()).toEqual(["approved", "support"]);
+    expect((await api.getUserConversations()).map((c) => c.id).sort()).toEqual(["approved", "support"]);
     for (const id of ["tavern", "old", "group"]) {
       const page = await api.getConversationComments({ convo_id: id, limit: 10 });
       expect(page.data).toEqual([]);
@@ -238,7 +238,7 @@ describeWithDatabase("parental controls", () => {
       expect(page.data).toEqual([]);
       expect(page.restrictionMessage).toBeTruthy();
       expect(await child.fetchConversationComment({ commentId: "retained-message", conversationId: "retained" })).toBeNull();
-      expect(await child.getUserConversations({})).toEqual([]);
+      expect(await child.getUserConversations()).toEqual([]);
       expect((await child.reactConversationComment({ commentId: "retained-message", emoji: "👍" })).success).toBe(false);
       expect((await child.sendTypingIndicator({ conversationId: "retained" })).success).toBe(false);
       const sender = mode === "APPROVED" ? await callerFor(commentsRouter, "friend") : child;
@@ -250,7 +250,7 @@ describeWithDatabase("parental controls", () => {
       expect((await parent.save({ ...settings, version: 1, privateMessages: mode === "NONE" ? "EVERYONE" : mode, approvedUserIds: ["friend", "stranger"] })).success).toBe(true);
       expect((await child.getConversationComments({ convo_id: "retained", limit: 10 })).data).toHaveLength(1);
       expect(await child.fetchConversationComment({ commentId: "retained-message", conversationId: "retained" })).not.toBeNull();
-      expect((await child.getUserConversations({})).map((c) => c.id)).toEqual(["retained"]);
+      expect((await child.getUserConversations()).map((c) => c.id)).toEqual(["retained"]);
       expect(await stranger.fetchConversationComment({ commentId: "retained-message", conversationId: "retained" })).toBeNull();
       await db.insert(user2conversation).values({ userId: "stranger", conversationId: "retained" });
       expect((await child.getConversationComments({ convo_id: "retained", limit: 10 })).data).toHaveLength(1);
@@ -280,7 +280,7 @@ describeWithDatabase("parental controls", () => {
     expect(events).not.toHaveBeenCalled();
     expect((await child.getConversationComments({ convo_id: convoId, limit: 10 })).data).toHaveLength(1);
     expect(await child.fetchConversationComment({ commentId: before.data[0]!.id, conversationId: convoId })).not.toBeNull();
-    expect((await child.getUserConversations({})).map((c) => c.id)).toEqual([convoId]);
+    expect((await child.getUserConversations()).map((c) => c.id)).toEqual([convoId]);
 
     expect((await staff.createConversationComment({ object_id: convoId, comment: "Normal approved reply", quoteIds: null, senderId: null })).success).toBe(true);
     // A non-AI override resolves to the real author and must not require another approval.
@@ -304,7 +304,7 @@ describeWithDatabase("parental controls", () => {
     const child = await callerFor(commentsRouter, "child");
     expect((await child.getConversationComments({ convo_id: convoId, limit: 10 })).data).toHaveLength(2);
     expect(await child.fetchConversationComment({ commentId: reply.commentId!, conversationId: convoId })).not.toBeNull();
-    expect((await child.getUserConversations({})).map((c) => c.id)).toEqual([convoId]);
+    expect((await child.getUserConversations()).map((c) => c.id)).toEqual([convoId]);
     const outsider = await callerFor(commentsRouter, "outsider");
     expect((await outsider.createConversationComment({ object_id: convoId, comment: "Nonmember AI reply", quoteIds: null, senderId: "ai" })).success).toBe(false);
     const fallback = await child.createConversationComment({ object_id: convoId, comment: "Ordinary player cannot post as AI", quoteIds: null, senderId: "ai" });

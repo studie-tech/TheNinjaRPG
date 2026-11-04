@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
 import { makeBattleUser } from "./helpers/battleScenario";
-import type { BattleUserState, UserEffect } from "@/libs/combat/types";
+import type { BattleUserState } from "@/libs/combat/types";
 
 // Two independent caps: one of each CREATURE (so different summon jutsus can
 // coexist, as they did pre-PR), and one PILOTED summon overall (each piloted
@@ -10,7 +10,6 @@ import type { BattleUserState, UserEffect } from "@/libs/combat/types";
 const DEMON = "ai-demon";
 const TIGER = "ai-tiger";
 const P = "p1";
-const noEffects: UserEffect[] = [];
 
 const player = () => makeBattleUser(P, { curHealth: 100 });
 
@@ -43,7 +42,7 @@ const spawned = (
   });
 
 const reason = (state: BattleUserState[], aiId: string, wantsPilot: boolean) =>
-  summonCastBlockedReason(state, P, aiId, wantsPilot, noEffects);
+  summonCastBlockedReason(state, P, aiId, wantsPilot);
 
 describe("per-creature cap", () => {
   it("allows the first cast of a creature", () => {
@@ -120,20 +119,6 @@ describe("one-piloted-summon cap", () => {
       spawned("s1", DEMON, "Demon", { isPiloted: true, curHealth: 0 }),
     ];
     expect(reason(state, TIGER, true)).toBeNull();
-  });
-});
-
-describe("legacy battles without summonSourceId", () => {
-  it("still blocks a duplicate by falling back to the template username", () => {
-    const legacy = spawned("s1", DEMON, "Demon", { summonSourceId: undefined });
-    const state = [player(), template(DEMON, "Demon"), legacy];
-    expect(reason(state, DEMON, false)).toContain("already summoned");
-  });
-
-  it("does not block a different creature via the username fallback", () => {
-    const legacy = spawned("s1", DEMON, "Demon", { summonSourceId: undefined });
-    const state = [player(), template(DEMON, "Demon"), template(TIGER, "Tiger"), legacy];
-    expect(reason(state, TIGER, false)).toBeNull();
   });
 });
 

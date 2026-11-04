@@ -2,7 +2,6 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { HotkeyTarget } from "@/layout/HotkeyControls";
 import { HotkeyCaptureDialog } from "@/layout/HotkeyControls";
-import { ensureDom } from "../setup/dom.mjs";
 
 // Radix dispatches DOM events through the global constructors.
 const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent"] as const;
@@ -11,7 +10,6 @@ const browserDescriptors = browserGlobals.map((key) =>
 );
 
 beforeEach(() => {
-  ensureDom();
   for (const key of browserGlobals) {
     Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   }

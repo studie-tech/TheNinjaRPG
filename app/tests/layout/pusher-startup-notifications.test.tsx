@@ -17,14 +17,12 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider, useUserData } from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 import { actualUserContext } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 let userId = "player";
 beforeEach(() => {
-  ensureDom();
   // Bun retains other suites' module mocks; exercise the provider's real cache observers.
   vi.spyOn(userContext, "useUserData").mockImplementation(
     actualUserContext.useUserData,

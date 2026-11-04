@@ -133,8 +133,7 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
           </div>
         }
       >
-        {!skillTree && <p>Could not find this skill</p>}
-        {!loading && skillTree && (
+        {!loading && (
           <EditContent
             schema={SkillTreeValidator}
             form={form as unknown as UseFormReturn<ZodSkillTreeType, any>}

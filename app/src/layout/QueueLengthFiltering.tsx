@@ -51,8 +51,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setRankedRanks: cf.setters.rankedRanks,
-    setMinCount: cf.setters.minCount,
   };
 };
 

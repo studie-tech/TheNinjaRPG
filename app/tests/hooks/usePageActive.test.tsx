@@ -1,10 +1,7 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { usePageActive } from "@/hooks/usePageActive";
 import * as native from "@/libs/native";
-
-ensureDom();
 
 let isHidden = false;
 let onAppState: ((active: boolean) => void) | undefined;

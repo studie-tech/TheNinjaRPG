@@ -36,11 +36,9 @@ import {
   getTestDatabase,
   resetTables,
 } from "../setup/testDatabase";
-import { ensureDom } from "../setup/dom.mjs";
 
 describeWithDatabase("Kitchen shrine duration preview", () => {
   beforeEach(async () => {
-    ensureDom();
     await resetTables(
       craftingRequirement,
       userCookingJob,

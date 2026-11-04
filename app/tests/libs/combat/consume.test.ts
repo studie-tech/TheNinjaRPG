@@ -554,6 +554,7 @@ describe("active Consume damage conversion", () => {
       diffuseDamage: [
         {
           attackerId: "attacker",
+          sourceUserId: "attacker",
           remainingDamage: 200,
           remainingTurns: 2,
           lastAppliedRound: ROUND - 1,

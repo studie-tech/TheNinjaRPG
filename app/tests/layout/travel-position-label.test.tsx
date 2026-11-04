@@ -6,9 +6,7 @@ import { Profiler } from "react";
 import * as clientApi from "@/app/_trpc/client";
 import NavTabs from "@/layout/NavTabs";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("updates confirmed coordinates without rendering or changing tab identity, and releases its cache listener", async () => {

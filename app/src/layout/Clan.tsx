@@ -114,7 +114,7 @@ import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequireInVillage, useUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
@@ -135,8 +135,7 @@ import { mutateContentSchema } from "@/validators/comments";
 import { ObjectiveReward } from "@/validators/rewards";
 
 export const ClansOverview: React.FC = () => {
-  // Must be in allied village
-  const { userData } = useRequireInVillage("/clanhall");
+  const { data: userData } = useRequiredUserData();
   const locationLabel = userData?.isOutlaw ? "syndicate" : "village";
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const groupLabelPlural = userData?.isOutlaw ? "Factions" : "Clans";
@@ -225,7 +224,7 @@ interface ClanOrdersProps {
 export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
   // Destructure
   const { clanId, order, canPost } = props;
-  const { userData } = useRequireInVillage("/clanhall");
+  const { data: userData } = useRequiredUserData();
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const orderSubmissionInFlight = useRef(false);
@@ -267,9 +266,7 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
 
       reset(data);
       setIsOrderModalOpen(false);
-      // The update is already committed. A refresh failure should not turn the
-      // successful mutation into a retryable submission.
-      void utils.clan.get.invalidate().catch(() => undefined);
+      void utils.clan.get.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -344,8 +341,12 @@ interface ClanBattlesProps {
 export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Data
   const { clanId, canCreate } = props;
-  const { userData, timeDiff, updateUser, prepareUserUpdate } =
-    useRequireInVillage("/clanhall");
+  const {
+    data: userData,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserData();
   const { pusher } = useUserData();
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -471,7 +472,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         next.delete(clanBattleId);
         return next;
       });
-      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -504,7 +505,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // best-effort so a transient refetch failure cannot expose a stale retry.
       setLeftBattleIds((current) => new Set(current).add(clanBattleId));
       setJoinedBattleId(null);
-      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -551,23 +552,20 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       });
       if (!result.success) return;
 
-      // Hide the committed target before refreshing. If that refresh fails, the
-      // stale queue cannot expose a second kick for the same member.
+      // Hide the committed target until the refetch settles, so the stale queue
+      // cannot offer a second kick for the same member in the meantime.
       kickedTargets.current.add(targetKey);
       setKickedTargetKeys((current) => new Set(current).add(targetKey));
-      void utils.clan.getClanBattles
-        .invalidate()
-        .then(() => {
-          // The refreshed queue is now authoritative. Stop suppressing this key
-          // so a legitimate later rejoin to the same battle becomes visible.
-          kickedTargets.current.delete(targetKey);
-          setKickedTargetKeys((current) => {
-            const next = new Set(current);
-            next.delete(targetKey);
-            return next;
-          });
-        })
-        .catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate().then(() => {
+        // Stop suppressing this key so a legitimate later rejoin to the same
+        // battle becomes visible.
+        kickedTargets.current.delete(targetKey);
+        setKickedTargetKeys((current) => {
+          const next = new Set(current);
+          next.delete(targetKey);
+          return next;
+        });
+      });
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -850,7 +848,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // repeat path independently of the authoritative list refresh.
       setIsChallengeModalOpen(false);
       clanSearchMethods.reset({ name: "", clans: [] });
-      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -969,10 +967,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       };
     });
 
-  // {
-  //   !isInitiating && initiate({ clanBattleId: battle.id });
-  // }
-
   return (
     <ContentBox
       title={`${groupLabel} Battles`}
@@ -981,7 +975,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       padding={false}
       topRightContent={
         <div>
-          {canCreate && clanId && (
+          {canCreate && (
             <div className="flex flex-row items-center gap-1">
               <Button
                 id="create"
@@ -1088,7 +1082,7 @@ interface ClanRequestsProps {
 
 export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   // Destructure
-  const { userData } = useRequireInVillage("/clanhall");
+  const { data: userData } = useRequiredUserData();
   const { clanId, clanLeaderId, isLeaderOrColeader } = props;
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
@@ -1187,7 +1181,7 @@ interface ClanInfoProps {
 
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
-  const { userData, updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
+  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
   const { clanData, defaultBackHref } = props;
   const clanId = clanData.id;
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
@@ -1289,7 +1283,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       setHasLeftGroup(true);
       setIsLeaveModalOpen(false);
       router.push("/clanhall");
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate(),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -1328,7 +1322,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // if an authoritative refresh fails.
       setHasResignedLeadership(true);
       setIsResignModalOpen(false);
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -1382,7 +1376,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // immediately; a cache failure must never recreate a costly action.
       setDonateReps("");
       setIsDonateModalOpen(false);
-      void Promise.allSettled([utils.clan.get.invalidate()]);
+      void utils.clan.get.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
       // Keep the exact draft and confirmation open so the user can safely retry.
@@ -1418,7 +1412,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // immediately; dependent authoritative refreshes must not recreate it.
       setHasUpgradedToStronghold(true);
       setIsStrongholdUpgradeModalOpen(false);
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate(),
         utils.village.getSectorOwnerships.invalidate(),
       ]);
@@ -1487,7 +1481,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       setHasInstantlyTakenLeadership(true);
       setIsInstantJoinModalOpen(false);
       router.push("/clanhall");
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate(),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -1521,7 +1515,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // Remove the stale destructive retry path immediately; cache refresh failures
       // must not allow the committed bulk action to be repeated.
       setHasClearedLeadership(true);
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -1551,7 +1545,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // authoritative clan data is best-effort and cannot resubmit the edit.
       editForm.reset(data);
       setIsEditModalOpen(false);
-      void utils.clan.get.invalidate().catch(() => undefined);
+      void utils.clan.get.invalidate();
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -1577,7 +1571,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // retry path before refreshing any dependent authoritative views.
       colorForm.reset(data);
       setIsColorModalOpen(false);
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate(),
         utils.village.getSectorOwnerships.invalidate(),
       ]);
@@ -1590,7 +1584,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   });
 
   // Loader
-  if (!clanData) return <Loader explanation="Loading clan data" />;
   if (!userData) return <Loader explanation="Loading user data" />;
   if (isDepositing) return <Loader explanation="Depositing money" />;
 
@@ -1606,14 +1599,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       member.userId !== userData.userId &&
       hasRequiredRank(member.rank, CLAN_RANK_REQUIREMENT),
   );
-  const hadHideout = village?.type !== "OUTLAW" && userData.isOutlaw;
-  const hadStronghold =
-    village?.type === "STRONGHOLD" || village?.wasDowngraded || false;
+  const hadHideout = village.type !== "OUTLAW" && userData.isOutlaw;
+  const hadStronghold = village.type === "STRONGHOLD" || village.wasDowngraded || false;
   // Can we upgrade from hideout to stronghold?
   const hasMembers = clanData.members.length >= FACTION_MIN_MEMBERS_FOR_STRONGHOLD;
   const canCreateStronghold =
     !hasUpgradedToStronghold &&
-    village?.type === "HIDEOUT" &&
+    village.type === "HIDEOUT" &&
     !!village.wasDowngraded &&
     hasMembers &&
     clanData.bank >= STRONGHOLD_REESTABLISH_COST;
@@ -1885,18 +1877,18 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               {!userData?.isOutlaw && <p>Village: {clanData.village.name}</p>}
               <p>
                 Founder:{" "}
-                {clanData?.founder ? (
+                {clanData.founder ? (
                   <Link
                     className="font-bold hover:text-orange-500"
                     href={`/userid/${clanData.founder.userId}`}
                   >
-                    {clanData?.founder.username}
+                    {clanData.founder.username}
                   </Link>
                 ) : (
                   "Unknown"
                 )}
               </p>
-              {village?.belowMemberMinimumSince && village.type === "STRONGHOLD" && (
+              {village.belowMemberMinimumSince && village.type === "STRONGHOLD" && (
                 <p role="status">
                   <Popover>
                     <PopoverTrigger
@@ -1935,8 +1927,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               {userData?.isOutlaw && hadHideout && (
                 <div className="flex flex-row items-center">
                   <p>
-                    {clanData.village?.type === "STRONGHOLD" ? "Stronghold" : "Hideout"}{" "}
-                    sector: {clanData.village?.sector}
+                    {clanData.village.type === "STRONGHOLD" ? "Stronghold" : "Hideout"}{" "}
+                    sector: {clanData.village.sector}
                   </p>
                 </div>
               )}
@@ -2520,7 +2512,7 @@ interface ClanMembersProps {
 export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   // Destructure
   const { userId, clanId } = props;
-  const { userData, updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
+  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
   // State
@@ -2743,7 +2735,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       setSuccessfulKick({ memberId, dataUpdatedAt: clanDataUpdatedAt });
       setKickTargetId(null);
 
-      await Promise.allSettled([
+      await Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -2782,7 +2774,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       ]);
       setPromoteTargetId(null);
 
-      await Promise.allSettled([
+      await Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -2827,7 +2819,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       ]);
       setDemoteTargetId(null);
 
-      void Promise.allSettled([
+      void Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -3253,7 +3245,7 @@ interface ClanProfileProps {
 export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
   // Destructure & state
   const [showActive, setShowActive] = useLocalStorage<string>("clanPageTab", "orders");
-  const { userData } = useRequireInVillage("/clanhall");
+  const { data: userData } = useRequiredUserData();
   const { clanId, defaultBackHref } = props;
 
   // Queries
@@ -3420,7 +3412,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
 
 /** Confirm a clan-bank conversion and keep expected rejections visible for retry. */
 function ClanPointConversion({ clanId, points }: { clanId: string; points: number }) {
-  const { updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(1);
   const [error, setError] = useState("");

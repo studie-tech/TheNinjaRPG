@@ -6,8 +6,7 @@ import { quest, questHistory, userData } from "@/drizzle/schema";
 import { calcHP } from "@/libs/profile";
 import { isAvailableUserQuests } from "@/libs/quest";
 import { fetchQuestBootstrap } from "@/server/api/routers/profile";
-import { fetchUncompletedQuests, questsRouter } from "@/server/api/routers/quests";
-import { commitQuestObjectiveRewards } from "@/server/api/routers/quests";
+import { commitQuestObjectiveRewards, fetchUncompletedQuests, questsRouter } from "@/server/api/routers/quests";
 
 import { QuestReward } from "@/validators/rewardPackages";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";

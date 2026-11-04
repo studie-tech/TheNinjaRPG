@@ -87,12 +87,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setStartDate: cf.setters.startDate, // keep date as string (yyyy-mm-dd)
-    setEndDate: cf.setters.endDate, // keep date as string (yyyy-mm-dd)
-    setSystem: cf.setters.system,
-    setStatus: cf.setters.status,
-    setReportedUser: cf.setters.reportedUser,
-    setReporterUser: cf.setters.reporterUser,
   };
 };
 

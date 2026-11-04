@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { IMG_URL_ASSISTANT } from "@/drizzle/constants";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
-import { drawLemuVariant, getLemuImage, isLemuExperimentEnabled, LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
+import { drawLemuVariant, getLemuImage, LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("Lemu experiment", () => {
   it("records the new experiment and uses the promoted baseline", () => {
-    expect(isLemuExperimentEnabled).toBe(true);
     expect(getLemuImage("control")).toBe(IMG_URL_ASSISTANT);
     expect(IMG_URL_ASSISTANT).toBe("https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp");
     expect(getLayoutExperimentAssignments({ abLemuReplacementVariant: "control" })).toEqual([{experiment:"ab_lemu_replacement_3",variant:"control"}]);

@@ -18,7 +18,6 @@ import type {
   VillageAlliance,
   VillageStructure,
 } from "@/drizzle/schema";
-import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -75,14 +74,8 @@ export const canAccessStructure = (
     );
     const isAlly = relationship?.status === "ALLY";
     const structure = sectorVillage?.structures.find((s) => s.route === structureRoute);
-    const inVillage =
-      calcIsInVillage({
-        x: userData.longitude,
-        y: userData.latitude,
-      }) || sectorVillage.type === "SAFEZONE";
     if (
       !structure ||
-      !inVillage ||
       (!ownVillage && !safeZone && (!isAlly || structure.allyAccess === 0))
     ) {
       structureAccess = false;

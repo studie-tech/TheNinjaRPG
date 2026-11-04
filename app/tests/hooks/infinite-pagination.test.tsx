@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -23,7 +22,6 @@ class FakeObserver {
 
 describe("useInfinitePagination", () => {
   beforeEach(() => {
-    ensureDom();
     visible = true;
     globalThis.IntersectionObserver =
       FakeObserver as unknown as typeof IntersectionObserver;

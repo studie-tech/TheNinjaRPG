@@ -8,9 +8,7 @@ import type { ReactNode } from "react";
 import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import { useRankedQueueCount, useRankedQueueCountCache } from "@/hooks/useRankedQueueCount";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const actualSetTimeout = globalThis.setTimeout;

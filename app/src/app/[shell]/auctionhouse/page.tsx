@@ -92,7 +92,6 @@ import {
   type AuctionListingState,
   auctionHouseLevelMessage,
   IMG_AVATAR_DEFAULT,
-  ItemRarities,
   RYO_FOR_REP_MIN_REPS,
   TRADEABLE_CURRENCY_TYPES,
 } from "@/drizzle/constants";
@@ -606,11 +605,7 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
   const currencyLabel = listing.currencyType === "MONEY" ? "ryo" : "reputation";
   const stackQuantity = listing.userItem.quantity;
   const showPerUnitPricing = item.canStack && stackQuantity > 1;
-  const showRarityBackdrop =
-    !!item.rarity &&
-    ItemRarities.includes(item.rarity as (typeof ItemRarities)[number]);
-  const bidderMinLevel = listing.bidderMinLevel ?? AUCTION_BIDDER_LEVEL_MIN;
-  const bidderMaxLevel = listing.bidderMaxLevel ?? AUCTION_BIDDER_LEVEL_MAX;
+  const { bidderMinLevel, bidderMaxLevel } = listing;
   const showBidderLevelHint =
     listing.listingType === "AUCTION" &&
     (bidderMinLevel > AUCTION_BIDDER_LEVEL_MIN ||
@@ -628,18 +623,14 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
     >
       <div className="flex min-h-0 flex-1 gap-3 p-3">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 border-black">
-          {showRarityBackdrop ? (
-            <Image
-              src={getRarityBackground(item.rarity)}
-              alt=""
-              width={80}
-              height={80}
-              className="pointer-events-none absolute inset-0 h-full w-full rounded-[10px] object-cover"
-              unoptimized
-            />
-          ) : (
-            <div className="absolute inset-0 bg-muted/40" aria-hidden />
-          )}
+          <Image
+            src={getRarityBackground(item.rarity)}
+            alt=""
+            width={80}
+            height={80}
+            className="pointer-events-none absolute inset-0 h-full w-full rounded-[10px] object-cover"
+            unoptimized
+          />
           {item.image ? (
             <div className="absolute inset-0 z-[1] flex items-center justify-center p-1">
               <Image
@@ -922,7 +913,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   if (!userData) return null;
 
   // Derived
-  const userBid = listing?.bids.find((bid) => bid.bidderId === userData.userId);
+  const userBid = listing.bids.find((bid) => bid.bidderId === userData.userId);
   const spendBalanceForListing =
     listing.currencyType === "MONEY" ? userData.bank : userData.reputationPoints;
   const availableFunds = userBid
@@ -936,8 +927,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const stackQuantity = listing.userItem.quantity;
   const showPerUnitPricing = listing.userItem.item.canStack && stackQuantity > 1;
 
-  const bidderMinLevel = listing.bidderMinLevel ?? AUCTION_BIDDER_LEVEL_MIN;
-  const bidderMaxLevel = listing.bidderMaxLevel ?? AUCTION_BIDDER_LEVEL_MAX;
+  const { bidderMinLevel, bidderMaxLevel } = listing;
   const meetsAuctionHouseMinLevel = userData.level >= AUCTION_HOUSE_MIN_LEVEL;
   const canBidByLevel =
     listing.listingType !== "AUCTION" ||
@@ -965,14 +955,14 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   };
 
   const handleBid = () => {
-    if (bidAmount && listing && isBidInputValid) {
+    if (bidAmount && isBidInputValid) {
       setPendingBidAmount(parsedBidAmount);
       setShowBidConfirmation(true);
     }
   };
 
   const handleBuyoutClick = () => {
-    if (listing?.buyoutPrice) {
+    if (listing.buyoutPrice) {
       setPendingBidAmount(listing.buyoutPrice);
       setShowBuyoutConfirmation(true);
     }
@@ -985,7 +975,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   };
 
   const confirmBuyout = () => {
-    if (pendingBidAmount !== null && listing?.buyoutPrice) {
+    if (pendingBidAmount !== null && listing.buyoutPrice) {
       handlePlaceBid(auctionId, listing.buyoutPrice);
     }
   };
@@ -1336,12 +1326,12 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
               Are you sure you want to place a bid of{" "}
               <span className="font-semibold">
                 {submittedBidAmount?.toLocaleString()}{" "}
-                {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+                {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
               </span>{" "}
               on this auction?
               {showPerUnitPricing &&
               submittedBidAmount != null &&
-              listing?.currencyType != null ? (
+              listing.currencyType != null ? (
                 <span className="mt-2 block text-muted-foreground text-sm">
                   {formatAuctionPerUnitLine(
                     submittedBidAmount,
@@ -1436,12 +1426,12 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <AlertDialogDescription>
               Are you sure you want to buyout this auction for{" "}
               <span className="font-semibold">
-                {listing?.buyoutPrice?.toLocaleString()}{" "}
-                {listing?.currencyType === "MONEY" ? "ryo" : "reputation"}
+                {listing.buyoutPrice?.toLocaleString()}{" "}
+                {listing.currencyType === "MONEY" ? "ryo" : "reputation"}
               </span>
               ? This will immediately complete the auction and transfer the item to you.
               {showPerUnitPricing &&
-              listing?.buyoutPrice != null &&
+              listing.buyoutPrice != null &&
               listing.currencyType != null ? (
                 <span className="mt-2 block text-muted-foreground text-sm">
                   {formatAuctionPerUnitLine(

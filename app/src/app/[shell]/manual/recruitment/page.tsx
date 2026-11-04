@@ -536,11 +536,7 @@ export default function ManualRecruitment() {
         >
           {isFetching && <Loader explanation="Loading level distributions" />}
           {!isFetching && data && data.length > 0 && (
-            <GroupedLevelStats
-              datasets={data}
-              title={`#Users vs. ${metricLabel}`}
-              xaxis={metricLabel}
-            />
+            <GroupedLevelStats datasets={data} xaxis={metricLabel} />
           )}
           {!isFetching && (!data || data.length === 0) && (
             <p>No data found for filters.</p>
@@ -580,10 +576,7 @@ export default function ManualRecruitment() {
             <Loader explanation="Loading daily recruits by source" />
           )}
           {!isFetchingDailyBySource && dailyBySource && dailyBySource.length > 0 && (
-            <DailyCountsBySourceChart
-              datasets={dailyBySource}
-              title="Recruits per Day"
-            />
+            <DailyCountsBySourceChart datasets={dailyBySource} />
           )}
           {!isFetchingDailyBySource &&
             (!dailyBySource || dailyBySource.length === 0) && (

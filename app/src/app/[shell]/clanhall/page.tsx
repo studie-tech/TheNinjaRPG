@@ -68,7 +68,6 @@ export default function Clans() {
   if (!access) return <Loader explanation="Accessing Clan Hall" />;
 
   // Derived
-  const inClan = userData.clanId;
   const enoughPrestige = userData.villagePrestige >= CLAN_CREATE_PRESTIGE_REQUIREMENT;
   const enoughRyo = userData.money >= CLAN_CREATE_RYO_COST;
   const canCreate = enoughPrestige && enoughRyo;
@@ -95,8 +94,7 @@ export default function Clans() {
         defaultBackHref="/village"
         padding={false}
         topRightContent={
-          hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT) &&
-          !inClan && (
+          hasRequiredRank(userData.rank, CLAN_RANK_REQUIREMENT) && (
             <Confirm
               title={`Create new ${groupLabel}`}
               proceed_label={proceedLabel}
@@ -134,11 +132,7 @@ export default function Clans() {
                                 {...field}
                               />
                             </FormControl>
-                            {createForm?.formState?.errors?.name?.message && (
-                              <FormMessage>
-                                {createForm.formState.errors.name.message}
-                              </FormMessage>
-                            )}
+                            <FormMessage />
                           </FormItem>
                         );
                       }}

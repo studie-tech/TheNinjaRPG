@@ -18,7 +18,6 @@ import {
   insertSageModeForCreate,
   listSageModeForGetAll,
   listSageModeForGetAllNames,
-  listSageModeForGetAllNamesForEdit,
   listUserDataForDelete,
   updateSageModeForUpdate,
   updateUserDataForDelete,
@@ -36,7 +35,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { calculateContentDiff } from "@/utils/diff";
-import { canChangeContent, canEditBloodline } from "@/utils/permissions";
+import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
@@ -62,28 +61,13 @@ const persistSageTagDuration = (effect: ZodAllTags) => {
 
 export const sageModeRouter = createTRPCRouter({
   /**
-   * Name/image list for quest and objective pickers. Hidden modes are included
+   * Name/image list for quest, objective and staff user-edit pickers. Hidden modes are included
    * only for content staff (`canChangeContent`); everyone else sees visible rows.
    */
   getAllNames: publicProcedure.query(async ({ ctx }) => {
     const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
     const allowHidden = user ? canChangeContent(user.role) : false;
     return await listSageModeForGetAllNames(ctx.drizzle, allowHidden);
-  }),
-
-  /**
-   * Full name/image list including hidden modes, for staff user-edit. Same
-   * permission as assigning a bloodline (`canEditBloodline`).
-   */
-  getAllNamesForEdit: protectedProcedure.query(async ({ ctx }) => {
-    const [user, results] = await Promise.all([
-      fetchUser(ctx.drizzle, ctx.userId),
-      listSageModeForGetAllNamesForEdit(ctx.drizzle),
-    ]);
-    if (!user || !canEditBloodline(user.role)) {
-      throw serverError("FORBIDDEN", "Not allowed to list sage modes for editing");
-    }
-    return results;
   }),
 
   /**
@@ -166,7 +150,6 @@ export const sageModeRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Sage Mode does not exist");
-      if (!user) return errorResponse("User does not exist");
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete sage mode");
       }

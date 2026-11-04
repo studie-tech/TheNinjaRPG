@@ -53,10 +53,11 @@ describe("applySageModeAfterRoundTransition", () => {
       _prevHealthAdj: 2000,
       sageModeActivated: false,
     });
-    // Sage user whose sage buffs have all expired (no active sageMode effects present).
+    // Sage user whose activation window has elapsed.
     const sage = makeBattleUser("sage", {
       sageModeActivated: true,
       sageModeId: "sage-1",
+      sageModeExpiresRound: 5,
       sageModeUsedThisBattle: true,
     });
     const battle = makeSageBattle([bystander, sage]);
@@ -71,6 +72,7 @@ describe("applySageModeAfterRoundTransition", () => {
     const sage = makeBattleUser("sage", {
       sageModeActivated: true,
       sageModeId: "sage-1",
+      sageModeExpiresRound: 5,
     });
     const battle = makeSageBattle([sage]);
 
@@ -84,10 +86,11 @@ describe("applySageModeAfterRoundTransition", () => {
     expect(queued[0]?.rounds).toBe(2);
   });
 
-  it("marks sage mode spent and deactivated once buffs have expired", () => {
+  it("marks sage mode spent and deactivated once the window has elapsed", () => {
     const sage = makeBattleUser("sage", {
       sageModeActivated: true,
       sageModeId: "sage-1",
+      sageModeExpiresRound: 5,
     });
     const battle = makeSageBattle([sage]);
 
@@ -98,41 +101,6 @@ describe("applySageModeAfterRoundTransition", () => {
     expect(sageAfter?.sageModeUsedThisBattle).toBe(true);
     expect(sageAfter?.sageModeActivatedRound).toBeNull();
     expect(sageAfter?.sageModeExpiresRound).toBeNull();
-  });
-
-  it("does nothing while sage buffs are still active", () => {
-    const sage = makeBattleUser("sage", {
-      sageModeActivated: true,
-      sageModeId: "sage-1",
-    });
-    // An active sage buff still on the user — the transition must NOT fire yet.
-    const activeSageBuff = makeTag("increasestat", {
-      power: 10,
-      rounds: 3,
-      calculation: "percentage",
-      statTypes: ["Ninjutsu"],
-      generalTypes: [],
-    }) as unknown as UserEffect;
-    const activeEffect: UserEffect = {
-      ...activeSageBuff,
-      id: "active-sage",
-      creatorId: "sage",
-      targetId: "sage",
-      fromType: "sageMode",
-      isNew: false,
-      castThisRound: false,
-      createdRound: 4,
-      rounds: 3,
-    };
-    const battle = makeSageBattle([sage], [activeEffect]);
-
-    applySageModeAfterRoundTransition(battle);
-
-    expect(
-      battle.usersEffects.some((e) => e.fromType === "sageModeAfter"),
-    ).toBe(false);
-    const sageAfter = battle.usersState.find((u) => u.userId === "sage");
-    expect(sageAfter?.sageModeActivated).toBe(true);
   });
 
   it("keeps sage mode active for the full window when the active effects were all instant", () => {

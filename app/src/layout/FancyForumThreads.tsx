@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import Loader from "@/layout/Loader";
 import type { InfiniteThreads } from "@/libs/forum";
 import { useInfinitePagination } from "@/libs/pagination";
 import { parseHtml } from "@/utils/parse";
@@ -21,7 +20,6 @@ interface FancyForumThreadsProps {
   board_name: string;
   defaultBackHref?: string;
   initialData: Awaited<InfiniteThreads>;
-  initialBreak?: boolean;
   image?: string;
   canPost?: boolean | null;
 }
@@ -30,7 +28,6 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const {
     data: threads,
-    isPending,
     fetchNextPage,
     hasNextPage,
   } = api.forum.getThreads.useInfiniteQuery(
@@ -43,8 +40,8 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       refetchOnReconnect: false,
     },
   );
-  const allThreads = threads?.pages.flatMap((page) => page.threads);
-  const board = threads?.pages[0]?.board;
+  const allThreads = threads.pages.flatMap((page) => page.threads);
+  const board = threads.pages[0]?.board;
 
   useInfinitePagination({
     fetchNextPage,
@@ -52,7 +49,6 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
     lastElement,
   });
 
-  if (isPending) return <Loader explanation="Loading data" />;
   if (!board) return <NotFoundPage />;
 
   return (
@@ -60,11 +56,9 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       title={board.name}
       subtitle={board.summary}
       defaultBackHref={props.defaultBackHref}
-      initialBreak={props.initialBreak}
       padding={false}
       topRightContent={
-        props.canPost &&
-        board && (
+        props.canPost && (
           <Link href={`/forum/${board.id}`}>
             <Button id="conversation">
               <SquarePen className="mr-2 h-5 w-5" />
@@ -85,12 +79,12 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
         />
       )}
       <div className="grid grid-cols-1">
-        {allThreads && allThreads.length === 0 ? (
+        {allThreads.length === 0 ? (
           <div className="m-2 p-6 text-center text-muted-foreground">
             <p>No threads yet. Be the first to start a conversation!</p>
           </div>
         ) : (
-          allThreads?.map((thread, i) => {
+          allThreads.map((thread, i) => {
             const post = thread.posts[0];
             return (
               <div
@@ -106,17 +100,15 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
                   </p>
                 </div>
                 {post && parseHtml(post.content)}
-                {board && (
-                  <p className="pt-3 hover:cursor-pointer hover:text-orange-500">
-                    <Link
-                      href={`/forum/${board.id}/${thread.id}`}
-                      className="flex flex-row items-center justify-end"
-                    >
-                      <MessagesSquare className="mr-1 h-5 w-5" />
-                      {thread.nPosts} Comments
-                    </Link>
-                  </p>
-                )}
+                <p className="pt-3 hover:cursor-pointer hover:text-orange-500">
+                  <Link
+                    href={`/forum/${board.id}/${thread.id}`}
+                    className="flex flex-row items-center justify-end"
+                  >
+                    <MessagesSquare className="mr-1 h-5 w-5" />
+                    {thread.nPosts} Comments
+                  </Link>
+                </p>
               </div>
             );
           })

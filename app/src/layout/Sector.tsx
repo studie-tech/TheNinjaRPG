@@ -352,11 +352,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // window change rather than rebuilding a fresh Map inside every per-sector
   // draw. Mirrored to refs for the imperative build/nav functions below.
   const mergedTerrains = useMemo(
-    () => mergeTerrainSpecs(sectorWindow.mapTerrains ?? []),
+    () => mergeTerrainSpecs(sectorWindow.mapTerrains),
     [sectorWindow.mapTerrains],
   );
   const mergedDecorations = useMemo(
-    () => mergeDecorationAssets(sectorWindow.mapAssets ?? []),
+    () => mergeDecorationAssets(sectorWindow.mapAssets),
     [sectorWindow.mapAssets],
   );
   // Library data is stable across unchanged polls; include its contents so
@@ -404,7 +404,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
-      enabled: sector !== undefined,
       placeholderData: (previous) => previous,
       // Equal server Dates do not change the visible presence or village snapshot.
       structuralSharing: shareUserCache,
@@ -498,12 +497,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
     { sector: sector },
-    { enabled: userData?.sector === sector && sector !== undefined },
+    { enabled: userData?.sector === sector },
   );
   const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
 
   const dialogSceneAssetIds = npcDialog
-    ? [npcDialog.sceneBackground, ...(npcDialog.sceneCharacters ?? [])].filter(Boolean)
+    ? [npcDialog.sceneBackground, ...npcDialog.sceneCharacters].filter(Boolean)
     : [];
   const { data: dialogSceneAssets } = api.gameAsset.getSceneAssets.useQuery(
     { assetIds: dialogSceneAssetIds },
@@ -714,109 +713,103 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       instantMove = true;
     }
     if (data.userId) {
-      if (usersRef.current) {
-        // Filter out stealthed users (defense in depth - server should already filter these)
-        // Only filter if it's not the current user (user should always see themselves)
-        // Uses isUserCurrentlyStealthed to check expiry, mirroring server-side logic
-        if (isUserCurrentlyStealthed(data) && data.userId !== userData?.userId) {
-          // Remove from local users list if they went stealth
-          const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
-          if (idx !== -1) {
-            usersRef.current.splice(idx, 1);
-            actorRevisionRef.current++;
-            if (!skipStateUpdate) {
-              if (publishSurroundingsRef.current)
-                setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
-            }
+      // Filter out stealthed users (defense in depth - server should already filter these)
+      // Only filter if it's not the current user (user should always see themselves)
+      // Uses isUserCurrentlyStealthed to check expiry, mirroring server-side logic
+      if (isUserCurrentlyStealthed(data) && data.userId !== userData?.userId) {
+        // Remove from local users list if they went stealth
+        const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
+        if (idx !== -1) {
+          usersRef.current.splice(idx, 1);
+          actorRevisionRef.current++;
+          if (!skipStateUpdate) {
+            if (publishSurroundingsRef.current)
+              setSorrounding(usersRef.current.filter((u) => u.userId));
           }
-          return;
         }
+        return;
+      }
 
-        const allianceStatus =
-          usersRef.current.find((u) => u.userId === data.userId)?.allianceStatus ??
-          getAllyStatus(userData?.village, data.villageId);
-        const idx = usersRef.current
-          .filter((u) => u.userId)
-          .findIndex((u) => u.userId === data.userId);
-        if (idx !== -1 && usersRef.current[idx]) {
-          if (instantMove) {
-            // User exists - instant movement
-            usersRef.current[idx] = {
-              ...usersRef.current[idx],
-              ...data,
-              allianceStatus,
-              experience: data.experience ?? usersRef.current[idx].experience,
-              rank: data.rank ?? usersRef.current[idx].rank,
-            };
-          } else {
-            // User exists - animate movement
-            const currentHex = findHex(gridRef.current, {
-              x: usersRef.current[idx]?.longitude ?? 0,
-              y: usersRef.current[idx]?.latitude ?? 0,
-            });
-            const targetHex = findHex(gridRef.current, {
-              x: data.longitude,
-              y: data.latitude,
-            });
-            if (pathFinderRef.current && currentHex && targetHex) {
-              const path = pathFinderRef.current.getShortestPath(currentHex, targetHex);
-              if (path) {
-                const heading = worldMotionHeading(currentHex, targetHex);
-                for (const tile of path) {
-                  const before = usersRef.current[idx];
-                  const motion = before
-                    ? publishMotionStep(
-                        data.userId,
-                        {
-                          sector: data.sector,
-                          x: before.longitude,
-                          y: before.latitude,
-                        },
-                        { sector: data.sector, x: tile.col, y: tile.row },
-                        heading,
-                      )
-                    : null;
-                  if (usersRef.current[idx]) {
-                    usersRef.current[idx] = {
-                      ...usersRef.current[idx],
-                      ...data,
-                      avatar: usersRef.current[idx].avatar,
-                      avatarLight: usersRef.current[idx].avatarLight,
-                      username: usersRef.current[idx].username,
-                      experience: data.experience ?? usersRef.current[idx].experience,
-                      rank: data.rank ?? usersRef.current[idx].rank,
-                      allianceStatus,
-                      longitude: tile.col,
-                      latitude: tile.row,
-                    };
-                  }
-                  actorRevisionRef.current++;
-                  await sleep(SECTOR_WALK_STEP_MS);
-                  if (motion && motionStepsRef.current.get(data.userId) === motion)
-                    motionStepsRef.current.delete(data.userId);
+      const allianceStatus =
+        usersRef.current.find((u) => u.userId === data.userId)?.allianceStatus ??
+        getAllyStatus(userData?.village, data.villageId);
+      const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
+      if (idx !== -1 && usersRef.current[idx]) {
+        if (instantMove) {
+          // User exists - instant movement
+          usersRef.current[idx] = {
+            ...usersRef.current[idx],
+            ...data,
+            allianceStatus,
+            experience: data.experience ?? usersRef.current[idx].experience,
+            rank: data.rank ?? usersRef.current[idx].rank,
+          };
+        } else {
+          // User exists - animate movement
+          const currentHex = findHex(gridRef.current, {
+            x: usersRef.current[idx]?.longitude ?? 0,
+            y: usersRef.current[idx]?.latitude ?? 0,
+          });
+          const targetHex = findHex(gridRef.current, {
+            x: data.longitude,
+            y: data.latitude,
+          });
+          if (pathFinderRef.current && currentHex && targetHex) {
+            const path = pathFinderRef.current.getShortestPath(currentHex, targetHex);
+            if (path) {
+              const heading = worldMotionHeading(currentHex, targetHex);
+              for (const tile of path) {
+                const before = usersRef.current[idx];
+                const motion = before
+                  ? publishMotionStep(
+                      data.userId,
+                      {
+                        sector: data.sector,
+                        x: before.longitude,
+                        y: before.latitude,
+                      },
+                      { sector: data.sector, x: tile.col, y: tile.row },
+                      heading,
+                    )
+                  : null;
+                if (usersRef.current[idx]) {
+                  usersRef.current[idx] = {
+                    ...usersRef.current[idx],
+                    ...data,
+                    avatar: usersRef.current[idx].avatar,
+                    avatarLight: usersRef.current[idx].avatarLight,
+                    username: usersRef.current[idx].username,
+                    experience: data.experience ?? usersRef.current[idx].experience,
+                    rank: data.rank ?? usersRef.current[idx].rank,
+                    allianceStatus,
+                    longitude: tile.col,
+                    latitude: tile.row,
+                  };
                 }
+                actorRevisionRef.current++;
+                await sleep(SECTOR_WALK_STEP_MS);
+                if (motion && motionStepsRef.current.get(data.userId) === motion)
+                  motionStepsRef.current.delete(data.userId);
               }
             }
           }
-        } else {
-          // New user enters — do not invent experience; unknown XP fails closed in bracket filters
-          // New identities come from the authenticated, masked sector snapshot.
-          void utils.travel.getSectorData.invalidate();
         }
-        // Remove users who are no longer in the sector; compare against the
-        // live sector ref, which crossings advance before the prop catches up
-        usersRef.current
-          .map((user, idx) => (user.sector !== sectorRef.current ? idx : null))
-          .filter((idx): idx is number => idx !== null)
-          .reverse()
-          .map((idx) => usersRef.current?.splice(idx, 1));
+      } else {
+        // New user enters — do not invent experience; unknown XP fails closed in bracket filters
+        // New identities come from the authenticated, masked sector snapshot.
+        void utils.travel.getSectorData.invalidate();
       }
+      // Remove users who are no longer in the sector; compare against the
+      // live sector ref, which crossings advance before the prop catches up
+      usersRef.current = usersRef.current.filter(
+        (user) => user.sector === sectorRef.current,
+      );
     }
     actorRevisionRef.current++;
     // Only update state if not explicitly skipped (to avoid excessive updates during animation)
     if (!skipStateUpdate) {
       if (publishSurroundingsRef.current)
-        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+        setSorrounding(usersRef.current.filter((u) => u.userId));
     }
   };
 
@@ -1087,7 +1080,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     });
     // Update surrounding users state at the end
     if (publishSurroundingsRef.current)
-      setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+      setSorrounding(usersRef.current.filter((u) => u.userId));
     runQuestTriggers(data);
   };
 
@@ -1305,7 +1298,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }
       continueMovement();
       if (publishSurroundingsRef.current)
-        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+        setSorrounding(usersRef.current.filter((u) => u.userId));
     }
     runQuestTriggers(data, true);
   };
@@ -1385,7 +1378,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       snapMovementPosition(freshUser);
       setPosition({ x: freshUser.longitude, y: freshUser.latitude });
       if (publishSurroundingsRef.current)
-        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+        setSorrounding(usersRef.current.filter((u) => u.userId));
     }
   };
 
@@ -1405,7 +1398,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         updatedAt: new Date(),
       });
       if (publishSurroundingsRef.current)
-        setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+        setSorrounding(usersRef.current.filter((u) => u.userId));
       // runQuestTriggers with forceCheck already issues checkQuest(), so calling
       // it here too fired the location-quest mutation twice per crossing (and,
       // through its invalidation, refetched the user's items twice)
@@ -1693,7 +1686,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               usersRef.current.splice(idx, 1);
               actorRevisionRef.current++;
               if (publishSurroundingsRef.current)
-                setSorrounding(usersRef.current.filter((u) => u?.userId) || []);
+                setSorrounding(usersRef.current.filter((u) => u.userId));
             }
             return;
           }
@@ -2005,11 +1998,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             return {
               ...user,
               allianceStatus,
-              isBanned:
-                "isBanned" in user
-                  ? Boolean((user as { isBanned?: boolean }).isBanned)
-                  : false,
-              isOutlaw: user.isOutlaw || false,
             };
           })
           .filter(
@@ -2058,25 +2046,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const updateCurrentStructure = () => {
     const userData = userRef.current;
     if (!userData) return;
-    if (structures) {
-      const structure = structures.find((s) => {
-        if (s.longitude === userData.longitude && s.latitude === userData.latitude)
-          return true;
-        return STRUCTURE_ADJACENTS.some(
-          ({ dCol, dRow }) =>
-            s.longitude === userData.longitude + dCol &&
-            s.latitude === userData.latitude + dRow,
-        );
-      });
-      if (currentStructureRef.current !== (structure ?? null)) {
-        currentStructureRef.current = structure ?? null;
-        setCurrentStructure(structure ?? null);
-      }
-    } else {
-      if (currentStructureRef.current) {
-        currentStructureRef.current = null;
-        setCurrentStructure(null);
-      }
+    const structure = structures.find((s) =>
+      STRUCTURE_ADJACENTS.some(
+        ({ dCol, dRow }) =>
+          s.longitude === userData.longitude + dCol &&
+          s.latitude === userData.latitude + dRow,
+      ),
+    );
+    if (currentStructureRef.current !== (structure ?? null)) {
+      currentStructureRef.current = structure ?? null;
+      setCurrentStructure(structure ?? null);
     }
   };
 
@@ -2687,7 +2666,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             <p className="p-5 text-3xl">
               <AvatarImage
                 href={targetUser.avatar}
-                userId={targetUser.userId}
                 alt={targetUser.username}
                 size={256}
                 priority
@@ -2956,12 +2934,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                       />
                     )}
                 </div>
-                <AvatarImage
-                  href={user.avatar}
-                  userId={user.userId}
-                  alt={user.username}
-                  size={512}
-                />
+                <AvatarImage href={user.avatar} alt={user.username} size={512} />
               </div>
               <div className="relative">
                 {showRob && (

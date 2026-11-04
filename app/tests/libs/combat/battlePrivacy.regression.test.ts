@@ -103,11 +103,15 @@ describe("battle privacy regressions", () => {
       extraState: processed.extraState,
     });
     expect(battle.extraState.bloodlines.line?.effects[0]).toMatchObject({
-      highestGenerals: ["speed", "willpower"], targetHighestGenerals: ["speed", "willpower"],
+      highestGenerals: ["speed", "willpower"],
     });
     expect(battle.extraState.items.keystone?.effects[0]).toMatchObject({
-      highestGenerals: ["speed", "willpower"], targetHighestGenerals: ["speed", "willpower"],
+      highestGenerals: ["speed", "willpower"],
     });
+    for (const definition of [battle.extraState.bloodlines.line, battle.extraState.items.keystone,
+      battle.extraState.keystoneItems.keystone]) {
+      Object.assign(definition!.effects[0]!, { targetHighestGenerals: ["speed", "willpower"] });
+    }
     const before = structuredClone(battle);
     for (const viewer of ["me", "spectator"]) {
       const response = maskBattle(battle, viewer);

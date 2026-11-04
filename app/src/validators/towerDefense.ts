@@ -26,9 +26,6 @@ export type TowerDefenseState = z.infer<typeof towerDefenseStateSchema>;
 // ============================================
 // Enemy Types & Directions
 // ============================================
-export const enemyTypeSchema = z.string();
-export type EnemyType = z.infer<typeof enemyTypeSchema>;
-
 /**
  * Enemy spawn data (static fields sent once per enemy)
  * COST OPTIMIZATION: Path and maxHealth are sent in this table to save bandwidth
@@ -52,7 +49,7 @@ export type EnemyDirection = z.infer<typeof enemyDirectionSchema>;
 export const towerDefenseEnemySchema = z.object({
   id: z.string(),
   aiUserId: z.string(),
-  enemyType: enemyTypeSchema,
+  enemyType: z.string(),
   position: hexPositionSchema,
   path: z.array(hexPositionSchema),
   pathIndex: z.int().min(0),
@@ -154,18 +151,9 @@ export const towerDefenseGameStateSchema = z.object({
   currentWave: z.int().min(0),
   score: z.int().min(0),
   state: towerDefenseStateSchema.nullable(),
-  enemies: z.array(towerDefenseEnemySchema),
-  projectiles: z.array(towerDefenseProjectileSchema),
-  abilities: z.array(towerDefenseAbilitySchema),
-  waveStartTime: z.number().min(0),
   waveInProgress: z.boolean(),
-  isSubmitting: z.boolean(),
   error: z.string().nullable(),
-  playerHitEvents: z.array(hitEventSchema),
-  enemyHitEvents: z.array(hitEventSchema),
   finalPointsEarned: z.int().nullable(),
-  playerBonuses: playerBonusesSchema,
-  maxHealth: z.int().min(1),
   existingSession: z
     .object({
       id: z.string(),
@@ -177,7 +165,6 @@ export const towerDefenseGameStateSchema = z.object({
       maxHealth: z.int().min(1),
     })
     .nullable(),
-  enemyCount: z.int().min(0),
 });
 export type TowerDefenseGameState = z.infer<typeof towerDefenseGameStateSchema>;
 
@@ -218,7 +205,6 @@ export interface RuntimeState {
 export const purchaseUpgradeInputSchema = z.object({
   upgradeId: z.string(),
 });
-export type PurchaseUpgradeInput = z.infer<typeof purchaseUpgradeInputSchema>;
 
 // ============================================
 // Signed Definitions
@@ -276,7 +262,6 @@ export const characterAnimationSchema = z.object({
   frameDurationMs: z.int().min(1).prefault(100),
   loop: z.boolean().prefault(true),
 });
-export type CharacterAnimation = z.infer<typeof characterAnimationSchema>;
 
 export const characterAssetConfigSchema = z.object({
   rotations: z.record(spriteDirectionSchema, z.string()),
@@ -315,7 +300,6 @@ export const claimCompletedRunInputSchema = z.object({
   upgradeDefinitionsJson: z.string().min(1, "Upgrade definitions required"),
   enemyDefinitionsJson: z.string().min(1, "Enemy definitions required"),
 });
-export type ClaimCompletedRunInput = z.infer<typeof claimCompletedRunInputSchema>;
 
 /** A completed_run row as SpacetimeDB's SQL endpoint returns it. */
 export const spacetimeCompletedRunSchema = z.object({

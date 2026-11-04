@@ -5,7 +5,6 @@ import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,
   COST_SWAP_VILLAGE,
-  UserRequestTypes,
   VILLAGE_LEAVE_REQUIRED_RANK,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
@@ -63,8 +62,6 @@ import { calcRamenCost, getRamenHealPercentage, ramenOptions } from "@/utils/ram
 import { canAccessStructure, getStrucBoost } from "@/utils/village";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-
-const availRequests = ["SURRENDER", "ALLIANCE"];
 
 export const villageRouter = createTRPCRouter({
   // Get all village names
@@ -367,7 +364,7 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Create alliance or surrender request" },
     })
-    .input(z.object({ targetId: z.string(), type: z.enum(UserRequestTypes) }))
+    .input(z.object({ targetId: z.string(), type: z.enum(["ALLIANCE", "SURRENDER"]) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetches
@@ -405,7 +402,6 @@ export const villageRouter = createTRPCRouter({
             (r.senderId === target.kageId && r.receiverId === user.userId),
         );
       if (request) return errorResponse("Already have a pending request");
-      if (!availRequests.includes(input.type)) return errorResponse("Bad r-type");
 
       // Check if alliance is possible
       if (input.type === "ALLIANCE") {
@@ -437,7 +433,7 @@ export const villageRouter = createTRPCRouter({
         }),
       ]);
 
-      return { success: true, message: "Alliance request sent" };
+      return { success: true, message: "Request sent" };
     }),
   acceptRequest: protectedProcedure
     .meta({
@@ -465,7 +461,6 @@ export const villageRouter = createTRPCRouter({
       if (!isKage(user)) return errorResponse("You are not kage");
       if (request.receiverId !== user.userId) return errorResponse("Go away");
       if (request.status !== "PENDING") return errorResponse("Request not pending");
-      if (!availRequests.includes(request.type)) return errorResponse("Bad r-type");
 
       // Check if alliance is possible
       if (request.type === "ALLIANCE") {
@@ -484,7 +479,7 @@ export const villageRouter = createTRPCRouter({
       ]);
 
       // Return
-      return { success: true, message: "Alliance request accepted" };
+      return { success: true, message: "Request accepted" };
     }),
   rejectRequest: protectedProcedure
     .meta({
@@ -502,10 +497,9 @@ export const villageRouter = createTRPCRouter({
       if (!isKage(user)) return errorResponse("You are not kage");
       if (!request) return errorResponse("Request not found");
       if (request.receiverId !== user.userId) return errorResponse("Go away");
-      if (!availRequests.includes(request.type)) return errorResponse("Bad r-type");
       // Update
       await updateRequestState(ctx.drizzle, input.id, "REJECTED", request.type);
-      return { success: true, message: "Alliance request rejected" };
+      return { success: true, message: "Request rejected" };
     }),
   cancelRequest: protectedProcedure
     .meta({
@@ -523,10 +517,9 @@ export const villageRouter = createTRPCRouter({
       if (!isKage(user)) return errorResponse("You are not kage");
       if (!request) return errorResponse("Request not found");
       if (request.senderId !== user.userId) return errorResponse("Go away");
-      if (!availRequests.includes(request.type)) return errorResponse("Bad r-type");
       // Update
       await updateRequestState(ctx.drizzle, input.id, "CANCELLED", request.type);
-      return { success: true, message: "Alliance request rejected" };
+      return { success: true, message: "Request cancelled" };
     }),
   leaveAlliance: protectedProcedure
     .meta({ mcp: { description: "Leave an alliance as kage" } })

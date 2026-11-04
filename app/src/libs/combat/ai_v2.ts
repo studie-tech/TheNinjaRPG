@@ -39,9 +39,6 @@ type ActionWithTarget = {
   lat: number;
 };
 
-// Debug flag when testing AI
-const debug = false;
-
 /**
  * Choose and perform an AI-driven turn using profiles preloaded into battle state.
  * Target allegiance follows fixed battlefield sides in every mode, including
@@ -52,11 +49,6 @@ export const performAIaction = (
   grid: Grid<TerrainHex>,
   aiUserId: string,
 ) => {
-  if (debug) {
-    console.log(">> performAIaction Start");
-    const ai = battle.usersState.find((u) => u.userId === aiUserId);
-    console.log(">> Action Points 1: ", ai?.actionPoints);
-  }
   // New stats to return
   const nextActionEffects: ActionEffect[] = [];
   const aiDescriptions: string[] = [];
@@ -164,7 +156,7 @@ export const performAIaction = (
     const origin = findHex(grid, user);
     // Prepare living combatants once from the state after earlier actions.
     const combatants = nextBattle.usersState
-      .filter((u) => stillInBattle(u, nextBattle.usersEffects))
+      .filter((u) => stillInBattle(u))
       .map((u) => ({ ...u, hex: findHex(grid, u) }));
     const enemies = combatants.filter((u) => !areBattleAllies(u, user));
     const allies = combatants.filter((u) => areBattleAllies(u, user));
@@ -208,7 +200,7 @@ export const performAIaction = (
             ? (target.enmity ?? 0)
             : metric === "max"
               ? getEffectiveMaxPool(target, nextBattle.usersEffects, "Health")
-              : getEffectiveCurPool(target, nextBattle.usersEffects, "Health");
+              : getEffectiveCurPool(target, "Health");
         if (!best) return candidate;
         return (
           highest
@@ -394,7 +386,7 @@ export const performAIaction = (
         const target = getTarget(condition);
         switch (condition.type) {
           case "health_below": {
-            const curHealth = getEffectiveCurPool(user, effects, "Health");
+            const curHealth = getEffectiveCurPool(user, "Health");
             const maxHealth = getEffectiveMaxPool(user, effects, "Health");
             return (curHealth / maxHealth) * 100 < condition.value;
           }
@@ -425,7 +417,7 @@ export const performAIaction = (
           case "does_not_have_summon":
             // Same predicate as the one-per-controller cap in summon(), so the
             // AI's re-summon gate can never drift from what blocks the cast.
-            return !hasLiveSummon(nextBattle.usersState, user.userId, effects);
+            return !hasLiveSummon(nextBattle.usersState, user.userId);
           case "has_effect": {
             if (condition.threshold === 0) return true;
             const userEffects = nextBattle.usersEffects.filter(
@@ -550,7 +542,7 @@ export const performAIaction = (
           }
         } else if (rule.action.type === "use_combo_action") {
           const userActions = user.usedActions.map((a) => a.id);
-          const { nextId } = getComboStatus(rule.action.comboIds, userActions);
+          const nextId = getNextComboId(rule.action.comboIds, userActions);
           if (nextId) {
             const action = availActions.find((a) => a.id === nextId);
             const target = getTarget(rule.action, action);
@@ -584,7 +576,6 @@ export const performAIaction = (
       /** CHECK IF ACTION IS VALID */
       /** ************************ */
       if (nextAction) {
-        const check = actionPointsAfterAction(user, nextBattle, nextAction?.action);
         // Action insertion uses the weighted grid to determine barrier interception,
         // even when the selected rule itself needed no paths.
         if (hasBarriers) getActionAstar();
@@ -592,12 +583,11 @@ export const performAIaction = (
           battle: returnBattle,
           action: nextAction.action,
           grid,
-          contextUserId: user.userId,
           actorId: user.userId,
           longitude: nextAction.long,
           latitude: nextAction.lat,
         });
-        if (check.canAct && result) {
+        if (result) {
           nextBattle = result.newBattle;
           nextActionEffects.push(...result.actionEffects);
           aiDescriptions.push(nextAction.action.battleDescription);
@@ -630,19 +620,10 @@ export const performAIaction = (
         user.curHealth = 0;
       }
     }
-    if (debug) {
-      console.log(">> Performed action: ", nextAction);
-    }
   }
 
   // Reset grid from obstacles
   resetGridFromObstacles(grid);
-
-  if (debug) {
-    console.log(">> performAIaction End. Had action: ");
-    const ai = nextBattle.usersState.find((u) => u.userId === aiUserId);
-    console.log(">> Action Points 2: ", ai?.actionPoints);
-  }
 
   // Return the new state
   const nextActionId = nextAction?.action?.id ?? undefined;
@@ -743,25 +724,18 @@ const resetGridFromObstacles = (grid: Grid<TerrainHex>) => {
 };
 
 /**
- * Determines the combo status based on the provided combo IDs and the latest actions.
+ * Returns the next combo ID to use given the latest actions: the step after the
+ * longest in-progress prefix of the combo, or the first step otherwise.
  *
- * @param comboIds - An array of strings representing the sequence of combo IDs.
- * @param latestActions - An array of strings representing the latest actions performed.
- * @returns An object containing:
- *   - `inCombo`: A boolean indicating whether the latest actions are part of the combo sequence.
- *   - `nextId` (optional): The next combo ID in the sequence if the combo is in progress, otherwise undefined.
+ * @param comboIds - The sequence of combo IDs.
+ * @param latestActions - The latest actions performed.
  */
-export const getComboStatus = (
+export const getNextComboId = (
   comboIds: string[],
   latestActions: string[],
-): { inCombo: boolean; nextId: string | undefined } => {
+): string | undefined => {
   const N = comboIds.length;
   const M = latestActions.length;
-
-  if (N === 0) {
-    // No combo defined
-    return { inCombo: false, nextId: undefined };
-  }
 
   let maxMatchLength = 0;
 
@@ -780,13 +754,5 @@ export const getComboStatus = (
     }
   }
 
-  if (maxMatchLength > 0 && maxMatchLength < N) {
-    const inCombo = true;
-    const nextId = comboIds[maxMatchLength];
-    return { inCombo, nextId };
-  } else {
-    const inCombo = false;
-    const nextId = comboIds[0];
-    return { inCombo, nextId };
-  }
+  return comboIds[maxMatchLength > 0 && maxMatchLength < N ? maxMatchLength : 0];
 };

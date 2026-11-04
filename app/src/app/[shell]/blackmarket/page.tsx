@@ -27,9 +27,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   PITY_BLOODLINE_ROLLS,
-  PITY_SYSTEM_ENABLED,
   REP_TRADE_MIN_LEVEL,
   RYO_FOR_REP_DAYS_FROZEN,
+  RYO_FOR_REP_RESERVE,
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -163,7 +163,7 @@ const BlackMarketItemCatalog: React.FC<{
           headerExtra: currencyNav,
         }}
       />
-      {PITY_SYSTEM_ENABLED && <PityBloodlineRoll userData={userData} />}
+      <PityBloodlineRoll userData={userData} />
     </>
   );
 };
@@ -201,7 +201,6 @@ const PityBloodlineRoll: React.FC<{
   });
 
   // Loaders
-  if (!userData) return <Loader explanation="Loading userdata" />;
   if (isPendingRolls) return <Loader explanation="Loading previous rolls" />;
   if (isPendingBloodlines) return <Loader explanation="Loading bloodlines" />;
   if (!prevRolls || !bloodlines) return null;
@@ -278,9 +277,6 @@ const PityBloodlineRoll: React.FC<{
 const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
-  // Loaders
-  if (!userData) return <Loader explanation="Loading userdata" />;
-
   // Derived
   const bloodlineId = userData.bloodlineId;
 
@@ -509,7 +505,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   );
 
   // Derived
-  const tradeableReps = Math.max(userData.reputationPoints - 5, 0);
+  const tradeableReps = Math.max(userData.reputationPoints - RYO_FOR_REP_RESERVE, 0);
 
   return (
     <ContentBox

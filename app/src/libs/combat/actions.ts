@@ -60,7 +60,6 @@ import {
   findBarrier,
   getActionAffectedTiles,
   getBarriersBetween,
-  getEffectiveCurPool,
   getEffectStackKey,
   getItem,
   getJutsu,
@@ -756,10 +755,9 @@ export const userItemToAction = (
 ) => {
   const item = getItem(battle, useritem.itemId);
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
-  // AI users can never earn item XP, so their gear keeps character-level scaling
-  // (bosses stay tuned to the pre-item-level formulas). For players the item's
-  // ownership level applies; legacy in-progress battles may lack it, hence ?? 1.
-  const level = user.isAi ? (user.level ?? 1) : (useritem.level ?? 1);
+  // AI users can never earn item XP, so their gear keeps character-level scaling.
+  // For players the item's ownership level applies.
+  const level = user.isAi ? (user.level ?? 1) : useritem.level;
   return {
     id: item.id,
     name: useritem.variantName ?? item.name,
@@ -951,6 +949,7 @@ export const handleInjectedJutsus = (
   return activeJutsus;
 };
 
+/** Validate a combat action and insert its costs and effects into the preloaded battle. */
 export const insertAction = (info: {
   battle: CompleteBattle;
   grid: Grid<TerrainHex>;
@@ -1066,7 +1065,6 @@ export const insertAction = (info: {
               tag: tag as UserEffect,
               user: user,
               actionId: action.id,
-              target: user,
               level: action.level,
               round: battle.round,
               barrierAbsorb: totalAbsorb,
@@ -1116,7 +1114,6 @@ export const insertAction = (info: {
             tag: tag as UserEffect,
             user: user,
             actionId: action.id,
-            target: target,
             level: action.level,
             round: battle.round,
             barrierAbsorb: totalAbsorb,
@@ -1208,7 +1205,6 @@ export const insertAction = (info: {
           const effect = realizeTag({
             tag: structuredClone(tag) as UserEffect,
             user,
-            target,
             actionId: skillId,
             level: user.level,
             round: battle.round,
@@ -1374,11 +1370,11 @@ export const getTargetUser = (
  */
 export class ActionNotPossibleError extends Error {}
 
+/** Apply an action and resolve its effects entirely within the preloaded battle state. */
 export const performBattleAction = (props: {
   battle: CompleteBattle;
   action: CombatAction;
   grid: Grid<TerrainHex>;
-  contextUserId: string;
   actorId: string;
   longitude: number;
   latitude: number;
@@ -1658,18 +1654,11 @@ export const getActionPointCost = (
 
 /**
  * Figure out if user is still live and well in battle (not fled, not dead, etc.)
- * When effects are provided, uses effective health (accounting for pool buffs/debuffs).
- * Accepts minimal shape when effects is omitted (e.g. ProcessingBattleUser in combat router).
+ * Stored current health already includes pool buffs/debuffs.
  */
 export const stillInBattle = (
-  user: ReturnedUserState | Pick<ReturnedUserState, "curHealth" | "fledBattle">,
-  effects?: UserEffect[],
-) => {
-  const health = effects
-    ? getEffectiveCurPool(user as ReturnedUserState, effects, "Health")
-    : user.curHealth;
-  return health > 0 && !user.fledBattle;
-};
+  user: Pick<ReturnedUserState, "curHealth" | "fledBattle">,
+) => user.curHealth > 0 && !user.fledBattle;
 
 /**
  * Calculate (based on current time), which user is currently the one to perform a move
@@ -1683,9 +1672,7 @@ export const calcActiveUser = (
   const syncedTime = Date.now() - timeDiff;
   const mseconds = syncedTime - new Date(battle.roundStartAt).getTime();
   const secondsLeft = COMBAT_SECONDS - mseconds / 1000;
-  const usersInBattle = battle.usersState.filter((u) =>
-    stillInBattle(u, battle.usersEffects),
-  );
+  const usersInBattle = battle.usersState.filter((u) => stillInBattle(u));
   const inBattleuserIds = usersInBattle.map((u) => u.userId);
   let activeUserId = battle.activeUserId ? battle.activeUserId : userId;
   let progressRound = false;

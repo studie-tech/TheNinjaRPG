@@ -82,7 +82,7 @@ const ActivityStreakPopup: React.FC = () => {
   });
   const { data: userStreaks, isLoading } = useActivityStreaks(
     shouldFetchStreaks,
-    timeDiff ?? 0,
+    timeDiff,
   );
 
   // Determine if we should show the popup

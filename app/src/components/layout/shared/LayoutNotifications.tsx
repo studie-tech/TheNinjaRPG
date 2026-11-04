@@ -29,7 +29,7 @@ interface NotificationListProps {
   className?: string;
 }
 
-export const NotificationList: React.FC<NotificationListProps> = ({
+const NotificationList: React.FC<NotificationListProps> = ({
   notifications,
   layout,
   className = "",
@@ -215,15 +215,13 @@ export const CollapsibleNotifications: React.FC<CollapsibleNotificationsProps> =
 interface MobileNotificationsPopoverProps {
   notifications?: NavBarDropdownLink[];
   variant: LayoutVariant;
-  count?: number;
 }
 
 export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProps> = ({
   notifications,
   variant,
-  count: providedCount,
 }) => {
-  const count = providedCount ?? notifications?.length ?? 0;
+  const count = notifications?.length ?? 0;
   const isPixel = variant === "pixel";
   const hasNotifications = count > 0;
 

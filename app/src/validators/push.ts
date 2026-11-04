@@ -27,7 +27,6 @@ export const setPushPreferenceSchema = z.object({
   category: z.enum(PUSH_CATEGORIES),
   enabled: z.boolean(),
 });
-export type SetPushPreferenceInput = z.infer<typeof setPushPreferenceSchema>;
 
 export const registerActivitySchema = z.object({
   activityId: z.string().min(1).max(191),

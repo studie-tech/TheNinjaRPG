@@ -1,9 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import { ensureDom } from "../../setup/dom.mjs";
 
-ensureDom();
 const setup = (zoom = true, pan = false, pointerType = "touch") => {
   const canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, 390);

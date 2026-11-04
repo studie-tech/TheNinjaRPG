@@ -3,6 +3,7 @@ import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
   MAX_PVP_BRACKET,
+  MAX_TRAVEL_PINS,
 } from "@/drizzle/constants";
 
 export const sectorIdSchema = z.coerce
@@ -11,18 +12,9 @@ export const sectorIdSchema = z.coerce
   .min(MAP_SECTOR_ID_MIN)
   .max(MAP_SECTOR_ID_MAX);
 
-/**
- * Global travel accepts the target sector and tolerates the previous client's
- * current-sector hint during rolling deployments. The transform discards the
- * hint, while strict mode still rejects client-supplied landing coordinates;
- * the server derives departure and landing state itself.
- */
+/** Accept the departure hint while deriving departure and landing from server state. */
 export const startGlobalMoveSchema = z
-  .object({
-    sector: sectorIdSchema,
-    curSector: sectorIdSchema.optional(),
-  })
-  .strict()
+  .strictObject({ sector: sectorIdSchema, curSector: sectorIdSchema.optional() })
   .transform(({ sector }) => ({ sector }));
 
 export const quickTravelSchema = z.object({ sector: sectorIdSchema });
@@ -52,7 +44,6 @@ export const travelPinSchema = travelLocationSchema.extend({
   latitude: z.number().int().nonnegative(),
   label: z.string().trim().min(1).max(40),
 });
-export const travelPinsSchema = z.array(travelPinSchema).max(20);
 export type TravelPin = z.infer<typeof travelPinSchema>;
 
 /** Reads stored pins one by one, so a single stale or invalid pin does not drop the rest. */
@@ -62,4 +53,4 @@ export const parseTravelPins = (stored: unknown): TravelPin[] =>
       const parsed = travelPinSchema.safeParse(entry);
       return parsed.success ? [parsed.data] : [];
     })
-    .slice(0, 20);
+    .slice(0, MAX_TRAVEL_PINS);

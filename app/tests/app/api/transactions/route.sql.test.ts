@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
 import { eq } from "drizzle-orm";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/transactions/route";
 import { paypalTransaction, recruitmentRewards, stripePayment, userData, webStoreOrder } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
@@ -18,7 +17,6 @@ describeWithDatabase("PayPal transaction reconciliation", () => {
     await resetTables(webStoreOrder, paypalTransaction, recruitmentRewards, stripePayment, userData);
     stubCronAuth(() => null);
     spies.push(spyOn(stripeClient, "stripeIsLive").mockReturnValue(false));
-    spies.push(spyOn(headers, "cookies").mockResolvedValue({} as never));
     spies.push(spyOn(gamesettings, "lockWithGameTimer").mockResolvedValue(false));
   });
   afterEach(() => {

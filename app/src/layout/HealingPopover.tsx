@@ -126,7 +126,6 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
           <div className="text-center">
             <AvatarImage
               href={targetUser.avatar}
-              userId={targetUser.userId}
               alt={targetUser.username}
               size={60}
               priority

@@ -4,9 +4,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 afterEach(cleanup);
 
 describe("query cache mutation hook", () => {

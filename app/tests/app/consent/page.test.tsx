@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as contentBox from "@/layout/ContentBox";
-import { ensureDom } from "../../setup/dom.mjs";
 import CookieConsent from "@/app/[shell]/consent/page";
 
 beforeEach(() => {
-  ensureDom();
   vi.useFakeTimers();
   vi.spyOn(contentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>

@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { renderToString } from "react-dom/server";
@@ -43,7 +42,6 @@ const runHeadScript = () => {
 
 describe("reading preferences", () => {
   beforeEach(() => {
-    ensureDom();
     window.localStorage.clear();
     applyReadingPreferences(DEFAULT_READING_PREFERENCES);
   });

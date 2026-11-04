@@ -93,18 +93,6 @@ export const calculateEnemyDirection = (
 // ============================================
 
 /**
- * Generates a unique seed for a new run.
- * Uses crypto if available, falls back to timestamp + random.
- */
-export const generateRunSeed = (): string => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback for environments without crypto
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-};
-
-/**
  * Calculate the cost of an upgrade based on its current level
  * Uses exponential scaling: baseCost * costMultiplier^currentLevel
  */

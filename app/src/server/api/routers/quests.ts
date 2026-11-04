@@ -1983,7 +1983,7 @@ export const questsRouter = createTRPCRouter({
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      if (!user || !canEditQuests(user.role)) {
+      if (!canEditQuests(user.role)) {
         return errorResponse("Not authorized to delete user quests");
       }
       if (!targetUser.user) {
@@ -2492,16 +2492,13 @@ export const updateRewards = async (info: {
       rank: rewards.reward_rank,
     });
   }
-  // Update rewards for readability. `droppedGatheringItems` is surfaced so the quest
-  // claim caller (the only updateRewards caller with hydrated userQuests) can credit
-  // the herbs_gathered tracker by the number of gathered drops.
+  // Update rewards for readability
   return {
     items: itemsToInsert,
     titles,
     jutsus,
     bloodlines,
     badges,
-    droppedGatheringItems,
     sageModes: rolledSageMode ? [rolledSageMode] : [],
   };
 };
@@ -2594,7 +2591,7 @@ export const restrictedNewQuestEdgeError = async (
 export const fetchUncompletedQuests = async (
   client: DrizzleClient,
   user: UserData,
-  type: QuestType,
+  type: BootstrapQuestType,
 ) => {
   const availableLetters = availableQuestLetterRanks(user.rank);
   const now = new Date().toISOString();
@@ -2759,7 +2756,7 @@ export const claimDailyQuestSlot = async (
  * not. The overworld-NPC flow filters its pool to these so a mis-pooled type can never
  * reach assignQuestToUser, throw, and strand a player's NPC-quest claim.
  */
-export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
+const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
   "special",
   "mastery",
   "story",
@@ -2783,7 +2780,7 @@ export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
  * enforced by {@link questUiAccessBlockMessage} for UI and companion starts.
  * NPC starts cannot bypass those acquisition requirements.
  */
-export const OVERWORLD_GATED_QUEST_TYPES: QuestType[] = [
+const OVERWORLD_GATED_QUEST_TYPES: QuestType[] = [
   "special",
   "story",
   "hunting",
@@ -2797,7 +2794,7 @@ export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: QuestType[] =
   ASSIGNABLE_QUEST_TYPES.filter((type) => !OVERWORLD_GATED_QUEST_TYPES.includes(type));
 
 /** Every path that creates or restarts a quest history row must declare its origin. */
-export type QuestAcquisitionSource =
+type QuestAcquisitionSource =
   | "item"
   | "ui"
   | "pet_task"
@@ -3437,11 +3434,11 @@ export const upsertQuestEntry = async (
 export const insertNextQuest = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
-  type: QuestType,
+  type: BootstrapQuestType,
 ) => {
   const history = await fetchUncompletedQuests(client, user, type);
-  const nextQuest = history?.[0];
-  if (nextQuest && nextQuest.questType !== "hunting") {
+  const nextQuest = history[0];
+  if (nextQuest) {
     const logEntry = await upsertQuestEntry(client, user, nextQuest, "system");
     return { ...logEntry.entry, quest: nextQuest };
   }
@@ -3646,12 +3643,7 @@ export const commitQuestObjectiveRewards = async (info: {
     : undefined;
   if (user.petTask && user.petTask.questId === userQuest?.questId && !petTask)
     return { outcome: "state_changed" };
-  if (
-    petTask &&
-    (!user.petTask ||
-      JSON.stringify(user.petTask) !== JSON.stringify(petTask) ||
-      !isPetTaskAttempt(petTask, userQuest))
-  )
+  if (petTask && !isPetTaskAttempt(petTask, userQuest))
     return { outcome: "state_changed" };
   if (userQuest?.id === `party-${user.questPartyId}`) {
     // Helpers keep their original completion receipt; this also covers bound NPC objectives.
@@ -4610,7 +4602,7 @@ const prepareOverworldBindings = async (
  * run together. Packages keep their original cards while child rewards supply lookup ids.
  * Offers that no longer parse are skipped rather than failing the list.
  */
-export const resolveRewardChoiceDisplays = async (
+const resolveRewardChoiceDisplays = async (
   client: DrizzleClient,
   user: Pick<UserData, "userId" | "sageModeId" | "masteryRanks">,
   rows: {
@@ -4753,7 +4745,7 @@ export const resolveRewardChoiceDisplays = async (
  * so a tracker write committed meanwhile is never overwritten. Returns false when the snapshot
  * moved and nothing was written.
  */
-export const advanceRewardChoiceTrackers = async (
+const advanceRewardChoiceTrackers = async (
   client: DrizzleClient,
   userId: string,
   rewards: GetRewardResult,
@@ -4833,3 +4825,6 @@ export const runRewardTasks =
     for (const task of tasks) results.push(await task());
     return results as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
   };
+
+/** Quest types the user fetch bootstraps automatically. */
+type BootstrapQuestType = Extract<QuestType, "tier" | "exam">;

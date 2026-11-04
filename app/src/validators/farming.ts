@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FARM_SHOP_ENTRY_TYPES } from "@/drizzle/constants";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 
 export const dayNightCycleStateSchema = z.object({
@@ -8,8 +9,6 @@ export const dayNightCycleStateSchema = z.object({
   nextDayCycleAt: z.date(),
   dayCycleIndex: z.number().int(),
 });
-
-export type DayNightCycleState = z.infer<typeof dayNightCycleStateSchema>;
 
 export const farmPlotStateSchema = z.object({
   id: z.string(),
@@ -44,7 +43,7 @@ export const farmVisualStateSchema = z.object({
 export type FarmVisualState = z.infer<typeof farmVisualStateSchema>;
 
 export const farmShopEntrySchema = z.object({
-  type: z.enum(["PLOT", "EXTRACTOR", "SEED", "FERTILIZER"]),
+  type: z.enum(FARM_SHOP_ENTRY_TYPES),
   label: z.string(),
   cost: z.number().int(),
   minLevel: z.number().int(),
@@ -67,7 +66,7 @@ export type FarmShopEntryState = z.infer<typeof farmShopEntrySchema>;
 
 export const farmShopPurchaseInputSchema = z
   .object({
-    type: z.enum(["PLOT", "EXTRACTOR", "SEED", "FERTILIZER"]),
+    type: z.enum(FARM_SHOP_ENTRY_TYPES),
     itemId: z.string().optional(),
     quantity: z.int().min(1).max(99).prefault(1),
   })

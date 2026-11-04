@@ -3,9 +3,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
 import { Profiler } from "react";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 afterEach(cleanup);
 
 it("retains guarded optimistic lifecycle callbacks without subscribing the scene to action status", async () => {

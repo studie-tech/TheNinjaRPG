@@ -2,7 +2,6 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Profiler, StrictMode } from "react";
 import Countdown from "@/layout/Countdown";
-import { ensureDom } from "../setup/dom.mjs";
 
 const BASE = Date.UTC(2026, 9, 26, 12);
 let now = BASE;
@@ -13,7 +12,6 @@ const advance = (milliseconds: number) => {
 };
 
 beforeEach(() => {
-  ensureDom();
   now = BASE;
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);

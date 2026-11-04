@@ -60,8 +60,6 @@ export function ProfileSharing() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
-  // tRPC utility
-
   // mutations
   const { mutate: claimVotes, isPending } = api.profile.claimVotes.useMutation({
     onSuccess: async (data) => {
@@ -241,7 +239,7 @@ export function ProfileSharing() {
         {recruitTab === "Rewards" && <RecruitRewardsTab />}
       </ContentBox>
 
-      {allUsers && allUsers.length > 0 && (
+      {allUsers.length > 0 && (
         <ContentBox
           title="Recruits"
           subtitle="Members recruited by you"
@@ -526,7 +524,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         // refreshing so a failed refetch can never offer the mutation again.
         setReviewComplete(true);
         setDialogOpen(false);
-        void utils.linkPromotion.getLinkPromotions.invalidate().catch(() => undefined);
+        void utils.linkPromotion.getLinkPromotions.invalidate();
       }
     },
     onError: (error) => {

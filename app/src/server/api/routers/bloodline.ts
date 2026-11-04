@@ -13,7 +13,6 @@ import {
   BLOODLINE_SWAP_COOLDOWN_HOURS,
   COST_SWAP_BLOODLINE,
   LetterRanks,
-  PITY_SYSTEM_ENABLED,
   REMOVAL_COST,
   ROLL_CHANCE,
 } from "@/drizzle/constants";
@@ -217,7 +216,7 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
       ]);
-      if (!actor || actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
+      if (actor.isBanned || !canRemoveBloodlineFromPool(actor.role)) {
         return [];
       }
       return historic;
@@ -437,7 +436,9 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse(
           "Unlink or delete its jutsu reskins before deleting this bloodline reskin",
         );
-      // Mutate
+      // Mutate. The transaction holds the reskin group's row lock, which jutsu family
+      // saves and createLinkedReskin also take, so no jutsu can link to the group
+      // between the child check and the delete.
       const deleted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           await selectBloodlineReskinForDeleteReskin(tx, input);
@@ -469,7 +470,6 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUserHistoricBloodlines(ctx.drizzle, input.userId),
       ]);
       // Guards
-      if (!actor || !target) return errorResponse("User not found");
       if (actor.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canRemoveBloodlineFromPool(actor.role)) return errorResponse("Unauthorized");
@@ -575,7 +575,6 @@ export const bloodlineRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Bloodline does not exist");
-      if (!user) return errorResponse("User does not exist");
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to delete bloodline");
       }
@@ -853,7 +852,6 @@ export const bloodlineRouter = createTRPCRouter({
         rank: input.rank,
       });
       // Guard
-      if (!PITY_SYSTEM_ENABLED) return errorResponse("Pity system is disabled");
       const prevRoll = previousRolls.find(
         (r) => r.goal === input.rank && !r.bloodlineId,
       );
@@ -934,7 +932,6 @@ export const bloodlineRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
       ]);
-      if (!user) return errorResponse("User not found");
       // Guard
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");

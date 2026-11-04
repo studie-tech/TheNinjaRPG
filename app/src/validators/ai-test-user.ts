@@ -93,8 +93,6 @@ export const aiTestUserResponseSchema = z.object({
       signInToken: z.string().optional(),
     }),
   ),
-  testingToken: z.string().optional(),
-  version: z.string().optional(),
 });
 
 /** Request schema for calling a tRPC endpoint as a provisioned test user. */
@@ -107,9 +105,4 @@ export const aiTestUserCallEndpointRequestSchema = z.object({
   input: z.record(z.string(), z.unknown()).optional(),
 });
 
-export type AiTestUserRequest = z.infer<typeof aiTestUserRequestSchema>;
 export type AiTestUserProfile = z.infer<typeof aiTestUserProfileSchema>;
-export type AiTestUserResponse = z.infer<typeof aiTestUserResponseSchema>;
-export type AiTestUserCallEndpointRequest = z.infer<
-  typeof aiTestUserCallEndpointRequestSchema
->;

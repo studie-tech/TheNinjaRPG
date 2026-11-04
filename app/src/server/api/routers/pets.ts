@@ -104,7 +104,7 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 export const petsRouter = createTRPCRouter({
   /** Buy collection capacity and debit its price in one account update. */
   unlockSlot: protectedProcedure
-    .input(petPaymentSchema.optional())
+    .input(petPaymentSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchPetOwner(ctx.drizzle, ctx.userId);
@@ -115,11 +115,7 @@ export const petsRouter = createTRPCRouter({
         );
       if (user.petSlots >= PET_MAX_COLLECTION_SLOTS)
         return errorResponse("Your companion collection has all available slots.");
-      const payment = getPetPayment(
-        user,
-        input?.currency ?? "REPUTATION",
-        PET_COLLECTION_SLOT_COST,
-      );
+      const payment = getPetPayment(user, input.currency, PET_COLLECTION_SLOT_COST);
       if (payment.balance < payment.cost)
         return errorResponse(
           `A collection slot costs ${payment.cost} ${payment.label}.`,
@@ -1035,13 +1031,12 @@ const petMutationConflict = () =>
 const isPetMutationConflict = (error: unknown) =>
   error instanceof Error && error.name === "PetMutationConflict";
 
-/** Publish a pet patch with its account claim and optional reputation charge. */
+/** Publish a pet patch guarded by the owner and pet snapshots. */
 const updateOwnedPet = async (
   client: DrizzleClient,
   user: UserData,
   pet: UserPet,
   patch: Partial<UserPet>,
-  cost = 0,
 ) => {
   const now = new Date();
   const assignments = Object.entries(patch)
@@ -1053,13 +1048,12 @@ const updateOwnedPet = async (
       return sql`${column} = ${sql.param(value, column)}`;
     });
   // Drizzle cannot build a multi-table UPDATE. Both snapshot guards gate the
-  // patch and any debit together; free edits have no balance precondition.
+  // patch and the account claim together.
   const result = await retryOnDeadlock(() =>
     executeResultForUpdateOwnedPet(
       client,
       user,
       now,
-      cost,
       assignments,
       ownerSnapshotWhere,
 

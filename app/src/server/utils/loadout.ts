@@ -34,21 +34,20 @@ export const backfillLoadouts = async <T extends { id: string }>(args: {
  * Branches on the pure decision, performs the table-specific update via the
  * callback. PlanetScale reports CHANGED (not matched) rows, so rowsAffected===0
  * is ambiguous: it means either the row vanished/isn't owned OR a concurrent
- * request already set this exact name. The optional verifyExists re-read (only
+ * request already set this exact name. The verifyExists re-read (only
  * run in that rare zero-rows case) tells the two apart so a benign no-op isn't
  * reported as "not found".
  */
 export const applyLoadoutRename = async (
   decision: RenameDecision,
   performUpdate: (name: string) => PromiseLike<{ rowsAffected: number }>,
-  verifyExists?: () => PromiseLike<boolean>,
+  verifyExists: () => PromiseLike<boolean>,
 ): Promise<BaseServerResponse> => {
   if (!decision.ok) return errorResponse(decision.message);
   if (!decision.changed) return { success: true, message: decision.message };
   const result = await performUpdate(decision.name);
-  if (result.rowsAffected === 0) {
-    const stillExists = verifyExists ? await verifyExists() : false;
-    if (!stillExists) return errorResponse("Loadout not found");
+  if (result.rowsAffected === 0 && !(await verifyExists())) {
+    return errorResponse("Loadout not found");
   }
   return { success: true, message: "Loadout renamed" };
 };

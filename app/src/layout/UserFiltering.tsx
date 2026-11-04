@@ -158,16 +158,7 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setUsername: cf.setters.username,
-    setIp: cf.setters.ip,
-    setBloodline: cf.setters.bloodline,
-    setVillage: cf.setters.village,
     setEffect: cf.setters.effect,
-    setIsEvent: cf.setters.isEvent,
-    setIsWarCamp: cf.setters.isWarCamp,
-    setIsSummon: cf.setters.isSummon,
-    setInArena: cf.setters.inArena,
-    setInShrines: cf.setters.inShrines,
   };
 };
 

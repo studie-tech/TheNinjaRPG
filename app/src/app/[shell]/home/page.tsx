@@ -54,8 +54,7 @@ import Modal from "@/layout/Modal";
 import { getHomeRooms } from "@/libs/homeProperty";
 import {
   byItemName,
-  calcMaxHouseCookingItems,
-  calcMaxHouseMaterials,
+  calcMaxHouseSpecialItems,
   finishedImbuementItems,
   getHomeStorageBucket,
   showsItemLevelBadge,
@@ -305,9 +304,9 @@ function Residence() {
     searchQuery !== "" || itemTypeFilter !== "ALL" || rarityFilter !== "ALL";
 
   const maxHouseMaterials =
-    userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0;
+    userData && homeData ? calcMaxHouseSpecialItems(homeData.storage) : 0;
   const maxHouseCooking =
-    userData && homeData ? calcMaxHouseCookingItems(userData, homeData.storage) : 0;
+    userData && homeData ? calcMaxHouseSpecialItems(homeData.storage) : 0;
   const canStoreMoreItems = storedItems.length < homeStorage;
   const canStoreMoreMaterials = storedMaterials.length < maxHouseMaterials;
   const canStoreMoreCooking = storedCooking.length < maxHouseCooking;
@@ -567,19 +566,18 @@ function Residence() {
                           )}
                           {userData &&
                             homeData &&
-                            calcMaxHouseMaterials(userData, homeData.storage) > 0 && (
+                            calcMaxHouseSpecialItems(homeData.storage) > 0 && (
                               <span className="ml-2">
-                                +{calcMaxHouseMaterials(userData, homeData.storage)}{" "}
-                                Material Storage
+                                +{calcMaxHouseSpecialItems(homeData.storage)} Material
+                                Storage
                               </span>
                             )}
                           {userData &&
                             homeData &&
-                            calcMaxHouseCookingItems(userData, homeData.storage) >
-                              0 && (
+                            calcMaxHouseSpecialItems(homeData.storage) > 0 && (
                               <span className="ml-2">
-                                +{calcMaxHouseCookingItems(userData, homeData.storage)}{" "}
-                                Cooking Storage
+                                +{calcMaxHouseSpecialItems(homeData.storage)} Cooking
+                                Storage
                               </span>
                             )}
                         </div>

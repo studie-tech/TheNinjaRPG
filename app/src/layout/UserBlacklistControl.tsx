@@ -84,7 +84,6 @@ const UserBlacklistControl: React.FC = () => {
                       <AvatarImage
                         href={user.target.avatar}
                         alt={user.target.username}
-                        userId={user.target.userId}
                         hover_effect={false}
                         size={100}
                       />

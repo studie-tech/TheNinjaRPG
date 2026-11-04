@@ -767,7 +767,9 @@ function PetTraitChoices({
               <span>
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{option.name}</span>
-                  {option.rarity && <Badge variant="outline">{option.rarity}</Badge>}
+                  {"rarity" in option && (
+                    <Badge variant="outline">{option.rarity}</Badge>
+                  )}
                 </span>
                 <span className="mt-1 block text-muted-foreground text-sm">
                   {option.description}

@@ -11,13 +11,6 @@ import {
 import { statFilters } from "@/libs/train";
 import { JutsuValidator } from "@/validators/combat";
 
-// Basic name/level search
-export const searchJutsuSchema = z.object({
-  name: z.string().min(0).max(256),
-  requiredLevel: z.number().min(0).max(150).optional(),
-});
-export type SearchJutsuSchema = z.infer<typeof searchJutsuSchema>;
-
 export const getEvolutionsSchema = z.object({
   jutsuId: z.string(),
 });

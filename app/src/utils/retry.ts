@@ -9,36 +9,9 @@ export interface RetryOptions {
   baseDelayMs?: number;
   /** Maximum total time budget in milliseconds before giving up (default: 30000) */
   deadlineMs?: number;
-  /** Custom function to determine if an error is transient (default: checks status 502/503) */
+  /** Whether an error is worth retrying (default: every error) */
   isTransient?: (error: unknown) => boolean;
 }
-
-/**
- * Check if an error is a transient server error that should be retried.
- * Uses structured error detection via status property for API errors,
- * with fallback to string matching for compatibility.
- */
-export const isTransientError = (error: unknown): boolean => {
-  if (error && typeof error === "object") {
-    // Check for status property (used by Replicate SDK and other API clients)
-    const status = (error as { status?: number }).status;
-    if (status === 502 || status === 503) {
-      return true;
-    }
-
-    // Fallback: check error message for HTTP status codes
-    if (error instanceof Error) {
-      const message = error.message;
-      return (
-        message.includes("502") ||
-        message.includes("503") ||
-        message.includes("Bad Gateway") ||
-        message.includes("Service Unavailable")
-      );
-    }
-  }
-  return false;
-};
 
 /**
  * Execute an async function with retry logic for transient errors.
@@ -65,7 +38,7 @@ export const withRetry = async <T>(
     maxRetries = 2,
     baseDelayMs = 1000,
     deadlineMs = 30000,
-    isTransient = isTransientError,
+    isTransient = () => true,
   } = options;
 
   const startTime = Date.now();

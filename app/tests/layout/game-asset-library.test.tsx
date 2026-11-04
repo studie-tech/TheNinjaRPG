@@ -17,7 +17,6 @@ import * as Link from "@/layout/Link";
 import * as Modal from "@/layout/Modal";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 type Page = { data: GameAsset[]; nextCursor: number | null };
 type Result = { success: boolean; message: string };
@@ -47,7 +46,6 @@ const read = vi.fn(async (cursor: number | null): Promise<Page> => {
 });
 
 beforeEach(() => {
-  ensureDom();
   deleted = false; failReads = false; hasMore = false; read.mockClear();
   folders = []; create.mockClear();
   pageAssets = [asset];

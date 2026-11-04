@@ -89,7 +89,6 @@ describeWithDatabase("sage removal committed balances", () => {
     expect(stored?.sageModeId).toBeNull();
   });
   it("keeps full reconciliation for a server-side pending queue", async () => {
-    const db = await getTestDatabase();
     await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
     const result = await (await callerFor(sageModeRouter, userId)).removeSageMode();
     expect(result.success).toBe(true);

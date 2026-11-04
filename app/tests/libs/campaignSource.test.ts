@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 const setConsent = (statistics: boolean, hasResponse = true) => {
   window.Cookiebot = { consent: { statistics }, hasResponse };

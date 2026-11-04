@@ -18,14 +18,11 @@ import java.util.Map;
 /**
  * Android's answer to Live Activities.
  *
- * Shares only the shape of the calls with the iOS plugin -- start, update, end -- which is
- * what lets app/src/libs/native/liveActivity.ts drive both. It is not a port of ActivityKit.
+ * Shares the start, end, endKind and endAll calls with the iOS plugin, which lets
+ * app/src/libs/native/liveActivity.ts drive both. It is not a port of ActivityKit.
  *
  * Every supported release posts the countdown the same way: an ongoing notification with a
  * determinate progress bar, on its own low-importance channel so it never makes a sound.
- * Android 16 (API 36) added Notification.ProgressStyle, which would render this as a
- * lock-screen card and a status-bar chip instead; adopting it is left for when the app
- * compiles against API 36, and until then the notification is what every release gets.
  */
 @CapacitorPlugin(name = "TNRLiveActivity")
 public class TNRLiveUpdatesPlugin extends Plugin {
@@ -72,23 +69,6 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         // Android owns the countdown and its expiry locally, so there is no ActivityKit
         // push token to register with the server.
         call.resolve(result);
-    }
-
-    @PluginMethod
-    public void update(PluginCall call) {
-        String activityId = call.getString("activityId");
-        Integer notificationId = activityId == null ? null : notificationIdFor(activityId);
-        if (notificationId == null) {
-            call.reject("No such activity");
-            return;
-        }
-        Long endsAt = parseEndsAt(call);
-        if (endsAt == null) {
-            call.reject("endsAtEpochMs is required");
-            return;
-        }
-        post(notificationId, activityId, call, endsAt);
-        call.resolve();
     }
 
     @PluginMethod
@@ -141,13 +121,6 @@ public class TNRLiveUpdatesPlugin extends Plugin {
         int nextId = prefs.getInt(KEY_NEXT_ID, FIRST_NOTIFICATION_ID);
         prefs.edit().clear().putInt(KEY_NEXT_ID, nextId).apply();
         call.resolve();
-    }
-
-    @PluginMethod
-    public void getPushToStartToken(PluginCall call) {
-        // An iOS-only concept. Resolving empty keeps this a capability check on the web
-        // side rather than an error to handle per platform.
-        call.resolve(new JSObject());
     }
 
     private void post(int notificationId, String activityId, PluginCall call, long endsAt) {
@@ -267,9 +240,8 @@ public class TNRLiveUpdatesPlugin extends Plugin {
      * field.
      *
      * Android keeps posted notifications outside the app process, so after the process is
-     * recreated an in-memory map would leave update() rejecting ids that are still on
-     * screen, and end() with no id to cancel -- an ongoing notification nothing can
-     * remove.
+     * recreated an in-memory map would prevent start() from reusing the visible card
+     * and end() from cancelling it, leaving an ongoing notification nothing can remove.
      */
     private SharedPreferences prefs() {
         return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);

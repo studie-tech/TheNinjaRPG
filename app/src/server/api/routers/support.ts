@@ -41,6 +41,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { logError } from "@/server/utils/sentry";
 import { reduceByKey } from "@/utils/grouping";
 import {
   canAssignSupportTicket,
@@ -454,33 +455,34 @@ export const supportRouter = createTRPCRouter({
       if (!githubToken) {
         return errorResponse("GitHub API token is not configured");
       }
+      // Get all conversation comments to include in the GitHub issue
+      const comments = await listConversationCommentForEscalateToGithub(
+        ctx.drizzle,
+        ticket,
+      );
+
+      // Build the GitHub issue body
+      const ticketUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/support/${ticket.id}`;
+      let issueBody = `**Original Support Ticket**: ${ticketUrl}\n\n`;
+      issueBody += `**Category**: ${ticket.category}\n`;
+      issueBody += `**Priority**: ${ticket.priority}\n`;
+      issueBody += `**Status**: ${ticket.status}\n`;
+      issueBody += `**Created by**: ${ticket.createdBy.username}\n`;
+      issueBody += `**Created at**: ${ticket.createdAt.toISOString()}\n\n`;
+      issueBody += `**Description**:\n${ticket.description}\n\n`;
+
+      if (comments.length > 0) {
+        issueBody += `**Comments**:\n\n`;
+        comments.forEach((comment) => {
+          const role = comment.user.role !== "USER" ? ` (${comment.user.role})` : "";
+          issueBody += `**${comment.user.username}${role}** - ${comment.createdAt.toISOString()}:\n`;
+          issueBody += `${comment.content}\n\n`;
+        });
+      }
+
+      // Create GitHub issue; only the external call is treated as a recoverable failure
+      let githubIssue: { html_url: string; number: number };
       try {
-        // Get all conversation comments to include in the GitHub issue
-        const comments = await listConversationCommentForEscalateToGithub(
-          ctx.drizzle,
-          ticket,
-        );
-
-        // Build the GitHub issue body
-        const ticketUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/support/${ticket.id}`;
-        let issueBody = `**Original Support Ticket**: ${ticketUrl}\n\n`;
-        issueBody += `**Category**: ${ticket.category}\n`;
-        issueBody += `**Priority**: ${ticket.priority}\n`;
-        issueBody += `**Status**: ${ticket.status}\n`;
-        issueBody += `**Created by**: ${ticket.createdBy.username}\n`;
-        issueBody += `**Created at**: ${ticket.createdAt.toISOString()}\n\n`;
-        issueBody += `**Description**:\n${ticket.description}\n\n`;
-
-        if (comments.length > 0) {
-          issueBody += `**Comments**:\n\n`;
-          comments.forEach((comment) => {
-            const role = comment.user.role !== "USER" ? ` (${comment.user.role})` : "";
-            issueBody += `**${comment.user.username}${role}** - ${comment.createdAt.toISOString()}:\n`;
-            issueBody += `${comment.content}\n\n`;
-          });
-        }
-
-        // Create GitHub issue
         const githubResponse = await fetch(`${GITHUB_API_ENDPOINT}/issues`, {
           method: "POST",
           headers: {
@@ -500,40 +502,45 @@ export const supportRouter = createTRPCRouter({
             type: ticketCategoryToGithubType(ticket.category),
           }),
         });
-
         if (!githubResponse.ok) {
           const errorData = (await githubResponse.json()) as { message?: string };
-          console.error("GitHub API Error:", errorData);
+          logError(
+            new Error(
+              errorData.message ?? `GitHub API returned ${githubResponse.status}`,
+            ),
+            "GitHub issue creation failed",
+            { ticketId: ticket.id, status: githubResponse.status },
+          );
           return errorResponse("Failed to create GitHub issue");
         }
-
-        const githubIssue = (await githubResponse.json()) as {
+        githubIssue = (await githubResponse.json()) as {
           html_url: string;
           number: number;
         };
-        const githubIssueUrl = githubIssue.html_url;
-
-        // Update ticket with GitHub issue URL
-        await Promise.all([
-          updateSupportTicketForEscalateToGithub(ctx.drizzle, githubIssueUrl, ticket),
-          createSupportTicketActivity(
-            ctx.drizzle,
-            ticket.id,
-            ctx.userId,
-            "ESCALATED_TO_GITHUB",
-            undefined,
-            githubIssueUrl,
-            { githubIssueNumber: githubIssue.number },
-          ),
-        ]);
-
-        return {
-          success: true,
-          message: "Ticket escalated to GitHub successfully",
-        };
-      } catch {
-        return errorResponse("Failed to escalate ticket to GitHub");
+      } catch (error) {
+        logError(error, "GitHub issue creation failed", { ticketId: ticket.id });
+        return errorResponse("Failed to create GitHub issue");
       }
+      const githubIssueUrl = githubIssue.html_url;
+
+      // Update ticket with GitHub issue URL
+      await Promise.all([
+        updateSupportTicketForEscalateToGithub(ctx.drizzle, githubIssueUrl, ticket),
+        createSupportTicketActivity(
+          ctx.drizzle,
+          ticket.id,
+          ctx.userId,
+          "ESCALATED_TO_GITHUB",
+          undefined,
+          githubIssueUrl,
+          { githubIssueNumber: githubIssue.number },
+        ),
+      ]);
+
+      return {
+        success: true,
+        message: "Ticket escalated to GitHub successfully",
+      };
     }),
 });
 

@@ -31,11 +31,9 @@ import {
   getTestDatabase,
   resetTables,
 } from "../setup/testDatabase";
-import { ensureDom } from "../setup/dom.mjs";
 
 describeWithDatabase("CraftingCatalog shrine duration preview", () => {
   beforeEach(async () => {
-    ensureDom();
     // Profile data comes from fixture props; the catalog only needs the context clock.
     vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
     await resetTables(

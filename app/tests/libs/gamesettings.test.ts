@@ -7,7 +7,6 @@ import type { DrizzleClient } from "@/server/db";
 import { actualGameSettings } from "../setup/preload";
 
 const {
-  checkGameTimer,
   fetchPetArtProvider,
   lockWithDailyTimer,
   lockWithHourlyTimer,
@@ -131,13 +130,6 @@ describe("timer cadence", () => {
     expect(await lockWithGameTimer(store.client, "indexer-1m", 60_000)).toBeInstanceOf(Response);
     setSystemTime(new Date(now.getTime() + 59_994));
     expect(await lockWithGameTimer(store.client, "indexer-1m", 60_000)).toBe(false);
-  });
-
-  it("keeps read-only timer checks free of claims", async () => {
-    setSystemTime(now);
-    const store = timerStore();
-    expect(await checkGameTimer(store.client, "timer-1h", 60 * 60_000)).toBe(false);
-    expect(store.where).not.toHaveBeenCalled();
   });
 
   it("records a resume marker only while it owns the claim", async () => {

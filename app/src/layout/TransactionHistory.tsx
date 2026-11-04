@@ -66,12 +66,7 @@ export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
       initialBreak={true}
       padding={false}
     >
-      <Table
-        data={allTransactions}
-        columns={columns}
-        linkPrefix="/userid/"
-        setLastElement={setLastElement}
-      />
+      <Table data={allTransactions} columns={columns} setLastElement={setLastElement} />
     </ContentBox>
   );
 };

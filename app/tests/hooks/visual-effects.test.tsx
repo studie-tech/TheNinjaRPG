@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
@@ -13,7 +12,6 @@ const OverlayProbe = () => {
 describe("useVisualEffects", () => {
   afterEach(cleanup);
   beforeEach(() => {
-    ensureDom();
     window.localStorage.clear();
   });
 

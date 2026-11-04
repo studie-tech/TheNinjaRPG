@@ -291,7 +291,7 @@ export const createCombatActors = (
   const updateVisual = (record: Fighter) => {
     if (!snapshot) return;
     const { user } = record;
-    const alive = stillInBattle(user, snapshot.battle.usersEffects);
+    const alive = stillInBattle(user);
     record.alive = alive;
     record.root.visible = !user.hidden && !user.leftBattle;
     const displayed = alive && record.root.visible;
@@ -309,7 +309,6 @@ export const createCombatActors = (
           user,
           snapshot.battle.usersState,
           user.avatarFacing ?? "left",
-          snapshot.battle.usersEffects,
         );
         entry.sprite.scale.x =
           Math.abs(entry.sprite.scale.x) *
@@ -329,19 +328,11 @@ export const createCombatActors = (
       }
     }
     const maxima = getMaxPools(user, snapshot.battle, snapshot.battle.usersEffects);
-    record.hp.set(
-      getEffectiveCurPool(user, snapshot.battle.usersEffects, "Health") / maxima.health,
-    );
+    record.hp.set(getEffectiveCurPool(user, "Health") / maxima.health);
     if (record.sp && maxima.stamina !== undefined)
-      record.sp.set(
-        getEffectiveCurPool(user, snapshot.battle.usersEffects, "Stamina") /
-          maxima.stamina,
-      );
+      record.sp.set(getEffectiveCurPool(user, "Stamina") / maxima.stamina);
     if (record.cp && maxima.chakra !== undefined)
-      record.cp.set(
-        getEffectiveCurPool(user, snapshot.battle.usersEffects, "Chakra") /
-          maxima.chakra,
-      );
+      record.cp.set(getEffectiveCurPool(user, "Chakra") / maxima.chakra);
     const threat = displayed ? snapshot.aggro?.get(user.userId) : undefined;
     record.threat.container.visible =
       !!threat && Number.isFinite(threat.ratio) && threat.ratio > 0;

@@ -9,7 +9,6 @@ import * as audioPreferences from "@/libs/audioPreferences";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
-import { ensureDom } from "../setup/dom.mjs";
 
 type RemoteCommand = "play" | "pause" | "toggle";
 type AudioTestMocks = {
@@ -65,21 +64,14 @@ const user = (level: number, musicOn = true) =>
     level,
   }) as NonNullable<UserWithRelations>;
 
-ensureDom();
-
 beforeEach(() => {
   vi.spyOn(audioPreferences, "isLocalAudioSession").mockReturnValue(false);
   // Restore hook and utility exports between suites sharing Bun's module cache.
   vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
     isPlaying: getAudioTestMocks().isPlaying,
-    isLoading: false,
-    error: null,
-    canPlay: true,
     requiresInteraction: false,
     enabled: getAudioTestMocks().enabled,
     setEnabled: getAudioTestMocks().setEnabled,
-    toggle: vi.fn(async () => undefined),
-    setVolume: vi.fn(),
   }));
   vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
   vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);

@@ -66,10 +66,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setRewardType: cf.setters.rewardType,
-    setAwardedTo: cf.setters.awardedTo,
-    setAwardedBy: cf.setters.awardedBy,
-    setDate: cf.setters.date,
   };
 };
 

@@ -16,7 +16,6 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { FARM_MAX_PLOTS, FARM_STARTING_PLOTS } from "@/drizzle/constants";
 import {
   farmCollectionLog,
   farmExtraction,
@@ -437,7 +436,6 @@ export const updateUserDataForBuyShopItem = (
         gte(userData.farmCurrency, shopEntry.cost),
         eq(userData.farmPlotsPurchased, user.farmPlotsPurchased),
         lt(userData.farmPlotsPurchased, maxPurchased),
-        sql`${FARM_STARTING_PLOTS} + ${userData.farmPlotsPurchased} + 1 <= ${FARM_MAX_PLOTS}`,
       ),
     );
 
@@ -770,13 +768,7 @@ export const listItemForGetFarmCollectionState = (
       isNotNull(item.farmYieldItemId),
       gt(item.farmGrowTimeSeconds, 0),
     ),
-    columns: {
-      isFarmSeed: true,
-      hidden: true,
-      farmYieldItemId: true,
-      farmMinLevel: true,
-      farmGrowTimeSeconds: true,
-    },
+    columns: { farmYieldItemId: true, farmMinLevel: true },
   });
 
 /** Build the `item` listing for `getFarmCollectionState`, using predicates on `id` and `hidden`. */
@@ -786,7 +778,7 @@ export const listItemForGetFarmCollectionState2 = (
 ) =>
   client.query.item.findMany({
     where: and(inArray(item.id, yieldItemIds), eq(item.hidden, false)),
-    columns: { id: true, name: true, image: true, hidden: true },
+    columns: { id: true, name: true, image: true },
   });
 
 /**

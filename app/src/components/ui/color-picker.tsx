@@ -1,7 +1,7 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,7 @@ const ColorPicker = ({
 }: Omit<ButtonProps, "value" | "onChange" | "onBlur"> & ColorPickerProps) => {
   const [open, setOpen] = useState(false);
 
-  const parsedValue = useMemo(() => {
-    return value || "#FFFFFF";
-  }, [value]);
+  const parsedValue = value || "#FFFFFF";
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -61,23 +59,10 @@ const ColorPicker = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full">
-        <div
-          aria-disabled={disabled}
-          className={cn(disabled && "pointer-events-none opacity-50")}
-        >
-          <HexColorPicker
-            color={parsedValue}
-            onChange={(nextColor) => {
-              if (!disabled) onChange(nextColor);
-            }}
-          />
-        </div>
+        <HexColorPicker color={parsedValue} onChange={onChange} />
         <Input
-          disabled={disabled}
           maxLength={7}
-          onChange={(e) => {
-            if (!disabled) onChange(e?.currentTarget?.value);
-          }}
+          onChange={(e) => onChange(e.currentTarget.value)}
           ref={ref}
           value={parsedValue}
         />

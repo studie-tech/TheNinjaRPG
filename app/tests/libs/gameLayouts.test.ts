@@ -1,17 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { runInNewContext } from "node:vm";
-import { GAME_LAYOUTS, getGameLayoutScript, getWelcomeLayout, type GameLayoutId } from "@/libs/gameLayouts";
-import { cookieValueToLayout, storedValueToLayout } from "@/libs/layoutPreference";
+import { GAME_LAYOUTS, getGameLayoutScript, getWelcomeLayout, toGameLayoutId, type GameLayoutId } from "@/libs/gameLayouts";
+import { storedValueToLayout } from "@/libs/layoutPreference";
 
 describe("unified game layout identity", () => {
   it.each([...GAME_LAYOUTS])("restores $name from either preference representation", ({ id }) => {
-    expect(cookieValueToLayout(id)).toBe(id);
+    expect(toGameLayoutId(id)).toBe(id);
     expect(storedValueToLayout(JSON.stringify(id))).toBe(id);
     expect(getWelcomeLayout(id)).toBe(id);
   });
 
   it.each([null, undefined, "themed", "unknown", '{"id":"pixel"}'])("rejects invalid or incomplete choices %j", (value) => {
-    expect(cookieValueToLayout(value)).toBeUndefined();
+    expect(toGameLayoutId(value)).toBeUndefined();
     expect(getWelcomeLayout(value)).toBe("default");
   });
 });

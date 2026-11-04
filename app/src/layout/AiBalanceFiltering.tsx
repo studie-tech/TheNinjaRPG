@@ -67,12 +67,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setBattleTypes: cf.setters.battleTypes,
-    setMinCount: cf.setters.minCount,
-    setUserRanks: cf.setters.userRanks,
-    setVillages: cf.setters.villages,
-    setMinLevel: cf.setters.minLevel,
-    setMaxLevel: cf.setters.maxLevel,
   };
 };
 

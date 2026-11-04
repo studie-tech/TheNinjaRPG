@@ -13,7 +13,7 @@ import {
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
-import EmojiPicker from "@/layout/EmojiPicker";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import ReportUser from "@/layout/Report";
 import type { ChatStartUser } from "@/libs/chatPanel";
@@ -36,8 +36,7 @@ interface UserReportCommentProps extends PostProps {
   comment: UserReportComment;
 }
 export const CommentOnReport: React.FC<UserReportCommentProps> = (props) => {
-  const [editing, setEditing] = useState(false);
-  return <BaseComment {...props} editing={editing} setEditing={setEditing} />;
+  return <BaseComment {...props} editing={false} setEditing={() => {}} />;
 };
 
 /**
@@ -80,7 +79,7 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
         // this exact delete action back.
         props.onDeleted?.(variables.id);
         setEditing(false);
-        void utils.comments.getConversationComments.invalidate().catch(() => undefined);
+        void utils.comments.getConversationComments.invalidate();
       }
     },
     onError: (error) => {

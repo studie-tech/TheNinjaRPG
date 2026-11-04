@@ -1,9 +1,8 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { MerchProductPage } from "@/components/merch/MerchProductPage";
 import { merchProductSchema } from "@/validators/merch";
-import { ensureDom } from "../setup/dom.mjs";
 
 vi.mock("@/layout/Image", () => ({ default: () => null }));
 vi.mock("@/layout/Link", () => ({
@@ -35,7 +34,6 @@ const product = merchProductSchema.parse({
 });
 
 afterEach(cleanup);
-beforeEach(ensureDom);
 
 describe("merch colour changes", () => {
   it("explains an incompatible size reset and requires another size before purchase", () => {

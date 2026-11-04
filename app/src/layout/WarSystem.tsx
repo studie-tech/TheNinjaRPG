@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -103,8 +103,6 @@ type SurrenderParticipationRole =
   | "MAIN_DEFENDER"
   | "ALLY_ATTACKER"
   | "ALLY_DEFENDER";
-
-const getAdminEndWarRevision = (snapshot: object) => JSON.stringify(snapshot);
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 
@@ -646,12 +644,10 @@ export const WarMap: React.FC<{
       </div>
       {villages && globe && (
         <GlobalMap
-          intersection={true}
           highlights={villages}
           userLocation={true}
           showOwnership={true}
           focusSector={focusSector}
-          focusSectorLabel="Target"
           onTileClick={(sector) => {
             if (!canDeclareWar) {
               showMutationToast({ success: false, message: "You are not the leader" });
@@ -709,57 +705,7 @@ export const SectorWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const adminEndSnapshot = {
-    id: war.id,
-    attackerVillageId: war.attackerVillageId,
-    defenderVillageId: war.defenderVillageId,
-    startedAt: war.startedAt.toISOString(),
-    endedAt: war.endedAt?.toISOString() ?? null,
-    status: war.status,
-    type: war.type,
-    sector: war.sector,
-    attackerShrineHp: war.attackerShrineHp,
-    attackerShrineMaxHp: war.attackerShrineMaxHp,
-    attackerShrineStatus: war.attackerShrineStatus,
-    defenderShrineHp: war.defenderShrineHp,
-    defenderShrineMaxHp: war.defenderShrineMaxHp,
-    defenderShrineStatus: war.defenderShrineStatus,
-    lastTokenReductionAt: war.lastTokenReductionAt.toISOString(),
-    targetStructureRoute: war.targetStructureRoute,
-    attackerWarHealth: war.attackerWarHealth,
-    defenderWarHealth: war.defenderWarHealth,
-    attackerWarHealthMax: war.attackerWarHealthMax,
-    defenderWarHealthMax: war.defenderWarHealthMax,
-  };
-  const currentAdminEndRevision = getAdminEndWarRevision(adminEndSnapshot);
-  const currentAdminEndIdentity = `${user.userId}:${war.id}:${currentAdminEndRevision}`;
-  const currentAdminEndIdentityRef = useRef(currentAdminEndIdentity);
-  const sectorWarMountedRef = useRef(true);
-  currentAdminEndIdentityRef.current = currentAdminEndIdentity;
-  useEffect(() => {
-    sectorWarMountedRef.current = true;
-    return () => {
-      sectorWarMountedRef.current = false;
-    };
-  }, []);
-
-  type SectorAdminEndRequest = {
-    componentIdentity: string;
-    attackerName: string;
-    defenderName: string;
-    payload: {
-      warId: string;
-      requestId: string;
-      expectedRevision: string;
-      expectedWar: typeof adminEndSnapshot;
-    };
-  };
   const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
-  const [adminEndRequest, setAdminEndRequest] = useState<SectorAdminEndRequest | null>(
-    null,
-  );
-  const adminEndRequestRef = useRef<SectorAdminEndRequest | null>(null);
-  const adminEndSubmitGuardRef = useRef(false);
 
   // Mutations
   const { mutate: buildShrine, isPending: isBuilding } =
@@ -779,15 +725,8 @@ export const SectorWar: React.FC<{
   const { mutate: adminEndWar, isPending: isEndingWar } =
     api.war.adminEndWar.useMutation({
       onSuccess: async (data) => {
-        if (!sectorWarMountedRef.current) return;
-
-        if (!data.success) {
-          showMutationToast(data);
-          return;
-        }
         showMutationToast(data);
-        adminEndRequestRef.current = null;
-        setAdminEndRequest(null);
+        if (!data.success) return;
         setShowAdminEndDialog(false);
         await Promise.all([
           utils.war.getActiveWars.invalidate(),
@@ -795,63 +734,7 @@ export const SectorWar: React.FC<{
           utils.war.getEndedWars.invalidate(),
         ]);
       },
-      onSettled: () => {
-        adminEndSubmitGuardRef.current = false;
-      },
     });
-
-  useEffect(() => {
-    const request = adminEndRequestRef.current;
-    if (
-      request &&
-      request.componentIdentity !== currentAdminEndIdentity &&
-      !isEndingWar
-    ) {
-      adminEndRequestRef.current = null;
-      setAdminEndRequest(null);
-      setShowAdminEndDialog(false);
-      adminEndSubmitGuardRef.current = false;
-    }
-  }, [currentAdminEndIdentity, isEndingWar]);
-
-  const openAdminEndDialog = () => {
-    if (isBuilding || isEndingWar || adminEndSubmitGuardRef.current) return;
-    const request: SectorAdminEndRequest = {
-      componentIdentity: currentAdminEndIdentity,
-      attackerName: war.attackerVillage?.name ?? war.attackerVillageId,
-      defenderName: war.defenderVillage?.name ?? war.defenderVillageId,
-      payload: {
-        warId: war.id,
-        requestId: crypto.randomUUID(),
-        expectedRevision: currentAdminEndRevision,
-        expectedWar: adminEndSnapshot,
-      },
-    };
-    adminEndRequestRef.current = request;
-    setAdminEndRequest(request);
-    setShowAdminEndDialog(true);
-  };
-
-  const submitAdminEndWar = () => {
-    const request = adminEndRequestRef.current;
-    if (!request || isEndingWar || adminEndSubmitGuardRef.current) return;
-    adminEndSubmitGuardRef.current = true;
-    adminEndWar({ warId: request.payload.warId });
-  };
-
-  const setAdminEndDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
-    nextOpen,
-  ) => {
-    const open =
-      typeof nextOpen === "function" ? nextOpen(showAdminEndDialog) : nextOpen;
-    if (!open && isEndingWar) return;
-    setShowAdminEndDialog(open);
-    if (!open) {
-      adminEndRequestRef.current = null;
-      setAdminEndRequest(null);
-      adminEndSubmitGuardRef.current = false;
-    }
-  };
 
   // Only show active sector wars
   if (war.status !== "ACTIVE") return null;
@@ -878,7 +761,7 @@ export const SectorWar: React.FC<{
                 size="icon"
                 aria-label={`End sector war ${war.id}`}
                 disabled={isBuilding || isEndingWar}
-                onClick={openAdminEndDialog}
+                onClick={() => setShowAdminEndDialog(true)}
               >
                 {isEndingWar ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -967,59 +850,43 @@ export const SectorWar: React.FC<{
           </div>
         </div>
       </div>
-      {adminEndRequest && (
-        <Modal
-          id="sector-admin-end-war"
-          title="End Sector War"
-          isOpen={showAdminEndDialog}
-          setIsOpen={setAdminEndDialogOpen}
-          proceed_label="End sector war"
-          proceed_loading_label="Ending"
-          confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
-          isLoading={isEndingWar}
-          keepOpenOnAccept={true}
-          onAccept={(event) => {
-            event.preventDefault();
-            submitAdminEndWar();
-          }}
-        >
-          <div className="space-y-3">
-            <p>
-              This removes the war and its war history without assigning a winner or
-              applying village losses.
-            </p>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border bg-muted/40 p-3 text-sm">
-              <dt className="font-medium">War ID</dt>
-              <dd className="break-all font-mono">{adminEndRequest.payload.warId}</dd>
-              <dt className="font-medium">Type</dt>
-              <dd>Sector War</dd>
-              <dt className="font-medium">Sector</dt>
-              <dd>{adminEndRequest.payload.expectedWar.sector}</dd>
-              <dt className="font-medium">Participants</dt>
-              <dd>
-                {adminEndRequest.attackerName} vs. {adminEndRequest.defenderName}
-              </dd>
-              <dt className="font-medium">Status</dt>
-              <dd>{adminEndRequest.payload.expectedWar.status}</dd>
-              <dt className="font-medium">Revision</dt>
-              <dd className="font-mono">{adminEndRequest.payload.expectedRevision}</dd>
-            </dl>
-            <p className="font-medium text-amber-600 dark:text-amber-400">
-              This administrative action cannot be undone.
-            </p>
-            {isEndingWar && (
-              <div
-                className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
-                role="status"
-                aria-live="polite"
-              >
-                <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
-                <span>Ending</span>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
+      <Modal
+        id="sector-admin-end-war"
+        title="End Sector War"
+        isOpen={showAdminEndDialog}
+        setIsOpen={setShowAdminEndDialog}
+        proceed_label="End sector war"
+        proceed_loading_label="Ending"
+        confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
+        isLoading={isEndingWar}
+        keepOpenOnAccept={true}
+        onAccept={() => adminEndWar({ warId: war.id })}
+      >
+        <div className="space-y-3">
+          <p>
+            This removes the war and its war history without assigning a winner or
+            applying village losses.
+          </p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border bg-muted/40 p-3 text-sm">
+            <dt className="font-medium">War ID</dt>
+            <dd className="break-all font-mono">{war.id}</dd>
+            <dt className="font-medium">Type</dt>
+            <dd>Sector War</dd>
+            <dt className="font-medium">Sector</dt>
+            <dd>{war.sector}</dd>
+            <dt className="font-medium">Participants</dt>
+            <dd>
+              {war.attackerVillage?.name ?? war.attackerVillageId} vs.{" "}
+              {war.defenderVillage?.name ?? war.defenderVillageId}
+            </dd>
+            <dt className="font-medium">Status</dt>
+            <dd>{war.status}</dd>
+          </dl>
+          <p className="font-medium text-amber-600 dark:text-amber-400">
+            This administrative action cannot be undone.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -1280,13 +1147,7 @@ const WarSideTownHall: React.FC<{
         </div>
       )}
       <div className="w-full max-w-[160px]">
-        <Building
-          structure={structure}
-          village={village}
-          textPosition="bottom"
-          showBar={false}
-          showNumbers={false}
-        />
+        <Building structure={structure} village={village} showBar={false} />
       </div>
     </div>
   );
@@ -1498,29 +1359,6 @@ export const VillageWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const surrenderWarSnapshot = {
-    id: war.id,
-    attackerVillageId: war.attackerVillageId,
-    defenderVillageId: war.defenderVillageId,
-    startedAt: war.startedAt.toISOString(),
-    endedAt: war.endedAt?.toISOString() ?? null,
-    status: war.status,
-    type: war.type,
-    sector: war.sector,
-    attackerShrineHp: war.attackerShrineHp,
-    attackerShrineMaxHp: war.attackerShrineMaxHp,
-    attackerShrineStatus: war.attackerShrineStatus,
-    defenderShrineHp: war.defenderShrineHp,
-    defenderShrineMaxHp: war.defenderShrineMaxHp,
-    defenderShrineStatus: war.defenderShrineStatus,
-    lastTokenReductionAt: war.lastTokenReductionAt.toISOString(),
-    targetStructureRoute: war.targetStructureRoute,
-    attackerWarHealth: war.attackerWarHealth,
-    defenderWarHealth: war.defenderWarHealth,
-    attackerWarHealthMax: war.attackerWarHealthMax,
-    defenderWarHealthMax: war.defenderWarHealthMax,
-  };
-  const surrenderRevision = getAdminEndWarRevision(surrenderWarSnapshot);
   const surrenderAlly = war.warAllies.find(
     (entry) => entry.villageId === user.villageId,
   );
@@ -1534,67 +1372,7 @@ export const VillageWar: React.FC<{
           : surrenderAlly?.supportVillageId === war.defenderVillageId
             ? "ALLY_DEFENDER"
             : undefined;
-  const surrenderIdentity = `${user.userId}:${user.villageId ?? "none"}:${user.village?.kageId ?? "none"}:${war.id}:${surrenderRevision}:${surrenderRole ?? "none"}:${surrenderAlly?.id ?? "none"}`;
-  const adminEndIdentity = `${user.userId}:${war.id}:${surrenderRevision}`;
-  const surrenderIdentityRef = useRef(surrenderIdentity);
-  const adminEndIdentityRef = useRef(adminEndIdentity);
-  const villageWarMountedRef = useRef(true);
-  surrenderIdentityRef.current = surrenderIdentity;
-  adminEndIdentityRef.current = adminEndIdentity;
-
-  type SurrenderRequest = {
-    componentIdentity: string;
-    attackerName: string;
-    defenderName: string;
-    villageName: string;
-    supportedVillageName: string | null;
-    payload: {
-      warId: string;
-      requestId: string;
-      expectedRevision: string;
-      expectedWar: typeof surrenderWarSnapshot;
-      expectedActor: { userId: string; villageId: string; kageId: string };
-      expectedParticipationRole: SurrenderParticipationRole;
-      expectedWarAlly: {
-        id: string;
-        warId: string;
-        villageId: string;
-        supportVillageId: string;
-        tokensPaid: number;
-        joinedAt: string;
-      } | null;
-    };
-  };
-  const [surrenderRequest, setSurrenderRequest] = useState<SurrenderRequest | null>(
-    null,
-  );
-  const surrenderRequestRef = useRef<SurrenderRequest | null>(null);
-  const surrenderSubmitGuardRef = useRef(false);
-
-  type VillageAdminEndRequest = {
-    componentIdentity: string;
-    attackerName: string;
-    defenderName: string;
-    payload: {
-      warId: string;
-      requestId: string;
-      expectedRevision: string;
-      expectedWar: typeof surrenderWarSnapshot;
-    };
-  };
   const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
-  const [adminEndRequest, setAdminEndRequest] = useState<VillageAdminEndRequest | null>(
-    null,
-  );
-  const adminEndRequestRef = useRef<VillageAdminEndRequest | null>(null);
-  const adminEndSubmitGuardRef = useRef(false);
-
-  useEffect(() => {
-    villageWarMountedRef.current = true;
-    return () => {
-      villageWarMountedRef.current = false;
-    };
-  }, []);
 
   // Form for token offer
   const offerSchema = createAllianceOfferSchema(userVillage?.tokens ?? 0);
@@ -1674,14 +1452,8 @@ export const VillageWar: React.FC<{
   const { mutate: surrender, isPending: isSurrendering } =
     api.war.surrender.useMutation({
       onSuccess: async (data) => {
-        if (!villageWarMountedRef.current) return;
-        if (!data.success) {
-          showMutationToast(data);
-          return;
-        }
         showMutationToast(data);
-        surrenderRequestRef.current = null;
-        setSurrenderRequest(null);
+        if (!data.success) return;
         setShowSurrenderDialog(false);
         await Promise.all([
           utils.war.getActiveWars.invalidate(),
@@ -1690,24 +1462,13 @@ export const VillageWar: React.FC<{
           utils.war.getAllyOffers.invalidate(),
         ]);
       },
-      onSettled: () => {
-        surrenderSubmitGuardRef.current = false;
-      },
     });
 
   const { mutate: adminEndWar, isPending: isAdminEnding } =
     api.war.adminEndWar.useMutation({
       onSuccess: async (data) => {
-        if (!villageWarMountedRef.current) return;
-
-        if (!data.success) {
-          showMutationToast(data);
-          return;
-        }
-
         showMutationToast(data);
-        adminEndRequestRef.current = null;
-        setAdminEndRequest(null);
+        if (!data.success) return;
         setShowAdminEndDialog(false);
         await Promise.all([
           utils.war.getActiveWars.invalidate(),
@@ -1716,149 +1477,15 @@ export const VillageWar: React.FC<{
           utils.war.getAllyOffers.invalidate(),
         ]);
       },
-      onSettled: () => {
-        adminEndSubmitGuardRef.current = false;
-      },
     });
 
   const competingVillageWarMutation =
     isHiring || isRejectingOffer || isCancelling || isCreatingOffer || isAdminEnding;
 
-  const openAdminEndDialog = () => {
-    if (
-      isSurrendering ||
-      competingVillageWarMutation ||
-      adminEndSubmitGuardRef.current
-    ) {
-      return;
-    }
-    const request: VillageAdminEndRequest = {
-      componentIdentity: adminEndIdentity,
-      attackerName: war.attackerVillage.name,
-      defenderName: war.defenderVillage.name,
-      payload: {
-        warId: war.id,
-        requestId: crypto.randomUUID(),
-        expectedRevision: surrenderRevision,
-        expectedWar: surrenderWarSnapshot,
-      },
-    };
-    adminEndRequestRef.current = request;
-    setAdminEndRequest(request);
-    setShowAdminEndDialog(true);
-  };
-
-  const submitAdminEndWar = () => {
-    const request = adminEndRequestRef.current;
-    if (!request || isAdminEnding || adminEndSubmitGuardRef.current) return;
-    adminEndSubmitGuardRef.current = true;
-    adminEndWar({ warId: request.payload.warId });
-  };
-
-  const setAdminEndDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
-    nextOpen,
-  ) => {
-    const open =
-      typeof nextOpen === "function" ? nextOpen(showAdminEndDialog) : nextOpen;
-    if (!open && isAdminEnding) return;
-    setShowAdminEndDialog(open);
-    if (!open) {
-      adminEndRequestRef.current = null;
-      setAdminEndRequest(null);
-      adminEndSubmitGuardRef.current = false;
-    }
-  };
-
-  const openSurrenderDialog = () => {
-    if (
-      isSurrendering ||
-      surrenderSubmitGuardRef.current ||
-      competingVillageWarMutation ||
-      !user.villageId ||
-      !user.village?.kageId ||
-      !surrenderRole
-    ) {
-      return;
-    }
-    const supportedVillage = surrenderAlly
-      ? surrenderAlly.supportVillageId === war.attackerVillageId
-        ? war.attackerVillage
-        : war.defenderVillage
-      : null;
-    const request: SurrenderRequest = {
-      componentIdentity: surrenderIdentity,
-      attackerName: war.attackerVillage.name,
-      defenderName: war.defenderVillage.name,
-      villageName: user.village.name,
-      supportedVillageName: supportedVillage?.name ?? null,
-      payload: {
-        warId: war.id,
-        requestId: crypto.randomUUID(),
-        expectedRevision: surrenderRevision,
-        expectedWar: surrenderWarSnapshot,
-        expectedActor: {
-          userId: user.userId,
-          villageId: user.villageId,
-          kageId: user.village.kageId,
-        },
-        expectedParticipationRole: surrenderRole,
-        expectedWarAlly: surrenderAlly
-          ? {
-              id: surrenderAlly.id,
-              warId: surrenderAlly.warId,
-              villageId: surrenderAlly.villageId,
-              supportVillageId: surrenderAlly.supportVillageId,
-              tokensPaid: surrenderAlly.tokensPaid,
-              joinedAt: surrenderAlly.joinedAt.toISOString(),
-            }
-          : null,
-      },
-    };
-    surrenderRequestRef.current = request;
-    setSurrenderRequest(request);
-    setShowSurrenderDialog(true);
-  };
-
-  const submitSurrender = () => {
-    const request = surrenderRequestRef.current;
-    if (!request || isSurrendering || surrenderSubmitGuardRef.current) return;
-    surrenderSubmitGuardRef.current = true;
-    surrender({ warId: request.payload.warId });
-  };
-
-  const setSurrenderDialogOpen: React.Dispatch<React.SetStateAction<boolean>> = (
-    nextOpen,
-  ) => {
-    const open =
-      typeof nextOpen === "function" ? nextOpen(showSurrenderDialog) : nextOpen;
-    if (!open && isSurrendering) return;
-    setShowSurrenderDialog(open);
-    if (!open) {
-      surrenderRequestRef.current = null;
-      setSurrenderRequest(null);
-      surrenderSubmitGuardRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    const request = surrenderRequestRef.current;
-    if (request && request.componentIdentity !== surrenderIdentity && !isSurrendering) {
-      surrenderRequestRef.current = null;
-      setSurrenderRequest(null);
-      setShowSurrenderDialog(false);
-      surrenderSubmitGuardRef.current = false;
-    }
-  }, [isSurrendering, surrenderIdentity]);
-
-  useEffect(() => {
-    const request = adminEndRequestRef.current;
-    if (request && request.componentIdentity !== adminEndIdentity && !isAdminEnding) {
-      adminEndRequestRef.current = null;
-      setAdminEndRequest(null);
-      setShowAdminEndDialog(false);
-      adminEndSubmitGuardRef.current = false;
-    }
-  }, [adminEndIdentity, isAdminEnding]);
+  const supportedVillageName =
+    surrenderAlly?.supportVillageId === war.attackerVillageId
+      ? war.attackerVillage.name
+      : war.defenderVillage.name;
 
   // Derived
   const isAttacker =
@@ -1933,7 +1560,7 @@ export const VillageWar: React.FC<{
               size="icon"
               aria-label={isSurrendering ? "Surrendering" : `Surrender war ${war.id}`}
               disabled={isSurrendering || competingVillageWarMutation}
-              onClick={openSurrenderDialog}
+              onClick={() => setShowSurrenderDialog(true)}
             >
               {isSurrendering ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -1949,7 +1576,7 @@ export const VillageWar: React.FC<{
               className="bg-amber-700 hover:bg-amber-800"
               aria-label={`Administratively end ${war.type === "WAR_RAID" ? "war raid" : "village war"} ${war.id}`}
               disabled={isSurrendering || competingVillageWarMutation}
-              onClick={openAdminEndDialog}
+              onClick={() => setShowAdminEndDialog(true)}
             >
               {isAdminEnding ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -1964,157 +1591,107 @@ export const VillageWar: React.FC<{
       <Modal
         id="village-war-surrender"
         title="Confirm Village War Surrender"
-        isOpen={showSurrenderDialog}
-        setIsOpen={setSurrenderDialogOpen}
+        isOpen={showSurrenderDialog && war.status === "ACTIVE" && !!surrenderRole}
+        setIsOpen={setShowSurrenderDialog}
         proceed_label="Surrender"
         proceed_loading_label="Surrendering"
         confirmClassName="bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-500"
         isLoading={isSurrendering}
         keepOpenOnAccept={true}
-        onAccept={(event) => {
-          event.preventDefault();
-          submitSurrender();
-        }}
+        onAccept={() => surrender({ warId: war.id })}
         className="max-w-xl border-red-900/60"
       >
-        {surrenderRequest && (
+        {showSurrenderDialog && surrenderRole && (
           <div className="space-y-4">
             <div className="rounded-md border border-red-800/60 bg-red-950/30 p-3">
               <p className="font-semibold text-red-300">
                 This action cannot be undone.
               </p>
-              {surrenderRequest.payload.expectedParticipationRole.startsWith(
-                "MAIN_",
-              ) ? (
+              {surrenderRole.startsWith("MAIN_") ? (
                 <p className="mt-1 text-sm">
-                  {surrenderRequest.villageName} is a main belligerent. Surrendering
-                  immediately ends this war in defeat for your village. The opposing
-                  main village receives the victory rewards, while your village receives
-                  defeat exhaustion and structure penalties. Supporting forces remain
-                  part of the recorded outcome.
+                  {user.village?.name} is a main belligerent. Surrendering immediately
+                  ends this war in defeat for your village. The opposing main village
+                  receives the victory rewards, while your village receives defeat
+                  exhaustion and structure penalties. Supporting forces remain part of
+                  the recorded outcome.
                 </p>
               ) : (
                 <p className="mt-1 text-sm">
-                  {surrenderRequest.villageName} is supporting{" "}
-                  {surrenderRequest.supportedVillageName}. Surrendering withdraws only
-                  your village; the war continues for both main villages and all other
-                  allies. Your village receives defeat exhaustion, and the{" "}
-                  {surrenderRequest.payload.expectedWarAlly?.tokensPaid.toLocaleString()}{" "}
+                  {user.village?.name} is supporting {supportedVillageName}.
+                  Surrendering withdraws only your village; the war continues for both
+                  main villages and all other allies. Your village receives defeat
+                  exhaustion, and the {surrenderAlly?.tokensPaid.toLocaleString()}{" "}
                   tokens already paid are not refunded.
                 </p>
               )}
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
               <dt className="text-muted-foreground">War</dt>
-              <dd className="font-mono">{surrenderRequest.payload.warId}</dd>
+              <dd className="font-mono">{war.id}</dd>
               <dt className="text-muted-foreground">Conflict</dt>
               <dd>
-                {surrenderRequest.attackerName} vs {surrenderRequest.defenderName}
+                {war.attackerVillage.name} vs {war.defenderVillage.name}
               </dd>
               <dt className="text-muted-foreground">Your role</dt>
-              <dd>
-                {surrenderRequest.payload.expectedParticipationRole.replaceAll(
-                  "_",
-                  " ",
-                )}
-              </dd>
+              <dd>{surrenderRole.replaceAll("_", " ")}</dd>
               <dt className="text-muted-foreground">Confirmed by</dt>
-              <dd>{surrenderRequest.villageName}&apos;s current Kage</dd>
+              <dd>{user.village?.name}&apos;s current Kage</dd>
             </dl>
-            {isSurrendering && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/30 p-3 font-medium text-amber-200"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Surrendering
-              </div>
-            )}
           </div>
         )}
       </Modal>
 
-      {adminEndRequest && (
-        <Modal
-          id="village-admin-end-war"
-          title={
-            adminEndRequest.payload.expectedWar.type === "WAR_RAID"
-              ? "End War Raid"
-              : "End Village War"
-          }
-          isOpen={showAdminEndDialog}
-          setIsOpen={setAdminEndDialogOpen}
-          proceed_label={
-            adminEndRequest.payload.expectedWar.type === "WAR_RAID"
-              ? "End war raid"
-              : "End village war"
-          }
-          proceed_loading_label="Ending"
-          confirmClassName="bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-500"
-          isLoading={isAdminEnding}
-          keepOpenOnAccept={true}
-          onAccept={(event) => {
-            event.preventDefault();
-            submitAdminEndWar();
-          }}
-          className="max-w-xl border-amber-900/60"
-        >
-          <div className="space-y-4">
-            <div className="rounded-md border border-amber-800/60 bg-amber-950/30 p-3">
-              <p className="font-semibold text-amber-300">
-                This administrative action cannot be undone.
-              </p>
-              <p className="mt-1 text-sm">
-                The exact active war, its kill history, supporting forces, and pending
-                ally offers will be removed. No winner is assigned, no victory or defeat
-                rewards are granted, and no village tokens, structures, or sector
-                ownership are changed.
-              </p>
-            </div>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border bg-muted/40 p-3 text-sm">
-              <dt className="text-muted-foreground">War ID</dt>
-              <dd className="break-all font-mono">{adminEndRequest.payload.warId}</dd>
-              <dt className="text-muted-foreground">Type</dt>
-              <dd>{adminEndRequest.payload.expectedWar.type.replaceAll("_", " ")}</dd>
-              <dt className="text-muted-foreground">Participants</dt>
-              <dd>
-                {adminEndRequest.attackerName} vs {adminEndRequest.defenderName}
-              </dd>
-              <dt className="text-muted-foreground">Status</dt>
-              <dd>{adminEndRequest.payload.expectedWar.status}</dd>
-              <dt className="text-muted-foreground">Target structure</dt>
-              <dd>{adminEndRequest.payload.expectedWar.targetStructureRoute}</dd>
-              <dt className="text-muted-foreground">Attacker health</dt>
-              <dd>
-                {adminEndRequest.payload.expectedWar.attackerWarHealth.toLocaleString()}{" "}
-                /{" "}
-                {adminEndRequest.payload.expectedWar.attackerWarHealthMax.toLocaleString()}
-              </dd>
-              <dt className="text-muted-foreground">Defender health</dt>
-              <dd>
-                {adminEndRequest.payload.expectedWar.defenderWarHealth.toLocaleString()}{" "}
-                /{" "}
-                {adminEndRequest.payload.expectedWar.defenderWarHealthMax.toLocaleString()}
-              </dd>
-              <dt className="text-muted-foreground">Revision</dt>
-              <dd className="break-all font-mono">
-                {adminEndRequest.payload.expectedRevision}
-              </dd>
-            </dl>
-            {isAdminEnding && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/30 p-3 font-medium text-amber-200"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Ending
-              </div>
-            )}
+      <Modal
+        id="village-admin-end-war"
+        title={war.type === "WAR_RAID" ? "End War Raid" : "End Village War"}
+        isOpen={showAdminEndDialog && war.status === "ACTIVE"}
+        setIsOpen={setShowAdminEndDialog}
+        proceed_label={war.type === "WAR_RAID" ? "End war raid" : "End village war"}
+        proceed_loading_label="Ending"
+        confirmClassName="bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-500"
+        isLoading={isAdminEnding}
+        keepOpenOnAccept={true}
+        onAccept={() => adminEndWar({ warId: war.id })}
+        className="max-w-xl border-amber-900/60"
+      >
+        <div className="space-y-4">
+          <div className="rounded-md border border-amber-800/60 bg-amber-950/30 p-3">
+            <p className="font-semibold text-amber-300">
+              This administrative action cannot be undone.
+            </p>
+            <p className="mt-1 text-sm">
+              The exact active war, its kill history, supporting forces, and pending
+              ally offers will be removed. No winner is assigned, no victory or defeat
+              rewards are granted, and no village tokens, structures, or sector
+              ownership are changed.
+            </p>
           </div>
-        </Modal>
-      )}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border bg-muted/40 p-3 text-sm">
+            <dt className="text-muted-foreground">War ID</dt>
+            <dd className="break-all font-mono">{war.id}</dd>
+            <dt className="text-muted-foreground">Type</dt>
+            <dd>{war.type.replaceAll("_", " ")}</dd>
+            <dt className="text-muted-foreground">Participants</dt>
+            <dd>
+              {war.attackerVillage.name} vs {war.defenderVillage.name}
+            </dd>
+            <dt className="text-muted-foreground">Status</dt>
+            <dd>{war.status}</dd>
+            <dt className="text-muted-foreground">Target structure</dt>
+            <dd>{war.targetStructureRoute}</dd>
+            <dt className="text-muted-foreground">Attacker health</dt>
+            <dd>
+              {war.attackerWarHealth.toLocaleString()} /{" "}
+              {war.attackerWarHealthMax.toLocaleString()}
+            </dd>
+            <dt className="text-muted-foreground">Defender health</dt>
+            <dd>
+              {war.defenderWarHealth.toLocaleString()} /{" "}
+              {war.defenderWarHealthMax.toLocaleString()}
+            </dd>
+          </dl>
+        </div>
+      </Modal>
 
       {/* Add dialog for war kills */}
       <Modal

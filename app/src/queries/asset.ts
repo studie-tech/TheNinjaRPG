@@ -7,6 +7,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   getTableColumns,
   inArray,
   like,
@@ -96,7 +97,7 @@ export const listGameAssetForGetAllNames = (
     where: input.type ? eq(gameAsset.type, input.type) : ne(gameAsset.type, "LPC"),
   });
 
-/** Build the `gameAssetTag` distinct selection for `getAllGameAssetContentTagNames`. */
+/** List content tags assigned to assets for public tag discovery. */
 export const selectDistinctGameAssetTagForGetAllGameAssetContentTagNames = (
   client: Pick<DrizzleClient, "selectDistinct">,
 ) =>
@@ -135,7 +136,7 @@ export const selectGameAssetForGetAll = (
   input: {
     name?: undefined | string;
     type?: GameAssetType | undefined;
-    tags?: undefined | string[];
+    tags?: string[];
     nameTokens?: undefined | string[];
     folder?: undefined | string;
     includeAnimations?: boolean;
@@ -148,8 +149,6 @@ export const selectGameAssetForGetAll = (
   client
     .select({ ...getTableColumns(gameAsset) })
     .from(gameAsset)
-    .leftJoin(gameAssetTag, eq(gameAsset.id, gameAssetTag.assetId))
-    .leftJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id))
     .where(
       and(
         ...(input.name ? [like(gameAsset.name, `%${input.name}%`)] : []),
@@ -158,7 +157,21 @@ export const selectGameAssetForGetAll = (
           : input.includeAnimations
             ? []
             : [ne(gameAsset.type, "ANIMATION"), ne(gameAsset.type, "LPC")]),
-        ...(input.tags ? [inArray(contentTag.name, input.tags)] : []),
+        // A matching tag qualifies an asset once, even when several selected tags match.
+        input.tags
+          ? exists(
+              client
+                .select({ id: gameAssetTag.id })
+                .from(gameAssetTag)
+                .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id))
+                .where(
+                  and(
+                    eq(gameAssetTag.assetId, gameAsset.id),
+                    inArray(contentTag.name, input.tags),
+                  ),
+                ),
+            )
+          : undefined,
         ...(input.nameTokens
           ? input.nameTokens.map((t) => like(gameAsset.name, `%${t}%`))
           : []),
@@ -168,7 +181,6 @@ export const selectGameAssetForGetAll = (
           : []),
       ),
     )
-    .groupBy(gameAsset.id)
     .orderBy(
       input.sort === "newest"
         ? desc(gameAsset.createdAt)

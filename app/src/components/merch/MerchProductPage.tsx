@@ -8,6 +8,7 @@ import Table from "@/layout/Table";
 import {
   formatMerchMoney,
   getMerchDesign,
+  isColorOption,
   merchDescriptionLead,
   productFromPrice,
   selectedMerchImage,
@@ -124,10 +125,9 @@ export function MerchProductPage({ handle }: { handle: string }) {
                     <button
                       type="button"
                       key={value}
-                      aria-pressed={
-                        (selection[option.name] ??
-                          (option.values.length === 1 ? value : undefined)) === value
-                      }
+                      aria-pressed={selection[option.name] === value}
+                      // Colour choices stay selectable whatever the other options are; an
+                      // incompatible pick resets the selection with a message.
                       disabled={
                         !product.variants.some(
                           (item) =>
@@ -135,7 +135,7 @@ export function MerchProductPage({ handle }: { handle: string }) {
                             item.selectedOptions.every((selected) =>
                               selected.name === option.name
                                 ? selected.value === value
-                                : /^(color|colour)$/i.test(option.name) ||
+                                : isColorOption(option.name) ||
                                   !selection[selected.name] ||
                                   selected.value === selection[selected.name],
                             ),

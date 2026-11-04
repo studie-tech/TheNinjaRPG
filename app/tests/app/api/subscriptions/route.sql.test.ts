@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as headers from "next/headers";
 import { GET } from "@/app/api/subscriptions/route";
 import { paypalSubscription, storePurchase, stripePayment, userData } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
@@ -19,7 +18,6 @@ describeWithDatabase("PayPal renewal lookup failures", () => {
       id: "due-subscription", subscriptionId: "I-DUE", orderId: "I-DUE", createdById: "renewal-buyer", affectedUserId: "renewal-buyer", federalStatus: "GOLD", status: "ACTIVE", updatedAt: new Date(Date.now() - 32 * 86400000),
     });
     stubCronAuth(() => null);
-    vi.spyOn(headers, "cookies").mockResolvedValue({} as never);
   });
   afterEach(() => { vi.restoreAllMocks(); resetServerModuleStubs(); });
   it.each([401, 429, 500, 503, 404])("preserves coverage on transient HTTP %s, while a definitive 404 clears unsupported coverage", async (status) => {

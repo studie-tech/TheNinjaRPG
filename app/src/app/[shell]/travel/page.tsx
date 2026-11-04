@@ -57,6 +57,7 @@ import {
   MAP_SECTOR_ID_MIN,
   MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MAX_TRAVEL_PINS,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   VILLAGE_LEAVE_REQUIRED_RANK,
@@ -856,18 +857,13 @@ function Travel() {
       villages &&
       globe && (
         <GlobalMap
-          intersection={true}
           highlights={villages}
           usersHighlighted={trackedBounties}
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
           focusSector={focusSector}
-          focusSectorLabel="Target"
-          onTileClick={(sector) => {
-            if (sector === null) return;
-            initiateTravelToSector(sector);
-          }}
+          onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
         />
       )
@@ -1273,7 +1269,7 @@ function Travel() {
                     variant="outline"
                     disabled={
                       !pinLabel.trim() ||
-                      pins.length >= 20 ||
+                      pins.length >= MAX_TRAVEL_PINS ||
                       userData.status !== "AWAKE"
                     }
                     onClick={() => {
@@ -1627,14 +1623,14 @@ const StealthControls: React.FC<{
       ? lastSuccessfulSensoryAt
       : userData?.lastSensoryAt;
 
-  const stealthStatus = getStealthStatus(
-    userData
-      ? { ...userData, lastSensoryAt: effectiveLastSensoryAt ?? null }
-      : userData,
-    STEALTH_SENSORY_CAP,
-    STEALTH_TRAIN_GAIN_PER_MINUTE,
-    timeDiff,
-  );
+  const stealthStatus = userData
+    ? getStealthStatus(
+        { ...userData, lastSensoryAt: effectiveLastSensoryAt ?? null },
+        STEALTH_SENSORY_CAP,
+        STEALTH_TRAIN_GAIN_PER_MINUTE,
+        timeDiff,
+      )
+    : undefined;
   const sensoryCooldown = useLiveCountdown(stealthStatus?.sensoryCooldownRemaining);
   const stealthCooldown = useLiveCountdown(stealthStatus?.stealthCooldownRemaining);
   const stealthDuration = useLiveCountdown(stealthStatus?.stealthDurationRemaining);

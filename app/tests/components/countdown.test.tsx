@@ -1,9 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import Countdown from "@/layout/Countdown";
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
 
 const BASE = Date.UTC(2026, 8, 16, 12, 0, 0);
 let nowMs = BASE;

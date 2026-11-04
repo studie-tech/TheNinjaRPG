@@ -48,7 +48,6 @@ import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { CoordinateTargetingEditor } from "@/layout/CoordinateTargetingEditor";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
-import Image from "@/layout/Image";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { MethodSizeEditor } from "@/layout/MethodSizeEditor";
 import Modal from "@/layout/Modal";
@@ -152,12 +151,9 @@ export type FormEntry<K> = {
   | {
       type: "db_values_with_number";
       values: FormDbValue[] | undefined;
-      multiple?: boolean;
-      current?: string;
     }
   | {
       type: "dialog_options";
-      values: { text: string; nextObjectiveId: string }[];
       objectiveIds: string[];
     }
 );
@@ -173,16 +169,13 @@ interface EditContentProps<T, K, S extends FieldValues> {
   allowMaterialRewards?: boolean;
   /** Additional controls sharing this form's submission and disabled state. */
   children?: React.ReactNode;
-  formClassName?: string;
   buttonTxt?: string;
   allowImageUpload?: boolean;
   relationId?: string;
-  fixedWidths?: "basis-32" | "basis-64" | "basis-96";
   type?: ContentType;
   onAccept?: (
     e: React.BaseSyntheticEvent<object, any, any> | undefined,
   ) => Promise<void>;
-  onEnter?: () => Promise<void>;
   submitDisabled?: boolean;
   submitLoading?: boolean;
   submitLoadingText?: string;
@@ -202,7 +195,6 @@ export const EditContent = <
   // Destructure
   const {
     formData,
-    formClassName,
     form,
     showSubmit,
     buttonTxt,
@@ -310,23 +302,6 @@ export const EditContent = <
     { enabled: previewIds.length > 0 },
   );
 
-  // Event listener for submitting on enter click
-  const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (props.onEnter && !isImageUploading) {
-      switch (event.key) {
-        case "Enter":
-          void props.onEnter();
-          break;
-      }
-    }
-  };
-  useEffect(() => {
-    document.addEventListener("keydown", onDocumentKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onDocumentKeyDown);
-    };
-  }, [props.onEnter, isImageUploading]);
-
   // Picker controls are rendered in a portal, outside the disabled fieldset below.
   // Close the picker when a caller opts into an in-flight submit lock so every
   // control belonging to this atomic form is consistently unavailable.
@@ -336,25 +311,10 @@ export const EditContent = <
     }
   }, [submitLoading]);
 
-  // Mutations
-  // const { mutate: create3dModel } =
-  //   api.openai.create3dModel.useMutation({
-  //     onSuccess: (data, variables) => {
-  //       showMutationToast({
-  //         success: true,
-  //         message: "3D model generated. Now fetching",
-  //       });
-  //       fetchReplicateResult({
-  //         replicateId: data.replicateId,
-  //         field: variables.field,
-  //         removeBg: false,
-  //       });
-  //     },
-  //   });
-
   // If this is a quest, deduce the quest-type
+  const contentType = props.type;
   const questType =
-    props.type === "quest" ? form.getValues("questType" as Path<S>) : undefined;
+    contentType === "quest" ? form.getValues("questType" as Path<S>) : undefined;
 
   /**
    * Get the category of a form entry
@@ -411,9 +371,7 @@ export const EditContent = <
           }
           void props.onAccept?.(event);
         }}
-        className={
-          formClassName ?? "grid grid-cols-1 items-center gap-1 md:grid-cols-2"
-        }
+        className="grid grid-cols-1 items-center gap-1 md:grid-cols-2"
       >
         {/* Asset Picker Dialog */}
         {assetPickerOpen && !submitLoading && (
@@ -544,26 +502,13 @@ export const EditContent = <
         {/* biome-ignore format: Keep the display-contents fieldset from reformatting the large field renderer. */}
         <fieldset disabled={submitLoading} aria-busy={submitLoading} className="contents">
         {formData
-          .filter((formEntry) => {
-            return (
-              !["reward_hunter_items_ids", "reward_hunter_items"].includes(
-                formEntry.id,
-              ) ||
-              questType === "hunting" ||
-              props.type === "activityStreak" ||
-              props.allowMaterialRewards
-            );
-          })
-          .filter((formEntry) => {
-            return (
-              !["reward_gathering_items_ids", "reward_gathering_items"].includes(
-                formEntry.id,
-              ) ||
-              questType === "gathering" ||
-              props.type === "activityStreak" ||
-              props.allowMaterialRewards
-            );
-          })
+          .filter((formEntry) =>
+            isMaterialRewardFieldVisible(
+              String(formEntry.id),
+              questType,
+              props.allowMaterialRewards,
+            ),
+          )
           .map((formEntry) => {
             return { ...formEntry, category: getCategory(formEntry.id) };
           })
@@ -579,7 +524,7 @@ export const EditContent = <
           .map((formEntry) => {
             // Derived
             const id = formEntry.id;
-            let type = formEntry.type;
+            const type = formEntry.type;
 
             // Options for select & multi-select
             let options: OptionType[] = [];
@@ -594,11 +539,6 @@ export const EditContent = <
               label: o.label !== "" ? o.label : "None",
               value: o.value !== "" ? o.value : "None",
             }));
-
-            // Show richInputs as text if fixedWidths
-            if (props.fixedWidths && formEntry.type === "richinput") {
-              type = "text";
-            }
 
             // Prompt for image generation
             let prompt = "";
@@ -641,9 +581,6 @@ export const EditContent = <
                       : formEntry.doubleWidth
                         ? "md:col-span-2"
                         : "",
-                    props.fixedWidths
-                      ? `h-32 shrink-0 grow-0 px-2 pt-3 ${props.fixedWidths}`
-                      : "",
                     // Rewards drawn in green
                     formEntry.category === "reward"
                       ? "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
@@ -839,15 +776,7 @@ export const EditContent = <
                     />
                   )}
                   {(type === "str_array" ||
-                    (type === "db_values" &&
-                      ![
-                        "appearAnimation",
-                        "disappearAnimation",
-                        "staticAnimation",
-                        "staticAssetPath",
-                        "appearSfx",
-                        "disappearSfx",
-                      ].includes(id))) && (
+                    (type === "db_values" && !ASSET_PICKER_FIELDS.includes(id))) && (
                     <div className="flex min-w-0 flex-row items-end">
                       <div className="min-w-0 flex-1">
                         <FormField
@@ -1054,28 +983,9 @@ export const EditContent = <
                           <X className="h-5 w-5 stroke-1" />
                         </Button>
                       )}
-                      {"current" in formEntry && formEntry.current && (
-                        <div className="ml-1 h-12 w-12 overflow-y-auto">
-                          <Image
-                            src={formEntry.current}
-                            alt={id}
-                            width={100}
-                            height={100}
-                            priority
-                          />
-                        </div>
-                      )}
                     </div>
                   )}
-                  {type === "db_values" &&
-                    [
-                      "appearAnimation",
-                      "disappearAnimation",
-                      "staticAnimation",
-                      "staticAssetPath",
-                      "appearSfx",
-                      "disappearSfx",
-                    ].includes(id) && (
+                  {type === "db_values" && ASSET_PICKER_FIELDS.includes(id) && (
                       <div className="flex flex-row items-start gap-3">
                         <FormField
                           control={form.control}
@@ -1197,21 +1107,11 @@ export const EditContent = <
                     )}
                   {formEntry.type === "avatar" &&
                     props.allowImageUpload &&
-                    props.type && (
+                    contentType && (
                       <FormField
                         control={form.control}
                         name={id}
-                        render={({ field }) => {
-                          const sizeVal: IMG_ORIENTATION =
-                            formEntry.type === "avatar" && "size" in formEntry
-                              ? ((formEntry as { size?: IMG_ORIENTATION }).size ??
-                                "square")
-                              : "square";
-                          const maxDimVal: number =
-                            formEntry.type === "avatar" && "maxDim" in formEntry
-                              ? ((formEntry as { maxDim?: number }).maxDim ?? 256)
-                              : 256;
-                          return props.type ? (
+                        render={({ field }) => (
                             <FormItem>
                               <FormControl>
                                 <ContentImageSelector
@@ -1220,21 +1120,18 @@ export const EditContent = <
                                   id={props.relationId ?? nanoid()}
                                   allowImageUpload={props.allowImageUpload}
                                   prompt={prompt}
-                                  type={props.type}
+                                  type={contentType}
                                   onUploadComplete={(url) => {
                                     field.onChange(url);
                                   }}
-                                  size={sizeVal}
-                                  maxDim={maxDimVal}
+                                  size={formEntry.size ?? "square"}
+                                  maxDim={formEntry.maxDim ?? 256}
                                   disabled={submitLoading}
                                 />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
-                          ) : (
-                            <div>Missing content type</div>
-                          );
-                        }}
+                        )}
                       />
                     )}
                   {formEntry.type === "audio" && (
@@ -1670,11 +1567,9 @@ interface EffectFormWrapperProps {
   idx: number;
   type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
   availableTags: readonly string[];
-  formClassName?: string;
   hideTagType?: boolean;
   editableFields?: readonly string[];
   tag: ZodAllTags;
-  fixedWidths?: "basis-32" | "basis-64" | "basis-96";
   effects: ZodAllTags[];
   setEffects: (effects: ZodAllTags[]) => void;
   submitLoading?: boolean;
@@ -1686,7 +1581,7 @@ interface EffectFormWrapperProps {
  */
 export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // Destructure props
-  const { tag, idx, effects, formClassName, setEffects } = props;
+  const { tag, idx, effects, setEffects } = props;
 
   // Get user data for permission checks
   const { data: userData } = useUserData();
@@ -1760,13 +1655,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   });
 
   const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined, {
-    enabled:
-      fields.includes("staticAssetPath") ||
-      fields.includes("appearAnimation") ||
-      fields.includes("staticAnimation") ||
-      fields.includes("disappearAnimation") ||
-      fields.includes("appearSfx") ||
-      fields.includes("disappearSfx"),
+    enabled: ASSET_PICKER_FIELDS.some((field) => fields.includes(field)),
   });
 
   // Form for handling the specific tag
@@ -1780,12 +1669,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // A few fields we need to watch
   const watchType = useWatch({ control: form.control, name: "type" });
   const watchStaticPath = useWatch({ control: form.control, name: "staticAssetPath" });
-  const watchAppear = useWatch({ control: form.control, name: "appearAnimation" });
-  const watchStatic = useWatch({ control: form.control, name: "staticAnimation" });
-  const watchDisappear = useWatch({
-    control: form.control,
-    name: "disappearAnimation",
-  });
   const watchAll = useWatch({ control: form.control });
   const isDamageModifier = damageModifierTypes.includes(tag.type);
   const [hasElementFilter, setHasElementFilter] = useState(
@@ -1801,13 +1684,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     if (incomingHasElements) setHasElementFilter(true);
   }, [incomingHasElements]);
 
-  // Get images for the different animations and statics
+  // Asset options and the selected static image
   const statics = assetData?.filter((a) => a.type === "STATIC");
   const animations = assetData?.filter((a) => a.type === "ANIMATION");
   const staticImage = statics?.find((a) => a.id === watchStaticPath)?.image;
-  const appearAnimImage = animations?.find((a) => a.id === watchAppear)?.image;
-  const disappearAnimImage = animations?.find((a) => a.id === watchDisappear)?.image;
-  const staticAnimImage = animations?.find((a) => a.id === watchStatic)?.image;
 
   // When user changes type, we need to update the effects array to re-render form
   useEffect(() => {
@@ -2072,7 +1952,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: itemData,
           doubleWidth: true,
-          multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values_with_number",
         };
@@ -2140,7 +2019,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: appearAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "disappearAnimation") {
         return {
@@ -2148,7 +2026,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: disappearAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "staticAnimation") {
         return {
@@ -2156,7 +2033,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: animations,
           multiple: false,
           type: "db_values",
-          current: staticAnimImage,
         };
       } else if (innerType instanceof z.ZodString && value === "staticAssetPath") {
         return {
@@ -2422,10 +2298,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         schema={tagSchema}
         form={form}
         formData={formData}
-        formClassName={formClassName}
         showSubmit={false}
-        buttonTxt="Confirm Changes (No database sync)"
-        fixedWidths={props.fixedWidths}
         submitLoading={props.submitLoading}
       />
     </>
@@ -2437,9 +2310,7 @@ interface ObjectiveFormWrapperProps {
   quest: DeepPartial<Quest>;
   availableTags: readonly string[];
   hideTagType?: boolean;
-  hideRounds?: boolean;
   objective: AllObjectivesType;
-  formClassName?: string;
   objectives: AllObjectivesType[];
   setObjectives: (content: AllObjectivesType[]) => void;
   submitLoading?: boolean;
@@ -2453,7 +2324,7 @@ interface ObjectiveFormWrapperProps {
  */
 export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props) => {
   // Destructure props
-  const { idx, objective, objectives, formClassName, setObjectives } = props;
+  const { idx, objective, objectives, setObjectives } = props;
 
   // Get user data for permission checks
   const { data: userData } = useUserData();
@@ -2677,18 +2548,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     })
     .filter((value) => {
       return (
-        props?.quest?.questType === "hunting" ||
-        !["reward_hunter_items_ids"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        props?.quest?.questType === "gathering" ||
-        !["reward_gathering_items_ids"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
         !["fail_quest", "win_quest", "reset_quest"].includes(watchTask) ||
         !["nextObjectiveId"].includes(value)
       );
@@ -2766,7 +2625,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
               name: `lvl ${ai.level}: ${ai.username}`,
             })),
           doubleWidth: true,
-          multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values_with_number",
         };
@@ -2775,7 +2633,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           id: value,
           values: itemData,
           doubleWidth: true,
-          multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values_with_number",
         };
@@ -2865,10 +2722,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           // Dialog objective: nextObjectiveId is an array of {text, nextObjectiveId}
           return {
             id: value,
-            values: (shownTag.nextObjectiveId ?? []) as {
-              text: string;
-              nextObjectiveId: string;
-            }[],
             doubleWidth: true,
             label: FORM_LABEL_MAP[value] ?? value,
             type: "dialog_options",
@@ -3054,9 +2907,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         schema={objectiveSchema}
         form={form}
         formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}
-        formClassName={formClassName}
         showSubmit={false}
-        buttonTxt="Confirm Changes (No database sync)"
         submitLoading={props.submitLoading}
       >
         <RewardEditor
@@ -3077,9 +2928,7 @@ interface RewardFormWrapperProps {
   reward: ObjectiveRewardType;
   rewards: ObjectiveRewardType[];
   setRewards: (rewards: ObjectiveRewardType[]) => void;
-  formClassName?: string;
   hideFields?: string[];
-  type?: ContentType;
 }
 
 /**
@@ -3087,15 +2936,7 @@ interface RewardFormWrapperProps {
  * @returns React.ReactNode
  */
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const {
-    idx,
-    reward,
-    rewards,
-    formClassName,
-    setRewards,
-    hideFields = [],
-    type,
-  } = props;
+  const { idx, reward, rewards, setRewards, hideFields = [] } = props;
 
   const { data: rewardUser } = useUserData();
   // Parse reward with schema
@@ -3154,7 +2995,6 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
           id: value,
           values: itemData,
           doubleWidth: true,
-          multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values_with_number" as const,
         };
@@ -3256,9 +3096,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
       schema={ObjectiveReward}
       form={form}
       formData={formData}
-      formClassName={formClassName}
       showSubmit={false}
-      type={type}
     />
   );
 };
@@ -3341,12 +3179,6 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
   field: string;
   onChange: (value: unknown) => void;
   options?: {
-    ai?: OptionType[];
-    jutsu?: OptionType[];
-    jutsuInjectable?: OptionType[];
-    item?: OptionType[];
-    bloodline?: OptionType[];
-    sageMode?: OptionType[];
     animation?: OptionType[];
     staticAsset?: OptionType[];
   };
@@ -3361,79 +3193,6 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
   const inner = unwrapFieldSchema(fieldSchema);
   const eff = effect as unknown as Record<string, unknown>;
 
-  // Common db-backed fields
-  if (field === "aiId") {
-    const raw = eff[field];
-    const value = typeof raw === "string" ? raw : "";
-    return (
-      <SingleSelectSimple
-        value={value}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.ai || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "jutsuIds") {
-    const raw = eff[field];
-    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
-    return (
-      <MultiSelect
-        selected={selected}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.jutsuInjectable || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "items") {
-    const raw = eff[field];
-    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
-    return (
-      <MultiSelect
-        selected={selected}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.item || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "reward_jutsus") {
-    const raw = eff[field];
-    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
-    return (
-      <MultiSelect
-        selected={selected}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.jutsu || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "reward_bloodlines") {
-    const raw = eff[field];
-    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
-    return (
-      <MultiSelect
-        selected={selected}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.bloodline || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "reward_sage_modes") {
-    const raw = eff[field];
-    const selected = Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
-    return (
-      <MultiSelect
-        selected={selected}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.sageMode || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
   if (["appearAnimation", "disappearAnimation", "staticAnimation"].includes(field)) {
     const raw = eff[field];
     const value = typeof raw === "string" ? raw : "";
@@ -3672,31 +3431,12 @@ export const MassEffectEditor = <
     });
   }, [entries, kind]);
 
-  // Options
-  const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined);
-  const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined);
-  const { data: itemData } = api.item.getAllNames.useQuery(undefined);
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined);
+  // Options: the field selector lists damage-tag fields, so only asset pickers need data
   const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined);
 
   const options = useMemo(
     () =>
       ({
-        ai: (aiData || [])
-          .filter((a) => a.isSummon)
-          .sort((a, b) => a.level - b.level)
-          .map((ai) => ({
-            label: `lvl ${ai.level}: ${ai.username}`,
-            value: ai.userId,
-          })),
-        jutsu: (jutsuData || []).map((j) => ({ label: j.name, value: j.id })),
-        jutsuInjectable: (jutsuData || [])
-          .filter((j) => j.injectableInBattle)
-          .map((j) => ({ label: j.name, value: j.id })),
-        item: (itemData || []).map((i) => ({ label: i.name, value: i.id })),
-        bloodline: (bloodlines || []).map((b) => ({ label: b.name, value: b.id })),
-        sageMode: (sageModes || []).map((s) => ({ label: s.name, value: s.id })),
         animation: (assetData || [])
           .filter((a) => a.type === "ANIMATION")
           .map((a) => ({ label: a.id, value: a.id })),
@@ -3704,7 +3444,7 @@ export const MassEffectEditor = <
           .filter((a) => a.type === "STATIC")
           .map((a) => ({ label: a.id, value: a.id })),
       }) as const,
-    [aiData, jutsuData, itemData, bloodlines, sageModes, assetData],
+    [assetData],
   );
 
   type Row = {
@@ -4052,18 +3792,11 @@ export const EffectFieldSelector: React.FC<{
   className?: string;
   disabled?: boolean;
 }> = ({ selected, setSelected, className, disabled }) => {
-  // Build field options from all tag schemas
+  // The selectable fields are the damage tag's fields
   const fieldOptions = useMemo<OptionType[]>(() => {
-    const fields = new Set<string>();
-    // Build from a sample of tag schemas by introspecting one common schema
-    // We reuse getTagSchema across tag types using tagTypes from types.ts
     const all = getTagSchema("damage").shape as Record<string, unknown>;
-    Object.keys(all)
+    return Object.keys(all)
       .filter((k) => !["type", "timeTracker"].includes(k))
-      .forEach((k) => {
-        fields.add(k);
-      });
-    return Array.from(fields)
       .sort((a, b) => a.localeCompare(b))
       .map((f) => ({ label: f, value: f }));
   }, []);
@@ -4160,3 +3893,32 @@ const unwrapFieldSchema = (schema: z.ZodType): z.ZodType => {
   }
   return inner;
 };
+
+/**
+ * Hunter and gathering rewards show on quests of their own type, or wherever the
+ * caller allows material rewards.
+ */
+const isMaterialRewardFieldVisible = (
+  id: string,
+  questType: unknown,
+  allowMaterialRewards?: boolean,
+) => {
+  if (allowMaterialRewards) return true;
+  if (id === "reward_hunter_items" || id === "reward_hunter_items_ids") {
+    return questType === "hunting";
+  }
+  if (id === "reward_gathering_items" || id === "reward_gathering_items_ids") {
+    return questType === "gathering";
+  }
+  return true;
+};
+
+/** Effect fields edited through the game-asset picker instead of a combobox. */
+const ASSET_PICKER_FIELDS: readonly string[] = [
+  "appearAnimation",
+  "disappearAnimation",
+  "staticAnimation",
+  "staticAssetPath",
+  "appearSfx",
+  "disappearSfx",
+];

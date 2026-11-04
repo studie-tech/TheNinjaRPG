@@ -14,7 +14,6 @@ import type { UserPatch } from "@/deltas/profile";
 import * as routing from "@/utils/routing";
 import { updateUserCache } from "@/utils/userCache";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../setup/dom.mjs";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money = 100, userId = "actor", tutorialOn = true) => ({
@@ -80,7 +79,6 @@ beforeEach(() => {
     const selected = useMemo(() => data ? select(data) : undefined, [data]);
     return { data: selected, updateUser: mocks.updateUser } as never;
   }));
-  ensureDom();
   localStorage.clear();
   Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
@@ -107,7 +105,7 @@ describe("TutorialAssistant highlight activation", () => {
       <div id="lesson-control" ref={(element) => {
         if (element) element.getBoundingClientRect = () => new DOMRect(20, 120, 160, 48);
       }} />
-      <TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />
+      <TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />
     </>
   );
 
@@ -146,7 +144,7 @@ afterEach(() => {
   if (resizeObserver) Object.defineProperty(globalThis, "ResizeObserver", resizeObserver);
   else Reflect.deleteProperty(globalThis, "ResizeObserver");
 });
-const renderAssistant = () => render(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+const renderAssistant = () => render(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
 
 it("pauses tutorial controls while chatting and restores the saved lesson on close", () => {
   mocks.step = { ...mocks.step, showNextButton: true };
@@ -195,7 +193,7 @@ describe("TutorialAssistant account boundary", () => {
     expect(view.container.innerHTML).toBe("");
     expect(mocks.rewardHook).not.toHaveBeenCalled();
     route.mockRestore();
-    view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
     expect(mocks.rewardHook).toHaveBeenCalled();
   });
@@ -212,13 +210,13 @@ describe("TutorialAssistant account boundary", () => {
     expect(mocks.rewardHook).not.toHaveBeenCalled();
 
     mocks.client.setQueryData(key, profile());
-    view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     expect(mocks.rewardHook).toHaveBeenCalled();
     expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
 
     mocks.rewardHook.mockClear();
     mocks.client.removeQueries({ queryKey: key });
-    view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     expect(view.container.innerHTML).toBe("");
     expect(mocks.rewardHook).not.toHaveBeenCalled();
   });
@@ -275,7 +273,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     const view = renderAssistant();
     confirmDisable(view);
     mocks.client.setQueryData(key, profile(300, "other"));
-    view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+    view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     await act(async () => { resolve({ success: true, message: "Saved" }); });
     expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(300, "other"));
     expect(mocks.updateUser).not.toHaveBeenCalled();
@@ -305,7 +303,7 @@ it("shows a completed tutorial state and still presents available quest guidance
   }] as never;
   completed.userData.questData = [{ id: "quest", goals: [] }] as never;
   mocks.client.setQueryData(key, { userData: { ...completed.userData } });
-  view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+  view.rerender(<TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
   await waitFor(() => expect(view.getByRole("region", { name: "Tutorial: Current quest" })).toBeTruthy());
   expect(view.queryByText("Tutorial complete. Quest guidance will appear here when available.")).toBeNull();
 });

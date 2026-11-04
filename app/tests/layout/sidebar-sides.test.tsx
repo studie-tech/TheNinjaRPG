@@ -1,4 +1,3 @@
-import { ensureDom } from "../setup/dom.mjs";
 import * as clerk from "@clerk/nextjs";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
@@ -25,8 +24,6 @@ import {
 } from "@/libs/layoutPreference";
 import { VISUAL_EFFECT_KEYS } from "@/libs/visualEffects";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
-
-ensureDom();
 
 const browserGlobals = ["Event", "CustomEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) =>
@@ -84,15 +81,10 @@ const renderProps = (
   children: <p>Page content</p>,
   variant,
   userData: undefined,
-  isClerkLoaded: true,
   isSignedInLayout: true,
-  isAnonymousLayout: false,
   pathname: "/profile",
   navbarMenuItems: [],
-  navbarMenuItemsLeft: [],
-  navbarMenuItemsRight: [],
   shownNotifications: [],
-  systems: [],
   location: undefined,
   leftSideBarOpen: false,
   onLeftSideBarOpenChange: () => {},
@@ -110,7 +102,6 @@ const renderProps = (
   imageset: { navbar: "/navbar.webp", handsign: "/handsign.webp", wallpaper: "/wall.webp" },
   variantClasses: layoutVariantClasses[variant],
   showMobileNotifications: false,
-  mobileNotificationCount: 0,
 });
 
 const setSwapped = (swapped: boolean) =>

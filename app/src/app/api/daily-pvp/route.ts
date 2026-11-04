@@ -1,5 +1,4 @@
 import { and, eq, lt } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { userData } from "@/drizzle/schema";
 import {
   getGameSetting,
@@ -33,9 +32,6 @@ const USER_DECAY_BATCH_SIZE = 1000;
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

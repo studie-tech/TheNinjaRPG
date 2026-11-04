@@ -28,8 +28,6 @@ const vectorCapabilities = new WeakMap<
 >();
 const fulltextUnavailableUntil = new WeakMap<DrizzleClient, number>();
 
-export type PreviousReport = Awaited<ReturnType<typeof getRelatedReports>>[number];
-
 const eligibleReports = (client: DrizzleClient) =>
   and(
     ne(userReport.aiInterpretation, ""),
@@ -62,9 +60,6 @@ const isFeatureUnavailable = (error: unknown, feature: "vector" | "fulltext") =>
       /FUNCTION\s+\S*\b(?:DISTANCE|TO_VECTOR)\b.*does not exist/i.test(message) ||
       /(?:unsupported|not supported|not enabled|disabled).*\b(?:vector|distance)\b|\b(?:vector|distance)\b.*(?:unsupported|not supported|not enabled|disabled)/i.test(
         message,
-      ) ||
-      /(?:Table.*UserReportEmbedding.*doesn't exist|table.*UserReportEmbedding.*not found)/i.test(
-        message,
       )
     )
       return true;
@@ -73,12 +68,13 @@ const isFeatureUnavailable = (error: unknown, feature: "vector" | "fulltext") =>
   return false;
 };
 
+/** Cache vector capability probes per client while allowing transient failures to retry. */
 export const supportsReportVectorSearch = async (client: DrizzleClient) => {
   const cached = vectorCapabilities.get(client);
   if (cached && cached.expiresAt > Date.now()) return cached.supported;
   const supported = (async () => {
     try {
-      // Probe both the function and optional table before calling the embedding API.
+      // Probe the vector functions before calling the embedding API.
       await selectUserReportEmbeddingForSupportsReportVectorSearch(client);
       return true;
     } catch (error) {
@@ -122,12 +118,7 @@ export const deleteUserReportEmbeddings = async (
   client: DrizzleClient,
   userId: string,
 ) => {
-  try {
-    await deleteUserReportEmbeddingForDeleteUserReportEmbeddings(client, userId);
-  } catch (error) {
-    // Account cleanup also works before the optional embedding table is deployed.
-    if (!isFeatureUnavailable(error, "vector")) throw error;
-  }
+  await deleteUserReportEmbeddingForDeleteUserReportEmbeddings(client, userId);
 };
 
 /** Prefer semantic matches, then full-text ranking, then literal word matches. */

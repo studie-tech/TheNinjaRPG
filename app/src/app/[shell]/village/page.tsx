@@ -259,7 +259,6 @@ export default function VillageOverview() {
               <Building
                 structure={structure}
                 village={villageData}
-                textPosition="bottom"
                 eager={index < 3}
                 showBar
                 showUpgrade

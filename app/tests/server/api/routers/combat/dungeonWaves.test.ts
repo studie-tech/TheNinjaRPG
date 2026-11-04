@@ -21,7 +21,7 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../../../libs/combat/helpers/battleScenario";
-import { dungeonBattleState, encounterWaveState, dungeonContent } from "../../../../setup/dungeon";
+import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,

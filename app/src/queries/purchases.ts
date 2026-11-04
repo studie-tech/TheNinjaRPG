@@ -45,7 +45,6 @@ export const selectStorePurchaseForRecent = (
   input: {
     transactionId?: undefined | string;
     productId?: undefined | string;
-    createdAfter?: undefined | Date;
     limit: number;
   },
 ) =>
@@ -71,9 +70,6 @@ export const selectStorePurchaseForRecent = (
           ? [eq(storePurchase.transactionId, input.transactionId)]
           : []),
         ...(input.productId ? [eq(storePurchase.productId, input.productId)] : []),
-        ...(input.createdAfter
-          ? [gte(storePurchase.createdAt, input.createdAfter)]
-          : []),
       ),
     )
     .orderBy(desc(storePurchase.createdAt))
@@ -478,16 +474,6 @@ export const findStorePurchaseForApplyStorePurchase3 = (
     columns: { grantedAt: true, revokedAt: true, expiresAt: true },
     where: eq(storePurchase.transactionId, grant.transactionId),
   });
-
-/** Build the `userData` selection for `applyStorePurchase`, using predicates on `userId`. */
-export const selectUserDataForApplyStorePurchase2 = (
-  client: Pick<DrizzleClient, "select">,
-  recipientUserId: string,
-) =>
-  client
-    .select({ federalStatus: userData.federalStatus })
-    .from(userData)
-    .where(eq(userData.userId, recipientUserId));
 
 /**
  * Build the `storePurchase` listing for `settleRecordedLedger`, including predicates
@@ -1103,34 +1089,6 @@ export const listPaypalSubscriptionForPaypalFederalFloor = (
       eq(paypalSubscription.affectedUserId, userId),
       eq(paypalSubscription.status, "ACTIVE"),
       gte(paypalSubscription.updatedAt, new Date(Date.now() - PAYPAL_WINDOW_MS)),
-    ),
-  });
-
-/**
- * Build the `storePurchase` listing for `storeFederalFloor`, selecting only
- * `federalStatus`, including predicates on `userId`, `acceptedAt`, `isSandbox`.
- */
-export const listStorePurchaseForStoreFederalFloor = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-  isSandboxGrantee: (userId: string) => boolean,
-  STORE_WINDOW_MS: number,
-) =>
-  client.query.storePurchase.findMany({
-    columns: { federalStatus: true },
-    where: and(
-      eq(storePurchase.userId, userId),
-      isNotNull(storePurchase.acceptedAt),
-      ...(isSandboxGrantee(userId) ? [] : [eq(storePurchase.isSandbox, false)]),
-      isNotNull(storePurchase.federalStatus),
-      isNull(storePurchase.revokedAt),
-      or(
-        gte(storePurchase.expiresAt, new Date()),
-        and(
-          isNull(storePurchase.expiresAt),
-          gte(storePurchase.createdAt, new Date(Date.now() - STORE_WINDOW_MS)),
-        ),
-      ),
     ),
   });
 

@@ -8,11 +8,7 @@ const DisplayUserReport = dynamic(() => import("@/layout/UserReport"), {
   loading: () => <Loader explanation="Loading report" />,
 });
 
-interface BanInfoProps {
-  placeholder?: string;
-}
-
-const BanInfo: React.FC<BanInfoProps> = () => {
+const BanInfo: React.FC = () => {
   const { data: report } = api.reports.getBan.useQuery(undefined);
 
   if (!report?.reportedUser) return <Loader explanation="Loading ban info" />;
@@ -28,9 +24,7 @@ const BanInfo: React.FC<BanInfoProps> = () => {
         clarification or wish to ask a question, you can create a private support ticket
         to reach moderation.
       </ContentBox>
-      {report && (
-        <DisplayUserReport report={report} initialBreak={true} hideHrefBack={true} />
-      )}
+      <DisplayUserReport report={report} initialBreak={true} hideHrefBack={true} />
     </>
   );
 };

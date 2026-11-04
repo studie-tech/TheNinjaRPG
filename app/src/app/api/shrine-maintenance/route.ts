@@ -1,10 +1,10 @@
-import { cookies } from "next/headers";
 import {
   SHRINE_BOOST_COST,
   SHRINE_BOOST_DURATION_HOURS,
   shrineLobbyFreshAfter,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
+import type { Village } from "@/drizzle/schema";
 import {
   handleEndpointError,
   lockWithDailyTimer,
@@ -26,8 +26,7 @@ import {
 } from "@/queries/shrine";
 import { fetchVillages } from "@/queries/village";
 import { listActiveWarsWithRules } from "@/queries/war";
-
-import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { syncWarCamps } from "@/server/utils/objectiveWar";
 import {
@@ -40,14 +39,10 @@ import type { BoostTemplateEntry } from "@/validators/shrine";
 
 const ENDPOINT_NAME = "shrine-maintenance";
 const ENDPOINT_NAME_DAILY = "shrine-maintenance-daily";
-type ShrineMaintenanceDb = Pick<DrizzleClient, "select" | "update" | "delete">;
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer - run once per minute
   const minuteCheck = await lockWithMinuteTimer(drizzleDB, ENDPOINT_NAME);
@@ -135,15 +130,6 @@ async function runShrineMaintenance(now: Date) {
   };
 }
 
-type ShrineSettings = {
-  unlockedAiIds?: string[];
-  activeBoosts?: Record<string, string>;
-  activeAiIds?: string[];
-  boostTemplate?: BoostTemplateEntry[];
-  boostTemplateUpdatedBy?: string;
-  boostTemplateUpdatedAt?: string;
-};
-
 /**
  * Returns the set of boost types to activate from the template for a village.
  * Skips boosts already active, skips if no Level 3 shrine in the village sector,
@@ -153,7 +139,7 @@ export function computeTemplateActivations(params: {
   now: Date;
   prevTime: Date;
   villageTokens: number;
-  shrineSettings: ShrineSettings | null;
+  shrineSettings: Partial<Village["shrineSettings"]>;
   hasLevel3Shrine: boolean;
   boostCost: number;
 }): { boostType: BoostTemplateEntry["boostType"]; newEndAt: string }[] {
@@ -167,7 +153,7 @@ export function computeTemplateActivations(params: {
   // Village must control at least one Level 3 shrine
   if (!hasLevel3Shrine) return [];
 
-  const template = shrineSettings?.boostTemplate ?? [];
+  const template = shrineSettings.boostTemplate ?? [];
   if (template.length === 0) return [];
 
   const currentDayOfWeek = now.getUTCDay();
@@ -196,7 +182,7 @@ export function computeTemplateActivations(params: {
     ),
   ].sort(); // alphabetical for deterministic partial activation
 
-  const activeBoosts = shrineSettings?.activeBoosts ?? {};
+  const activeBoosts = shrineSettings.activeBoosts ?? {};
   const boostDurationMs = SHRINE_BOOST_DURATION_HOURS * 60 * 60 * 1000;
   // Anchor expiry to the slot start, not the (possibly-jittered) cron firing time,
   // so the expiry lands exactly on the next slot boundary. Otherwise a late tick
@@ -252,8 +238,7 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
 
   // Scale the work with template users, not total villages.
   const villagesWithTemplate = allVillages.filter(
-    (v) =>
-      ((v.shrineSettings as ShrineSettings | null)?.boostTemplate?.length ?? 0) > 0,
+    (v) => (v.shrineSettings.boostTemplate?.length ?? 0) > 0,
   );
 
   const pendingTemplateActivations: {
@@ -263,12 +248,11 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
   }[] = [];
 
   for (const villageData of villagesWithTemplate) {
-    const settings = villageData.shrineSettings as ShrineSettings | null;
     const templateActivations = computeTemplateActivations({
       now,
       prevTime,
-      villageTokens: villageData.tokens ?? 0,
-      shrineSettings: settings,
+      villageTokens: villageData.tokens,
+      shrineSettings: villageData.shrineSettings,
       hasLevel3Shrine: villagesWithLevel3Shrine.has(villageData.id),
       boostCost: SHRINE_BOOST_COST,
     });
@@ -280,7 +264,7 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
   // Group activations by village so each row takes a single UPDATE instead of
   // one round-trip per boost type. MySQL serializes writes to the same row, so a
   // village whose template activates several types in one slot would otherwise
-  // pay N sequential round-trips. mergeActiveBoostsExpression upserts all of a
+  // pay N sequential round-trips. upsertActiveBoostsExpression upserts all of a
   // village's keys in one JSON_SET, and the token + per-type
   // boostInactivePredicate guards keep the write idempotent: a retried tick can
   // never double-deduct tokens or overwrite a still-live boost.
@@ -329,14 +313,11 @@ async function runShrineBoostTick(now: Date, prevTime: Date) {
  * Deletes shrine battle lobbies that never progressed into a real battle and
  * resets users who are still marked as queued for those stale lobbies.
  */
-export async function runStaleShrineLobbyCleanup(
-  now: Date,
-  db: ShrineMaintenanceDb = drizzleDB,
-) {
+export async function runStaleShrineLobbyCleanup(now: Date) {
   const cutoff = shrineLobbyFreshAfter(now);
 
   const staleLobbies = await selectMpvpBattleQueueForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     cutoff,
   );
 
@@ -350,29 +331,29 @@ export async function runStaleShrineLobbyCleanup(
   // claimed between the SELECT above and these statements is excluded from both
   // child cleanup and parent delete (claimed rows have battleId set).
   const unclaimedSubquery = selectMpvpBattleQueueForRunStaleShrineLobbyCleanup2(
-    db,
+    drizzleDB,
     deletedQueueIds,
     cutoff,
   );
 
   const unclaimedUsersSubquery = selectMpvpBattleUserForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     unclaimedSubquery,
   );
 
   // Step 1a: reset user statuses while mpvpBattleUser rows still exist —
   // the subquery reads from mpvpBattleUser, so the UPDATE must precede the DELETE.
   const resetResult = await updateUserDataForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     unclaimedUsersSubquery,
   );
 
   // Step 1b: now safe to drop the child rows
-  await deleteMpvpBattleUserForRunStaleShrineLobbyCleanup(db, unclaimedSubquery);
+  await deleteMpvpBattleUserForRunStaleShrineLobbyCleanup(drizzleDB, unclaimedSubquery);
 
   // Step 2: parent delete with the same guard
   const deleteResult = await deleteMpvpBattleQueueForRunStaleShrineLobbyCleanup(
-    db,
+    drizzleDB,
     deletedQueueIds,
     cutoff,
   );

@@ -231,21 +231,20 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("You are not in the correct sector");
       }
 
-      // 40% chance to rob successfully
       const success = Math.random() < ROBBING_SUCCESS_CHANCE;
 
+      // Break stealth before the money writes or the battle, so initiateBattle sees the
+      // settled stealth state and no second stealth roll happens
+      if (user.stealthActive) {
+        await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
+      }
+
       if (success) {
-        // Rob 30% of target's money
         const stolenAmount = Math.floor(target.money * ROBBING_STOLLEN_AMOUNT);
         const prestigeGain = boostPvpGain(
           ROBBING_VILLAGE_PRESTIGE_GAIN,
           getPvpBoost(user, [pvpAverage]).totalPercent,
         );
-
-        // Break stealth first (if active) to avoid coupling with money operations
-        if (user.stealthActive) {
-          await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
-        }
 
         // Debit the victim first, re-checking at write time every target condition that a
         // concurrent request could have changed since the read: immunity, balance, status and
@@ -277,21 +276,15 @@ export const travelRouter = createTRPCRouter({
         }
 
         // Log the action
-        const logInsert = await insertActionLogForRobPlayer(
-          ctx.drizzle,
-          user,
-          stolenAmount,
-        );
-        if (logInsert.rowsAffected === 0) {
-          // Non-critical error, continue but log it
-          console.error("Failed to insert action log for robbery");
-        }
+        await insertActionLogForRobPlayer(ctx.drizzle, user, stolenAmount);
 
-        // Notify target (non-critical)
-        await pusher.trigger(target.userId, "event", {
-          type: "userMessage",
-          message: `You've been robbed by ${user.username}`,
-        });
+        // Notify the target after the response; the robbery is already committed
+        after(() =>
+          pusher.trigger(target.userId, "event", {
+            type: "userMessage",
+            message: `You've been robbed by ${user.username}`,
+          }),
+        );
 
         return {
           success: true,
@@ -299,13 +292,7 @@ export const travelRouter = createTRPCRouter({
           money: user.money + stolenAmount,
         };
       } else {
-        // Failed rob attempt - break stealth first, then initiate combat
-        // Sequential execution ensures initiateBattle sees correct stealth state
-        // and avoids double stealth rolls
-        if (user.stealthActive) {
-          await breakStealth(ctx.drizzle, ctx.userId, user.stealth, false);
-        }
-
+        // Failed rob attempt - initiate combat
         const battle = await initiateBattle(
           {
             longitude: input.longitude,
@@ -897,11 +884,11 @@ export const travelRouter = createTRPCRouter({
       const { longitude, latitude, sector, villageId } = input;
       const userId = ctx.userId;
       const userVillage = villageId ?? "syndicate";
-      // Return a graceful response instead of a raw 500 if the sector has no
-      // published map (mutations must return baseServerResponse per CLAUDE.md).
       // When the destination looks like a default-sized border crossing, load
       // that neighbour in the same query so the walk does not wait on a
-      // second sequential published-map read.
+      // second sequential published-map read. A failed read answers like a
+      // missing map: a thrown error would leave the client's walk re-issuing
+      // the move while its target is still set.
       const sectorsToPrefetch = publishedMapsToPrefetchForMove(sector, {
         x: longitude,
         y: latitude,
@@ -921,8 +908,9 @@ export const travelRouter = createTRPCRouter({
       ]);
       if (isolated) return errorResponse(ISOLATED_PYRAMID_MESSAGE);
       if (!originalUser) return errorResponse("User not found");
+      if (!maps) return errorResponse("Connection hiccup, please try moving again");
       let moveUser = originalUser;
-      const sectorMap = maps?.get(sector);
+      const sectorMap = maps.get(sector);
       if (!sectorMap) return errorResponse("This sector has no published map yet");
       // If a republish blocked the tile the player is standing on, snap them to
       // the nearest walkable tile instead of locking them in place forever.
@@ -962,7 +950,7 @@ export const travelRouter = createTRPCRouter({
           targetSector === prefetchedCampSector && warCampEntry
             ? warCampEntry
             : fetchWarCampEntry(ctx.drizzle, userId, targetSector),
-          maps?.get(targetSector) ??
+          maps.get(targetSector) ??
             fetchPublishedSectorMap(ctx.drizzle, targetSector).catch(() => null),
         ]);
         if (updated) {

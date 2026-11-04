@@ -8,13 +8,11 @@ import {
 import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
 import * as Image from "@/layout/Image";
-import { ensureDom } from "../setup/dom.mjs";
 
 const variants = GAME_LAYOUTS.map((layout) => layout.id);
 const invalidate = vi.fn(async () => {});
 
 beforeEach(() => {
-  ensureDom();
   invalidate.mockClear();
   // Bun retains module mocks from other suites; this suite needs visible provider icons.
   vi.spyOn(Image, "default").mockImplementation(({ alt, src }) => (

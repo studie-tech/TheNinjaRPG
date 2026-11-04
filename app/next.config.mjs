@@ -1,5 +1,4 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
-import bundleAnalyzer from "@next/bundle-analyzer";
 import { withBotId } from "botid/next/config";
 import { cdnOrigin, contentSecurityPolicy } from "./src/libs/cdn.mjs";
 
@@ -25,10 +24,6 @@ const CDN_ORIGIN = cdnOrigin({
  */
 const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || "unknown";
 
-const withBundleAnalyzer = bundleAnalyzer({
-  enabled: process.env.ANALYZE === "true",
-});
-
 /** @type {import("next").NextConfig} */
 const config = {
   reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
@@ -36,7 +31,6 @@ const config = {
     // TypeScript 7 ships a native CLI rather than the JavaScript compiler API.
     useTypeScriptCli: true,
     globalNotFound: true,
-    nextScriptWorkers: true,
   },
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
@@ -161,10 +155,9 @@ const config = {
   },
 };
 
-// export default withBundleAnalyzer(config);
 // withBotId adds the same-origin rewrites that serve the BotID challenge script (see
 // src/libs/botid.ts); src/proxy.ts keeps its path prefix out of the shell rewrite.
-export default withSentryConfig(withBotId(withBundleAnalyzer(config)), {
+export default withSentryConfig(withBotId(config), {
   // For all available options, see:
   // https://github.com/getsentry/sentry-webpack-plugin#options
 

@@ -41,7 +41,7 @@ export function ActivityStreakPanel() {
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,
-    timeDiff ?? 0,
+    timeDiff,
   );
 
   const { data: availablePasses, isLoading: passesLoading } =

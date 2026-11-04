@@ -114,7 +114,7 @@ export const auctionRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const {
         cursor,
-        limit = 20,
+        limit,
         itemName,
         sellerSearch,
         listingType,
@@ -271,17 +271,8 @@ export const auctionRouter = createTRPCRouter({
       if (user.level < AUCTION_HOUSE_MIN_LEVEL) {
         return errorResponse(auctionHouseLevelMessage);
       }
-      if (userItemData.equipped !== "NONE") {
-        return errorResponse("Item is currently equipped");
-      }
-      if (userItemData.isInAuction) {
-        return errorResponse("Item is already in auction");
-      }
       if (!userItemData.item.canBeTraded) {
         return errorResponse("Item is not tradable");
-      }
-      if (buyoutPrice && buyoutPrice <= startingPrice) {
-        return errorResponse("Buyout price must be greater than starting price");
       }
 
       // Validate the recipient before splitting any of the sender's inventory.
@@ -324,12 +315,8 @@ export const auctionRouter = createTRPCRouter({
           );
         }
 
-        // If quantity equals the full stack, use the existing item
-        if (quantity === userItemData.quantity) {
-          // Use the existing item, no splitting needed
-          auctionUserItemId = userItemId;
-        } else {
-          // Use the convenience method to split the stack
+        // A partial stack is split off; the full stack is listed as is
+        if (quantity < userItemData.quantity) {
           const quantityToKeep = userItemData.quantity - quantity;
           const result = await splitItemStack(
             ctx.drizzle,
@@ -672,17 +659,6 @@ export const auctionRouter = createTRPCRouter({
       };
     }),
 
-  // Complete auction (transfer userItem to winner)
-  completeAuction: protectedProcedure
-    .meta({ mcp: { description: "Complete expired auction" } })
-    .input(z.object({ auctionId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      const { auctionId } = input;
-
-      return completeAuctionInternal(ctx.drizzle, auctionId);
-    }),
-
   // Cancel listing (seller only, no bids — atomic guard so a race cannot cancel after a bid)
   cancelAuction: protectedProcedure
     .meta({
@@ -731,19 +707,18 @@ export const auctionRouter = createTRPCRouter({
     }),
 });
 
-/** Settle expiration and buyout through the same atomic listing claim. */
+/** Settle an expired listing through the atomic listing claim that buyouts share. */
 export const completeAuctionInternal = async (
   drizzle: DrizzleClient,
   auctionId: string,
-  winnerId?: string,
 ) => {
   try {
     const auction = await fetchAuctionListing(drizzle, auctionId);
     if (!auction) return throwAuctionSettlementConflict("Auction not found");
     const settlement = await retryOnDeadlock(() =>
       auction.bids.length < 2
-        ? settleAuctionWithoutRefunds(drizzle, auction, winnerId)
-        : drizzle.transaction((tx) => settleAuction(tx, auctionId, winnerId)),
+        ? settleAuctionWithoutRefunds(drizzle, auction)
+        : drizzle.transaction((tx) => settleAuction(tx, auctionId)),
     );
     notifyAuctionSettlement(drizzle, settlement);
     return settlement;

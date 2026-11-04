@@ -449,9 +449,6 @@ export const raidsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query - parallel fetch
       const [user, questData, titleError] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -491,9 +488,6 @@ export const raidsRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query
       const [user, titleError] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -528,9 +522,6 @@ export const raidsRouter = createTRPCRouter({
     .input(z.object({ thresholdId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Guard - null check for TypeScript (protectedProcedure guarantees non-null)
-      if (!ctx.userId) return errorResponse("Not authenticated");
-
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
 
@@ -592,8 +583,6 @@ export const raidsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         findMpvpBattleUserForReadyToQueue(ctx.drizzle, ctx),
       ]);
-      // Guard
-      if (!user) return errorResponse("User not found");
       // Validation does not change the profile; reconcile only a mismatched activity status.
       const reject = (message: string) => ({
         ...errorResponse(message),
@@ -851,7 +840,7 @@ export const raidsRouter = createTRPCRouter({
 
       if (statusResult.rowsAffected === 0) {
         // Rollback - clean up newly created team if status update fails
-        if (createdNewTeam && teamId) {
+        if (createdNewTeam) {
           await deleteUnclaimedBattleQueue(ctx.drizzle, teamId);
         }
         return errorResponse("Failed to update status - you may already be in a queue");
@@ -1311,11 +1300,8 @@ export const raidsRouter = createTRPCRouter({
  * raids that have actually expired and have sectors that still need cleanup.
  *
  * @param client - The drizzle database client
- * @returns The number of sectors returned to neutral ownership
  */
-export const cleanupExpiredExclusiveRaids = async (
-  client: DrizzleClient,
-): Promise<number> => {
+export const cleanupExpiredExclusiveRaids = async (client: DrizzleClient) => {
   const now = new Date();
 
   // Find all expired exclusive raids where boss is not defeated
@@ -1339,11 +1325,9 @@ export const cleanupExpiredExclusiveRaids = async (
     .filter((s): s is number => s !== null);
 
   // Delete all sectors in parallel
-  const results = await Promise.all(
+  await Promise.all(
     sectorsToClean.map((sectorNum) => deleteSectorByNumber(client, sectorNum)),
   );
-
-  return results.filter((r) => r.rowsAffected > 0).length;
 };
 
 /**
@@ -1353,20 +1337,17 @@ export const cleanupExpiredExclusiveRaids = async (
  *
  * @param client - The drizzle database client
  * @param raidId - The quest ID of the raid to check
- * @returns Object indicating if the raid was expired and cleaned up
  */
 export const checkAndCleanupExpiredRaid = async (
   client: DrizzleClient,
   raidId: string,
-): Promise<{ wasExpired: boolean; sectorCleaned: boolean }> => {
+) => {
   const now = new Date();
 
   // Match both time-expired and boss-defeated raids
   const raid = await findQuestForCheckAndCleanupExpiredRaid(client, raidId, now);
 
-  if (!raid) {
-    return { wasExpired: false, sectorCleaned: false };
-  }
+  if (!raid) return;
 
   // Clean up only queued/claiming teams — skip teams already in an active battle
   const queuedTeams = await listMpvpBattleQueueForCheckAndCleanupExpiredRaid(
@@ -1384,9 +1365,7 @@ export const checkAndCleanupExpiredRaid = async (
       deleteMpvpBattleQueueForCheckAndCleanupExpiredRaid(client, raidId),
       // Drop chat memberships for all queued users on this raid so they lose
       // access once cleanup yanks them out of the queue.
-      ...(userIds.length > 0
-        ? [purgeRaidChatMembership(client, raidChatConversationId, userIds)]
-        : []),
+      purgeRaidChatMembership(client, raidChatConversationId, userIds),
       ...(userIds.length > 0
         ? [updateUserDataForCheckAndCleanupExpiredRaid(client, userIds)]
         : []),
@@ -1402,13 +1381,10 @@ export const checkAndCleanupExpiredRaid = async (
       const raidSector = (objective as RaidObjectiveType).sector;
       if (raidSector !== null && raidSector !== undefined) {
         // Delete sector - returns it to neutral ownership (syndicate)
-        const result = await deleteSectorByNumber(client, raidSector);
-        return { wasExpired: true, sectorCleaned: result.rowsAffected > 0 };
+        await deleteSectorByNumber(client, raidSector);
       }
     }
   }
-
-  return { wasExpired: true, sectorCleaned: false };
 };
 
 const rollbackJoinRaidQueue = async ({

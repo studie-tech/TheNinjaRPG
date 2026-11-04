@@ -200,7 +200,6 @@ export const useAiEditForm = (
       type: "db_values_with_number",
       values: items,
       label: "Equipped Items [and drop chance%]",
-      multiple: true,
       doubleWidth: true,
     },
   ];

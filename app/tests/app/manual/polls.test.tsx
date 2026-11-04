@@ -6,15 +6,12 @@ import { Controller } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import PollsPage from "@/app/[shell]/manual/polls/page";
-import * as dialog from "@/components/ui/dialog";
 import * as ContentBox from "@/layout/ContentBox";
 import * as RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { ensureDom } from "../../setup/dom.mjs";
-import { actualDialog } from "../../setup/preload";
 
 type Result = RouterOutputs["poll"]["createPoll"];
 type CreateInput = RouterInputs["poll"]["createPoll"];
@@ -38,7 +35,6 @@ const originalEvent = globalThis.Event;
 const originalCustomEvent = globalThis.CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;
   vi.clearAllMocks();
@@ -64,9 +60,6 @@ beforeEach(() => {
   ));
   vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  for (const key of ["Dialog", "DialogContent", "DialogFooter", "DialogHeader", "DialogTitle", "DialogDescription"] as const) {
-    vi.spyOn(dialog, key).mockImplementation(actualDialog[key] as never);
-  }
 });
 
 afterEach(async () => {

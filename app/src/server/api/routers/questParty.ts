@@ -254,9 +254,9 @@ export const questPartyRouter = createTRPCRouter({
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
       ]);
       if (!user) return errorResponse("User not found");
+      if (!definition) return errorResponse("Quest not found");
       const block = teamQuestBlock(user, definition);
       if (block) return errorResponse(block);
-      if (!definition) return errorResponse("Quest not found");
       const partyId = nanoid();
       const reserved = await claimUserSnapshot({
         client: ctx.drizzle,

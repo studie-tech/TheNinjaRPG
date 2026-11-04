@@ -155,7 +155,7 @@ describe("summon() template lookup", () => {
     // Round progression runs orphan cleanup. The hidden clone-source template
     // (curHealth 0, controllerId = aiId with no matching combatant) must NOT be
     // spliced, or every future re-cast loses its template.
-    spliceOrphanedSummons(usersState, userEffects);
+    spliceOrphanedSummons(usersState);
 
     // The summon disappears (dies / expires), clearing the one-per-controller cap.
     const spawned = usersState.find(
@@ -176,7 +176,7 @@ describe("spliceOrphanedSummons vs the clone-source template", () => {
     const template = mkTemplate(); // isSummon, controllerId = aiId, curHealth 0
     const usersState = [mkPlayer(), template];
 
-    spliceOrphanedSummons(usersState, []);
+    spliceOrphanedSummons(usersState);
 
     expect(usersState).toContain(template);
   });
@@ -192,7 +192,7 @@ describe("spliceOrphanedSummons vs the clone-source template", () => {
     } as unknown as BattleUserState;
     const usersState = [mkPlayer(), liveOrphan];
 
-    const removed = spliceOrphanedSummons(usersState, []).map((u) => u.userId);
+    const removed = spliceOrphanedSummons(usersState).map((u) => u.userId);
 
     expect(removed).toContain("s9");
     expect(usersState).not.toContain(liveOrphan);
@@ -323,7 +323,7 @@ describe("summon teardown after a re-cast", () => {
   it("removes the expired dead summon, not the freshly re-cast live one", () => {
     // A re-cast inserts the new live summon at summoner+1, ahead of the older
     // dead one. When the old effect expires, teardown must remove the dead
-    // summon, not the live one a plain first-match would hit.
+    // summon it spawned, not the live one a controller match would hit.
     const liveS2 = {
       userId: "s2",
       controllerId: PLAYER_ID,
@@ -348,12 +348,12 @@ describe("summon teardown after a re-cast", () => {
       type: "summon",
       aiId: AI_DB_ID,
       creatorId: PLAYER_ID,
+      summonedUserId: "s1",
       rounds: 0,
       isNew: false,
       castThisRound: false,
     } as unknown as GroundEffect;
 
-    // No summonedUserId -> legacy branch, which prefers the non-live summon.
     summon(usersState, expireEffect, userEffects, mkBattle());
 
     expect(usersState.find((u) => u.userId === "s2")).toBeDefined(); // live kept
@@ -361,9 +361,8 @@ describe("summon teardown after a re-cast", () => {
   });
 
   it("removes the summon the effect actually spawned, even if it is the live one", () => {
-    // The legacy heuristic always prefers the non-live summon, so it removes the
-    // dead one no matter which effect expired. With summonedUserId the effect
-    // that spawned the LIVE summon correctly tears down that one instead.
+    // Teardown follows summonedUserId, so the effect that spawned the LIVE
+    // summon tears down that one rather than the dead one.
     const liveS2 = {
       userId: "s2",
       controllerId: PLAYER_ID,

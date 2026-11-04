@@ -116,15 +116,6 @@ public enum TNRSnapshotStore {
         }
     }
 
-    /// Persist a snapshot produced by native code rather than the web bridge.
-    public static func save(snapshot: TNRSnapshot) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(snapshot),
-              let json = String(data: data, encoding: .utf8) else { return }
-        save(json: json)
-    }
-
     /// Save a network refresh only while the account snapshot it started from is current.
     ///
     /// The app can sign out or bind another player while the widget request is in flight.

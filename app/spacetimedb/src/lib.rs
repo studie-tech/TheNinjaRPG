@@ -326,9 +326,6 @@ pub struct HexPosition {
 // ============================================
 
 fn get_grid_size_for_wave(wave: u32, initial_grid_size: u32, max_grid_size: u32, expand_freq: u32) -> u32 {
-    if expand_freq == 0 {
-        return initial_grid_size.min(max_grid_size);
-    }
     let expansions = (wave.saturating_sub(1)) / expand_freq;
     (initial_grid_size + expansions * 2).min(max_grid_size)
 }
@@ -1278,7 +1275,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         
         if time_since_last_shuriken >= state.ability_cooldown_ms as u64 {
             // PERFORMANCE: Use index to find enemies for this session
-            let mut closest_enemy: Option<(u64, u32, u32, u32)> = None;
+            let mut closest_enemy: Option<(u32, u32)> = None;
             let mut min_distance = u32::MAX;
             
             for enemy in ctx.db.enemy().session_id().filter(session_id) {
@@ -1289,13 +1286,13 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
                 if is_in_visual_range(player_pos.col, player_pos.row, enemy.col, enemy.row, state.ability_range, session.range_visual_factor) {
                     let distance = calculate_hex_distance(&player_pos, &HexPosition { col: enemy.col, row: enemy.row });
                     if distance < min_distance {
-                        closest_enemy = Some((enemy.id, enemy.col, enemy.row, distance));
+                        closest_enemy = Some((enemy.col, enemy.row));
                         min_distance = distance;
                     }
                 }
             }
             
-            if let Some((_, target_col, target_row, _)) = closest_enemy {
+            if let Some((target_col, target_row)) = closest_enemy {
                 let mut rng = create_rng(&format!("{}-auto-{}", session.seed, now));
                 let crit_roll = rng.random::<f64>();
                 
@@ -1486,11 +1483,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         
         // Check for game over
         if player_health <= 0 {
-            let points_earned = if session.score_to_points_ratio > 0 {
-                score / session.score_to_points_ratio
-            } else {
-                0
-            };
+            let points_earned = score / session.score_to_points_ratio;
             
             // COST OPTIMIZATION: Use hash instead of full JSON for definitions
             let definitions_hash = hash_definitions(

@@ -14,13 +14,7 @@ import type {
   FarmMutationResponse,
   FarmPlotState,
   FarmShopEntryState,
-  FarmStateResponse,
 } from "@/validators/farming";
-
-type FarmQueryData = FarmStateResponse | { success: false; message: string };
-
-const isFarmState = (data: FarmQueryData | undefined): data is FarmStateResponse =>
-  !!data && !("success" in data);
 
 /** Coordinate farm actions and keep controls pending until confirmed changes are reconciled. */
 export function useFarmController() {
@@ -66,7 +60,7 @@ export function useFarmController() {
     return () => window.clearInterval(interval);
   }, []);
 
-  const farmState = isFarmState(query.data) ? query.data : null;
+  const farmState = query.data ?? null;
   const now = useMemo(() => new Date(clockNow - timeDiff), [clockNow, timeDiff]);
   const selectedPlot = useMemo(
     () =>
@@ -107,7 +101,7 @@ export function useFarmController() {
         if (!result.success) return;
         await farmCache.updateCache(
           (current) =>
-            isFarmState(current)
+            current
               ? getFarmMutationUpdate(current, result, effect, userItemId)
               : undefined,
           snapshot,
@@ -174,9 +168,7 @@ export function useFarmController() {
         // Partial bulk failures may already have changed plots or granted crops.
         await farmCache.updateCache(
           (current) =>
-            isFarmState(current)
-              ? getFarmBulkMutationUpdate(current, result, key)
-              : undefined,
+            current ? getFarmBulkMutationUpdate(current, result, key) : undefined,
           snapshot,
         );
         return result.success;
@@ -235,7 +227,7 @@ export function useFarmController() {
         if (!result.success) return false;
         await farmCache.updateCache(
           (current) =>
-            isFarmState(current)
+            current
               ? getFarmMutationUpdate(
                   current,
                   result,
@@ -324,7 +316,7 @@ export function useFarmController() {
             }
             await farmCache.updateCache(
               (current) =>
-                isFarmState(current)
+                current
                   ? getFarmMutationUpdate(current, result, "sell", crop.userItemId)
                   : undefined,
               snapshot,

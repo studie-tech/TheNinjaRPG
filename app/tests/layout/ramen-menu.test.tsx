@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -38,7 +37,6 @@ const purchase = vi.fn(async (input: FoodInput) => {
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.clearAllMocks();
   isPending = false;
   purchaseResult = { success: true, message: "Food purchased", userPatch: { curStamina: 40, curChakra: 40, curHealth: 100 }, userDelta: { money: -10 } };
@@ -64,10 +62,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("shared ramen menu", () => {
-  it("uses village.buyFood and the shared user revision update in a kitchen", async () => {
-    const view = render(<RamenShop.RamenMenu image="/kitchen.webp" />);
-    expect(view.getByAltText("Kitchen").getAttribute("src")).toBe("/kitchen.webp");
+describe("ramen menu", () => {
+  it("uses village.buyFood and the shared user revision update", async () => {
+    const view = render(<RamenShop.RamenMenu />);
     await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
     expect(purchase).toHaveBeenCalledWith({ ramen: "small" });
     expect(prepareUserUpdate).toHaveBeenCalledTimes(1);

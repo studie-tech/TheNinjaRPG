@@ -1,7 +1,36 @@
 import { describe, expect, it } from "bun:test";
 import { assetAnimationClip, characterAnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
-import { LIGHT_ENEMY_ASSET_CONFIG, PLAYER_ASSET_CONFIG } from "@/libs/rendering/characterAssets";
-import type { SpriteDirection } from "@/validators/towerDefense";
+import {
+  type CharacterAssetConfig,
+  type SpriteDirection,
+  spriteDirections,
+} from "@/validators/towerDefense";
+
+const rotations = () =>
+  Object.fromEntries(
+    spriteDirections.map((direction) => [direction, `rotations/${direction}.png`]),
+  ) as CharacterAssetConfig["rotations"];
+const frames = (name: string, count: number) =>
+  Object.fromEntries(
+    spriteDirections.map((direction) => [
+      direction,
+      Array.from({ length: count }, (_, index) => `${name}/${direction}/frame_00${index}.png`),
+    ]),
+  ) as CharacterAssetConfig["animations"][number]["frames"];
+
+const PLAYER_ASSET_CONFIG: CharacterAssetConfig = {
+  rotations: rotations(),
+  animations: [
+    { name: "idle", state: "idle", frameDurationMs: 100, loop: true, frames: frames("idle", 8) },
+    { name: "throw", state: "throw", frameDurationMs: 60, loop: false, frames: frames("throw", 7) },
+  ],
+};
+const LIGHT_ENEMY_ASSET_CONFIG: CharacterAssetConfig = {
+  rotations: rotations(),
+  animations: [
+    { name: "running", state: "moving", frameDurationMs: 80, loop: true, frames: frames("running", 6) },
+  ],
+};
 
 describe("shared animation clips", () => {
   it("preserves vertical game-asset frame order and authored timing", () => {
@@ -32,7 +61,7 @@ describe("shared animation clips", () => {
   });
   it("falls back to a rotation and keeps configured one-shot behavior", () => {
     const missing = characterAnimationClip(PLAYER_ASSET_CONFIG, "moving", "east");
-    expect(missing.images).toEqual(["/towerdefence/player/rotations/east.png"]);
+    expect(missing.images).toEqual(["rotations/east.png"]);
     expect(characterAnimationClip(LIGHT_ENEMY_ASSET_CONFIG, "moving", "south").frameDurationMs).toBe(80);
     expect(characterAnimationClip(PLAYER_ASSET_CONFIG, "throw", "south").loop).toBe(false);
   });

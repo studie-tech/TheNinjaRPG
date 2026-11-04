@@ -25,8 +25,7 @@ export const createGlobeMesh = (
   tint?: (sector: number) => LinearColor | null,
 ) => {
   const container = new Container();
-  const columns = map.columns ?? 72,
-    rows = map.rows ?? 27;
+  const { columns, rows } = map;
   const highlightData = new Uint8Array(columns * rows * 4);
   const highlight = new BufferImageSource({
     resource: highlightData,
@@ -213,9 +212,9 @@ const buildPolarCaps = (map: GlobalMapData) => {
   const positions: number[] = [],
     colors: number[] = [],
     indices: number[] = [];
-  const columns = map.polarCapColumns ?? 72,
-    rows = map.polarCapRows ?? 10;
-  const limit = map.latitudeLimit ?? 65;
+  const columns = map.polarCapColumns,
+    rows = map.polarCapRows;
+  const limit = map.latitudeLimit;
   const radius = (map.radius / 3) * 0.998;
   for (const hemisphere of [-1, 1]) {
     const base = positions.length / 3;

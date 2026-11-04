@@ -200,7 +200,6 @@ export const REWARD_CHOICE_CONTENT_FIELDS = [
   "reward_badges",
   "reward_titles",
 ] as const;
-export type RewardChoiceContentField = (typeof REWARD_CHOICE_CONTENT_FIELDS)[number];
 
 /**
  * One pickable reward. `amount` is the scaled scalar value, or the item quantity (1 for
@@ -235,7 +234,6 @@ export const ClaimRewardChoiceSchema = z.object({
   choiceId: z.string().min(1),
   cardIds: z.array(z.string().min(1)).max(QUEST_REWARD_PICK_MAX),
 });
-export type ClaimRewardChoiceInput = z.infer<typeof ClaimRewardChoiceSchema>;
 
 /** A pending offer as shown to the player, with each card's content resolved for display. */
 export const RewardChoiceDisplaySchema = z.object({

@@ -1,6 +1,5 @@
 import { and, eq, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { cookies } from "next/headers";
 import { type FederalStatus, userData } from "@/drizzle/schema";
 import { lockWithDailyTimer } from "@/libs/gamesettings";
 import { insertDailyBankInterestForGET, selectUserDataForGET } from "@/queries/bank";
@@ -16,9 +15,6 @@ const INTEREST_INSERT_BATCH_SIZE = 500;
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check if we've already run today
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

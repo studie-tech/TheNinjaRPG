@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { checkGameTimer, lockWithGameTimer } from "@/libs/gamesettings";
+import { lockWithGameTimer } from "@/libs/gamesettings";
 import type { DrizzleClient } from "@/server/db";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
@@ -27,43 +27,6 @@ const createClient = (name: string, elapsedMs: number) => {
   return { client, findFirst, update, set, where };
 };
 
-describe("checkGameTimer durations and persisted names", () => {
-  it.each([
-    ["indexer-1m", 60_000, 30_000, true],
-    ["indexer-1m", 60_000, 120_000, false],
-    ["auction-expire-0.083m", 5 * 60_000, 299_000, true],
-    ["auction-expire-0.083m", 5 * 60_000, 300_000, false],
-    ["transaction-sync-1h", 60 * 60_000, 10 * 60_000, true],
-    ["transaction-sync-1h", 60 * 60_000, 60 * 60_000, false],
-    ["timer-720h", 30 * 24 * 60 * 60_000, 29 * 24 * 60 * 60_000, true],
-    ["timer-720h", 30 * 24 * 60 * 60_000, 30 * 24 * 60 * 60_000, false],
-  ] as const)(
-    "%s with a %i ms duration after %i ms has blocked=%s",
-    async (name, durationMs, elapsedMs, blocked) => {
-      const { client, findFirst, update } = createClient(name, elapsedMs);
-
-      const response = await checkGameTimer(client, name, durationMs);
-
-      expect(response instanceof Response).toBe(blocked);
-      if (!blocked) expect(response).toBe(false);
-      const query = findFirst.mock.calls[0]?.[0] as { where: SQL };
-      expect(dialect.sqlToQuery(query.where).params).toEqual([name]);
-      expect(update).not.toHaveBeenCalled();
-    },
-  );
-
-  it("reports remaining time from the duration rather than the key's label", async () => {
-    const { client } = createClient("auction-expire-0.083m", 2 * 60_000);
-
-    const response = await checkGameTimer(client, "auction-expire-0.083m", 5 * 60_000);
-
-    expect(response).toBeInstanceOf(Response);
-    if (response) {
-      expect(await response.json()).toBe("Wait 2 mins, 59 secs before running again");
-    }
-  });
-});
-
 describe("lockWithGameTimer", () => {
   it("updates the same persisted key that it checked", async () => {
     const name = "transaction-sync-1h";
@@ -85,5 +48,16 @@ describe("lockWithGameTimer", () => {
 
     expect(await lockWithGameTimer(client, "transaction-sync-1h", 60 * 60_000)).toBeInstanceOf(Response);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it("reports remaining time from the duration rather than the key's label", async () => {
+    const { client } = createClient("auction-expire-0.083m", 2 * 60_000);
+
+    const response = await lockWithGameTimer(client, "auction-expire-0.083m", 5 * 60_000);
+
+    expect(response).toBeInstanceOf(Response);
+    if (response) {
+      expect(await response.json()).toBe("Wait 2 mins, 59 secs before running again");
+    }
   });
 });

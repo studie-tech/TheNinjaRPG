@@ -12,8 +12,7 @@ import {
 import {
   buildItemLoadoutData,
   calcMaxCookingItems,
-  calcMaxHouseCookingItems,
-  calcMaxHouseMaterials,
+  calcMaxHouseSpecialItems,
   calcMaxMaterials,
   canEquipAdditional,
   checkEquipConstraints,
@@ -1033,12 +1032,9 @@ describe("cooking capacity", () => {
     expect(calcMaxCookingItems(user())).toBe(MATERIALS_BASE_SLOTS);
   });
 
-  it("uses homeStorage - 10 for house cooking capacity", () => {
-    expect(calcMaxHouseCookingItems(user(), 25)).toBe(15);
-    expect(calcMaxHouseCookingItems(user(), 5)).toBe(0);
-    expect(calcMaxHouseCookingItems(user(), 25)).toBe(
-      calcMaxHouseMaterials(user(), 25),
-    );
+  it("uses homeStorage - 10 for house materials and cooking capacity", () => {
+    expect(calcMaxHouseSpecialItems(25)).toBe(15);
+    expect(calcMaxHouseSpecialItems(5)).toBe(0);
   });
 
   it("reports cooking-specific full messages and capacity", () => {

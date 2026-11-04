@@ -30,9 +30,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
 
   // Handle back navigation
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCanGoBack(history.length > 1);
-    }
+    setCanGoBack(history.length > 1);
   }, []);
 
   // Handle back navigation

@@ -871,7 +871,6 @@ export const selectUserItemForGetUserItemCounts = (
 ) =>
   client
     .select({
-      count: count(userItem.id),
       itemId: userItem.itemId,
       quantity: sql<number>`sum(${userItem.quantity})`,
     })

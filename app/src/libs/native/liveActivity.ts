@@ -47,13 +47,6 @@ export const start = async (
 ): Promise<StartedActivity | undefined> =>
   invokeSafe<StartedActivity>(PLUGIN, "start", { kind, ...toPayload(state) });
 
-export const update = async (
-  activityId: string,
-  state: LiveActivityState,
-): Promise<void> => {
-  await invokeSafe(PLUGIN, "update", { activityId, ...toPayload(state) });
-};
-
 export const end = async (activityId: string): Promise<void> => {
   await invokeSafe(PLUGIN, "end", { activityId });
 };
@@ -84,12 +77,3 @@ export const onToken = (
     if (typeof payload?.pushToken !== "string") return;
     callback({ activityId: payload.activityId, pushToken: payload.pushToken });
   });
-
-/**
- * The push-to-start token (iOS 17.2+), which lets the server open an activity the player
- * never started on device — a raid beginning while the app is closed.
- */
-export const pushToStartToken = async (): Promise<string | undefined> => {
-  const result = await invokeSafe<{ token?: string }>(PLUGIN, "getPushToStartToken");
-  return result?.token;
-};

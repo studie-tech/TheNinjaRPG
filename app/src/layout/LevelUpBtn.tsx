@@ -4,7 +4,7 @@ import { sendGTMEvent } from "@next/third-parties/google";
 import { GraduationCap } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { IMG_PROFILE_LEVELUPGUY } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -23,10 +23,8 @@ interface LevelUpBtnProps {
 
 const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   // State
-  const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [isLevelling, setIsLevelling] = useState<boolean>(false);
 
   // tRPC utility
   const utils = api.useUtils();
@@ -35,12 +33,8 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   const { currentStep, completeTutorialAction } = useTutorialStep();
 
   // Fetch avatar query
-  const { mutate: levelUp } = api.profile.levelUp.useMutation({
-    onMutate: () => {
-      onMutateCheck();
-      setIsLevelling(true);
-      return { userRevision: prepareUserUpdate() };
-    },
+  const { mutate: levelUp, isPending: isLevelling } = api.profile.levelUp.useMutation({
+    onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
       if (data.success) void triggerConfetti();
@@ -62,10 +56,6 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
     },
     onError: async () => {
       await utils.profile.getUser.invalidate();
-    },
-    onSettled: () => {
-      document.body.style.cursor = "default";
-      setIsLevelling(false);
     },
   });
 
@@ -110,11 +100,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
           isOpen={showModal}
           setIsOpen={setShowModal}
           proceed_label="Awesome!"
-          isValid={false}
-          onAccept={() => {
-            setShowModal(false);
-            levelUp();
-          }}
+          onAccept={() => levelUp()}
         >
           <div className="absolute top-0 right-0 basis-1/2 opacity-20">
             <Image

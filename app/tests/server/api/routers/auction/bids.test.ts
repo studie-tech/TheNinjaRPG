@@ -10,7 +10,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
-import { auctionRouter } from "@/server/api/routers/auction";
+import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auction";
 import type { DrizzleClient } from "@/server/db";
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
@@ -333,10 +333,9 @@ describeWithDatabase("auction bid atomicity", () => {
   it("does not charge a bid whose listing settles after its snapshot", async () => {
     await seedBid();
     const db = await getTestDatabase();
-    const settler = await callerFor(auctionRouter, "seller");
     const settled = wrapTransactions(db, (tx) => beforeStatements(tx, auctionListing, [async () => {
       await db.update(auctionListing).set({ expiresAt: new Date(0) }).where(eq(auctionListing.id, "auction"));
-      expect((await settler.completeAuction({ auctionId: "auction" })).success).toBe(true);
+      expect((await completeAuctionInternal(db, "auction")).success).toBe(true);
     }]));
     const rival = callerForDatabase(auctionRouter, "rival", settled);
     expect((await rival.placeBid({ auctionId: "auction", amount: 100 })).success).toBe(false);

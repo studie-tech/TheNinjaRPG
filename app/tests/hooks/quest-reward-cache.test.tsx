@@ -8,9 +8,7 @@ import * as appClient from "@/app/_trpc/client";
 import { getQuestRewardCacheUpdate } from "@/deltas/quests";
 import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const stops: (() => void)[] = [];

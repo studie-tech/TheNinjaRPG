@@ -2,10 +2,9 @@ import { beforeEach, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { HomeTypeDetails } from "@/drizzle/constants";
 import { auctionBid, auctionListing, item, userData, userItem } from "@/drizzle/schema";
-import { auctionRouter } from "@/server/api/routers/auction";
+import { completeAuctionInternal } from "@/server/api/routers/auction";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
-  callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -60,8 +59,7 @@ describeWithDatabase("furniture auction transfers", () => {
       bidderId: "buyer",
       amount: 100,
     });
-    const buyer = await callerFor(auctionRouter, "buyer");
-    expect((await buyer.completeAuction({ auctionId: "chair-auction" })).success).toBe(true);
+    expect((await completeAuctionInternal(database, "chair-auction")).success).toBe(true);
     const [transferred] = await database
       .select()
       .from(userItem)

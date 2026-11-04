@@ -39,15 +39,6 @@ import { useDelayState } from "@/hooks/useDelayState";
 /** Discrete UI option for (single|multi)-select fields */
 export type Option<V extends string = string> = { value: V; label: string };
 
-/** Supported field control types */
-export type FieldType =
-  | "text"
-  | "date"
-  | "number"
-  | "single-select"
-  | "multi-select"
-  | "tri-state";
-
 // Field config types (discriminated unions ensure correct value types)
 
 /** Free-text input */
@@ -771,11 +762,7 @@ export const ContentFiltering = <
                     <FilterSelect
                       key={field.id}
                       label={field.label}
-                      value={
-                        (value as string) ??
-                        ("noneOption" in field && field.noneOption?.value) ??
-                        "None"
-                      }
+                      value={value as string}
                       onValueChange={(v) => setter(v)}
                       options={options}
                       includeNone={"includeNone" in field ? field.includeNone : true}
@@ -860,10 +847,7 @@ export const ContentFiltering = <
                       React.Dispatch<React.SetStateAction<string[]>>
                     >
                   )[cat.key];
-                  if (setter)
-                    setter((prev: string[] = []) =>
-                      (prev ?? []).filter((x) => x !== item),
-                    );
+                  if (setter) setter((prev) => prev.filter((x) => x !== item));
                 }}
                 disabled={disabled}
               />

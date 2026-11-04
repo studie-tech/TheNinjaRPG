@@ -1,5 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type ImgHTMLAttributes, type ComponentProps, useState } from "react";
 import { HOME_FLOOR_TILES, HOME_FURNITURE_MAX_PLACEMENTS, HOME_WALL_PAINTS, type HomeType, HomeTypes, HomeTypeDetails, IMG_HOME_PROPERTIES } from "@/drizzle/constants";
@@ -72,7 +71,6 @@ let savedEvent: typeof Event;
 let savedCustomEvent: typeof CustomEvent;
 
 beforeEach(() => {
-  ensureDom();
   savedEvent = globalThis.Event;
   savedCustomEvent = globalThis.CustomEvent;
   // Radix dispatches global constructors against the JSDOM document.
@@ -88,7 +86,6 @@ afterEach(() => {
 /** Regression coverage for residence navigation, owner access, and artwork recovery. */
 describe("Home scene", () => {
   beforeEach(() => {
-    ensureDom();
     vi.clearAllMocks();
   });
 
@@ -986,7 +983,7 @@ describe("Home scene", () => {
 });
 
 describe("multi-room home scene", () => {
-  beforeEach(() => { ensureDom(); vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it.each(["Decorate", "Undo changes"])("selects furniture in the active room on %s and saves that room's paint", async (action) => {
     const onSave = vi.fn<NonNullable<ComponentProps<typeof HomeScene>["onSave"]>>().mockResolvedValue(false);

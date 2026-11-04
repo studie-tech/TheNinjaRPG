@@ -35,17 +35,15 @@ interface ReportUserProps {
     id: string;
     content?: string;
     title?: string;
-    symmary?: string;
   };
 }
 
 const ReportUser: React.FC<ReportUserProps> = (props) => {
   const { data: userData } = useUserData();
   const [showModal, setShowModal] = useState<boolean>(false);
-  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   // React mutation state updates on the next render. This ref closes the same-tick
   // double-click / Enter gap before tRPC can expose `isPending`.
-  const pendingRequestRef = useRef<string | null>(null);
+  const pendingRequestRef = useRef(false);
 
   // Get utils
   const utils = api.useUtils();
@@ -71,11 +69,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
     (data) => {
       if (pendingRequestRef.current) return;
 
-      // Capture everything the player confirmed, including the target identity and
-      // reason draft, before beginning the asynchronous request.
-      const requestId = crypto.randomUUID();
-      pendingRequestRef.current = requestId;
-      setPendingRequestId(requestId);
+      pendingRequestRef.current = true;
 
       createReport.mutate(data, {
         onSuccess: (response) => {
@@ -93,9 +87,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
         },
         // Failures are presented by the shared tRPC mutation error handler.
         onSettled: () => {
-          if (pendingRequestRef.current !== requestId) return;
-          pendingRequestRef.current = null;
-          setPendingRequestId(null);
+          pendingRequestRef.current = false;
         },
       });
     },
@@ -116,7 +108,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           proceed_loading_label="Submitting"
           onAccept={userData?.isBanned ? undefined : onSubmit}
           isValid={isValid}
-          isLoading={pendingRequestId !== null}
+          isLoading={createReport.isPending}
           keepOpenOnAccept
         >
           {userData?.isBanned ? (
@@ -124,12 +116,6 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           ) : (
             <>
               <Post title={props.content.title} user={props.user} hover_effect={false}>
-                {props.content.symmary && (
-                  <div>
-                    {parseHtml(props.content.symmary)}
-                    <hr />
-                  </div>
-                )}
                 <hr />
                 {props.content.content && (
                   <div>
@@ -145,7 +131,7 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
                 placeholder="Unless obvious, please state the reason for this report"
                 control={control}
                 error={errors.reason?.message}
-                disabled={pendingRequestId !== null}
+                disabled={createReport.isPending}
               />
             </>
           )}

@@ -144,6 +144,7 @@ import {
   TAVERN_COLOR_STYLES,
 } from "@/libs/tavernColors";
 import { showMutationToast } from "@/libs/toast";
+import { getBloodlineElements } from "@/libs/userElements";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { round } from "@/utils/math";
@@ -184,7 +185,6 @@ import {
 import {
   type GenderChangeSchema,
   genderChangeSchema,
-  getBloodlineElements,
   updateUserPreferencesSchema,
 } from "@/validators/user";
 
@@ -626,7 +626,7 @@ const EmailReminderSettings: React.FC<{
         </p>
       </div>
 
-      <Link href={emailSettingsUrl} passHref>
+      <Link href={emailSettingsUrl}>
         <Button className="flex items-center gap-2">
           <SendHorizontal className="h-4 w-4" />
           Manage Email Settings
@@ -1134,7 +1134,6 @@ const Marriage: React.FC = () => {
               <AvatarImage
                 href={user.avatar}
                 alt={user.username}
-                userId={user.userId}
                 hover_effect={false}
                 size={100}
               />
@@ -1201,7 +1200,9 @@ const Marriage: React.FC = () => {
             id="send"
             disabled={targetUser === undefined}
             className="mt-2 w-full"
-            onClick={() => create({ userId: targetUser?.userId || "" })}
+            onClick={() => {
+              if (targetUser) create({ userId: targetUser.userId });
+            }}
           >
             <SendHorizontal className="mr-2 h-5 w-5" />
             Send Proposal
@@ -1257,7 +1258,6 @@ const NewAiAvatar: React.FC = () => {
             <AvatarImage
               href={userData.avatar}
               alt={userData.username}
-              refetchUserData={true}
               size={512}
               priority
               className="w-36"
@@ -1521,7 +1521,6 @@ const SwapVillage: React.FC = () => {
       if (data.success) await utils.profile.getUser.invalidate();
     },
     onSettled: () => {
-      document.body.style.cursor = "default";
       setIsOpen(false);
     },
   });
@@ -1615,7 +1614,6 @@ const SwapBloodline: React.FC = () => {
         ]);
       },
       onSettled: () => {
-        document.body.style.cursor = "default";
         setIsOpen(false);
       },
     });
@@ -2157,7 +2155,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
   onReroll,
 }) => (
   <Confirm
-    title={`Confirm ${elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element Re-Roll`}
+    title={`Confirm ${capitalizeFirstLetter(elementType)} Element Re-Roll`}
     button={
       <Button
         id={`reroll-${elementType}`}
@@ -2165,7 +2163,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
         className="w-full"
         disabled={!canAfford || !canChange}
       >
-        Re-Roll {elementType.charAt(0).toUpperCase() + elementType.slice(1)} Element
+        Re-Roll {capitalizeFirstLetter(elementType)} Element
       </Button>
     }
     onAccept={(e) => {
@@ -2251,7 +2249,6 @@ const NameChange: React.FC = () => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           data.userPatch?.username !== undefined &&
             data.userPatch.reputationPoints !== undefined
@@ -2261,7 +2258,7 @@ const NameChange: React.FC = () => {
               }
             : undefined,
           { revision },
-        ).catch(() => undefined);
+        );
       }
     },
   });
@@ -2411,7 +2408,6 @@ const TavernColors: React.FC = () => {
           input.target === "username"
             ? data.userPatch?.tavernUsernameColor
             : data.userPatch?.tavernTitleColor;
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           color !== undefined
             ? {
@@ -2421,9 +2417,9 @@ const TavernColors: React.FC = () => {
               }
             : undefined,
           { revision, delta: data.userDelta },
-        ).catch(() => undefined);
+        );
       } else {
-        await updateUser(undefined, { revision }).catch(() => undefined);
+        await updateUser(undefined, { revision });
       }
     },
   });
@@ -2595,7 +2591,6 @@ const ChangeGender: React.FC = () => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
-        // Cache reconciliation must not make a committed purchase retryable.
         await updateUser(
           data.userPatch?.gender !== undefined &&
             data.userPatch.reputationPoints !== undefined
@@ -2605,7 +2600,7 @@ const ChangeGender: React.FC = () => {
               }
             : undefined,
           { revision },
-        ).catch(() => undefined);
+        );
       }
     },
   });

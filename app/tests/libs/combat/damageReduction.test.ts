@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { DMG_REDUCTION_CAP } from "@/drizzle/constants";
 import {
   applyDamageModifierPipelineToConsequences,
+  buildDamageModifierEligibilityById,
   computeDamagePacket,
 } from "@/libs/combat/process";
 import type { Consequence } from "@/libs/combat/types";
@@ -63,11 +64,14 @@ describe("damage reduction floor", () => {
       ["healing", { ...healing }],
       ["missing-effect", { ...unmapped }],
     ]);
+    const usersEffects = [reduced, ordinary, reduction];
     applyDamageModifierPipelineToConsequences({
       consequences,
-      usersEffects: [reduced, ordinary, reduction],
+      usersEffects,
       extraState: makeCompleteBattle().extraState,
       battleRound: 1,
+      sealEffects: [],
+      eligibilityById: buildDamageModifierEligibilityById(usersEffects, 1),
     });
     expect(consequences.get(reduced.id)?.damage).toBeCloseTo(
       packet(0, 200) * (1 - DMG_REDUCTION_CAP),

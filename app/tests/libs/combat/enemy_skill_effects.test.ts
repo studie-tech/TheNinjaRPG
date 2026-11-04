@@ -25,6 +25,8 @@ const makeActor = () => ({
   fledBattle: false,
   leftBattle: false,
   usedActions: [] as { id: string; type: string }[],
+  usedTagTypes: [],
+  damageDealt: 0,
   items: [
     {
       id: "user-item-1",

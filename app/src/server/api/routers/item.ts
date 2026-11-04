@@ -1537,9 +1537,6 @@ export const itemRouter = createTRPCRouter({
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
       if (existingUnlock) return errorResponse("Variant already unlocked");
-      if (tokenItem.quantity <= 0) {
-        return errorResponse("Token item has no remaining uses");
-      }
 
       // Mutate — consume token first so a crash after this leaves the user without
       // the token but without the unlock (safe-failure direction: retryable). Uses
@@ -1762,7 +1759,6 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Guard
       if (!useritem) return errorResponse("User item not found");
-      if (useritem.userId !== user.userId) return errorResponse("Not yours to sell");
       if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
         return errorResponse("Cannot sell crafting item");
       }
@@ -1987,7 +1983,6 @@ export const itemRouter = createTRPCRouter({
       // Guard
       if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
-      if (useritem.userId !== user.userId) return errorResponse("Not yours to consume");
       if (useritem.item.itemType === "MEAL") {
         const result = await consumeMeal({
           client: ctx.drizzle,
@@ -2253,7 +2248,6 @@ export const itemRouter = createTRPCRouter({
         marriageSlots: user.marriageSlots,
         extraReskinSlots: user.extraReskinSlots,
       };
-      const data: unknown[] = [];
 
       // Rewards
       const rewards: ObjectiveRewardType[] = [];
@@ -2285,7 +2279,6 @@ export const itemRouter = createTRPCRouter({
             previousRolls,
             rank: effect.rank,
           });
-          data.push(bloodlinePool);
           const randomBloodline = getRandomElement(bloodlinePool);
           if (!randomBloodline) {
             throw serverError("NOT_FOUND", "No bloodline found");
@@ -2293,7 +2286,6 @@ export const itemRouter = createTRPCRouter({
           // Success?
           const roll = Math.random() * 100;
           const success = roll < effect.power;
-          data.push({ roll, success });
           // Log action
           const previousRoll = previousRolls.find((r) =>
             success
@@ -2337,7 +2329,6 @@ export const itemRouter = createTRPCRouter({
             user,
             previousRolls: previousSageRolls,
           });
-          data.push(sageModePool);
           const randomSageMode = getRandomElement(sageModePool);
           if (!randomSageMode) {
             messages.push(
@@ -2347,7 +2338,6 @@ export const itemRouter = createTRPCRouter({
           }
           const roll = Math.random() * 100;
           const success = roll < effect.power;
-          data.push({ roll, success });
           if (success) {
             mutations.push((client) =>
               insertSageModeRollsForConsume(client, ctx, randomSageMode),
@@ -2674,7 +2664,6 @@ export const itemRouter = createTRPCRouter({
       // Guard
       if (!user) return errorResponse("User not found");
       if (!useritem) return errorResponse("User item not found");
-      if (useritem.userId !== user.userId) return errorResponse("Not yours to repair");
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to repair items");
       }
@@ -2826,10 +2815,6 @@ export const itemRouter = createTRPCRouter({
       if (!hasRequiredSkill(repairUserItem.item, user))
         return errorResponse("Activate the required skill to use this repair item");
       if (!targetUserItem) return errorResponse("Target item not found");
-      if (repairUserItem.userId !== user.userId)
-        return errorResponse("Not your repair item");
-      if (targetUserItem.userId !== user.userId)
-        return errorResponse("Not your target item");
       if (user.status !== "AWAKE") {
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
@@ -2844,9 +2829,6 @@ export const itemRouter = createTRPCRouter({
         repairUserItem.craftingFinishedAt > new Date()
       ) {
         return errorResponse("Cannot use repair item that is being crafted");
-      }
-      if (repairUserItem.quantity <= 0) {
-        return errorResponse("You don't have any of this repair item");
       }
       if (repairUserItem.item.itemType === "FURNITURE") {
         return errorResponse("This item cannot be used as a repair kit");
@@ -2879,9 +2861,6 @@ export const itemRouter = createTRPCRouter({
         targetUserItem.item.maxDurability,
       );
       const actualRepair = newDurability - targetUserItem.durability;
-      if (actualRepair <= 0) {
-        return errorResponse("Item is already at full durability");
-      }
       // CAS target durability first — never consume a kit if the write fails
       const repaired = await tryRepairUserItemDurability(
         ctx.drizzle,
@@ -3030,7 +3009,7 @@ export const itemRouter = createTRPCRouter({
       const kitConsumeResults = await Promise.all(
         kitsToUse.map(async ({ repairItemId, quantityUsed }) => {
           const repairKitRow = useritems.find((ui) => ui.id === repairItemId);
-          if (!repairKitRow || quantityUsed <= 0 || !repairKitRow.item.destroyOnUse) {
+          if (!repairKitRow?.item.destroyOnUse) {
             return null;
           }
           const consumed = await retryOnDeadlock(() =>
@@ -3190,7 +3169,6 @@ export const itemRouter = createTRPCRouter({
           storedCount >=
           getHomeStorageBucketCapacity(
             homeBucket,
-            user,
             HomeTypeDetails[user.homeType].storage,
           )
         ) {

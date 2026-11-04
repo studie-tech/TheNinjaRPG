@@ -6,12 +6,10 @@ import DeviceSettings from "@/components/native/DeviceSettings";
 import * as permission from "@/hooks/useNativePush";
 import * as shell from "@/hooks/useNativeShell";
 import { haptics } from "@/libs/native";
-import { ensureDom } from "../../setup/dom.mjs";
 
 const impact = vi.fn();
 let previousCustomEvent: typeof CustomEvent;
 beforeEach(() => {
-  ensureDom();
   previousCustomEvent = globalThis.CustomEvent;
   globalThis.CustomEvent = window.CustomEvent;
   window.localStorage.clear();

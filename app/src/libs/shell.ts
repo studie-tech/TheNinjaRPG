@@ -1,11 +1,9 @@
-import { GAME_LAYOUTS, getWelcomeLayout } from "@/libs/gameLayouts";
+import { GAME_LAYOUTS, getWelcomeLayout, toGameLayoutId } from "@/libs/gameLayouts";
 import {
-  cookieValueToLayout,
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
 } from "@/libs/layoutPreference";
 import {
-  isLemuExperimentEnabled,
   LEMU_EXPERIMENT,
   type LemuVariant,
   normalizeLemuVariant,
@@ -157,7 +155,7 @@ export const chooseShell = (
   if (!hasSession && request.userAgent && CRAWLER_USER_AGENT.test(request.userAgent)) {
     return { variant: { client, layout: "default", signedIn: false }, assigned: {} };
   }
-  const preference = cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE));
+  const preference = toGameLayoutId(request.cookies.get(LAYOUT_PREFERENCE_COOKIE));
   const layout =
     preference ?? (!hasSession ? getWelcomeLayout(welcomeLayout) : "default");
   const assigned: ShellChoice["assigned"] = {};
@@ -166,11 +164,7 @@ export const chooseShell = (
     layout === "default" &&
     request.pathname === "/" &&
     request.isDocument !== false;
-  if (
-    isLandingVisit &&
-    isLemuExperimentEnabled &&
-    !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))
-  ) {
+  if (isLandingVisit && !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))) {
     assigned[LEMU_EXPERIMENT] = request.draw();
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));

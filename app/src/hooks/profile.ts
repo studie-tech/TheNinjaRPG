@@ -58,9 +58,11 @@ export const useUserEditForm = (
   const { data: lines, isPending: l3 } = api.bloodline.getAllNames.useQuery(undefined, {
     enabled: canEditBloodline,
   });
-  const { data: sageModes, isPending: l7 } = api.sageMode.getAllNamesForEdit.useQuery(
+  const { data: sageModes, isPending: l7 } = api.sageMode.getAllNames.useQuery(
     undefined,
-    { enabled: canEditBloodline },
+    {
+      enabled: canEditBloodline,
+    },
   );
   const selectedBloodlineId = useWatch({ control: form.control, name: "bloodlineId" });
   const { data: lineReskins } = api.bloodline.getReskinsForBloodline.useQuery(

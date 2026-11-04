@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import {
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
@@ -23,9 +22,6 @@ import { authenticateCronRequest } from "@/server/utils/cron";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   const now = new Date();
   const dayOfMonth = now.getUTCDate();

@@ -40,13 +40,12 @@ describeWithDatabase("auction settlement", () => {
 
   for (const currency of ["MONEY", "REPUTATION"] as const) {
     const balance = currency === "MONEY" ? "bank" : "reputationPoints";
-    it(`settles concurrent cron and explicit completions once in ${currency}`, async () => {
+    it(`settles concurrent completions once in ${currency}`, async () => {
       await seedAuction(currency);
       const db = await getTestDatabase();
-      const api = await callerFor(auctionRouter, "seller");
       const results = await Promise.all([
         completeAuctionInternal(db, "auction"),
-        api.completeAuction({ auctionId: "auction" }),
+        completeAuctionInternal(db, "auction"),
       ]);
       expect(results.filter((result) => result.success)).toHaveLength(1);
       expect(results.filter((result) => !result.success)).toHaveLength(1);
@@ -229,19 +228,6 @@ describeWithDatabase("auction settlement", () => {
         : { seller: 1162, winner: 1000, loser: 820 });
       expect(queuePush).toHaveBeenCalledTimes(1);
     });
-
-    it(`serializes buyout against expiration in ${currency}`, async () => {
-      await seedAuction(currency);
-      const db = await getTestDatabase();
-      await db.update(auctionBid).set({ amount: 150 }).where(eq(auctionBid.id, "winning-bid"));
-      const results = await Promise.all([
-        completeAuctionInternal(db, "auction", "winner"),
-        completeAuctionInternal(db, "auction"),
-      ]);
-      expect(results.filter((result) => result.success)).toHaveLength(1);
-      expect(await balances(balance)).toEqual({ seller: 1135, winner: 900, loser: 1000 });
-      expect(queuePush).toHaveBeenCalledTimes(1);
-    });
   }
 
   it("expires a no-bid listing only once and returns the seller's item", async () => {
@@ -409,12 +395,10 @@ describeWithDatabase("auction settlement", () => {
     expect(queuePush).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects early completion and invalid buyouts without consuming the claim", async () => {
+  it("rejects early completion without consuming the claim", async () => {
     await seedAuction("MONEY", true, false);
     const db = await getTestDatabase();
     expect((await completeAuctionInternal(db, "auction")).success).toBe(false);
-    expect((await completeAuctionInternal(db, "auction", "loser")).success).toBe(false);
-    expect((await completeAuctionInternal(db, "auction", "winner")).success).toBe(false);
     expect((await db.select().from(auctionListing))[0]?.status).toBe("ACTIVE");
     expect(queuePush).not.toHaveBeenCalled();
   });

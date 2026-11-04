@@ -85,7 +85,7 @@ const adminMiddleware = async () => {
   // Role Check
   if (!canChangeContent(user.role)) {
     throw new UploadThingError(
-      `You do not have permission to upload background images. Your role: ${user.role}`,
+      `You do not have permission to upload content files. Your role: ${user.role}`,
     );
   }
 
@@ -191,16 +191,6 @@ export const ourFileRouter = {
       const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
       return { ...moderation, userPatch };
     }),
-  backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
-    .middleware(async ({ files }) => ({
-      ...(await adminMiddleware()),
-      ...withExtensionIds(files),
-    })) // Use the adminMiddleware here
-    .onUploadComplete(async ({ metadata, file }) => {
-      console.log(
-        `Background image uploaded by ${metadata.userId}: ${servedUfsUrl(file)}`,
-      );
-    }),
   // SFX audio (small files)
   audioSfxUploader: f({ audio: { maxFileSize: "64KB" } })
     .input(z.object({ relationId: z.string() }))
@@ -260,17 +250,6 @@ export const ourFileRouter = {
         userId: metadata.userId,
         characterId: metadata.characterId,
       };
-    }),
-  // Tower Defense individual frame uploader (for batch uploading extracted frames)
-  towerDefenseFrameUploader: f({
-    image: { maxFileSize: "256KB", maxFileCount: 100 },
-  })
-    .middleware(async ({ files }) => ({
-      ...(await adminMiddleware()),
-      ...withExtensionIds(files),
-    }))
-    .onUploadComplete(({ file }) => {
-      return { fileUrl: servedUfsUrl(file) };
     }),
 } satisfies FileRouter;
 

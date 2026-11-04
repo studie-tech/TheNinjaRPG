@@ -43,7 +43,6 @@ jobs:
             app
             mobile
             scripts
-            spacetimedb-towerdefense
             .github
             .agents
             .vscode
@@ -72,7 +71,6 @@ jobs:
       PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID || 'test-app' }}
       PUSHER_APP_SECRET: ${{ secrets.PUSHER_APP_SECRET || 'test-secret' }}
       DATABASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL || 'http://127.0.0.1:1' }}
-      CAPTCHA_SALT: ${{ secrets.CAPTCHA_SALT }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-placeholder-not-a-real-key' }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}

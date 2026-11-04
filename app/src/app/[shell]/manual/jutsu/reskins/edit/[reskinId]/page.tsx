@@ -100,13 +100,12 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   }
 
   // Build EditContent config
-  const reskinData = reskin && !("success" in reskin) ? reskin : null;
   const formData: FormEntry<keyof JutsuReskinUpdateSchema>[] = [
     {
       id: "image",
       type: "avatar",
       label: "Image",
-      href: reskinData?.image || undefined,
+      href: reskin.image || undefined,
     },
     { id: "name", type: "text", label: "Reskin Name" },
     { id: "username", type: "text", label: "Owner (username)" },
@@ -166,7 +165,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
           showSubmit={true}
           buttonTxt="Save Changes"
           allowImageUpload={true}
-          relationId={reskinData?.id || reskinId}
+          relationId={reskin.id}
           type="jutsu_reskin"
           onAccept={onAccept}
           submitDisabled={!form.formState.isValid || isUpdating}

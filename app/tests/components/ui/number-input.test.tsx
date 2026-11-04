@@ -1,6 +1,5 @@
-import { ensureDom } from "../../setup/dom.mjs";
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
+import { afterEach, describe, expect, it, mock } from "bun:test";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
@@ -11,7 +10,6 @@ function Controlled({ initial = 1, ...props }: { initial?: number; min?: number;
 }
 
 describe("NumberInput", () => {
-  beforeEach(ensureDom);
   afterEach(cleanup);
 
   it("allows deleting a required quantity and replacing it with a single digit", () => {

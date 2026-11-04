@@ -12,7 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { IMG_LAYOUT_MOBILE_TOP, IMG_LOGO_SHORT } from "@/drizzle/constants";
+import { IMG_LOGO_SHORT } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
@@ -36,7 +36,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
   isSignedInLayout,
-  isAnonymousLayout,
   pathname,
   navbarMenuItems,
   shownNotifications,
@@ -54,9 +53,9 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   handleRightSidebarClick,
   variantClasses,
   showMobileNotifications,
-  mobileNotificationCount,
 }) => {
   const { swapSides } = useActivityDock();
+  const isAnonymousLayout = !isSignedInLayout;
   return (
     <div
       className="tnr-pixel-game absolute top-0 bottom-0 w-full md:relative"
@@ -125,9 +124,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       key={link.name}
                       className="relative z-10 flex flex-row items-center justify-center gap-1 px-2 py-2 hover:text-amber-300"
                       href={link.href}
-                      onClick={async () => {
-                        if (link.onClick) await link.onClick();
-                      }}
                     >
                       <span className="relative flex min-w-0 items-center gap-1">
                         {link.icon}
@@ -191,7 +187,6 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     <MobileNotificationsPopover
                       notifications={shownNotifications}
                       variant="pixel"
-                      count={mobileNotificationCount}
                     />
                   )}
                 </div>
@@ -255,52 +250,29 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
         </div>
         <div
           className={cn(
-            "relative h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden",
-            isAnonymousLayout && "hidden",
-            isSignedInLayout && "hidden",
-            shownNotifications &&
-              shownNotifications.length > 0 &&
-              pathname !== "/combat"
-              ? "top-[100px]"
-              : "top-[70px]",
-          )}
-          style={{ backgroundImage: `url(${IMG_LAYOUT_MOBILE_TOP})` }}
-        ></div>
-        <div
-          className={cn(
             "relative z-10 flex h-full flex-row",
-            isAnonymousLayout
-              ? "top-24"
-              : isSignedInLayout
-                ? "tnr-pixel-mobile-signed-content-row top-[70px] mx-auto mt-6 w-[calc(100%-16px)] max-w-[1440px] items-start gap-0 md:top-0 md:gap-2"
-                : "md:top-6",
-            !isSignedInLayout &&
-              (shownNotifications &&
-              shownNotifications.length > 0 &&
-              pathname !== "/combat"
+            isSignedInLayout
+              ? "tnr-pixel-mobile-signed-content-row top-[70px] mx-auto mt-6 w-[calc(100%-16px)] max-w-[1440px] items-start gap-0 md:top-0 md:gap-2"
+              : shownNotifications.length > 0 && pathname !== "/combat"
                 ? "top-[100px]"
-                : "top-[70px]"),
+                : "top-[70px]",
           )}
           data-sidebar-row
         >
-          <div
-            className={cn(
-              "relative hidden shrink-0 md:block",
-              isSignedInLayout ? "w-[200px] lg:w-[250px]" : "px-2",
-              isAnonymousLayout && "hidden md:hidden",
-            )}
-          >
-            <div className="relative">
-              <div
-                className={cn(
-                  "tnr-pixel-side-panel z-10 p-4 text-white",
-                  PIXEL_SIGNED_IN_SHELL_SURFACE,
-                )}
-              >
-                {leftSideBar}
+          {isSignedInLayout && (
+            <div className="relative hidden w-[200px] shrink-0 md:block lg:w-[250px]">
+              <div className="relative">
+                <div
+                  className={cn(
+                    "tnr-pixel-side-panel z-10 p-4 text-white",
+                    PIXEL_SIGNED_IN_SHELL_SURFACE,
+                  )}
+                >
+                  {leftSideBar}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div
             className={cn(
               "flex w-full min-w-0 flex-1 flex-col",
@@ -310,25 +282,23 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
           >
             <div
               className={cn(
-                "flex min-h-screen w-full flex-row md:min-h-0",
-                isSignedInLayout && "min-h-0 flex-1",
-                isAnonymousLayout &&
-                  "mx-auto min-h-0 w-[calc(100%-32px)] max-w-[1180px]",
+                "flex min-h-0 flex-row md:min-h-0",
+                isSignedInLayout
+                  ? "w-full flex-1"
+                  : "mx-auto w-[calc(100%-32px)] max-w-[1180px]",
               )}
             >
               <div
                 data-reading-surface
                 className={cn(
-                  "flex min-h-[200px] w-full grow flex-col overflow-x-scroll",
+                  "flex min-h-[200px] w-full grow flex-col",
                   isAnonymousLayout
                     ? "overflow-x-visible border border-sky-200/15 bg-slate-950/70 text-slate-50 shadow-2xl shadow-black/30 backdrop-blur-md"
                     : "overflow-x-auto bg-transparent text-slate-50",
                 )}
               >
                 <div
-                  className={cn(
-                    // Phones also leave room to scroll content clear of an open lesson.
-                    "p-3 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-3",
+                  className={
                     // The footer bar below sits in normal flow under this wrapper, so it
                     // starts wherever first paint ends -- often a short spinner -- and
                     // travels down as the page loads. On desktop that growth is also when
@@ -336,10 +306,11 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     // takes its width and the centred layout shifts sideways. One viewport
                     // of minimum height keeps the bar below the fold, where its movement
                     // cannot register as a shift, and the scrollbar present from first paint.
-                    isSignedInLayout &&
-                      "min-h-svh p-0 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-8",
-                    isAnonymousLayout && "p-5 pb-8 md:p-7",
-                  )}
+                    // Phones also leave room to scroll content clear of an open lesson.
+                    isSignedInLayout
+                      ? "min-h-svh p-0 pb-[calc(7rem+var(--activity-dock-space,0px))] md:pb-8"
+                      : "p-5 pb-8 md:p-7"
+                  }
                 >
                   {children}
                 </div>
@@ -347,20 +318,18 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             </div>
             <div
               className={cn(
-                "fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative",
-                isSignedInLayout &&
-                  "relative -mx-3 mt-4 -mb-3 h-auto max-h-none w-[calc(100%+1.5rem)] pb-28 md:pb-0",
-                isAnonymousLayout &&
-                  "fixed right-0 bottom-0 left-0 z-30 mx-auto h-auto max-h-none w-[calc(100%-32px)] max-w-[1180px] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:relative md:right-auto md:bottom-auto md:left-auto md:z-auto md:mt-6 md:pb-6",
+                "flex flex-col",
+                isSignedInLayout
+                  ? "relative bottom-0 -mx-3 mt-4 -mb-3 h-auto max-h-none w-[calc(100%+1.5rem)] pb-28 md:relative md:pb-0"
+                  : "fixed right-0 bottom-0 left-0 z-30 mx-auto h-auto max-h-none w-[calc(100%-32px)] max-w-[1180px] pb-[calc(env(safe-area-inset-bottom)+1rem)] md:relative md:right-auto md:bottom-auto md:left-auto md:z-auto md:mt-6 md:pb-6",
               )}
             >
               <div
                 className={cn(
-                  "absolute top-2 right-0 left-0 hidden md:block",
-                  isSignedInLayout &&
-                    "relative top-auto right-auto left-auto block w-full border-sky-200/15 border-t bg-slate-950/72 px-4 py-4 text-slate-200 backdrop-blur-md",
-                  isAnonymousLayout &&
-                    "relative top-auto right-auto left-auto block rounded-md border border-sky-200/15 bg-slate-950/70 px-4 py-3 text-slate-200 backdrop-blur-md",
+                  "relative top-auto right-auto left-auto block md:block",
+                  isSignedInLayout
+                    ? "w-full border-sky-200/15 border-t bg-slate-950/72 px-4 py-4 text-slate-200 backdrop-blur-md"
+                    : "rounded-md border border-sky-200/15 bg-slate-950/70 px-4 py-3 text-slate-200 backdrop-blur-md",
                 )}
               >
                 <Footer />

@@ -7,14 +7,12 @@ import type { PropsWithChildren } from "react";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
-import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
 const artwork = { id: "tower", key: "tower", category: "structure", licenseDetails: "", name: "Tower", randomRotation: false, renderScale: 1, small: false, windAffected: false };
 const clients: QueryClient[] = [];
 let now = 0;
 beforeEach(() => {
-  ensureDom();
   now = Date.UTC(2026, 10, 2, 12);
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);

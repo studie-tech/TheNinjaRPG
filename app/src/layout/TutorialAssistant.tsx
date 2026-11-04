@@ -1,6 +1,5 @@
 "use client";
 
-import * as Sentry from "@sentry/nextjs";
 import {
   ArrowRight,
   Gift,
@@ -462,7 +461,7 @@ const CancelTutorialConfirmDialog: React.FC<{
  */
 interface TutorialAssistantProps {
   /** Viewport width below which the shell moves its game menu into a drawer. */
-  sidebarBreakpoint?: number;
+  sidebarBreakpoint: number;
   rightSideBarOpen: boolean;
   setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;
@@ -512,7 +511,7 @@ const PlayerTutorialAssistant: React.FC<
   rightSideBarOpen,
   setRightSideBarOpen,
   rightSideBarRef,
-  sidebarBreakpoint = 768,
+  sidebarBreakpoint,
 }) => {
   // State
   const { data: userData, updateUser } = useUserDataSelector((user) => ({
@@ -539,15 +538,6 @@ const PlayerTutorialAssistant: React.FC<
   // Mutation to disable tutorial
   const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
   const disableTutorialLockRef = React.useRef(false);
-  const disableTutorialRequestRef = React.useRef<
-    | {
-        requestId: string;
-        userId: string;
-        tutorialStep: number;
-        expectedTutorialOn: true;
-      }
-    | undefined
-  >(undefined);
   const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
   const [disableTutorialError, setDisableTutorialError] = useState<string>();
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
@@ -556,18 +546,7 @@ const PlayerTutorialAssistant: React.FC<
     if (disableTutorialLockRef.current) return;
     if (!userData?.userId || userData.tutorialOn !== true) return;
 
-    const existingRequest = disableTutorialRequestRef.current;
-    const request =
-      existingRequest?.userId === userData.userId &&
-      existingRequest.tutorialStep === userData.tutorialStep
-        ? existingRequest
-        : {
-            requestId: crypto.randomUUID(),
-            userId: userData.userId,
-            tutorialStep: userData.tutorialStep,
-            expectedTutorialOn: true as const,
-          };
-    disableTutorialRequestRef.current = request;
+    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
     disableTutorialLockRef.current = true;
     setDisableTutorialError(undefined);
     setIsDisablingTutorial(true);
@@ -590,7 +569,6 @@ const PlayerTutorialAssistant: React.FC<
         if (tutorialIdentityRef.current.userId !== request.userId) {
           return;
         }
-        disableTutorialRequestRef.current = undefined;
         setShowCancelConfirmDialog(false);
       })
       .catch(() => {
@@ -679,13 +657,7 @@ const PlayerTutorialAssistant: React.FC<
       if (userData?.tutorialOn === false) return;
 
       // Handle the tutorial step
-      let tutorialStep = userData.tutorialStep;
-
-      // Set to 0 if undefined (first time user)
-      if (tutorialStep === undefined) {
-        tutorialStep = 0;
-        updateTutorialStep({ step: 0 });
-      }
+      const tutorialStep = userData.tutorialStep;
 
       // Get current step config
       const isHospitalized = userData.status === "HOSPITALIZED";
@@ -760,29 +732,7 @@ const PlayerTutorialAssistant: React.FC<
         }
       }
     }
-  }, [
-    userData,
-    currentStep,
-    pathname,
-    router,
-    updateTutorialStep,
-    rightSideBarOpen,
-    isMobile,
-  ]);
-
-  // Start Sentry replay on the first tutorial step
-  useEffect(() => {
-    // Do not handle replays on done tutorial
-    if (stepNumber >= TUTORIAL_STEPS.length) return;
-    if (!userData) return;
-    if (userData.level > 1) return;
-    if (userData?.tutorialOn === false) return;
-    // Start replay if we're on step 0 (first step)
-    const replay = Sentry.getReplay();
-    if (replay && stepNumber === 0) {
-      replay.start();
-    }
-  }, [stepNumber, userData]);
+  }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
 
   // Helper function to update the highlight position
   const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
@@ -1728,62 +1678,60 @@ const PlayerTutorialAssistant: React.FC<
                 {parseHtml(activeRelatedObjective.description)}
               </blockquote>
             )}
-          {isQuestOverlay &&
-            postTutorialQuest?.userQuest.quest.content.objectives &&
-            postTutorialQuest && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  {postTutorialQuest.userQuest.quest.content.objectives.map(
-                    (objective, objectiveIndex) => {
-                      const quest = postTutorialQuest.userQuest.quest;
-                      const tracker = postTutorialQuest.tracker;
-                      const allDone = isQuestComplete(quest, tracker);
-                      const activeObjective = getActiveObjective(quest, tracker);
-                      const status = tracker.goals.find((g) => g.id === objective.id);
-                      const hideIfNoRewards =
-                        objective.task === "dialog" ||
-                        (activeObjective && objective.id !== activeObjective?.id) ||
-                        (allDone && !status?.done);
-                      return (
-                        <Objective
-                          objective={objective}
-                          tracker={tracker}
-                          checkRewards={() => checkRewards({ questId: quest.id })}
-                          key={objective.id}
-                          titlePrefix={
-                            quest.consecutiveObjectives
-                              ? "Objective: "
-                              : `${objectiveIndex + 1}. `
-                          }
-                          grayedOut={
-                            !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
-                          }
-                          hideIfNoRewards={hideIfNoRewards}
-                        />
-                      );
-                    },
-                  )}
-                </div>
-                {isQuestComplete(
-                  postTutorialQuest.userQuest.quest,
-                  postTutorialQuest.tracker,
-                ) &&
-                  !postTutorialQuest.userQuest.completed &&
-                  userData?.status === "AWAKE" && (
-                    <Button
-                      onClick={() => {
-                        checkRewards({
-                          questId: postTutorialQuest.userQuest.quest.id,
-                        });
-                      }}
-                      className="w-full"
-                    >
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Collect Reward
-                    </Button>
-                  )}
-              </>
-            )}
+          {isQuestOverlay && postTutorialQuest?.userQuest.quest.content.objectives && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                {postTutorialQuest.userQuest.quest.content.objectives.map(
+                  (objective, objectiveIndex) => {
+                    const quest = postTutorialQuest.userQuest.quest;
+                    const tracker = postTutorialQuest.tracker;
+                    const allDone = isQuestComplete(quest, tracker);
+                    const activeObjective = getActiveObjective(quest, tracker);
+                    const status = tracker.goals.find((g) => g.id === objective.id);
+                    const hideIfNoRewards =
+                      objective.task === "dialog" ||
+                      (activeObjective && objective.id !== activeObjective?.id) ||
+                      (allDone && !status?.done);
+                    return (
+                      <Objective
+                        objective={objective}
+                        tracker={tracker}
+                        checkRewards={() => checkRewards({ questId: quest.id })}
+                        key={objective.id}
+                        titlePrefix={
+                          quest.consecutiveObjectives
+                            ? "Objective: "
+                            : `${objectiveIndex + 1}. `
+                        }
+                        grayedOut={
+                          !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
+                        }
+                        hideIfNoRewards={hideIfNoRewards}
+                      />
+                    );
+                  },
+                )}
+              </div>
+              {isQuestComplete(
+                postTutorialQuest.userQuest.quest,
+                postTutorialQuest.tracker,
+              ) &&
+                !postTutorialQuest.userQuest.completed &&
+                userData?.status === "AWAKE" && (
+                  <Button
+                    onClick={() => {
+                      checkRewards({
+                        questId: postTutorialQuest.userQuest.quest.id,
+                      });
+                    }}
+                    className="w-full"
+                  >
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Collect Reward
+                  </Button>
+                )}
+            </>
+          )}
         </AssistantDialog>
       )}
 

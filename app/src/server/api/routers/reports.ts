@@ -551,14 +551,12 @@ export const reportsRouter = createTRPCRouter({
         updateUserDataForWarn(ctx.drizzle, { reportedUserId: report.reportedUserId }),
         insertUserReportCommentForWarn(ctx.drizzle, ctx, input),
       ]);
-      if (report.reportedUserId) {
-        void pusher.trigger(report.reportedUserId, "event", {
-          type: "userMessage",
-          message: `You have been given a warning`,
-          route: "/reports",
-          routeText: "To Report",
-        });
-      }
+      void pusher.trigger(report.reportedUserId, "event", {
+        type: "userMessage",
+        message: `You have been given a warning`,
+        route: "/reports",
+        routeText: "To Report",
+      });
       return { success: true, message: "User warned" };
     }),
   // Escalate a report to admin. Only if already banned, and no previous escalation

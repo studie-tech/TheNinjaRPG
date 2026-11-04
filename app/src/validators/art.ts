@@ -6,7 +6,6 @@ export type SortOption = (typeof sortOptions)[number];
 
 export const timeFrame = ["Week", "Month", "Year", "All Time"] as const;
 export type TimeFrame = (typeof timeFrame)[number];
-export const mediaTypes = ["image", "video"] as const;
 
 export const conceptArtPromptSchema = z.object({
   prompt: z.string().max(5000, "Prompt cannot exceed 5000 characters").prefault(""),
@@ -16,7 +15,6 @@ export const conceptArtPromptSchema = z.object({
     .max(2147483647, "Seed cannot exceed 2147483647")
     .prefault(() => Math.floor(Math.random() * 1000000)),
 });
-export type ConceptPromptType = z.infer<typeof conceptArtPromptSchema>;
 
 export const conceptVideoPromptSchema = z.object({
   prompt: z
@@ -42,14 +40,12 @@ export const conceptVideoPromptSchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });
-export type ConceptVideoPromptType = z.infer<typeof conceptVideoPromptSchema>;
 
 export const conceptArtFilterSchema = z.object({
   only_own: z.boolean().prefault(false),
   sort: z.enum(sortOptions).prefault("Most Recent"),
   time_frame: z.enum(timeFrame).prefault("Week"),
 });
-export type ConceptFilterType = z.infer<typeof conceptArtFilterSchema>;
 
 export const getTimeFrameinSeconds = (
   timeString: (typeof timeFrame)[number],

@@ -15,7 +15,6 @@ import * as Countdown from "@/layout/Countdown";
 import * as Loader from "@/layout/Loader";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
-import { ensureDom } from "../../setup/dom.mjs";
 import { dungeonContent } from "../../setup/dungeon";
 
 type PartyState = RouterOutputs["coop"]["dungeon"]["getState"];
@@ -49,7 +48,6 @@ const partyState = (status: RunStatus | null): PartyState => ({
 
 /** Exercise the page with real query lifecycles while keeping account and mutation I/O local. */
 const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, stateFn = async () => partyState(status), seed?: Available) => {
-  ensureDom();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
   if (seed) queryClient.setQueryData(availableKey, seed);

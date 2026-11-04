@@ -197,9 +197,9 @@ export const checkFriendlyFire = (
 const getVisualOrSound = (
   longitude: number,
   latitude: number,
-  animation?: string,
-  sfx?: string,
-  round = 0,
+  animation: string | undefined,
+  sfx: string | undefined,
+  round: number,
 ): GroundEffect => {
   return {
     ...VisualTag.parse({
@@ -756,7 +756,7 @@ export const applyEffects = (
     if (
       !damageModifierTypes.includes(e.type) ||
       presentEffectIds.has(e.id) ||
-      !((isEffectActive(e) && !e.fromGround) || e.type === "visual")
+      !(isEffectActive(e) && !e.fromGround)
     ) {
       continue;
     }
@@ -1501,7 +1501,7 @@ export const applySingleEffect = (
   instantConsumeIds?: Set<string>,
 ) => {
   if (effect.timedBuffExpiresAt && effect.timedBuffExpiresAt <= Date.now()) return;
-  // Derive damage config from battle state (with fallback for older battles)
+  // Derive damage config from battle state
   const config = battle.extraState.dmgConfig ?? defaultDmgConfig;
   // Destructure
   const { usersState, usersEffects, round } = battle;
@@ -1847,8 +1847,6 @@ export const applySingleEffect = (
 };
 
 // ─── Consolidated damage modifier pipeline (battle damage packets) ─────────────
-
-export type { PreBattleGearModifiers };
 
 export const emptyPreBattleGearModifiers = (): PreBattleGearModifiers => ({
   incDamageGivenFromGear: 0,
@@ -2334,6 +2332,7 @@ const applyDiffuseToConsequences = ({
   }
 };
 
+/** Resolve one raw damage packet through ordered modifiers, seals and damage floors. */
 export const computeDamagePacket = (
   ctx: DamagePacketComputeContext,
 ): { damage: number } => {
@@ -2460,14 +2459,14 @@ export const computeDamagePacket = (
   damage = Math.max(minDamage, damage - totalStaticReduction);
 
   const keystoneIncPoints =
-    (attackerGear.incDamageGivenFromKeystone ?? 0) +
-    (defenderGear.incDamageTakenFromKeystone ?? 0) +
+    attackerGear.incDamageGivenFromKeystone +
+    defenderGear.incDamageTakenFromKeystone +
     elementalPoints(modifierLists.elementalKeystoneIncreases);
   damage *= 1 + keystoneIncPoints / 100;
 
   const keystoneDrPoints =
-    (defenderGear.drTakenFromKeystone ?? 0) +
-    (attackerGear.drGivenFromKeystone ?? 0) +
+    defenderGear.drTakenFromKeystone +
+    attackerGear.drGivenFromKeystone +
     elementalPoints(modifierLists.elementalKeystoneReductions, true);
   if (!ctx.ignoreDamageReduction) {
     damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
@@ -2495,30 +2494,27 @@ export const computeDamagePacket = (
   return { damage: Math.max(minDamage, damage) };
 };
 
+/**
+ * Update damage consequences in place using the caller's seal and eligibility snapshots.
+ * Reuse modifier lists per attacker/defender pair within this processing pass.
+ */
 export const applyDamageModifierPipelineToConsequences = ({
   consequences,
   usersEffects,
   extraState,
   battleRound,
-  sealEffects: sealEffectsInput,
-  eligibilityById: eligibilityByIdInput,
-  usersStateById,
+  sealEffects,
+  eligibilityById,
 }: {
   consequences: Map<string, Consequence>;
   usersEffects: UserEffect[];
   extraState: ExtraState;
   battleRound: number;
-  sealEffects?: UserEffect[];
-  eligibilityById?: Map<string, DamageModifierEligibility>;
-  /** @deprecated Prefer passing eligibilityById from applyEffects. */
-  usersStateById?: Map<string, BattleUserState>;
+  sealEffects: UserEffect[];
+  eligibilityById: Map<string, DamageModifierEligibility>;
 }) => {
   const preBattleGearModifiers = extraState.preBattleGearModifiers ?? {};
-  const sealEffects = sealEffectsInput ?? getActiveSealEffects(usersEffects);
   const effectById = new Map(usersEffects.map((e) => [e.id, e]));
-  const eligibilityById =
-    eligibilityByIdInput ??
-    buildDamageModifierEligibilityById(usersEffects, battleRound, usersStateById);
   const modifierListsByPair = new Map<string, DamagePacketModifierLists>();
 
   for (const [effectId, consequence] of consequences) {
@@ -2596,7 +2592,6 @@ function realizeSageTags(props: {
       tag,
       user,
       actionId,
-      target: user,
       level,
       round: battle.round,
       battle,
@@ -2738,8 +2733,7 @@ function applyActivateSageMode(
 /**
  * After a round advances: once `sageModeExpiresRound` (activation round +
  * `activationRounds`) has elapsed, queue lasting `afterEffects` and resolve
- * instant ones immediately. Falls back to "any lasting sage buff still active"
- * when expiry was never tracked. Also prunes spent active/exhaustion auras.
+ * instant ones immediately. Also prunes spent active/exhaustion auras.
  *
  * Instant after-effects cannot wait for the next `applyEffects` actor — they
  * are queued with `isNew=false` and would be dropped if that actor is not the sage.
@@ -2759,16 +2753,7 @@ export function applySageModeAfterRoundTransition(battle: CompleteBattle): void 
     // The active window is duration-driven: honor the full `activationRounds` window via
     // `sageModeExpiresRound` even when no lasting buff remains (a mode whose active effects
     // are all instant would otherwise collapse into exhaustion the next round).
-    if (u.sageModeExpiresRound != null) {
-      if (battle.round < u.sageModeExpiresRound) return;
-    } else {
-      // Fallback for battle state activated before `sageModeExpiresRound` was tracked:
-      // stay active while any lasting sage buff is still present.
-      const activeSageFx = battle.usersEffects.filter(
-        (e) => e.fromType === "sageMode" && e.targetId === u.userId,
-      );
-      if (activeSageFx.some((e) => isEffectActive(e))) return;
-    }
+    if (battle.round < (u.sageModeExpiresRound ?? 0)) return;
 
     const sageModeId = u.sageModeId;
     const sageMode: SageMode | undefined = sageModeId

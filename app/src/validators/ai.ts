@@ -108,7 +108,6 @@ export const AvailableEffectTypes = tagTypes.filter(
     type !== "increasejutsuslots" &&
     !isActivityBonus({ type }),
 ) as [string, ...string[]];
-export type AvailableEffectType = (typeof AvailableEffectTypes)[number];
 
 export const ConditionHasEffect = z.object({
   type: z.literal("has_effect").prefault("has_effect"),
@@ -144,8 +143,6 @@ export const AiConditionTypes = ZodAllAiConditions.options.map((o) => {
   const literal = typeField.unwrap(); // ZodLiteral
   return literal.value as string;
 });
-
-export type AiConditionType = (typeof AiConditionTypes)[number];
 
 export type ZodAllAiCondition = z.infer<typeof ZodAllAiConditions>;
 
@@ -262,8 +259,6 @@ export const AiActionTypes = ZodAllAiActions.options.map((o) => {
   return literal.value as string;
 });
 
-export type AiActionType = (typeof AiActionTypes)[number];
-
 export type ZodAllAiAction = z.infer<typeof ZodAllAiActions>;
 
 export const getActionSchema = (type: ZodAllAiAction["type"]) => {
@@ -315,10 +310,6 @@ export const AiRule = z
     });
   });
 
-export const createAiProfileSchema = z.object({
-  userId: z.string(),
-  rules: z.array(AiRule),
-});
 export const updateAiProfileSchema = z.object({
   id: z.string(),
   rules: z.array(AiRule),

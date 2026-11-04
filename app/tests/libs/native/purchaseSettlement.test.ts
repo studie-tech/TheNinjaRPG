@@ -5,7 +5,6 @@ import {
   finalStorePurchaseResult,
   finalStoreRestoreResult,
   hasStoreTransactionId,
-  hasSettledStorePurchase,
   isPendingStorePurchase,
   reconcileInterruptedStoreAttempt,
   releaseStorePurchaseLock,
@@ -46,10 +45,10 @@ describe("native purchase settlement", () => {
     const pending = receipt();
     expect(isPendingStorePurchase(pending)).toBe(true);
     expect(
-      hasSettledStorePurchase([pending], attempt({
+      storePurchaseReconciliation([pending], attempt({
         transactionId: "wanted-transaction",
       })),
-    ).toBe(false);
+    ).toBe("pending");
     expect(finalStorePurchaseResult("pending")).toBe("timed-out");
   });
 
@@ -80,25 +79,25 @@ describe("native purchase settlement", () => {
 
   it("settles only after the new receipt is granted or retired", () => {
     expect(
-      hasSettledStorePurchase([receipt({ grantedAt: new Date() })], attempt({
+      storePurchaseReconciliation([receipt({ grantedAt: new Date() })], attempt({
         transactionId: "wanted-transaction",
       })),
-    ).toBe(true);
+    ).toBe("credited");
     expect(
-      hasSettledStorePurchase([receipt({ revokedAt: new Date() })], attempt({
+      storePurchaseReconciliation([receipt({ revokedAt: new Date() })], attempt({
         transactionId: "wanted-transaction",
       })),
-    ).toBe(true);
+    ).toBe("rejected");
     expect(
-      hasSettledStorePurchase([receipt({ acceptedAt: null })], attempt({
+      storePurchaseReconciliation([receipt({ acceptedAt: null })], attempt({
         transactionId: "wanted-transaction",
       })),
-    ).toBe(true);
+    ).toBe("rejected");
   });
 
   it("does not let an unrelated concurrent receipt settle a transaction-id attempt", () => {
     expect(
-      hasSettledStorePurchase(
+      storePurchaseReconciliation(
         [
           receipt({
             id: "unrelated",
@@ -112,7 +111,7 @@ describe("native purchase settlement", () => {
           transactionId: "wanted-transaction",
         }),
       ),
-    ).toBe(false);
+    ).toBe("pending");
   });
 
   it("falls back to a same-product receipt absent from the fresh server baseline", () => {
@@ -120,7 +119,7 @@ describe("native purchase settlement", () => {
       baselineReceiptIds: ["old-same-product"],
     });
     expect(
-      hasSettledStorePurchase(
+      storePurchaseReconciliation(
         [
           receipt({
             transactionId: "other",
@@ -136,9 +135,9 @@ describe("native purchase settlement", () => {
         ],
         purchaseAttempt,
       ),
-    ).toBe(false);
+    ).toBe("pending");
     expect(
-      hasSettledStorePurchase(
+      storePurchaseReconciliation(
         [
           receipt({
             id: "new-same-product",
@@ -150,7 +149,7 @@ describe("native purchase settlement", () => {
         ],
         purchaseAttempt,
       ),
-    ).toBe(true);
+    ).toBe("credited");
   });
 
   it("reconciles a local StoreKit purchase whose SDK transaction id is zero", () => {

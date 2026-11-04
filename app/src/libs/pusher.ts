@@ -104,9 +104,6 @@ export const updateUserOnMap = async (
     sector: number;
     longitude: number;
     latitude: number;
-    username: string;
-    avatar: string | null;
-    avatarLight: string | null;
     location: string | null;
     villageId?: string | null;
     battleId?: string | null;

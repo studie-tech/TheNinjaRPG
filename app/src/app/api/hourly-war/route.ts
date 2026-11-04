@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import {
   ELDER_MIN_VOTING_COUNT,
   WAR_DAILY_HEALTH_DRAIN,
@@ -57,9 +56,6 @@ const DAILY_DECAY_TIMER = "daily-war-decay";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check hourly timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);

@@ -40,7 +40,6 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     handleRightSidebarClick,
     shownNotifications,
     showMobileNotifications,
-    mobileNotificationCount,
     mobileNavConfig,
     location,
     variantClasses,
@@ -96,7 +95,6 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
               <MobileNotificationsPopover
                 notifications={shownNotifications}
                 variant={props.variant}
-                count={mobileNotificationCount}
               />
             )}
           </div>
@@ -168,13 +166,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
           data-compact-hide
         >
           {navbarMenuItems.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              onClick={async () => {
-                if (link.onClick) await link.onClick();
-              }}
-            >
+            <Link key={link.name} href={link.href}>
               {link.icon}
               <span>{link.name}</span>
               {(link.notificationCount ?? 0) > 0 && (

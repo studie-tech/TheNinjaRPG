@@ -7,13 +7,9 @@ export interface AppEmojiPickerProps {
   onSelect: (native: string) => void;
   onClickOutside?: () => void;
   perLine?: number;
-  emojiSize?: number;
-  emojiButtonSize?: number;
 }
 
 const DEFAULT_PER_LINE = 9;
-const DEFAULT_EMOJI_SIZE = 24;
-const DEFAULT_EMOJI_BUTTON_SIZE = 36;
 /**
  * What emoji-mart's own grid measures once it renders, used only to reserve the space. Both
  * are observed rather than derived: under `dynamicWidth` the picker sizes itself and works out
@@ -45,31 +41,15 @@ const EmojiMartPicker = dynamic(
   },
 );
 
-export const EmojiPicker: React.FC<AppEmojiPickerProps> = (props) => {
-  const perLine = props.perLine ?? DEFAULT_PER_LINE;
-  const emojiSize = props.emojiSize ?? DEFAULT_EMOJI_SIZE;
-  const emojiButtonSize = props.emojiButtonSize ?? DEFAULT_EMOJI_BUTTON_SIZE;
-
-  return (
-    <EmojiMartPicker
-      perLine={perLine}
-      emojiSize={emojiSize}
-      emojiButtonSize={emojiButtonSize}
-      dynamicWidth={true}
-      onEmojiSelect={(emoji: unknown) => {
-        const native =
-          typeof emoji === "string"
-            ? emoji
-            : emoji &&
-                typeof emoji === "object" &&
-                "native" in (emoji as Record<string, unknown>)
-              ? (emoji as { native: string }).native
-              : "";
-        if (native) props.onSelect(native);
-      }}
-      onClickOutside={props.onClickOutside}
-    />
-  );
-};
-
-export default EmojiPicker;
+export const EmojiPicker: React.FC<AppEmojiPickerProps> = (props) => (
+  <EmojiMartPicker
+    perLine={props.perLine ?? DEFAULT_PER_LINE}
+    emojiSize={24}
+    emojiButtonSize={36}
+    dynamicWidth={true}
+    onEmojiSelect={(emoji: { native?: string }) => {
+      if (emoji.native) props.onSelect(emoji.native);
+    }}
+    onClickOutside={props.onClickOutside}
+  />
+);

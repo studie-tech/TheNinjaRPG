@@ -59,7 +59,6 @@ export const purchasesRouter = createTRPCRouter({
         limit: z.number().min(1).max(50).default(10),
         transactionId: z.string().optional(),
         productId: z.string().optional(),
-        createdAfter: z.date().optional(),
       }),
     )
     .output(

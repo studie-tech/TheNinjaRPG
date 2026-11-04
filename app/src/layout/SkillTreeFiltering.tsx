@@ -94,13 +94,6 @@ export const useFiltering = () => {
   return {
     ...cf.values,
     cf,
-    setName: cf.setters.name,
-    setEffect: cf.setters.effect,
-    setTier: cf.setters.tier as React.Dispatch<React.SetStateAction<number | "ANY">>,
-    setCostSkillPoints: cf.setters.costSkillPoints as React.Dispatch<
-      React.SetStateAction<number | "ANY">
-    >,
-    setHidden: cf.setters.hidden,
   };
 };
 

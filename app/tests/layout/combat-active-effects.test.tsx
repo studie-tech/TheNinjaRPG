@@ -2,7 +2,6 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { makeEffect } from "../libs/combat/helpers/battleScenario";
-import { ensureDom } from "../setup/dom.mjs";
 
 const userId = "holder";
 const runtime = { targetId: userId, creatorId: userId, fromType: "jutsu" as const };
@@ -13,7 +12,6 @@ const storedCurse = (rounds = 2) =>
   });
 
 beforeEach(() => {
-  ensureDom();
   window.localStorage.clear();
 });
 

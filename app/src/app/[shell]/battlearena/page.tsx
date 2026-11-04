@@ -101,7 +101,7 @@ export default function Arena() {
   // Guards
   if (!access) return <Loader explanation="Accessing Battle Arena" />;
   if (!userData) return <Loader explanation="Loading user" />;
-  if (userData?.isBanned) return <BanInfo />;
+  if (userData.isBanned) return <BanInfo />;
 
   // Derived values
   const title = tab ?? "";

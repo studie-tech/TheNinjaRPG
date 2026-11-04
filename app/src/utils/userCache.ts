@@ -12,7 +12,10 @@ import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) =>
   prepareQueryUpdate<UserCache>(client, key, (cache) => !!cache.userData);
 
-/** Reconcile the profile and report whether related caches can rely on a local projection. */
+/** Reconcile the profile and report whether related caches can rely on a local projection.
+ * Never rejects: the QueryClient swallows cancellation and refetch errors, so patch callbacks
+ * must not throw.
+ */
 export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,

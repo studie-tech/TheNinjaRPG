@@ -464,6 +464,7 @@ describeWithDatabase("staff user-id rename", () => {
         productId: "tnr_federal_gold",
         expirationAt: new Date(Date.now() + 86_400_000),
         transactionId: "delayed-deleted-extension",
+        isSandbox: false,
       }),
     ).resolves.toBeUndefined();
   });
@@ -523,7 +524,6 @@ describeWithDatabase("staff user-id rename", () => {
     // into the same Clerk session, so a tombstone they can never clear would lock them out
     // of the game permanently, with no way back short of a new email address.
     const database = await getTestDatabase();
-    await database.delete(storePurchase).where(eq(storePurchase.userId, OLD_USER_ID));
     await deleteUser(database, OLD_USER_ID);
     await Promise.all([
       database.insert(village).values({
@@ -555,7 +555,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: "reclaim-bloodline",
     });
     expect(created.success).toBe(true);
@@ -564,8 +563,8 @@ describeWithDatabase("staff user-id rename", () => {
       where: eq(userData.userId, OLD_USER_ID),
     });
     expect(reborn?.userId).toBe(OLD_USER_ID);
-    // The column default, not the literal a raw insert would otherwise write.
-    expect(reborn?.earnedExperience).toBe(2000);
+    // New characters earn their experience through the Academy Trials.
+    expect(reborn?.earnedExperience).toBe(0);
   });
 
   it("lets a deleted identity with store history make another character, and its subscription follows", async () => {
@@ -637,7 +636,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: "registration-bloodline",
     });
     expect(created.success).toBe(true);
@@ -697,7 +695,6 @@ describeWithDatabase("staff user-id rename", () => {
       read_privacy: true,
       read_earlyaccess: true,
       recruiter_userid: null,
-      utm_source: null,
       bloodlineId: `${tag}-bloodline`,
     });
   };
@@ -744,6 +741,7 @@ describeWithDatabase("staff user-id rename", () => {
       productId: "tnr_federal_gold",
       transactionId: "renewal-in-window",
       expirationAt: new Date(now + 46 * DAY),
+      isSandbox: false,
     });
     await expect(
       grantStorePurchase(database, {
@@ -800,9 +798,11 @@ describeWithDatabase("staff user-id rename", () => {
     await deleteUser(database, OLD_USER_ID);
     // No transaction id, the shape that used to land under the tombstone string.
     await revokeFederalStatus(database, OLD_USER_ID, {
+      eventId: "expiry-window",
       occurredAt: new Date(now),
       productId: "tnr_federal_gold",
       store: "APPLE",
+      isSandbox: false,
     });
     const created = await registerAgain(OLD_USER_ID, "expiry-window", "Lapsed");
     expect(created.success).toBe(true);
@@ -1029,9 +1029,6 @@ describeWithDatabase("staff user-id rename", () => {
       where: eq(userData.userId, OLD_USER_ID),
     });
     expect(reborn?.federalStatus).toBe("SILVER");
-    await database
-      .delete(paypalSubscription)
-      .where(eq(paypalSubscription.affectedUserId, OLD_USER_ID));
   });
 
   it("gives deletion durable ownership before cleanup and refuses a concurrent rename", async () => {
@@ -1284,7 +1281,7 @@ describeWithDatabase("staff user-id rename", () => {
         purchasedAt,
         raw: {},
       }),
-    ).resolves.toMatchObject({ status: "granted", reputationPoints: 8 });
+    ).resolves.toMatchObject({ status: "granted" });
     const [renamedAfter, receipt] = await Promise.all([
       database.query.userData.findFirst({
         columns: { reputationPoints: true },

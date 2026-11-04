@@ -93,7 +93,7 @@ interface BloodFilteringProps {
 const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
   const { data: userData } = useUserData();
   const limitRanks = props.limitRanks ? props.limitRanks : [...LetterRanks];
-  const schema = makeBloodlineFilteringSchema([...limitRanks]);
+  const schema = makeBloodlineFilteringSchema(limitRanks);
   const context = { canEdit: Boolean(userData && canChangeContent(userData.role)) };
 
   return (
@@ -109,10 +109,8 @@ const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
 
 export default BloodFiltering;
 
-export const getFilter = (
-  state: BloodFilteringState,
-  limitRanks: LetterRank[] = [...LetterRanks],
-) => buildFilter(state.cf, makeBloodlineFilteringSchema([...limitRanks]));
+export const getFilter = (state: BloodFilteringState) =>
+  buildFilter(state.cf, makeBloodlineFilteringSchema([...LetterRanks]));
 
 /** State for the Bloodline Filtering component */
 export const useFiltering = (defaultRank: LetterRank | "None" = "None") => {
@@ -121,14 +119,8 @@ export const useFiltering = (defaultRank: LetterRank | "None" = "None") => {
   return {
     ...cf.values,
     cf,
-    setName: cf.setters.name,
-    setClassification: cf.setters.classification,
-    setRank: cf.setters.rank,
-    setVillage: cf.setters.village,
-    setElement: cf.setters.element,
     setEffect: cf.setters.effect,
-    setStat: cf.setters.stat,
-    setHidden: cf.setters.hidden,
+    setRank: cf.setters.rank,
   };
 };
 

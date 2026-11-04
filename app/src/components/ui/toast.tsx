@@ -8,11 +8,7 @@ export interface ToastActionProps
   ref?: React.Ref<HTMLButtonElement>;
 }
 
-/**
- * Minimal drop-in replacement for the old Radix based `<ToastAction>`.
- * It purposely keeps the same signature so that the rest of the codebase
- * doesn't need to change after switching to *sonner*.
- */
+/** Styled action button rendered inside a toast. */
 export const ToastAction = ({
   ref,
   className,

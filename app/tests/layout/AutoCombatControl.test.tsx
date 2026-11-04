@@ -2,12 +2,10 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ensureDom } from "../setup/dom.mjs";
 
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 beforeEach(() => {
-  ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },
@@ -26,7 +24,6 @@ afterEach(async () => {
 });
 
 const mount = (overrides: Partial<Parameters<typeof AutoCombatControl>[0]> = {}) => {
-  ensureDom();
   const onChange = vi.fn();
   const props = { isActive: false, isPending: false, requiresConfirmation: true, onChange, ...overrides };
   return { ...render(<AutoCombatControl {...props} />), onChange, props };

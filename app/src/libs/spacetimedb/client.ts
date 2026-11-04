@@ -33,8 +33,6 @@ export type {
   SessionUpgrade,
 } from "./bindings/types";
 
-const DEBUG = false;
-
 /**
  * The module only lets the identity that created a session act on it, so the identity
  * must survive page reloads for a run to be resumed or claimed after one. SpacetimeDB
@@ -228,12 +226,6 @@ export class SpacetimeDBConnection {
         .withToken(readStoredToken(this.config))
         .onConnect((_ctx, identity, token) => {
           storeToken(this.config, token);
-          if (DEBUG) {
-            console.log(
-              "[SpacetimeDB] Connected with identity:",
-              identity.toHexString(),
-            );
-          }
           this.identity = identity.toHexString();
           // Row listeners accumulate per registration, so attach them once per connection.
           this.setupTableHandlers();
@@ -244,10 +236,7 @@ export class SpacetimeDBConnection {
           // This ensures callers cannot send reducers before subscriptions are established
           this.setupGlobalSubscriptions();
         })
-        .onDisconnect((_ctx, error) => {
-          if (DEBUG) {
-            console.log("[SpacetimeDB] Disconnected", error);
-          }
+        .onDisconnect(() => {
           this.connectionState = "disconnected";
           this.wsReady = false;
           this.emit({ type: "connection_state", state: "disconnected" });
@@ -309,9 +298,6 @@ export class SpacetimeDBConnection {
     this.globalSubscription = this.connection
       .subscriptionBuilder()
       .onApplied(() => {
-        if (DEBUG) {
-          console.log("[SpacetimeDB] Global subscription applied");
-        }
         // Mark WebSocket and connection as ready AFTER subscriptions are applied
         // This ensures reducers won't fire before subscriptions are fully established
         this.connectionState = "connected";
@@ -345,14 +331,6 @@ export class SpacetimeDBConnection {
     // This ensures we only receive events for OUR session, not all guests
     this.globalSubscription = this.connection
       .subscriptionBuilder()
-      .onApplied(() => {
-        if (DEBUG) {
-          console.log(
-            "[SpacetimeDB] Guest session subscription applied for seed:",
-            seed,
-          );
-        }
-      })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Guest session subscription error:", ctx);
         this.connectionState = "error";
@@ -394,12 +372,6 @@ export class SpacetimeDBConnection {
         // Overlapping subscriptions do not re-insert rows already in the local cache.
         // Reconcile the resumed session explicitly after its complete snapshot arrives.
         this.replaySessionSnapshot(sessionId);
-        if (DEBUG) {
-          console.log(
-            "[SpacetimeDB] Session subscription applied for:",
-            sessionId.toString(),
-          );
-        }
       })
       .onError((ctx: ErrorContext) => {
         console.error("[SpacetimeDB] Session subscription error:", ctx);
@@ -459,24 +431,15 @@ export class SpacetimeDBConnection {
 
     // Game session events
     db.gameSession.onInsert((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session inserted:", row.id);
-      }
       this.currentSessionId = row.id;
       this.emit({ type: "session_update", session: row as GameSession });
     });
 
     db.gameSession.onUpdate((_ctx, _oldRow, newRow) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session updated:", newRow.id);
-      }
       this.emit({ type: "session_update", session: newRow as GameSession });
     });
 
     db.gameSession.onDelete((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session deleted:", row.id);
-      }
       if (this.currentSessionId === row.id) {
         this.currentSessionId = null;
       }
@@ -499,16 +462,10 @@ export class SpacetimeDBConnection {
     // COST OPTIMIZATION: Enemy spawn events (static path data, sent once)
     // These are only insert/delete, never update
     db.enemySpawn.onInsert((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] EnemySpawn inserted:", row.enemyId);
-      }
       this.emit({ type: "enemy_spawn_insert", spawn: row });
     });
 
     db.enemySpawn.onDelete((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] EnemySpawn deleted:", row.enemyId);
-      }
       this.emit({ type: "enemy_spawn_delete", enemyId: row.enemyId });
     });
 
@@ -540,31 +497,19 @@ export class SpacetimeDBConnection {
 
     // Completed run events
     db.completedRun.onInsert((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Completed run:", row.id);
-      }
       this.emit({ type: "completed_run", run: row as CompletedRun });
     });
 
     // Session upgrade events
     db.sessionUpgrade.onInsert((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session upgrade inserted:", row.upgradeId);
-      }
       this.emit({ type: "session_upgrade_insert", upgrade: row as SessionUpgrade });
     });
 
     db.sessionUpgrade.onUpdate((_ctx, _oldRow, newRow) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session upgrade updated:", newRow.upgradeId);
-      }
       this.emit({ type: "session_upgrade_update", upgrade: newRow as SessionUpgrade });
     });
 
     db.sessionUpgrade.onDelete((_ctx, row) => {
-      if (DEBUG) {
-        console.log("[SpacetimeDB] Session upgrade deleted:", row.id);
-      }
       this.emit({ type: "session_upgrade_delete", upgradeId: row.id });
     });
   }
@@ -598,16 +543,6 @@ export class SpacetimeDBConnection {
     this.currentSessionId = null;
     this.currentUserId = null;
     this.emit({ type: "connection_state", state: "disconnected" });
-    if (DEBUG) {
-      console.log("[SpacetimeDB] Disconnected");
-    }
-  }
-
-  /**
-   * Get current connection state
-   */
-  getConnectionState(): ConnectionState {
-    return this.connectionState;
   }
 
   /**
@@ -615,13 +550,6 @@ export class SpacetimeDBConnection {
    */
   getIdentity(): string | null {
     return this.identity;
-  }
-
-  /**
-   * Get current session ID
-   */
-  getCurrentSessionId(): bigint | null {
-    return this.currentSessionId;
   }
 
   /**
@@ -693,9 +621,6 @@ export class SpacetimeDBConnection {
     await this.waitForWebSocketReady();
 
     await this.connection.reducers.createSession(params);
-    if (DEBUG) {
-      console.log("[SpacetimeDB] createSession called with signed definitions");
-    }
   }
 
   /**
@@ -707,9 +632,6 @@ export class SpacetimeDBConnection {
     }
 
     await this.connection.reducers.startWave({ sessionId });
-    if (DEBUG) {
-      console.log("[SpacetimeDB] startWave called for session:", sessionId);
-    }
   }
 
   /**
@@ -739,9 +661,6 @@ export class SpacetimeDBConnection {
     }
 
     await this.connection.reducers.purchaseUpgrade({ sessionId, upgradeId });
-    if (DEBUG) {
-      console.log("[SpacetimeDB] purchaseUpgrade called:", upgradeId);
-    }
   }
 
   /**
@@ -753,9 +672,6 @@ export class SpacetimeDBConnection {
     }
 
     await this.connection.reducers.deleteCompletedRun({ sessionId });
-    if (DEBUG) {
-      console.log("[SpacetimeDB] deleteCompletedRun called:", sessionId);
-    }
   }
 
   /**
@@ -767,9 +683,6 @@ export class SpacetimeDBConnection {
     }
 
     await this.connection.reducers.abandonSession({ sessionId });
-    if (DEBUG) {
-      console.log("[SpacetimeDB] abandonSession called for session:", sessionId);
-    }
   }
 }
 

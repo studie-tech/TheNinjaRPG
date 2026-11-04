@@ -22,7 +22,6 @@ import * as UserContext from "@/utils/UserContext";
 import { SimpleObjective } from "@/validators/objectives";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
-import { ensureDom } from "../setup/dom.mjs";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
 type MutationResult = UserDeltaResponse & { battleId?: string };
@@ -212,7 +211,6 @@ const readyAttempt = (endsAt = new Date(NOW - 1000).toISOString()) => ({
 });
 
 beforeEach(() => {
-  ensureDom();
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   globalThis.Event = window.Event;
   globalThis.CustomEvent = window.CustomEvent;

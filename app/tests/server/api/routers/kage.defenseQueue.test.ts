@@ -494,17 +494,6 @@ describeWithDatabase("scheduled Kage defenses", () => {
     await updateKage(db, b, {} as never);
     expect((await db.query.village.findFirst())?.kageId).toBe("defender");
   });
-  it("settles an already admitted legacy battle into one completed defense receipt", async () => {
-    const db = await getTestDatabase();
-    const fight = makeCompleteBattle({ id: "legacy-live-battle", battleType: "KAGE_PVP", round: 6, createdAt: now, usersState: [
-      makeBattleUser("first", { isAggressor: true, villageId, curHealth: 100 }),
-      makeBattleUser("defender", { isAggressor: false, villageId, curHealth: 0 }),
-    ] });
-    await updateKage(db, fight, {} as never); await updateKage(db, fight, {} as never);
-    const rows = await db.query.kageDefendedChallenges.findMany();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ battleId: fight.id, userId: "first", kageId: "defender", status: "COMPLETED", tenure: null, didWin: 1, rounds: 6, startedAt: now, resolvedAt: now, activeChallengerId: null });
-  });
   it("keeps hospital recovery from overlapping the following assigned slot", async () => {
     const m = await due(); const next = await join("second"); const db = await getTestDatabase();
     await db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "first"));

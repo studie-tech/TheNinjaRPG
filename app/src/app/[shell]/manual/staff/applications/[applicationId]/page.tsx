@@ -66,7 +66,6 @@ export default function ApplicationDetailPage() {
               <AvatarImage
                 href={app.applicant?.avatar || ""}
                 alt={app.applicant?.username || "Applicant"}
-                userId={app.applicantUserId}
                 hover_effect={true}
                 priority={true}
                 size={100}

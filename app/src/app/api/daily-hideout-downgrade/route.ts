@@ -1,5 +1,4 @@
 import { and, eq, gte } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { STRONGHOLD_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
 import { clan, village } from "@/drizzle/schema";
@@ -18,9 +17,6 @@ const ENDPOINT_NAME = "daily-hideout-downgrade";
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
-
-  // disable cache for this server action (https://github.com/vercel/next.js/discussions/50045)
-  await cookies();
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);

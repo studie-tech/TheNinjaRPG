@@ -1,6 +1,6 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { and, eq } from "drizzle-orm";
 import { REGEN_SECONDS } from "@/drizzle/constants";
@@ -12,7 +12,6 @@ import { itemRouter } from "@/server/api/routers/item";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { consumeMeal, settleCookingExperience } from "@/server/utils/cooking";
-import { settleCraftingQueue } from "@/server/utils/userQueue";
 import {
   DecreaseCookingTime,
   DecreaseCraftingTime, IncreaseRegenerationTag,

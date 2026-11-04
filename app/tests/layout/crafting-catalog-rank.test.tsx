@@ -1,7 +1,4 @@
-import { ensureDom } from "../setup/dom.mjs";
-
-ensureDom();
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";

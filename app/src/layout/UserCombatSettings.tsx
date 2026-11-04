@@ -32,13 +32,10 @@ import type { UserWithRelations } from "@/routers/profile";
 export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   config,
   userData,
-  updateUser,
   autoCombatControl,
 }) => {
-  const { sfxOn, setSfxEnabled, lightLayout, setLightLayout } = useGameSettings(
-    userData,
-    updateUser,
-  );
+  const { sfxOn, setSfxEnabled, lightLayout, setLightLayout } =
+    useGameSettings(userData);
   const [settingsTab, setSettingsTab] = useLocalStorage<string>(
     "combatSettingsTab",
     "battle",
@@ -254,5 +251,4 @@ interface UserCombatSettingsProps {
   /** The page owns the mutation and checks whether the battle permits switching control. */
   autoCombatControl?: React.ReactNode;
   userData?: UserWithRelations | null;
-  updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
 }

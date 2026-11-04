@@ -26,6 +26,7 @@ import {
   RYO_FOR_REP_DAYS_FROZEN,
   RYO_FOR_REP_MAX_LISTINGS,
   RYO_FOR_REP_MIN_REPS,
+  RYO_FOR_REP_RESERVE,
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
@@ -137,7 +138,7 @@ export const blackMarketRouter = createTRPCRouter({
         fetchActiveUserOffers(ctx.drizzle, ctx.userId),
       ]);
       // Guard
-      if (user.reputationPoints - 5 < input.reps) {
+      if (user.reputationPoints - RYO_FOR_REP_RESERVE < input.reps) {
         return errorResponse("Not enough reputation points");
       }
       if (input.reps < RYO_FOR_REP_MIN_REPS) {
@@ -153,8 +154,6 @@ export const blackMarketRouter = createTRPCRouter({
       if (user.level < REP_TRADE_MIN_LEVEL) {
         return errorResponse(repTradeLevelMessage);
       }
-      if (input.reps <= 0) return errorResponse("Reps must be greater than 0");
-      if (input.ryo <= 0) return errorResponse("Ryo must be greater than 0");
       if (input.ryo < input.reps) return errorResponse("Ryo must be greater than reps");
       // Deduce reputation points first
       const result = await updateUserDataForCreateOffer(ctx.drizzle, input, ctx);
@@ -183,7 +182,7 @@ export const blackMarketRouter = createTRPCRouter({
       if (!offer) return errorResponse("Offer not found");
       // Derived
       const isTerr = user.username === "Terriator";
-      const creatorId = offer?.creatorUserId;
+      const creatorId = offer.creatorUserId;
       // Guard
       if (creatorId !== ctx.userId && !isTerr) return errorResponse("Not yours");
       // Check time
@@ -574,7 +573,6 @@ export const blackMarketRouter = createTRPCRouter({
  *
  * @param {DrizzleClient} client - The Drizzle client used to make the query.
  * @param {string} userId - The ID of the user who rolled the element.
- * @param {string} elementType - The type of element rolled (primary or secondary).
  * @returns {Promise<{primary: string[], secondary: string[]}>} A promise that resolves to an object containing the rolled elements.
  */
 export const getRolledElements = async (client: DrizzleClient, userId: string) => {

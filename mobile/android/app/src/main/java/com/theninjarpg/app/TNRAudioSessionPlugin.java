@@ -90,12 +90,4 @@ public class TNRAudioSessionPlugin extends Plugin {
         }
         call.resolve();
     }
-
-    @PluginMethod
-    public void setRemoteCommandsEnabled(PluginCall call) {
-        // The MediaSession owns the controls on Android and is created with the service,
-        // so there is nothing to toggle separately. Accepting the call keeps the web API
-        // identical across platforms.
-        call.resolve();
-    }
 }

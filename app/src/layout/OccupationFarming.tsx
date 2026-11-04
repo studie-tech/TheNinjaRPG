@@ -111,11 +111,7 @@ export default function OccupationFarming({
         alreadyHasH1={embedded}
       >
         <div role="alert" className="space-y-2">
-          <p className="text-destructive text-sm">
-            {controller.query.data && "message" in controller.query.data
-              ? controller.query.data.message
-              : "Could not load the farm."}
-          </p>
+          <p className="text-destructive text-sm">Could not load the farm.</p>
           <Button
             variant="outline"
             disabled={controller.query.isFetching}

@@ -11,19 +11,9 @@ import { secondsPassed } from "@/utils/time";
 export type ColumnDefinitionType<T, K extends keyof T> = {
   key: K;
   header: React.ReactNode;
-  width?: number;
   /** Extra classes for the column's header and cells, e.g. to hide it on small screens. */
   className?: string;
-  onChange?: (id: string, column: string, value: string) => void;
-  type:
-    | "avatar"
-    | "string"
-    | "number"
-    | "capitalized"
-    | "time_passed"
-    | "date"
-    | "jsx"
-    | "input";
+  type: "avatar" | "string" | "number" | "capitalized" | "time_passed" | "date" | "jsx";
   tooltip?: (row: T) => string;
 };
 
@@ -105,10 +95,6 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                 <td
                   key={String(column.key)}
                   className={cn(compact ? "px-2 py-1" : "px-3 py-2", column.className)}
-                  style={{
-                    width: column.width ? `${column.width}rem` : "auto",
-                    minWidth: column.width ? `${column.width}rem` : "auto",
-                  }}
                 >
                   {column.type === "avatar" && (
                     <div className={avatarWrap}>
@@ -119,14 +105,6 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
                         hover_effect={true}
                       />
                     </div>
-                  )}
-                  {column.type === "input" && (
-                    <AvatarImage
-                      href={row[column.key] as string}
-                      alt={row[column.key] as string}
-                      size={avatarSize}
-                      hover_effect={true}
-                    />
                   )}
                   {column.type === "string" && (
                     <div title={column.tooltip?.(row)}>{row[column.key] as string}</div>

@@ -266,13 +266,11 @@ export const hexTileToPixel = (x: number, y: number) => ({
 });
 
 /**
- * Tile coordinate of an object. Authored objects pin their exact tile via
- * gridX/gridY properties; hand-placed objects (e.g. decorations dragged from
- * the tileset palette in Tiled) fall back to inverting the flat-top odd-q
- * stagger pixel layout (column pitch 0.75*tilewidth, odd columns shifted down
- * half a tile). Tile-objects anchor at bottom-center (the tilesets set
- * objectalignment "bottom"), so their pixel y sits half a tile below the hex
- * centre that point objects use.
+ * Tile coordinate of an object: the hex under its pixel position, found by
+ * inverting the flat-top odd-q stagger pixel layout (column pitch
+ * 0.75*tilewidth, odd columns shifted down half a tile). Tile-objects anchor at
+ * bottom-center (the tilesets set objectalignment "bottom"), so they are
+ * grounded by spriteGroundingOffset below the hex centre that point objects use.
  */
 const getObjectCoordinate = (
   map: TiledMap,
@@ -305,20 +303,6 @@ const getObjectCoordinate = (
   );
   // Mirrored files store the game's bottom row first; convert to game rows
   const row = flipped ? map.height - 1 - fileRow : fileRow;
-
-  // gridX/gridY pin the exact authored tile and avoid rounding drift on a clean
-  // round-trip. But Tiled leaves those custom properties untouched when a
-  // creator DRAGS the object, so once the pixel position no longer resolves to
-  // the pinned tile, the drag is what the creator sees and it wins (WYSIWYG).
-  // New palette-dragged objects carry no pin and use the pixel position.
-  const props = propertiesToRecord(object.properties);
-  const propX = asNumber(props.gridX ?? props.tileX);
-  const propY = asNumber(props.gridY ?? props.tileY);
-  if (propX !== undefined && propY !== undefined) {
-    const pinX = clamp(propX, 0, map.width - 1);
-    const pinY = clamp(propY, 0, map.height - 1);
-    if (pinX === col && pinY === row) return { x: pinX, y: pinY };
-  }
   return { x: col, y: row };
 };
 

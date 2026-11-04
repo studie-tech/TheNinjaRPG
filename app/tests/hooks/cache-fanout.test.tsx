@@ -9,9 +9,7 @@ import { getStartedJutsuTrainingUpdate } from "@/deltas/jutsu";
 import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
-import { ensureDom } from "../setup/dom.mjs";
 
-ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const stops: (() => void)[] = [];

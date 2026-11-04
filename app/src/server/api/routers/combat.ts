@@ -2,7 +2,6 @@ import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { after } from "next/server";
 import superjson from "superjson";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
@@ -201,7 +200,7 @@ import {
   calcJutsuEquipLimit,
   settleQueuedTraining,
 } from "@/libs/train";
-import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
+import { getBiomeFromGlobalTile } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
 import {
   deleteBattleById,
@@ -221,7 +220,6 @@ import {
   listJutsuForInitiateBattle2,
   listJutsuForInitiateBattle3,
   listRaidParticipationForInitiateBattle,
-  listSageModeForInitiateBattle,
   listTournamentForInitiateBattle,
   listUserDataForInitiateBattle,
   listUserDataForProcessUsersForBattle,
@@ -301,18 +299,13 @@ import {
   BarrierTag,
   IncreaseDamageGivenTag,
   isActivityBonus,
-  performActionSchema,
   statSchema,
-  toggleAutoCombatSchema,
   type ZodAllTags,
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
 import { sectorIdSchema } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
-
-// Debug flag when testing battle
-const debug = false;
 
 // Pusher instance
 const pusher = getServerPusher();
@@ -330,197 +323,176 @@ export const combatRouter = createTRPCRouter({
       // Initial battle version
       const actionRounds: number[] = [];
 
-      // OUTER LOOP: Attempt to perform action untill success || error thrown
-      // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      // Re-read and retry when another request claimed the battle version first
       let attempts = 0;
       while (true) {
-        try {
-          // Increment attempts
-          attempts += 1;
+        // Increment attempts
+        attempts += 1;
 
-          // Distinguish between public and non-public user state
-          const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
-          if (!userBattle) {
-            return { battle: null, result: null };
-          }
-          const stateBaseline = captureCombatStateUpdate(userBattle);
-
-          const spawnedWave = advanceEncounterWave(
-            userBattle,
-            !!dungeonBattleOutcome(userBattle),
-          );
-          // Current state of battle
-          const actId = userBattle.activeUserId;
-          const activeUser = userBattle.usersState.find((u) => u.userId === actId);
-          const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
-
-          // Update the battle to the correct activeUserId & round. Default to current user
-          const fetchedVersion = userBattle.version;
-          const fetchedUpdatedAt = userBattle.updatedAt;
-          const { progressRound, changedActor, actionRound, expiredEffects } =
-            alignBattle(userBattle, actionRounds, ctx.userId);
-          // A round can advance on this poll path too (idle turn timeout), not only via
-          // performAction. Run the sage exhaustion transition here as well, or it stays
-          // stranded until the next action. In-memory (no DB round-trip) and idempotent
-          // (guarded on sageModeActivated); the persist below carries the change, and the
-          // applyEffects call in the no-activity branch ticks any queued after-effects.
-          if (progressRound) {
-            applySageModeAfterRoundTransition(userBattle);
-          }
-          if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
-          advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
-
-          if (!actionRounds.includes(actionRound)) {
-            actionRounds.push(actionRound);
-          }
-
-          // Calculate if the battle is over for this user, and if so update user DB
-          // Fetch game settings for multipliers
-          let result = calcBattleResult(
-            userBattle,
-            ctx.userId,
-            userBattle.extraState.settings,
-          );
-
-          // The state this poll actually settles on. applyEffects hands back a
-          // clone rather than mutating in place, so everything downstream of it
-          // -- the result, the reward writes, the response -- has to read from
-          // that clone or it disagrees with what was just persisted.
-          let settledBattle = userBattle;
-
-          const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
-          // A settlement-only poll must persist leftBattle without ticking effects again.
-          const shouldTickEffects = battleOver || progressRound || changedActor;
-          const history: Parameters<typeof createAction>[2] = [];
-          if (shouldTickEffects && !hadActivity && actId && activeUser) {
-            const { newBattle, actionEffects } = applyEffects(userBattle, actId);
-            advanceEncounterWave(newBattle, !!dungeonBattleOutcome(newBattle));
-            settledBattle = newBattle;
-            // Effects ticking on this poll can end the fight -- a lingering
-            // damage tag finishing the last opponent -- so the result computed
-            // above is stale here, and persisting it would store a decided
-            // battle as an unfinished one nobody can ever act in again.
-            // calcBattleResult only mutates when it returns a result, so
-            // re-running it after a null costs nothing.
-            result =
-              result ??
-              calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
-
-            // Remove expired ground effects after applyEffects has processed them
-            // This ensures summon despawning logic runs before effects are removed
-            newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
-              if (e.rounds !== undefined && e.rounds <= 0) {
-                if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
-                  return true;
-                } else {
-                  return false; // Remove expired effects
-                }
-              }
-              return true; // Keep active effects
-            });
-
-            // Expiry and idle damage share one history key for this round/version.
-            history.push({
-              battleRound: actionRound,
-              appliedEffects: [...expiredEffects, ...actionEffects],
-              description: `${activeUser.username} stands and does nothing. `,
-              battleVersion: fetchedVersion,
-              actionId: "wait",
-              userId: activeUser.userId,
-            });
-          } else if (expiredEffects.length) {
-            history.push({
-              battleRound: actionRound,
-              appliedEffects: expiredEffects,
-              description: "Battlefield effects expire.",
-              battleVersion: fetchedVersion,
-              actionId: "wait",
-            });
-          }
-
-          if (result || progressRound || changedActor || spawnedWave) {
-            // alignBattle stamps updatedAt on every call. A settlement-only save must
-            // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
-            // as "the actor already acted" and would skip the idle actor's effects tick.
-            if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
-            const claim = await updateBattle(
-              ctx.drizzle,
-              result,
-              ctx.userId,
-              settledBattle,
-              fetchedVersion,
-              pusher,
-            );
-            if (!claim && attempts < 3) continue;
-            if (!claim) throw new Error("Battle version changed");
-            const { finishBattle } = claim;
-            const [logEntries] = await Promise.all([
-              createAction(ctx.drizzle, settledBattle, history),
-              finishBattle(),
-              ...(result &&
-              !settledBattle.extraState.dungeon &&
-              !settledBattle.extraState.hunting
-                ? [
-                    updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                    // Polling settlement pays the same faction counters as an action.
-                    updateVillageAnbuClan(
-                      ctx.drizzle,
-                      settledBattle,
-                      result,
-                      ctx.userId,
-                    ),
-                    updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                    updateKage(ctx.drizzle, settledBattle, result),
-                    // Terminal event outcomes were committed with the battle version claim.
-                    ...(claim.battleOver && settledBattle.extraState.tournamentGameId
-                      ? []
-                      : [
-                          updateTournament(
-                            ctx.drizzle,
-                            settledBattle,
-                            result,
-                            ctx.userId,
-                          ),
-                        ]),
-                    updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
-                  ]
-                : []),
-            ]);
-            // Idle effects can land a killing blow here too. Announce only after
-            // their log insert finishes so clients can refresh an earlier read.
-            if (
-              history.length &&
-              settledBattle.usersState.filter((user) => !user.isAi).length > 1
-            ) {
-              notifyBattleLogs(
-                pusher,
-                settledBattle,
-                logEntries,
-                !!result,
-                result
-                  ? undefined
-                  : buildCombatStateUpdate(stateBaseline, settledBattle),
-              );
-            }
-          }
-
-          // Hide private state of non-session user
-          const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
-
-          // Return the new battle + result state if applicable
-          return { battle: newMaskedBattle, result: result };
-        } catch (e) {
-          // If any of the above fails, retry the whole procedure
-          if (e instanceof Error) {
-            try {
-              e.message += ` (Attempt ${attempts})`;
-            } catch (e) {
-              console.error(e);
-            }
-          }
-          console.log("ERROR: ", e);
-          if (attempts > 2) throw e;
+        // Distinguish between public and non-public user state
+        const userBattle = await fetchBattle(ctx.drizzle, input.battleId);
+        if (!userBattle) {
+          return { battle: null, result: null };
         }
+        const stateBaseline = captureCombatStateUpdate(userBattle);
+
+        const spawnedWave = advanceEncounterWave(
+          userBattle,
+          !!dungeonBattleOutcome(userBattle),
+        );
+        // Current state of battle
+        const actId = userBattle.activeUserId;
+        const activeUser = userBattle.usersState.find((u) => u.userId === actId);
+        const hadActivity = userBattle.updatedAt > userBattle.roundStartAt;
+
+        // Update the battle to the correct activeUserId & round. Default to current user
+        const fetchedVersion = userBattle.version;
+        const fetchedUpdatedAt = userBattle.updatedAt;
+        const { progressRound, changedActor, actionRound, expiredEffects } =
+          alignBattle(userBattle, actionRounds, ctx.userId);
+        // A round can advance on this poll path too (idle turn timeout), not only via
+        // performAction. Run the sage exhaustion transition here as well, or it stays
+        // stranded until the next action. In-memory (no DB round-trip) and idempotent
+        // (guarded on sageModeActivated); the persist below carries the change, and the
+        // applyEffects call in the no-activity branch ticks any queued after-effects.
+        if (progressRound) {
+          applySageModeAfterRoundTransition(userBattle);
+        }
+        if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
+        advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
+
+        if (!actionRounds.includes(actionRound)) {
+          actionRounds.push(actionRound);
+        }
+
+        // Calculate if the battle is over for this user, and if so update user DB
+        // Fetch game settings for multipliers
+        let result = calcBattleResult(
+          userBattle,
+          ctx.userId,
+          userBattle.extraState.settings,
+        );
+
+        // The state this poll actually settles on. applyEffects hands back a
+        // clone rather than mutating in place, so everything downstream of it
+        // -- the result, the reward writes, the response -- has to read from
+        // that clone or it disagrees with what was just persisted.
+        let settledBattle = userBattle;
+
+        const battleOver = result && result.friendsLeft + result.targetsLeft === 0;
+        // A settlement-only poll must persist leftBattle without ticking effects again.
+        const shouldTickEffects = battleOver || progressRound || changedActor;
+        const history: Parameters<typeof createAction>[2] = [];
+        if (shouldTickEffects && !hadActivity && actId && activeUser) {
+          const { newBattle, actionEffects } = applyEffects(userBattle, actId);
+          advanceEncounterWave(newBattle, !!dungeonBattleOutcome(newBattle));
+          settledBattle = newBattle;
+          // Effects ticking on this poll can end the fight -- a lingering
+          // damage tag finishing the last opponent -- so the result computed
+          // above is stale here, and persisting it would store a decided
+          // battle as an unfinished one nobody can ever act in again.
+          // calcBattleResult only mutates when it returns a result, so
+          // re-running it after a null costs nothing.
+          result =
+            result ??
+            calcBattleResult(newBattle, ctx.userId, newBattle.extraState.settings);
+
+          // Remove expired ground effects after applyEffects has processed them
+          // This ensures summon despawning logic runs before effects are removed
+          newBattle.groundEffects = newBattle.groundEffects.filter((e) => {
+            if (e.rounds !== undefined && e.rounds <= 0) {
+              if (e.type === "visual" && actionRounds.includes(e.createdRound)) {
+                return true;
+              } else {
+                return false; // Remove expired effects
+              }
+            }
+            return true; // Keep active effects
+          });
+
+          // Expiry and idle damage share one history key for this round/version.
+          history.push({
+            battleRound: actionRound,
+            appliedEffects: [...expiredEffects, ...actionEffects],
+            description: `${activeUser.username} stands and does nothing. `,
+            battleVersion: fetchedVersion,
+            actionId: "wait",
+            userId: activeUser.userId,
+          });
+        } else if (expiredEffects.length) {
+          history.push({
+            battleRound: actionRound,
+            appliedEffects: expiredEffects,
+            description: "Battlefield effects expire.",
+            battleVersion: fetchedVersion,
+            actionId: "wait",
+          });
+        }
+
+        if (result || progressRound || changedActor || spawnedWave) {
+          // alignBattle stamps updatedAt on every call. A settlement-only save must
+          // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
+          // as "the actor already acted" and would skip the idle actor's effects tick.
+          if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
+          const claim = await updateBattle(
+            ctx.drizzle,
+            result,
+            ctx.userId,
+            settledBattle,
+            fetchedVersion,
+            pusher,
+          );
+          if (!claim && attempts < 3) continue;
+          if (!claim) throw new Error("Battle version changed");
+          const { finishBattle } = claim;
+          const [logEntries] = await Promise.all([
+            createAction(ctx.drizzle, settledBattle, history),
+            finishBattle(),
+            ...(result &&
+            !settledBattle.extraState.dungeon &&
+            !settledBattle.extraState.hunting
+              ? [
+                  updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                  // Polling settlement pays the same faction counters as an action.
+                  updateVillageAnbuClan(ctx.drizzle, settledBattle, result, ctx.userId),
+                  updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
+                  updateKage(ctx.drizzle, settledBattle, result),
+                  // Terminal event outcomes were committed with the battle version claim.
+                  ...(claim.battleOver && settledBattle.extraState.tournamentGameId
+                    ? []
+                    : [
+                        updateTournament(
+                          ctx.drizzle,
+                          settledBattle,
+                          result,
+                          ctx.userId,
+                        ),
+                      ]),
+                  updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
+                ]
+              : []),
+          ]);
+          // Idle effects can land a killing blow here too. Announce only after
+          // their log insert finishes so clients can refresh an earlier read.
+          if (
+            history.length &&
+            settledBattle.usersState.filter((user) => !user.isAi).length > 1
+          ) {
+            notifyBattleLogs(
+              pusher,
+              settledBattle,
+              logEntries,
+              !!result,
+              result ? undefined : buildCombatStateUpdate(stateBaseline, settledBattle),
+            );
+          }
+        }
+
+        // Hide private state of non-session user
+        const newMaskedBattle = maskBattle(settledBattle, ctx.userId);
+
+        // Return the new battle + result state if applicable
+        return { battle: newMaskedBattle, result: result };
       }
     }),
   getBattleEntries: protectedProcedure
@@ -528,6 +500,8 @@ export const combatRouter = createTRPCRouter({
     .input(
       z.object({
         battleId: z.string(),
+        // Client cache keys only: a new battle version or the arrival of the result
+        // re-reads the settled log.
         refreshKey: z.number().optional(),
         checkBattle: z.boolean().optional(),
         limit: z.number().optional(),
@@ -631,7 +605,22 @@ export const combatRouter = createTRPCRouter({
   performAction: protectedProcedure
     .meta({ mcp: { description: "Perform action in battle" } })
     .use(deferredRatelimitMiddleware)
-    .input(performActionSchema)
+    .input(
+      z.object({
+        battleId: z.string(),
+        actionId: z.string().optional(),
+        longitude: z.number().optional(),
+        latitude: z.number().optional(),
+        version: z
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .describe(
+            "Battle version from getBattle; required when actionId is provided",
+          ),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Short-form
       const suid = ctx.userId;
@@ -647,11 +636,17 @@ export const combatRouter = createTRPCRouter({
           ctx.waitForRateLimit(),
         ]);
         if (!battle) return { updateClient: true };
+        // Manual choices belong to the displayed snapshot, including requests from older tabs.
+        if (input.actionId !== undefined && input.version !== battle.version) {
+          return {
+            updateClient: true,
+            notification:
+              input.version === undefined
+                ? "Reload the page before choosing a battle action."
+                : "Battle state changed. Choose your action again.",
+          };
+        }
         const stateBaseline = captureCombatStateUpdate(battle);
-        // A denied request must not start a profiler that the action cannot stop.
-        Sentry.profiler.startProfiler();
-        if (debug) console.log("============ Performing action ============");
-
         advanceEncounterWave(battle, !!dungeonBattleOutcome(battle));
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
@@ -667,7 +662,7 @@ export const combatRouter = createTRPCRouter({
             !u.isSummon &&
             u.isAutoCombat &&
             !u.leftBattle &&
-            stillInBattle(u, battle.usersEffects),
+            stillInBattle(u),
         );
         const maxActions =
           AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
@@ -704,12 +699,6 @@ export const combatRouter = createTRPCRouter({
           if (progressedRoundBeforeAction) {
             applySageModeAfterRoundTransition(newBattle);
           }
-          if (debug) {
-            console.log(
-              `============ 1. Actor: ${actor.username} - ${actor.userId} ============`,
-            );
-          }
-
           // Record all rounds for this endpoint call¨
           if (!actionRounds.includes(actionRound)) {
             actionRounds.push(actionRound);
@@ -760,7 +749,6 @@ export const combatRouter = createTRPCRouter({
               action,
               actor,
               newBattle.usersState,
-              newBattle.usersEffects,
             );
             if (summonBlocked) {
               return { updateClient: false, notification: summonBlocked };
@@ -770,7 +758,6 @@ export const combatRouter = createTRPCRouter({
                 battle: newBattle,
                 action,
                 grid,
-                contextUserId: suid,
                 actorId: actor.userId,
                 longitude: input.longitude,
                 latitude: input.latitude,
@@ -794,7 +781,6 @@ export const combatRouter = createTRPCRouter({
               battleDescriptions.push(...aiState.aiDescriptions);
               performedActionId = aiState.nextActionId ?? performedActionId;
               performedByUserId = actor.userId;
-              // console.log("STATE SPACE: ", aiState.searchSize);
             } catch (error) {
               let notification = "Unknown Error";
               if (error instanceof Error) notification = error.message;
@@ -910,7 +896,13 @@ export const combatRouter = createTRPCRouter({
               fetchedVersion,
               pusher,
             );
-            if (!claim) return { updateClient: true };
+            if (!claim)
+              return {
+                updateClient: true,
+                ...(input.actionId !== undefined
+                  ? { notification: "Battle state changed. Choose your action again." }
+                  : {}),
+              };
             const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
@@ -947,11 +939,6 @@ export const combatRouter = createTRPCRouter({
                 result ? undefined : buildCombatStateUpdate(stateBaseline, newBattle),
               );
             }
-
-            // Stop profiling. Flush after the response so the client is not
-            // blocked; after() keeps the Vercel lambda alive via waitUntil.
-            Sentry.profiler.stopProfiler();
-            after(() => Sentry.flush(15000));
 
             // Return the new battle + result state if applicable
             return {
@@ -1452,7 +1439,6 @@ export const combatRouter = createTRPCRouter({
       // Merge every static lookup map the reprocessing produced (jutsus, items,
       // and the aiProfiles/bloodlines of newly loaded summon templates) so new
       // actions and summons resolve during battle.
-      userBattle.extraState = userBattle.extraState || {};
       userBattle.extraState.preBattleGearModifiers =
         userBattle.extraState.preBattleGearModifiers || {};
       mergeExtraState(userBattle.extraState, extraState);
@@ -1575,7 +1561,7 @@ export const combatRouter = createTRPCRouter({
       },
     })
     .use(ratelimitMiddleware)
-    .input(toggleAutoCombatSchema)
+    .input(z.object({ battleId: z.string(), enabled: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
       // Maximum number of retry attempts
       const MAX_RETRIES = 3;
@@ -2587,24 +2573,6 @@ export const initiateBattle = async (
     fetchedUsers.some((u) => u.userId === id),
   ).length;
 
-  // Ensure SageMode row is present when sageModeId is set (relation can be null if stale)
-  const missingSageIds = [
-    ...new Set(
-      users
-        .filter((u) => u.sageModeId && !u.sageMode)
-        .map((u) => u.sageModeId as string),
-    ),
-  ];
-  if (missingSageIds.length > 0) {
-    const sageRows = await listSageModeForInitiateBattle(client, missingSageIds);
-    const byId = Object.fromEntries(sageRows.map((m) => [m.id, m]));
-    for (const u of users) {
-      if (!u.sageModeId || u.sageMode) continue;
-      const row = byId[u.sageModeId];
-      if (row) u.sageMode = row;
-    }
-  }
-
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
 
@@ -2722,7 +2690,7 @@ export const initiateBattle = async (
     if (user.isBanned) return { success: false, message: `${user.username} is banned` };
 
     // Force defender village id
-    if (info?.forceDefenderVillageId && targetIds.includes(user.userId)) {
+    if (info.forceDefenderVillageId && targetIds.includes(user.userId)) {
       user.villageId = info.forceDefenderVillageId;
     }
 
@@ -2891,17 +2859,17 @@ export const initiateBattle = async (
     }
 
     // Scale targets
-    if (info?.scaleTarget && i >= leftSideUserCount && users[0]) {
+    if (info.scaleTarget && i >= leftSideUserCount && users[0]) {
       user.level = users[0].level;
       scaleUserStats(user, user.isAi ? "ai" : "player");
     }
 
     // Manually Assign Stats
-    if (info?.targetStatDistribution && i >= leftSideUserCount) {
-      manuallyAssignUserStats(user, info?.targetStatDistribution);
+    if (info.targetStatDistribution && i >= leftSideUserCount) {
+      manuallyAssignUserStats(user, info.targetStatDistribution);
     }
-    if (info?.userStatDistribution && userIds.includes(user.userId)) {
-      manuallyAssignUserStats(user, info?.userStatDistribution);
+    if (info.userStatDistribution && userIds.includes(user.userId)) {
+      manuallyAssignUserStats(user, info.userStatDistribution);
     }
 
     // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
@@ -2911,17 +2879,7 @@ export const initiateBattle = async (
     capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
 
     // Add achievements to users for tracking
-    // Ensure userQuests and completedQuests are initialized for mockAchievementHistoryEntries
-    if (!user.userQuests) user.userQuests = [];
-    if (!user.completedQuests) user.completedQuests = [];
-    const userForAchievements = {
-      ...user,
-      userQuests: user.userQuests,
-      completedQuests: user.completedQuests,
-    };
-    user.userQuests.push(
-      ...mockAchievementHistoryEntries(achievements, userForAchievements),
-    );
+    user.userQuests.push(...mockAchievementHistoryEntries(achievements, user));
   }
 
   // Check immunity on defenders
@@ -3155,7 +3113,7 @@ export const initiateBattle = async (
       if (boss) {
         raidInitialBossHp = raidBossCurrent;
         // Set boss maxHealth first (use higher of AI max and raid max), then curHealth
-        const raidMaxHp = raidQuest?.raidBossMaxHealth ?? boss.maxHealth;
+        const raidMaxHp = raidQuest.raidBossMaxHealth ?? boss.maxHealth;
         boss.maxHealth = Math.max(boss.maxHealth, raidMaxHp);
         boss.curHealth = Math.min(boss.maxHealth, raidBossCurrent);
         // Set chakra and stamina equal to max health for raid bosses
@@ -3168,9 +3126,7 @@ export const initiateBattle = async (
   }
 
   // Starting ground effects
-  const groundAssets = assets.filter(
-    (a) => a.onInitialBattleField && a.type === "STATIC",
-  );
+  const groundAssets = assets.filter((a) => a.type === "STATIC");
   for (let col = 0; col < gridSize.width; col++) {
     for (let row = 0; row < gridSize.height; row++) {
       // Ignore the spots where we placed users
@@ -3210,7 +3166,7 @@ export const initiateBattle = async (
   const activeUser = usersState
     .sort((a, b) => b.initiative - a.initiative)
     .filter((u) => u.curHealth > 0);
-  const activeUserId = attackerFirst ? users?.[0]?.userId : activeUser?.[0]?.userId;
+  const activeUserId = attackerFirst ? users[0]?.userId : activeUser[0]?.userId;
 
   // When to start the battle
   const startTime = !PvpBattleTypes.includes(battleType)
@@ -3906,7 +3862,6 @@ export const processUsersForBattle = async (
       round: 0,
       iAmHere: false,
       originalLevel: inputUser.level,
-      originalMoney: inputUser.money,
       originalLongitude: inputUser.longitude,
       originalLatitude: inputUser.latitude,
       actionPoints: 100,
@@ -4057,10 +4012,6 @@ export const processUsersForBattle = async (
       user.level = getEffectiveLevel(user);
     }
 
-    // Store original location
-    user.originalLongitude = user.longitude;
-    user.originalLatitude = user.latitude;
-
     // Default locaton
     if (hide) {
       user.longitude = 0;
@@ -4107,9 +4058,8 @@ export const processUsersForBattle = async (
       user.avatarLight = user.anbuSquad.image;
     }
 
-    // For ally village check later (and formerly for village wall defence bonus)
+    // For ally village check later
     const ownSector = user.sector === user.village?.sector;
-    const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
 
     const fitsBattle = (usage: BattleUsageType) => fitsBattleUsage(battleType, usage);
 
@@ -4163,7 +4113,6 @@ export const processUsersForBattle = async (
         }) as UserEffect,
         user,
         actionId: "elemental-mastery",
-        target: user,
         level: user.level,
       });
       realized.isNew = false;
@@ -4185,7 +4134,6 @@ export const processUsersForBattle = async (
           tag: effect as UserEffect,
           user,
           actionId: user.bloodline?.id ?? "initial",
-          target: user,
           level: user.level,
         });
         realized.isNew = false;
@@ -4240,7 +4188,6 @@ export const processUsersForBattle = async (
                 tag: effect as UserEffect,
                 user: user,
                 actionId: userSkill.skillId,
-                target: user,
                 level: user.level,
               });
               realized.isNew = false;
@@ -4279,7 +4226,6 @@ export const processUsersForBattle = async (
             tag: titleCombatTag(effect) as UserEffect,
             user,
             actionId: owned.titleId,
-            target: user,
             level: 0,
           });
           realized.isNew = false;
@@ -4302,7 +4248,6 @@ export const processUsersForBattle = async (
           tag: { ...effect, rounds: undefined, powerPerLevel: 0 } as UserEffect,
           user,
           actionId: buff.id,
-          target: user,
           level: 0,
         });
         realized.isNew = false;
@@ -4322,7 +4267,6 @@ export const processUsersForBattle = async (
           tag: effect as UserEffect,
           user: user,
           actionId: "initial",
-          target: user,
           level: user.level,
         });
         realized.isNew = false;
@@ -4338,35 +4282,25 @@ export const processUsersForBattle = async (
     // in userJutsuToAction to ensure each user sees their own reskin.
     // user.userSkills was cleared for storage above; gates read the captured skills.
     const gateUser = { ...user, userSkills: requirementSkills };
-    const processedJutsus = user.jutsus
-      .map((userjutsu) => ({
-        ...userjutsu,
-        lastUsedRound: userjutsu.lastUsedRound,
-        originalCooldown: userjutsu.originalCooldown,
-      }))
-      .filter((userjutsu) => {
-        // Not if no jutsu
-        if (!userjutsu.jutsu) {
-          return false;
-        }
-        if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
-          return false;
-        }
-        // Shared with the combat lobby so loadout switches never keep jutsu dropped here.
-        if (
-          battleJutsuGateFailure(userjutsu.jutsu, gateUser, battleType, gateMasteries)
-        ) {
-          return false;
-        }
-        // Add summons to list only for jutsus that survived every gate above
-        const effects = userjutsu.jutsu.effects as UserEffect[];
-        effects
-          .filter((e) => e.type === "summon")
-          .forEach((e) => {
-            if ("aiId" in e) addSummon(e.aiId);
-          });
-        return true;
-      });
+    const processedJutsus = user.jutsus.filter((userjutsu) => {
+      if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
+        return false;
+      }
+      // Shared with the combat lobby so loadout switches never keep jutsu dropped here.
+      if (
+        battleJutsuGateFailure(userjutsu.jutsu, gateUser, battleType, gateMasteries)
+      ) {
+        return false;
+      }
+      // Add summons to list only for jutsus that survived every gate above
+      const effects = userjutsu.jutsu.effects as UserEffect[];
+      effects
+        .filter((e) => e.type === "summon")
+        .forEach((e) => {
+          if ("aiId" in e) addSummon(e.aiId);
+        });
+      return true;
+    });
     user.jutsus = processedJutsus;
 
     // Add basic actions to user for tracking cooldowns
@@ -4387,9 +4321,7 @@ export const processUsersForBattle = async (
     // Determine equipped keystone item name for quick display later
     const keystoneItem = user.items.find(
       (useritem) =>
-        useritem.item &&
-        useritem.item.itemType === "KEYSTONE" &&
-        useritem.equipped === "KEYSTONE",
+        useritem.item.itemType === "KEYSTONE" && useritem.equipped === "KEYSTONE",
     );
     user.keystoneName = keystoneItem?.item.name ?? null;
     user.keystoneItem = keystoneItem?.item ?? null;
@@ -4398,7 +4330,6 @@ export const processUsersForBattle = async (
     const items: ProcessedItem[] = [];
     user.items
       .filter((ui) => {
-        if (!ui.item) return false;
         if (!fitsBattle(ui.item.battleUsageType)) return false;
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
         if (
@@ -4445,7 +4376,6 @@ export const processUsersForBattle = async (
         ) {
           // Add item effects to user (only if user has required bloodline)
           if (
-            ui.item.effects &&
             ui.equipped !== "NONE" &&
             (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId)
           ) {
@@ -4454,7 +4384,6 @@ export const processUsersForBattle = async (
                 tag: effect,
                 user: user,
                 actionId: ui.itemId,
-                target: user,
                 // AI gear can never earn item XP; keep character-level scaling
                 // for AI so boss/raid content is not silently nerfed to level 1.
                 level: user.isAi ? user.level : ui.level,
@@ -4490,11 +4419,6 @@ export const processUsersForBattle = async (
       });
     user.items = items;
 
-    // Base values
-    user.fledBattle = false;
-    user.leftBattle = false;
-    user.moneyStolen = 0;
-
     // Roll initiative
     user.initiative = rollInitiative(user, users, user.village?.sector);
 
@@ -4504,8 +4428,7 @@ export const processUsersForBattle = async (
     );
 
     // Check if we are in ally village or not
-    user.allyVillage = false;
-    if (inVillage && !ownSector) {
+    if (!ownSector) {
       const sector = info.villages.find((v) => v.sector === user.sector);
       if (sector) {
         const relationship = findRelationship(relations, user.villageId, sector.id);
@@ -4617,18 +4540,16 @@ export const processUsersForBattle = async (
   }
 
   // Compute initial durability before conversion (needs item.item access)
-  const initialDurability: Record<string, Record<string, number>> = {};
-  usersState.forEach((user) => {
-    initialDurability[user.userId] = {};
-    const userDurability = initialDurability[user.userId];
-    user.items.forEach(
-      (item: { id: string; durability: number; item?: { maxDurability?: number } }) => {
-        if (item.item?.maxDurability && item.item.maxDurability > 0 && userDurability) {
-          userDurability[item.id] = item.durability;
-        }
-      },
-    );
-  });
+  const initialDurability = Object.fromEntries(
+    usersState.map((user) => [
+      user.userId,
+      Object.fromEntries(
+        user.items
+          .filter((ui) => ui.item.maxDurability > 0)
+          .map((ui) => [ui.id, ui.durability]),
+      ),
+    ]),
+  );
 
   // Build extraState from all users
   const extraState: ExtraState = {
@@ -4641,9 +4562,9 @@ export const processUsersForBattle = async (
     villages: {},
     anbuSquads: {},
     keystoneItems: {},
-    wars: {},
+    wars: Object.fromEntries(info.wars.map((w) => [w.id, w])),
     aiProfiles: {},
-    relations: {},
+    relations: Object.fromEntries(info.relations.map((r) => [r.id, r])),
     clans: {},
     userQuests: {},
     completedQuests: {},
@@ -4651,20 +4572,6 @@ export const processUsersForBattle = async (
     bounties: {},
     bountySignups: {},
   };
-
-  // Add wars to extraState
-  for (const w of info.wars) {
-    if (!extraState.wars[w.id]) {
-      extraState.wars[w.id] = w;
-    }
-  }
-
-  // Add relations to extraState
-  for (const r of info.relations) {
-    if (!extraState.relations[r.id]) {
-      extraState.relations[r.id] = r;
-    }
-  }
 
   // Add default AI profile
   extraState.aiProfiles.Default = info.defaultProfile;
@@ -4772,8 +4679,8 @@ export const processUsersForBattle = async (
       experience: uj.experience,
       equipped: uj.equipped,
       origin: "user" as const,
-      lastUsedRound: uj.lastUsedRound ?? -(uj.jutsu?.cooldown ?? 0),
-      originalCooldown: uj.originalCooldown ?? uj.jutsu?.cooldown ?? 0,
+      lastUsedRound: uj.lastUsedRound,
+      originalCooldown: uj.originalCooldown,
       reskinId: uj.reskinId ?? null,
       linkedReskinId: uj.linkedReskin?.id ?? null,
     }));
@@ -4799,8 +4706,8 @@ export const processUsersForBattle = async (
         experience: ui.experience,
         durability: ui.durability,
         equipped: ui.equipped,
-        lastUsedRound: ui.lastUsedRound ?? -(ui.item?.cooldown ?? 0),
-        originalCooldown: ui.originalCooldown ?? ui.item?.cooldown ?? 0,
+        lastUsedRound: ui.lastUsedRound,
+        originalCooldown: ui.originalCooldown,
         dropChancePerc: ui.dropChancePerc,
         imbuementEffects: ui.imbuementEffects ?? [],
         activeVariantId: ui.activeVariantId ?? null,
@@ -4889,7 +4796,6 @@ export const processUsersForBattle = async (
           tag: structuredClone(effect),
           user: creator,
           actionId: pending.skillId,
-          target,
           level: pending.level,
         });
         realized.isNew = false;

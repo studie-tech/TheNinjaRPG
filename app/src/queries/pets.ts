@@ -390,7 +390,6 @@ export const executeResultForUpdateOwnedPet = (
   client: Pick<DrizzleClient, "execute">,
   user: import("@/drizzle/schema").UserData,
   now: Date,
-  cost: number,
   assignments: SQL<unknown>[],
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 
@@ -400,11 +399,10 @@ export const executeResultForUpdateOwnedPet = (
       UPDATE ${userData}
       INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
       SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
-          ${cost ? sql`${userData.reputationPoints} = ${userData.reputationPoints} - ${cost},` : sql``}
           ${sql.join(assignments, sql`, `)}${assignments.length ? sql`,` : sql``}
           ${userPet.revision} = ${userPet.revision} + 1,
           ${userPet.updatedAt} = ${now}
-      WHERE ${and(ownerSnapshotWhere(user), petSnapshotWhere(pet), cost ? gte(userData.reputationPoints, cost) : undefined)}
+      WHERE ${and(ownerSnapshotWhere(user), petSnapshotWhere(pet))}
     `);
 
 /** Every pet write must still own the selected identity at the fetched revision. */

@@ -332,7 +332,6 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
       jutsuName: jutsu.name,
       previousLevel: displayedJutsuLevel,
       newLevel: data.level,
-      previousReskinId: displayedJutsuReskinId,
       previousReskinName: displayedJutsuReskinName,
       newReskinId,
       newReskinName,
@@ -340,7 +339,6 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
       finishTraining: userJutsu.finishTraining
         ? new Date(userJutsu.finishTraining)
         : null,
-      requestId: crypto.randomUUID(),
     });
   });
 
@@ -440,12 +438,10 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
       imbuements: selectedUserItem.imbuements
         .map((imbuement) => ({
           id: imbuement.id,
-          itemId: imbuement.imbuementItemId,
           itemName: imbuement.item.name,
           craftingFinishedAt: new Date(imbuement.craftingFinishedAt),
         }))
         .sort((a, b) => a.id.localeCompare(b.id)),
-      requestId: crypto.randomUUID(),
     });
   });
 
@@ -1029,7 +1025,6 @@ const DeleteUserQuestControl: React.FC<{
       startedAt: new Date(userQuest.startedAt),
       endAt: userQuest.endAt ? new Date(userQuest.endAt) : null,
       completed: userQuest.completed,
-      requestId: crypto.randomUUID(),
     });
   };
 
@@ -1169,13 +1164,11 @@ type JutsuAdjustmentSnapshot = {
   jutsuName: string;
   previousLevel: number;
   newLevel: number;
-  previousReskinId: string | null;
   previousReskinName: string | null;
   newReskinId: string | null;
   newReskinName: string | null;
   equipped: boolean;
   finishTraining: Date | null;
-  requestId: string;
 };
 
 type CommittedJutsuAdjustment = {
@@ -1206,11 +1199,9 @@ type ItemAdjustmentSnapshot = {
   craftingFinishedAt: Date | null;
   imbuements: Array<{
     id: string;
-    itemId: string;
     itemName: string;
     craftingFinishedAt: Date;
   }>;
-  requestId: string;
 };
 
 type UserQuestDeletionSnapshot = {
@@ -1223,5 +1214,4 @@ type UserQuestDeletionSnapshot = {
   startedAt: Date;
   endAt: Date | null;
   completed: number;
-  requestId: string;
 };

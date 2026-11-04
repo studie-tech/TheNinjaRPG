@@ -80,12 +80,13 @@ export const getTimeOfLastReset = () => {
 /**
  * Number of seconds passed since the given date
  *
- * @param date - The date to calculate the seconds passed since
+ * @param date - The date to calculate the seconds passed since; battle JSON columns
+ *   carry it as an ISO string
  * @param timeDiff - The time difference in milliseconds
  * @param floor - Whether to floor the result
  * @returns The number of seconds passed since the given date
  */
-export const secondsPassed = (date: Date, timeDiff?: number, floor = true) => {
+export const secondsPassed = (date: Date | string, timeDiff?: number, floor = true) => {
   let now = Date.now();
   if (timeDiff) now = now - timeDiff;
   const parsedDate = date instanceof Date ? date : new Date(date);
@@ -272,36 +273,6 @@ export const formatTimeAgo = (date: Date) => {
   if (diffInSeconds < HOUR_S) return `${Math.floor(diffInSeconds / MINUTE_S)}m ago`;
   if (diffInSeconds < DAY_S) return `${Math.floor(diffInSeconds / HOUR_S)}h ago`;
   return `${Math.floor(diffInSeconds / DAY_S)}d ago`;
-};
-
-/**
- * Combines a calendar date with a UTC HH:MM time string into a Date object.
- * The date components are taken from the **local** representation of `date`
- * (year/month/day as the user sees them), and the time is interpreted as UTC
- * hours/minutes. Using local components avoids off-by-one-day errors for users
- * in non-UTC timezones where a local-midnight Date has a different UTC date.
- * @param date - A Date whose local year/month/day is used
- * @param timeHHMM - A time string in "HH:MM" format (UTC)
- * @returns A new Date representing that local date + UTC time
- */
-export const combineUTCDateTime = (date: Date, timeHHMM: string): Date => {
-  if (!/^\d{1,2}:\d{2}$/.test(timeHHMM)) {
-    throw new TypeError(
-      `combineUTCDateTime: invalid time format "${timeHHMM}" — expected HH:MM`,
-    );
-  }
-  const [hhStr = "00", mmStr = "00"] = timeHHMM.split(":");
-  const hh = parseInt(hhStr, 10);
-  const mm = parseInt(mmStr, 10);
-  if (!Number.isFinite(hh) || hh < 0 || hh > 23) {
-    throw new TypeError(`combineUTCDateTime: hours out of range (${hh})`);
-  }
-  if (!Number.isFinite(mm) || mm < 0 || mm > 59) {
-    throw new TypeError(`combineUTCDateTime: minutes out of range (${mm})`);
-  }
-  return new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hh, mm, 0, 0),
-  );
 };
 
 /**

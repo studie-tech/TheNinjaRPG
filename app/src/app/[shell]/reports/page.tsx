@@ -71,13 +71,7 @@ export default function Reports() {
       clearedReportIdsRef.current.add(variables.object_id);
       setClearedReportIds((current) => [...current, variables.object_id]);
 
-      try {
-        await utils.reports.getAll.invalidate();
-      } catch {
-        // Invalidation normally refetches active report lists. Retry with an explicit
-        // authoritative read if that cache operation itself fails.
-        await utils.reports.getAll.refetch().catch(() => undefined);
-      }
+      await utils.reports.getAll.invalidate();
     },
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
@@ -114,11 +108,11 @@ export default function Reports() {
   return (
     <ContentBox
       title="Reports"
-      subtitle={userData?.role === "USER" ? "Your reports" : "Overview"}
+      subtitle={userData.role === "USER" ? "Your reports" : "Overview"}
       topRightContent={
         <div>
           <div className="flex flex-col items-start">
-            {userData && isStaffRole(userData.role) && (
+            {isStaffRole(userData.role) && (
               <div className="flex w-full flex-row items-center gap-1">
                 <Link href="/reports/statistics">
                   <Button id="report-statistics" hoverText="Staff Activity Overview">
@@ -185,7 +179,6 @@ export default function Reports() {
                         <div className="mr-3 basis-2/12 truncate text-center sm:basis-3/12 sm:text-base">
                           <AvatarImage
                             href={reportedUser.avatar}
-                            userId={reportedUser.userId}
                             alt={reportedUser.username}
                             size={100}
                           />

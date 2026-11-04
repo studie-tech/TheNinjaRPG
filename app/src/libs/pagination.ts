@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { showMutationToast } from "@/libs/toast";
 
 interface Pagination {
   fetchNextPage: () => Promise<any>;
@@ -7,6 +6,7 @@ interface Pagination {
   lastElement: HTMLElement | null;
 }
 
+/** Fetch available pages as the observed last row enters the viewport. */
 export const useInfinitePagination = ({
   fetchNextPage,
   hasNextPage,
@@ -62,17 +62,8 @@ export const useInfinitePagination = ({
         }
       }
     };
-    if (hasNextPage) {
-      fetchData().catch((error: unknown) => {
-        if (error instanceof Error) {
-          console.error(error);
-        }
-        showMutationToast({
-          success: false,
-          title: "Error fetching batch",
-          message: "Error fetching next batch of data",
-        });
-      });
-    }
+    // TanStack's fetchNextPage resolves with isError instead of rejecting; the
+    // QueryCache error handler reports failed pages.
+    if (hasNextPage) void fetchData();
   }, [fetchNextPage, hasNextPage, page]);
 };
