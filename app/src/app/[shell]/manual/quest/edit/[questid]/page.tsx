@@ -241,7 +241,6 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         title="Content Panel"
         subtitle="Quest Management"
         defaultBackHref="/manual/quest"
-        noRightAlign={true}
         topRightContent={<QuestHelper quest={currentValues} />}
       >
         {currentValues.questType === "village_mission" && (
