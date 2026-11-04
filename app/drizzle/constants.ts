@@ -1047,6 +1047,8 @@ export const QuestTypes = [
   "special",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
+/** Action log marker for staff resets, which never draw on the monthly allowance. */
+export const SKILL_RESET_STAFF_RELATED_MSG = "Free reset for staff member";
 /** Solo assignments from the Mission Hall; one can be active at a time. */
 export const MISSION_HALL_SOLO_QUEST_TYPES: readonly QuestType[] = [
   "mission",
@@ -1061,6 +1063,11 @@ export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
   "war",
 ];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+/** Types started only through a dedicated acquisition flow, never from public listings. */
+export const RESTRICTED_QUEST_TYPES = [
+  ...NPC_ONLY_QUEST_TYPES,
+  "special",
+] as const satisfies readonly QuestType[];
 /** Contracts a companion may take on. */
 export const PET_TASK_QUEST_TYPES = [
   "hunting",
@@ -1669,6 +1676,8 @@ export const COST_RESKIN_JUTSU = 60;
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
+/** Guardian AI behind village protector encounters and the last-resort shrine defence. */
+export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";
 /** Ascending, incremental milestones; repeated categories add percentage points. */
 export const VILLAGE_LOYALTY_TIERS = [
   { days: 7, bonus: "regen", percent: 5 },
@@ -2014,6 +2023,10 @@ export const MAX_REPS_PER_MONTH = 4000;
 export const MAX_REPS_EXTRA_PER_MONTH = 250;
 
 // Federal config
+/** Days one PayPal or reputation payment keeps its federal tier. */
+export const PAYPAL_PAID_PERIOD_DAYS = 31;
+/** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
+export const STORE_RECEIPT_FALLBACK_DAYS = 63;
 export const FED_NORMAL_REPS_COST = 15;
 export const FED_SILVER_REPS_COST = 35;
 export const FED_GOLD_REPS_COST = 50;
@@ -2211,6 +2224,7 @@ export const SHRINE_HP_BY_LEVEL = { 1: 3000, 2: 4000, 3: 5000 } as const;
 export const SHRINE_MAX_LEVEL = Math.max(
   ...Object.keys(SHRINE_HP_BY_LEVEL).map(Number),
 );
+export const SHRINE_BOOST_REQUIRED_LEVEL = 3;
 export const SHRINE_BOOST_TYPES = [
   "Training",
   "PVP",
@@ -3651,6 +3665,7 @@ export const OUT_OF_COMBAT_BASE_DAMAGE_INCREASE = 60; // Percentage points added
 export const PARRY_MAX_PERCENTAGE = 100;
 export const DIFFUSE_MAX_PERCENTAGE = 99;
 export const DIFFUSE_DEFAULT_DELAY_ROUNDS = 3;
+export const TEMPORAL_AP_DELTA = 10; // AP added or removed by time compression / dilation
 export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
 
 /** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */
@@ -3716,24 +3731,31 @@ export const COPYABLE_EFFECT_TYPES: ReadonlySet<string> = new Set(
   COPY_PRIORITY_TIERS.flat(),
 );
 
-/**
- * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
- * effects are not stealable/reflectable. Shared by both tags. Keep in step with
- * the passive/pre-battle sources in `persistentEffectSourceTypes` (tags.ts) and
- * `getEffectStage` (util.ts): a source those treat as passive belongs here too.
- */
-export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
-  "bloodline",
-  "armor",
-  "accessory",
-  "keystone",
-  "item",
-  "village",
+/** Sources (`fromType`) granted before battle; they resolve in damage-modifier stage 1. */
+export const PRE_BATTLE_SOURCE_TYPES: readonly string[] = [
+  ...preBattleGearFromTypes,
+  ...preBattleKeystoneFromTypes,
   "skill",
+  "village",
   "ranked",
   "elementalMastery",
+];
+
+/** Sources `clear` / `cleanse` never strip. Sage buffs and exhaustion are both protected. */
+export const PERSISTENT_EFFECT_SOURCE_TYPES: ReadonlySet<string> = new Set([
+  ...PRE_BATTLE_SOURCE_TYPES,
+  "bloodline",
   "sageMode",
   "sageModeAfter",
+]);
+
+/**
+ * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
+ * effects are not stealable/reflectable. Shared by both tags.
+ */
+export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
+  ...PERSISTENT_EFFECT_SOURCE_TYPES,
+  "item",
 ]);
 
 /**

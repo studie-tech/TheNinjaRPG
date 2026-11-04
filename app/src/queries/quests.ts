@@ -24,9 +24,9 @@ import {
   IMG_AVATAR_DEFAULT,
   type LetterRank,
   MAX_EXPERIENCE_LEVEL,
-  NPC_ONLY_QUEST_TYPES,
   PET_TASK_MIN_RANK,
   type QuestType,
+  RESTRICTED_QUEST_TYPES,
   type UserRole,
   UserRoles,
   VILLAGE_SYNDICATE_ID,
@@ -68,7 +68,7 @@ import { getFarmingLevel } from "@/libs/farming";
 import { isSupportedOverworldBindingTask } from "@/libs/overworldAi";
 import { filterQuestTrackersForDbPersist, getUserQuests } from "@/libs/quest";
 import {
-  buildRewardChoiceCards,
+  rewardChoiceContentIds,
   type RewardChoiceOwnership,
 } from "@/libs/rewardChoice";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
@@ -198,7 +198,7 @@ export const fetchRestrictedNewQuestTargets = async (
     columns: { id: true, name: true },
     where: and(
       inArray(quest.id, targetIds),
-      inArray(quest.questType, [...NPC_ONLY_QUEST_TYPES, "special"]),
+      inArray(quest.questType, [...RESTRICTED_QUEST_TYPES]),
     ),
   });
 };
@@ -257,16 +257,7 @@ export const fetchRewardChoiceOwnership = async (
   user: Pick<UserData, "userId" | "sageModeId" | "masteryRanks">,
   cards: RewardChoiceCard[],
 ): Promise<RewardChoiceOwnership> => {
-  const expandedCards = cards.flatMap((card) =>
-    card.rewards ? buildRewardChoiceCards(card.rewards) : [card],
-  );
-  const idsFor = (field: RewardChoiceCard["field"]) => [
-    ...new Set(
-      expandedCards.flatMap((card) =>
-        card.field === field && card.contentId ? [card.contentId] : [],
-      ),
-    ),
-  ];
+  const idsFor = rewardChoiceContentIds(cards);
   const jutsuIds = idsFor("reward_jutsus");
   const bloodlineIds = idsFor("reward_bloodlines");
   const badgeIds = idsFor("reward_badges");
@@ -426,16 +417,7 @@ export const listUserItemForSpecificQuests = (
   ctx: { userId: string },
 ) =>
   client.query.userItem.findMany({
-    where: and(
-      eq(userItem.userId, ctx.userId),
-      eq(userItem.storedAtHome, false),
-      eq(userItem.isInAuction, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lte(userItem.craftingFinishedAt, new Date()),
-      ),
-      gt(userItem.quantity, 0),
-    ),
+    where: carriedUserItemWhere(ctx.userId),
     columns: { itemId: true, quantity: true },
     with: { item: { columns: { name: true } } },
   });
@@ -1921,15 +1903,8 @@ export const listUserItemForHandleQuestConsequences = (
 ) =>
   client.query.userItem.findMany({
     where: and(
-      eq(userItem.userId, user.userId),
+      carriedUserItemWhere(user.userId),
       inArray(userItem.itemId, missingItemIds),
-      gt(userItem.quantity, 0),
-      eq(userItem.isInAuction, false),
-      eq(userItem.storedAtHome, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lte(userItem.craftingFinishedAt, new Date()),
-      ),
     ),
     columns: { id: true, itemId: true, quantity: true },
   });
@@ -2204,18 +2179,20 @@ export const selectQuestHistoryForQuestAttemptIsActive = (
 
 /** Inventory that can pay a quest entry: carried, not listed, and not still being crafted. */
 export const fetchQuestEntryInventory = (client: DrizzleClient, userId: string) =>
-  client.query.userItem.findMany({
-    where: and(
-      eq(userItem.userId, userId),
-      gt(userItem.quantity, 0),
-      eq(userItem.storedAtHome, false),
-      eq(userItem.isInAuction, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lt(userItem.craftingFinishedAt, new Date()),
-      ),
+  client.query.userItem.findMany({ where: carriedUserItemWhere(userId) });
+
+/** Stacks a user has in hand, the definition behind quest entry costs and deliveries. */
+const carriedUserItemWhere = (userId: string) =>
+  and(
+    eq(userItem.userId, userId),
+    gt(userItem.quantity, 0),
+    eq(userItem.storedAtHome, false),
+    eq(userItem.isInAuction, false),
+    or(
+      isNull(userItem.craftingFinishedAt),
+      lt(userItem.craftingFinishedAt, new Date()),
     ),
-  });
+  );
 
 /**
  * Build the `questHistory` update for `payQuestEntryAtStart`, setting `entryPaid`,

@@ -30,6 +30,7 @@ import {
   questDailyQuota,
   questTypeConcurrentBlockMessage,
 } from "@/libs/quest";
+import { findManagedQuestAttempt } from "@/libs/questRun";
 import {
   REWARD_CHOICE_PENDING_MESSAGE,
   REWARD_CHOICE_READY_MESSAGE,
@@ -491,13 +492,7 @@ export const overworldAiRouter = createTRPCRouter({
             forceKeepPools:
               "keepOriginalPools" in full ? full.keepOriginalPools : false,
             // Pyramid lifecycle/version guards apply even when the floor needs no ticket.
-            questAttempt: activeUser.userQuests.find(
-              (entry) =>
-                entry.questId === bound.questId &&
-                !entry.endAt &&
-                (entry.questType === "battlepyramid" ||
-                  !!entry.quest.content.entryItems?.length),
-            ),
+            questAttempt: findManagedQuestAttempt(activeUser.userQuests, bound.questId),
             allyAiIds: "allyAIs" in full ? expandAiCopies(full.allyAIs) : [],
           });
           return battle.success

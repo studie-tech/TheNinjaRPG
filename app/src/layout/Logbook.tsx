@@ -35,6 +35,7 @@ import {
   getIsolatedPyramid,
   hasQuestContentChanged,
   isBetweenPyramidBattles,
+  isManagedQuestRun,
 } from "@/libs/questRun";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
@@ -669,10 +670,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                   size="icon"
                   variant="ghost"
                   disabled={
-                    isAbandoning ||
-                    (!!userData?.battleId &&
-                      (quest.questType === "battlepyramid" ||
-                        !!quest.content.entryItems?.length))
+                    isAbandoning || (!!userData?.battleId && isManagedQuestRun(quest))
                   }
                   aria-label={`Abandon ${quest.name}`}
                   aria-busy={isAbandoning}

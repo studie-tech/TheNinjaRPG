@@ -1,4 +1,4 @@
-import { LetterRanks, NPC_ONLY_QUEST_TYPES, QuestTypes } from "@/drizzle/constants";
+import { LetterRanks, QuestTypes, RESTRICTED_QUEST_TYPES } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -40,9 +40,7 @@ export const makeQuestFilteringSchema = () =>
           (ctx as { canChangeContent?: boolean } | undefined)?.canChangeContent
             ? opts
             : opts.filter(
-                (o) =>
-                  o.value !== "special" &&
-                  !(NPC_ONLY_QUEST_TYPES as readonly string[]).includes(o.value),
+                (o) => !(RESTRICTED_QUEST_TYPES as readonly string[]).includes(o.value),
               ),
         noneOption: { value: "ALL", label: "None" },
       },
