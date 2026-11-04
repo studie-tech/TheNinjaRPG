@@ -4,6 +4,7 @@ import { RANKED_PVP_STATS } from "@/drizzle/constants";
 import type { RankedLoadout, UserRequest } from "@/drizzle/schema";
 import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { getServerPusher } from "@/libs/pusher";
+import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchUser } from "@/queries/profile";
 import { findRankedLoadoutByUserId } from "@/queries/pvprank";
 import {
@@ -79,9 +80,10 @@ export const sparringRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [challenge, user] = await Promise.all([
+      const [challenge, user, jutsuEquipLimits] = await Promise.all([
         fetchRequest(ctx.drizzle, input.id, "SPAR"),
         fetchUser(ctx.drizzle, ctx.userId),
+        fetchJutsuEquipLimits(ctx.drizzle),
       ]);
       // Guards
       if (challenge.receiverId !== ctx.userId) {
@@ -124,8 +126,12 @@ export const sparringRouter = createTRPCRouter({
         }
 
         const [cleanedSender, cleanedReceiver] = await Promise.all([
-          cleanRankedProhibitedSelections(ctx.drizzle, senderLoadout),
-          cleanRankedProhibitedSelections(ctx.drizzle, receiverLoadout),
+          cleanRankedProhibitedSelections(ctx.drizzle, senderLoadout, jutsuEquipLimits),
+          cleanRankedProhibitedSelections(
+            ctx.drizzle,
+            receiverLoadout,
+            jutsuEquipLimits,
+          ),
         ]);
         if (
           !hasEffectiveLoadout(cleanedSender.loadout) ||
@@ -149,6 +155,7 @@ export const sparringRouter = createTRPCRouter({
           targetStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
           userStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
           forceLoadouts,
+          jutsuEquipLimits,
         },
         battleType,
       );

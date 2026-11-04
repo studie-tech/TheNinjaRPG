@@ -68,6 +68,7 @@ const startBattle = async (
   equipLimits = equipLimitFixture,
 ) => {
   let saved: CompleteBattle | undefined;
+  const readEquipLimits = vi.fn(async () => equipLimits);
   const client = {
     query: new Proxy(
       {},
@@ -84,7 +85,7 @@ const startBattle = async (
     select: () => ({
       from: (table: object) => {
         if (table === combatSharedCooldown) return { orderBy: async () => [] };
-        if (table === jutsuEquipLimit) return { orderBy: async () => equipLimits };
+        if (table === jutsuEquipLimit) return { orderBy: readEquipLimits };
         const rows = table === userData ? [{ average: 0 }] : [{ count: 0 }];
         const builder = {
           innerJoin: () => builder,
@@ -119,6 +120,7 @@ const startBattle = async (
       saved.usersState.map((user) => [user.controllerId, !!user.isAutoCombat]),
     ) as Record<string, boolean>,
     usersState: saved.usersState,
+    equipLimitReads: readEquipLimits.mock.calls.length,
   };
 };
 
@@ -202,9 +204,11 @@ describe("initiateBattle jutsu equipment limits", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["RANKED_SPARRING", "RANKED_PVP", "SPARRING"] as const)(
-    "uses the matching equipment limits for %s",
-    async (battleType) => {
+  it.each((["RANKED_SPARRING", "RANKED_PVP", "SPARRING"] as const).flatMap(
+    (battleType) => (["fetch", "configured", "unlimited"] as const).map((preload) => [battleType, preload] as const),
+  ))(
+    "uses the matching equipment limits for %s (rules: %s)",
+    async (battleType, preload) => {
       const player = participant("player");
       if (battleType === "RANKED_PVP") player.status = "QUEUED";
       const definition = {
@@ -238,17 +242,19 @@ describe("initiateBattle jutsu equipment limits", () => {
           jutsu: definition,
         },
       ];
-      const { usersState } = await startBattle(
+      const limits = [{ category: "heal", unrankedMaxEquipped: 0, rankedMaxEquipped: 3 }];
+      const { usersState, equipLimitReads } = await startBattle(
         battleType,
         [player, participant("opponent", { isAi: true, villageId: "b" })],
-        {},
-        [{ category: "heal", unrankedMaxEquipped: 0, rankedMaxEquipped: 3 }],
+        { jutsuEquipLimits: preload === "fetch" ? undefined : preload === "configured" ? limits : [] },
+        limits,
       );
       expect(
         usersState
           .find((user) => user.controllerId === player.userId)
           ?.jutsus.map((entry) => entry.jutsuId),
-      ).toEqual(battleType === "SPARRING" ? [] : [definition.id]);
+      ).toEqual(battleType === "SPARRING" && preload !== "unlimited" ? [] : [definition.id]);
+      expect(equipLimitReads).toBe(preload === "fetch" ? 1 : 0);
     },
   );
 });

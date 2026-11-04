@@ -20,6 +20,7 @@ import {
   eventRewardFor,
   generateEventBracket,
 } from "@/libs/tournament/events";
+import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { findUserById, findUserRoleById } from "@/queries/profile";
 import { deleteTournamentMatches } from "@/queries/tournament";
 import {
@@ -625,7 +626,10 @@ export const syncEventTournament = async (
 
 /** Claim the current ready roster once, then publish the revocable token combat must claim. */
 const launchEventGame = async (client: DrizzleClient, id: string, seriesId: string) => {
-  const row = await fetchEvent(client, id);
+  const [row, jutsuEquipLimits] = await Promise.all([
+    fetchEvent(client, id),
+    fetchJutsuEquipLimits(client),
+  ]);
   const event = row?.eventData;
   const series = event?.series.find((s) => s.id === seriesId && !s.complete);
   const game = series?.games.at(-1);
@@ -675,7 +679,7 @@ const launchEventGame = async (client: DrizzleClient, id: string, seriesId: stri
     return;
   }
   const cleaned = await Promise.all(
-    loadouts.map((l) => cleanRankedProhibitedSelections(client, l)),
+    loadouts.map((l) => cleanRankedProhibitedSelections(client, l, jutsuEquipLimits)),
   );
   if (
     event.config.rules === "RANKED" &&
@@ -713,6 +717,7 @@ const launchEventGame = async (client: DrizzleClient, id: string, seriesId: stri
       targetStatDistribution:
         event.config.rules === "RANKED" ? RANKED_PVP_STATS : undefined,
       forceLoadouts: cleaned.map((l) => l.loadout),
+      jutsuEquipLimits,
       autoCombatUserIds: event.config.rules === "AI" ? game.userIds : undefined,
     },
     event.config.rules === "RANKED" ? "RANKED_SPARRING" : "SPARRING",

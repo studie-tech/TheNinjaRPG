@@ -20,6 +20,7 @@ import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
 
@@ -124,6 +125,16 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     return row;
   };
 
+  it("loads rules alongside an empty ranked loadout in one query wave", async () => {
+    const db = await getTestDatabase();
+    await db.update(rankedLoadout).set({ loadout: loadout([]) }).where(eq(rankedLoadout.userId, USER));
+    const caller = await callerFor(pvpRankRouter, USER);
+    const measured = await recordQueries(() => caller.getRankedLoadout());
+    expect(measured.result.loadout).toEqual(loadout([]));
+    expect(measured.statements.filter((statement) => /from `JutsuEquipLimit`/i.test(statement))).toHaveLength(1);
+    expect(measured.roundTrips).toBe(1);
+  });
+
   it("cleans equipped and favorite selections before queueing and reports removals", async () => {
     const result = await (await callerFor(pvpRankRouter, USER)).queueForRankedPvp();
     expect(result.success).toBe(true);
@@ -174,7 +185,9 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
         loadout(["usable-two"], ["weapon-two"]),
       );
       expect(saved.success).toBe(true);
-      const cleaned = await cleanRankedProhibitedSelections(db, original);
+      const measured = await recordQueries(() => cleanRankedProhibitedSelections(db, original, equipLimitFixture));
+      const cleaned = measured.result;
+      expect(measured.statements.some((statement) => statement.includes("JutsuEquipLimit"))).toBe(false);
       expect(cleaned.loadout.loadout).toEqual(loadout(["usable-two"], ["weapon-two"]));
       expect(cleaned.jutsus.map((entry) => entry.id)).toEqual(["usable-two"]);
       expect(cleaned.items.map((entry) => entry.id)).toEqual(["weapon-two"]);

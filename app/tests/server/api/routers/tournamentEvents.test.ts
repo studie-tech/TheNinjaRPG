@@ -16,6 +16,9 @@ import {
 } from "@/drizzle/constants";
 import {
   aiProfile,
+  item,
+  rankedLoadout,
+  jutsuEquipLimit,
   battle,
   battleHistory,
   questHistory,
@@ -44,7 +47,7 @@ import { maintainEventTournaments, syncEventTournament } from "@/server/api/rout
 import type { DrizzleClient } from "@/server/db";
 import { eventTournamentConfigSchema, type EventParticipant } from "@/validators/tournament";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertUsers } from "../../../setup/factories";
+import { insertItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
 import {
@@ -76,6 +79,9 @@ describeWithDatabase("event tournament persistence", () => {
       battleHistory,
       battle,
       aiProfile,
+      item,
+      rankedLoadout,
+      jutsuEquipLimit,
       trainingLog,
       userQueue,
       userCookingJob,
@@ -520,7 +526,7 @@ describeWithDatabase("event tournament persistence", () => {
       },
     });
 
-  const readyEvent = async () => {
+  const readyEvent = async (rules: "OPEN" | "RANKED" = "OPEN") => {
     const database = await getTestDatabase();
     await insertUsers(
       ["hero", "foe"].map((userId) => ({
@@ -543,7 +549,7 @@ describeWithDatabase("event tournament persistence", () => {
       })),
     );
     await database.insert(aiProfile).values({ id: "Default", userId: "ai", rules: [] });
-    const event = createEventState(eventConfig("Launch race"));
+    const event = createEventState({ ...eventConfig("Launch race"), rules });
     event.participants = ["hero", "foe"].map((userId, i) => ({
       id: `seat-${i}`,
       userId,
@@ -583,6 +589,21 @@ describeWithDatabase("event tournament persistence", () => {
         });
     return { database, game, accept };
   };
+
+  it("reads one rules snapshot for both ranked loadouts and battle admission", async () => {
+    const { database, game, accept } = await readyEvent("RANKED");
+    await insertItems([{ id: "ranked-weapon", name: "Ranked weapon", itemType: "WEAPON", inShop: true }]);
+    await database.insert(rankedLoadout).values(game.userIds.map((userId) => ({
+      id: `ranked-${userId}`,
+      userId,
+      loadout: { jutsuIds: [], weaponIds: ["ranked-weapon"], consumableIds: [] },
+    })));
+    const measured = await recordQueries(() => accept(game.userIds[1]!));
+    expect(measured.result.success).toBe(true);
+    expect(measured.statements.filter((statement) => /from `JutsuEquipLimit`/i.test(statement))).toHaveLength(1);
+    const launched = await database.query.battle.findFirst({ where: eq(battle.id, game.battleId) });
+    expect(launched?.battleType).toBe("RANKED_SPARRING");
+  });
 
   it.each([false, true])("reconciles the accepting actor's Cooking when a match launches (receipt: %s)", async (hasCooking) => {
     const { database, game, accept } = await readyEvent();

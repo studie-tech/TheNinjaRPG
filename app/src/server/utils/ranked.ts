@@ -1,8 +1,8 @@
 import type { Item, Jutsu, RankedLoadout } from "@/drizzle/schema";
-import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import type { JutsuEquipCap } from "@/libs/jutsu";
+import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { listItemsByIds } from "@/queries/item";
 import { listJutsuByIds } from "@/queries/jutsu";
-import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import {
   findRankedLoadoutForCleanRankedProhibitedSelections,
   listUserDataForFetchSanninRankedPlayers,
@@ -10,6 +10,7 @@ import {
 } from "@/queries/pvprank";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
+import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
 const RANKED_LOADOUT_CLEANUP_MAX_ATTEMPTS = 3;
 
@@ -25,7 +26,9 @@ export const fetchSanninRankedPlayers = async (client: DrizzleClient) => {
 const filterProhibitedRankedSelections = async (
   client: DrizzleClient,
   storedLoadout: RankedLoadout,
+  jutsuEquipLimits: JutsuEquipLimit[],
 ) => {
+  const caps = buildJutsuEquipCaps(jutsuEquipLimits, "ranked");
   const referencedJutsuIds = [
     ...new Set([
       ...storedLoadout.loadout.jutsuIds,
@@ -40,8 +43,7 @@ const filterProhibitedRankedSelections = async (
       ...(storedLoadout.loadout.favoriteConsumableIds ?? []),
     ]),
   ];
-  const [caps, selectedJutsus, selectedItems] = await Promise.all([
-    fetchJutsuEquipCaps(client, "ranked"),
+  const [selectedJutsus, selectedItems] = await Promise.all([
     referencedJutsuIds.length > 0
       ? listJutsuByIds(client, referencedJutsuIds)
       : Promise.resolve([]),
@@ -130,6 +132,7 @@ const filterProhibitedRankedSelections = async (
  * deleted or no-longer-in-shop items, and duplicate ids. Kept in sync
  * with validateJutsuLoadout / validateItemLoadout so matchmaking cannot force
  * a pre-restriction loadout into battle.
+ * Callers preload one rules snapshot for all participants, retries and battle creation.
  *
  * Writes use optimistic concurrency on `updatedAt`. If another request (e.g.
  * updateRankedLoadout) wins the race, reload the current row and retry cleanup
@@ -138,9 +141,10 @@ const filterProhibitedRankedSelections = async (
 export const cleanRankedProhibitedSelections = async (
   client: DrizzleClient,
   storedLoadout: RankedLoadout,
+  jutsuEquipLimits: JutsuEquipLimit[],
   attempt = 0,
 ): Promise<{
-  caps: Awaited<ReturnType<typeof fetchJutsuEquipCaps>>;
+  caps: JutsuEquipCap[];
   loadout: RankedLoadout;
   hasChanges: boolean;
   removedJutsuIds: string[];
@@ -148,7 +152,11 @@ export const cleanRankedProhibitedSelections = async (
   jutsus: Jutsu[];
   items: Item[];
 }> => {
-  const filtered = await filterProhibitedRankedSelections(client, storedLoadout);
+  const filtered = await filterProhibitedRankedSelections(
+    client,
+    storedLoadout,
+    jutsuEquipLimits,
+  );
   if (!filtered.hasChanges) {
     return filtered;
   }
@@ -175,9 +183,14 @@ export const cleanRankedProhibitedSelections = async (
     if (attempt + 1 >= RANKED_LOADOUT_CLEANUP_MAX_ATTEMPTS) {
       // Give up persisting; still strip prohibited ids from the latest row for
       // this request so matchmaking cannot force them into battle.
-      return filterProhibitedRankedSelections(client, current);
+      return filterProhibitedRankedSelections(client, current, jutsuEquipLimits);
     }
-    return cleanRankedProhibitedSelections(client, current, attempt + 1);
+    return cleanRankedProhibitedSelections(
+      client,
+      current,
+      jutsuEquipLimits,
+      attempt + 1,
+    );
   }
   return { ...filtered, loadout };
 };

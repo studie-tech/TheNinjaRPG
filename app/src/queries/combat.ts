@@ -130,6 +130,7 @@ import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { periodStart, secondsFromDate, secondsFromNow } from "@/utils/time";
 import type { EncounterWave } from "@/validators/coop";
+import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
 /** Load the complete battle state by ID or return null; the read does not advance combat. */
 export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
@@ -145,9 +146,13 @@ export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
 /**
  * Fetch the essentials for a battle
  * @param client - The drizzle client
+ * @param preloadedJutsuEquipLimits - Rules already used to clean this battle's loadouts.
  * @returns The essentials for a battle
  */
-export const fetchBattleEssentials = async (client: DrizzleClient) => {
+export const fetchBattleEssentials = async (
+  client: DrizzleClient,
+  preloadedJutsuEquipLimits?: JutsuEquipLimit[],
+) => {
   const [
     defaultProfile,
     activeWars,
@@ -199,7 +204,7 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     // Fetch damage formula config
     fetchDmgConfig(client),
     fetchSharedCooldowns(client),
-    fetchJutsuEquipLimits(client),
+    preloadedJutsuEquipLimits ?? fetchJutsuEquipLimits(client),
     fetchPvpExperienceAverage(client),
   ]);
   return {

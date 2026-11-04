@@ -303,6 +303,7 @@ import {
   type ZodAllTags,
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
+import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 import { sectorIdSchema } from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
@@ -1883,6 +1884,8 @@ export const initiateBattle = async (
     targetStatDistribution?: AssignableUserStats;
     scaleTarget?: boolean;
     forceLoadouts?: RankedLoadout[];
+    /** Shared rules snapshot used for ranked loadout cleanup and battle admission. */
+    jutsuEquipLimits?: JutsuEquipLimit[];
     forceDefenderVillageId?: string;
     biome?: CombatBiome;
     forceKeepPools?: boolean;
@@ -2004,7 +2007,7 @@ export const initiateBattle = async (
         ? fetchActiveTerritoryWar(client, sector)
         : null),
     // Essentials
-    fetchBattleEssentials(client),
+    fetchBattleEssentials(client, info.jutsuEquipLimits),
     // Fetch game assets (only battlefield ones to avoid row limit)
     listGameAssetForInitiateBattle(client),
     // Fetch achievements
