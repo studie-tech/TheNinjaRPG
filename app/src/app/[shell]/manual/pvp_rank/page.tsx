@@ -13,13 +13,9 @@ import {
   MAX_PLAYER_LEVEL,
   RANKED_BLOODLINE_EFFECT_MULT,
   RANKED_LOADOUT_MAX_CONSUMABLES,
-  RANKED_LOADOUT_MAX_HEAL_JUTSUS,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
-  RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS,
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_ITEMS,
-  RANKED_LOADOUT_MAX_POISON_JUTSUS,
-  RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -33,10 +29,42 @@ import { RankedRankDistributionHistogram } from "@/layout/RankedRankDistribution
 import { SeasonManager } from "@/layout/SeasonManager";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
+import { getJutsuCategoryDef } from "@/libs/jutsu";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
+/** Explain ranked PvP rules, loadout limits, matchmaking, and season rewards. */
 export default function RankedManualPage() {
+  const {
+    data: equipLimits,
+    isError,
+    refetch,
+  } = api.misc.getJutsuEquipLimits.useQuery();
+  const rankedLimits = equipLimits?.filter((rule) => rule.rankedMaxEquipped !== null);
+  const jutsuLimitEntries = isError ? (
+    <li role="alert">
+      Could not load jutsu limits.{" "}
+      <button type="button" className="underline" onClick={() => void refetch()}>
+        Try again
+      </button>
+    </li>
+  ) : rankedLimits === undefined ? (
+    <li role="status">Loading jutsu limits…</li>
+  ) : rankedLimits.length === 0 ? (
+    <li>No category limits apply to ranked jutsu.</li>
+  ) : (
+    rankedLimits.map((rule) => {
+      const label = capitalizeFirstLetter(getJutsuCategoryDef(rule.category).label);
+      return (
+        <li key={rule.category}>
+          {rule.rankedMaxEquipped === 0
+            ? `${label} jutsu cannot be equipped in ranked battles.`
+            : `${label} jutsu are limited to ${rule.rankedMaxEquipped} in ranked battles.`}
+        </li>
+      );
+    })
+  );
+
   type Tab = "overview" | "matchmaking" | "loadouts" | "rewards";
   const [activeTab, setActiveTab] = useLocalStorage<Tab>("manRankTa", "overview", true);
 
@@ -109,17 +137,12 @@ export default function RankedManualPage() {
                     <li>
                       {RANKED_LOADOUT_MAX_JUTSUS} jutsus from their ranked loadout
                     </li>
-                    <li>Maximum {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS} residual jutsu</li>
-                    <li>Maximum {RANKED_LOADOUT_MAX_POISON_JUTSUS} poison jutsu</li>
+
                     <li>Maximum {RANKED_LOADOUT_MAX_POISON_ITEMS} poison item</li>
-                    <li>
-                      Maximum {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} increasecost
-                      jutsu
-                    </li>
                     <li>
                       Maximum {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item
                     </li>
-                    <li>Maximum {RANKED_LOADOUT_MAX_HEAL_JUTSUS} heal jutsu</li>
+                    {jutsuLimitEntries}
                   </ul>
                 </div>
               </CardContent>
@@ -198,30 +221,16 @@ export default function RankedManualPage() {
                     <li>You can change your loadout at any time</li>
                     <li>Loadout changes take effect immediately</li>
                     <li>You cannot use items from your inventory in ranked battles</li>
-                    <li>
-                      Residual jutsu are limited to {RANKED_LOADOUT_MAX_RESIDUAL_JUTSUS}{" "}
-                      in ranked battles
-                    </li>
-                    <li>
-                      Poison jutsu are limited to {RANKED_LOADOUT_MAX_POISON_JUTSUS} in
-                      ranked battles
-                    </li>
+
                     <li>
                       Poison items are limited to {RANKED_LOADOUT_MAX_POISON_ITEMS} in
                       ranked battles
                     </li>
                     <li>
-                      Increasecost jutsu are limited to{" "}
-                      {RANKED_LOADOUT_MAX_INCREASECOST_JUTSUS} in ranked battles
-                    </li>
-                    <li>
                       Increasecost items are limited to{" "}
                       {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} in ranked battles
                     </li>
-                    <li>
-                      Heal jutsu are limited to {RANKED_LOADOUT_MAX_HEAL_JUTSUS} in
-                      ranked battles
-                    </li>
+                    {jutsuLimitEntries}
                   </ul>
                 </div>
               </CardContent>

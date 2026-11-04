@@ -104,6 +104,8 @@ import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
+import { fetchSharedCooldowns } from "@/queries/sharedCooldown";
 import {
   activeWarAllyWhere,
   activeWarMercenaryWhere,
@@ -128,6 +130,7 @@ import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { periodStart, secondsFromDate, secondsFromNow } from "@/utils/time";
 import type { EncounterWave } from "@/validators/coop";
+import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
 /** Load the complete battle state by ID or return null; the read does not advance combat. */
 export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
@@ -143,9 +146,13 @@ export const fetchBattle = async (client: DrizzleClient, battleId: string) => {
 /**
  * Fetch the essentials for a battle
  * @param client - The drizzle client
+ * @param preloadedJutsuEquipLimits - Rules already used to clean this battle's loadouts.
  * @returns The essentials for a battle
  */
-export const fetchBattleEssentials = async (client: DrizzleClient) => {
+export const fetchBattleEssentials = async (
+  client: DrizzleClient,
+  preloadedJutsuEquipLimits?: JutsuEquipLimit[],
+) => {
   const [
     defaultProfile,
     activeWars,
@@ -153,6 +160,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     villages,
     relations,
     dmgConfig,
+    sharedCooldownRows,
+    jutsuEquipLimits,
     pvpAverage,
   ] = await Promise.all([
     // Fetch default AI profile
@@ -194,6 +203,8 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     client.select().from(villageAlliance),
     // Fetch damage formula config
     fetchDmgConfig(client),
+    fetchSharedCooldowns(client),
+    preloadedJutsuEquipLimits ?? fetchJutsuEquipLimits(client),
     fetchPvpExperienceAverage(client),
   ]);
   return {
@@ -203,6 +214,10 @@ export const fetchBattleEssentials = async (client: DrizzleClient) => {
     villages,
     relations,
     dmgConfig,
+    jutsuEquipLimits,
+    sharedCooldowns: Object.fromEntries(
+      sharedCooldownRows.map(({ tag, rounds }) => [tag, rounds]),
+    ),
   };
 };
 
@@ -815,6 +830,7 @@ export const insertBattleForCreateBattle = (
   energyCapacity: { [k: string]: number },
   injectableJutsus: import("@/drizzle/schema").Jutsu[],
   dmgConfig: import("@/libs/combat/constants").DmgConfig,
+  sharedCooldowns: Record<string, number>,
   settings: import("@/drizzle/schema").GameSetting[],
   initialDurability: Record<string, Record<string, number>>,
   info: {
@@ -863,6 +879,7 @@ export const insertBattleForCreateBattle = (
         [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
       },
       dmgConfig: dmgConfig,
+      sharedCooldowns,
       settings: settings,
       initialDurability: initialDurability,
       hunting: info.hunting,

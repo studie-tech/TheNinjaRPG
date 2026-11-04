@@ -480,6 +480,7 @@ export type ExtraState = {
   bountySignups: Record<string, CombatQueryBountySignup[]>; // controllerId -> array of bounty signups
   // Battle settings
   dmgConfig?: DmgConfig;
+  sharedCooldowns?: Record<string, number>;
   /** Per-user pre-battle gear/keystone % mods folded into the damage pipeline at battle start. */
   preBattleGearModifiers?: Record<string, PreBattleGearModifiers>;
   settings?: GameSetting[];
@@ -620,6 +621,8 @@ export type CombatAction = {
   cooldown: number;
   originalCooldown: number;
   effects: ZodAllTags[];
+  /** Authored effect types retained on selected actions before elemental damage resolves. */
+  sharedCooldownTags?: ZodAllTags["type"][];
   lastUsedRound?: number;
   data?: Jutsu | Item;
   level?: number;

@@ -65,6 +65,19 @@ import type { ZodPetSpeciesEffect } from "@/validators/petSpecies";
 
 import type { HuntingHabitatContent, HuntingReceipt, HuntingSessionContent } from "@/validators/hunting";
 
+/** Per-category jutsu caps; NULL means unlimited in that mode. */
+export const jutsuEquipLimit = mysqlTable("JutsuEquipLimit", {
+  category: varchar("category", { length: 191 }).primaryKey().notNull(),
+  unrankedMaxEquipped: int("unrankedMaxEquipped"),
+  rankedMaxEquipped: int("rankedMaxEquipped"),
+});
+
+/** Shared cooldown duration per combat tag; battles retain their own snapshot. */
+export const combatSharedCooldown = mysqlTable("CombatSharedCooldown", {
+  tag: varchar("tag", { length: 191 }).primaryKey().notNull(),
+  rounds: int("rounds").notNull(),
+});
+
 /** Editable habitats and their creature contracts; accepted sessions retain their own terms. */
 export const huntingHabitat = mysqlTable("HuntingHabitat", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),

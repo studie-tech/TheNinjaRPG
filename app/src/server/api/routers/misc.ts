@@ -17,10 +17,8 @@ import {
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
-
 import { fetchDmgConfig, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
-
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -28,6 +26,11 @@ import {
   updateEmailReminderForToggleEmailReminder,
 } from "@/queries/emailReminder";
 import { findGameSettingByName } from "@/queries/gamesettings";
+import {
+  deleteJutsuEquipLimit,
+  fetchJutsuEquipLimits,
+  saveJutsuEquipLimit,
+} from "@/queries/jutsuEquipLimit";
 import {
   countCaptchaForRefreshCaptcha,
   countSupportReviewForReviewSupportWithAI,
@@ -52,6 +55,11 @@ import {
   updateUserDataForSubmitNotification,
 } from "@/queries/misc";
 import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
+import {
+  deleteSharedCooldown,
+  fetchSharedCooldowns,
+  upsertSharedCooldown,
+} from "@/queries/sharedCooldown";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import {
   baseServerResponse,
@@ -60,6 +68,7 @@ import {
   protectedProcedure,
   publicProcedure,
   ratelimitMiddleware,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -72,8 +81,16 @@ import {
 import { secondsFromNow } from "@/utils/time";
 import { trackVisitorSchema } from "@/validators/analytics";
 import { confSchema } from "@/validators/combat";
+import {
+  equipLimitCategorySchema,
+  jutsuEquipLimitSchema,
+} from "@/validators/jutsuEquipLimit";
 import { changeSettingSchema } from "@/validators/misc";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
+import {
+  sharedCooldownSchema,
+  sharedCooldownTagSchema,
+} from "@/validators/sharedCooldown";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const miscRouter = createTRPCRouter({
@@ -253,6 +270,54 @@ export const miscRouter = createTRPCRouter({
           setting,
         }),
       };
+    }),
+  getJutsuEquipLimits: publicProcedure.query(({ ctx }) =>
+    fetchJutsuEquipLimits(ctx.drizzle),
+  ),
+  setJutsuEquipLimit: protectedProcedure
+    .input(jutsuEquipLimitSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
+      await saveJutsuEquipLimit(ctx.drizzle, input);
+      return { success: true, message: "Jutsu equip limits saved" };
+    }),
+  removeJutsuEquipLimit: protectedProcedure
+    .input(z.object({ category: equipLimitCategorySchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
+      await deleteJutsuEquipLimit(ctx.drizzle, input.category);
+      return { success: true, message: "Jutsu equip limits removed" };
+    }),
+  getSharedCooldowns: protectedProcedure.query(async ({ ctx }) => {
+    const [user, cooldowns] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      fetchSharedCooldowns(ctx.drizzle),
+    ]);
+    if (!canModifyCombatSettings(user.role))
+      throw serverError("FORBIDDEN", "Not allowed");
+    return cooldowns;
+  }),
+  setSharedCooldown: protectedProcedure
+    .input(sharedCooldownSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
+      await upsertSharedCooldown(ctx.drizzle, input);
+      return { success: true, message: "Shared cooldown saved" };
+    }),
+  removeSharedCooldown: protectedProcedure
+    .input(z.object({ tag: sharedCooldownTagSchema }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
+      await deleteSharedCooldown(ctx.drizzle, input.tag);
+      return { success: true, message: "Shared cooldown removed" };
     }),
   getDmgConfig: publicProcedure
     .meta({

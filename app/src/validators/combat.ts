@@ -851,7 +851,7 @@ export const ParryTag = z.object({
   ...PowerAttributes,
   type: z.literal("parry").prefault("parry"),
   description: msg(
-    "Redirect a percentage of incoming direct damage to the attacker before shields and absorption. Stacks up to 100%. Returned damage cannot trigger Parry.",
+    "Redirect a percentage of incoming direct damage to the attacker before shields and absorption. Pierce bypasses Parry. Stacks up to 100%. Returned damage cannot trigger Parry. Cannot be buff prevented. Can be cleared.",
   ),
   calculation: z.literal("percentage").prefault("percentage"),
 });

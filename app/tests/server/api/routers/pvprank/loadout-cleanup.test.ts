@@ -1,6 +1,8 @@
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
+import { jutsuEquipLimit } from "@/drizzle/schema";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { RANKED_LOADOUT_MAX_HEAL_JUTSUS } from "@/drizzle/constants";
+
 import {
   item,
   jutsu,
@@ -18,12 +20,13 @@ import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
 
 const USER = "ranked-cleanup-user";
 const FAVORITE_HEAL_IDS = Array.from(
-  { length: RANKED_LOADOUT_MAX_HEAL_JUTSUS },
+  { length: 3 },
   (_, index) => `favorite-heal-${index}`,
 );
 const loadout = (jutsuIds: string[], weaponIds: string[] = []) => ({
@@ -40,6 +43,7 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
+      jutsuEquipLimit,
       rankedPvpQueue,
       rankedLoadout,
       rankedSeason,
@@ -51,6 +55,7 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
       { userId: USER, username: USER, rank: "JONIN", status: "AWAKE", rankedLp: 100 },
     ]);
     const db = await getTestDatabase();
+    await db.insert(jutsuEquipLimit).values(equipLimitFixture);
     await db.insert(jutsu).values(
       [
         ...["usable", "usable-two", ...FAVORITE_HEAL_IDS].map((id) => ({
@@ -120,6 +125,16 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     return row;
   };
 
+  it("loads rules alongside an empty ranked loadout in one query wave", async () => {
+    const db = await getTestDatabase();
+    await db.update(rankedLoadout).set({ loadout: loadout([]) }).where(eq(rankedLoadout.userId, USER));
+    const caller = await callerFor(pvpRankRouter, USER);
+    const measured = await recordQueries(() => caller.getRankedLoadout());
+    expect(measured.result.loadout).toEqual(loadout([]));
+    expect(measured.statements.filter((statement) => /from `JutsuEquipLimit`/i.test(statement))).toHaveLength(1);
+    expect(measured.roundTrips).toBe(1);
+  });
+
   it("cleans equipped and favorite selections before queueing and reports removals", async () => {
     const result = await (await callerFor(pvpRankRouter, USER)).queueForRankedPvp();
     expect(result.success).toBe(true);
@@ -170,7 +185,9 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
         loadout(["usable-two"], ["weapon-two"]),
       );
       expect(saved.success).toBe(true);
-      const cleaned = await cleanRankedProhibitedSelections(db, original);
+      const measured = await recordQueries(() => cleanRankedProhibitedSelections(db, original, equipLimitFixture));
+      const cleaned = measured.result;
+      expect(measured.statements.some((statement) => statement.includes("JutsuEquipLimit"))).toBe(false);
       expect(cleaned.loadout.loadout).toEqual(loadout(["usable-two"], ["weapon-two"]));
       expect(cleaned.jutsus.map((entry) => entry.id)).toEqual(["usable-two"]);
       expect(cleaned.items.map((entry) => entry.id)).toEqual(["weapon-two"]);

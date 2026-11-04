@@ -18,6 +18,7 @@ import {
 } from "@/libs/ranked_pvp";
 import { hasRequiredRank } from "@/libs/train";
 import { listJutsuByIds } from "@/queries/jutsu";
+import { fetchJutsuEquipCaps, fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { fetchUser, wakeQueuedUser } from "@/queries/profile";
 import {
   countRankedPvpQueueForGetRankedQueueCount,
@@ -315,7 +316,11 @@ export const pvpRankRouter = createTRPCRouter({
   getRankedLoadout: protectedProcedure
     .meta({ mcp: { description: "Get user's ranked PvP loadout" } })
     .query(async ({ ctx }) => {
-      let loadout = await findRankedLoadoutByUserId(ctx.drizzle, ctx.userId);
+      const [storedLoadout, jutsuEquipLimits] = await Promise.all([
+        findRankedLoadoutByUserId(ctx.drizzle, ctx.userId),
+        fetchJutsuEquipLimits(ctx.drizzle),
+      ]);
+      let loadout = storedLoadout;
       if (!loadout) {
         loadout = {
           id: nanoid(),
@@ -334,7 +339,9 @@ export const pvpRankRouter = createTRPCRouter({
         await insertRankedLoadoutForGetRankedLoadout(ctx.drizzle, loadout);
         return loadout;
       }
-      return (await cleanRankedProhibitedSelections(ctx.drizzle, loadout)).loadout;
+      return (
+        await cleanRankedProhibitedSelections(ctx.drizzle, loadout, jutsuEquipLimits)
+      ).loadout;
     }),
 
   // Get the ranked PvP queue
@@ -386,7 +393,8 @@ export const pvpRankRouter = createTRPCRouter({
       };
       // Query all relevant information
       const itemIds = [...new Set([...loadout.weaponIds, ...loadout.consumableIds])];
-      const [items, jutsus, currentLoadout] = await Promise.all([
+      const [caps, items, jutsus, currentLoadout] = await Promise.all([
+        fetchJutsuEquipCaps(ctx.drizzle, "ranked"),
         itemIds.length > 0 ? listItemForUpdateRankedLoadout(ctx.drizzle, itemIds) : [],
         loadout.jutsuIds.length > 0
           ? listJutsuByIds(ctx.drizzle, loadout.jutsuIds)
@@ -404,7 +412,7 @@ export const pvpRankRouter = createTRPCRouter({
         return errorResponse("Some jutsus not found or not available in shop");
       }
       // Check loadout
-      const jutsuCheck = validateJutsuLoadout(jutsus);
+      const jutsuCheck = validateJutsuLoadout(jutsus, caps);
       const itemCheck = validateItemLoadout(items);
       if (!jutsuCheck.check || !itemCheck.check) {
         return errorResponse(jutsuCheck.message || itemCheck.message);
@@ -461,12 +469,14 @@ export const pvpRankRouter = createTRPCRouter({
     .output(rankedQueueResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [existingQueue, user, currentLoadout, currentSeason] = await Promise.all([
-        fetchUserRankedQueue(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
-        findRankedLoadoutByUserId(ctx.drizzle, ctx.userId),
-        fetchCurrentSeason(ctx.drizzle),
-      ]);
+      const [existingQueue, user, currentLoadout, currentSeason, jutsuEquipLimits] =
+        await Promise.all([
+          fetchUserRankedQueue(ctx.drizzle, ctx.userId),
+          fetchUser(ctx.drizzle, ctx.userId),
+          findRankedLoadoutByUserId(ctx.drizzle, ctx.userId),
+          fetchCurrentSeason(ctx.drizzle),
+          fetchJutsuEquipLimits(ctx.drizzle),
+        ]);
       // Guard
       if (existingQueue) {
         return errorResponse("Already in queue");
@@ -497,12 +507,13 @@ export const pvpRankRouter = createTRPCRouter({
         const cleaned = await cleanRankedProhibitedSelections(
           ctx.drizzle,
           currentLoadout,
+          jutsuEquipLimits,
         );
         removedJutsuIds = cleaned.removedJutsuIds;
         removedItemIds = cleaned.removedItemIds;
 
         // Check loadout
-        const jutsuCheck = validateJutsuLoadout(cleaned.jutsus);
+        const jutsuCheck = validateJutsuLoadout(cleaned.jutsus, cleaned.caps);
         const itemCheck = validateItemLoadout(cleaned.items);
         if (!jutsuCheck.check || !itemCheck.check) {
           return errorResponse(jutsuCheck.message || itemCheck.message);
@@ -588,9 +599,10 @@ export const pvpRankRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx }) => {
       // Get all queued players
-      const [queuedPlayers, topPlayersLP] = await Promise.all([
+      const [queuedPlayers, topPlayersLP, jutsuEquipLimits] = await Promise.all([
         listRankedPvpQueueForCheckRankedPvpMatches(ctx.drizzle),
         fetchSanninRankedPlayers(ctx.drizzle),
+        fetchJutsuEquipLimits(ctx.drizzle),
       ]);
 
       const userEntry = queuedPlayers.find((p) => p.userId === ctx.userId);
@@ -629,8 +641,16 @@ export const pvpRankRouter = createTRPCRouter({
         return { success: false, message: "No loadout found", battleId: undefined };
       }
       const [userEffective, opponentEffective] = await Promise.all([
-        cleanRankedProhibitedSelections(ctx.drizzle, userEntry.user.rankedLoadout),
-        cleanRankedProhibitedSelections(ctx.drizzle, opponentEntry.user.rankedLoadout),
+        cleanRankedProhibitedSelections(
+          ctx.drizzle,
+          userEntry.user.rankedLoadout,
+          jutsuEquipLimits,
+        ),
+        cleanRankedProhibitedSelections(
+          ctx.drizzle,
+          opponentEntry.user.rankedLoadout,
+          jutsuEquipLimits,
+        ),
       ]);
       // The atomic claim is inside initiateBattle: it transitions both
       // participants QUEUED -> BATTLE in one guarded UPDATE and rolls back
@@ -646,6 +666,7 @@ export const pvpRankRouter = createTRPCRouter({
           targetStatDistribution: RANKED_PVP_STATS,
           userStatDistribution: RANKED_PVP_STATS,
           forceLoadouts: [userEffective.loadout, opponentEffective.loadout],
+          jutsuEquipLimits,
           topPlayersLP,
         },
         "RANKED_PVP",
