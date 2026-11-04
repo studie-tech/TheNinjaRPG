@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -64,6 +63,7 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   areTowerDefenseClaimsEnabled,
@@ -434,11 +434,8 @@ export const towerDefenseRouter = createTRPCRouter({
         enemyDefinitions: enemyParseResult.data,
       };
 
-      const expectedBuffer = Buffer.from(signSessionParams(sessionParams), "utf8");
-      const runBuffer = Buffer.from(run.session_signature, "utf8");
       if (
-        expectedBuffer.length !== runBuffer.length ||
-        !timingSafeEqual(expectedBuffer, runBuffer)
+        !constantTimeEquals(signSessionParams(sessionParams), run.session_signature)
       ) {
         return errorResponse(
           "Invalid session signature. The session may have started with tampered data.",
