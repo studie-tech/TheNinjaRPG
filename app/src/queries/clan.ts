@@ -58,6 +58,7 @@ import {
   selectUnresolvedClanLobbyEntry,
 } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { clampActionLogText } from "@/utils/actionLog";
@@ -174,31 +175,13 @@ export const fetchClans = async (
   return await client.query.clan.findMany({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       founder: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       members: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       village: true,
     },
@@ -219,22 +202,10 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
   return await client.query.clan.findFirst({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       founder: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       village: {
         columns: {
@@ -262,13 +233,7 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
       },
       leaderOrder: true,
       elderNominee: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
     },
     where: eq(clan.id, clanId),

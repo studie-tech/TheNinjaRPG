@@ -1,6 +1,7 @@
 /**
  * Database access for support; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -32,7 +33,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { getNextClosedAt } from "@/libs/support";
-import { postAuthorColumns } from "@/queries/profile";
+import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `userData` update for `POST`, setting `aiCalls`, using predicates on `userId` and `aiCalls`. */
@@ -312,15 +313,15 @@ export const findSupportTicketForGetSupportTicketWithRelations = (
     where: eq(supportTicket.id, ticketId),
     with: {
       createdBy: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
       assignedTo: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
       activities: {
         with: {
           author: {
-            columns: postAuthorColumns,
+            columns: userCardColumns,
           },
         },
         orderBy: desc(supportTicketActivity.createdAt),
@@ -411,10 +412,10 @@ export const listSupportTicketForGetSupportTicketsWithRelations = (
     })(),
     with: {
       createdBy: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
       assignedTo: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
     },
     orderBy: (() => {

@@ -14,6 +14,7 @@ import {
   type UserRequestState,
 } from "@/drizzle/constants";
 import { anbuSquad, clan, userData, userRequest } from "@/drizzle/schema";
+import { userSummaryWithLightColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
 
@@ -185,24 +186,10 @@ export const fetchSquads = async (client: DrizzleClient, villageId: string) => {
   return await client.query.anbuSquad.findMany({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-          avatarLight: true,
-        },
+        columns: userSummaryWithLightColumns,
       },
       members: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-          avatarLight: true,
-        },
+        columns: userSummaryWithLightColumns,
       },
     },
     where: eq(anbuSquad.villageId, villageId),
@@ -220,14 +207,7 @@ export const fetchSquad = async (client: DrizzleClient, squadId: string) => {
   return await client.query.anbuSquad.findFirst({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-          avatarLight: true,
-        },
+        columns: userSummaryWithLightColumns,
       },
       members: {
         columns: {

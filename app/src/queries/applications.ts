@@ -10,6 +10,7 @@ import type {
   UserRole,
 } from "@/drizzle/constants";
 import { staffApplication } from "@/drizzle/schema";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -31,13 +32,7 @@ export const fetchApplication = async (info: {
     ),
     with: {
       applicant: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-        },
+        columns: userSummaryColumns,
         with: { village: { columns: { name: true } } },
       },
       approvals: {
@@ -102,13 +97,7 @@ export const listStaffApplicationForList = (
     ),
     with: {
       applicant: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-        },
+        columns: userSummaryColumns,
         with: { village: { columns: { name: true } } },
       },
       approvals: {

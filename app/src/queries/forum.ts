@@ -3,6 +3,7 @@
  * Callers own authorization, transaction boundaries and external side effects;
  * unfiltered lookups also serve staff recovery and must not be exposed directly.
  */
+
 import {
   and,
   asc,
@@ -41,7 +42,7 @@ import {
   userDevice,
   userUpload,
 } from "@/drizzle/schema";
-import { postAuthorColumns } from "@/queries/profile";
+import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 type Client = Pick<
@@ -258,7 +259,7 @@ export const listForumPosts = (
     orderBy: [asc(forumPost.createdAt), asc(forumPost.id)],
     with: {
       user: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
       reactions: { columns: { userId: true, reaction: true } },
     },

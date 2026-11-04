@@ -1,6 +1,7 @@
 /**
  * Database access for combat; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   count,
@@ -103,11 +104,11 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
-import { selectClaimedRankedQueueEntry } from "@/queries/concurrency";
+import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
-import { postAuthorColumns } from "@/queries/profile";
 import { fetchSharedCooldowns } from "@/queries/sharedCooldown";
+import { userCardColumns } from "@/queries/userColumns";
 import {
   activeWarAllyWhere,
   activeWarMercenaryWhere,
@@ -312,10 +313,10 @@ export const findBattleHistoryForGetBattleHistoryEntry = (
     where: eq(battleHistory.battleId, input.battleId),
     with: {
       attacker: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
       defender: {
-        columns: postAuthorColumns,
+        columns: userCardColumns,
       },
     },
   });
@@ -1703,7 +1704,7 @@ export const updateUserDataForFinishBattle = (
       bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
       bracketImmunityPausedAt: null,
       battleId: null,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       curEnergy: combatEnergyRecoverySql(newBattle, teammate.userId),
       // Only Energy recovers in combat; reset the shared clock for other pools.
       regenAt: sql`NOW(3)`,
@@ -2201,7 +2202,7 @@ export const updateUserDataForUpdateUser = (
       battleId: null,
       regenAt: settledAt,
       curEnergy: combatEnergyRecoverySql(curBattle, userId, 0, settledAt),
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(and(eq(userData.userId, userId), eq(userData.battleId, curBattle.id)));
 
@@ -2254,7 +2255,7 @@ export const updateUserItemForUpdateUser = (
       // Hunting requires a changed-row acknowledgement even for unchanged carried items.
       ...(settlingHunt
         ? {
-            updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+            updatedAt: nextSnapshotSql(userItem.updatedAt),
           }
         : {}),
     })
@@ -2336,7 +2337,7 @@ export const updateUserDataForUpdateUser2 = (
     .update(userData)
     .set({
       // Settlement invalidates delayed passive-regeneration snapshots.
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       curEnergy: combatEnergyRecoverySql(
         curBattle,
         userId,

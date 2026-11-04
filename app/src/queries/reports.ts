@@ -1,6 +1,7 @@
 /**
  * Database access for reports; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -16,6 +17,7 @@ import {
   lt,
   lte,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -49,7 +51,8 @@ import {
   userReportEmbedding,
   userReview,
 } from "@/drizzle/schema";
-import { postAuthorColumns } from "@/queries/profile";
+import { userCardColumns } from "@/queries/userColumns";
+import { insertValuesWhere } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 import sanitize from "@/utils/sanitize";
@@ -103,36 +106,6 @@ export const listUserReportForGET2 = (
       gt(userReport.banEnd, new Date()),
     ),
   });
-
-/** Build the `userData` update for `GET`, setting `isBanned`, using predicates on `userId`. */
-export const updateUserDataForGET = (
-  client: Pick<DrizzleClient, "update">,
-  usersToUnban: string[],
-) =>
-  client
-    .update(userData)
-    .set({ isBanned: false })
-    .where(inArray(userData.userId, usersToUnban));
-
-/** Build the `userData` update for `GET`, setting `isSilenced`, using predicates on `userId`. */
-export const updateUserDataForGET2 = (
-  client: Pick<DrizzleClient, "update">,
-  usersToUnsilence: string[],
-) =>
-  client
-    .update(userData)
-    .set({ isSilenced: false })
-    .where(inArray(userData.userId, usersToUnsilence));
-
-/** Build the `userData` update for `GET`, setting `isTradeBanned`, using predicates on `userId`. */
-export const updateUserDataForGET3 = (
-  client: Pick<DrizzleClient, "update">,
-  usersToUntradeBan: string[],
-) =>
-  client
-    .update(userData)
-    .set({ isTradeBanned: false })
-    .where(inArray(userData.userId, usersToUntradeBan));
 
 /** Build the oldest 50 reports marked needsAiSummary, retaining the summary-input projection and createdAt ordering. */
 export const listUserReportForSummaryIndexer = (client: Pick<DrizzleClient, "query">) =>
@@ -414,14 +387,7 @@ const reportColumns = (client: Pick<DrizzleClient, "select">) => ({
 export const findUserReportWithUsers = (client: DrizzleClient, userReportId: string) =>
   client.query.userReport.findFirst({
     where: eq(userReport.id, userReportId),
-    with: {
-      reporterUser: {
-        columns: postAuthorColumns,
-      },
-      reportedUser: {
-        columns: postAuthorColumns,
-      },
-    },
+    with: reportUsersRelations,
   });
 
 /** Table alias for reporter user joins, keeping its columns distinct from other participants. */
@@ -640,31 +606,32 @@ export const listUserReportForLoadReports = (
       ]),
       eq(userReport.reportedUserId, ctx.userId),
     ),
-    with: {
-      reporterUser: {
-        columns: postAuthorColumns,
-      },
-      reportedUser: {
-        columns: postAuthorColumns,
-      },
-    },
+    with: reportUsersRelations,
   });
 
-/** Build the `userReport` selection for `noActiveReport`, using predicates on `reportedUserId`, `status`, `banEnd`. */
-export const selectUserReportForNoActiveReport = (
-  client: Pick<DrizzleClient, "select">,
-  ctx: { userId: string },
-  statuses: import("@/drizzle/schema").ReportAction[],
-) =>
-  client
-    .select({ id: userReport.id })
-    .from(userReport)
-    .where(
-      and(
-        eq(userReport.reportedUserId, ctx.userId),
-        inArray(userReport.status, statuses),
-        gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
-      ),
+/**
+ * Build a guard matching users with no running report in the given statuses, so a flag
+ * reset rechecks them in its own write. `userId` is one user or the column of the updated
+ * row; `isRunning` compares a report's end with now.
+ */
+export const noActiveReportGuard =
+  (
+    client: Pick<DrizzleClient, "select">,
+    userId: string | typeof userData.userId,
+    isRunning: typeof gt,
+  ) =>
+  (statuses: BanState[]) =>
+    notExists(
+      client
+        .select({ id: userReport.id })
+        .from(userReport)
+        .where(
+          and(
+            eq(userReport.reportedUserId, userId),
+            inArray(userReport.status, statuses),
+            isRunning(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
+          ),
+        ),
     );
 
 /** Build the `userData` update for `getBan`, setting `isSilenced`, using predicates on `userId`. */
@@ -743,18 +710,22 @@ export const updateUserDataForBan = (
     .set({ isBanned: true, status: "AWAKE", travelFinishAt: null })
     .where(eq(userData.userId, report.reportedUserId));
 
-/** Build the `userReportComment` insert for `ban`. */
-export const insertUserReportCommentForBan = (
+/** Build the `userReportComment` insert recording a moderation decision. */
+export const insertUserReportDecisionComment = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: { object_id: string; comment: string },
+  entry: {
+    reportId: string;
+    comment: string;
+    decision: import("@/drizzle/schema").ReportAction;
+  },
 ) =>
   client.insert(userReportComment).values({
     id: nanoid(),
     userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "BAN_ACTIVATED",
+    reportId: entry.reportId,
+    content: sanitize(entry.comment),
+    decision: entry.decision,
   });
 
 /** Build the `userData` update for `silence`, setting `isSilenced` and `status`, using predicates on `userId`. */
@@ -767,34 +738,6 @@ export const updateUserDataForSilence = (
     .set({ isSilenced: true, status: "AWAKE" })
     .where(eq(userData.userId, report.reportedUserId));
 
-/** Build the `userReportComment` insert for `silence`. */
-export const insertUserReportCommentForSilence = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { object_id: string; comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "SILENCE_ACTIVATED",
-  });
-
-/** Build the `userReportComment` insert for `timeout`. */
-export const insertUserReportCommentForTimeout = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { object_id: string; comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "TIMEOUT_ACTIVATED",
-  });
-
 /** Build the `userData` update for `warn`, setting `isWarned`, using predicates on `userId`. */
 export const updateUserDataForWarn = (
   client: Pick<DrizzleClient, "update">,
@@ -804,20 +747,6 @@ export const updateUserDataForWarn = (
     .update(userData)
     .set({ isWarned: true })
     .where(eq(userData.userId, report.reportedUserId ?? ""));
-
-/** Build the `userReportComment` insert for `warn`. */
-export const insertUserReportCommentForWarn = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { object_id: string; comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "OFFICIAL_WARNING",
-  });
 
 /** Build the `userReport` escalation, applied only to the caller's own active, unresolved ban. */
 export const updateUserReportForEscalate = (
@@ -837,20 +766,6 @@ export const updateUserReportForEscalate = (
         gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
       ),
     );
-
-/** Build the `userReportComment` insert for `escalate`. */
-export const insertUserReportCommentForEscalate = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { object_id: string; comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "BAN_ESCALATED",
-  });
 
 /** Build the `userReport` listing for `clear`, including predicates on `reportedUserId`, `status`, `banEnd`. */
 export const listUserReportForClear = (
@@ -897,38 +812,21 @@ export const listUserReportForClear3 = (
     ),
   });
 
-/** Build the `userReport` selection for `noActiveReport`, using predicates on `reportedUserId`, `status`, `banEnd`. */
-export const selectUserReportForNoActiveReport2 = (
-  client: Pick<DrizzleClient, "select">,
-  reportedUserId: string,
-  statuses: import("@/drizzle/schema").ReportAction[],
-) =>
-  client
-    .select({ id: userReport.id })
-    .from(userReport)
-    .where(
-      and(
-        eq(userReport.reportedUserId, reportedUserId),
-        inArray(userReport.status, statuses),
-        gte(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
-      ),
-    );
-
 /** Build a ban reset guarded by the caller’s active-report predicate. */
 export const clearUserBanWithoutActiveReport = (
   client: Pick<DrizzleClient, "update">,
-  userId: string,
+  userIds: string[],
   noActiveReport: (statuses: BanState[]) => SQL<unknown>,
 ) =>
   client
     .update(userData)
     .set({ isBanned: false })
-    .where(and(eq(userData.userId, userId), noActiveReport(ActiveBanStates)));
+    .where(and(inArray(userData.userId, userIds), noActiveReport(ActiveBanStates)));
 
-/** Build the `userData` update for `clear`, setting `isSilenced`, using predicates on `userId`. */
-export const updateUserDataForClear2 = (
+/** Build a silence reset guarded by the caller’s active-report predicate. */
+export const clearUserSilenceWithoutActiveReport = (
   client: Pick<DrizzleClient, "update">,
-  reportedUserId: string,
+  userIds: string[],
   noActiveReport: (statuses: BanState[]) => SQL<unknown>,
 ) =>
   client
@@ -936,38 +834,23 @@ export const updateUserDataForClear2 = (
     .set({ isSilenced: false })
     .where(
       and(
-        eq(userData.userId, reportedUserId),
+        inArray(userData.userId, userIds),
         noActiveReport(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]),
       ),
     );
 
-/** Build the `userData` update for `clear`, setting `isTradeBanned`, using predicates on `userId`. */
-export const updateUserDataForClear3 = (
+/** Build a trade ban reset guarded by the caller’s active-report predicate. */
+export const clearUserTradeBanWithoutActiveReport = (
   client: Pick<DrizzleClient, "update">,
-  reportedUserId: string,
+  userIds: string[],
   noActiveReport: (statuses: BanState[]) => SQL<unknown>,
 ) =>
   client
     .update(userData)
     .set({ isTradeBanned: false })
     .where(
-      and(eq(userData.userId, reportedUserId), noActiveReport(["TRADE_BAN_ACTIVATED"])),
+      and(inArray(userData.userId, userIds), noActiveReport(["TRADE_BAN_ACTIVATED"])),
     );
-
-/** Build the `userReportComment` insert for `clear`. */
-export const insertUserReportCommentForClear = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  report: { id: string },
-  input: { comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: report.id,
-    content: sanitize(input.comment),
-    decision: "REPORT_CLEARED",
-  });
 
 /** Build the `reportLog` insert for `updateUserAvatar`. */
 export const insertReportLogForUpdateUserAvatar = (
@@ -1146,20 +1029,6 @@ export const updateUserDataForTradeBan = (
     .update(userData)
     .set({ isTradeBanned: true })
     .where(eq(userData.userId, report.reportedUserId));
-
-/** Build the `userReportComment` insert for `tradeBan`. */
-export const insertUserReportCommentForTradeBan = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { object_id: string; comment: string },
-) =>
-  client.insert(userReportComment).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    reportId: input.object_id,
-    content: sanitize(input.comment),
-    decision: "TRADE_BAN_ACTIVATED",
-  });
 
 /** Build the `userReport` insert for `insertUserReport`. */
 export const insertUserReportForInsertUserReport = (
@@ -1387,22 +1256,7 @@ export const executeRowsForInsertRecord = (
   table: typeof userReport | typeof userReportComment | typeof actionLog,
   values: Record<string, unknown>,
   guard: undefined | SQL<unknown>,
-) => {
-  const columns = getTableColumns(table);
-  const keys = Object.keys(values) as (keyof typeof columns)[];
-  return client.execute(sql`
-      INSERT INTO ${table} (${sql.join(
-        keys.map((key) => sql.identifier(columns[key].name)),
-        sql`, `,
-      )})
-      SELECT ${sql.join(
-        keys.map((key) => sql.param(values[key], columns[key])),
-        sql`, `,
-      )}
-      WHERE ${guard}
-      ON DUPLICATE KEY UPDATE id = id
-    `);
-};
+) => insertValuesWhere(client, table, values, guard, { ignoreDuplicate: true });
 
 /**
  * Build the `sanctionTombstone` update for `reapplySanctions`, setting
@@ -1489,3 +1343,9 @@ const activeSanctionReportsWhere = (userId: string) =>
     ]),
     gt(userReport.banEnd, new Date()),
   );
+
+/** Raw reporter and subject relations; subject-facing reads redact the reporter. */
+const reportUsersRelations = {
+  reporterUser: { columns: userCardColumns },
+  reportedUser: { columns: userCardColumns },
+} as const;
