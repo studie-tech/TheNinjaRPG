@@ -1,20 +1,17 @@
 import { BufferImageSource, Texture } from "pixi.js";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 
-/** Small light pools retain palette steps or interpolate broad illumination without a blur pass. */
-export const createPixelLightTexture = (options: { smooth?: boolean } = {}) => {
+/** A tiny palette-stepped light pool gives lanterns a pixel edge without a blur pass. */
+export const createPixelLightTexture = () => {
   const size = 64;
   const pixels = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const distance = Math.hypot(x - size / 2, y - size / 2) / (size / 2);
       const falloff = Math.max(0, 1 - distance);
-      const alpha = options.smooth
-        ? falloff * falloff
-        : Math.floor(falloff * falloff * 24) / 24;
+      const alpha = Math.floor(falloff * falloff * 24) / 24;
       const index = (y * size + x) * 4;
-      const white = options.smooth ? Math.round(alpha * 255) : 255;
-      pixels[index] = pixels[index + 1] = pixels[index + 2] = white;
+      pixels[index] = pixels[index + 1] = pixels[index + 2] = 255;
       pixels[index + 3] = Math.round(alpha * 255);
     }
   return new Texture({
@@ -23,8 +20,7 @@ export const createPixelLightTexture = (options: { smooth?: boolean } = {}) => {
       width: size,
       height: size,
       format: "rgba8unorm",
-      scaleMode: options.smooth ? "linear" : "nearest",
-      ...(options.smooth ? { alphaMode: "premultiplied-alpha" as const } : {}),
+      scaleMode: "nearest",
     }),
   });
 };
