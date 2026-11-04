@@ -1,9 +1,6 @@
 import type { UserQueueState } from "@/deltas/profile";
 
-import {
-  COST_CHANGE_GENDER,
-  COST_REROLL_ELEMENT,
-} from "@/drizzle/constants";
+import { COST_CHANGE_GENDER, COST_REROLL_ELEMENT } from "@/drizzle/constants";
 import { hasEnergyQueue } from "@/libs/queue";
 
 import type { findUserWithBloodline } from "@/queries/profile";

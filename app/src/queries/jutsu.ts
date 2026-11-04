@@ -112,6 +112,7 @@ export const fetchActiveLoadoutJutsuIds = async (
 };
 
 import { gte, isNotNull, isNull, ne, or, type SQL, sql } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -131,7 +132,6 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import type { JutsuCapFlags } from "@/libs/jutsu";
-
 import { calculateContentDiff } from "@/utils/diff";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 

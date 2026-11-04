@@ -35,7 +35,9 @@ export const guideRouter = createTRPCRouter({
     .input(GuideListFilterSchema.optional())
     .query(async ({ ctx, input }) => {
       const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
-      const includeDrafts = Boolean(input?.includeDrafts && canChangeContent(viewerRole));
+      const includeDrafts = Boolean(
+        input?.includeDrafts && canChangeContent(viewerRole),
+      );
       if (!includeDrafts) {
         return await fetchPublishedGuides(ctx.drizzle);
       }
