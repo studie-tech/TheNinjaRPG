@@ -9,9 +9,6 @@ import Modal from "@/layout/Modal";
 import { calcItemRepairCost } from "@/libs/item";
 import type { UserWithRelations } from "@/routers/profile";
 
-/**
- * Repair Item Selection Modal Component
- */
 type SetIsOpenType = React.Dispatch<React.SetStateAction<boolean>>;
 
 interface RepairItemModalProps {
@@ -23,6 +20,7 @@ interface RepairItemModalProps {
   isPending?: boolean;
 }
 
+/** Lets players choose a repair kit with a durability preview and pending-state guard. */
 export function RepairItemSelectionModal({
   isOpen,
   setIsOpen,
@@ -117,50 +115,6 @@ export function RepairItemSelectionModal({
   );
 }
 
-/**
- * Shared Repair Modal Wrapper Component
- * Handles the repair item selection modal with mutation logic
- */
-interface RepairModalWrapperProps {
-  useritem: UserItemWithRelations | undefined;
-  repairItems: UserItemWithRelations[];
-  isRepairModalOpen: boolean;
-  setIsRepairModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  onRepairItem: (params: { repairItemId: string; targetItemId: string }) => void;
-  isPending?: boolean;
-}
-
-export function RepairModalWrapper({
-  useritem,
-  repairItems,
-  isRepairModalOpen,
-  setIsRepairModalOpen,
-  onRepairItem,
-  isPending = false,
-}: RepairModalWrapperProps) {
-  if (!useritem) return null;
-
-  return (
-    <RepairItemSelectionModal
-      isOpen={isRepairModalOpen}
-      setIsOpen={setIsRepairModalOpen}
-      targetItem={useritem}
-      repairItems={repairItems}
-      onSelectRepairItem={(repairItemId, targetItemId) => {
-        onRepairItem({
-          repairItemId,
-          targetItemId,
-        });
-      }}
-      isPending={isPending}
-    />
-  );
-}
-
-/**
- * Shared per-item durability repair actions (kit + ryo).
- * Used by both Backpack and Character item-details modals.
- */
 interface ItemDurabilityRepairActionsProps {
   useritem: UserItemWithRelations;
   userData: NonNullable<UserWithRelations>;
@@ -170,6 +124,7 @@ interface ItemDurabilityRepairActionsProps {
   isRepairingWithRyo?: boolean;
 }
 
+/** Offers repair-kit selection and crafter ryo repair with cost and affordability checks. */
 export function ItemDurabilityRepairActions({
   useritem,
   userData,

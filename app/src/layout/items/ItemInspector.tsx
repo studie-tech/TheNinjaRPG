@@ -34,7 +34,7 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import { rarityLabel, rarityTextClass, slotLabel } from "@/layout/items/ItemCard";
 import {
   ItemDurabilityRepairActions,
-  RepairModalWrapper,
+  RepairItemSelectionModal,
 } from "@/layout/items/ItemRepair";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import Loader from "@/layout/Loader";
@@ -623,12 +623,14 @@ export function ItemInspector({
         </Dialog>
       )}
       {/* Repair Item Selection Modal */}
-      <RepairModalWrapper
-        useritem={useritem}
+      <RepairItemSelectionModal
+        targetItem={useritem}
         repairItems={repairItems}
-        isRepairModalOpen={isRepairModalOpen}
-        setIsRepairModalOpen={setIsRepairModalOpen}
-        onRepairItem={mutateRepairItem}
+        isOpen={isRepairModalOpen}
+        setIsOpen={setIsRepairModalOpen}
+        onSelectRepairItem={(repairItemId, targetItemId) => {
+          mutateRepairItem({ repairItemId, targetItemId });
+        }}
         isPending={isUsingRepairItem}
       />
       {/* Variant Modal */}
