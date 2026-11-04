@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
-import { isPetJutsuAllowed } from "@/libs/pets/abilities";
+import type { Jutsu } from "@/drizzle/schema";
+import { isPetJutsuAllowedForSpecies } from "@/libs/pets/abilities";
 import { callDiscordContent } from "@/libs/socials";
 import { listJutsuByIds } from "@/queries/jutsu";
 import {
@@ -56,15 +57,8 @@ export const petSpeciesRouter = createTRPCRouter({
         return errorResponse("Not allowed to create companion species");
       if (existing) return errorResponse("Companion species name already exists");
       // The new species ID does not exist yet, so defaults must allow any species.
-      if (
-        defaults.length !== input.defaultJutsuIds.length ||
-        defaults.some(
-          (entry) => !isPetJutsuAllowed(entry) || !!entry.requiredPetSpeciesId,
-        )
-      )
-        return errorResponse(
-          "Choose published, compatible PETS jutsu for the default loadout.",
-        );
+      if (!isValidDefaultLoadout(defaults, input.defaultJutsuIds))
+        return errorResponse(INVALID_DEFAULT_LOADOUT);
       const id = nanoid();
       try {
         await insertPetSpeciesForCreate(ctx.drizzle, id, input);
@@ -99,17 +93,8 @@ export const petSpeciesRouter = createTRPCRouter({
       if (!species) return errorResponse("Companion species not found");
       if (existing && existing.id !== species.id)
         return errorResponse("Companion species name already exists");
-      if (
-        defaults.length !== input.data.defaultJutsuIds.length ||
-        defaults.some(
-          (entry) =>
-            !isPetJutsuAllowed(entry) ||
-            (!!entry.requiredPetSpeciesId && entry.requiredPetSpeciesId !== input.id),
-        )
-      )
-        return errorResponse(
-          "Choose published, compatible PETS jutsu for the default loadout.",
-        );
+      if (!isValidDefaultLoadout(defaults, input.data.defaultJutsuIds, input.id))
+        return errorResponse(INVALID_DEFAULT_LOADOUT);
       const changes = calculateContentDiff(species, { ...species, ...input.data });
       if (changes.length === 0)
         return { success: true, message: "Companion species is already up to date." };
@@ -127,3 +112,15 @@ export const petSpeciesRouter = createTRPCRouter({
       return { success: true, message: "Companion species updated." };
     }),
 });
+
+const INVALID_DEFAULT_LOADOUT =
+  "Choose published, compatible PETS jutsu for the default loadout.";
+
+/** Every requested default exists and suits the species. */
+const isValidDefaultLoadout = (
+  defaults: Jutsu[],
+  requestedIds: string[],
+  speciesId?: string,
+) =>
+  defaults.length === requestedIds.length &&
+  defaults.every((entry) => isPetJutsuAllowedForSpecies(entry, speciesId));

@@ -34,7 +34,7 @@ import { type UserData, type UserPet, userData, userPet } from "@/drizzle/schema
 import { fetchPetArtProvider } from "@/libs/gamesettings";
 import {
   getPetAbilityCapacity,
-  isPetJutsuAllowed,
+  isPetJutsuAllowedForSpecies,
   isPetSkillAllowed,
   validatePetAbilities,
 } from "@/libs/pets/abilities";
@@ -369,11 +369,8 @@ export const petsRouter = createTRPCRouter({
         slotCost: PET_COLLECTION_SLOT_COST,
         slotSilverCost: PET_SEICHI_SILVER_COST,
         abilities: {
-          jutsus: abilities.jutsus.filter(
-            (entry) =>
-              isPetJutsuAllowed(entry) &&
-              (!entry.requiredPetSpeciesId ||
-                entry.requiredPetSpeciesId === pet?.speciesId),
+          jutsus: abilities.jutsus.filter((entry) =>
+            isPetJutsuAllowedForSpecies(entry, pet?.speciesId),
           ),
           skills: abilities.skills.filter(isPetSkillAllowed),
         },
