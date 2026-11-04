@@ -2396,9 +2396,9 @@ export const initiateBattle = async (
             const owned =
               progressionQueues.get(`${user.userId}:${item.id}`)?.shift() ?? null;
             return {
+              ...inertUserItemColumns(user.userId, new Date()),
               // Synthetic id so battle-end quantity/durability writes never touch
               // real inventory rows; XP is credited via progressionRowId instead.
-              ...inertUserItemColumns(user.userId, new Date()),
               id: nanoid(),
               progressionRowId: owned?.id ?? null,
               itemId: item.id,
