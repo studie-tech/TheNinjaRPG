@@ -110,6 +110,7 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     await insertUsers([{ userId: "lpc-editor", role: "CODER" }]);
     const caller = callerForDatabase(gameAssetRouter, "lpc-editor", database);
     const before = buildLpcCatalog(await caller.getLpcCatalog());
+    expect(await caller.getLpcSceneCatalog()).toEqual(before);
     const saved = await database.query.gameAsset.findFirst({ where: eq(gameAsset.id, "katana") });
     const config = structuredClone(saved!.lpcConfig!); config.replacementSlot = "shirt";
     const result = await caller.update({ id: "katana", data: gameAssetValidator.parse({ ...saved, lpcConfig: config }) });

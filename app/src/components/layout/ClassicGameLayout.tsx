@@ -73,7 +73,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
   return (
-    <div className="absolute top-0 bottom-0 w-full md:relative">
+    <div data-world-page className="absolute top-0 bottom-0 w-full md:relative">
       <div
         className={cn(
           "fixed bottom-1 rounded-full bg-slate-500",

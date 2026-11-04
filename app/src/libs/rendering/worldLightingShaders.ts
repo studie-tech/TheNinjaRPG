@@ -365,6 +365,8 @@ uniform vec4 uSunDepth;
 uniform vec3 uAmbient;
 uniform vec3 uSunColor;
 uniform float uDay;
+uniform float uSunlight;
+uniform float uLocalLights;
 uniform float uShadows;
 ${materialShader}
 vec3 linearColor(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }
@@ -398,7 +400,7 @@ void main() {
   vec3 p = receiverPosition(screenWorld, height, n, uViewport, uReceiverSize);
   float shade = 1.0;
   float facingSun = dot(n, uSun);
-  if (uShadows > 0.5 && uDay > 0.0 && facingSun > 0.001) {
+  if (uShadows > 0.5 && uSunlight > 0.5 && uDay > 0.0 && facingSun > 0.001) {
     vec3 relative = p - uSunOrigin;
     vec2 sunUV = (vec2(dot(relative, uSunRight), dot(relative, uSunUp)) - uSunBounds.xy) / uSunBounds.zw;
     float depth = (dot(relative, uSun) - uSunDepth.x) / uSunDepth.y;
@@ -425,15 +427,15 @@ void main() {
   vec2 staticUV = (p.xy - uStaticBounds.xy) / uStaticBounds.zw;
   vec2 dynamicUV = (p.xy - uDynamicBounds.xy) / uDynamicBounds.zw;
   float contact = 0.0;
-  if (uShadows > 0.5) contact = max(contactCoverage(uStaticField, staticUV), contactCoverage(uDynamicField, dynamicUV)) * (1.0 - smoothstep(1.0, 8.0, p.z));
-  vec3 light = uAmbient * (1.0 - contact * 0.22) + uSunColor * max(dot(n, uSun), 0.0) * shade * uDay + texture2D(uPoints, lightingUV).rgb;
+  if (uShadows > 0.5 && uLocalLights > 0.5) contact = max(contactCoverage(uStaticField, staticUV), contactCoverage(uDynamicField, dynamicUV)) * (1.0 - smoothstep(1.0, 8.0, p.z));
+  vec3 light = uAmbient * (1.0 - contact * 0.22) + uSunColor * max(dot(n, uSun), 0.0) * shade * uDay * uSunlight + texture2D(uPoints, lightingUV).rgb * uLocalLights;
   vec3 albedo = color.rgb / max(color.a, 0.00001);
   // The diffuse art already contains painted highlights. Bounded compensation preserves their pixel detail under a moving sun.
   float baked = 0.4 + 0.6 * max(dot(n, normalize(vec3(-0.5, -0.4, 0.8))), 0.0);
-  float compensation = mix(1.0, 1.0 / baked, 0.25);
+  float compensation = mix(1.0, 1.0 / baked, 0.25 * uSunlight);
   vec3 result = displayColor(linearColor(albedo) * light * compensation);
   float emission = step(4.0, mod(floor(data.r * 255.0 + 0.5), 8.0));
-  result = mix(result, max(albedo, vec3(0.95, 0.56, 0.18)), emission * (1.0 - uDay * 0.7));
+  result = mix(result, max(albedo, vec3(0.95, 0.56, 0.18)), emission * (1.0 - uDay * 0.7) * uLocalLights);
   gl_FragColor = vec4(result * color.a, color.a);
 }`;
 

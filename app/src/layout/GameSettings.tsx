@@ -734,27 +734,46 @@ export const VisualEffectsSettings = () => {
     <div className="space-y-3">
       <div className="divide-border/50 divide-y">
         <SettingsToggle
-          label="Lighting"
-          description="Sunlight, day/night colors and local lights"
-          checked={visualEffects.lighting}
-          onCheckedChange={(enabled) => setVisualEffect("lighting", enabled)}
+          label="Sunlight"
+          description="Directional light from the sun"
+          checked={visualEffects.sunlight}
+          onCheckedChange={(enabled) => setVisualEffect("sunlight", enabled)}
+        />
+        <SettingsToggle
+          label="Day/night colors"
+          description="Ambient colors change with the world clock"
+          checked={visualEffects.dayNight}
+          onCheckedChange={(enabled) => setVisualEffect("dayNight", enabled)}
+        />
+        <SettingsToggle
+          label="Local lights"
+          description="Lanterns, windows and nearby light sources"
+          checked={visualEffects.localLights}
+          onCheckedChange={(enabled) => setVisualEffect("localLights", enabled)}
         />
         <SettingsToggle
           label="Shadows"
-          description={
-            visualEffects.lighting
-              ? "Shadows from the sun and nearby lights"
-              : "Enable lighting to show shadows"
-          }
+          description="Shadows from the sun and nearby lights"
           checked={visualEffects.shadows}
-          disabled={!visualEffects.lighting}
           onCheckedChange={(enabled) => setVisualEffect("shadows", enabled)}
         />
         <SettingsToggle
-          label="Animations"
-          description="Wind, weather and sprite animations"
-          checked={visualEffects.animations}
-          onCheckedChange={(enabled) => setVisualEffect("animations", enabled)}
+          label="Weather"
+          description="Rain, snow, storms and other weather effects"
+          checked={visualEffects.weather}
+          onCheckedChange={(enabled) => setVisualEffect("weather", enabled)}
+        />
+        <SettingsToggle
+          label="Wind"
+          description="Swaying trees, grass and foliage"
+          checked={visualEffects.wind}
+          onCheckedChange={(enabled) => setVisualEffect("wind", enabled)}
+        />
+        <SettingsToggle
+          label="Sprite animations"
+          description="Animated characters, scenery and effects"
+          checked={visualEffects.spriteAnimations}
+          onCheckedChange={(enabled) => setVisualEffect("spriteAnimations", enabled)}
         />
       </div>
       <p className="text-muted-foreground text-xs">

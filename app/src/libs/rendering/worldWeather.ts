@@ -37,7 +37,10 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
         ? clamp(weather.intensity, 0, 1)
         : 0;
       container.visible =
-        weather.kind !== "clear" && strength > 0 && !frame.reducedMotion;
+        game.visualEffects.weather &&
+        weather.kind !== "clear" &&
+        strength > 0 &&
+        !frame.reducedMotion;
       if (!container.visible) return;
       if (!geometry) {
         const random = alea("world-weather");

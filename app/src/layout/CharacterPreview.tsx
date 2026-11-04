@@ -74,7 +74,13 @@ export const CharacterPreview = ({
           actor.sprite.scale.set(160);
           game.stage.addChild(actor.sprite);
           game.setUpdate((frame) => {
-            actor.render(frame, animation, direction.current);
+            actor.render(
+              game.visualEffects.spriteAnimations
+                ? frame
+                : { ...frame, reducedMotion: true },
+              animation,
+              direction.current,
+            );
           });
           setReady(true);
         } catch (cause) {

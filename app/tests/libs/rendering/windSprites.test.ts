@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { BatchableSprite, BatcherPipe, BufferImageSource, InstructionSet, Matrix, Rectangle, type Renderer, type Shader, Sprite, Texture, type UniformGroup, type WebGLRenderer } from "pixi.js";
-import { createWindSprite, updateWindSprites, WindSprite, WindSpritePipe } from "@/libs/rendering/primitives/windSprites";
+import { createWindSprite, isWindSprite, updateWindSprites, WindSprite, WindSpritePipe } from "@/libs/rendering/primitives/windSprites";
 
 beforeEach(() => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null));
 afterEach(() => vi.restoreAllMocks());
@@ -59,6 +59,21 @@ describe("scenery wind vertex data", () => {
     } finally { batcher.destroy({ shader: true }); texture.destroy(true); }
   });
 
+  it("uses renderer-owned capability and pipe identity across module instances", () => {
+    const setWind = vi.fn();
+    const renderer = { renderPipes: { worldWindSprite: { setWind } } } as unknown as Renderer;
+    const sprite = createWindSprite(renderer, Texture.EMPTY, 0);
+    const foreign = new Sprite(Texture.EMPTY);
+    Object.defineProperty(foreign, "renderPipeId", { value: "worldWindSprite" });
+    try {
+      expect(isWindSprite(sprite)).toBe(true);
+      expect(isWindSprite(foreign)).toBe(true);
+      const breeze = { large: new Float32Array(4), small: new Float32Array(4), key: "still" };
+      updateWindSprites(renderer, breeze);
+      expect(setWind).toHaveBeenCalledWith(breeze);
+    } finally { sprite.destroy(); foreign.destroy(); }
+  });
+
   it("keeps the CPU path available when the renderer has no wind pipe", () => {
     const sprite = createWindSprite({} as Renderer, Texture.EMPTY, 2);
     try {
@@ -76,9 +91,10 @@ describe("scenery wind vertex data", () => {
         break: vi.fn(),
         addToBatch: (entry: BatchableSprite) => { entry._batcher = batcher; },
       } },
-      shader: { bind: (shader: Shader) => samples.push(Array.from((shader.resources.wind as UniformGroup).uniforms.uWind as Float32Array)) },
+      shader: { bind: vi.fn(), updateUniformGroup: (group: UniformGroup) => samples.push(Array.from(group.uniforms.uWind as Float32Array)) },
     } as unknown as WebGLRenderer;
     const pipe = new WindSpritePipe(renderer);
+    Object.assign(renderer.renderPipes, { worldWindSprite: pipe });
     const sprite = createWindSprite(renderer, Texture.EMPTY, 1) as WindSprite;
     const instructions = new InstructionSet();
     const breeze = (value: number) => ({ large: new Float32Array([value, 0, 0, 0]), small: new Float32Array(4), key: String(value) });
@@ -90,6 +106,7 @@ describe("scenery wind vertex data", () => {
       const first = instructions.instructions[0] as Parameters<WindSpritePipe["execute"]>[0];
       updateWindSprites(renderer, breeze(1));
       pipe.execute(first);
+      expect(renderer.shader.bind).toHaveBeenLastCalledWith(first.shader, true);
       updateWindSprites(renderer, breeze(2));
       pipe.execute(first);
       expect(samples).toEqual([[1, 0, 0, 0], [2, 0, 0, 0]]);

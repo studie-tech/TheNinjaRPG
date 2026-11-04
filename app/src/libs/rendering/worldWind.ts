@@ -21,8 +21,12 @@ export const worldWindGroup = (phase: number, small = false) =>
   (((Math.round(phase / (Math.PI * 0.5)) % 4) + 4) % 4) + (small ? 4 : 0);
 
 /** Shared subpixel gusts keep vegetation and every shadow pass in the same smooth pose. */
-export const sampleWorldWind = (frame: GameFrame, scale: number): WorldWind => {
-  if (frame.reducedMotion) return STILL_WORLD_WIND;
+export const sampleWorldWind = (
+  frame: GameFrame,
+  scale: number,
+  enabled = true,
+): WorldWind => {
+  if (frame.reducedMotion || !enabled) return STILL_WORLD_WIND;
   const large = new Float32Array(4),
     small = new Float32Array(4);
   for (let index = 0; index < 4; index++) {

@@ -7,7 +7,11 @@ import {
   Texture,
 } from "pixi.js";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
-import { createSceneAssets, textureOpaqueFrame } from "@/libs/rendering/assets";
+import {
+  createSceneAssets,
+  stabilizeNearestTexture,
+  textureOpaqueFrame,
+} from "@/libs/rendering/assets";
 import { worldLighting } from "@/libs/rendering/color";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
@@ -21,8 +25,8 @@ import {
 } from "@/libs/rendering/primitives/shadow";
 import {
   createWindSprite,
+  isWindSprite,
   updateWindSprites,
-  WindSprite,
 } from "@/libs/rendering/primitives/windSprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type {
@@ -58,6 +62,8 @@ export const createWorldSprites = async (
   worldShadows?: WorldShadows,
   staticScenery = false,
 ) => {
+  const simpleLighting =
+    worldShadows?.kind === "projected" || worldShadows?.kind === "baked";
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const views: Texture[] = [];
@@ -77,7 +83,8 @@ export const createWorldSprites = async (
     motionFrame: number;
   }[] = [];
   let disposed = false;
-  let lastBrightness = 1;
+  let lastBrightness = Number.NaN;
+  let lastDayNight: boolean | undefined;
   let motionElapsed = 0;
   const dispose = () => {
     if (disposed) return;
@@ -160,7 +167,8 @@ export const createWorldSprites = async (
     !game.signal.aborted &&
     descriptions.some(
       (description) =>
-        description.shadow && !(worldShadows && description.shadowCaster),
+        description.shadow &&
+        !(worldShadows?.kind === "physical" && description.shadowCaster),
     )
   ) {
     shadowLease = acquireSoftShadowTexture();
@@ -185,10 +193,12 @@ export const createWorldSprites = async (
       let { texture } = result.value;
       if (texture && description.frame) {
         const { x, y, width, height } = description.frame;
-        texture = new Texture({
-          source: texture.source,
-          frame: new Rectangle(x, y, width, height),
-        });
+        texture = stabilizeNearestTexture(
+          new Texture({
+            source: texture.source,
+            frame: new Rectangle(x, y, width, height),
+          }),
+        );
         views.push(texture);
       }
       const sprite =
@@ -246,7 +256,9 @@ export const createWorldSprites = async (
             (frame.y - texture.frame.y)) /
             frame.height,
         );
-        texture = new Texture({ source: texture.source, frame });
+        texture = stabilizeNearestTexture(
+          new Texture({ source: texture.source, frame }),
+        );
         views.push(texture);
         sprite.texture = texture;
         sprite.scale.copyFrom(scale);
@@ -302,10 +314,12 @@ export const createWorldSprites = async (
       if (
         description.shadow &&
         shadowTexture &&
-        !(worldShadows && description.shadowCaster)
+        !(worldShadows?.kind === "physical" && description.shadowCaster)
       ) {
         if (!shadows) {
-          shadows = new Container();
+          shadows = new Container({
+            isRenderGroup: staticScenery && simpleLighting,
+          });
           shadows.label = "scenery-shadows";
           container.addChildAt(shadows, 0);
         }
@@ -323,9 +337,15 @@ export const createWorldSprites = async (
         shadows.addChild(shadow);
       }
       let light: Sprite | undefined;
-      if (description.light && !worldShadows) {
+      if (
+        description.light &&
+        worldShadows?.kind !== "physical" &&
+        worldShadows?.kind !== "baked"
+      ) {
         if (!lights) {
-          lights = new Container();
+          lights = new Container({
+            isRenderGroup: staticScenery && simpleLighting,
+          });
           lights.label = "scenery-lights";
           lights.alpha = 0;
           container.addChildAt(lights, shadows ? 1 : 0);
@@ -334,7 +354,10 @@ export const createWorldSprites = async (
         light = new Sprite(lightTexture);
         light.anchor.set(0.5);
         light.position.set(characterFoot?.x ?? description.x, footY);
-        light.width = description.size * description.light;
+        light.width =
+          description.size *
+          description.light *
+          (simpleLighting && description.shadowCaster === "building" ? 2.2 : 1);
         light.height = light.width * 0.5;
         light.tint = 0xffaa52;
         light.blendMode = "add";
@@ -382,8 +405,7 @@ export const createWorldSprites = async (
         entry.description.wind !== null && entry.description.wind !== undefined,
     )
     .flatMap((entry) => {
-      if (!(entry.sprite instanceof Sprite) || entry.sprite instanceof WindSprite)
-        return [];
+      if (!(entry.sprite instanceof Sprite) || isWindSprite(entry.sprite)) return [];
       const sprite = entry.sprite;
       entry.sprite.updateLocalTransform();
       return [
@@ -404,7 +426,7 @@ export const createWorldSprites = async (
       : [],
   );
   const hasGpuWind = entries.some(
-    (entry) => entry.sprite instanceof WindSprite && entry.description.wind != null,
+    (entry) => isWindSprite(entry.sprite) && entry.description.wind != null,
   );
   const groundDetails = entries.filter((entry) => entry.description.small);
   let flatGround: Container | null = null;
@@ -424,6 +446,29 @@ export const createWorldSprites = async (
     entries,
     missing,
     dispose,
+    /** Offscreen sectors retain their art while leaving the renderer's per-frame group traversal. */
+    setRenderable: (value: boolean) => {
+      if (container.renderable === value) return;
+      container.renderable = value;
+      if (!staticScenery || !simpleLighting) return;
+      for (const group of [shadows, lights, flatGround]) {
+        if (!group) continue;
+        if (value) group.enableRenderGroup();
+        else group.disableRenderGroup();
+      }
+    },
+    /** Moving effects retain their actor transforms while sharing the terrain's draw order. */
+    attachGroundEffects: (layer: RenderLayer) => {
+      if (shadows) {
+        shadows.zIndex = 0;
+        layer.attach(shadows);
+      }
+      if (lights) {
+        lights.zIndex = 1;
+        layer.attach(lights);
+      }
+      layer.sortRenderLayerChildren();
+    },
     /** Render layers preserve scope ownership/transforms while keeping identity pins outside physical lighting. */
     attachLayers: (
       layers: { ground?: RenderLayer; world: RenderLayer; ui: RenderLayer },
@@ -440,10 +485,17 @@ export const createWorldSprites = async (
       attached = { ...layers, offsetY };
       worldShadows?.invalidate();
       if (flatGround) flatGround.zIndex = -offsetY;
+      const retainGround = staticScenery && simpleLighting;
+      if (retainGround) {
+        if (shadows) layers.ground?.attach(shadows);
+        if (lights) layers.ground?.attach(lights);
+      }
       for (const entry of entries) {
         // Contact masks and emitter pools must draw after terrain, before upright artwork.
-        if (entry.shadow) layers.ground?.attach(entry.shadow);
-        if (entry.light) layers.ground?.attach(entry.light);
+        if (!retainGround) {
+          if (entry.shadow) layers.ground?.attach(entry.shadow);
+          if (entry.light) layers.ground?.attach(entry.light);
+        }
         entry.sprite.zIndex = -(entry.description.groundY + offsetY);
         if (flatGround && entry.sprite.parent === flatGround) {
           if (layers.ground) {
@@ -461,19 +513,35 @@ export const createWorldSprites = async (
       layers.ui.sortRenderLayerChildren();
     },
     setLighting: (brightness: number) => {
-      if (worldShadows) return;
+      if (worldShadows?.kind === "physical") return;
+      if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
+      if (lights)
+        lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
       brightness = Math.round(brightness * 256) / 256;
-      if (lastBrightness === brightness) return;
+      const dayNight = game.visualEffects?.dayNight !== false;
+      if (lastBrightness === brightness && lastDayNight === dayNight) return;
       lastBrightness = brightness;
+      lastDayNight = dayNight;
       const { night, tint } = worldLighting(brightness);
-      if (lights) lights.alpha = night * 0.3;
+      // Lamps follow the clock even when ambient colors and contact-shadow fading are disabled.
+      const contactNight = dayNight ? night : 0;
+      if (lights) {
+        lights.alpha = night * (simpleLighting ? 0.8 : 0.3);
+        // Zero-opacity emitters must leave the draw list, including actor scopes without scenery animation.
+        lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
+      }
+      if (simpleLighting) {
+        // Shared ambient uniforms keep fades independent of the number of loaded sprites.
+        if (shadows) shadows.alpha = 1 - contactNight * 0.75;
+        return;
+      }
       for (const entry of entries) {
         if (!entry.description.mask && !entry.description.unlit)
           entry.sprite.tint = Color.shared
             .setValue(entry.description.tint ?? 0xffffff)
-            .multiply(tint)
+            .multiply(dayNight ? tint : 0xffffff)
             .toNumber();
-        if (entry.shadow) entry.shadow.alpha = 0.6 * (1 - night * 0.75);
+        if (entry.shadow) entry.shadow.alpha = 0.6 * (1 - contactNight * 0.75);
       }
     },
     setViewport: (bounds: WorldBounds, padding: number) => {
@@ -501,6 +569,7 @@ export const createWorldSprites = async (
         padding,
       };
       viewport = next;
+      let membershipChanged = false;
       // Offscreen sprites keep their decoded lease but do not upload or join a GPU batch.
       for (const entry of entries) {
         entry.sprite.renderable =
@@ -516,6 +585,27 @@ export const createWorldSprites = async (
           ) && entry.sprite.alpha > 0;
         if (entry.shadow) entry.shadow.renderable = entry.sprite.renderable;
         if (entry.light) entry.light.renderable = entry.sprite.renderable;
+        if (
+          attached &&
+          !entry.description.mask &&
+          !entry.description.unlit &&
+          entry.sprite.parent === container
+        ) {
+          const layer = attached.world;
+          if (entry.sprite.renderable && entry.sprite.parentRenderLayer !== layer) {
+            layer.attach(entry.sprite);
+            membershipChanged = true;
+          } else if (
+            !entry.sprite.renderable &&
+            entry.sprite.parentRenderLayer === layer
+          ) {
+            layer.detach(entry.sprite);
+            membershipChanged = true;
+          }
+        }
+      }
+      if (membershipChanged) {
+        attached?.world.sortRenderLayerChildren();
       }
     },
     animate: (
@@ -524,15 +614,23 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
-      for (const entry of softEffects) {
-        if (entry.shadow)
-          entry.shadow.visible =
-            entry.sprite.visible &&
-            game.visualEffects?.shadows !== false &&
-            game.visualEffects?.lighting !== false;
-        if (entry.light)
-          entry.light.visible =
-            entry.sprite.visible && game.visualEffects?.lighting !== false;
+      if (staticScenery && simpleLighting) {
+        // Fixed scenery owns retained effect groups; viewport culling already mirrors each child's renderability.
+        if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
+        if (lights)
+          lights.visible =
+            lights.alpha > 0 && game.visualEffects?.localLights !== false;
+      } else {
+        for (const entry of softEffects) {
+          if (entry.shadow)
+            entry.shadow.visible =
+              entry.sprite.visible && game.visualEffects?.shadows !== false;
+          if (entry.light)
+            entry.light.visible =
+              entry.sprite.visible &&
+              (lights?.alpha ?? 0) > 0 &&
+              game.visualEffects?.localLights !== false;
+        }
       }
       if (zoom !== detailZoom && groundDetails.length) {
         detailZoom = zoom;
@@ -540,10 +638,16 @@ export const createWorldSprites = async (
         for (const entry of groundDetails) {
           const pixels = Math.abs(entry.sprite.height) * zoom;
           if (attached && !entry.description.mask && !entry.description.unlit) {
-            if (attached.ground && pixels <= WORLD_DETAIL.groundLightingPixels[0]) {
+            if (
+              attached.ground &&
+              pixels <=
+                (simpleLighting
+                  ? WORLD_DETAIL.projectedGroundPixels
+                  : WORLD_DETAIL.groundLightingPixels[0])
+            ) {
               // Retained ground instructions keep actor motion from repacking flat cover.
               flatGround ??= new Container({
-                isRenderGroup: true,
+                isRenderGroup: container.renderable,
                 label: "flat-ground",
               });
               if (!flatGround.parent) container.addChild(flatGround);
@@ -582,7 +686,10 @@ export const createWorldSprites = async (
         // Fixed scenery owns retained material poses; a zoom-driven fade changes that snapshot.
         worldShadows?.invalidate();
       }
-      const direction = frame.reducedMotion ? null : movement;
+      const direction =
+        frame.reducedMotion || game.visualEffects?.spriteAnimations === false
+          ? null
+          : movement;
       motionElapsed = direction ? motionElapsed + frame.delta * 1000 : 0;
       for (const entry of animated) {
         const motion = entry.description.motion;
@@ -606,7 +713,8 @@ export const createWorldSprites = async (
         entry.sprite.scale.x = Math.abs(entry.sprite.scale.x) * facing;
       }
       if (!wind.length && !hasGpuWind) return;
-      const breeze = sampledWind ?? sampleWorldWind(frame, zoom);
+      const breeze =
+        sampledWind ?? sampleWorldWind(frame, zoom, game.visualEffects?.wind);
       if (hasGpuWind) updateWindSprites(game.renderer, breeze);
       for (const entry of wind) {
         const { sprite, description } = entry;

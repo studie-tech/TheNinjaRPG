@@ -88,7 +88,11 @@ import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
-import { userBattleAtom, useUserDataSelector } from "@/utils/UserContext";
+import {
+  selectUserWithoutPosition,
+  userBattleAtom,
+  useUserDataSelector,
+} from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
 /**
@@ -134,9 +138,7 @@ export const socials = [
 
 const MenuBoxProfile: React.FC = () => {
   // State
-  const { data: userData, timeDiff } = useUserDataSelector(
-    ({ longitude, latitude, updatedAt, location, ...profile }) => profile,
-  );
+  const { data: userData, timeDiff } = useUserDataSelector(selectUserWithoutPosition);
   const [now, setNow] = useState(Date.now);
   const refreshTime = () => setNow(Date.now());
   const battle = useAtomValue(userBattleAtom);

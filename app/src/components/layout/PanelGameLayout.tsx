@@ -48,7 +48,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
   const isGuidedTutorial = isTutorialActive(userData);
 
   return (
-    <div className="tnr-theme-game" data-layout-variant={props.variant}>
+    <div data-world-page className="tnr-theme-game" data-layout-variant={props.variant}>
       <div
         className={cn(
           "fixed hidden min-[1100px]:block",

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getMutationKey } from "@trpc/react-query";
 import type { Grid } from "honeycomb-grid";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
@@ -34,14 +34,12 @@ import {
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
-import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
-import { useVisualEffects } from "@/hooks/visual-effects";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -56,10 +54,12 @@ import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
+import { expandedWorldAtom } from "@/libs/expandedWorld";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
@@ -78,6 +78,7 @@ import {
   createTravelScene,
   type TravelPick,
   type TravelSnapshot,
+  travelLightingMode,
 } from "@/libs/rendering/scenes/travel";
 import {
   type TravelMotionStep,
@@ -138,6 +139,7 @@ export interface SectorWindowData {
 }
 
 interface SectorProps {
+  loadLpcCatalog: () => Promise<LpcCatalog>;
   sector: number;
   tile: GlobalTile;
   sectorWindow: SectorWindowData;
@@ -201,10 +203,27 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const sectorMap = centerEntry.map;
   const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
+  const expandedExitRef = useRef<HTMLButtonElement>(null);
+  const setExpandedWorld = useSetAtom(expandedWorldAtom);
+  useEffect(() => {
+    setExpandedWorld(isWorldExpanded);
+    return () => setExpandedWorld(false);
+  }, [isWorldExpanded, setExpandedWorld]);
   useEffect(() => {
     if (!isWorldExpanded) return;
+    const returnFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const exit = expandedExitRef.current;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const page = document.querySelector<HTMLElement>("body > [data-world-page]");
+    const height = page?.style.height ?? "";
+    if (page) {
+      // The world is portalled to body. Preserve the covered page's scroll extent while suspending its paint.
+      page.style.height = `${Math.max(page.offsetHeight, page.scrollHeight)}px`;
+      page.setAttribute("data-world-covered", "true");
+    }
+    exit?.focus({ preventScroll: true });
     const onEscape = (event: KeyboardEvent) => {
       if (
         event.key === "Escape" &&
@@ -216,19 +235,22 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     document.addEventListener("keydown", onEscape);
     return () => {
       document.body.style.overflow = overflow;
+      if (page) {
+        page.removeAttribute("data-world-covered");
+        page.style.height = height;
+      }
       document.removeEventListener("keydown", onEscape);
+      // Do not steal focus from a dialog or navigation target that took it during dismissal.
+      if (
+        returnFocus?.isConnected &&
+        (document.activeElement === document.body || document.activeElement === exit)
+      )
+        returnFocus.focus({ preventScroll: true });
     };
   }, [isWorldExpanded, setWorldExpanded]);
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
-
-  // Day/night map shading preference — ref so the long-running render loop
-  // reacts without rebuilding the map
-  const { visualEffects } = useVisualEffects();
-  const showDayNightMapOverlays = visualEffects.lighting;
-  const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
-  showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
 
   // State pertaining to the sector
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
@@ -367,7 +389,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // tRPC utility
   const utils = api.useUtils();
-  const loadLpcCatalog = useLpcCatalogLoader({ revalidateInBackground: true });
+  const loadLpcCatalog = props.loadLpcCatalog;
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db
@@ -2291,10 +2313,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
           const lightDate =
-            lightingPreviewRef.current ??
-            (showDayNightMapOverlaysRef.current
-              ? new Date(Date.now() - timeDiffRef.current)
-              : null);
+            lightingPreviewRef.current ?? new Date(Date.now() - timeDiffRef.current);
           return {
             ...snapshot,
             actorRevision: actorRevisionRef.current,
@@ -2313,7 +2332,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             lightDate,
             weather: weatherPreviewRef.current,
             weatherTime: Date.now() - timeDiffRef.current,
-            brightness: lightDate ? getWorldCycleBrightness(lightDate) : 1,
+            brightness: getWorldCycleBrightness(lightDate),
           };
         },
         onTap: (hit) => travelCallbacks.current.onTap(hit),
@@ -2332,7 +2351,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         },
       }),
-    `${lightLayout}:${isWorldExpanded}`,
+    `${lightLayout}:${isWorldExpanded}:${travelLightingMode(sector)}`,
   );
   const [showWorldLoader, setShowWorldLoader] = useState(false);
   useEffect(() => {
@@ -2460,6 +2479,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               size="icon"
               variant="outline"
               className="bg-background/90"
+              ref={expandedExitRef}
               aria-label="Exit expanded world"
               onClick={() => setWorldExpanded(false)}
             >

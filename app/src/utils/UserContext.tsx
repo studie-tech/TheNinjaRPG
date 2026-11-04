@@ -34,6 +34,7 @@ import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
 } from "@/utils/userCache";
+import { withoutUserPosition } from "@/utils/userCacheSharing";
 import { canAccessStructure } from "@/utils/village";
 
 /**
@@ -336,13 +337,8 @@ export const useUserDataSelector = <T,>(
 };
 
 /** Profile fields independent of movement and its commit timestamp. */
-export const selectUserWithoutPosition = ({
-  longitude,
-  latitude,
-  location,
-  updatedAt,
-  ...profile
-}: NonNullable<UserWithRelations>) => profile;
+export const selectUserWithoutPosition = (user: NonNullable<UserWithRelations>) =>
+  withoutUserPosition(user);
 
 /** Read current profile data inside scene callbacks without subscribing React to position changes. */
 export const useUserDataRef = (
@@ -351,8 +347,9 @@ export const useUserDataRef = (
   const client = useQueryClient();
   const key = getQueryKey(api.profile.getUser, undefined, "query");
   const hash = hashKey(key);
+  const cache = client.getQueryCache();
   const read = () =>
-    client.getQueryData<{ userData: UserWithRelations }>(key)?.userData;
+    cache.get<{ userData: UserWithRelations }>(hash)?.state.data?.userData;
   const user = useRef(read());
   const changed = useRef(onChange);
   changed.current = onChange;
@@ -365,10 +362,15 @@ export const useUserDataRef = (
       changed.current?.(next, previous);
     };
     update();
-    return client.getQueryCache().subscribe((event) => {
-      if (event.query.queryHash === hash) update();
+    return cache.subscribe((event) => {
+      // Observer bookkeeping does not change the cached profile.
+      if (
+        event.query.queryHash === hash &&
+        (event.type === "updated" || event.type === "added" || event.type === "removed")
+      )
+        update();
     });
-  }, [client, hash]);
+  }, [cache, hash]);
   return user;
 };
 

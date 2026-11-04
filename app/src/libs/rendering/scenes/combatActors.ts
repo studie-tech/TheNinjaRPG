@@ -391,8 +391,7 @@ export const createCombatActors = (
         shoot: 1040,
         hurt: 480,
       };
-      record.shadow.renderable =
-        game.visualEffects?.shadows !== false && game.visualEffects?.lighting !== false;
+      record.shadow.renderable = game.visualEffects?.shadows !== false;
       const active =
         cue &&
         record.actionAt !== undefined &&

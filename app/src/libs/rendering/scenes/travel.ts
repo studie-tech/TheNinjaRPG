@@ -1,15 +1,17 @@
 import alea from "alea";
 import type { Grid } from "honeycomb-grid";
-import { Container, getMaxFragmentPrecision, RenderLayer } from "pixi.js";
+import { Container, RenderLayer } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
+import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import { createGameRenderer, type GameRenderer } from "@/libs/rendering/runtime";
 import {
   createTravelActors,
@@ -33,7 +35,7 @@ import {
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
 import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
   getWorldWeather,
@@ -45,6 +47,7 @@ import {
   sampleWorldWind,
 } from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
+import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
@@ -53,6 +56,12 @@ import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
+
+/** Scene-owned providers change only at the authored-village boundary, so other crossings retain their window. */
+export const travelLightingMode = (sector: number) =>
+  sector === WORLD_LANDMARKS.find((village) => village.name === "Akikaze")?.sector
+    ? "baked"
+    : "projected";
 
 /**
  * Owns retained sector scopes. Initialization awaits the current sector's terrain;
@@ -87,6 +96,7 @@ export const createTravelScene = async (options: {
         : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
   });
   const resolution = game.renderer.resolution ?? options.resolution ?? 1;
+  game.canvas.style.filter = "none";
   try {
     // The camera moves this group without repacking unchanged descendant transforms.
     const world = new Container({ isRenderGroup: true }),
@@ -94,27 +104,35 @@ export const createTravelScene = async (options: {
       terrainDrawLayer = new RenderLayer(),
       artLayer = new Container(),
       groundArtLayer = new RenderLayer(),
-      depthLayer = new RenderLayer({ sortableChildren: true }),
+      actorGroundLayer = new RenderLayer(),
+      depthLayer = new RenderLayer(),
       uiLayer = new RenderLayer();
-    // Packed geometry decoding needs highp; mediump devices use the primitives' ambient lighting.
-    const shadows =
-      getMaxFragmentPrecision() === "highp"
-        ? createWorldShadows(game, world)
-        : undefined;
-    const lightingLayer = shadows?.container ?? new Container();
+    terrainDrawLayer.label = "travel-terrain";
+    groundArtLayer.label = "travel-ground-art";
+    actorGroundLayer.label = "travel-actor-ground";
+    depthLayer.label = "travel-depth";
+    uiLayer.label = "travel-overlay";
+    const bakedVillage = travelLightingMode(options.getSnapshot().sector) === "baked";
+    const bakedLighting = bakedVillage
+      ? createBakedVillageLighting(game, world)
+      : undefined;
+    const shadows = bakedLighting ?? createProjectedWorldLighting(game, world);
+    const lightingLayer = shadows.container;
     const weather = createWorldWeather(game, options.lightLayout);
     const sceneryBounds = new WeakMap<Container, WorldBounds>();
     const route = createTravelPath(),
       actors = createTravelActors(
         game,
-        { ground: groundArtLayer, depth: depthLayer, overlay: uiLayer },
+        { ground: actorGroundLayer, depth: depthLayer, overlay: uiLayer },
         shadows,
         sceneryBounds,
       );
-    // Ownership stays with sector scopes; their physical draw layers share one lighting pass.
+    game.own(route.dispose);
+    // Sector scopes own artwork while terrain, scenery and actors share one lit world.
     lightingLayer.addChild(
       terrainDrawLayer,
       groundArtLayer,
+      actorGroundLayer,
       route.container,
       depthLayer,
     );
@@ -156,6 +174,7 @@ export const createTravelScene = async (options: {
       }
     };
     const pending = new Set<GameRenderer>();
+    let currentSceneryReady: Promise<void> = Promise.resolve();
     let generation = 0,
       disposed = false,
       zoom = options.initialZoom;
@@ -165,6 +184,8 @@ export const createTravelScene = async (options: {
       lastPath: string | null = null,
       hover = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
+    let isStill = false;
+    let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / logicalWidth) * zoom;
     const transform = (constrain = false) => {
@@ -408,12 +429,18 @@ export const createTravelScene = async (options: {
           x: origin.x + entry.dx * spanX,
           y: origin.y + entry.dy * spanY,
         };
+        if (entry.sector === snapshot.sector)
+          void bakedLighting?.preloadField(preparedSector.sourceKey, position);
+        if (disposed || token !== generation) return;
         const existing = sectors.get(entry.sector);
         if (existing?.key === key) {
           existing.position = position;
           existing.terrain.container.position.copyFrom(position);
           existing.art.container.position.copyFrom(position);
           placeArt(existing.art, position);
+          // A retained neighbor may become occupied before the previous sector finishes its artwork.
+          if (entry.sector === snapshot.sector)
+            currentSceneryReady = existing.startScenery();
           continue;
         }
         const scope = createRenderScope(game);
@@ -487,10 +514,32 @@ export const createTravelScene = async (options: {
             cachedSectorData.delete(oldest);
           }
           // Artwork and material maps must not hold walking or live actors behind a loading screen.
-          const scenery = createWorldSprites(scope, descriptions, shadows, true).then(
-            (art) => ({ art }),
-            (error: unknown) => ({ error }),
-          );
+          const loadScenery = () => {
+            if (scope.isDisposed())
+              return Promise.resolve({
+                error: new DOMException("Scenery cancelled", "AbortError"),
+              });
+            return createWorldSprites(scope, descriptions, shadows, true).then(
+              (art) => ({ art }),
+              (error: unknown) => ({ error }),
+            );
+          };
+          // One promise races priority completion with occupation, so promotion cannot install art twice.
+          let promoteScenery!: () => void;
+          const promoted = new Promise<void>((resolve) => {
+            promoteScenery = resolve;
+          });
+          // The occupied sector's artwork gets bandwidth and decoding time before the surrounding window.
+          const scenery =
+            entry.sector === snapshot.sector
+              ? loadScenery()
+              : Promise.race([currentSceneryReady, promoted]).then(loadScenery);
+          const startScenery = () => {
+            promoteScenery();
+            return scenery.then(() => {});
+          };
+          if (entry.sector === snapshot.sector)
+            currentSceneryReady = scenery.then(() => {});
           const [terrain, art] = await Promise.all([
             createHexTerrain(scope, data),
             createWorldSprites(scope, [], shadows, true),
@@ -509,9 +558,9 @@ export const createTravelScene = async (options: {
             transform();
             setBackground(entry.map);
           }
-          // Physical lighting receives neutral albedo; the frame loop applies ambient-only lighting.
+          // The lit world supplies ambient color to neutral terrain and scenery together.
           terrain.setLighting(1);
-          if (shadows) scope.own(shadows.registerTerrain(terrain.container, data));
+          scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
           art.container.position.copyFrom(position);
           terrainLayer.addChild(terrain.container);
@@ -529,6 +578,7 @@ export const createTravelScene = async (options: {
             data,
             terrain,
             art,
+            startScenery,
             position,
             height:
               logicalWidth *
@@ -559,6 +609,7 @@ export const createTravelScene = async (options: {
           pending.delete(scope);
           actorsDirty = true;
           lastPath = null;
+          game.invalidate();
           options.onReady();
           // Yield between sectors so input and already-loaded scenery can render.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -574,17 +625,41 @@ export const createTravelScene = async (options: {
         .window.find((entry) => entry.sector === options.getSnapshot().sector)?.map;
       if (activeMap) setBackground(activeMap);
     };
+    // Presence and movement arrive through refs; poll their identities without redrawing an idle unlit map.
+    const snapshotTimer = setInterval(() => {
+      if (disposed || !isStill) return;
+      try {
+        const inputs = travelFrameInputs(options.getSnapshot());
+        if (inputs.some((input, index) => input !== lastFrameInputs?.[index]))
+          game.invalidate();
+      } catch (error) {
+        game.dispose();
+        options.onError(error);
+      }
+    }, 100);
     game.own(() => {
       disposed = true;
       generation++;
+      clearInterval(snapshotTimer);
       if (zoomTimer !== null) clearTimeout(zoomTimer);
     });
-    game.setUpdate((frame) => {
+    game.setUpdate((sourceFrame) => {
+      const frame = game.visualEffects.spriteAnimations
+        ? sourceFrame
+        : { ...sourceFrame, reducedMotion: true };
       const snapshot = options.getSnapshot(),
         entry = sectors.get(snapshot.sector);
       const isPreparing = snapshot.viewer?.status === "TRAVEL";
-      // Compile destination scenery during the countdown without animating a hidden world.
-      game.setAnimating(!isPreparing);
+      isStill =
+        isPreparing ||
+        (frame.reducedMotion &&
+          (sourceFrame.reducedMotion ||
+            (!game.visualEffects.weather && !game.visualEffects.wind)) &&
+          !game.visualEffects.sunlight &&
+          !game.visualEffects.dayNight &&
+          !game.visualEffects.localLights);
+      game.setAnimating(!isStill);
+      lastFrameInputs = travelFrameInputs(snapshot);
       if (isPreparing) return;
       if (!entry) return;
       movements.clear();
@@ -654,7 +729,7 @@ export const createTravelScene = async (options: {
         lastActorSnapshot = snapshot;
         actors.sync(actorSnapshot);
       }
-      const breeze = sampleWorldWind(frame, scale());
+      const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
       const viewport = camera
         ? {
             minX: camera.x - halfWidth,
@@ -672,22 +747,20 @@ export const createTravelScene = async (options: {
           maxY: rendered.position.y + rendered.height,
         };
         const visible = !viewport || boundsOverlap(bounds, viewport, rendered.margin);
-        rendered.art.container.renderable = visible;
+        rendered.art.setRenderable(visible);
         // Terrain needs only one tile of edge clearance; tall scenery retains its wider margin.
         rendered.terrain.container.renderable =
           !viewport || boundsOverlap(bounds, viewport, rendered.margin / 3);
-        if (visible) {
-          if (camera)
-            rendered.art.setViewport(
-              {
-                minX: camera.x - halfWidth - rendered.position.x,
-                maxX: camera.x + halfWidth - rendered.position.x,
-                minY: camera.y - halfHeight - rendered.position.y,
-                maxY: camera.y + halfHeight - rendered.position.y,
-              },
-              Math.max(6, game.renderer.width * 0.0035) / scale(),
-            );
-        }
+        if (camera)
+          rendered.art.setViewport(
+            {
+              minX: camera.x - halfWidth - rendered.position.x,
+              maxX: camera.x + halfWidth - rendered.position.x,
+              minY: camera.y - halfHeight - rendered.position.y,
+              maxY: camera.y + halfHeight - rendered.position.y,
+            },
+            Math.max(6, game.renderer.width * 0.0035) / scale(),
+          );
         if (visible || refreshDetails)
           rendered.art.animate(frame, scale(), null, breeze);
       }
@@ -702,7 +775,8 @@ export const createTravelScene = async (options: {
           hover = "";
           options.onHover(null, null);
         }
-        game.canvas.style.cursor = controls.dragging() ? "grabbing" : "default";
+        const cursor = controls.dragging() ? "grabbing" : "default";
+        if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
       } else {
         const hit = pick(pointer.x, pointer.y);
         hoverTile = hit.tile;
@@ -712,9 +786,11 @@ export const createTravelScene = async (options: {
           hover = hoverKey;
           options.onHover(hit.structureId, hit.locationId);
         }
-        if (document.body.style.cursor !== "wait")
-          game.canvas.style.cursor =
+        if (document.body.style.cursor !== "wait") {
+          const cursor =
             hit.actor || hit.locationId || hit.structureId ? "pointer" : "default";
+          if (game.canvas.style.cursor !== cursor) game.canvas.style.cursor = cursor;
+        }
       }
       const selected = snapshot.routeTarget;
       const selectedTile =
@@ -780,7 +856,7 @@ export const createTravelScene = async (options: {
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
       weather.update(
-        frame,
+        sourceFrame,
         snapshot.weather ??
           getWorldWeather(
             getBiomeFromTileType(
@@ -792,18 +868,14 @@ export const createTravelScene = async (options: {
         world.position,
         snapshot.brightness,
       );
-      // Physical lighting excludes the canvas UI and the actors' identity markers.
-      game.canvas.style.filter = "none";
-      if (shadows) {
-        if (viewport)
-          shadows.update(worldSunlight(snapshot.lightDate), viewport, breeze);
-      } else {
-        for (const rendered of sectors.values()) {
-          rendered.terrain.setLighting(snapshot.brightness);
-          rendered.art.setLighting(snapshot.brightness);
-        }
-        actors.setLighting(snapshot.brightness);
+      // World lighting excludes the canvas UI and the actors' identity markers.
+      bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));
+      if (viewport)
+        shadows.update(worldSunlight(snapshot.lightDate, 60_000), viewport, breeze);
+      for (const rendered of sectors.values()) {
+        rendered.art.setLighting(snapshot.brightness);
       }
+      actors.setLighting(snapshot.brightness);
     });
     await updateWindow(true);
     return {
@@ -819,6 +891,7 @@ export const createTravelScene = async (options: {
       clearHighlights: () => {
         lastPath = null;
         route.set([], 0);
+        game.invalidate();
       },
     };
   } catch (error) {
@@ -845,6 +918,7 @@ export type TravelSnapshot = Omit<TravelActorsSnapshot, "grid"> & {
   enabled: boolean;
   /** Committed destination takes precedence over hover while the journey is in progress. */
   routeTarget?: { sector: number; x: number; y: number } | null;
+  /** Ungated world-clock brightness; ambient and contact-shadow consumers apply their own preference. */
   brightness: number;
   motionSteps?: ReadonlyMap<
     string,
@@ -880,7 +954,30 @@ type TravelSector = {
   data: HexTerrainData;
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
+  startScenery: () => Promise<void>;
 };
+
+/** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */
+const travelFrameInputs = (snapshot: TravelSnapshot) =>
+  [
+    snapshot.actorRevision,
+    snapshot.sector,
+    snapshot.viewer,
+    snapshot.users,
+    snapshot.col,
+    snapshot.row,
+    snapshot.window,
+    snapshot.showUsers,
+    snapshot.minBracket,
+    snapshot.friendlyAttack,
+    snapshot.structureObjectiveIds,
+    snapshot.nav,
+    snapshot.enabled,
+    snapshot.brightness,
+    snapshot.routeTarget?.sector,
+    snapshot.routeTarget?.x,
+    snapshot.routeTarget?.y,
+  ] as const;
 
 /**
  * Retain CPU terrain and descriptions for up to nine sectors across navigation.

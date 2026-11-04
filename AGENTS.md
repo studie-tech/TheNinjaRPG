@@ -4,6 +4,7 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 
 ## Required invariants
 
+- **Game media assets:** upload all game artwork and generated media (including sprite/shadow atlases, emission overlays and baked light pools) to UploadThing and serve them through the existing BunnyCDN hosts via `app/src/utils/image.ts`. Never add or serve these assets from `app/public/` or another application-local static path. Packed atlases and numerical light textures must use raw file-key URLs without resize/optimizer parameters; verify byte-identical CDN delivery before publishing their manifests. Keep source/publication caches outside the repository. This media CDN is separate from `CDN_URL`, which serves only `/_next/static`.
 - Run all `make` commands from the repository/worktree root, never `app/`. Run `make build` **only when explicitly requested**.
 - **Combat:** `initiateBattle()` must preload everything combat needs into battle state. `performAction()` gets ONE initial battle-state query, in-memory processing, then ONE `Promise.all` mutation phase. **Never add intermediate fetches**; add missing data at initiation.
 - **Economy:** use atomic WHERE/CAS guards for balances, receipt delivery and reward claims; check `rowsAffected` before granting irreversible rewards. Use SQL increments for counters vulnerable to stale snapshots.

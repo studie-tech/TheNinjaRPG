@@ -1,14 +1,18 @@
+import * as combatEffects from "@/libs/rendering/scenes/combatEffects";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import type { GroundEffect } from "@/libs/combat/types";
 import { getBattlefieldHeightRatio } from "@/libs/combat/util";
+import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatScene, type CombatSceneSnapshot } from "@/libs/rendering/scenes/combat";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
 
 const cleanups: (() => void)[] = [];
+const originalTerrain=combatTerrain.prepareCombatTerrain;
 beforeEach(() => {
   vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
   vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
@@ -17,7 +21,7 @@ beforeEach(() => {
 afterEach(() => { for (const dispose of cleanups.splice(0)) dispose(); vi.restoreAllMocks(); });
 
 /** Exercise actual scene transforms and gestures without a GPU or network textures. */
-const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: GroundEffect[]; assets?: GameAsset[] } = {}) => {
+const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: GroundEffect[]; assets?: GameAsset[] } = {}, initialFrames = true) => {
   const user = makeBattleUser("camera-user", { isAi: true, isOriginal: true, longitude: 6, latitude: 5 });
   const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10, background: lightLayout ? "ground" : "ocean", groundEffects: extra.groundEffects ?? [] });
   let snapshot = { battle, userId: user.userId, actions: [], timeDiff: 0, assets: extra.assets ?? [], requestedIds: new Set(), active: true, sound: false, volume: 0, showGridNumbers: false, inspect: true } as unknown as CombatSceneSnapshot;
@@ -26,9 +30,10 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
   const listeners = new window.AbortController(), owned = new Set<() => void>();
   let update = (_frame: GameFrame) => {}, resize = (_width: number, _height: number) => {}, disposed = false;
   const game = {
+    visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     stage: new Container(), canvas, signal: new AbortController().signal,
     animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
-    renderer: { width: 390, height }, assets: { texture: async () => Texture.WHITE },
+    renderer: { width: 390, height, render: vi.fn() }, assets: { texture: async () => Texture.WHITE },
     own: (callback: () => void) => owned.add(callback), disown: (callback: () => void) => owned.delete(callback),
     isDisposed: () => disposed, invalidate() {}, setAnimating() {},
     setUpdate: (callback: typeof update) => { update = callback; },
@@ -48,11 +53,36 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
   };
   const drag = (dx: number, dy: number) => { event("pointerdown", 195, height / 2); event("pointermove", 195 + dx, height / 2 + dy); event("pointerup", 195 + dx, height / 2 + dy); tick(); };
   const refresh = (longitude?: number) => { snapshot = { ...snapshot, battle: { ...snapshot.battle, version: snapshot.battle.version + 1, usersState: snapshot.battle.usersState.map((fighter) => longitude === undefined ? { ...fighter } : { ...fighter, longitude }) } }; scene.refresh(); };
-  tick(120);
-  return { game, world, scene, user, tick, event, drag, refresh, onTap, resize: () => resize(390, height) };
+  if (initialFrames) tick(120);
+  return { getSnapshot:()=>snapshot, patchSnapshot:(patch:Partial<CombatSceneSnapshot>)=>{snapshot={...snapshot,...patch}}, game, world, scene, user, tick, event, drag, refresh, onTap, resize: () => resize(390, height) };
 };
 
 describe("combat camera gestures", () => {
+  it("defers scenery reconciliation to the first frame's appearance suppression", async () => {
+    const original=combatEffects.createCombatEffects, phases:boolean[]=[];
+    vi.spyOn(combatEffects,"createCombatEffects").mockImplementation((...args)=>{const effects=original(...args),sync=effects.sync;effects.sync=(next,initial=false)=>{phases.push(initial);return sync(next,initial)};return effects});
+    vi.spyOn(combatTerrain,"prepareCombatTerrain").mockImplementation((...args)=>({...originalTerrain(...args),scenery:[{id:"held-border",kind:"decoration",image:"held-border.png",size:20,x:30,y:30,groundY:20}]}));
+    let release!:(texture:Texture)=>void;const held=new Promise<Texture>(resolve=>{release=resolve});
+    vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("held-border")?held:Texture.WHITE);
+    const fixture=await setup(2,false,{},false);
+    const effect={id:"before-first-frame",type:"visual",longitude:6,latitude:5,power:100,appearSfx:"arrival"} as GroundEffect;
+    fixture.patchSnapshot({sound:true,battle:{...fixture.getSnapshot().battle,groundEffects:[effect]}});
+    release(Texture.WHITE);for(let i=0;i<3;i++)await new Promise(resolve=>setTimeout(resolve,0));
+    expect(phases).toEqual([true]); fixture.tick(); expect(phases).toEqual([true,true]);
+  });
+
+  it.each([false,true])("keeps fighters usable while border scenery loads and ignores cancelled artwork (%s)", async cancel=>{
+    vi.spyOn(combatTerrain,"prepareCombatTerrain").mockImplementation((...args)=>({...originalTerrain(...args),scenery:[{id:"pending-border",kind:"decoration",image:"pending-combat-border.png",size:20,x:30,y:30,groundY:20}]}));
+    let release!:(texture:Texture)=>void;const pending=new Promise<Texture>(resolve=>{release=resolve});
+    vi.spyOn(Assets,"load").mockImplementation(async input=>JSON.stringify(input).includes("pending-combat-border")?pending:Texture.WHITE);
+    const fixture=await setup(2,false);
+    expect(fixture.game.isDisposed()).toBe(false);expect(fixture.world.getChildByLabel("combat-health",true)).not.toBeNull();
+    expect(fixture.world.getChildByLabel("pending-border",true)).toBeNull();
+    if(cancel)fixture.scene.dispose();release(Texture.WHITE);await new Promise(resolve=>setTimeout(resolve,0));
+    if(cancel)expect(fixture.world.destroyed).toBe(true);
+    else {expect(fixture.world.getChildByLabel("pending-border",true)).not.toBeNull();await fixture.scene.renderAt(1000);expect(fixture.game.isDisposed()).toBe(false);}
+  });
+
   it("reports character details only on a tap and clears the character hit on empty terrain", async () => {
     const { world, user, event, tick, onTap, game } = await setup();
     const actor = world.getChildByLabel(user.userId, true)!;

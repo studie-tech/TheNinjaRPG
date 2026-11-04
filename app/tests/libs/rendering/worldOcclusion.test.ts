@@ -954,6 +954,35 @@ describe("retained exact occlusion fields", () => {
     field.update([caster], viewport, 512); const revision = field.revision, uploads = [field.texture, field.references, field.prisms].map((t) => vi.spyOn(t.source, "update"));
     field.update([caster], viewport, 256); expect(field.revision).toBe(revision + 1); expect(field.heightRange).toBe(256); expect(uploads.every((u) => u.mock.calls.length === 0)).toBe(true); field.dispose();
   });
+  it("pauses queued and in-progress compilation without publishing incomplete fields", async () => {
+    const onUpdate = vi.fn(), source = trackedFrame(64);
+    const field = createWorldOcclusion({ incremental: true, budgetMs: 0.25, onUpdate });
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock++);
+    try {
+      field.update([normalizedRecord("paused", source)], viewport, 32);
+      field.setEnabled(false);
+      await new Promise(r => setTimeout(r, 10));
+      expect(source.reads).toBe(0); expect(onUpdate).not.toHaveBeenCalled();
+      field.setEnabled(true);
+      for (let i = 0; i < 100 && !source.reads; i++) await new Promise(r => setTimeout(r, 1));
+      expect(source.reads).toBeGreaterThan(0);
+      expect(field.revision).toBe(0);
+      field.setEnabled(false);
+      const reads = source.reads, before = packedSnapshot(field);
+      await new Promise(r => setTimeout(r, 10));
+      expect(source.reads).toBe(reads); expect(field.revision).toBe(0);
+      expect(matchesSnapshot(field, before)).toEqual([true, true, true]);
+      field.setEnabled(true);
+      await waitForRevision(field, 1);
+      expect(onUpdate).toHaveBeenCalledTimes(1);
+      expect(field.prismCount).toBe(64);
+    } finally { now.mockRestore(); field.dispose(); }
+    field.setEnabled(true);
+    await new Promise(r => setTimeout(r, 10));
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels queued work and destroys every retained source exactly once", async () => {
     const onUpdate = vi.fn(), field = createWorldOcclusion({ incremental: true, onUpdate }), textures = [field.texture, field.references, field.prisms], destroy = textures.map((t) => vi.spyOn(t, "destroy"));
     field.update([record("body", [], { volumes: [box(40, 40, 50, 50, 0, 20)] })], viewport, 32); field.dispose(); field.dispose(); await new Promise((r) => setTimeout(r, 10));

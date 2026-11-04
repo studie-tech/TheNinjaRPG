@@ -89,6 +89,14 @@ export const spriteLayerSheets = (
     : sheets;
 };
 
+/** Authored pose duration shared by sampling and retained actor updates. */
+export const lpcFrameDuration = (state: LpcAnimation) =>
+  state === "walk"
+    ? 180
+    : state === "idle" || state === "combat"
+      ? LPC_IDLE_FRAME_MS
+      : LPC_ATTACK_FRAME_MS;
+
 /**
  * Sample elapsed milliseconds: resting/walking cycles loop, attacks clamp, and reduced motion holds the first pose.
  * Missing clips use the neutral held pose; scene code owns cue expiry.
@@ -109,12 +117,7 @@ export const lpcFrame = (
     layout.clips.idle?.[direction] ??
     layout.clips.walk?.[direction];
   if (!frames?.length) return null;
-  const duration =
-    state === "walk"
-      ? 180
-      : state === "idle" || state === "combat"
-        ? LPC_IDLE_FRAME_MS
-        : LPC_ATTACK_FRAME_MS;
+  const duration = lpcFrameDuration(state);
   const step = reducedMotion ? 0 : Math.floor(Math.max(0, elapsed) / duration);
   const index =
     state === "idle" || state === "combat" || state === "walk"

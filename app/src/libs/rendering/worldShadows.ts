@@ -15,8 +15,9 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
-import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
-import { getWorldCycleBrightness, getWorldCyclePosition } from "@/libs/dayNight";
+import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
+import type { BakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
+import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
@@ -37,6 +38,7 @@ import {
   worldMaterialFrame,
 } from "@/libs/rendering/worldMaterials";
 import { createWorldOcclusion, type Occluder } from "@/libs/rendering/worldOcclusion";
+import type { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows, type SunCaster } from "@/libs/rendering/worldSunShadows";
 import {
   MAX_SMALL_WORLD_WIND,
@@ -46,33 +48,7 @@ import {
   worldWindGroup,
   worldWindShader,
 } from "@/libs/rendering/worldWind";
-
-/** East (+X), south (−Y), west (−X) follow the existing server-corrected cycle. Null freezes noon. */
-export const worldSunlight = (date: Date | null = null) => {
-  const cycle = date ? getWorldCyclePosition(date) : null;
-  const brightness = date ? getWorldCycleBrightness(date) : WORLD_DAY_BRIGHTNESS;
-  const day = Math.max(
-    0,
-    Math.min(
-      1,
-      (brightness - WORLD_NIGHT_BRIGHTNESS) /
-        (WORLD_DAY_BRIGHTNESS - WORLD_NIGHT_BRIGHTNESS),
-    ),
-  );
-  const progress = !cycle
-    ? 0.5
-    : cycle.phase === "day"
-      ? cycle.phaseOffset / cycle.phaseDuration
-      : day > 0
-        ? 0
-        : 1;
-  const angle = Math.PI * progress;
-  const x = Math.cos(angle),
-    y = -Math.sin(angle) * 0.65,
-    z = 0.28 + Math.sin(angle) * 0.8;
-  const length = Math.hypot(x, y, z);
-  return { x: x / length, y: y / length, z: z / length, day };
-};
+import { subscribeVisualEffects } from "@/libs/visualEffects";
 
 /**
  * Physical albedo, matched receiver data and bounded lighting share one composite.
@@ -115,6 +91,21 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       budgetMs: 2,
     }),
     dynamicField = createWorldOcclusion({ direct: true, onError: onOcclusionError });
+  const setOcclusionEnabled = (enabled: boolean) => {
+    staticField.setEnabled(enabled);
+    dynamicField.setEnabled(enabled);
+  };
+  setOcclusionEnabled(game.visualEffects.localLights && game.visualEffects.shadows);
+  // Offscreen renderers have no frame to reconcile settings; stop queued work on the preference event itself.
+  game.own(
+    subscribeVisualEffects((effect, enabled) => {
+      if (effect === "localLights" || effect === "shadows")
+        setOcclusionEnabled(
+          (effect === "localLights" ? enabled : game.visualEffects.localLights) &&
+            (effect === "shadows" ? enabled : game.visualEffects.shadows),
+        );
+    }),
+  );
   const view = new UniformGroup(
     {
       uViewport: { value: new Float32Array(4), type: "vec4<f32>" },
@@ -152,6 +143,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       uAmbient: { value: new Float32Array(3), type: "vec3<f32>" },
       uSunColor: { value: new Float32Array(3), type: "vec3<f32>" },
       uDay: { value: 1, type: "f32" },
+      uSunlight: { value: 1, type: "f32" },
+      uLocalLights: { value: 1, type: "f32" },
     },
     { isStatic: true },
   );
@@ -353,6 +346,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     if (!container.destroyed) container.destroy({ children: true });
   });
   return {
+    kind: "physical" as const,
     container,
     /**
      * Shares decoded materials and releases pending leases when an owner disappears.
@@ -488,7 +482,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       breeze: WorldWind = STILL_WORLD_WIND,
     ) => {
       if (disposed) return;
-      const { lighting, shadows } = game.visualEffects;
+      const { sunlight, dayNight, localLights, shadows } = game.visualEffects;
+      const lighting = sunlight || dayNight || localLights;
+      setOcclusionEnabled(localLights && shadows);
       if (filter.enabled !== lighting) {
         filter.enabled = lighting;
         invalidate();
@@ -1178,7 +1174,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           clear: false,
         });
       }
-      if (shadows && light.day > 0) {
+      if (sunlight && shadows && light.day > 0) {
         sun.update(
           detailedSunCasters,
           screenViewport,
@@ -1187,11 +1183,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           minReceiverHeight,
         );
         hasSunCasters = true;
-      } else if (shadows && hasSunCasters) {
+      } else if (hasSunCasters) {
         sun.update([], screenViewport, light);
         hasSunCasters = false;
       }
-      if (!shadows) {
+      if (!shadows || !sunlight) {
         // Surface lighting follows the sun even when its depth maps are disabled.
         sun.setUnshadowedDirection(light);
       }
@@ -1201,7 +1197,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         minY: globalViewport.minY * 2 - 640,
         maxY: globalViewport.maxY * 2 + 192,
       };
-      if (shadows) {
+      if (localLights && shadows) {
         staticField.update(
           detailedOccluders,
           fieldBounds,
@@ -1241,6 +1237,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         dynamicField.prisms.source.pixelWidth,
         dynamicField.prisms.source.pixelHeight,
       ]);
+      if (!localLights) lights.length = 0;
       const nextPointDay = Math.round(light.day * 256);
       // Cached emitter snapshots are immutable; camera and wind leave their identities intact.
       const pointGeometryChanged =
@@ -1331,7 +1328,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           clearColor: [0, 0, 0, 0],
         });
       }
-      const day = light.day;
+      const day = dayNight ? light.day : 1;
       look.uniforms.uScreenSize.set([game.renderer.width, game.renderer.height]);
       look.uniforms.uScreenViewport.set([
         screenViewport.minX,
@@ -1339,10 +1336,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         screenSpanX,
         screenSpanY,
       ]);
+      // Neutral daylight replaces directional shading when sunlight is disabled.
       look.uniforms.uAmbient.set([
-        0.13 + 0.19 * day,
-        0.22 + 0.12 * day,
-        0.31 + 0.03 * day,
+        0.13 + (sunlight ? 0.19 : 0.87) * day,
+        0.22 + (sunlight ? 0.12 : 0.78) * day,
+        0.31 + (sunlight ? 0.03 : 0.69) * day,
       ]);
       const horizon = 1 - light.z;
       look.uniforms.uSunColor.set([
@@ -1350,7 +1348,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         0.77 - horizon * 0.15,
         0.7 - horizon * 0.22,
       ]);
-      look.uniforms.uDay = day;
+      look.uniforms.uDay = light.day;
+      look.uniforms.uSunlight = Number(sunlight);
+      look.uniforms.uLocalLights = Number(localLights);
       look.update();
       for (const release of retired.splice(0)) release();
     },
@@ -1630,6 +1630,7 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
     Math.abs(determinant) > 0.000001
       ? [(-h * d) / determinant, (h * a) / determinant, (d * c - a * f) / determinant]
       : [0, 1, 0];
+  // Match albedo sampling at texel boundaries so receiver normals/coverage do not reintroduce bands.
   if (instanced) {
     const { orig, trim } = entry.record.sprite.texture;
     // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
@@ -1642,8 +1643,8 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
       m[3] ?? 0,
       m[5] ?? 0,
       entry.material.height,
-      (frame.x * sourceRatio) / entry.material.width,
-      (frame.y * heightRatio) / entry.material.height,
+      (frame.x * sourceRatio) / entry.material.width + NEAREST_TEXTURE_UV_BIAS,
+      (frame.y * heightRatio) / entry.material.height + NEAREST_TEXTURE_UV_BIAS,
       (frame.width * sourceRatio) / entry.material.width,
       (frame.height * heightRatio) / entry.material.height,
       h,
@@ -1680,8 +1681,10 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
     vertices.push(
       (m[4] ?? 0) + (m[0] ?? 0) * logicalU + (m[2] ?? 0) * logicalV,
       (m[5] ?? 0) + (m[1] ?? 0) * logicalU + (m[3] ?? 0) * logicalV,
-      ((frame.x + u * frame.width) * sourceRatio) / entry.material.width,
-      ((frame.y + v * frame.height) * heightRatio) / entry.material.height,
+      ((frame.x + u * frame.width) * sourceRatio) / entry.material.width +
+        NEAREST_TEXTURE_UV_BIAS,
+      ((frame.y + v * frame.height) * heightRatio) / entry.material.height +
+        NEAREST_TEXTURE_UV_BIAS,
       entry.height,
       index,
       entry.material.isBillboard
@@ -1793,7 +1796,11 @@ export type WorldShadowShape =
   | "wall"
   | "character"
   | "column";
-export type WorldShadows = ReturnType<typeof createWorldShadows>;
+/** Common registration/update contract for physical, projected and prebaked scene lighting. */
+export type WorldShadows =
+  | ReturnType<typeof createWorldShadows>
+  | ProjectedWorldLighting
+  | BakedVillageLighting;
 type Caster = {
   character?: Container;
   sceneryOwner?: Container;

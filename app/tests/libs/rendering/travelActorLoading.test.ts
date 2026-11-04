@@ -1,13 +1,13 @@
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Text, Texture } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
 import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldBounds } from "@/libs/rendering/visibility";
-import { createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
+import { travelActorRecipes, createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -25,19 +25,20 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
   const controller = new AbortController();
   const owned = new Set<() => void>();
   const stage = new Container({ isRenderGroup: true });
-  const depth = new RenderLayer(), overlay = new RenderLayer();
+  const depth = new RenderLayer(), overlay = new RenderLayer(), ground = new RenderLayer();
   const game = {
     lpcCatalog,
+    invalidate: vi.fn(),
     signal: controller.signal, isDisposed: () => controller.signal.aborted,
     own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup),
   } as unknown as GameRenderer;
-  const actors = createTravelActors(game, { depth, overlay }, undefined, sceneryBounds);
-  stage.addChild(actors.container, depth, overlay);
+  const actors = createTravelActors(game, { depth, overlay, ground }, undefined, sceneryBounds);
+  stage.addChild(actors.container, ground, depth, overlay);
   const grid = getBattleGrid(40, { width: 12, height: 12, biome: "ground" } as never, { x: 0, y: 0 });
   const snapshot = (users: SectorUser[]): TravelActorsSnapshot => ({ grid, users, viewer, sector: 724, minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set() });
   const dispose = () => { if (controller.signal.aborted) return; controller.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); };
   cleanups.push(dispose);
-  return { actors, grid, stage, depth, overlay, snapshot, dispose };
+  return { game, actors, grid, stage, depth, overlay, ground, snapshot, dispose };
 };
 const holdCharacters = () => {
   let release = () => {};
@@ -58,6 +59,74 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it.each(["FRIENDLY","HOSTILE"] as const)("retains visible %s NPC interactions within the twenty-body budget", npcInteractionType => {
+    holdCharacters(); const {actors,snapshot}=fixture();
+    const users=Array.from({length:30},(_,i)=>player(i,{longitude:4,latitude:4,updatedAt:new Date(1000+i)}));
+    users.push(player(99,{isNpc:true,npcPlacementId:"guide",npcInteractionType,longitude:4,latitude:4,updatedAt:new Date(0)}));
+    actors.sync(snapshot(users));
+    const roots=actors.container.children.filter(root=>root.label.startsWith("user:")||root.label.startsWith("npc:"));
+    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide")).toBe(true);
+    const recipes=travelActorRecipes({...snapshot(users),characterKeys:new Set(roots.map(root=>root.label))});
+    expect(recipes.find(recipe=>recipe.key==="npc:guide")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
+    expect(recipes.find(recipe=>recipe.counter)?.counter).toBe(31);
+  });
+
+  it("keeps moving contact effects on the ground and batches emitter pools together", async () => {
+    const { actors, snapshot, ground } = fixture();
+    actors.sync(snapshot([player(0), player(1)]));
+    await settle();
+    const effects = ground.renderLayerChildren;
+    expect(effects.map(effect => effect.label)).toEqual(["scenery-shadows", "scenery-shadows", "scenery-lights", "scenery-lights"]);
+    const light = effects[2]!;
+    const root = light.parent!.parent!;
+    const before = light.toGlobal({ x: 0, y: 0 });
+    root.x += 12;
+    expect(light.toGlobal({ x: 0, y: 0 }).x - before.x).toBeCloseTo(12);
+    actors.sync(snapshot([player(0)]));
+    expect(ground.renderLayerChildren).toHaveLength(2);
+    expect(ground.renderLayerChildren.every(effect => !effect.destroyed)).toBe(true);
+  });
+  it("resolves visibility once per occupied tile while retaining the entire crowd count", () => {
+    holdCharacters();const {actors,grid,snapshot}=fixture();
+    const users=Array.from({length:264},(_,i)=>player(i,{longitude:4,latitude:4}));
+    const tile=grid.getHex({col:4,row:4})!;
+    actors.setViewport({minX:-tile.center.x,maxX:-tile.center.x+100,minY:-tile.center.y,maxY:-tile.center.y+100});
+    const lookup=vi.spyOn(grid,"getHex");actors.sync(snapshot(users));
+    expect(lookup.mock.calls.length).toBeLessThan(10);expect(actors.container.children.filter(root=>root.label.startsWith("user:"))).toHaveLength(20);
+    const badge=actors.container.getChildByLabel("count:4,4")!;
+    expect((badge.children[0]!.children.find(child=>child instanceof Text) as Text).text).toBe("264");
+  });
+
+  it("keeps hover eligibility current after occupancy and health updates",async()=>{
+    const {actors,snapshot}=fixture();const target=player(0,{longitude:4,latitude:4}),neighbor=player(1,{longitude:5,latitude:4});
+    actors.sync(snapshot([target,neighbor]));await settle();const root=actors.container.getChildByLabel("user:loading-0")!;
+    const info=root.getChildByLabel("info",true)!,heal=root.getChildByLabel("heal",true)!;
+    expect(info.visible).toBe(false);actors.hover("user:loading-0");expect(info.visible).toBe(true);expect(heal.visible).toBe(true);
+    actors.sync(snapshot([target,{...neighbor,longitude:4}]));expect(info.visible).toBe(false);expect(heal.visible).toBe(false);
+    actors.sync(snapshot([{...target,curHealth:target.maxHealth},neighbor]));expect(info.visible).toBe(true);expect(heal.visible).toBe(false);
+    actors.hover(null);expect(info.visible).toBe(false);
+  });
+
+  it("retains a crowd badge and loaded actors when its count changes", async () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const users = Array.from({ length: 4 }, (_, i) => player(i, { longitude: 4, latitude: 4 }));
+    actors.sync(snapshot(users));
+    const badge = actors.container.getChildByLabel("count:4,4")!;
+    const labels: Text[] = [];
+    const visit = (root: Container) => { if (root instanceof Text) labels.push(root); for (const child of root.children) visit(child); };
+    visit(badge);
+    const label = labels[0]!;
+    expect(label.text).toBe("4");
+    const bodies = actors.container.children.filter(root => root.label?.startsWith("user:"));
+    actors.sync(snapshot(users.slice(0, 3)));
+    expect(actors.container.getChildByLabel("count:4,4")).toBe(badge);
+    expect(label.destroyed).toBe(false);
+    expect(label.text).toBe("3");
+    expect(actors.container.children.filter(root => root.label?.startsWith("user:"))).toEqual(bodies.slice(0, 3));
+    actors.sync(snapshot(users.slice(0, 2)));
+    expect(badge.destroyed).toBe(true);
+  });
   it("holds keys across disjoint planes and checks nonadjacent artwork when moving sideways into overlap", () => {
     holdCharacters(); const bounds = new WeakMap<Container, WorldBounds>();
     const { actors, grid, stage, depth, snapshot } = fixture(bounds);
@@ -86,8 +155,8 @@ describe("travel actor artwork loading", () => {
     const users = Array.from({ length: 80 }, (_, i) => player(i, { longitude: i % 10, latitude: Math.floor(i / 10) }));
     actors.sync(snapshot(users));
     const roots = actors.container.children.filter(root => root.label?.startsWith("user:"));
-    expect(roots).toHaveLength(80);
-    const move = (offset: number) => actors.animate(frame, new Map(roots.map((root, i) => [users[i]!.userId, { x: i * 100, y: i * 40 + offset, direction: null, facing: 1 }])));
+    expect(roots).toHaveLength(20);
+    const move = (offset: number) => actors.animate(frame, new Map(roots.map((root, i) => [root.label.slice("user:".length), { x: i * 100, y: i * 40 + offset, direction: null, facing: 1 }])));
     move(0); const keys = roots.map(root => root.zIndex);
     stage.renderGroup!.structureDidChange = false;
     move(1);
@@ -155,6 +224,19 @@ describe("travel actor artwork loading", () => {
     expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
     expect(figure.width / figure.height).toBeCloseTo(0.5);
   });
+  it("reaches a multi-tile presence update in one still frame without replaying its path", async () => {
+    const { actors, grid, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 });
+    actors.sync(snapshot([user])); await settle();
+    const root = actors.container.children[0]!;
+    actors.sync(snapshot([{ ...user, latitude: 8 }]));
+    actors.animate({ ...frame, reducedMotion: true });
+    const tile = grid.getHex({ col: 4, row: 8 })!;
+    expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+    actors.animate({ ...frame, now: 1200, reducedMotion: false });
+    expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+  });
+
   it("does not replay queued network waypoints after a timed walk finishes", async () => {
     const { actors, grid, snapshot } = fixture();
     const user = player(0, { longitude: 4, latitude: 4 });
@@ -184,13 +266,16 @@ describe("travel actor artwork loading", () => {
     expect(root.y).not.toBe(arrived.y);
   });
 
-  it("keeps 100 pending actors visible and pickable at their own body positions", async () => {
+  it("caps pending characters at twenty and keeps their bodies pickable without adding singleton badges", async () => {
     const pending = holdCharacters();
     const { actors, grid, depth, snapshot } = fixture();
     actors.sync(snapshot(Array.from({ length: 100 }, (_, index) => player(index))));
-    expect(pending.create).toHaveBeenCalledTimes(100);
-    expect(actors.container.children).toHaveLength(100);
-    for (const root of actors.container.children) {
+    expect(pending.create).toHaveBeenCalledTimes(20);
+    expect(actors.container.children).toHaveLength(20);
+    const bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(actors.container.children.filter(root => root.label.startsWith("count:"))).toHaveLength(0);
+    for (const root of bodies) {
       const index = Number(root.label.slice("user:loading-".length));
       const tile = grid.getHex({ col: index % 10, row: Math.floor(index / 10) })!;
       const body = root.children.find((child) => child.label === "avatar");
@@ -205,9 +290,93 @@ describe("travel actor artwork loading", () => {
     expect(actors.container.children.every((root) => !root.children.some((child) => child.label === "avatar"))).toBe(true);
   });
 
+  it("retains the viewer, promotes real movement, ignores activity-only updates and preserves full crowd totals", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    let users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: 4, latitude: 4, updatedAt: new Date(i) }));
+    users.push(player(99, { userId: "viewer", longitude: 4, latitude: 4, updatedAt: new Date(0) }));
+    actors.sync(snapshot(users));
+    const bodies = () => actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(20);
+    expect(bodies().some(root => root.label === "user:viewer")).toBe(true);
+    expect(bodies().some(root => root.label === "user:loading-0")).toBe(false);
+    const original = bodies();
+    users = users.map(user => user.userId === "loading-0" ? { ...user, updatedAt: new Date(999999), curHealth: 10 } : user);
+    actors.sync(snapshot(users));
+    expect(bodies()).toEqual(original);
+    users = users.map(user => user.userId === "loading-0" ? { ...user, latitude: 5 } : user);
+    actors.sync(snapshot(users));
+    expect(bodies()).toHaveLength(20);
+    expect(bodies().some(root => root.label === "user:loading-0")).toBe(true);
+    expect(bodies().some(root => root.label === "user:viewer")).toBe(true);
+    const totals: string[] = [];
+    const visit = (root: Container) => { if (root instanceof Text) totals.push(root.text); for (const child of root.children) visit(child); };
+    for (const root of actors.container.children) if (root.label.startsWith("count:")) visit(root);
+    expect(totals).toEqual(["30"]);
+  });
+
+  it("fills the screen from its own crowd instead of reserving slots for recently active offscreen users", () => {
+    holdCharacters();
+    const { actors, grid, snapshot } = fixture();
+    const users = Array.from({ length: 40 }, (_, i) => player(i, {
+      longitude: i < 20 ? 1 : 8, latitude: i < 20 ? 1 : 8, updatedAt: new Date(i),
+    }));
+    const tile = grid.getHex({ col: 1, row: 1 })!;
+    actors.setViewport({ minX: -tile.center.x, maxX: -tile.center.x + 1, minY: -tile.center.y, maxY: -tile.center.y + 1 });
+    actors.sync(snapshot(users));
+    let bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(bodies.every(root => Number(root.label.slice("user:loading-".length)) < 20)).toBe(true);
+    const next = grid.getHex({ col: 8, row: 8 })!;
+    actors.setViewport({ minX: -next.center.x, maxX: -next.center.x + 1, minY: -next.center.y, maxY: -next.center.y + 1 });
+    bodies = actors.container.children.filter(root => root.label.startsWith("user:"));
+    expect(bodies).toHaveLength(20);
+    expect(bodies.every(root => Number(root.label.slice("user:loading-".length)) >= 20)).toBe(true);
+  });
+
+  it("reuses viewport membership between exact visibility boundaries and refreshes it after source changes", () => {
+    holdCharacters();
+    const { actors, grid, snapshot } = fixture();
+    const users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: i < 20 ? 1 : 8, latitude: i < 20 ? 1 : 8 }));
+    const tile = grid.getHex({ col: 1, row: 1 })!;
+    const bounds = { minX: -tile.center.x + .371, maxX: -tile.center.x + 1.371, minY: -tile.center.y + .371, maxY: -tile.center.y + 1.371 };
+    actors.setViewport(bounds); actors.sync(snapshot(users));
+    const lookup = vi.spyOn(grid, "getHex");
+    try {
+      actors.setViewport({ ...bounds });
+      actors.setViewport({ minX: bounds.minX + .00001, maxX: bounds.maxX + .00001, minY: bounds.minY + .00001, maxY: bounds.maxY + .00001 });
+      expect(lookup).not.toHaveBeenCalled();
+      const next = grid.getHex({ col: 8, row: 8 })!; lookup.mockClear();
+      const reused = { minX: -next.center.x, maxX: -next.center.x + 1, minY: -next.center.y, maxY: -next.center.y + 1 };
+      actors.setViewport(reused);
+      expect(lookup).toHaveBeenCalled();
+      lookup.mockClear(); Object.assign(reused, bounds); actors.setViewport(reused);
+      expect(lookup).toHaveBeenCalled();
+      lookup.mockClear(); actors.sync(snapshot(users.map(user => ({ ...user, latitude: 2 }))));
+      expect(lookup).toHaveBeenCalled();
+    } finally { lookup.mockRestore(); }
+  });
+
+  it("orders a batch of movement edges by their published clock instead of the source array", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const users = Array.from({ length: 30 }, (_, i) => player(i, { longitude: 4, latitude: 5 }));
+    users.push(player(99, { userId: "viewer", longitude: 4, latitude: 5 }));
+    const source = snapshot(users);
+    source.motionSteps = new Map(users.slice(0, 21).map((user, i) => [user.userId, {
+      from: { sector: 724, x: 4, y: 4 }, to: { sector: 724, x: 4, y: 5 },
+      startedAt: 100 - i, direction: "north" as const, facing: 1 as const,
+    }]));
+    actors.sync(source);
+    const ids = actors.container.children.filter(root => root.label.startsWith("user:")).map(root => root.label);
+    expect(ids).toHaveLength(20);
+    expect(ids).toContain("user:viewer");
+    for (let i = 0; i < 19; i++) expect(ids).toContain(`user:loading-${i}`);
+  });
+
   it("atomically replaces the placeholder at the retained foot, scale and current position", async () => {
     const pending = holdCharacters();
-    const { actors, grid, snapshot, stage, depth } = fixture();
+    const { game, actors, grid, snapshot, stage, depth } = fixture();
     actors.container.position.set(90, -70);
     actors.sync(snapshot([player(0)]));
     const root = actors.container.children[0]!;
@@ -225,6 +394,7 @@ describe("travel actor artwork loading", () => {
     const expectedBounds = fallback.getBounds();
     const expectedPosition = root.position.clone();
     pending.release(); await settle();
+    expect(game.invalidate).toHaveBeenCalled();
     const body = root.children.at(-1)!.children.find((child) => child.label === "avatar")!;
     expect(actors.container.children[0]).toBe(root);
     expect(root.position).toMatchObject(expectedPosition);

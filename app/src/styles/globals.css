@@ -996,3 +996,13 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3)
     transform: translateX(400%);
   }
 }
+
+/* The portalled world covers the game page; timers and animated artwork need no background paint. */
+[data-world-page][data-world-covered="true"] {
+  content-visibility: hidden;
+}
+
+[data-world-page][data-world-covered="true"],
+[data-world-page][data-world-covered="true"] * {
+  animation-play-state: paused !important;
+}

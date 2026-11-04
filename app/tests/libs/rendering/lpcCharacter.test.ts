@@ -1,3 +1,4 @@
+import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from "pixi.js";
@@ -5,6 +6,7 @@ import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import * as lpc from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -26,6 +28,7 @@ const gameFixture = () => {
   const source = texture();
   const game = {
     lpcCatalog,
+    invalidate: vi.fn(),
     own: (cleanup: () => void) => owned.add(cleanup),
     disown: (cleanup: () => void) => owned.delete(cleanup),
     assets: { texture: vi.fn(async () => source) },
@@ -48,6 +51,50 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("stabilizes every cached character frame while retaining atlas/trim coordinates and shared source ownership", async () => {
+    const { game, source } = gameFixture();
+    source.source.style.scaleMode = "nearest";
+    const character = await characters.createLpcCharacter(game, resolveSpriteAppearance({}), "travel");
+    const verify = () => {
+      for (const { sprite } of character.layers) {
+        const view = sprite.texture;
+        expect(view.source).toBe(source.source);
+        expect(view.orig.width).toBe(64);
+        expect(view.uvs.x0).toBe(view.frame.x / source.source.width + NEAREST_TEXTURE_UV_BIAS);
+        expect(view.uvs.y0).toBe(view.frame.y / source.source.height + NEAREST_TEXTURE_UV_BIAS);
+      }
+    };
+    verify();
+    character.render(frame(180), "walk", 1);
+    verify();
+    character.render(frame(360), "walk", 2);
+    verify();
+    expect(source.uvs.x0).toBe(0);
+    expect(source.source.destroyed).toBe(false);
+  });
+  it("retains a pose between authored frame boundaries while responding immediately to facing and reduced motion", async () => {
+    const { game } = gameFixture();
+    const character = await characters.createLpcCharacter(game, resolveSpriteAppearance({}), "travel");
+    const samples = vi.spyOn(lpc, "lpcFrame");
+    character.render(frame(0), "walk", 2);
+    const first = samples.mock.calls.length;
+    expect(first).toBeGreaterThan(0);
+    const textures = character.layers.map(layer => layer.sprite.texture);
+    character.render(frame(179), "walk", 2);
+    expect(samples.mock.calls).toHaveLength(first);
+    expect(character.layers.map(layer => layer.sprite.texture)).toEqual(textures);
+    character.render(frame(180), "walk", 2);
+    expect(samples.mock.calls.length).toBeGreaterThan(first);
+    const walking = samples.mock.calls.length;
+    character.render(frame(180), "walk", 1);
+    expect(samples.mock.calls.length).toBeGreaterThan(walking);
+    const facing = samples.mock.calls.length;
+    character.render(frame(180, true), "walk", 1);
+    expect(samples.mock.calls.length).toBeGreaterThan(facing);
+    const still = samples.mock.calls.length;
+    character.render(frame(1000, true), "walk", 1);
+    expect(samples.mock.calls).toHaveLength(still);
+  });
   it("uses saved replacement settings for new designs and retains clothing when replacement is disabled", async () => {
     const { game } = gameFixture();
     const catalog = structuredClone(lpcCatalog);

@@ -32,6 +32,7 @@ import {
   isObjectChainVisible,
   type WorldBounds,
 } from "@/libs/rendering/visibility";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
@@ -49,6 +50,31 @@ export const createTravelActors = (
   const container = new Container();
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
+  const appearanceParts = new Map<
+    string,
+    { key: string; parts: WorldSpriteDescription[] }
+  >();
+  const signatures = new WeakMap<WorldSpriteDescription[], string>();
+  const partsFor = (user: SectorUser, tile: TerrainHex) => {
+    const id = userActorKey(user);
+    // Position and health updates retain artwork; every input used by userParts belongs in this key.
+    const key = JSON.stringify([
+      user.spriteAppearance,
+      user.avatar,
+      user.avatarLight,
+      user.isNpc,
+      user.rank,
+      user.allianceStatus,
+      user.npcInteractionType,
+      tile.width,
+      tile.height,
+    ]);
+    const previous = appearanceParts.get(id);
+    if (previous?.key === key) return previous.parts;
+    const parts = userParts(user, tile);
+    appearanceParts.set(id, { key, parts });
+    return parts;
+  };
   let viewer: UserWithRelations;
   let users: SectorUser[] = [];
   let friendlyAttack = false;
@@ -59,34 +85,126 @@ export const createTravelActors = (
   let actorSector: number | null = null;
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
+  let stableViewport: Record<keyof WorldBounds, [number, number]> | null = null;
   let visibleKey = "";
+  const movementOrder = new Map<
+    string,
+    {
+      x: number;
+      y: number;
+      sector: number;
+      order: number;
+      initialTime: number;
+      step?: number;
+    }
+  >();
+  let selectionKey: string | null = null;
+  let characterKeys = new Set<string>();
   let paintedOriginY = container.y;
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
-    const visibleUsers = !bounds
-      ? snapshot.users
-      : snapshot.users.filter((user) => {
-          if (user.userId === snapshot.viewer?.userId) return true;
-          const tile = snapshot.grid.getHex({
-            col: user.longitude,
-            row: user.latitude,
-          });
+    const domain: typeof stableViewport = bounds
+      ? {
+          minX: [-Infinity, Infinity],
+          maxX: [-Infinity, Infinity],
+          minY: [-Infinity, Infinity],
+          maxY: [-Infinity, Infinity],
+        }
+      : null;
+    const boundary = (axis: keyof WorldBounds, value: number) => {
+      if (!bounds || !domain) return;
+      const range = domain[axis];
+      if (bounds[axis] < value) range[1] = Math.min(range[1], value);
+      else if (bounds[axis] > value) range[0] = Math.max(range[0], value);
+      else range[0] = range[1] = value;
+    };
+    // Occupants share tile geometry and the exact camera boundaries that change membership.
+    const tiles = new Map<
+      string,
+      { visible: boolean; onScreen: boolean } | undefined
+    >();
+    const tileFor = (user: SectorUser) => {
+      const key = `${user.longitude},${user.latitude}`;
+      if (tiles.has(key)) return tiles.get(key);
+      const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
+      if (!tile) {
+        tiles.set(key, undefined);
+        return undefined;
+      }
+      const x = -tile.center.x,
+        y = -tile.center.y,
+        width = tile.width,
+        height = tile.height;
+      boundary("minX", x + width * 3);
+      boundary("minX", x + width * 2);
+      boundary("maxX", x - width * 3);
+      boundary("maxX", x - width);
+      boundary("minY", y + height * 3);
+      boundary("minY", y + height * 2.4);
+      boundary("maxY", y - height * 3);
+      boundary("maxY", y - height);
+      const entry = {
+        visible:
+          !bounds ||
+          (x >= bounds.minX - width * 3 &&
+            x <= bounds.maxX + width * 3 &&
+            y >= bounds.minY - height * 3 &&
+            y <= bounds.maxY + height * 3),
+        onScreen:
+          !bounds ||
+          boundsOverlap(bounds, {
+            minX: x - width,
+            maxX: x + width * 2,
+            minY: y - height,
+            maxY: y + height * 2.4,
+          }),
+      };
+      tiles.set(key, entry);
+      return entry;
+    };
+    const visibleUsers = snapshot.users.filter((user) => {
+      const tile = tileFor(user);
+      return user.userId === snapshot.viewer?.userId || !!tile?.visible;
+    });
+    const candidates = visibleUsers.flatMap((user) => {
+      if (!canShowUser(snapshot, user) || user.status !== "AWAKE") return [];
+      const tile = tileFor(user);
+      return tile ? [{ user, key: userActorKey(user), onScreen: tile.onScreen }] : [];
+    });
+    const key = candidates
+      .map((entry) => `${entry.key}:${Number(entry.onScreen)}`)
+      .join("|");
+    if (key !== selectionKey) {
+      selectionKey = key;
+      if (candidates.length > WORLD_DETAIL.travelCharacters)
+        candidates.sort((a, b) => {
+          const ownA = a.user.userId === snapshot.viewer?.userId;
+          const ownB = b.user.userId === snapshot.viewer?.userId;
+          const orderA = movementOrder.get(a.key),
+            orderB = movementOrder.get(b.key);
           return (
-            tile &&
-            -tile.center.x >= bounds.minX - tile.width * 3 &&
-            -tile.center.x <= bounds.maxX + tile.width * 3 &&
-            -tile.center.y >= bounds.minY - tile.height * 3 &&
-            -tile.center.y <= bounds.maxY + tile.height * 3
+            Number(ownB) - Number(ownA) ||
+            Number(b.onScreen) - Number(a.onScreen) ||
+            // Visible quest/hostile NPCs retain their controls within the same body budget.
+            Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
+            (orderB?.order ?? 0) - (orderA?.order ?? 0) ||
+            (orderB?.initialTime ?? 0) - (orderA?.initialTime ?? 0) ||
+            a.key.localeCompare(b.key)
           );
         });
-    return { ...snapshot, users: visibleUsers };
+      characterKeys = new Set(
+        candidates.slice(0, WORLD_DETAIL.travelCharacters).map((entry) => entry.key),
+      );
+    }
+    stableViewport = domain;
+    return { ...snapshot, users: visibleUsers, characterKeys };
   };
   /** Camera movement only reconciles resources when visible actor membership changes. */
   const userKey = (snapshot: TravelActorsSnapshot) =>
     snapshot.users
       .map((user) => `${user.userId}:${user.npcPlacementId ?? ""}`)
-      .join("|");
+      .join("|") + `/${[...(snapshot.characterKeys ?? [])].join("|")}`;
   /** Retire departed scopes while retaining movement state for unchanged actor identities. */
   const reconcile = (snapshot: TravelActorsSnapshot) => {
     if (pathGrid !== snapshot.grid || actorSector !== snapshot.sector) {
@@ -101,8 +219,10 @@ export const createTravelActors = (
     viewer = snapshot.viewer;
     users = snapshot.users;
     friendlyAttack = snapshot.friendlyAttack;
-    const recipes = travelActorRecipes(snapshot);
+    const recipes = travelActorRecipes(snapshot, partsFor);
     const wanted = new Set(recipes.map((recipe) => recipe.key));
+    for (const key of appearanceParts.keys())
+      if (!wanted.has(key)) appearanceParts.delete(key);
     for (const [key, record] of records) {
       if (!wanted.has(key)) {
         record.scope.dispose();
@@ -111,17 +231,22 @@ export const createTravelActors = (
       }
     }
     for (const recipe of recipes) {
-      const signature = JSON.stringify([
-        recipe.parts,
-        recipe.counter,
-        recipe.user?.allianceStatus,
-      ]);
+      let signature = signatures.get(recipe.parts);
+      if (signature === undefined) {
+        signature = JSON.stringify([recipe.parts, recipe.user?.allianceStatus]);
+        signatures.set(recipe.parts, signature);
+      }
       const previous = records.get(recipe.key);
       if (previous?.signature === signature) {
-        if (previous.recipe.tile !== recipe.tile) {
+        if (
+          previous.recipe.tile !== recipe.tile &&
+          !snapshot.motionSteps?.has(recipe.user?.userId ?? "")
+        ) {
           const path = paths?.getShortestPath(previous.tile, recipe.tile) ?? [];
           previous.path = path[0] === previous.tile ? path.slice(1) : path;
         }
+        if (previous.counterLabel && previous.recipe.counter !== recipe.counter)
+          previous.counterLabel.text = String(recipe.counter);
         previous.recipe = recipe;
         continue;
       }
@@ -162,6 +287,7 @@ export const createTravelActors = (
         root,
         art: null,
         fallback: null,
+        counterLabel: null,
         tile: previous?.tile ?? recipe.tile,
         path: previous?.path ?? [],
         x: previous?.x ?? -recipe.tile.center.x,
@@ -213,6 +339,7 @@ export const createTravelActors = (
           .fill("firebrick")
           .stroke({ color: "maroon", width: 5 });
         label.anchor.set(0.5);
+        record.counterLabel = label;
         badge.addChild(background, label);
         badge.position.set(recipe.tile.width * 0.8, recipe.tile.height * 1.3);
         badge.scale.set(
@@ -227,6 +354,7 @@ export const createTravelActors = (
           record.art = art;
           art.setLighting(brightness);
           root.addChild(art.container);
+          if (layers?.ground) art.attachGroundEffects(layers.ground);
           if (art.entries.some((entry) => entry.description.kind === "avatar")) {
             record.fallback?.destroy();
             record.fallback = null;
@@ -241,6 +369,7 @@ export const createTravelActors = (
               )
                 layers?.overlay.attach(entry.sprite);
           updateActions();
+          game.invalidate();
         },
         (error) => {
           if (!scope.isDisposed()) console.warn("Travel actor unavailable", error);
@@ -254,6 +383,7 @@ export const createTravelActors = (
       const target = record.recipe.user;
       const isHovered = key === hovered && !!viewer && target?.userId !== viewer.userId;
       const alone =
+        isHovered &&
         target &&
         users.filter(
           (candidate) =>
@@ -263,7 +393,7 @@ export const createTravelActors = (
             candidate.latitude === target.latitude,
         ).length === 1;
       const actions =
-        target && viewer
+        isHovered && target && viewer
           ? travelActionAvailability(viewer, target, friendlyAttack)
           : { attack: false, heal: false, info: false };
       for (const entry of record.art?.entries ?? []) {
@@ -330,6 +460,7 @@ export const createTravelActors = (
   };
   /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
   const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
+  const depthIndices = new WeakMap<Container, number>();
   const hasDepthCrossing = (siblings: readonly Container[], spatial = false) => {
     if (!spatial || !sceneryBounds)
       return siblings.some((root, index) => {
@@ -340,17 +471,30 @@ export const createTravelActors = (
         );
       });
     const actors: [number, ActorRecord][] = [];
-    let previousDepth = -Infinity;
-    for (let i = 0; i < siblings.length; i++) {
-      const root = siblings[i];
-      if (!root) continue;
-      const before = siblings[i - 1];
-      if (before && before.zIndex > root.zIndex) return true;
-      const actor = byRoot.get(root);
-      if (!actor) continue;
-      if (previousDepth > actor.depth) return true;
-      previousDepth = actor.depth;
-      actors.push([i, actor]);
+    // Scenery publishes sorted fixed planes when membership changes. Retained actor indices
+    // locate only moving contacts; an insertion or sort invalidates an index by identity.
+    for (const actor of records.values()) {
+      const root = actor.root;
+      let index = depthIndices.get(root) ?? -1;
+      if (siblings[index] !== root) {
+        index = siblings.indexOf(root);
+        depthIndices.set(root, index);
+      }
+      if (index < 0) continue;
+      const before = siblings[index - 1],
+        after = siblings[index + 1];
+      if (
+        (before && before.zIndex > root.zIndex) ||
+        (after && after.zIndex < root.zIndex)
+      )
+        return true;
+      actors.push([index, actor]);
+    }
+    actors.sort((a, b) => a[0] - b[0]);
+    for (let index = 1; index < actors.length; index++) {
+      const before = actors[index - 1],
+        actor = actors[index];
+      if (before && actor && before[1].depth > actor[1].depth) return true;
     }
     let comparisons = 0;
     for (const [i, actor] of actors) {
@@ -392,6 +536,10 @@ export const createTravelActors = (
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
     for (const record of records.values()) {
       const { recipe, root } = record;
+      if (frame.reducedMotion) {
+        record.path.length = 0;
+        record.tile = recipe.tile;
+      }
       const waypoint = record.path[0] ?? recipe.tile;
       const dx = -waypoint.center.x - record.x,
         dy = -waypoint.center.y - record.y;
@@ -411,7 +559,7 @@ export const createTravelActors = (
         record.y = movement.y;
       } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
-        // Catch up queued network waypoints without overshooting; reduced motion snaps to each one.
+        // Still frames reach the authoritative tile in one update; animated movement catches up its queued path.
         const step = frame.reducedMotion
           ? distance
           : Math.min(
@@ -426,7 +574,11 @@ export const createTravelActors = (
         }
       }
       for (const entry of record.art?.entries ?? [])
-        entry.character?.render(frame, moving ? "walk" : "idle", record.facing);
+        entry.character?.render(
+          frame,
+          moving && !frame.reducedMotion ? "walk" : "idle",
+          record.facing,
+        );
       const phi = angle + recipe.orbit;
       root.position.set(
         record.x +
@@ -457,6 +609,38 @@ export const createTravelActors = (
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
   const sync = (snapshot: TravelActorsSnapshot) => {
+    if (sourceSnapshot?.sector !== snapshot.sector) {
+      movementOrder.clear();
+      selectionKey = null;
+    }
+    if (sourceSnapshot?.viewer?.userId !== snapshot.viewer?.userId) selectionKey = null;
+    const present = new Set<string>();
+    for (const user of snapshot.users) {
+      const key = userActorKey(user),
+        previous = movementOrder.get(key);
+      const step = snapshot.motionSteps?.get(user.userId)?.startedAt;
+      present.add(key);
+      // Only movement promotes a retained character; health, art and activity refreshes do not.
+      const moved =
+        previous &&
+        (previous.x !== user.longitude ||
+          previous.y !== user.latitude ||
+          previous.sector !== user.sector);
+      const newStep = step !== undefined && step !== previous?.step;
+      if (previous && !moved && !newStep) continue;
+      selectionKey = null;
+      movementOrder.set(key, {
+        x: user.longitude,
+        y: user.latitude,
+        sector: user.sector,
+        order: newStep ? step : moved ? performance.now() : (previous?.order ?? 0),
+        // A first snapshot has activity timestamps, but no history of observed position changes.
+        initialTime: previous?.initialTime ?? (Number(user.updatedAt) || 0),
+        step: step ?? previous?.step,
+      });
+    }
+    for (const key of movementOrder.keys())
+      if (!present.has(key)) movementOrder.delete(key);
     sourceSnapshot = snapshot;
     const visible = visibleSnapshot(snapshot);
     visibleKey = userKey(visible);
@@ -466,8 +650,22 @@ export const createTravelActors = (
     container,
     sync,
     setViewport: (bounds: WorldBounds) => {
-      viewport = bounds;
+      const previous = viewport;
+      const domain = stableViewport;
+      viewport = { ...bounds };
       if (!sourceSnapshot) return;
+      if (
+        (previous &&
+          bounds.minX === previous.minX &&
+          bounds.maxX === previous.maxX &&
+          bounds.minY === previous.minY &&
+          bounds.maxY === previous.maxY) ||
+        (domain &&
+          (Object.keys(domain) as (keyof WorldBounds)[]).every(
+            (axis) => bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
+          ))
+      )
+        return;
       const visible = visibleSnapshot(sourceSnapshot);
       const key = userKey(visible);
       if (key === visibleKey) return;
@@ -502,17 +700,17 @@ export const createTravelActors = (
 };
 
 /** Viewer-filtered user/NPC/battle groups; stable recipe keys preserve actor identity between syncs. */
-export const travelActorRecipes = (snapshot: TravelActorsSnapshot): ActorRecipe[] => {
+export const travelActorRecipes = (
+  snapshot: TravelActorsSnapshot,
+  partsFor: (
+    user: SectorUser,
+    tile: TerrainHex,
+  ) => WorldSpriteDescription[] = userParts,
+): ActorRecipe[] => {
   const recipes: ActorRecipe[] = [];
   const grouped = new Map<string, SectorUser[]>();
   for (const user of snapshot.users) {
-    if (
-      (!snapshot.showUsers && user.userId !== snapshot.viewer?.userId) ||
-      (!user.isNpc &&
-        user.userId !== snapshot.viewer?.userId &&
-        !passesBracketFilter(user, snapshot.minBracket))
-    )
-      continue;
+    if (!canShowUser(snapshot, user)) continue;
     const key = `${user.longitude},${user.latitude}`;
     const group = grouped.get(key) ?? [];
     group.push(user);
@@ -524,20 +722,22 @@ export const travelActorRecipes = (snapshot: TravelActorsSnapshot): ActorRecipe[
     const tile = snapshot.grid.getHex({ col: first.longitude, row: first.latitude });
     if (!tile) continue;
     const awake = tileUsers.filter((user) => user.status === "AWAKE");
-    awake.forEach((user, index) => {
+    const selected = snapshot.characterKeys;
+    const shown = selected
+      ? awake.filter((user) => selected.has(userActorKey(user)))
+      : awake;
+    shown.forEach((user, index) => {
       const appearanceUser =
         !user.spriteAppearance && user.userId === snapshot.viewer?.userId
           ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
           : user;
       recipes.push({
-        key: user.isNpc
-          ? `npc:${user.npcPlacementId ?? user.userId}`
-          : `user:${user.userId}`,
+        key: userActorKey(user),
         user: appearanceUser,
         tile,
-        parts: userParts(appearanceUser, tile),
-        orbit: (index / tileUsers.length) * Math.PI * 2,
-        spread: awake.length > 1,
+        parts: partsFor(appearanceUser, tile),
+        orbit: (index / shown.length) * Math.PI * 2,
+        spread: shown.length > 1,
       });
     });
     const battles = new Map<string, SectorUser[]>();
@@ -654,6 +854,15 @@ const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
+/** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
+const userActorKey = (user: SectorUser) =>
+  user.isNpc ? `npc:${user.npcPlacementId ?? user.userId}` : `user:${user.userId}`;
+/** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
+const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
+  (snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
+  (user.isNpc ||
+    user.userId === snapshot.viewer?.userId ||
+    passesBracketFilter(user, snapshot.minBracket));
 
 const part = (
   tile: TerrainHex,
@@ -772,6 +981,10 @@ export type TravelActorsSnapshot = {
   showUsers: boolean;
   friendlyAttack: boolean;
   structureObjectiveIds: ReadonlySet<string | undefined>;
+  /** Limits individual artwork only; occupancy badges and encounters use the complete user list. */
+  characterKeys?: ReadonlySet<string>;
+  /** Published movement edges already supply interpolation; they need no second path search. */
+  motionSteps?: ReadonlyMap<string, TravelMotionStep>;
 };
 export type TravelActorHit = {
   key: string;
@@ -806,6 +1019,7 @@ type ActorRecord = {
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
   fallback: Graphics | null;
+  counterLabel: Text | null;
 };
 
 /** Interpolated sector-local feet use the same path clock as the camera. */

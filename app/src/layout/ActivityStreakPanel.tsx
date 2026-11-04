@@ -33,11 +33,11 @@ import Loader from "@/layout/Loader";
 import { getRewardPreview } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
-  const { timeDiff, prepareUserUpdate, updateUser } = useUserData();
+  const { timeDiff, prepareUserUpdate, updateUser } = useUserInfo();
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,

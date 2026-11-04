@@ -1,6 +1,7 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
-import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, Shader, Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, type Geometry, type Mesh, Rectangle, RenderLayer, Shader, Sprite, Texture } from "pixi.js";
 import sharp from "sharp";
 import { WORLD_CYCLE_SECONDS, WORLD_CYCLE_TRANSITION_SECONDS, WORLD_DAY_SECONDS } from "@/drizzle/constants";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -13,9 +14,11 @@ import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldShadows } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import * as visualEffects from "@/libs/visualEffects";
 
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 const fixture = (instanced = false, resolution = 1) => {
@@ -23,7 +26,7 @@ const fixture = (instanced = false, resolution = 1) => {
   const world = new Container(), parent = new Container();
   const render = vi.fn();
   const canvas = document.createElement("canvas");
-  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, resolution, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
+  const game = { visualEffects: { ...DEFAULT_VISUAL_EFFECTS }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, resolution, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
@@ -104,6 +107,62 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("separates sunlight, ambient cycling and local lamps without changing the world clock", () => {
+    const f = fixture(), light = { ...worldSunlight(), day: .25 };
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      const filter = f.shadows.container.filters![0]!;
+      const look = filter.resources.look.uniforms;
+      f.shadows.update(light, viewport);
+      expect(look.uDay).toBe(.25);
+      expect(look.uSunlight).toBe(1);
+      expect(look.uLocalLights).toBe(1);
+      expect(look.uAmbient[0]).toBeCloseTo(.1775);
+      f.game.visualEffects.dayNight = false;
+      f.shadows.update(light, viewport);
+      expect(look.uAmbient[0]).toBeCloseTo(.32);
+      expect(look.uDay).toBe(.25);
+      expect(look.uSunlight).toBe(1);
+      f.game.visualEffects.sunlight = false;
+      f.shadows.update(light, viewport);
+      expect(look.uSunlight).toBe(0);
+      expect(look.uLocalLights).toBe(1);
+      expect(Array.from(look.uAmbient)).toEqual([1, 1, 1]);
+      f.game.visualEffects.localLights = false;
+      f.shadows.update(light, viewport);
+      expect(filter.enabled).toBe(false);
+      f.game.visualEffects.dayNight = true;
+      f.shadows.update(light, viewport);
+      expect(filter.enabled).toBe(true);
+      expect(look.uLocalLights).toBe(0);
+      expect(look.uSunlight).toBe(0);
+      expect(look.uAmbient[0]).toBeCloseTo(.3475);
+    } finally { f.dispose(); }
+  });
+  it("stops queued occlusion on preference events without waiting for an offscreen frame", async () => {
+    const createField = worldFields.createWorldOcclusion;
+    const fields: ReturnType<typeof createField>[] = [];
+    const fieldSpy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation(options => {
+      const field = createField(options); fields.push(field); return field;
+    });
+    let change: Parameters<typeof visualEffects.subscribeVisualEffects>[0] = () => {};
+    const unsubscribe = vi.fn();
+    const preferenceSpy = vi.spyOn(visualEffects, "subscribeVisualEffects").mockImplementation(callback => {
+      change = callback; return unsubscribe;
+    });
+    const f = fixture();
+    try {
+      f.shadows.update(worldSunlight(), viewport);
+      change("localLights", false);
+      await new Promise(r => setTimeout(r, 10));
+      expect(fields[0]!.revision).toBe(0);
+      change("localLights", true);
+      for (let i = 0; i < 100 && !fields[0]!.revision; i++) await new Promise(r => setTimeout(r, 1));
+      expect(fields[0]!.revision).toBeGreaterThan(0);
+    } finally { f.dispose(); fieldSpy.mockRestore(); preferenceSpy.mockRestore(); }
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves artwork density without scaling retained lighting targets", () => {
     const standard = fixture(), dense = fixture(false, 2);
     try {
@@ -121,6 +180,27 @@ describe("physical world lighting", () => {
     } finally { standard.dispose(); dense.dispose(); }
   });
 
+  it.each(["localLights", "shadows"] as const)("pauses queued occlusion when %s is disabled and resumes it on enable", async (effect) => {
+    const createField = worldFields.createWorldOcclusion;
+    const fields: ReturnType<typeof createField>[] = [];
+    const spy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation(options => {
+      const field = createField(options); fields.push(field); return field;
+    });
+    const f = fixture();
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      f.shadows.update(worldSunlight(), viewport);
+      f.game.visualEffects[effect] = false;
+      f.shadows.update(worldSunlight(), viewport);
+      await new Promise(r => setTimeout(r, 10));
+      expect(fields[0]!.revision).toBe(0);
+      f.game.visualEffects[effect] = true;
+      f.shadows.update(worldSunlight(), viewport);
+      for (let i = 0; i < 100 && !fields[0]!.revision; i++) await new Promise(r => setTimeout(r, 1));
+      expect(fields[0]!.revision).toBeGreaterThan(0);
+    } finally { f.dispose(); spy.mockRestore(); }
+  });
+
   it("bypasses lighting targets while disabled and restores them on the next frame", () => {
     const f = fixture();
     try {
@@ -128,12 +208,12 @@ describe("physical world lighting", () => {
       f.shadows.update(worldSunlight(), viewport);
       const filter = f.shadows.container.filters![0]!;
       const before = f.render.mock.calls.length;
-      f.game.visualEffects.lighting = false;
+      f.game.visualEffects.sunlight = f.game.visualEffects.dayNight = f.game.visualEffects.localLights = false;
       f.shadows.update(worldSunlight(), viewport);
       f.shadows.update(worldSunlight(), { ...viewport, minX: 5, maxX: 105 });
       expect(filter.enabled).toBe(false);
       expect(f.render).toHaveBeenCalledTimes(before);
-      f.game.visualEffects.lighting = true;
+      f.game.visualEffects.localLights = true;
       f.shadows.update(worldSunlight(), viewport);
       expect(filter.enabled).toBe(true);
       expect(f.render.mock.calls.length).toBeGreaterThan(before);
@@ -677,6 +757,7 @@ describe("physical world lighting", () => {
     // Fixture-owned atlas sources preserve real dimensions independently of shared scene image leases.
     const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({
       texture: async (path) => decoded[path === worldAssetSource("/world-art/biome-scenery.webp")!.material ? 1 : 0]!,
+      acquireTexture() { return {resource: Promise.resolve(Texture.EMPTY), release() {}}; },
       dispose() {},
     }));
     let drawn: Uint8Array = new Uint8Array();
@@ -1057,5 +1138,30 @@ describe("physical world lighting", () => {
     f.shadows.update(worldSunlight(), viewport);
     expect(f.render).toHaveBeenCalledTimes(draws);
     expect(() => { release(); release(); }).not.toThrow();
+  });
+});
+
+
+describe("scenery draw membership", () => {
+  it("removes offscreen artwork from depth scans and restores its owned sprite when panning back", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    try {
+      const art = await createWorldSprites(f.game, [
+        { id: "near", kind: "decoration", image: "near.png", x: 0, y: 0, size: 10, groundY: 0 },
+        { id: "far", kind: "decoration", image: "far.png", x: 400, y: 0, size: 10, groundY: 0 },
+      ]);
+      const depth = new RenderLayer(), ui = new RenderLayer();
+      f.world.addChild(depth, ui); f.parent.addChild(art.container);
+      art.attachLayers({ world: depth, ui });
+      const near = art.entries[0]!.sprite, far = art.entries[1]!.sprite;
+      art.setViewport({ minX: -20, maxX: 20, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([near]);
+      expect(far.parent).toBe(art.container);
+      expect(far.destroyed).toBe(false);
+      art.setViewport({ minX: 380, maxX: 420, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([far]);
+      art.setViewport({ minX: -20, maxX: 20, minY: -20, maxY: 20 }, 0);
+      expect(depth.renderLayerChildren).toEqual([near]);
+    } finally { f.dispose(); source.dispose(); }
   });
 });

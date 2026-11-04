@@ -1,3 +1,6 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import * as towerActors from "@/libs/rendering/scenes/towerDefenseActors";
+import * as towerEffects from "@/libs/rendering/scenes/towerDefenseEffects";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Sprite, Texture, UniformGroup } from "pixi.js";
@@ -42,6 +45,7 @@ const renderer = (texture: (path: string) => Promise<Texture>) => {
   const owned = new Set<() => void>();
   let signal = controller.signal, disposed = false;
   const game = {
+    visualEffects: {...DEFAULT_VISUAL_EFFECTS},
     stage: new Container(), canvas, animation: new UniformGroup({ uTime: { value: 0, type: "f32" } }),
     renderer: { width: 800, height: 440, resize: vi.fn() }, assets: { texture },
     get signal() { return signal; }, isDisposed: () => disposed,
@@ -97,6 +101,18 @@ const cropSprites = (game: GameRenderer) => {
 };
 
 describe("optional farm crop artwork", () => {
+
+  it("freezes tower-defense artwork without pausing simulation or mutating the source frame", async () => {
+    const actors=vi.fn(),effects=vi.fn();
+    vi.spyOn(towerActors,"createTowerDefenseActors").mockReturnValue({container:new Container(),animate:actors,throwAt(){},hitPlayer(){}} as unknown as ReturnType<typeof towerActors.createTowerDefenseActors>);
+    vi.spyOn(towerEffects,"createTowerDefenseEffects").mockResolvedValue({container:new Container(),update:effects,impact(){}} as unknown as Awaited<ReturnType<typeof towerEffects.createTowerDefenseEffects>>);
+    const fixture=renderer(async()=>Texture.WHITE),updates=vi.spyOn(fixture.game,"setUpdate"),advance=vi.fn();
+    const scene=await createTowerDefenseScene({mount:fixture.mount,signal:fixture.controller.signal,onError:vi.fn(),seed:"still-art",initialGridSize:7,initialPlayerPosition:{col:3,row:3},onFrame:advance,getSnapshot:()=>({active:true,entities:{enemiesArray:[],projectilesArray:[]},runtime:{abilities:[]},hits:[]}) as never,onTileClick(){}});
+    const update=updates.mock.lastCall?.[0],frame={now:1000,delta:.1,reducedMotion:false};
+    fixture.game.visualEffects.spriteAnimations=false;update?.(frame);
+    expect(advance).toHaveBeenLastCalledWith(.1);expect(actors.mock.lastCall?.[3]).toEqual({...frame,reducedMotion:true});expect(effects.mock.lastCall?.[4]).toEqual({...frame,reducedMotion:true});expect(frame.reducedMotion).toBe(false);
+    fixture.game.visualEffects.spriteAnimations=true;update?.(frame);expect(actors.mock.lastCall?.[3]).toBe(frame);scene.dispose();
+  });
   it("keeps the hook ready and every plot selectable after a late crop-image failure", async () => {
     const pending = pendingTexture(), failure = new Error("Crop image unavailable");
     const fixture = renderer((path) => path === "crop.png" ? pending.promise : Promise.resolve(Texture.WHITE));

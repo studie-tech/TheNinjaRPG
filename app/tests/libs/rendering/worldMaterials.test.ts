@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
+import { transformImageUrl } from "@/utils/image";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { BufferImageSource, Polygon, Rectangle, Texture } from "pixi.js";
@@ -14,7 +15,7 @@ import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
 import { acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
-import { worldSunlight } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
 
 const material = (width: number, height: number): WorldMaterial => {
@@ -224,7 +225,7 @@ describe("world material loading", () => {
         if (!materialUrls.has(path)) return albedo.texture;
         if (failure === "missing") throw new Error("Missing authored material");
         return auxiliary.texture;
-      }, dispose,
+      }, acquireTexture() { return {resource: Promise.resolve(Texture.EMPTY), release() {}}; }, dispose,
     }));
     let drawn: Uint8Array = new Uint8Array();
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((kind: string) => kind === "2d" ? {
@@ -237,7 +238,7 @@ describe("world material loading", () => {
     try {
       const loaded = await lease.resource;
       expect(request).toHaveBeenCalledTimes(failure === "unknown" ? 0 : 1);
-      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(loaded.surfaceFrames).toBeUndefined();
       expect(loaded.isBillboard).toBe(true);
       expect(loaded.pixels[2]).toBe(Math.round((1 - 0.5 / height) * 255));
@@ -274,7 +275,7 @@ describe("world material loading", () => {
       numerical.pixels.set([129, 128, 128, 255], i * 4);
     }
     const loadTexture = vi.fn(async (image: string) => materialUrls.has(image) ? numerical.texture : albedo.texture);
-    const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({ texture: loadTexture, dispose }));
+    const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({ texture: loadTexture, acquireTexture() { return {resource: Promise.resolve(Texture.EMPTY), release() {}}; }, dispose }));
     let drawn: Uint8Array = new Uint8Array();
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((kind: string) => kind === "2d" ? {
       drawImage: (pixels: Uint8Array) => { drawn = pixels; },
@@ -296,7 +297,7 @@ describe("world material loading", () => {
       const [source, repeated] = await Promise.all([first.resource, second.resource]);
       expect(source).toBe(repeated);
       expect(fixture.request).toHaveBeenCalledTimes(1);
-      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(fixture.loadTexture).toHaveBeenCalledTimes(2);
       expect(source.surfaceFrames).toEqual([definition]);
       expect(source.surfaceBytes).toBe(text.length * 4);
@@ -342,7 +343,7 @@ describe("world material loading", () => {
       expect(source.isBillboard).toBe(false);
       expect(fixture.loadTexture).toHaveBeenCalledWith("persisted-structure.webp", 0, "nearest");
       expect(fixture.loadTexture).toHaveBeenCalledWith(published.material, 0, "nearest");
-      expect(fixture.request).toHaveBeenCalledWith(published.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(published.surfaces));
     } finally { lease.release(); fixture.restore(); }
   });
 
@@ -357,7 +358,7 @@ describe("world material loading", () => {
     const lease = acquireWorldMaterial(image, "column");
     try {
       const source = await lease.resource;
-      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(source.surfaceFrames).toBeUndefined();
       expect(source.surfaceBytes ?? 0).toBe(0);
       expect(source.isBillboard).toBe(true);

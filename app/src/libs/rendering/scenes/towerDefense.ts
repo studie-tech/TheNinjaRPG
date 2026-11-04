@@ -168,6 +168,10 @@ export const createTowerDefenseScene = async (options: {
     };
     let seenHits = new Set<string>();
     game.setUpdate((frame) => {
+      const spriteFrame = game.visualEffects.spriteAnimations
+        ? frame
+        : { ...frame, reducedMotion: true };
+      // Decorative motion can stop without pausing simulation time or independent scenery wind.
       options.onFrame(frame.delta);
       const snapshot = options.getSnapshot(),
         { enemiesArray: enemies, projectilesArray: projectiles } = snapshot.entities;
@@ -226,7 +230,7 @@ export const createTowerDefenseScene = async (options: {
         enemies,
         data.grid,
         ability,
-        frame,
+        spriteFrame,
         snapshot.impactAsset,
         (projectile) => actors.throwAt(projectile.origin, projectile.target, frame.now),
         playImpact,
@@ -241,7 +245,7 @@ export const createTowerDefenseScene = async (options: {
         }
       }
       seenHits = currentHits;
-      actors.animate(enemies, player, data.grid, frame);
+      actors.animate(enemies, player, data.grid, spriteFrame);
       art?.animate(frame, scale);
       game.setAnimating(snapshot.active);
     });

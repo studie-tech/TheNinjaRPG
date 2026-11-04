@@ -3,8 +3,10 @@ import {
   LPC_ATTACK_FRAME_MS,
   LPC_IDLE_FRAME_MS,
   lpcFrame,
+  lpcFrameDuration,
   spriteLayerSheets,
 } from "@/libs/lpc/catalog";
+import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
@@ -90,6 +92,10 @@ export const createLpcCharacter = async (
   // One actor-wide phase keeps its layers together; independent cycles avoid synchronized crowds.
   let idlePhase = Math.random();
   let idleDuration = 1600 + Math.random() * 2000;
+  let paintedState: LpcAnimation | undefined,
+    paintedDirection: LpcDirection | undefined;
+  let paintedStep = -1,
+    paintedReducedMotion = false;
   /** Restart retriggers the same animation for a new cue; elapsed time comes from the scene clock. */
   const render = (
     frame: GameFrame,
@@ -124,6 +130,21 @@ export const createLpcCharacter = async (
         ? 0
         : idlePhase * 3 * LPC_IDLE_FRAME_MS
       : frame.now - startedAt;
+    const sampleStep = frame.reducedMotion
+      ? 0
+      : Math.floor(Math.max(0, elapsed) / lpcFrameDuration(sampleState));
+    if (
+      paintedState === sampleState &&
+      paintedDirection === direction &&
+      paintedStep === sampleStep &&
+      paintedReducedMotion === frame.reducedMotion
+    )
+      return;
+    paintedState = sampleState;
+    paintedDirection = direction;
+    paintedStep = sampleStep;
+    paintedReducedMotion = frame.reducedMotion;
+    // A pose holds every layer until its authored boundary; movement still updates the actor root each frame.
     // A custom weapon drives the body timeline while retaining its own authored columns.
     const poseOwner = poseOwners.get(sampleState);
     const pose =
@@ -213,14 +234,16 @@ const frameTexture = (
   const key = `${sample.x}:${sample.y}:${sample.width}:${sample.height}:${sample.size}:${sample.trim?.x ?? ""}:${sample.trim?.y ?? ""}`;
   let texture = views.get(key);
   if (!texture) {
-    texture = new Texture({
-      source,
-      frame: new Rectangle(sample.x, sample.y, sample.width, sample.height),
-      orig: new Rectangle(0, 0, sample.size, sample.size),
-      trim: sample.trim
-        ? new Rectangle(sample.trim.x, sample.trim.y, sample.width, sample.height)
-        : undefined,
-    });
+    texture = stabilizeNearestTexture(
+      new Texture({
+        source,
+        frame: new Rectangle(sample.x, sample.y, sample.width, sample.height),
+        orig: new Rectangle(0, 0, sample.size, sample.size),
+        trim: sample.trim
+          ? new Rectangle(sample.trim.x, sample.trim.y, sample.width, sample.height)
+          : undefined,
+      }),
+    );
     views.set(key, texture);
   }
   return texture;

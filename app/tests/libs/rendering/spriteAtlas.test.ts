@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Sprite, Container, RenderLayer, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Sprite, Container, RenderLayer, Texture, Rectangle } from "pixi.js";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import * as shadows from "@/libs/rendering/primitives/shadow";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
@@ -8,12 +8,105 @@ import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
-import { createSceneAssets } from "@/libs/rendering/assets";
+import { createSceneAssets, stabilizeNearestTexture, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
+import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import { textureImageUrl } from "@/utils/image";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("stabilizes nearest UVs without changing frame identity, trim, source bytes or linear sampling", () => {
+    const source = new BufferImageSource({ resource: new Uint8Array(8 * 8 * 4), width: 8, height: 8, scaleMode: "nearest" });
+    const texture = new Texture({ source, frame: new Rectangle(0.5, 1, 3.5, 4), orig: new Rectangle(0, 0, 8, 8), trim: new Rectangle(2, 1, 3.5, 4) });
+    const metadata = JSON.stringify([texture.frame, texture.orig, texture.trim]);
+    const pixels = source.resource;
+    stabilizeNearestTexture(texture);
+    expect(texture.uvs.x0).toBe(0.5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    expect(texture.uvs.y2).toBe(5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    const uvs = { ...texture.uvs };
+    stabilizeNearestTexture(texture);
+    expect(texture.uvs).toEqual(uvs);
+    expect(JSON.stringify([texture.frame, texture.orig, texture.trim])).toBe(metadata);
+    expect(source.resource).toBe(pixels);
+    texture.destroy(true);
+    const linear = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 1, height: 1, scaleMode: "linear" }) });
+    const linearUvs = { ...linear.uvs };
+    stabilizeNearestTexture(linear);
+    expect(linear.uvs).toEqual(linearUvs);
+    linear.destroy(true);
+  });
+  it("applies stable sampling to fractional scenery atlas views while preserving their source/frame contract", async () => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(8 * 8 * 4), width: 8, height: 8, scaleMode: "nearest" }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    const art = await createWorldSprites({ own() {}, signal: new AbortController().signal } as unknown as GameRenderer, [{ id: "seam-tree", kind: "tree", image: "nearest-seam-atlas.png", frame: { x: 0.5, y: 1, width: 3.5, height: 4 }, x: 0, y: 0, groundY: 0, size: 16, nearest: true }]);
+    cleanups.push(() => { art.dispose(); texture.destroy(true); });
+    const view = (art.entries[0]!.sprite as Sprite).texture;
+    expect(view.source).toBe(texture.source);
+    expect(view.frame).toMatchObject({ x: 0.5, y: 1, width: 3.5, height: 4 });
+    expect(view.uvs.x0).toBe(0.5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    expect(view.uvs.y2).toBe(5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+  });
+  it("keeps clock-driven lamps independent of ambient/contact shading and updates a live preference at the same brightness", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const visualEffects = { dayNight: false, shadows: true, localLights: true };
+    const game = { visualEffects, own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const provider = {kind:"projected",register:()=>Object.assign(()=>{}, {ready:Promise.resolve()}),invalidate(){}} as never;
+    const art = await createWorldSprites(game, [{id:"lamp",kind:"avatar",image:"lamp-test.png",size:20,x:0,y:0,groundY:0,shadow:.2,light:.6}], provider);
+    cleanups.push(art.dispose);
+    const light = art.entries[0]!.light!.parent!, shadow = art.entries[0]!.shadow!.parent!;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true); expect(light.alpha).toBeCloseTo(.8); expect(shadow.alpha).toBe(1);
+    visualEffects.dayNight = true; art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.alpha).toBeCloseTo(.8); expect(shadow.alpha).toBeCloseTo(.25);
+    visualEffects.dayNight = false; art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(shadow.alpha).toBe(1);
+  });
+
+  it("retires one derived texture binding without releasing another scene's active lease", async () => {
+    const resource = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => resource);
+    const unload = vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
+    const first = createSceneAssets(), second = createSceneAssets(), pressure = createSceneAssets();
+    const path = "/world-shadows/active-lease.png", other = "/world-shadows/idle-pressure.png";
+    try {
+      const a = first.acquireTexture(path, 0), b = second.acquireTexture(path, 0);
+      await Promise.all([a.resource, b.resource]);
+      a.release(); first.dispose();
+      await pressure.texture(other, 0); pressure.dispose();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(unload.mock.calls.map(([url]) => url)).not.toContain(path);
+      expect(await b.resource).toBe(resource);
+      expect(load.mock.calls.filter(([input]) => (input as unknown as { src: string }).src === path)).toHaveLength(1);
+    } finally { first.dispose(); second.dispose(); pressure.dispose(); resource.destroy(true); }
+  });
+  it("removes daylight emitter batches and applies independent effect switches without animation", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const visualEffects = { shadows: true, localLights: true };
+    const game = { visualEffects, own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const art = await createWorldSprites(game, [{ id: "emitter", kind: "avatar", image: "actor-emitter.png", size: 20, x: 0, y: 0, groundY: 0, shadow: .2, light: .6 }]);
+    cleanups.push(art.dispose);
+    const light = art.entries[0]!.light!.parent!;
+    const shadow = art.entries[0]!.shadow!.parent!;
+    art.setLighting(WORLD_DAY_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true);
+    expect(light.alpha).toBeGreaterThan(0);
+    visualEffects.localLights = false;
+    visualEffects.shadows = false;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+    expect(shadow.visible).toBe(false);
+    visualEffects.localLights = true;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true);
+    expect(shadow.visible).toBe(false);
+    art.setLighting(WORLD_DAY_BRIGHTNESS);
+    expect(light.visible).toBe(false);
+  });
   it("keeps boundary scenery visible while panning and removes scenery beyond the retained view", async () => {
     const game = { own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
     vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
@@ -104,13 +197,26 @@ describe("world sprite atlas ownership", () => {
     expect(texture.destroyed).toBe(false);
     expect(texture.source.destroyed).toBe(false);
   });
-  it("preserves native source URLs while positive rendition widths use the image CDN", async () => {
+  it("resolves logical scenery keys to native Bunny textures for both asset lease APIs", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const assets = createSceneAssets();
+    cleanups.push(() => assets.dispose());
+    const source = WORLD_ASSET_SOURCES["/world-art/woodland-village.webp"]!;
+    const lease = assets.acquireTexture("/world-art/woodland-village.webp", 128);
+    try {
+      await lease.resource;
+      await assets.texture(source.material, 0, "nearest");
+      expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: textureImageUrl(source.image, 0) }));
+      expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: `${textureImageUrl(source.material, 0)}#tnr-nearest` }));
+    } finally { lease.release(); }
+  });
+  it("routes native sources and renditions through the image CDN", async () => {
     const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
     const assets = createSceneAssets();
     cleanups.push(() => assets.dispose());
     const image = "https://ui0arpl8sm.ufs.sh/f/native-material-source-test.png";
     await assets.texture(image, 0, "nearest");
-    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: `${image}#tnr-nearest` }));
+    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: "https://uploadthing.b-cdn.net/f/native-material-source-test.png#tnr-nearest" }));
     await assets.texture(image, 64, "nearest");
     expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: "https://uploadthing.b-cdn.net/f/native-material-source-test.png?width=64#tnr-nearest" }));
   });

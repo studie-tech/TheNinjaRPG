@@ -38,7 +38,8 @@ import {
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldShadows } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import {
   createWorldWeather,
   getWorldWeather,
@@ -87,13 +88,6 @@ export const createCombatScene = async (options: {
   });
   game.setAnimating(false);
   try {
-    const preloads = createRenderScope(game);
-    const textureIds = new Set(initial.battle.extraState.textureAssets ?? []);
-    void Promise.allSettled(
-      initial.assets
-        .filter((asset) => textureIds.has(asset.id) && asset.image)
-        .map((asset) => preloads.assets.texture(asset.image)),
-    ).then(() => preloads.dispose());
     const width = options.viewport?.width ?? game.renderer.width;
     const data = prepareCombatTerrain(
       width,
@@ -112,10 +106,11 @@ export const createCombatScene = async (options: {
     const groundLayer = new RenderLayer(),
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
-    const [terrain, art] = await Promise.all([
+    const [terrain, emptyArt] = await Promise.all([
       createHexTerrain(game, data.terrain, false),
-      createWorldSprites(game, data.scenery, shadows),
+      createWorldSprites(game, [], shadows),
     ]);
+    let art = emptyArt;
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
     const labels = new Container();
@@ -297,6 +292,31 @@ export const createCombatScene = async (options: {
     sync(initial, true);
     await Promise.all([actors.ready(), effectsReady]);
     initialized = true;
+    // Fighters and active effects become usable before optional border scenery and future effect art.
+    const sceneryReady = createWorldSprites(game, data.scenery, shadows)
+      .then((next) => {
+        if (game.isDisposed()) return;
+        const position = world.getChildIndex(art.container);
+        art.dispose();
+        art = next;
+        world.addChildAt(art.container, position);
+        art.attachLayers({ ground: groundLayer, world: depthLayer, ui: uiLayer });
+        // The frame owns initial-appearance suppression, including effects arriving before first paint.
+        dirty = true;
+        game.invalidate();
+      })
+      .catch((error: unknown) => {
+        if (!game.isDisposed())
+          console.warn("Combat scenery unavailable; fighters remain usable", error);
+      });
+    const preloads = createRenderScope(game);
+    const textureIds = new Set(initial.battle.extraState.textureAssets ?? []);
+    void Promise.allSettled(
+      initial.assets
+        .filter((asset) => textureIds.has(asset.id) && asset.image)
+        .map((asset) => preloads.assets.texture(asset.image)),
+    ).then(() => preloads.dispose());
+
     game.own(() => {
       if (zoomTimer !== null) clearTimeout(zoomTimer);
     });
@@ -365,7 +385,10 @@ export const createCombatScene = async (options: {
         document.body.style.cursor,
       );
     };
-    const updateFrame = (frame: GameFrame, capture = false) => {
+    const updateFrame = (sourceFrame: GameFrame, capture = false) => {
+      const frame = game.visualEffects.spriteAnimations
+        ? sourceFrame
+        : { ...sourceFrame, reducedMotion: true };
       if (!initialized) return;
       const snapshot = options.getSnapshot();
       clock =
@@ -433,13 +456,13 @@ export const createCombatScene = async (options: {
         }
       }
       transform();
-      const breeze = sampleWorldWind(frame, scale());
+      const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
       art.animate(frame, scale(), null, breeze);
       const lightDate =
         snapshot.lightDate ??
         (snapshot.cycleEnabled ? new Date(Date.now() - snapshot.timeDiff) : null);
       weather.update(
-        frame,
+        sourceFrame,
         snapshot.weather ??
           getWorldWeather(
             snapshot.battle.background,
@@ -460,9 +483,10 @@ export const createCombatScene = async (options: {
           breeze,
         );
       else {
-        const brightness = lightDate
-          ? getWorldCycleBrightness(lightDate)
-          : WORLD_DAY_BRIGHTNESS;
+        const brightness =
+          game.visualEffects.dayNight && lightDate
+            ? getWorldCycleBrightness(lightDate)
+            : WORLD_DAY_BRIGHTNESS;
         terrain.setLighting(brightness);
         art.setLighting(brightness);
         actors.setLighting(brightness);
@@ -514,7 +538,7 @@ export const createCombatScene = async (options: {
         if (game.isDisposed()) return;
         clock = Math.max(0, timeMs);
         sync(options.getSnapshot(), !rendered);
-        await Promise.all([actors.ready(), effectsReady]);
+        await Promise.all([actors.ready(), effectsReady, sceneryReady]);
         if (game.isDisposed()) return;
         updateFrame({ now: clock, delta: 0, reducedMotion: false }, true);
         game.renderer.render({ container: game.stage });

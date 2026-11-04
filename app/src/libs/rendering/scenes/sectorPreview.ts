@@ -10,7 +10,8 @@ import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
-import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldShadows } from "@/libs/rendering/worldShadows";
+import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
@@ -188,7 +189,7 @@ export const createSectorPreview = async (options: {
       if (!dragging) game.canvas.style.cursor = "default";
     });
     game.setUpdate((frame) => {
-      const breeze = sampleWorldWind(frame, scale);
+      const breeze = sampleWorldWind(frame, scale, game.visualEffects.wind);
       art.animate(frame, scale, null, breeze);
       if (dragging) shadows?.invalidate();
       shadows?.update(

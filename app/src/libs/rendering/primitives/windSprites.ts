@@ -3,6 +3,7 @@ import {
   Batcher,
   type BatcherOptions,
   BatchGeometry,
+  type Container,
   colorBitGl,
   compileHighShaderGlProgram,
   ExtensionType,
@@ -20,10 +21,14 @@ import {
 } from "pixi.js";
 import { type WorldWind, worldWindShader } from "@/libs/rendering/worldWind";
 
-const uniforms = new WeakMap<
-  Renderer,
-  { group: ReturnType<typeof createWindUniforms>; key: string }
->();
+/** Renderer-local lookup tolerates missing extensions and development module reloads. */
+const windPipeFor = (renderer: Renderer) =>
+  (renderer?.renderPipes as { worldWindSprite?: WindSpritePipe } | undefined)
+    ?.worldWindSprite;
+
+/** Pipe identity remains valid across development module reloads. */
+export const isWindSprite = (sprite: Container): sprite is WindSprite =>
+  "renderPipeId" in sprite && sprite.renderPipeId === "worldWindSprite";
 
 /** Keeps scenery in painter-ordered sprite batches while its gust is applied on the GPU. */
 export const createWindSprite = (
@@ -31,18 +36,13 @@ export const createWindSprite = (
   texture: Texture,
   group: number,
 ) => {
-  if (!uniforms.has(renderer)) return new Sprite(texture);
+  if (!windPipeFor(renderer)) return new Sprite(texture);
   return new WindSprite(texture, group);
 };
 
 /** One renderer-local gust drives every color batch, matching the physical passes. */
 export const updateWindSprites = (renderer: Renderer, breeze: WorldWind) => {
-  const current = uniforms.get(renderer);
-  if (!current || current.key === breeze.key) return;
-  current.key = breeze.key;
-  current.group.uniforms.uWind.set(breeze.large);
-  current.group.uniforms.uWindSmall.set(breeze.small);
-  current.group.update();
+  windPipeFor(renderer)?.setWind(breeze);
 };
 
 /** A base pose remains immutable while the batch shader moves rows above its root. */
@@ -63,9 +63,17 @@ export class WindSpritePipe {
   private sprites = new WeakMap<WindSprite, BatchableSprite>();
   private instructions = new WeakMap<InstructionSet, WindInstruction>();
   private wind = createWindUniforms();
+  private windKey = "";
 
-  constructor(private renderer: WebGLRenderer) {
-    uniforms.set(renderer, { group: this.wind, key: "" });
+  constructor(private renderer: WebGLRenderer) {}
+
+  /** Mark the shared gust group for upload only when its sampled pose changes. */
+  setWind(breeze: WorldWind) {
+    if (this.windKey === breeze.key) return;
+    this.windKey = breeze.key;
+    this.wind.uniforms.uWind.set(breeze.large);
+    this.wind.uniforms.uWindSmall.set(breeze.small);
+    this.wind.update();
   }
 
   private getSprite(sprite: WindSprite) {
@@ -113,8 +121,11 @@ export class WindSpritePipe {
   }
 
   execute(instruction: WindInstruction) {
-    // Pixi batches sync custom uniforms only on first use; retained gusts need each-frame binding.
-    if (instruction.shader) this.renderer.shader.bind(instruction.shader);
+    // Batch submission owns samplers and global transforms; retained gusts only need their changing group.
+    if (instruction.shader) {
+      this.renderer.shader.bind(instruction.shader, true);
+      this.renderer.shader.updateUniformGroup(this.wind);
+    }
   }
 
   updateRenderable(sprite: WindSprite) {
@@ -128,7 +139,6 @@ export class WindSpritePipe {
   }
 
   destroy() {
-    uniforms.delete(this.renderer);
     this.sprites = new WeakMap();
     this.instructions = new WeakMap();
   }

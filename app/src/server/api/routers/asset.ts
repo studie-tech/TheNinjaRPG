@@ -8,6 +8,7 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
+import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import { prepareLpcSheet, validateLpcImages } from "@/libs/lpc/import";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -49,6 +50,10 @@ export const gameAssetRouter = createTRPCRouter({
       mcp: { description: "Get LPC character designs, variants and attribution" },
     })
     .query(({ ctx }) => listLpcAssets(ctx.drizzle)),
+  /** Renderers share frame layouts and omit design-editor metadata from their network snapshot. */
+  getLpcSceneCatalog: publicProcedure
+    .meta({ mcp: { description: "Get the compiled LPC scene artwork catalog" } })
+    .query(async ({ ctx }) => buildLpcCatalog(await listLpcAssets(ctx.drizzle))),
   /** Prepare immutable image files; only the separate asset save persists their design settings. */
   prepareLpcSheet: protectedProcedure
     .input(
