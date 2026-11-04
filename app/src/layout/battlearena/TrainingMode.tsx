@@ -168,7 +168,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
             </div>
             <div className="col-span-2 flex items-center justify-between gap-3 rounded-lg border p-3">
               <div className="flex flex-col">
-                <p className="flex items-center gap-2 font-semibold text-sm">
+                <p className="flex items-center gap-2 text-sm font-semibold">
                   <Bot className="h-4 w-4" /> Auto combat
                 </p>
                 <p className="text-muted-foreground text-xs">

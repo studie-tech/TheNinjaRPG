@@ -1,153 +1,41 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Swords } from "lucide-react";
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { Check, Trash2, X } from "lucide-react";
+import { useId, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import ContentBox from "@/layout/ContentBox";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
-import Loader from "@/layout/Loader";
-import UserRequestSystem from "@/layout/UserRequestSystem";
-import UserSearchSelect from "@/layout/UserSearchSelect";
+import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
+import { OpponentFinder } from "@/layout/battlearena/OpponentFinder";
+import { sparExamProgress } from "@/libs/battleArena";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { getSearchValidator } from "@/validators/register";
 
-/** Sparring: challenge other players and answer their challenges. */
-export const SparringMode = () => (
-  <>
-    <ChallengeUser />
-    <ActiveChallenges />
-  </>
-);
-
-const ChallengeUser: React.FC = () => {
-  // Data from database
-  const { data: userData } = useRequiredUserData();
-
-  // User search
-  const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
-
-  // Ranked rules toggle
+/** Sparring: exam progress, challenges to and from you, and players to challenge. */
+export function SparringMode() {
+  const { data: userData, updateUser } = useRequiredUserData();
+  const utils = api.useUtils();
+  const router = useRouter();
   const [useRankedRules, setUseRankedRules] = useState(false);
-
-  // Spectate toggle
   const [spectatable, setSpectatable] = useState(false);
 
-  // tRPC utility
-  const utils = api.useUtils();
-
-  // Mutations
-  const { mutate: create, isPending } = api.sparring.createChallenge.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        userSearchMethods.setValue("users", []);
-        await utils.sparring.getUserChallenges.invalidate();
-      }
-    },
-  });
-
-  // If loading
-  if (isPending) return <Loader explanation="Loading" />;
-  if (!userData) return <Loader explanation="Loading userdata" />;
-
-  // Render
-  return (
-    <div>
-      <p className="p-2">
-        You can directly challenge ninja from across the continent to spar against you
-        with no consequence to your alliances or village.
-      </p>
-      <div className="flex flex-row gap-3 p-2">
-        <JutsuLoadoutSelector variant="dropdown" label="Jutsu loadout" />
-        <ItemLoadoutSelector variant="dropdown" label="Item loadout" />
-      </div>
-      <div className="mb-5 p-2">
-        <UserSearchSelect
-          useFormMethods={userSearchMethods}
-          showYourself={false}
-          inline={true}
-          showAi={false}
-          maxUsers={maxUsers}
-        />
-        <div className="mt-2 mb-2 flex items-center space-x-2">
-          <Checkbox
-            id="useRankedRules"
-            checked={useRankedRules}
-            onCheckedChange={(checked) => setUseRankedRules(checked === true)}
-          />
-          <label htmlFor="useRankedRules" className="text-sm">
-            Use ranked rules (ranked loadouts, level {MAX_PLAYER_LEVEL} stats, no LP
-            rewards)
-          </label>
-        </div>
-        <div className="mt-2 mb-2 flex items-center space-x-2">
-          <Checkbox
-            id="spectatable"
-            checked={spectatable}
-            onCheckedChange={(checked) => setSpectatable(checked === true)}
-          />
-          <label htmlFor="spectatable" className="text-sm">
-            Allow spectators to watch this spar
-          </label>
-        </div>
-        {targetUser && (
-          <Button
-            id="challenge"
-            className="mt-2 w-full"
-            onClick={() =>
-              create({
-                targetId: targetUser.userId,
-                useRankedRules,
-                spectatable,
-              })
-            }
-          >
-            <Swords className="mr-2 h-5 w-5" />
-            Challenge Now!
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const ActiveChallenges: React.FC = () => {
-  // Data from database
-  const { data: userData, updateUser } = useRequiredUserData();
-
-  // Queries
   const { data: challenges } = api.sparring.getUserChallenges.useQuery(undefined, {
     staleTime: 5000,
     enabled: !!userData,
   });
 
-  // tRPC utility
-  const utils = api.useUtils();
+  const { mutate: create, isPending: isCreating } =
+    api.sparring.createChallenge.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        if (data.success) await utils.sparring.getUserChallenges.invalidate();
+      },
+    });
 
-  // Router for forwarding
-  const router = useRouter();
-
-  // Mutations
   const { mutate: accept, isPending: isAccepting } =
     api.sparring.acceptChallenge.useMutation({
       onSuccess: async (data) => {
@@ -171,9 +59,7 @@ const ActiveChallenges: React.FC = () => {
     api.sparring.rejectChallenge.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.sparring.getUserChallenges.invalidate();
-        }
+        if (data.success) await utils.sparring.getUserChallenges.invalidate();
       },
     });
 
@@ -181,34 +67,168 @@ const ActiveChallenges: React.FC = () => {
     api.sparring.cancelChallenge.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.sparring.getUserChallenges.invalidate();
-        }
+        if (data.success) await utils.sparring.getUserChallenges.invalidate();
       },
     });
 
-  // If loading
   if (!userData) return null;
 
-  // Render
-  return (
-    challenges &&
-    challenges.length > 0 && (
-      <ContentBox
-        title="Active Challenges"
-        subtitle="Sent to or from you"
-        initialBreak={true}
-        padding={false}
-      >
-        <UserRequestSystem
-          isLoading={isAccepting || isRejecting || isCancelling}
-          requests={challenges}
-          userId={userData.userId}
-          onAccept={accept}
-          onReject={reject}
-          onCancel={cancel}
-        />
-      </ContentBox>
-    )
+  const exam = sparExamProgress(userData);
+  const isAnswering = isAccepting || isRejecting || isCancelling;
+  const challengedIds = new Set(
+    challenges
+      ?.filter((c) => c.senderId === userData.userId && c.status === "PENDING")
+      .map((c) => c.receiverId),
   );
-};
+
+  return (
+    <div className="flex flex-col gap-3 @min-[600px]:flex-row">
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        {exam && (
+          <section
+            aria-label="Exam progress"
+            className="flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40"
+          >
+            <div className="flex justify-between gap-2 text-sm">
+              <b>
+                {exam.questName} · win {exam.target} spars
+              </b>
+              <b>
+                {exam.done} / {exam.target}
+              </b>
+            </div>
+            <div className="h-2 rounded-full bg-amber-200 dark:bg-amber-900">
+              <div
+                className="bg-primary h-2 rounded-full"
+                style={{ width: `${(exam.done / exam.target) * 100}%` }}
+              />
+            </div>
+          </section>
+        )}
+        {challenges && challenges.length > 0 && (
+          <section className="flex flex-col gap-1.5">
+            <h2 className="text-base font-bold">Challenges</h2>
+            <ul aria-label="Challenges" className="flex flex-col gap-1.5">
+              {challenges.map((challenge) => {
+                const isIncoming = challenge.receiverId === userData.userId;
+                const other = isIncoming ? challenge.sender : challenge.receiver;
+                const isPending = challenge.status === "PENDING";
+                const options = [
+                  challenge.useRankedRules ? "Ranked rules" : "Normal rules",
+                  challenge.spectatable ? "spectators allowed" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <li
+                    key={challenge.id}
+                    className={`bg-card flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm ${
+                      isPending && isIncoming ? "border-amber-500" : ""
+                    } ${isPending ? "" : "opacity-70"}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      {isIncoming ? (
+                        <>
+                          <b>{other.username}</b> challenged you
+                        </>
+                      ) : (
+                        <>
+                          You challenged <b>{other.username}</b>
+                        </>
+                      )}
+                      <span className="text-muted-foreground block text-xs">
+                        Lv {other.level} {capitalizeFirstLetter(other.rank)}
+                        {other.village ? ` · ${other.village.name}` : ""} · {options}
+                        {isPending
+                          ? ""
+                          : ` · ${capitalizeFirstLetter(challenge.status)}`}
+                      </span>
+                    </span>
+                    {isPending && isIncoming && (
+                      <span className="flex gap-1.5">
+                        <Button
+                          className="h-11"
+                          disabled={isAnswering}
+                          onClick={() => accept({ id: challenge.id })}
+                        >
+                          <Check className="mr-1 h-4 w-4" aria-hidden /> Accept
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-11"
+                          disabled={isAnswering}
+                          onClick={() => reject({ id: challenge.id })}
+                        >
+                          <X className="mr-1 h-4 w-4" aria-hidden /> Decline
+                        </Button>
+                      </span>
+                    )}
+                    {isPending && !isIncoming && (
+                      <Button
+                        variant="outline"
+                        className="h-11"
+                        disabled={isAnswering}
+                        onClick={() => cancel({ id: challenge.id })}
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" aria-hidden /> Cancel
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        <OpponentFinder
+          challengedIds={challengedIds}
+          isChallenging={isCreating}
+          onChallenge={(targetId) => create({ targetId, useRankedRules, spectatable })}
+        />
+      </div>
+      <BattleSetupPanel action={null}>
+        <p className="text-muted-foreground text-xs font-semibold">
+          Your challenges use
+        </p>
+        <OptionCheckbox
+          checked={useRankedRules}
+          onChange={setUseRankedRules}
+          label="Ranked rules"
+          hint={`Ranked loadouts, level ${MAX_PLAYER_LEVEL} stats, no LP rewards`}
+        />
+        <OptionCheckbox
+          checked={spectatable}
+          onChange={setSpectatable}
+          label="Allow spectators"
+        />
+      </BattleSetupPanel>
+    </div>
+  );
+}
+
+/** A challenge option; rendered in both the rail and the phone sheet, so ids are per instance. */
+function OptionCheckbox({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  const id = useId();
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(value) => onChange(value === true)}
+      />
+      <label htmlFor={id}>
+        {label}
+        {hint && <span className="text-muted-foreground block text-xs">{hint}</span>}
+      </label>
+    </div>
+  );
+}

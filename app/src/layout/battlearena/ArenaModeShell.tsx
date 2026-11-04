@@ -45,14 +45,14 @@ export function ArenaModeShell({
       <button
         type="button"
         onClick={onOverview}
-        className="flex min-h-9 items-center gap-1 self-start font-semibold text-primary text-sm hover:underline"
+        className="text-primary flex min-h-9 items-center gap-1 self-start text-sm font-semibold hover:underline"
       >
         ← Overview
       </button>
       <div
         role="tablist"
         aria-label="Arena modes"
-        className="grid grid-cols-5 gap-0.5 rounded-lg bg-muted p-0.5 @min-[600px]:flex"
+        className="bg-muted grid grid-cols-5 gap-0.5 rounded-lg p-0.5 @min-[600px]:flex"
       >
         {ARENA_MODES.map((option) => {
           const Icon = MODE_ICONS[option];
@@ -65,7 +65,7 @@ export function ArenaModeShell({
               aria-selected={selected}
               onClick={() => onSelect(option)}
               className={cn(
-                "relative flex min-w-0 items-center justify-center gap-1.5 rounded-md font-semibold text-sm",
+                "relative flex min-w-0 items-center justify-center gap-1.5 rounded-md text-sm font-semibold",
                 "h-14 flex-col text-[11px] @min-[600px]:h-10 @min-[600px]:flex-row @min-[600px]:px-3.5 @min-[600px]:text-sm",
                 selected
                   ? "bg-background text-foreground shadow-sm"
@@ -75,7 +75,7 @@ export function ArenaModeShell({
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
               {ARENA_MODE_LABELS[option]}
               {option === "Sparring" && waiting > 0 && (
-                <span className="absolute top-1 right-1 min-w-4 rounded-full bg-primary px-1 text-[10px] text-primary-foreground leading-4 @min-[600px]:static">
+                <span className="bg-primary text-primary-foreground absolute top-1 right-1 min-w-4 rounded-full px-1 text-[10px] leading-4 @min-[600px]:static">
                   {waiting}
                 </span>
               )}
@@ -95,7 +95,7 @@ export function ArenaModeShell({
               {exam.done} / {exam.target}
             </b>
           </span>
-          <span className="font-semibold text-primary">Find opponents →</span>
+          <span className="text-primary font-semibold">Find opponents →</span>
         </button>
       )}
       {children}

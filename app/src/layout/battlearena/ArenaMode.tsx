@@ -98,12 +98,12 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
         <Progress
           value={Math.min(100, (fightsUsed / BATTLE_ARENA_DAILY_LIMIT) * 100)}
         />
-        <p className="text-center text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-center text-xs">
           {fightsUsed} / {BATTLE_ARENA_DAILY_LIMIT} daily arena fights used
         </p>
       </div>
     ) : (
-      <p className="text-center text-muted-foreground text-xs">
+      <p className="text-muted-foreground text-center text-xs">
         Fights today: {fightsUsed}
       </p>
     );
@@ -157,7 +157,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
         </span>
       </Button>
       {autoCombat && !isTutorialFight && (
-        <p className="text-center text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-center text-xs">
           <Bot className="mr-1 inline h-3 w-3" aria-hidden />
           Auto combat is on: your AI profile fights this battle
         </p>
@@ -174,10 +174,10 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     >
       <section
         aria-label="Choose your opponent"
-        className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl border bg-card p-3"
+        className="bg-card flex min-w-0 flex-1 flex-col gap-3 rounded-xl border p-3"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="font-bold text-base">Choose your opponent</h2>
+          <h2 className="text-base font-bold">Choose your opponent</h2>
           <span className="text-muted-foreground text-xs">
             Closest to your level first
           </span>
@@ -191,7 +191,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => setAiId(opponent.userId)}
-                className={`relative flex w-full flex-col items-center gap-1 rounded-lg border-2 bg-background p-2 transition-colors hover:bg-popover ${
+                className={`bg-background hover:bg-popover relative flex w-full flex-col items-center gap-1 rounded-lg border-2 p-2 transition-colors ${
                   isSelected ? "border-amber-500 shadow-md" : "border-transparent"
                 }`}
               >
@@ -202,10 +202,10 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
                   height={80}
                   className="aspect-square w-full rounded-md object-cover"
                 />
-                <span className="w-full truncate text-center font-semibold text-xs">
+                <span className="w-full truncate text-center text-xs font-semibold">
                   {opponent.username}
                 </span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-muted-foreground text-[11px]">
                   Level {opponent.level}
                 </span>
                 {opponent.userId === bestMatchId && (
@@ -219,7 +219,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
           {!opponents && <Loader explanation="Loading opponents" />}
         </div>
         {selected && (
-          <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-2">
+          <div className="bg-muted/60 flex items-center gap-3 rounded-lg p-2">
             <Image
               alt=""
               src={selected.avatar ?? IMG_AVATAR_DEFAULT}
@@ -236,7 +236,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
       </section>
       <BattleSetupPanel autoCombat={!isTutorialFight} action={action}>
         {isTutorialFight && (
-          <p className="flex items-center gap-2 text-muted-foreground text-xs">
+          <p className="text-muted-foreground flex items-center gap-2 text-xs">
             <Bot className="h-4 w-4 shrink-0" aria-hidden /> Auto combat stays off
             during your academy training, so you learn to fight by hand.
           </p>
@@ -263,7 +263,7 @@ function OpponentDetails({ aiId }: { aiId: string }) {
       <PopoverContent className="max-h-[70vh] w-[500px] max-w-[90vw] overflow-y-auto">
         {isPending && <Loader explanation="Loading opponent" />}
         {!isPending && !ai && (
-          <p className="p-2 text-center text-muted-foreground text-sm">
+          <p className="text-muted-foreground p-2 text-center text-sm">
             Could not load this opponent
           </p>
         )}

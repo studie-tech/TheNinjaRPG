@@ -139,7 +139,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
           <ModeCard key={card.mode} card={card} onOpen={onOpen} />
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/50 px-3 py-2 text-sm">
+      <div className="bg-muted/50 flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 text-sm">
         <b>Your setup</b>
         <span className="text-muted-foreground">
           Jutsu and item loadouts · auto combat {isAutoCombat ? "on" : "off"}
@@ -177,7 +177,7 @@ function ModeCard({
   return (
     <article
       className={cn(
-        "flex gap-3 rounded-xl border bg-card p-3",
+        "bg-card flex gap-3 rounded-xl border p-3",
         card.wide ? "@min-[600px]:col-span-2" : "",
         "flex-row @min-[600px]:flex-col",
         card.wide && "@min-[600px]:flex-row",
@@ -194,12 +194,12 @@ function ModeCard({
         <Icon className="h-8 w-8" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h2 className="font-bold text-lg">{card.title}</h2>
+        <h2 className="text-lg font-bold">{card.title}</h2>
         <p className="text-sm">{card.description}</p>
         {card.status && (
           <p
             className={cn(
-              "font-semibold text-sm",
+              "text-sm font-semibold",
               card.quiet ? "text-muted-foreground" : "text-primary",
             )}
           >

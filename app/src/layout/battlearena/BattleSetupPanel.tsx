@@ -34,9 +34,9 @@ export function BattleSetupPanel({
   return (
     <aside
       aria-label="Battle setup"
-      className="flex flex-col gap-3 @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start @min-[600px]:rounded-xl @min-[600px]:border @min-[600px]:bg-card @min-[600px]:p-3"
+      className="@min-[600px]:bg-card flex flex-col gap-3 @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start @min-[600px]:rounded-xl @min-[600px]:border @min-[600px]:p-3"
     >
-      <h2 className="font-bold text-base @max-[600px]:sr-only">Battle setup</h2>
+      <h2 className="text-base font-bold @max-[600px]:sr-only">Battle setup</h2>
       <div className="flex flex-col gap-3 @max-[600px]:hidden">
         <BattleSetupControls autoCombat={autoCombat}>{children}</BattleSetupControls>
       </div>
@@ -48,7 +48,7 @@ export function BattleSetupPanel({
         <span className="truncate">
           Loadouts{autoCombat ? ` · auto combat ${isAutoCombat ? "on" : "off"}` : ""}
         </span>
-        <span className="flex items-center gap-1 font-semibold text-primary">
+        <span className="text-primary flex items-center gap-1 font-semibold">
           <SlidersHorizontal className="h-4 w-4" aria-hidden /> Setup
         </span>
       </Button>
@@ -88,7 +88,7 @@ export function BattleSetupControls({
       {autoCombat && (
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col">
-            <p className="flex items-center gap-2 font-semibold text-sm">
+            <p className="flex items-center gap-2 text-sm font-semibold">
               <Bot className="h-4 w-4" aria-hidden /> Auto combat
             </p>
             <p className="text-muted-foreground text-xs">
