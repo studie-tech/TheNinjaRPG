@@ -1,4 +1,5 @@
 import { UTApi } from "uploadthing/server";
+import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { listUserUploadForRemoveAccountProcessorData } from "@/queries/accountDeletion";
 import { drizzleDB } from "@/server/db";
 
@@ -48,7 +49,9 @@ export const ownedUploadKey = (
     const url = new URL(value);
     if (
       url.protocol !== "https:" ||
-      !["ui0arpl8sm.ufs.sh", "uploadthing.b-cdn.net"].includes(url.hostname)
+      ![new URL(UPLOADTHING_HOST).hostname, "uploadthing.b-cdn.net"].includes(
+        url.hostname,
+      )
     )
       return null;
     const match = /^\/f\/([A-Za-z0-9_.-]+)$/.exec(url.pathname);

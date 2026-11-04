@@ -3195,6 +3195,9 @@ export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDeta
 export const HomeFurnitureActions = ["sleep", "storage", "kitchen", "farm"] as const;
 export type HomeFurnitureAction = (typeof HomeFurnitureActions)[number];
 
+/** Alpha at or below which a pixel of a generated cutout counts as transparent. */
+export const CUTOUT_ALPHA_THRESHOLD = 16;
+
 /** Placement stores clockwise quarter turns; each direction uses separately painted art. */
 export const HOME_FURNITURE_ROTATIONS = [0, 1, 2, 3] as const;
 export type HomeFurnitureRotation = (typeof HOME_FURNITURE_ROTATIONS)[number];

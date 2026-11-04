@@ -16,6 +16,7 @@ import {
   editableOf,
   entityKey,
   loadEntities,
+  normalizeEditable,
 } from "@/libs/contentReview/entities";
 import { isEpidemicConfigured, searchEpidemicSfx } from "@/libs/contentReview/epidemic";
 import { importEpidemicSfx, materializeChoice } from "@/libs/contentReview/media";
@@ -31,11 +32,7 @@ import {
   topLevelField,
 } from "@/libs/contentReview/paths";
 import { buildReviewStats } from "@/libs/contentReview/stats";
-import {
-  createStaffProposal,
-  normalizeEditable,
-  validationError,
-} from "@/libs/contentReview/submit";
+import { createStaffProposal, validationError } from "@/libs/contentReview/submit";
 import { sameValue } from "@/libs/contentReview/version";
 import {
   deleteGameAssetForRollback,

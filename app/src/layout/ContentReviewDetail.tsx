@@ -43,9 +43,11 @@ import {
   STATUS_LABELS,
 } from "@/libs/contentReview/labels";
 import {
+  directMediaValue,
   isMediaPath,
   isSceneAssetPath,
   isSceneCharacterPath,
+  mediaPlaceholder,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -1215,24 +1217,16 @@ const proposedFields = (change: Change, choices: ReviewChoices) => {
     if (!(field in fields) || !pick) continue;
     // A sound outside the catalog stays a placeholder that names the chosen candidate, so the
     // battlefield can play it from that candidate's URL.
-    const value =
-      pick.kind === "IMAGE" && !isSceneCharacterPath(path)
-        ? pick.url
-        : pick.source === "CATALOG"
-          ? pick.externalId
-          : pick.kind === "SFX" || isSceneCharacterPath(path)
-            ? mediaPlaceholder(pick.id)
-            : null;
+    const direct = directMediaValue(pick, path);
+    const placeholder =
+      pick.kind === "SFX" || isSceneCharacterPath(path)
+        ? mediaPlaceholder(pick.id)
+        : null;
+    const value = direct === undefined ? placeholder : direct;
     if (value) fields = setAtPath(fields, path, value);
   }
   return fields;
 };
-
-/**
- * Value libs/contentReview/submit.ts writes into a media field whose candidate is not in the
- * catalog yet.
- */
-const mediaPlaceholder = (mediaId: string) => `media:${mediaId}`;
 
 /** Whether a value is shown whole rather than as a list of changed leaves. */
 const isScalar = (value: unknown) => value === null || typeof value !== "object";
