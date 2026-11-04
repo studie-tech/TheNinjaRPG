@@ -1,11 +1,7 @@
 import alea from "alea";
 import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { createNoise2D } from "simplex-noise";
-import {
-  HEX_ASPECT_RATIO,
-  TD_HEX_SIZE,
-  TD_PROJECTILE_SPEED,
-} from "@/drizzle/constants";
+import { HEX_ASPECT_RATIO, TD_HEX_SIZE } from "@/drizzle/constants";
 import { defineHex } from "@/libs/hexgrid";
 import {
   getProceduralTerrain,
@@ -13,7 +9,7 @@ import {
 } from "@/libs/rendering/proceduralBiomes";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { buildHexTerrainData } from "@/libs/rendering/terrainData";
-import { calculateHexDistance } from "@/libs/towerDefense/game";
+import { getProjectileProgress } from "@/libs/towerDefense/game";
 import type {
   HexPosition,
   TowerDefenseEnemy,
@@ -106,15 +102,10 @@ export const towerDefenseProjectileProgress = (
 ) => {
   if (projectile.clientSpawnTime === undefined)
     return Math.max(0, Math.min(1, projectile.progress));
-  const distance = calculateHexDistance(projectile.origin, projectile.target);
-  return distance > 0
-    ? Math.max(
-        0,
-        Math.min(
-          1,
-          (((now - projectile.clientSpawnTime) / 1000) * TD_PROJECTILE_SPEED) /
-            distance,
-        ),
-      )
-    : 1;
+  return getProjectileProgress(
+    projectile.origin,
+    projectile.target,
+    projectile.clientSpawnTime,
+    now,
+  );
 };

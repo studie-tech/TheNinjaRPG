@@ -5,7 +5,7 @@
  * All game logic (spawning, combat, movement) is handled by SpacetimeDB.
  */
 
-import type { TDEnemyDirection } from "@/drizzle/constants";
+import { TD_PROJECTILE_SPEED, type TDEnemyDirection } from "@/drizzle/constants";
 import type { HexPosition, SpriteDirection } from "@/validators/towerDefense";
 
 /**
@@ -22,6 +22,22 @@ export const calculateHexDistance = (a: HexPosition, b: HexPosition): number => 
   const ds = Math.abs(aq + ar - (bq + br));
 
   return Math.max(dq, Math.max(dr, ds));
+};
+
+/**
+ * Interpolate a projectile's flight, 0 to 1, from its local spawn time. The server only
+ * reports spawns and hits, so clients derive progress from the shared projectile speed.
+ */
+export const getProjectileProgress = (
+  origin: HexPosition,
+  target: HexPosition,
+  clientSpawnTime: number,
+  now: number,
+) => {
+  const distance = calculateHexDistance(origin, target);
+  if (distance <= 0) return 1;
+  const elapsedSeconds = (now - clientSpawnTime) / 1000;
+  return Math.max(0, Math.min(1, (elapsedSeconds * TD_PROJECTILE_SPEED) / distance));
 };
 
 // ============================================

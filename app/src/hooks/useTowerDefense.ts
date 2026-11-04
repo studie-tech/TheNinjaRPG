@@ -9,10 +9,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "@/app/_trpc/client";
 import {
+  TD_ABILITY_IDS,
   TD_EXISTING_SESSION_CHECK_TIMEOUT_MS,
   TD_HIT_EVENT_DURATION_MS,
   TD_PLAYER_BASE_HEALTH,
-  TD_PROJECTILE_SPEED,
 } from "@/drizzle/constants";
 import {
   clearEnemyAssetConfigCache,
@@ -32,8 +32,11 @@ import {
   type SpacetimeDBEvent,
 } from "@/libs/spacetimedb/client";
 import { showMutationToast } from "@/libs/toast";
-import { getDefaultPlayerBonuses } from "@/libs/towerDefense/abilities";
-import { calculateHexDistance } from "@/libs/towerDefense/game";
+import {
+  getDefaultPlayerBonuses,
+  getShurikenAbility,
+} from "@/libs/towerDefense/abilities";
+import { getProjectileProgress } from "@/libs/towerDefense/game";
 import type {
   EntityStore,
   GameMode,
@@ -216,19 +219,15 @@ const convertProjectile = (
   existingClientSpawnTime?: number,
 ): TowerDefenseProjectileWithSpawn => {
   const clientSpawnTime = existingClientSpawnTime ?? Date.now();
-  const elapsed = (Date.now() - clientSpawnTime) / 1000;
   const origin = { col: p.originCol, row: p.originRow };
   const target = { col: p.targetCol, row: p.targetRow };
-  const distance = calculateHexDistance(origin, target);
-  const computedProgress =
-    distance > 0 ? Math.min((elapsed * TD_PROJECTILE_SPEED) / distance, 1.0) : 1.0;
 
   const base = towerDefenseProjectileSchema.parse({
     id: `projectile-${p.id}`,
-    abilityType: "shuriken",
+    abilityType: TD_ABILITY_IDS.SHURIKEN,
     origin,
     target,
-    progress: computedProgress,
+    progress: getProjectileProgress(origin, target, clientSpawnTime, Date.now()),
     damage: p.damage,
     critRoll: p.critRoll,
   });
@@ -484,8 +483,7 @@ export const useTowerDefense = (userId?: string) => {
 
       const newAbilities = [
         towerDefenseAbilitySchema.parse({
-          id: "shuriken",
-          name: "Shuriken Throw",
+          ...getShurikenAbility(),
           damage: state.abilityDamage,
           range: state.abilityRange,
           cooldownMs: state.abilityCooldownMs,
@@ -1316,12 +1314,11 @@ export const useTowerDefense = (userId?: string) => {
       }
     }
 
-    // CLEANUP: For guests, delete the completed run and abandon the session
+    // CLEANUP: For guests, delete the session along with its completed run
     // This prevents guest sessions from accumulating in SpacetimeDB
     if (isGuest && sessionIdRef.current) {
       try {
         await connectionRef.current.deleteCompletedRun(sessionIdRef.current);
-        await connectionRef.current.abandonSession(sessionIdRef.current);
       } catch (error) {
         console.error("[useTowerDefense] Failed to cleanup guest session:", error);
         // Continue to lobby even if cleanup fails
