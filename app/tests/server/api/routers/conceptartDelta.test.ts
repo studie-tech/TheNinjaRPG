@@ -4,7 +4,7 @@ import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
-import { conceptartRouter } from "@/server/api/routers/conceptart";
+import { CONCEPT_PROMPT, conceptartRouter } from "@/server/api/routers/conceptart";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
@@ -38,6 +38,8 @@ describeWithDatabase("concept art confirmed debits", () => {
     expect(result.success).toBe(true);
     expect(result.userDelta).toEqual({ reputationPoints: -COST_CONCEPT_IMAGE });
     expect(reads).toHaveBeenCalledTimes(1);
+    expect(replicate.fastTxt2imgReplicate).toHaveBeenCalledWith(expect.objectContaining({ prompt: `A ninja, ${CONCEPT_PROMPT}` }));
+    expect(CONCEPT_PROMPT.startsWith(",")).toBe(false);
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.reputationPoints).toBe(1000 - COST_CONCEPT_IMAGE);
     expect((await db.query.conceptImage.findFirst({ where: eq(conceptImage.id, result.imageId!) }))?.done).toBe(true);
   });

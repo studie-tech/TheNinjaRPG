@@ -56,7 +56,7 @@ import {
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
-export const CONCEPT_PROMPT = `, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
+export const CONCEPT_PROMPT = `trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
 
 export const conceptartRouter = createTRPCRouter({
   toggleEmotion: protectedProcedure
@@ -112,23 +112,12 @@ export const conceptartRouter = createTRPCRouter({
         return errorResponse("Not enough reputation points");
       }
       // NSFW Check
-      try {
-        const nsfwCheck = await classifyNsfwPrompt(input.prompt);
-        if (nsfwCheck.isNsfw) {
-          return errorResponse("Prompt rejected: contains inappropriate content");
-        }
-      } catch {
-        return errorResponse("Unable to validate prompt. Please try again later.");
-      }
+      const promptRejection = await rejectNsfwPrompt(input.prompt);
+      if (promptRejection) return promptRejection;
       // Generate
-      const prompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
-      const avatar = await fastTxt2imgReplicate({
-        prompt,
-        aspect_ratio: "9:16",
-        disable_safety_checker: false,
-        output_quality: 95,
-        mega_pixels: "1",
-      });
+      const avatar = await generateConceptThumbnail(
+        `${input.prompt}, ${CONCEPT_PROMPT}`,
+      );
       const imageUrl = avatar.data?.ufsUrl;
       if (!imageUrl) return errorResponse("Failed to create image");
       // Mutate
@@ -167,14 +156,8 @@ export const conceptartRouter = createTRPCRouter({
         );
       }
       // NSFW Check (before deducting points)
-      try {
-        const nsfwCheck = await classifyNsfwPrompt(input.prompt);
-        if (nsfwCheck.isNsfw) {
-          return errorResponse("Prompt rejected: contains inappropriate content");
-        }
-      } catch {
-        return errorResponse("Unable to validate prompt. Please try again later.");
-      }
+      const promptRejection = await rejectNsfwPrompt(input.prompt);
+      if (promptRejection) return promptRejection;
       // Deduct reputation points immediately to prevent spam
       // Use WHERE clause to ensure user still has enough points (prevents race condition)
       const deductResult = await updateUserDataForCreateVideo(ctx.drizzle, ctx);
@@ -185,25 +168,18 @@ export const conceptartRouter = createTRPCRouter({
         );
       }
       try {
+        const styledPrompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
         // If user provided a start_image, use it as thumbnail; otherwise generate one
         let thumbnailUrl: string | undefined;
         if (input.start_image) {
           thumbnailUrl = input.start_image;
         } else {
-          const thumbnailPrompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
-          const thumbnailResult = await fastTxt2imgReplicate({
-            prompt: thumbnailPrompt,
-            aspect_ratio: "9:16",
-            disable_safety_checker: false,
-            output_quality: 95,
-            mega_pixels: "1",
-          });
+          const thumbnailResult = await generateConceptThumbnail(styledPrompt);
           thumbnailUrl = thumbnailResult.data?.ufsUrl;
         }
         // Start the video generation job (returns immediately)
-        const videoPrompt = `${input.prompt}, ${CONCEPT_PROMPT}`;
         const prediction = await startVideoGeneration({
-          prompt: videoPrompt,
+          prompt: styledPrompt,
           negative_prompt: input.negative_prompt,
           seed: input.seed,
           start_image: thumbnailUrl,
@@ -294,13 +270,9 @@ export const conceptartRouter = createTRPCRouter({
       }
       // If failed or canceled from Replicate
       if (prediction.status === "failed" || prediction.status === "canceled") {
-        const errorMessage =
-          typeof prediction.error === "string"
-            ? prediction.error
-            : "Video generation failed";
         return {
           success: false,
-          message: errorMessage,
+          message: videoFailureMessage(prediction),
           status: prediction.status,
           readyToFinalize: true, // Call mutation to update DB status
           replicateId: record.replicateId,
@@ -358,11 +330,7 @@ export const conceptartRouter = createTRPCRouter({
           { status: prediction.status },
           input,
         );
-        const errorMessage =
-          typeof prediction.error === "string"
-            ? prediction.error
-            : "Video generation failed";
-        return errorResponse(errorMessage);
+        return errorResponse(videoFailureMessage(prediction));
       }
       // Handle succeeded - perform upload
       if (prediction.status === "succeeded" && prediction.output) {
@@ -414,7 +382,7 @@ export const conceptartRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
-      const userSearch = ctx?.userId ?? "none";
+      const userSearch = ctx.userId ?? "none";
       const secondsBack = getTimeFrameinSeconds(input.time_frame);
       const results = await listConceptImageForGetAll(
         ctx.drizzle,
@@ -434,6 +402,32 @@ export const conceptartRouter = createTRPCRouter({
     return image || null;
   }),
 });
+
+/** Returns the error to send when a prompt is unsafe or cannot be classified. */
+const rejectNsfwPrompt = async (prompt: string) => {
+  try {
+    const nsfwCheck = await classifyNsfwPrompt(prompt);
+    return nsfwCheck.isNsfw
+      ? errorResponse("Prompt rejected: contains inappropriate content")
+      : null;
+  } catch {
+    return errorResponse("Unable to validate prompt. Please try again later.");
+  }
+};
+
+/** Generates a concept image in the portrait format used for art and video thumbnails. */
+const generateConceptThumbnail = (prompt: string) =>
+  fastTxt2imgReplicate({
+    prompt,
+    aspect_ratio: "9:16",
+    disable_safety_checker: false,
+    output_quality: 95,
+    mega_pixels: "1",
+  });
+
+/** Replicate's own failure text, when it sent one. */
+const videoFailureMessage = (prediction: { error?: unknown }) =>
+  typeof prediction.error === "string" ? prediction.error : "Video generation failed";
 
 type RouterOutput = inferRouterOutputs<typeof conceptartRouter>;
 export type ImageWithRelations = RouterOutput["get"];
