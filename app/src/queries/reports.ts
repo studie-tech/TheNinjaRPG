@@ -49,6 +49,7 @@ import {
   userReportEmbedding,
   userReview,
 } from "@/drizzle/schema";
+import { postAuthorColumns } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 import sanitize from "@/utils/sanitize";
@@ -415,28 +416,10 @@ export const findUserReportWithUsers = (client: DrizzleClient, userReportId: str
     where: eq(userReport.id, userReportId),
     with: {
       reporterUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       reportedUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
     },
   });
@@ -659,28 +642,10 @@ export const listUserReportForLoadReports = (
     ),
     with: {
       reporterUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       reportedUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
     },
   });

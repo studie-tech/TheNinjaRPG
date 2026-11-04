@@ -4,6 +4,7 @@
 import { eq } from "drizzle-orm";
 import { conceptImage } from "@/drizzle/schema";
 import { indexableConceptArt } from "@/libs/conceptart";
+import { postAuthorColumns } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 
 /** Load an image with its author and viewer-specific reactions; a missing image yields undefined. */
@@ -16,16 +17,7 @@ export const fetchImage = async (
     where: eq(conceptImage.id, imageId),
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       likes: {
         where: (userLikes) => eq(userLikes.userId, userId),
@@ -272,16 +264,7 @@ export const listConceptImageForGetAll = (
     limit: input.limit,
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       likes: {
         where: (userLikes) => eq(userLikes.userId, userSearch),

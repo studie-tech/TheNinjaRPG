@@ -105,6 +105,18 @@ import { clampActionLogText } from "@/utils/actionLog";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
+/** Author fields behind the `user` prop of `layout/Post`. */
+export const postAuthorColumns = {
+  userId: true,
+  username: true,
+  avatar: true,
+  rank: true,
+  isOutlaw: true,
+  level: true,
+  role: true,
+  federalStatus: true,
+} as const;
+
 /** Build the `userData` update for `GET`. */
 export const updateUserDataForGET = (client: Pick<DrizzleClient, "update">) =>
   client.update(userData).set({

@@ -1,3 +1,4 @@
+import { postAuthorColumns } from "@/queries/profile";
 /**
  * Database access for comments; authorization and transaction scopes stay in callers.
  */
@@ -125,16 +126,7 @@ export const listUserReportCommentForGetReportComments = (
     where: eq(userReportComment.reportId, report.id),
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
     },
     orderBy: [desc(userReportComment.createdAt)],

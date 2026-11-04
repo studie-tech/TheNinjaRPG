@@ -32,6 +32,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { getNextClosedAt } from "@/libs/support";
+import { postAuthorColumns } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `userData` update for `POST`, setting `aiCalls`, using predicates on `userId` and `aiCalls`. */
@@ -311,42 +312,15 @@ export const findSupportTicketForGetSupportTicketWithRelations = (
     where: eq(supportTicket.id, ticketId),
     with: {
       createdBy: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       assignedTo: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       activities: {
         with: {
           author: {
-            columns: {
-              userId: true,
-              username: true,
-              avatar: true,
-              level: true,
-              rank: true,
-              isOutlaw: true,
-              role: true,
-              federalStatus: true,
-            },
+            columns: postAuthorColumns,
           },
         },
         orderBy: desc(supportTicketActivity.createdAt),
@@ -437,28 +411,10 @@ export const listSupportTicketForGetSupportTicketsWithRelations = (
     })(),
     with: {
       createdBy: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       assignedTo: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
     },
     orderBy: (() => {
