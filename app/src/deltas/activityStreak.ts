@@ -3,11 +3,11 @@ import type { UserQueueState } from "@/deltas/profile";
 import { getRewardUserDelta } from "@/deltas/quests";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import type { UserStreakProgress } from "@/drizzle/schema";
-import { isStreakContinuous } from "@/libs/activityStreak";
+import { getStreakTheoreticalMaxDay, isStreakContinuous } from "@/libs/activityStreak";
 import type { postProcessRewards } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import type { findActivityStreakConfigForClaimStreakDay } from "@/queries/activityStreak";
-import { DAY_S, isSameDay } from "@/utils/time";
+import { isSameDay } from "@/utils/time";
 
 /** Debit the configured event-pass currencies; withhold the delta while energy work is queued. */
 export const getPurchaseEventPassUserUpdate = ({
@@ -68,9 +68,10 @@ export const getClaimedStreakUpdate = (
     startsCycle || (completed && config.streakType === "RECURRING")
       ? now
       : progress.startedAt;
-  const theoreticalMaxDay = Math.min(
-    Math.floor((now.getTime() - startedAt.getTime()) / (DAY_S * 1000)) + 1,
+  const theoreticalMaxDay = getStreakTheoreticalMaxDay(
+    startedAt,
     config.totalDays,
+    now,
   );
   const needsCatchUp = currentDay > 0 && currentDay < theoreticalMaxDay;
   return {
@@ -142,11 +143,7 @@ export const getClaimedStreaks = (
         streak.alreadyClaimedToday !== alreadyClaimedToday ||
         streak.canClaimToday !== canClaimToday ||
         streak.theoreticalMaxDay !==
-          Math.min(
-            Math.floor((now.getTime() - streak.startedAt.getTime()) / (DAY_S * 1000)) +
-              1,
-            streak.totalDays,
-          )
+          getStreakTheoreticalMaxDay(streak.startedAt, streak.totalDays, now)
       );
     })
   )

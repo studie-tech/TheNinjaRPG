@@ -11,9 +11,10 @@ import { COST_STREAK_CATCHUP_DAY, ActivityStreakTypes } from "@/drizzle/constant
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
   getEventPassCompletionDate,
+  getStreakClaimState,
   isEventPassCompletion,
-  isStreakContinuous,
   normalizeRecurringStreakProgress,
+  resolveStreakClaim,
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
@@ -61,7 +62,7 @@ import {
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
-import { isToday, isWithinDateRange } from "@/utils/time";
+import { isWithinDateRange } from "@/utils/time";
 import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
@@ -111,34 +112,20 @@ export const activityStreakRouter = createTRPCRouter({
           // Skip deactivated configs - users cannot claim these
           if (!config.isActive) return null;
 
+          const {
+            isPassCompleted,
+            theoreticalMaxDay,
+            alreadyClaimedToday,
+            continuous,
+            isBehind,
+          } = getStreakClaimState(progress, config, now, eventPassCompletedAt);
+
           // Completed event passes remain as permanent purchase records, but they
           // are no longer active streaks that the player can claim.
-          if (
-            config.streakType === "EVENT_PASS" &&
-            (progress.currentDay >= config.totalDays ||
-              eventPassCompletedAt !== undefined)
-          ) {
-            return null;
-          }
-
-          const alreadyClaimedToday = isToday(progress.lastClaimDate);
-          const withinThreshold = isStreakContinuous(progress.lastClaimDate);
-
-          // Calculate theoretical max day based on days since started (capped at totalDays)
-          const daysSinceStart = Math.floor(
-            (Date.now() - new Date(progress.startedAt).getTime()) /
-              (1000 * 60 * 60 * 24),
-          );
-          const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
-
-          // User is behind if their current day is less than theoretical max
-          // Note: currentDay === 0 means "fresh start" (never claimed or just completed/reset),
-          // not "behind" - you can't be behind if you haven't started
-          const isBehind =
-            progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
+          if (isPassCompleted) return null;
 
           // Streak is broken if outside the 36-hour window (but user has progress)
-          const streakBroken = !withinThreshold && progress.currentDay > 0;
+          const streakBroken = !continuous && progress.currentDay > 0;
 
           // User needs to catch up if they're behind AND either:
           // - Their streak is broken (missed 36hr window), OR
@@ -453,97 +440,26 @@ export const activityStreakRouter = createTRPCRouter({
         return errorResponse("You need to purchase this event pass first");
       }
 
+      const claimState = getStreakClaimState(
+        progress,
+        config,
+        now,
+        eventPassCompletedAt,
+      );
+
       // Completed event-pass progress is retained as the permanent purchase
       // record and cannot be claimed or restarted.
-      if (
-        config.streakType === "EVENT_PASS" &&
-        (progress.currentDay >= config.totalDays || eventPassCompletedAt !== undefined)
-      ) {
+      if (claimState.isPassCompleted) {
         return errorResponse("This event pass has already been completed");
       }
 
-      // Calculate theoretical max day to prevent buying ahead
-      const daysSinceStart = Math.floor(
-        (Date.now() - new Date(progress.startedAt).getTime()) / (1000 * 60 * 60 * 24),
-      );
-      const theoreticalMaxDay = Math.min(daysSinceStart + 1, config.totalDays);
-
-      // Check if streak is continuous (within 36-hour window)
-      const continuous = isStreakContinuous(progress.lastClaimDate);
-
-      // Check if already claimed today (used for guards in multiple branches)
-      const alreadyClaimedToday = isToday(progress.lastClaimDate);
-
-      // Check if user can still catch up (not at theoretical max yet AND has started)
-      // Note: currentDay === 0 means "fresh start", not "behind" - first claim should be free
-      const canCatchUp =
-        progress.currentDay > 0 && progress.currentDay < theoreticalMaxDay;
-
-      // Determine new day number and whether we need to charge for catchup
-      // Logic is the same for both RECURRING and EVENT_PASS
-      let newCurrentDay: number;
-      let streakReset = false;
-      let paidCatchUp = false;
-
-      // Handle explicit reset first - only allowed when behind and not claimed today
-      if (input.reset) {
-        // Guard: can't reset if haven't started yet (day 0)
-        if (progress.currentDay === 0) {
-          return errorResponse("Nothing to reset - you haven't started yet");
-        }
-        // Guard: can only reset if not already claimed today
-        if (alreadyClaimedToday) {
-          return errorResponse("You have already claimed this streak today");
-        }
-        // Guard: can only reset if behind (canCatchUp means user is behind theoreticalMaxDay)
-        if (!canCatchUp) {
-          return errorResponse(
-            "Cannot reset - your streak is on track! Just claim the next day.",
-          );
-        }
-        newCurrentDay = 1;
-        streakReset = true;
-      } else if (input.payCatchUp) {
-        // Pay to catch up - only valid in catch-up scenarios
-        // Guard: can only pay to catch up if canCatchUp is true (user is behind)
-        if (!canCatchUp) {
-          return errorResponse(
-            "You can only pay to catch up when you are behind. Come back tomorrow!",
-          );
-        }
-        // Guard: must have enough reputation points
-        if (user.reputationPoints < COST_STREAK_CATCHUP_DAY) {
-          return errorResponse(
-            `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(user.reputationPoints)}`,
-          );
-        }
-        // Guard: cannot catch up beyond total days
-        if (progress.currentDay >= config.totalDays) {
-          return errorResponse(
-            "Streak already completed - cannot catch up beyond total days",
-          );
-        }
-        // Guard: cannot claim beyond theoretical max (can't buy ahead of time)
-        if (progress.currentDay + 1 > theoreticalMaxDay) {
-          return errorResponse(
-            "Cannot claim beyond current day - you can only catch up to today",
-          );
-        }
-        newCurrentDay = progress.currentDay + 1;
-        paidCatchUp = true;
-      } else if (continuous || progress.currentDay === 0) {
-        // Normal claim - streak is continuous or just starting
-        // Guard: not already claimed today (only for normal claims)
-        if (alreadyClaimedToday) {
-          return errorResponse("You have already claimed this streak today");
-        }
-        newCurrentDay = progress.currentDay + 1;
-      } else {
-        // Streak is broken and user didn't choose to pay or reset
-        // Auto-reset to day 1
-        newCurrentDay = 1;
-        streakReset = true;
-      }
+      const claim = resolveStreakClaim(progress.currentDay, claimState, {
+        reset: input.reset,
+        payCatchUp: input.payCatchUp,
+        reputationPoints: user.reputationPoints,
+      });
+      if ("error" in claim) return errorResponse(claim.error);
+      const { newCurrentDay, streakReset, paidCatchUp } = claim;
 
       // Get rewards for this day
       const dayReward = config.rewards.find((r) => r.dayNumber === newCurrentDay);

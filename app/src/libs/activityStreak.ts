@@ -1,5 +1,6 @@
-import { STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
-import { DAY_S, HOUR_S, nextUtcDayAt, secondsFromDate } from "@/utils/time";
+import { COST_STREAK_CATCHUP_DAY, STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
+import { DAY_S, HOUR_S, isSameDay, nextUtcDayAt, secondsFromDate } from "@/utils/time";
+
 export type ActivityStreakPopupState = {
   isOpen: boolean;
   isLoading: boolean;
@@ -128,6 +129,91 @@ const streakContinuityEndsAt = (lastClaimDate: Date | null) =>
 
 export const isStreakContinuous = (lastClaimDate: Date | null, now = new Date()) =>
   (streakContinuityEndsAt(lastClaimDate)?.getTime() ?? 0) > now.getTime();
+
+/** Highest day the calendar has reached since the streak started, capped at its length. */
+export const getStreakTheoreticalMaxDay = (
+  startedAt: Date,
+  totalDays: number,
+  now: Date,
+) =>
+  Math.min(
+    Math.floor((now.getTime() - startedAt.getTime()) / (DAY_S * 1000)) + 1,
+    totalDays,
+  );
+
+/** Time-derived claim state; the streak list and the claim mutation must agree on it. */
+export const getStreakClaimState = (
+  progress: { currentDay: number; startedAt: Date; lastClaimDate: Date | null },
+  config: { streakType: string; totalDays: number },
+  now: Date,
+  eventPassCompletedAt?: Date,
+) => {
+  const { currentDay, startedAt, lastClaimDate } = progress;
+  const theoreticalMaxDay = getStreakTheoreticalMaxDay(
+    startedAt,
+    config.totalDays,
+    now,
+  );
+  return {
+    isPassCompleted:
+      config.streakType === "EVENT_PASS" &&
+      (currentDay >= config.totalDays || eventPassCompletedAt !== undefined),
+    theoreticalMaxDay,
+    alreadyClaimedToday: lastClaimDate !== null && isSameDay(lastClaimDate, now),
+    continuous: isStreakContinuous(lastClaimDate, now),
+    // Day 0 is a fresh start (never claimed or just reset), not a missed day.
+    isBehind: currentDay > 0 && currentDay < theoreticalMaxDay,
+  };
+};
+
+/** Decide which day a claim lands on and how it got there, or why it is refused. */
+export const resolveStreakClaim = (
+  currentDay: number,
+  state: Pick<
+    ReturnType<typeof getStreakClaimState>,
+    "alreadyClaimedToday" | "continuous" | "isBehind"
+  >,
+  request: { reset?: boolean; payCatchUp?: boolean; reputationPoints: number },
+):
+  | { newCurrentDay: number; streakReset: boolean; paidCatchUp: boolean }
+  | { error: string } => {
+  const { alreadyClaimedToday, continuous, isBehind } = state;
+  if (request.reset) {
+    if (currentDay === 0) {
+      return { error: "Nothing to reset - you haven't started yet" };
+    }
+    if (alreadyClaimedToday) {
+      return { error: "You have already claimed this streak today" };
+    }
+    if (!isBehind) {
+      return {
+        error: "Cannot reset - your streak is on track! Just claim the next day.",
+      };
+    }
+    return { newCurrentDay: 1, streakReset: true, paidCatchUp: false };
+  }
+  if (request.payCatchUp) {
+    if (!isBehind) {
+      return {
+        error: "You can only pay to catch up when you are behind. Come back tomorrow!",
+      };
+    }
+    if (request.reputationPoints < COST_STREAK_CATCHUP_DAY) {
+      return {
+        error: `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${Math.floor(request.reputationPoints)}`,
+      };
+    }
+    return { newCurrentDay: currentDay + 1, streakReset: false, paidCatchUp: true };
+  }
+  if (continuous || currentDay === 0) {
+    if (alreadyClaimedToday) {
+      return { error: "You have already claimed this streak today" };
+    }
+    return { newCurrentDay: currentDay + 1, streakReset: false, paidCatchUp: false };
+  }
+  // A broken streak that neither pays nor resets explicitly restarts from day 1.
+  return { newCurrentDay: 1, streakReset: true, paidCatchUp: false };
+};
 
 /** Recheck at UTC rollover, the continuity deadline, or the next elapsed pass day. */
 export const nextStreakRefreshAt = (
