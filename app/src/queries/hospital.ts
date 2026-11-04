@@ -1,6 +1,7 @@
 /**
  * Database access for hospital; authorization and transaction scopes stay in callers.
  */
+
 import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -12,7 +13,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { regenTicksSql, userRegenerationGainSql } from "@/server/utils/regeneration";
 import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
@@ -86,7 +87,7 @@ export const executeResultForUserHeal = (
                     ? sql`NOW(3)`
                     : sql`TIMESTAMPADD(SECOND, ${regenTicksSql(recipient.regenAt, sql`NOW(3)`)} * ${REGEN_SECONDS}, ${recipient.regenAt})`
                 },
-                ${recipient.updatedAt} = ${nextSnapshotAtSql(recipient.updatedAt)}
+                ${recipient.updatedAt} = ${nextSnapshotSql(recipient.updatedAt)}
             WHERE ${and(
               eq(userData.userId, u.userId),
               eq(userData.updatedAt, u.updatedAt),
@@ -130,7 +131,7 @@ export const updateUserDataForNpcHeal = (
       curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
       maxEnergy: user.maxEnergy,
       regenAt: healedAt,
-      updatedAt: nextSnapshotAtSql(userData.updatedAt),
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
     .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")));
@@ -152,7 +153,7 @@ export const updateUserDataForNpcHeal2 = (
       curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
       maxEnergy: user.maxEnergy,
       regenAt: healedAt,
-      updatedAt: nextSnapshotAtSql(userData.updatedAt),
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
     .where(

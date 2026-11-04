@@ -1,6 +1,7 @@
 /**
  * Database access for staff; authorization and transaction scopes stay in callers.
  */
+
 import type { Client as PlanetScaleClient } from "@planetscale/database";
 import { and, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
@@ -91,7 +92,7 @@ import {
   warKill,
   webStoreOrder,
 } from "@/drizzle/schema";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
@@ -247,7 +248,7 @@ export const executeRecoverySqlForForceAwake = (
               ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
               ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
               ${questHistory.endAt} = ${endedAt},
-              ${userData.updatedAt} = ${nextSnapshotAtSql(userData.updatedAt)}
+              ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)}
           WHERE ${userData.userId} = ${targetUser.userId}
             AND ${userData.battleId} <=> ${targetUser.battleId}
             AND ${huntingSession.id} <=> ${hunt?.id ?? null}

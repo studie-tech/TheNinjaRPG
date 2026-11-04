@@ -42,6 +42,7 @@ import {
   RankedBattleTypes,
   REGEN_SECONDS,
   TERRITORY_WAR_TEAM_SIZE,
+  VILLAGE_PROTECTOR_AI_ID,
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
@@ -85,7 +86,6 @@ import {
 import { addPetsToBattle, petsAllowedInBattle } from "@/libs/combat/pets";
 import {
   applyEffects,
-  applySageModeAfterRoundTransition,
   checkFriendlyFire,
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
@@ -148,6 +148,7 @@ import {
 import { effectiveMasteries, isWornGear, isWornGearDisabled } from "@/libs/mastery";
 import {
   areWarObjectivesRevealed,
+  findShrineAttackWar,
   getWarRelationship,
   getWarSide,
   isObjectiveWarActive,
@@ -238,7 +239,7 @@ import {
   updateUserJutsuForUpdateCombatLoadout,
   updateVillageForInitiateBattle,
 } from "@/queries/combat";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { fetchItemLoadouts, listItemsByIds } from "@/queries/item";
 import {
   fetchBloodlineJutsuReskins,
@@ -351,14 +352,6 @@ export const combatRouter = createTRPCRouter({
         const fetchedUpdatedAt = userBattle.updatedAt;
         const { progressRound, changedActor, actionRound, expiredEffects } =
           alignBattle(userBattle, actionRounds, ctx.userId);
-        // A round can advance on this poll path too (idle turn timeout), not only via
-        // performAction. Run the sage exhaustion transition here as well, or it stays
-        // stranded until the next action. In-memory (no DB round-trip) and idempotent
-        // (guarded on sageModeActivated); the persist below carries the change, and the
-        // applyEffects call in the no-activity branch ticks any queued after-effects.
-        if (progressRound) {
-          applySageModeAfterRoundTransition(userBattle);
-        }
         if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
         advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
 
@@ -679,12 +672,8 @@ export const combatRouter = createTRPCRouter({
           const {
             actor,
             actionRound,
-            progressRound: progressedRoundBeforeAction,
             expiredEffects: expiredBeforeAction,
           } = alignBattle(newBattle, actionRounds, suid);
-          if (progressedRoundBeforeAction) {
-            applySageModeAfterRoundTransition(newBattle);
-          }
           // Record all rounds for this endpoint call¨
           if (!actionRounds.includes(actionRound)) {
             actionRounds.push(actionRound);
@@ -795,9 +784,6 @@ export const combatRouter = createTRPCRouter({
             orphanedSummons,
             expiredEffects,
           } = alignBattle(newBattle, actionRounds, suid);
-          if (progressRound) {
-            applySageModeAfterRoundTransition(newBattle);
-          }
           actionEffects.push(...expiredEffects);
           // Tell players why a summon left the field, rather than having it
           // silently disappear once its summoner is dead/fled/gone.
@@ -1633,52 +1619,13 @@ export const combatRouter = createTRPCRouter({
       ]);
 
       // Find the war the user is involved with
-      // For SECTOR_WAR: check war.sector matches and user is attacker
-      // For VILLAGE_WAR/WAR_RAID: check village sectors for attack OR defend scenarios
-      const userWar = activeWars.find((w) => {
-        if (w.status !== "ACTIVE") return false;
-        const side = getWarSide(w, user?.villageId ?? null, user?.userId);
-        const isUserOnAttackerSide = side === w.attackerVillageId;
-        const isUserOnDefenderSide = side === w.defenderVillageId;
-
-        if (w.rules) {
-          return (
-            !!side &&
-            isObjectiveWarActive(w) &&
-            areWarObjectivesRevealed(w, side) &&
-            w.objectiveState?.objectives.some(
-              (o) => o.sector === input.sector && o.villageId !== side && !o.destroyed,
-            )
-          );
-        }
-        if (w.type === "SECTOR_WAR") {
-          // Sector wars use war.sector and only attackers can attack
-          return w.sector === input.sector && isUserOnAttackerSide;
-        }
-
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
-          const atDefenderVillage = w.defenderVillage?.sector === input.sector;
-          const atAttackerVillage = w.attackerVillage?.sector === input.sector;
-
-          // Attack scenarios: at enemy's village (reduce their shrine HP)
-          const canAttack =
-            (atDefenderVillage && isUserOnAttackerSide) ||
-            (atAttackerVillage && isUserOnDefenderSide);
-
-          // Defend scenarios: at own village when shrine is damaged (restore shrine HP)
-          const canDefend =
-            (atAttackerVillage &&
-              isUserOnAttackerSide &&
-              w.attackerShrineHp < w.attackerShrineMaxHp) ||
-            (atDefenderVillage &&
-              isUserOnDefenderSide &&
-              w.defenderShrineHp < w.defenderShrineMaxHp);
-
-          return canAttack || canDefend;
-        }
-
-        return false;
-      });
+      const userWar = findShrineAttackWar(
+        activeWars,
+        user?.villageId ?? null,
+        user?.userId,
+        input.sector,
+        { allowDefend: true },
+      );
 
       // Check if this is a Village War or Raid (allows attacking home sectors)
       const isVillageWarOrRaid =
@@ -1714,7 +1661,7 @@ export const combatRouter = createTRPCRouter({
       const targetIds =
         validAis.length > 0
           ? validAis.map((ai) => ai.userId)
-          : ["MJMzOE67Cx2YP3NX8SAbh"];
+          : [VILLAGE_PROTECTOR_AI_ID];
 
       // Return battle
       return await initiateBattle(
@@ -3211,7 +3158,7 @@ export const initiateBattle = async (
     queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
       userData.userId,
       queuedParticipants.map((entry) => entry.user.userId),
-    )} THEN ${nextSnapshotAtSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
+    )} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
     const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
     const recoveryParticipants = info.tournamentGame
       ? queuedParticipants

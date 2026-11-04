@@ -1,6 +1,7 @@
 /**
  * Database access for train; authorization and transaction scopes stay in callers.
  */
+
 import { and, asc, eq, gt, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type {
@@ -18,7 +19,7 @@ import {
   userJutsu,
   userQueue,
 } from "@/drizzle/schema";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import {
   completedQuestHistoryRelation,
@@ -320,7 +321,7 @@ export const updateUserDataForSettleWaitingJobs = (
   client
     .update(userData)
     .set({
-      updatedAt: nextSnapshotAtSql(userData.updatedAt),
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(eq(userData.userId, userId));
 

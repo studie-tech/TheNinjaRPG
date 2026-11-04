@@ -1,11 +1,20 @@
 /**
  * Database access for title; authorization and transaction scopes stay in callers.
  */
+
 import { and, asc, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { actionLog, title, userData, userTitle } from "@/drizzle/schema";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
+
+/** A public, non-archived title that may be granted, optionally only from `ids`. */
+export const grantableTitleWhere = (ids?: string[]) =>
+  and(
+    ids ? inArray(title.id, ids) : undefined,
+    eq(title.archived, false),
+    isNull(title.legacyOwnerId),
+  );
 
 /** Build the `userData` update for `grant`, setting `updatedAt`, using predicates on `userId`. */
 export const updateUserDataForGrant = (
@@ -15,7 +24,7 @@ export const updateUserDataForGrant = (
   client
     .update(userData)
     .set({
-      updatedAt: nextSnapshotAtSql(userData.updatedAt),
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(eq(userData.userId, userId));
 
@@ -39,13 +48,7 @@ export const insertUserTitleForGrant = (
           createdAt: sql<Date>`CURRENT_TIMESTAMP(3)`.as("createdAt"),
         })
         .from(title)
-        .where(
-          and(
-            inArray(title.id, ids),
-            eq(title.archived, false),
-            isNull(title.legacyOwnerId),
-          ),
-        ),
+        .where(grantableTitleWhere(ids)),
     )
     .onDuplicateKeyUpdate({ set: { userId: sql`${userTitle.userId}` } });
 
@@ -53,22 +56,12 @@ export const insertUserTitleForGrant = (
 export const selectTitleForValidateTitleRewardIds = (
   client: Pick<DrizzleClient, "select">,
   ids: string[],
-) =>
-  client
-    .select({ id: title.id })
-    .from(title)
-    .where(
-      and(
-        inArray(title.id, ids),
-        isNull(title.legacyOwnerId),
-        eq(title.archived, false),
-      ),
-    );
+) => client.select({ id: title.id }).from(title).where(grantableTitleWhere(ids));
 
 /** Build the `title` listing for `getAllNames`, using predicates on `legacyOwnerId` and `archived`. */
 export const listTitleForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
   client.query.title.findMany({
-    where: and(isNull(title.legacyOwnerId), eq(title.archived, false)),
+    where: grantableTitleWhere(),
     orderBy: asc(title.name),
   });
 

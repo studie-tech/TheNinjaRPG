@@ -1,6 +1,7 @@
 /**
  * Database access for hunting; authorization and transaction scopes stay in callers.
  */
+
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -14,7 +15,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { HuntingHabitatContent, HuntingReceipt } from "@/validators/hunting";
 
@@ -110,7 +111,7 @@ export const updateHuntingHabitatForSave = (
     .set({
       content,
       // Same-millisecond saves must invalidate admission's captured revision.
-      updatedAt: nextSnapshotAtSql(huntingHabitat.updatedAt),
+      updatedAt: nextSnapshotSql(huntingHabitat.updatedAt),
     })
     .where(eq(huntingHabitat.id, id));
 

@@ -1,13 +1,13 @@
 /**
  * Database access for item; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
   count,
   eq,
   exists,
-  getTableColumns,
   gt,
   gte,
   inArray,
@@ -59,7 +59,7 @@ import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
-import { nextSnapshotAtSql } from "@/queries/concurrency";
+import { insertValuesWhere, nextSnapshotSql } from "@/queries/concurrency";
 import { lpcDesignAssignmentGuard } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -1051,23 +1051,16 @@ export const insertItemVariantForUpsertItemVariant = (
     battleDescription: safeBattleDescription,
     furnitureData: input.variant.furnitureData,
   };
-  const columns = getTableColumns(itemVariant);
-  const keys = Object.keys(values) as (keyof typeof values)[];
   // INSERT SELECT keeps item and LPC design references valid when the variant is saved.
-  return client.execute(sql`
-    INSERT INTO ${itemVariant} (${sql.join(
-      keys.map((key) => sql.identifier(columns[key].name)),
-      sql`, `,
-    )})
-    SELECT ${sql.join(
-      keys.map((key) => sql.param(values[key], columns[key])),
-      sql`, `,
-    )}
-    WHERE EXISTS (SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})
+  return insertValuesWhere(
+    client,
+    itemVariant,
+    values,
+    sql`EXISTS (SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})
       AND ${input.variant.requiredItemId ? exists(sql`(SELECT 1 FROM ${item} WHERE ${eq(item.id, input.variant.requiredItemId)})`) : sql`TRUE`}
-      AND ${lpcDesignAssignmentGuard(input.variant.lpcProfile)}
-    ON DUPLICATE KEY UPDATE id = id
-  `);
+      AND ${lpcDesignAssignmentGuard(input.variant.lpcProfile)}`,
+    { ignoreDuplicate: true },
+  );
 };
 
 /** Build the `itemVariant` selection for `upsertItemVariant`, using predicates on `itemId`. */
@@ -1330,7 +1323,7 @@ export const updateUserItemForUnequipAllItems = (
     .update(userItem)
     .set({
       equipped: "NONE",
-      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1758,7 +1751,7 @@ export const updateUserItemForSelectItemLoadout = (
     .set({
       equipped,
       // Even an unchanged loadout must acknowledge the hunting guard.
-      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1874,7 +1867,7 @@ export const updateUserItemForToggleEquipItem = (
     .update(userItem)
     .set({
       equipped: sql`CASE WHEN ${userItem.id} = ${useritem.id} THEN ${useritem.equipped} ELSE 'NONE' END`,
-      updatedAt: nextSnapshotAtSql(userItem.updatedAt),
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -2240,7 +2233,7 @@ export const executeRowsForSettleCookingExperience = (
           UPDATE ${userData}
           INNER JOIN ${userCookingJob} ON ${userCookingJob.userId} = ${userData.userId}
           SET ${userData.cookingExperience} = ${userData.cookingExperience} + ${job.experience},
-              ${userData.updatedAt} = ${nextSnapshotAtSql(userData.updatedAt)},
+              ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
               ${userCookingJob.experience} = 0
           WHERE ${userData.userId} = ${userId}
             AND ${userCookingJob.id} = ${job.id}
