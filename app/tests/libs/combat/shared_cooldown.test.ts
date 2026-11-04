@@ -25,7 +25,12 @@ import {
 const SHARED_COOLDOWN_ROUNDS = 3;
 const USER = "player";
 
-type SharedTag = "clearprevent" | "debuffprevent" | "clear";
+type SharedTag =
+  | "clearprevent"
+  | "debuffprevent"
+  | "clear"
+  | "damage"
+  | "elementaldamage";
 
 const sharedJutsu = (id: string, cooldown: number, tag: SharedTag) =>
   ({
@@ -111,7 +116,170 @@ const usableRounds = (battle: CompleteBattle, actionId: string, from: number, to
     return usable(battle, actionId);
   });
 
+/** Advance all compared actions together so cooldown expiry cannot rewind their tracking. */
+const expectLocks = (battle: CompleteBattle, expected: Record<string, number>) => {
+  for (let round = 1; round <= 7; round++) {
+    battle.round = round;
+    const available = new Set(
+      availableUserActions(battle, USER, true, true).map((action) => action.id),
+    );
+    for (const [id, duration] of Object.entries(expected)) {
+      expect(available.has(id)).toBe(round >= 1 + duration);
+    }
+  }
+};
+
 describe("global cooldown", () => {
+  describe.each(["jutsu", "item", "imbuement"] as const)(
+    "%s elemental source",
+    (sourceKind) => {
+      const scenario = (mixed = false) => {
+        const source = sharedJutsu("source", 0, "elementaldamage");
+        if (mixed) source.effects.push(makeTag("damage"));
+        const sourceItem = sharedConsumable(
+          "source",
+          0,
+          sourceKind === "item"
+            ? ["elementaldamage", ...(mixed ? ["damage" as const] : [])]
+            : mixed
+              ? ["damage"]
+              : [],
+        );
+        const elementalItem = sharedConsumable("elemental-item", 0, ["elementaldamage"]);
+        const imbuedItem = sharedConsumable("imbued-item", 0, []);
+        const battle = makeGcdBattle(
+          [
+            sharedJutsu("elemental-peer", 0, "elementaldamage"),
+            sharedJutsu("damage-peer", 0, "damage"),
+            {
+              ...sharedJutsu("mixed-peer", 0, "elementaldamage"),
+              effects: [makeTag("elementaldamage"), makeTag("damage")],
+            },
+            ...(sourceKind === "jutsu" ? [source] : []),
+          ],
+          [elementalItem, imbuedItem, ...(sourceKind !== "jutsu" ? [sourceItem] : [])],
+        );
+        for (const owned of battle.usersState[0]!.items) {
+          if (
+            owned.itemId === imbuedItem.id ||
+            (sourceKind === "imbuement" && owned.itemId === source.id)
+          ) {
+            owned.imbuementEffects = [makeEffect("elementaldamage")];
+          }
+        }
+        return battle;
+      };
+
+      it("shares authored elemental tags without triggering ordinary damage cooldowns", () => {
+        const battle = scenario();
+        battle.extraState.sharedCooldowns = { elementaldamage: 3, damage: 5 };
+        expect(
+          availableUserActions(battle, USER)
+            .find((action) => action.id === "source")
+            ?.effects.map((effect) => effect.type),
+        ).toEqual(["damage"]);
+        perform(battle, 1, "source");
+        expectLocks(battle, {
+          "elemental-peer": 3,
+          "elemental-item": 3,
+          "imbued-item": 3,
+          "mixed-peer": 3,
+          "damage-peer": 0,
+          basicAttack: 0,
+          source: 0,
+        });
+      });
+
+      it("keeps both authored damage types distinct on a mixed source", () => {
+        const battle = scenario(true);
+        battle.extraState.sharedCooldowns = { elementaldamage: 5, damage: 2 };
+        perform(battle, 1, "source");
+        expectLocks(battle, {
+          "elemental-peer": 5,
+          "elemental-item": 5,
+          "imbued-item": 5,
+          "mixed-peer": 5,
+          "damage-peer": 2,
+          basicAttack: 2,
+          source: 0,
+        });
+      });
+
+      it("does not treat resolved elemental tags as configured ordinary damage", () => {
+        const battle = scenario();
+        battle.extraState.sharedCooldowns = { damage: 3 };
+        perform(battle, 1, "source");
+        for (const id of [
+          "elemental-peer",
+          "elemental-item",
+          "imbued-item",
+          "mixed-peer",
+          "damage-peer",
+          "basicAttack",
+        ]) {
+          expect(usable(battle, id)).toBe(true);
+        }
+      });
+    },
+  );
+
+  it("uses the selected copy's imbuement when an unavailable item shares its catalog id", () => {
+    const battle = makeGcdBattle(
+      [
+        sharedJutsu("elemental-peer", 0, "elementaldamage"),
+        sharedJutsu("damage-peer", 0, "damage"),
+      ],
+      [sharedConsumable("source", 0, [])],
+    );
+    const user = battle.usersState[0]!;
+    const selected = user.items[0]!;
+    selected.imbuementEffects = [makeEffect("elementaldamage")];
+    user.items.unshift({
+      ...selected,
+      id: "unavailable-copy",
+      equipped: "NONE",
+      imbuementEffects: [makeEffect("damage")],
+    });
+    battle.extraState.sharedCooldowns = { elementaldamage: 3, damage: 5 };
+    perform(battle, 1, "source");
+    expect(usable(battle, "damage-peer")).toBe(true);
+    expect(usableRounds(battle, "elemental-peer", 1, 5)).toEqual([4, 5]);
+  });
+
+  it("retains authored shared tags on an injected elemental jutsu", () => {
+    const battle = makeGcdBattle([
+      sharedJutsu("source", 0, "elementaldamage"),
+      sharedJutsu("peer", 0, "elementaldamage"),
+    ]);
+    battle.usersState[0]!.jutsus = battle.usersState[0]!.jutsus.filter(
+      (jutsu) => jutsu.jutsuId !== "source",
+    );
+    battle.usersEffects.push(
+      makeEffect(
+        "injectjutsus",
+        { jutsuIds: ["source"], rounds: 10 },
+        { targetId: USER },
+      ),
+    );
+    battle.extraState.sharedCooldowns = { elementaldamage: 3, damage: 5 };
+    perform(battle, 1, "source");
+    expect(usable(battle, "basicAttack")).toBe(true);
+    expect(usableRounds(battle, "peer", 1, 5)).toEqual([4, 5]);
+  });
+
+  it("matches raw basic actions against authored peer tags without selection metadata", () => {
+    const battle = makeGcdBattle([
+      sharedJutsu("elemental-peer", 0, "elementaldamage"),
+      sharedJutsu("damage-peer", 0, "damage"),
+    ]);
+    battle.extraState.sharedCooldowns = { elementaldamage: 5, damage: 3 };
+    battle.round = 1;
+    const user = battle.usersState[0]!;
+    applyActionCooldowns(battle, user, getDefaultBasicActions(user).basicAttack);
+    expect(usable(battle, "elemental-peer")).toBe(true);
+    expect(usableRounds(battle, "damage-peer", 1, 5)).toEqual([4, 5]);
+  });
+
   it("shares configured movement cooldowns in both directions and restores Move's zero cooldown", () => {
     const battle = makeGcdBattle([]);
     battle.extraState.sharedCooldowns = { move: 3 };

@@ -621,6 +621,8 @@ export type CombatAction = {
   cooldown: number;
   originalCooldown: number;
   effects: ZodAllTags[];
+  /** Authored effect types retained on selected actions before elemental damage resolves. */
+  sharedCooldownTags?: ZodAllTags["type"][];
   lastUsedRound?: number;
   data?: Jutsu | Item;
   level?: number;

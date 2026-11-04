@@ -343,7 +343,12 @@ export const availableUserActions = (
     }
     // AI selection and action previews need actor-specific elements without changing the catalog.
     return user
-      ? { ...a, effects: a.effects.map((tag) => resolveElementalDamage(tag, user)) }
+      ? {
+          ...a,
+          // Preserve authored types, including this owned item's imbuements, for cooldown matching.
+          sharedCooldownTags: a.effects.map((tag) => tag.type),
+          effects: a.effects.map((tag) => resolveElementalDamage(tag, user)),
+        }
       : a;
   });
   // A stale companion in a disabled or non-PvE battle may only yield its turn.
@@ -1460,7 +1465,9 @@ export const applyActionCooldowns = (
 ) => {
   const { round } = battle;
   const config = battle.extraState.sharedCooldowns ?? {};
-  const sharedTags = new Set<string>(action.effects.map((effect) => effect.type));
+  const sharedTags = new Set<string>(
+    action.sharedCooldownTags ?? action.effects.map((effect) => effect.type),
+  );
   const sharedRounds = (effects: { type: string }[]) =>
     effects.reduce(
       (longest, effect) =>
