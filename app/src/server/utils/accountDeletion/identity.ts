@@ -1,25 +1,22 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { deleteEmailReminderForRemoveAccountIdentity } from "@/queries/accountDeletion";
 import { drizzleDB } from "@/server/db";
+import { fetchClerkUser, isClerkNotFound } from "@/server/utils/clerk";
+import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
 import {
-  isClerkNotFound,
-  recordSanctionTombstone,
-} from "@/server/utils/sanctionTombstone";
-import { appleClientCredentials, isAppleProvider, revokeAppleToken } from "./apple";
+  appleClientCredentials,
+  isAppleProvider,
+  revokeClerkAppleTokens,
+} from "./apple";
 
 export const removeAccountIdentity = async (
   userId: string,
   appleRevokedSubject: string | null = null,
 ) => {
   const clerk = await clerkClient();
-  let user: Awaited<ReturnType<typeof clerk.users.getUser>>;
-  try {
-    user = await clerk.users.getUser(userId);
-  } catch (error) {
-    // Clerk may have deleted the identity before a response or queue update was lost.
-    if (isClerkNotFound(error)) return;
-    throw error;
-  }
+  // Clerk may have deleted the identity before a response or queue update was lost.
+  const user = await fetchClerkUser(userId);
+  if (!user) return;
   // The emails and OAuth accounts are only readable while the Clerk user exists, and a
   // returning player gets a new Clerk id, so a running sanction is recorded first.
   await recordSanctionTombstone(drizzleDB, userId, user);
@@ -31,13 +28,10 @@ export const removeAccountIdentity = async (
     )
   ) {
     const credentials = await appleClientCredentials("web");
-    const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");
-    if (!tokens.data.length)
+    if (!(await revokeClerkAppleTokens(clerk, userId, credentials)))
       throw new Error(
         "Apple authorization changed after confirmation; deletion needs operator attention",
       );
-    for (const token of tokens.data)
-      await revokeAppleToken(token.token, "access_token", credentials);
   }
   const emails = user.emailAddresses
     .filter((email) => email.verification?.status === "verified")
