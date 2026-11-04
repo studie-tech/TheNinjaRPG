@@ -20,6 +20,7 @@ import {
 } from "@/validators/merch";
 
 const CART_COOKIE = "tnr-merch-cart";
+const CART_PAYLOAD = `cart { ${CART_FIELDS} } userErrors { code message } warnings { message }`;
 
 export const merchRouter = createTRPCRouter({
   getCatalog: publicProcedure.query(async () => {
@@ -47,29 +48,20 @@ export const merchRouter = createTRPCRouter({
     const id = await readCartId();
     const operation = id ? "cartLinesAdd" : "cartCreate";
     const query = id
-      ? `mutation Add($id: ID!, $lines: [CartLineInput!]!) { cartLinesAdd(cartId: $id, lines: $lines) { cart { ${CART_FIELDS} } userErrors { code message } warnings { message } } }`
-      : `mutation Create($input: CartInput!) { cartCreate(input: $input) { cart { ${CART_FIELDS} } userErrors { code message } warnings { message } } }`;
+      ? `mutation Add($id: ID!, $lines: [CartLineInput!]!) { cartLinesAdd(cartId: $id, lines: $lines) { ${CART_PAYLOAD} } }`
+      : `mutation Create($input: CartInput!) { cartCreate(input: $input) { ${CART_PAYLOAD} } }`;
     const lines = [{ merchandiseId: input.variantId, quantity: input.quantity }];
-    const data = await shopifyRequest(query, id ? { id, lines } : { input: { lines } });
-    const payload = shopifyCartPayloadSchema.parse(
-      (data as Record<string, unknown>)[operation],
+    return runCartMutation(
+      operation,
+      query,
+      id ? { id, lines } : { input: { lines } },
+      {
+        failed: "Your cart has expired. Please add your item again.",
+        stale: "Item added. Your bag needs to refresh before you make another change.",
+        done: "Added to your bag.",
+      },
+      saveCartId,
     );
-    if (!payload.cart) (await cookies()).delete(CART_COOKIE);
-    if (payload.userErrors.length || !payload.cart)
-      return errorResponse(
-        payload.userErrors[0]?.message ||
-          "Your cart has expired. Please add your item again.",
-      );
-    await saveCartId(payload.cart.id);
-    const cart = await reconcileCommittedShopifyCart(payload.cart);
-    return {
-      success: true as const,
-      message:
-        cart === null
-          ? "Item added. Your bag needs to refresh before you make another change."
-          : payload.warnings?.map((w) => w.message).join(" ") || "Added to your bag.",
-      cart,
-    };
   }),
   updateCart: publicProcedure.input(merchUpdateSchema).mutation(async ({ input }) => {
     if (!isShopifyConfigured())
@@ -79,30 +71,23 @@ export const merchRouter = createTRPCRouter({
     const remove = input.quantity === 0;
     const operation = remove ? "cartLinesRemove" : "cartLinesUpdate";
     const query = remove
-      ? `mutation Remove($id: ID!, $lines: [ID!]!) { cartLinesRemove(cartId: $id, lineIds: $lines) { cart { ${CART_FIELDS} } userErrors { code message } warnings { message } } }`
-      : `mutation Update($id: ID!, $lines: [CartLineUpdateInput!]!) { cartLinesUpdate(cartId: $id, lines: $lines) { cart { ${CART_FIELDS} } userErrors { code message } warnings { message } } }`;
-    const data = await shopifyRequest(query, {
-      id,
-      lines: remove ? [input.lineId] : [{ id: input.lineId, quantity: input.quantity }],
-    });
-    const payload = shopifyCartPayloadSchema.parse(
-      (data as Record<string, unknown>)[operation],
+      ? `mutation Remove($id: ID!, $lines: [ID!]!) { cartLinesRemove(cartId: $id, lineIds: $lines) { ${CART_PAYLOAD} } }`
+      : `mutation Update($id: ID!, $lines: [CartLineUpdateInput!]!) { cartLinesUpdate(cartId: $id, lines: $lines) { ${CART_PAYLOAD} } }`;
+    return runCartMutation(
+      operation,
+      query,
+      {
+        id,
+        lines: remove
+          ? [input.lineId]
+          : [{ id: input.lineId, quantity: input.quantity }],
+      },
+      {
+        failed: "Your bag could not be updated. Please try again.",
+        stale: "Bag updated. Your bag needs to refresh before you make another change.",
+        done: "Bag updated.",
+      },
     );
-    if (!payload.cart) (await cookies()).delete(CART_COOKIE);
-    if (payload.userErrors.length || !payload.cart)
-      return errorResponse(
-        payload.userErrors[0]?.message ||
-          "Your bag could not be updated. Please try again.",
-      );
-    const cart = await reconcileCommittedShopifyCart(payload.cart);
-    return {
-      success: true as const,
-      message:
-        cart === null
-          ? "Bag updated. Your bag needs to refresh before you make another change."
-          : payload.warnings?.map((w) => w.message).join(" ") || "Bag updated.",
-      cart,
-    };
   }),
   checkout: publicProcedure.mutation(async () => {
     if (!isMerchCheckoutEnabled())
@@ -126,6 +111,36 @@ export const merchRouter = createTRPCRouter({
     };
   }),
 });
+
+/**
+ * Applies a cart mutation and maps its payload to a response. `onCart` runs before the
+ * follow-up read, so a new cart's id survives a failure of that read.
+ */
+async function runCartMutation(
+  operation: string,
+  query: string,
+  variables: Parameters<typeof shopifyRequest>[1],
+  messages: { failed: string; stale: string; done: string },
+  onCart?: (cartId: string) => Promise<void>,
+) {
+  const data = await shopifyRequest(query, variables);
+  const payload = shopifyCartPayloadSchema.parse(
+    (data as Record<string, unknown>)[operation],
+  );
+  if (!payload.cart) (await cookies()).delete(CART_COOKIE);
+  if (payload.userErrors.length || !payload.cart)
+    return errorResponse(payload.userErrors[0]?.message || messages.failed);
+  await onCart?.(payload.cart.id);
+  const cart = await reconcileCommittedShopifyCart(payload.cart);
+  return {
+    success: true as const,
+    message:
+      cart === null
+        ? messages.stale
+        : payload.warnings?.map((w) => w.message).join(" ") || messages.done,
+    cart,
+  };
+}
 
 async function readCartId() {
   const id = (await cookies()).get(CART_COOKIE)?.value;

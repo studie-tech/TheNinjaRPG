@@ -39,6 +39,7 @@ import {
   updateVillageForMaintainKageDefenses,
   updateVillageForRemoveAbsentKage,
 } from "@/queries/kageDefense";
+import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -75,6 +76,15 @@ export const withKageDefense = async <T>(
       return callback(tx, hall);
     }),
   );
+
+/** `withKageDefense` for procedures, answering a missing hall with an error response. */
+export const withKageHall = async <T>(
+  client: DrizzleClient,
+  villageId: string,
+  callback: (tx: DrizzleClient, hall: KageDefenseHall) => Promise<T>,
+) =>
+  (await withKageDefense(client, villageId, callback)) ??
+  errorResponse("Village not found");
 
 /** Load a tenure-consistent working snapshot after acquiring the village row lock. */
 const loadKageDefense = async (client: DrizzleClient, villageId: string) => {

@@ -11,7 +11,7 @@ import {
   KAGE_REMOVAL_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import { clan, village, villageStructure } from "@/drizzle/schema";
-import { castElderVoteEntry } from "@/libs/elder";
+import { castElderVoteEntry, tallyElderVotes } from "@/libs/elder";
 import { fetchClan } from "@/queries/clan";
 import { fetchElderVote } from "@/queries/elder";
 import {
@@ -55,7 +55,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { queryInTransaction } from "@/server/utils/concurrency";
-import { withKageDefense } from "@/server/utils/kage";
+import { withKageHall } from "@/server/utils/kage";
 import {
   getKageRemovalElectorate,
   isServingElder,
@@ -343,66 +343,63 @@ export const kageRouter = createTRPCRouter({
     .input(kageRemovalSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return (
-        (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
-          const [user, elders, failedVotes] = await queryInTransaction([
-            findUserById(tx, ctx.userId),
-            listEligibleKageRemovalElders(tx, input),
-            listVillageElderVoteForInitiateKageRemovalVote(tx, input),
-          ]);
-          const v = hall.village;
-          if (!isServingElder(user, input.villageId))
-            return errorResponse(
-              "Only serving village elders can initiate a removal vote",
-            );
-          if (!v.kageId || ctx.userId === v.kageId)
-            return errorResponse(
-              "Choose the village's current Kage; you cannot remove yourself",
-            );
-          if (
-            hall.now.getTime() <
-            v.leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000
-          )
-            return errorResponse(
-              `The Kage is protected for ${KAGE_ELDER_REMOVAL_LOCK_SECS / 86400} days after taking office`,
-            );
-          const failed = failedVotes[0];
-          if (
-            failed?.resolvedAt &&
-            failed.targetId === v.kageId &&
-            (!failed.tenure ||
-              failed.tenure.getTime() === v.leaderUpdatedAt.getTime()) &&
-            failed.resolvedAt >= v.leaderUpdatedAt &&
-            failed.resolvedAt > secondsFromNow(-KAGE_REMOVAL_COOLDOWN_DAYS * 86400)
-          )
-            return errorResponse(
-              `The village must wait ${KAGE_REMOVAL_COOLDOWN_DAYS} days after a failed removal vote`,
-            );
-          const electorate = getKageRemovalElectorate(elders, v.kageId);
-          if (electorate.size < ELDER_MIN_VOTING_COUNT)
-            return errorResponse(
-              `At least ${ELDER_MIN_VOTING_COUNT} elders are required`,
-            );
-          const inserted = await insertVillageElderVoteForInitiateKageRemovalVote(
-            tx,
-            v,
-            ctx,
-            input,
+      return withKageHall(ctx.drizzle, input.villageId, async (tx, hall) => {
+        const [user, elders, failedVotes] = await queryInTransaction([
+          findUserById(tx, ctx.userId),
+          listEligibleKageRemovalElders(tx, input),
+          listVillageElderVoteForInitiateKageRemovalVote(tx, input),
+        ]);
+        const v = hall.village;
+        if (!isServingElder(user, input.villageId))
+          return errorResponse(
+            "Only serving village elders can initiate a removal vote",
           );
-          if (!inserted.rowsAffected)
-            return errorResponse("There is already a pending Kage removal vote");
-          const recipients = [...electorate];
-          // Commit publication and delivery with the motion so a failed request can retry
-          // without leaving an unannounced pending vote that blocks further proposals.
-          // Notification is a shared announcement; unread counters select its recipients.
-          await insertNotificationForInitiateKageRemovalVote(tx, user, v, input);
-          await incrementNotificationCounters(tx, recipients);
-          return {
-            success: true,
-            message: `Removal vote published. Elders have ${ELDER_KAGE_REMOVAL_VOTE_DAYS} days to vote.`,
-          };
-        })) ?? errorResponse("Village not found")
-      );
+        if (!v.kageId || ctx.userId === v.kageId)
+          return errorResponse(
+            "Choose the village's current Kage; you cannot remove yourself",
+          );
+        if (
+          hall.now.getTime() <
+          v.leaderUpdatedAt.getTime() + KAGE_ELDER_REMOVAL_LOCK_SECS * 1000
+        )
+          return errorResponse(
+            `The Kage is protected for ${KAGE_ELDER_REMOVAL_LOCK_SECS / 86400} days after taking office`,
+          );
+        const failed = failedVotes[0];
+        if (
+          failed?.resolvedAt &&
+          failed.targetId === v.kageId &&
+          (!failed.tenure || failed.tenure.getTime() === v.leaderUpdatedAt.getTime()) &&
+          failed.resolvedAt >= v.leaderUpdatedAt &&
+          failed.resolvedAt > secondsFromNow(-KAGE_REMOVAL_COOLDOWN_DAYS * 86400)
+        )
+          return errorResponse(
+            `The village must wait ${KAGE_REMOVAL_COOLDOWN_DAYS} days after a failed removal vote`,
+          );
+        const electorate = getKageRemovalElectorate(elders, v.kageId);
+        if (electorate.size < ELDER_MIN_VOTING_COUNT)
+          return errorResponse(
+            `At least ${ELDER_MIN_VOTING_COUNT} elders are required`,
+          );
+        const inserted = await insertVillageElderVoteForInitiateKageRemovalVote(
+          tx,
+          v,
+          ctx,
+          input,
+        );
+        if (!inserted.rowsAffected)
+          return errorResponse("There is already a pending Kage removal vote");
+        const recipients = [...electorate];
+        // Commit publication and delivery with the motion so a failed request can retry
+        // without leaving an unannounced pending vote that blocks further proposals.
+        // Notification is a shared announcement; unread counters select its recipients.
+        await insertNotificationForInitiateKageRemovalVote(tx, user, v, input);
+        await incrementNotificationCounters(tx, recipients);
+        return {
+          success: true,
+          message: `Removal vote published. Elders have ${ELDER_KAGE_REMOVAL_VOTE_DAYS} days to vote.`,
+        };
+      });
     }),
 
   /** Record a serving elder's ballot under the village lock, then use the shared resolver. */
@@ -418,7 +415,7 @@ export const kageRouter = createTRPCRouter({
       const motion = await fetchElderVote(ctx.drizzle, input.voteId);
       if (motion?.type !== "KAGE_REMOVAL")
         return errorResponse("Removal vote not found");
-      const recorded = await withKageDefense(
+      const recorded = await withKageHall(
         ctx.drizzle,
         motion.villageId,
         async (tx, hall) => {
@@ -450,7 +447,7 @@ export const kageRouter = createTRPCRouter({
             : errorResponse("You have already voted");
         },
       );
-      if (!recorded?.success) return recorded ?? errorResponse("Village not found");
+      if (!recorded.success) return recorded;
       return settleKageRemoval(ctx.drizzle, input.voteId);
     }),
 
@@ -461,8 +458,7 @@ export const kageRouter = createTRPCRouter({
       const votes = await listVillageElderVoteForGetRemovalHistory(ctx.drizzle, input);
       return votes.map(({ entries, ...vote }) => ({
         ...vote,
-        yes: entries.filter((e) => e.vote === "YES").length,
-        no: entries.filter((e) => e.vote === "NO").length,
+        ...tallyElderVotes(entries),
       }));
     }),
   /** Fill the current vacancy once, recording the approved motion's successor when applicable. */
@@ -470,8 +466,10 @@ export const kageRouter = createTRPCRouter({
     .input(kageNominationSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const result =
-        (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
+      const result = await withKageHall(
+        ctx.drizzle,
+        input.villageId,
+        async (tx, hall) => {
           const [elder, candidate, motion] = await queryInTransaction([
             findUserById(tx, ctx.userId),
             findUserById(tx, input.userId),
@@ -530,7 +528,8 @@ export const kageRouter = createTRPCRouter({
               candidateRank: candidate.rank,
             }),
           };
-        })) ?? errorResponse("Village not found");
+        },
+      );
       return result;
     }),
 });

@@ -81,21 +81,16 @@ export const findVillageForWithdrawDefense = (
     where: eq(village.id, match.villageId),
   });
 
-/** Build the `kageDefendedChallenges` update for `rescheduleDefense`, using predicates on `id`. */
-export const updateKageDefendedChallengesForRescheduleDefense = (
+/** Return matches to the queue, clearing their slot until `notBefore`. */
+export const requeueKageDefendedChallenges = (
   client: Pick<DrizzleClient, "update">,
-  notBefore: Date,
-  later: { match: { id: string } }[],
+  ids: string[],
+  values: { notBefore: Date; outcome?: string },
 ) =>
   client
     .update(kageDefendedChallenges)
-    .set({ status: "QUEUED", scheduledAt: null, checkedInAt: null, notBefore })
-    .where(
-      inArray(
-        kageDefendedChallenges.id,
-        later.map((r) => r.match.id),
-      ),
-    );
+    .set({ status: "QUEUED", scheduledAt: null, checkedInAt: null, ...values })
+    .where(inArray(kageDefendedChallenges.id, ids));
 
 /** Build the `kageDefendedChallenges` update for `rescheduleDefense`, setting `rescheduled`, using predicates on `id`. */
 export const updateKageDefendedChallengesForRescheduleDefense2 = (
@@ -220,31 +215,6 @@ export const listKageDefendedChallengesForStartDefense = (
   client.query.kageDefendedChallenges.findMany({
     where: eq(kageDefendedChallenges.userId, m.userId),
   });
-
-/** Build the `kageDefendedChallenges` update for `resetFailedLaunch`, using predicates on `id`. */
-export const updateKageDefendedChallengesForResetFailedLaunch = (
-  client: Pick<DrizzleClient, "update">,
-  hall: { now: Date; rows: { match: { id: string; status: string } }[] },
-  index: number,
-) =>
-  client
-    .update(kageDefendedChallenges)
-    .set({
-      status: "QUEUED",
-      scheduledAt: null,
-      checkedInAt: null,
-      notBefore: secondsFromDate(KAGE_DEFENSE_NOTICE_HOURS * 3600, hall.now),
-      outcome: "Battle could not start; queue priority retained without penalty",
-    })
-    .where(
-      inArray(
-        kageDefendedChallenges.id,
-        hall.rows
-          .slice(index)
-          .filter((r) => ["QUEUED", "SCHEDULED"].includes(r.match.status))
-          .map((r) => r.match.id),
-      ),
-    );
 
 /** Build the `village` lookup for `loadKageDefense`, using predicates on `id`. */
 export const findVillageForLoadKageDefense = (
