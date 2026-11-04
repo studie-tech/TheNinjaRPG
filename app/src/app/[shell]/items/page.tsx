@@ -21,12 +21,9 @@ import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
 import {
-  calcMaxCookingItems,
-  calcMaxEventItems,
-  calcMaxItems,
-  calcMaxMaterials,
   countsTowardInventoryStorage,
   getInventoryBucket,
+  getInventoryBucketCapacity,
   isEquippableUserItem,
 } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
@@ -35,14 +32,13 @@ import { useRequiredUserData } from "@/utils/UserContext";
 /** Carried inventory, equipment loadouts, and item actions across capacity buckets. */
 export default function MyItems() {
   // State
-  const availableTabs = ["all", "normal", "event", "materials", "cooking"];
   const {
     data: userData,
     prepareUserUpdate,
     updateUser,
     timeDiff,
   } = useRequiredUserData();
-  const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("all");
+  const [activeTab, setActiveTab] = useState("all");
   const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
   const buyItemSlotInFlight = useRef(false);
 
@@ -108,40 +104,16 @@ export default function MyItems() {
         (i) => !i.craftingFinishedAt || i.craftingFinishedAt < inventoryTime,
       ),
     }));
-  const normalItems = availableItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "normal",
-  );
-  const eventItems = availableItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "event",
-  );
-  const materialsItems = availableItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "materials",
-  );
-  const cookingItems = availableItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "cooking",
-  );
-
   // Capacity includes unfinished crafts even though they are absent from the
   // usable-item list. Share the storage rule with server-side capacity guards.
   const carriedItems = userItems?.filter(countsTowardInventoryStorage);
-  const normalItemCount = carriedItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "normal",
-  ).length;
-  const eventItemCount = carriedItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "event",
-  ).length;
-  const materialsItemCount = carriedItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "materials",
-  ).length;
-  const cookingItemCount = carriedItems?.filter(
-    (ui) => getInventoryBucket(ui.item) === "cooking",
-  ).length;
-
-  // Calculate inventory limits
-  const maxNormalItems = userData ? calcMaxItems(userData) : 0;
-  const maxEventItems = userData ? calcMaxEventItems(userData) : 0;
-  const maxMaterials = userData ? calcMaxMaterials(userData) : 0;
-  const maxCookingItems = userData ? calcMaxCookingItems(userData) : 0;
+  const bags = (["normal", "event", "materials", "cooking"] as const).map((value) => {
+    const count =
+      carriedItems?.filter((ui) => getInventoryBucket(ui.item) === value).length ?? 0;
+    const max = userData ? getInventoryBucketCapacity(value, userData) : 0;
+    return { value, count, max, over: count > max };
+  });
+  const selectedBag = bags.find((bag) => bag.value === activeTab);
 
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -163,27 +135,8 @@ export default function MyItems() {
             bag={activeTab}
             backpackStatus={
               <div className="flex items-center gap-1">
-                {activeTab !== "all" && (
-                  <BagCapacity
-                    used={
-                      (activeTab === "normal"
-                        ? normalItemCount
-                        : activeTab === "event"
-                          ? eventItemCount
-                          : activeTab === "materials"
-                            ? materialsItemCount
-                            : cookingItemCount) ?? 0
-                    }
-                    max={
-                      activeTab === "normal"
-                        ? maxNormalItems
-                        : activeTab === "event"
-                          ? maxEventItems
-                          : activeTab === "materials"
-                            ? maxMaterials
-                            : maxCookingItems
-                    }
-                  />
+                {selectedBag && (
+                  <BagCapacity used={selectedBag.count} max={selectedBag.max} />
                 )}
                 {/* Purchased slots extend the Gear bag only. */}
                 {activeTab === "normal" && (
@@ -205,51 +158,17 @@ export default function MyItems() {
             }
             bagTabs={
               <BagTabs
-                bags={[
-                  {
-                    value: "all",
-                    count:
-                      (normalItemCount ?? 0) +
-                      (eventItemCount ?? 0) +
-                      (materialsItemCount ?? 0) +
-                      (cookingItemCount ?? 0),
-                  },
-                  {
-                    value: "normal",
-                    count: normalItemCount ?? 0,
-                    over: (normalItemCount ?? 0) > maxNormalItems,
-                  },
-                  {
-                    value: "event",
-                    count: eventItemCount ?? 0,
-                    over: (eventItemCount ?? 0) > maxEventItems,
-                  },
-                  {
-                    value: "materials",
-                    count: materialsItemCount ?? 0,
-                    over: (materialsItemCount ?? 0) > maxMaterials,
-                  },
-                  {
-                    value: "cooking",
-                    count: cookingItemCount ?? 0,
-                    over: (cookingItemCount ?? 0) > maxCookingItems,
-                  },
-                ]}
+                bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
                 active={activeTab}
                 onChange={setActiveTab}
               />
             }
             bagItems={
-              (activeTab === "all"
-                ? availableItems
-                : activeTab === "normal"
-                  ? normalItems
-                  : activeTab === "event"
-                    ? eventItems
-                    : activeTab === "materials"
-                      ? materialsItems
-                      : cookingItems
-              )?.filter((ui) => ui.equipped === "NONE") ?? []
+              availableItems?.filter(
+                (ui) =>
+                  ui.equipped === "NONE" &&
+                  (activeTab === "all" || getInventoryBucket(ui.item) === activeTab),
+              ) ?? []
             }
           />
         </div>
