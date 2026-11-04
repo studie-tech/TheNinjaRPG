@@ -26,7 +26,7 @@ import {
 } from "@/drizzle/schema";
 import {
   filterRollableBloodlines,
-  getFreeBloodlineSwaps,
+  getBloodlineSwapAllowance,
   getPityRolls,
 } from "@/libs/bloodline";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
@@ -115,11 +115,9 @@ import { offsetPage } from "@/server/utils/pagination";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
-import { getUserFederalStatus } from "@/utils/paypal";
 import {
   canChangeContent,
   canRemoveBloodlineFromPool,
-  isStaffMember,
 } from "@/utils/permissions";
 import {
   getDaysHoursMinutesSeconds,
@@ -246,12 +244,10 @@ export const bloodlineRouter = createTRPCRouter({
           recentSwaps: [],
         };
       // Derived
-      const federalStatus = getUserFederalStatus(user);
-      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
-      const freeSwapsUsed = recentSwaps.length;
-      const rawRemaining = freeSwaps - freeSwapsUsed;
-      const freeSwapsRemaining = Math.max(0, rawRemaining);
-      const isFree = freeSwapsRemaining > 0 || isStaffMember(user);
+      const { isFree, freeSwapsUsed, freeSwapsRemaining } = getBloodlineSwapAllowance(
+        user,
+        recentSwaps.length,
+      );
       // Return
       return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
     }),
@@ -286,12 +282,13 @@ export const bloodlineRouter = createTRPCRouter({
       }
 
       // Check for free swap eligibility
-      const federalStatus = getUserFederalStatus(user);
-      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
-      const freeSwapsUsed = monthlySwaps.length;
-      const hasFreeSwapAvailable = freeSwapsUsed < freeSwaps;
-      const isStaffFreeSwap = isStaffMember(user);
-      const isFreeSwap = hasFreeSwapAvailable || isStaffFreeSwap;
+      const {
+        federalStatus,
+        freeSwapsUsed,
+        hasFreeSwapAvailable,
+        isFree: isFreeSwap,
+        isStaffFree: isStaffFreeSwap,
+      } = getBloodlineSwapAllowance(user, monthlySwaps.length);
 
       if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
