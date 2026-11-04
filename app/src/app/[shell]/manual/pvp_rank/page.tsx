@@ -29,9 +29,11 @@ import { RankedRankDistributionHistogram } from "@/layout/RankedRankDistribution
 import { SeasonManager } from "@/layout/SeasonManager";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
+import { getJutsuCategoryDef } from "@/libs/jutsu";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
+/** Explain ranked PvP rules, loadout limits, matchmaking, and season rewards. */
 export default function RankedManualPage() {
   const {
     data: equipLimits,
@@ -51,13 +53,16 @@ export default function RankedManualPage() {
   ) : rankedLimits.length === 0 ? (
     <li>No category limits apply to ranked jutsu.</li>
   ) : (
-    rankedLimits.map((rule) => (
-      <li key={rule.category}>
-        {rule.rankedMaxEquipped === 0
-          ? `${capitalizeFirstLetter(rule.category)} jutsu cannot be equipped in ranked battles.`
-          : `${capitalizeFirstLetter(rule.category)} jutsu are limited to ${rule.rankedMaxEquipped} in ranked battles.`}
-      </li>
-    ))
+    rankedLimits.map((rule) => {
+      const label = capitalizeFirstLetter(getJutsuCategoryDef(rule.category).label);
+      return (
+        <li key={rule.category}>
+          {rule.rankedMaxEquipped === 0
+            ? `${label} jutsu cannot be equipped in ranked battles.`
+            : `${label} jutsu are limited to ${rule.rankedMaxEquipped} in ranked battles.`}
+        </li>
+      );
+    })
   );
 
   type Tab = "overview" | "matchmaking" | "loadouts" | "rewards";
