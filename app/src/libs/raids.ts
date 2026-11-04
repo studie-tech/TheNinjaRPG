@@ -13,6 +13,17 @@ export const getRaidChatConversationId = (raidId: string) =>
 export const isRaidChatConversationId = (conversationId: string) =>
   conversationId.startsWith(RAID_CHAT_CONVERSATION_PREFIX);
 
+const BATTLE_CLAIM_PREFIX = "claiming-";
+
+/** Matches queue rows whose `battleId` is still a start claim. */
+export const BATTLE_CLAIM_LIKE_PATTERN = `${BATTLE_CLAIM_PREFIX}%`;
+
+/** Placeholder `battleId` that reserves a queue while its battle is being initiated. */
+export const createBattleClaimId = (nonce: string) => `${BATTLE_CLAIM_PREFIX}${nonce}`;
+
+export const isBattleClaimId = (battleId: string | null | undefined) =>
+  battleId?.startsWith(BATTLE_CLAIM_PREFIX) ?? false;
+
 /**
  * Helper to extract raid objective data from a quest.
  * Raid type is implicit from the objective task (open_raid or exclusive_raid).
@@ -103,24 +114,26 @@ export const isRaidListedForVillage = (
     if (!villageId || raidData.sector === null) {
       return false;
     }
-    const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
-    const isAttackerWithDefeatedShrine = attackerDefeatedShrineSectors.has(
-      raidData.sector,
+    if (raidCaptureClosedMessage(raid, now)) return false;
+    return (
+      ownedSectorNumbers.has(raidData.sector) ||
+      attackerDefeatedShrineSectors.has(raidData.sector)
     );
-
-    if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
-      if (!raid.raidGracePeriodEnd) {
-        return false;
-      }
-      if (raid.raidGracePeriodEnd >= now) {
-        return ownsCurrentSector || isAttackerWithDefeatedShrine;
-      }
-      return false;
-    }
-
-    return ownsCurrentSector || isAttackerWithDefeatedShrine;
   }
   return false;
+};
+
+/** Why an exclusive raid no longer takes participants, or null within its capture window. */
+export const raidCaptureClosedMessage = (
+  raid: { raidCaptureDeadline: Date | null; raidGracePeriodEnd: Date | null },
+  now: Date,
+) => {
+  if (!raid.raidCaptureDeadline || raid.raidCaptureDeadline >= now) return null;
+  if (!raid.raidGracePeriodEnd) return "This raid's capture deadline has passed";
+  if (raid.raidGracePeriodEnd < now) {
+    return "This raid's capture deadline and grace period have ended";
+  }
+  return null;
 };
 
 /**

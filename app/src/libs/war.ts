@@ -11,6 +11,20 @@ import { getWarSide } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
 
+/** Whether a village attacks in this war, itself or as an accepted ally of the attacker. */
+export const isVillageOnAttackerSide = (
+  war: {
+    attackerVillageId: string;
+    warAllies?: { villageId: string; supportVillageId: string }[];
+  },
+  villageId: string | null | undefined,
+) =>
+  war.attackerVillageId === villageId ||
+  !!war.warAllies?.some(
+    (ally) =>
+      ally.villageId === villageId && ally.supportVillageId === war.attackerVillageId,
+  );
+
 /**
  * Checks if two villages fight on the same side of any war
  * @param wars - The wars to check

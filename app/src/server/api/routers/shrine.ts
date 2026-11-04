@@ -20,6 +20,7 @@ import {
   isWarMercenary,
 } from "@/libs/objectiveWar";
 import { getServerPusher } from "@/libs/pusher";
+import { createBattleClaimId } from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
 import {
   fetchUser,
@@ -1154,7 +1155,7 @@ export const shrineRouter = createTRPCRouter({
 
       // CRITICAL: Claim the battle BEFORE calling initiateBattle()
       // Use a placeholder battle ID to atomically claim this queue
-      const claimId = `claiming-${nanoid()}`;
+      const claimId = createBattleClaimId(nanoid());
       const claimResult = await claimBattleQueue(
         ctx.drizzle,
         claimId,
@@ -1167,17 +1168,23 @@ export const shrineRouter = createTRPCRouter({
       }
 
       // Now we have exclusive ownership - start the battle
-      const result = await initiateBattle(
-        {
-          userIds: attackerIds,
-          targetIds: defenderIds,
-          client: ctx.drizzle,
-          biome: "default",
-          forceDefenderVillageId: shrineBattle.defenderEntityId,
-          sector: shrineBattle.sector ?? undefined,
-        },
-        "SHRINE_WAR",
-      );
+      let result: Awaited<ReturnType<typeof initiateBattle>>;
+      try {
+        result = await initiateBattle(
+          {
+            userIds: attackerIds,
+            targetIds: defenderIds,
+            client: ctx.drizzle,
+            biome: "default",
+            forceDefenderVillageId: shrineBattle.defenderEntityId,
+            sector: shrineBattle.sector ?? undefined,
+          },
+          "SHRINE_WAR",
+        );
+      } catch (error) {
+        await releaseBattleQueueClaim(ctx.drizzle, input.shrineBattleId, claimId);
+        throw error;
+      }
 
       if (result.success && result.battleId) {
         // Update with the real battleId (replace our claim placeholder)
