@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { env } from "@/env/server.mjs";
 import { findMerchDesign } from "@/libs/merch/catalog";
-import { normalizeMerchKind } from "@/libs/merch/products";
+import { merchPrintTag, normalizeMerchKind } from "@/libs/merch/products";
 import type { MerchProduct } from "@/validators/merch";
 import {
   shopifyCartLinesQuerySchema,
@@ -65,15 +65,16 @@ export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
       const title = product.title
         .replace(/^TNRG\s+\d+\s*\|\s*/i, "")
         .replace(/\s*\|\s*/g, " — ");
+      const kind = normalizeMerchKind(
+        title.split(" — ").at(-1) || product.productType || "Merch",
+      );
       products.push({
         ...product,
         title,
         designKey: design.key,
         designName: design.name,
         category: design.category,
-        kind: normalizeMerchKind(
-          title.split(" — ").at(-1) || product.productType || "Merch",
-        ),
+        kind,
         images: product.images.nodes.map((i) => ({
           url: i.url,
           alt: i.altText || title,
@@ -85,14 +86,7 @@ export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
             ? { url: v.image.url, alt: v.image.altText || `${title} — ${v.title}` }
             : null,
         })),
-        tags: [
-          ...product.tags,
-          /jogger/i.test(title)
-            ? "Thigh print"
-            : /tee|hoodie|crewneck|sweatshirt/i.test(title)
-              ? "Back print"
-              : "Accessory",
-        ],
+        tags: [...product.tags, merchPrintTag(kind)],
         preview: false,
       });
     }
