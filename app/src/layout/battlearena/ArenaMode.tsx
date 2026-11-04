@@ -48,12 +48,19 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     ?.slice()
     .sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level));
 
-  // Select the best match when nothing is chosen yet
+  // Select the best match when nothing, or an opponent no longer in the arena, is chosen.
+  // The tutorial's dummy is not listed, so its fight keeps the dummy.
   useEffect(() => {
-    if (!aiId && userData && opponents?.[0]) {
-      setAiId(opponents[0].userId);
+    const best = opponents?.[0];
+    if (
+      userData &&
+      best &&
+      !isTutorialFight &&
+      !opponents.some((opponent) => opponent.userId === aiId)
+    ) {
+      setAiId(best.userId);
     }
-  }, [userData, opponents, aiId]);
+  }, [userData, opponents, aiId, isTutorialFight]);
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({

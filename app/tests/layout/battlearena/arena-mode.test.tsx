@@ -77,6 +77,12 @@ it("lists the closest level first and selects on click", () => {
   expect(setAiId).toHaveBeenCalledWith("ai-2");
 });
 
+it("switches to the best match when the saved opponent is not in the arena", () => {
+  const setAiId = vi.fn();
+  render(<ArenaMode aiId="retired-ai" setAiId={setAiId} />);
+  expect(setAiId).toHaveBeenCalledWith("ai-1");
+});
+
 it("starts the fight once", () => {
   render(<ArenaMode aiId="ai-1" setAiId={vi.fn()} />);
   const fight = screen.getByRole("button", { name: "Fight Yama" });

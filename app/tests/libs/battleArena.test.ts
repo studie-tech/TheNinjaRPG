@@ -97,6 +97,9 @@ describe("dummy presets", () => {
     expect(matchDummyPreset(max, me, max, 10)).toBe("Maximum");
     expect(matchDummyPreset(dummyPresetValues("Like me", me, max, 10), me, max, 10)).toBe("Like me");
     expect(matchDummyPreset({ ...max, speed: 5000 }, me, max, 10)).toBe("Custom");
+    // A fresh character's own stats equal the minimum; name the plainer preset.
+    const fresh = { defence: 10, strength: 10, speed: 10, intelligence: 10, willpower: 10 };
+    expect(matchDummyPreset(fresh, fresh, max, 10)).toBe("Minimum");
   });
 });
 

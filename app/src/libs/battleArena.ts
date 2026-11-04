@@ -106,7 +106,8 @@ export const matchDummyPreset = (
   maxValues: Partial<Record<string, number>>,
   min: number,
 ): DummyPreset =>
-  (["Like me", "Minimum", "Maximum"] as const).find((preset) => {
+  // Fixed presets first, so a player whose stats equal one of them sees its plainer name.
+  (["Minimum", "Maximum", "Like me"] as const).find((preset) => {
     const expected = dummyPresetValues(preset, user, maxValues, min);
     return DUMMY_STATS.every((stat) => Number(values[stat]) === expected[stat]);
   }) ?? "Custom";

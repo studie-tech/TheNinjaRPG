@@ -34,7 +34,8 @@ export function BattleSetupPanel({
   return (
     <aside
       aria-label="Battle setup"
-      className="@min-[600px]:bg-card flex flex-col gap-3 @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start @min-[600px]:rounded-xl @min-[600px]:border @min-[600px]:p-3"
+      // On phones the action stays in view, held clear of the tallest layout navigation bar.
+      className="bg-card flex flex-col gap-3 rounded-xl border p-2 @max-[600px]:sticky @max-[600px]:bottom-[calc(5.5rem+env(safe-area-inset-bottom))] @max-[600px]:z-10 @max-[600px]:shadow-lg @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start @min-[600px]:p-3"
     >
       <h2 className="text-base font-bold @max-[600px]:sr-only">Battle setup</h2>
       <div className="flex flex-col gap-3 @max-[600px]:hidden">

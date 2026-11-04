@@ -30,7 +30,7 @@ beforeEach(() => {
     useUtils: () => ({}),
     pvpRank: {
       getRankedPvpQueue: { useQuery: () => ({ data: { inQueue, queueCount: 4, createdAt: new Date() } }) },
-      getCurrentSeason: { useQuery: () => ({ data: season }) },
+      getCurrentSeason: { useQuery: () => ({ data: season, isPending: false }) },
       getRankedLoadout: {
         useQuery: () => ({ data: { loadout: { jutsuIds: Array(12).fill("j"), weaponIds: ["w", "w"], consumableIds: ["c"] } } }),
       },
@@ -104,6 +104,12 @@ it("says when the season is paused", () => {
   render(<RankedMode />);
   expect(screen.getByText(/Season 4.*paused/)).toBeDefined();
   expect(screen.queryByRole("button", { name: "Find ranked match" })).toBeNull();
+});
+
+it("says when no season is running", () => {
+  season = null;
+  render(<RankedMode />);
+  expect(screen.getByText("No ranked season is running right now.")).toBeDefined();
 });
 
 it("opens the ranked loadout editor", () => {

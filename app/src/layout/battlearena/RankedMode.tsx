@@ -34,7 +34,8 @@ export function RankedMode() {
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
-  const { data: currentSeason } = api.pvpRank.getCurrentSeason.useQuery();
+  const { data: currentSeason, isPending: isLoadingSeason } =
+    api.pvpRank.getCurrentSeason.useQuery();
   const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery();
 
   const { mutate: enterSeason, isPending: isEntering } =
@@ -104,7 +105,14 @@ export function RankedMode() {
   }, [queueData?.inQueue, checkForMatches]);
 
   if (!userData) return <Loader explanation="Loading user" />;
-  if (!currentSeason) return <Loader explanation="Searching for Season to Start" />;
+  if (isLoadingSeason) return <Loader explanation="Searching for Season to Start" />;
+  if (!currentSeason) {
+    return (
+      <p className="bg-card rounded-xl border p-4 text-center text-sm">
+        No ranked season is running right now.
+      </p>
+    );
+  }
 
   const progress = rankedProgress(userData.rankedLp);
   const hasEntered = userData.rankedLp > 0;
