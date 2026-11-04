@@ -4,6 +4,7 @@
 import {
   and,
   count,
+  desc,
   eq,
   getTableColumns,
   gt,
@@ -28,6 +29,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
+import type { UserRank } from "@/drizzle/schema";
 import {
   actionLog,
   kageDefendedChallenges,
@@ -174,21 +176,7 @@ export const fetchAlliances = async (client: DrizzleClient) => {
 export const fetchVillage = async (client: DrizzleClient, villageId: string) => {
   return await client.query.village.findFirst({
     where: eq(village.id, villageId),
-    with: {
-      notice: true,
-      relationshipA: true,
-      relationshipB: true,
-      structures: {
-        orderBy: (structure, { desc }) => desc(structure.name),
-      },
-      kage: {
-        columns: {
-          username: true,
-          userId: true,
-          avatar: true,
-        },
-      },
-    },
+    with: villageRelations,
   });
 };
 
@@ -215,21 +203,7 @@ export const fetchSectorVillage = async (
         ),
     orderBy: (villages) =>
       sql`FIELD(${villages.type}, 'SAFEZONE', 'HIDEOUT', 'STRONGHOLD', 'OUTLAW')`,
-    with: {
-      notice: true,
-      relationshipA: true,
-      relationshipB: true,
-      structures: {
-        orderBy: (structure, { desc }) => desc(structure.name),
-      },
-      kage: {
-        columns: {
-          username: true,
-          userId: true,
-          avatar: true,
-        },
-      },
-    },
+    with: villageRelations,
   });
   return result || null;
 };
@@ -427,19 +401,17 @@ export const updateUserDataForBuyFood = (
 /** Build the `userData` update for `leaveVillage`, using predicates on `userId` and `status`. */
 export const updateUserDataForLeaveVillage = (
   client: Pick<DrizzleClient, "update">,
-  user: { villagePrestige: number; rank: import("@/drizzle/schema").UserRank },
+  user: { villagePrestige: number; rank: UserRank },
   ctx: { userId: string },
 ) =>
   client
     .update(userData)
     .set({
       villageId: VILLAGE_SYNDICATE_ID,
-      villagePrestige:
-        user.villagePrestige >= 0 ? user.villagePrestige : -user.villagePrestige, // Converted to notoriety
+      villagePrestige: Math.abs(user.villagePrestige), // Converted to notoriety
       isOutlaw: true,
       joinedVillageAt: new Date(),
-      ...(user.rank === "GENIN" && { senseiId: null }),
-      ...(user.rank === "ELDER" && { rank: "JONIN" }),
+      ...villageChangeFields(user),
     })
     .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
 
@@ -447,7 +419,7 @@ export const updateUserDataForLeaveVillage = (
 export const updateUserDataForJoinVillage = (
   client: Pick<DrizzleClient, "update">,
   village: { id: string },
-  user: { rank: import("@/drizzle/schema").UserRank },
+  user: { rank: UserRank },
   ctx: { userId: string },
 ) =>
   client
@@ -457,8 +429,7 @@ export const updateUserDataForJoinVillage = (
       villagePrestige: 0,
       isOutlaw: false,
       joinedVillageAt: new Date(),
-      ...(user.rank === "GENIN" && { senseiId: null }),
-      ...(user.rank === "ELDER" && { rank: "JONIN" }),
+      ...villageChangeFields(user),
     })
     .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
 
@@ -480,7 +451,7 @@ export const updateUserDataForSwapVillage = (
     type: "VILLAGE" | "OUTLAW" | "SAFEZONE" | "HIDEOUT" | "STRONGHOLD";
     sector: number;
   },
-  user: { rank: import("@/drizzle/schema").UserRank },
+  user: { rank: UserRank },
   cost: number,
   ctx: { userId: string },
 ) =>
@@ -493,8 +464,7 @@ export const updateUserDataForSwapVillage = (
       sector: village.sector,
       longitude: ALLIANCEHALL_LONG,
       latitude: ALLIANCEHALL_LAT,
-      ...(user.rank === "GENIN" && { senseiId: null }),
-      ...(user.rank === "ELDER" && { rank: "JONIN" }),
+      ...villageChangeFields(user),
     })
     .where(
       and(
@@ -664,3 +634,18 @@ export const incrementVillageTokens = (
     .update(village)
     .set({ tokens: sql`${village.tokens} + ${amount}` })
     .where(eq(village.id, villageId));
+
+/** Relations of a full village read, shared by the id and sector lookups. */
+const villageRelations = {
+  notice: true,
+  relationshipA: true,
+  relationshipB: true,
+  structures: { orderBy: desc(villageStructure.name) },
+  kage: { columns: { username: true, userId: true, avatar: true } },
+} as const;
+
+/** A genin loses their sensei and an elder loses their seat when changing village. */
+const villageChangeFields = (user: { rank: UserRank }) => ({
+  ...(user.rank === "GENIN" && { senseiId: null }),
+  ...(user.rank === "ELDER" && { rank: "JONIN" as const }),
+});

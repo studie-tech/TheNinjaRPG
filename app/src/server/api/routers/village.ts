@@ -231,7 +231,9 @@ export const villageRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("You must be awake");
       if (user.isBanned) return errorResponse("Cannot leave while banned");
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
-        return errorResponse("Must be at least chunin to leave village");
+        return errorResponse(
+          `Must be at least ${VILLAGE_LEAVE_REQUIRED_RANK.toLowerCase()} to leave village`,
+        );
       }
 
       // Update
@@ -264,7 +266,7 @@ export const villageRouter = createTRPCRouter({
       if (user.villageId === village.id) return errorResponse("Already joined");
       if (user.clanId) return errorResponse("Leave faction first");
       if (user.status !== "AWAKE") return errorResponse("You must be awake");
-      if (user.isBanned) return errorResponse("Cannot leave while banned");
+      if (user.isBanned) return errorResponse("Cannot join while banned");
       if (village.type !== "VILLAGE") return errorResponse("Can only join villages");
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
         return errorResponse(
@@ -276,12 +278,7 @@ export const villageRouter = createTRPCRouter({
       const saved = await updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx);
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
-      await Promise.all([
-        // Clear current sensei requests for this user
-        deleteRequests(ctx.drizzle, ctx.userId),
-        // Remove the user as sensei for any active students
-        updateUserDataForJoinVillage2(ctx.drizzle, ctx),
-      ]);
+      await detachFromVillageRelations(ctx);
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
@@ -317,7 +314,9 @@ export const villageRouter = createTRPCRouter({
         village.type === "OUTLAW" &&
         !hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)
       ) {
-        return errorResponse("Must be at least chunin to join outlaw faction");
+        return errorResponse(
+          `Must be at least ${VILLAGE_LEAVE_REQUIRED_RANK.toLowerCase()} to join outlaw faction`,
+        );
       }
 
       // Update
@@ -330,12 +329,7 @@ export const villageRouter = createTRPCRouter({
       );
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
-      await Promise.all([
-        // Clear current sensei requests for this user
-        deleteRequests(ctx.drizzle, ctx.userId),
-        // Remove the user as sensei for any active students
-        updateUserDataForJoinVillage2(ctx.drizzle, ctx),
-      ]);
+      await detachFromVillageRelations(ctx);
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
@@ -673,6 +667,13 @@ export const upsertAllianceStatus = async (
     );
   }
 };
+
+/** Drop the user's non-HOME requests of every type and release their genin students. */
+const detachFromVillageRelations = (ctx: { drizzle: DrizzleClient; userId: string }) =>
+  Promise.all([
+    deleteRequests(ctx.drizzle, ctx.userId),
+    updateUserDataForJoinVillage2(ctx.drizzle, ctx),
+  ]);
 
 /**
  * Fetches alliance information for a given user.

@@ -1168,21 +1168,7 @@ export const listWarForFetchWarCampEntry = (
 export const fetchActiveWar = async (client: DrizzleClient, warId: string) => {
   return await client.query.war.findFirst({
     where: and(eq(war.id, warId), eq(war.status, "ACTIVE")),
-    with: {
-      attackerVillage: {
-        with: { structures: true },
-      },
-      defenderVillage: {
-        with: { structures: true },
-      },
-      warMercenaries: { where: activeWarMercenaryWhere() },
-      warAllies: {
-        where: activeWarAllyWhere(),
-        with: {
-          village: true,
-        },
-      },
-    },
+    with: activeWarRelations(),
   });
 };
 
@@ -1434,20 +1420,14 @@ export const listWarKillForGetObjectiveWarInfo = (
     },
   });
 
-/**
- * Build the `warMercenary` listing for `getObjectiveWarInfo`, selecting only `userId`,
- * using predicates on `warId` and `acceptedAt`.
- */
-export const listWarMercenaryForGetObjectiveWarInfo = (
+/** Build the `warMercenary` listing of every contract a war ever accepted, selecting `userId`. */
+export const listAcceptedWarMercenaries = (
   client: Pick<DrizzleClient, "query">,
   input: { warId: string },
 ) =>
   client.query.warMercenary.findMany({
     columns: { userId: true },
-    where: and(
-      eq(warMercenary.warId, input.warId),
-      sql`${warMercenary.acceptedAt} IS NOT NULL`,
-    ),
+    where: and(eq(warMercenary.warId, input.warId), isNotNull(warMercenary.acceptedAt)),
   });
 
 /** Build the `war` lookup for `startWarMission`, using predicates on `id`. */
@@ -1987,21 +1967,7 @@ export const insertNotificationForVoteOnWarDeclaration4 = (
 export const listWarForFetchActiveWars = (client: Pick<DrizzleClient, "query">) =>
   client.query.war.findMany({
     where: or(eq(war.status, "ACTIVE"), eq(war.settlementPending, true)),
-    with: {
-      attackerVillage: {
-        with: { structures: true },
-      },
-      defenderVillage: {
-        with: { structures: true },
-      },
-      warMercenaries: { where: activeWarMercenaryWhere() },
-      warAllies: {
-        where: activeWarAllyWhere(),
-        with: {
-          village: true,
-        },
-      },
-    },
+    with: activeWarRelations(),
   });
 
 /** Build the count of non-AI clan members belonging to a village. */
@@ -2098,3 +2064,12 @@ const objectiveWarCombatGuard = () => sql`(${war.rules} IS NULL OR (
 /** Mark one settlement delivery step in the same statement that publishes its effects. */
 const stepReceipt = (key: "boostsDelivered" | "structuresDelivered" | "notified") =>
   sql`JSON_SET(${war.settlement}, ${`$.${key}`}, CAST('true' AS JSON))`;
+
+/** Relations behind `FetchActiveWarsReturnType`, shared by the single and listing reads. */
+const activeWarRelations = () =>
+  ({
+    attackerVillage: { with: { structures: true } },
+    defenderVillage: { with: { structures: true } },
+    warMercenaries: { where: activeWarMercenaryWhere() },
+    warAllies: { where: activeWarAllyWhere(), with: { village: true } },
+  }) as const;

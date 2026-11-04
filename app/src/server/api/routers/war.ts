@@ -96,6 +96,7 @@ import {
   insertNotificationForVoteOnWarDeclaration3,
   insertNotificationForVoteOnWarDeclaration4,
   insertVillageElderVoteForDeclareVillageWarOrRaid,
+  listAcceptedWarMercenaries,
   listQuestForGetObjectiveWarInfo,
   listQuestHistoryForGetObjectiveWarInfo,
   listUserDataForDeclareVillageWarOrRaid,
@@ -105,7 +106,6 @@ import {
   listWarKillForGetWarKills,
   listWarMercenaryForGetMercenaries,
   listWarMercenaryForGetMercenaryOffers,
-  listWarMercenaryForGetObjectiveWarInfo,
   listWarMercenaryForInviteMercenary,
   selectClanMemberCountForVillage,
   selectUserDataForCancelWarDeclaration,
@@ -342,7 +342,7 @@ export const warRouter = createTRPCRouter({
         listQuestHistoryForGetObjectiveWarInfo(ctx.drizzle, ctx),
         selectVillageForGetObjectiveWarInfo(ctx.drizzle, ctx),
         listWarKillForGetObjectiveWarInfo(ctx.drizzle, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
         fetchMercenaryWarId(ctx.drizzle, ctx.userId),
       ]);
       if (
@@ -351,8 +351,8 @@ export const warRouter = createTRPCRouter({
       )
         return null;
       const side = getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)!;
-      const mercenaryIds = new Set(mercenaryHistory.map((m) => m.userId));
-      const isMasked = (id: string) => mercenaryIds.has(id) && id !== ctx.userId;
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
+      const isMasked = (id: string) => maskedIds.has(id);
       const displayName = (id: string, name: string | null | undefined) =>
         isMasked(id) ? "Mercenary" : (name ?? "Unknown ninja");
       const combatContributions = new Map<
@@ -1676,13 +1676,10 @@ export const warRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const [results, mercenaryHistory] = await Promise.all([
         listWarKillForGetWarKills(ctx.drizzle, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
       ]);
-      // Accepted contracts keep identities private after dismissal; recorded villages
-      // are credited war sides and remain visible alongside the kill records.
-      const maskedIds = new Set(
-        mercenaryHistory.filter((m) => m.userId !== ctx.userId).map((m) => m.userId),
-      );
+      // Recorded villages are credited war sides and remain visible alongside the kills.
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
       return results
         .filter((kill) => kill.killer && kill.victim)
         .map((kill) => ({
@@ -1730,11 +1727,9 @@ export const warRouter = createTRPCRouter({
           : sql<number>`sum(GREATEST(${aggregateField}, 0))`;
       const [results, mercenaryHistory] = await Promise.all([
         selectWarKillForGetWarKillStats(ctx.drizzle, aggregate, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
       ]);
-      const maskedIds = new Set(
-        mercenaryHistory.filter((m) => m.userId !== ctx.userId).map((m) => m.userId),
-      );
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
       return results.map((row) =>
         maskedIds.has(row.killerId)
           ? {
@@ -2050,6 +2045,10 @@ export type FetchActiveWarsReturnType = War & {
   attackerVillage: Village & { structures: VillageStructure[] };
   defenderVillage: Village & { structures: VillageStructure[] };
 };
+
+/** Accepted contracts keep identities private after dismissal, except from the viewer. */
+const getMaskedMercenaryIds = (mercenaries: { userId: string }[], viewerId: string) =>
+  new Set(mercenaries.map((m) => m.userId).filter((id) => id !== viewerId));
 
 /**
  * Count non-AI members of the owning faction for Hideouts and Strongholds,
