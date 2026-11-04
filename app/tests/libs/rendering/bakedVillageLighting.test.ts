@@ -1,5 +1,6 @@
+import published from "@/libs/rendering/bakedWorldSources.json";
 import { describe, expect, it, vi } from "bun:test";
-import { BufferImageSource, Container, Sprite, Texture } from "pixi.js";
+import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import * as fields from "@/libs/rendering/villageLightField";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -42,6 +43,34 @@ describe("baked village shadow selection", () => {
     expect(result).toHaveLength(1); expect(result[0]!.weight).toBeGreaterThan(0); expect(result[0]!.weight).toBeLessThan(0.1);
     expect(strongestShadowLights(lights, -1000, 0)).toHaveLength(0);
   });
+});
+
+it.each([false,true])("preserves building contact until its matching bake settles (failure: %s)", async failed => {
+  const cleanups:(()=>void)[]=[],world=new Container();
+  const page=new Texture({source:new BufferImageSource({resource:new Uint8Array(1024*1024*4),width:1024,height:1024})});
+  const game={renderer:{resolution:1},signal:new AbortController().signal,visualEffects:{...DEFAULT_VISUAL_EFFECTS},own:(fn:()=>void)=>cleanups.push(fn),isDisposed:()=>false,invalidate:vi.fn(),assets:{acquireTexture:()=>({resource:failed?Promise.reject(new Error("atlas unavailable")):Promise.resolve(page),release(){}})}} as unknown as GameRenderer;
+  const [image,frame,,material]=JSON.parse(Object.keys(published)[0]!);
+  const original=new Texture({source:new BufferImageSource({resource:new Uint8Array(Math.ceil(frame.x+frame.width)*Math.ceil(frame.y+frame.height)*4),width:Math.ceil(frame.x+frame.width),height:Math.ceil(frame.y+frame.height)})});
+  const view=new Texture({source:original.source,frame:new Rectangle(frame.x,frame.y,frame.width,frame.height)});
+  const source=new Sprite(view);world.addChild(source);
+  const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+  try {
+    const lighting=createBakedVillageLighting(game,world);
+    const tree={id:"tree",kind:"decoration",image:"custom-tree.png",size:40,x:0,y:0,groundY:0,shadowCaster:"canopy"} as const;
+    expect(lighting.contactShadowReplacement(source,tree,world)).toBe("replace");
+    expect(lighting.contactShadowReplacement(source,tree)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,small:true},world)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,unlit:true},world)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,shadowCaster:"building"},world)).toBe("preserve");
+    const building={...tree,image,worldMaterial:material,size:frame.height,preserveAspect:true,shadowCaster:"building"} as const;
+    expect(lighting.contactShadowReplacement(undefined,building,world)).toBe("preserve");
+    const release=lighting.register(source,building);
+    expect(lighting.contactShadowReplacement(source,building)).toBe("pending");
+    await new Promise(resolve=>setTimeout(resolve,0));
+    expect(lighting.contactShadowReplacement(source,building)).toBe(failed?"preserve":"replace");
+    release();expect(lighting.contactShadowReplacement(source,building)).toBe("preserve");
+    view.frame.x+=1;const unmatched=lighting.register(source,building);expect(lighting.contactShadowReplacement(source,building,world)).toBe("preserve");unmatched();
+  } finally {for(const fn of cleanups)fn();world.destroy({children:true});view.destroy(false);original.destroy(true);page.destroy(true);warning.mockRestore();}
 });
 
 describe("baked character shadow transitions", () => {

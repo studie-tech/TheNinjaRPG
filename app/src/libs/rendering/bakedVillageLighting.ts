@@ -65,6 +65,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   base.container.addChildAt(localGround, 1);
   const poses = createCharacterShadowPoses();
   const buildings = new Set<Building>();
+  const buildingBySource = new WeakMap<Sprite, Building>();
   const scenery = new Set<{
     source: Sprite;
     contact: { x: number; y: number };
@@ -326,6 +327,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       shadowPose: new Matrix(),
       height: 0,
       atlas: null,
+      pending: true,
       sun: shadowSprite(),
       lamps: [shadowSprite(localGround), shadowSprite(localGround)],
       selected: [],
@@ -333,6 +335,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       fallback,
     };
     buildings.add(building);
+    buildingBySource.set(source, building);
     const key = bakedShadowKey(source.texture, description);
     const atlasLease = base.acquireAtlas(key);
     const resource = settleAtlas(atlasLease.resource);
@@ -340,12 +343,15 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       .then((atlas) => {
         if (!building.active || disposed) return;
         building.atlas = atlas;
+        building.pending = false;
         fallback();
         installLighting(source, description, atlas);
         dirty = true;
         game.invalidate();
       })
       .catch((error) => {
+        building.pending = false;
+        if (!disposed) game.invalidate();
         if (!disposed && error?.name !== "AbortError")
           console.warn(
             "Baked building lighting unavailable; retaining projected shadows",
@@ -356,6 +362,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       () => {
         building.active = false;
         buildings.delete(building);
+        if (buildingBySource.get(source) === building) buildingBySource.delete(source);
         fallback();
         atlasLease.release();
         for (const sprite of [building.sun, ...building.lamps]) sprite.destroy();
@@ -385,6 +392,26 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   return {
     ...base,
     kind: "baked" as const,
+    /** Ambient grounding remains until a registered building bake has actually installed. */
+    contactShadowReplacement: (
+      source: Sprite | undefined,
+      description: WorldSpriteDescription,
+      owner?: Container,
+    ) => {
+      if (
+        !description.shadowCaster ||
+        description.shadowCaster === "character" ||
+        description.small ||
+        description.mask ||
+        description.unlit
+      )
+        return "preserve";
+      if (description.shadowCaster === "building") {
+        const building = source ? buildingBySource.get(source) : undefined;
+        return building?.atlas ? "replace" : building?.pending ? "pending" : "preserve";
+      }
+      return owner ? "replace" : "preserve";
+    },
     /** Load a matching pool ahead of scenery; unknown or failed bakes leave fixture fallback available. */
     preloadField: (sceneKey: string, position: { x: number; y: number }) => {
       const key = `${sceneKey}:${position.x}:${position.y}`;
@@ -909,6 +936,7 @@ type Building = {
   shadowPose: Matrix;
   height: number;
   atlas: BakedShadowAtlas | null;
+  pending: boolean;
   sun: Sprite;
   lamps: Sprite[];
   selected: WeightedLight[];

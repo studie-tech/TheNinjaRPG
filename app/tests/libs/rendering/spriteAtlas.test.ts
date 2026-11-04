@@ -411,15 +411,49 @@ describe("world sprite atlas ownership", () => {
     vi.spyOn(Assets, "load").mockImplementation(async () => original);
     const contact = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const release = Object.assign(() => {}, {ready:Promise.resolve()});
-    const provider = {kind, register:vi.fn(() => release)} as unknown as WorldShadows;
+    const provider = {kind, register:vi.fn(() => release), contactShadowReplacement:(_source:Sprite|undefined,_description:WorldSpriteDescription,owner?:Container)=>owner?"replace":"preserve"} as unknown as WorldShadows;
     const game = {own() {}, signal:new AbortController().signal} as unknown as GameRenderer;
-    const art = await createWorldSprites(game, [{id:"tree",kind:"decoration",image:`contact-owner-${kind}.png`,size:40,x:0,y:20,groundY:0,shadow:.25,shadowCaster:"canopy"}], provider);
+    const art = await createWorldSprites(game, [{id:"tree",kind:"decoration",image:`contact-owner-${kind}.png`,size:40,x:0,y:20,groundY:0,shadow:.25,shadowCaster:"canopy"}], provider, true);
     try {
       expect(provider.register).toHaveBeenCalledTimes(1);
       expect(art.entries[0]?.shadow).toBeUndefined();
       expect(art.container.children.some(child => child.label === "scenery-shadows")).toBe(false);
       expect(contact).not.toHaveBeenCalled();
     } finally {art.dispose();original.destroy(true);contact.mockRestore();}
+  });
+
+  it.each(["dynamic", "motion", "unknown-building"] as const)("keeps fallback contact grounding for %s artwork under baked lighting", async scenario => {
+    const original = new Texture({source:new BufferImageSource({resource:new Uint8Array(16*16*4),width:16,height:16})});
+    vi.spyOn(Assets,"load").mockImplementation(async()=>original);
+    vi.spyOn(HTMLCanvasElement.prototype,"getContext").mockReturnValue(null);
+    const release=Object.assign(()=>{}, {ready:Promise.resolve()});
+    const register=vi.fn((..._args:Parameters<WorldShadows["register"]>)=>release);
+    const provider={kind:"baked",register,contactShadowReplacement:(_source:Sprite|undefined,description:WorldSpriteDescription,owner?:Container)=>owner && description.shadowCaster!=="building"?"replace":"preserve"} as unknown as WorldShadows;
+    const game={own(){},signal:new AbortController().signal,isDisposed:()=>false,assets:{texture:async()=>original}} as unknown as GameRenderer;
+    const description:WorldSpriteDescription={id:scenario,kind:"decoration",image:`grounding-${scenario}.png`,size:40,x:0,y:20,groundY:0,shadow:.25,shadowCaster:scenario==="unknown-building"?"building":"canopy",...(scenario==="motion"?{motion:{size:16,clip:{images:["grounding-motion.png"],columns:1,rows:1,frameCount:1,frameDurationMs:100,loop:true},frameOffsets:{horizontal:0,north:0,south:0}}}:{})};
+    const art=await createWorldSprites(game,[description],provider,scenario!=="dynamic");
+    try {
+      expect(art.entries[0]?.shadow).toBeDefined();
+      expect(register.mock.calls[0]?.[4]).toBe(scenario==="unknown-building"?art.container:undefined);
+    } finally {art.dispose();original.destroy(true);}
+  });
+
+  it.each(["replace", "preserve"] as const)("keeps a pending building contact until lighting settles to %s", async settled => {
+    const original=new Texture({source:new BufferImageSource({resource:new Uint8Array(16*16*4),width:16,height:16})});
+    vi.spyOn(Assets,"load").mockImplementation(async()=>original);vi.spyOn(HTMLCanvasElement.prototype,"getContext").mockReturnValue(null);
+    let state:"pending"|"replace"|"preserve"="pending";
+    const provider={kind:"baked",register:()=>Object.assign(()=>{}, {ready:Promise.resolve()}),contactShadowReplacement:()=>state,invalidate:vi.fn()} as unknown as WorldShadows;
+    const game={own(){},signal:new AbortController().signal} as unknown as GameRenderer;
+    const art=await createWorldSprites(game,[{id:"pending",kind:"structure",image:`pending-contact-${settled}.png`,size:40,x:0,y:20,groundY:0,shadow:.25,shadowCaster:"building"}],provider,true);
+    try {
+      const contact=art.entries[0]!.shadow!;expect(contact).toBeDefined();
+      const layers={ground:new RenderLayer(),world:new RenderLayer(),ui:new RenderLayer()};art.attachLayers(layers);expect(layers.ground.renderLayerChildren).toHaveLength(1);
+      const frame={now:0,delta:0,reducedMotion:true};art.animate(frame,1);expect(contact.destroyed).toBe(false);
+      state=settled;art.animate(frame,1);
+      expect(contact.destroyed).toBe(settled==="replace");expect(!!art.entries[0]!.shadow).toBe(settled==="preserve");
+      expect(layers.ground.renderLayerChildren).toHaveLength(settled==="replace"?0:1);
+      art.animate(frame,1);
+    } finally {art.dispose();original.destroy(true);}
   });
 
   it("shares one contact mask across scopes and releases it after the final owner", async () => {

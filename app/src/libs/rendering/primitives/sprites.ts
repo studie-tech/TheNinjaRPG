@@ -66,18 +66,25 @@ export const createWorldSprites = async (
 ) => {
   const simpleLighting =
     worldShadows?.kind === "projected" || worldShadows?.kind === "baked";
-  // Baked scenery owns its ground footprint; ambient-only fallback lighting retains contact grounding.
-  const needsContactShadow = (description: WorldSpriteDescription) =>
+  const sceneryOwner = (description: WorldSpriteDescription) =>
+    staticScenery && !description.motion && description.shadowCaster !== "character"
+      ? container
+      : undefined;
+  // Lighting owns replacement state; asynchronous bakes retain grounding while pending or failed.
+  const contactReplacement = (description: WorldSpriteDescription, source?: Sprite) =>
+    worldShadows?.kind === "baked"
+      ? worldShadows.contactShadowReplacement(
+          source,
+          description,
+          sceneryOwner(description),
+        )
+      : "preserve";
+  const needsContactShadow = (description: WorldSpriteDescription, source?: Sprite) =>
     description.shadow &&
     !(
       description.shadowCaster &&
-      worldShadows &&
-      (worldShadows.kind === "physical" ||
-        (worldShadows.kind === "baked" &&
-          !description.mask &&
-          !description.unlit &&
-          !description.small &&
-          description.shadowCaster !== "character"))
+      (worldShadows?.kind === "physical" ||
+        contactReplacement(description, source) === "replace")
     );
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
@@ -86,6 +93,7 @@ export const createWorldSprites = async (
   let lightTexture: Texture | null = null,
     shadowLease: ReturnType<typeof acquireSoftShadowTexture> | null = null;
   const container = new Container();
+  const pendingContacts = new Set<Container>();
   const entries: {
     sprite: Sprite | LpcCharacter["sprite"];
     character?: LpcCharacter;
@@ -107,6 +115,7 @@ export const createWorldSprites = async (
     disposed = true;
     for (const release of materials) release();
     materials.length = 0;
+    pendingContacts.clear();
     if (!container.destroyed)
       container.destroy({ children: true, texture: false, textureSource: false });
     for (const view of views) view.destroy(false);
@@ -178,7 +187,11 @@ export const createWorldSprites = async (
     }),
   );
   let shadowTexture: Texture | null = null;
-  if (!disposed && !game.signal.aborted && descriptions.some(needsContactShadow)) {
+  if (
+    !disposed &&
+    !game.signal.aborted &&
+    descriptions.some((description) => needsContactShadow(description))
+  ) {
     shadowLease = acquireSoftShadowTexture();
     try {
       shadowTexture = await shadowLease.resource;
@@ -350,14 +363,17 @@ export const createWorldSprites = async (
             result.value.motion ? description : { ...description, motion: undefined },
             result.value.motion?.views,
             undefined,
-            staticScenery &&
-              !description.motion &&
-              description.shadowCaster !== "character"
-              ? container
-              : undefined,
+            sceneryOwner(description),
           ),
         );
-      if (needsContactShadow(description) && description.shadow && shadowTexture) {
+      if (
+        needsContactShadow(
+          description,
+          sprite instanceof Sprite ? sprite : undefined,
+        ) &&
+        description.shadow &&
+        shadowTexture
+      ) {
         if (!shadows) {
           shadows = new Container({
             isRenderGroup: staticScenery && simpleLighting,
@@ -377,6 +393,13 @@ export const createWorldSprites = async (
         shadow.alpha = 0.6;
         shadow.label = `shadow:${description.id}`;
         shadows.addChild(shadow);
+        if (
+          contactReplacement(
+            description,
+            sprite instanceof Sprite ? sprite : undefined,
+          ) === "pending"
+        )
+          pendingContacts.add(sprite);
       }
       let light: Sprite | undefined;
       if (
@@ -669,6 +692,27 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
+      if (disposed) return;
+      // Bakes settle after art is visible; retire replacement contacts once without frame-time decoding.
+      if (pendingContacts.size) {
+        for (const entry of softEffects) {
+          if (!pendingContacts.has(entry.sprite)) continue;
+          const replacement = contactReplacement(
+            entry.description,
+            entry.sprite instanceof Sprite ? entry.sprite : undefined,
+          );
+          if (replacement === "pending") continue;
+          pendingContacts.delete(entry.sprite);
+          if (replacement === "replace") {
+            entry.shadow?.destroy();
+            entry.shadow = undefined;
+          }
+        }
+        if (shadows && !shadows.children.length) {
+          shadows.destroy();
+          shadows = null;
+        }
+      }
       if (staticScenery && simpleLighting) {
         // Fixed scenery owns retained effect groups; viewport culling already mirrors each child's renderability.
         if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
