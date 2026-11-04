@@ -11,9 +11,11 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lt,
   lte,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -455,6 +457,25 @@ export const selectUserDataForGetRecruitmentLevelDistribution4 = (
     .where(and(...dynamicWhere))
     .groupBy(userData.userId);
 
+/** Non-AI players created inside the optional recruitment date range. */
+export const recruitmentUserConditions = (input: {
+  startDate?: undefined | string;
+  endDate?: undefined | string;
+}): import("@/utils/typeutils").QueryCondition[] => [
+  eq(userData.isAi, false),
+  ...(input.startDate ? [gte(userData.createdAt, new Date(input.startDate))] : []),
+  ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
+];
+
+/** Users without a referral row. */
+export const hasNoReferralSource = (client: Pick<DrizzleClient, "select">) =>
+  notExists(
+    client
+      .select({ userId: referralSource.userId })
+      .from(referralSource)
+      .where(eq(referralSource.userId, userData.userId)),
+  );
+
 /**
  * Build the `userData` selection for `getRecruitmentDailyLevelStats`, including
  * predicates on `isAi`, `createdAt`, `source`.
@@ -480,31 +501,16 @@ export const selectUserDataForGetRecruitmentDailyLevelStats = (
     .where(
       selected
         ? and(
-            eq(userData.isAi, false),
-            ...(input.startDate
-              ? [gte(userData.createdAt, new Date(input.startDate))]
-              : []),
-            ...(input.endDate
-              ? [lte(userData.createdAt, new Date(input.endDate))]
-              : []),
+            ...recruitmentUserConditions(input),
             or(
               ...(realSources && realSources.length > 0
                 ? [inArray(referralSource.source, realSources)]
                 : []),
-              ...(wantsDynamic ? [sql`(${referralSource.userId} IS NULL)`] : []),
-              ...(wantsRecruited ? [sql`(${userData.recruiterId} IS NOT NULL)`] : []),
+              ...(wantsDynamic ? [isNull(referralSource.userId)] : []),
+              ...(wantsRecruited ? [isNotNull(userData.recruiterId)] : []),
             ),
           )
-        : and(
-            eq(userData.isAi, false),
-            ...(input.startDate
-              ? [gte(userData.createdAt, new Date(input.startDate))]
-              : []),
-            ...(input.endDate
-              ? [lte(userData.createdAt, new Date(input.endDate))]
-              : []),
-            sql`${referralSource.userId} IS NOT NULL`,
-          ),
+        : and(...recruitmentUserConditions(input), isNotNull(referralSource.userId)),
     )
     .groupBy(dayExpr)
     .orderBy(asc(dayExpr));
@@ -544,13 +550,9 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource2 = (
     .from(userData)
     .where(
       and(
-        eq(userData.isAi, false),
-        sql`${userData.recruiterId} IS NULL`,
-        sql`NOT EXISTS(SELECT 1 FROM ${referralSource} rs2 WHERE rs2.userId = ${userData.userId})`,
-        ...(input.startDate
-          ? [gte(userData.createdAt, new Date(input.startDate))]
-          : []),
-        ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
+        ...recruitmentUserConditions(input),
+        isNull(userData.recruiterId),
+        hasNoReferralSource(client),
       ),
     )
     .groupBy(dayExpr)
@@ -571,16 +573,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource3 = (
       count: sql`COUNT(${userData.userId})`.mapWith(Number),
     })
     .from(userData)
-    .where(
-      and(
-        eq(userData.isAi, false),
-        sql`${userData.recruiterId} IS NOT NULL`,
-        ...(input.startDate
-          ? [gte(userData.createdAt, new Date(input.startDate))]
-          : []),
-        ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
-      ),
-    )
+    .where(and(...recruitmentUserConditions(input), isNotNull(userData.recruiterId)))
     .groupBy(dayExpr)
     .orderBy(asc(dayExpr));
 
