@@ -523,37 +523,39 @@ export const updateDungeonRunForSettleDungeonBattle = (
       ),
     );
 
-/** Build the `userData` update for `settleDungeonBattle`, using predicates on `userId` and `battleId`. */
-export const updateUserDataForSettleDungeonBattle = (
+/**
+ * Build the `userData` update reviving a dungeon party when its battle ends, setting pools,
+ * energy and `status`, using predicates on `userId` and `battleId`.
+ */
+export const updateUserDataForReviveDungeonMembers = (
   client: Pick<DrizzleClient, "update">,
   dungeonEnergyRecoverySql: (
     snapshot: CompleteBattle | undefined,
     memberIds: string[],
     at: Date,
   ) => SQL<unknown>,
-  current: import("@/libs/combat/types").CompleteBattle,
-  meta: { runState: { memberIds: string[] } },
+  snapshot: CompleteBattle | undefined,
+  party: { memberIds: string[]; battleId: string; status: "AWAKE" | "QUEUED" },
   settledAt: Date,
-  keepQueued: boolean,
 ) =>
   client
     .update(userData)
     .set({
-      status: keepQueued ? "QUEUED" : "AWAKE",
+      status: party.status,
       battleId: null,
       bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
       bracketImmunityPausedAt: null,
       curHealth: sql`${userData.maxHealth}`,
       curChakra: sql`${userData.maxChakra}`,
       curStamina: sql`${userData.maxStamina}`,
-      curEnergy: dungeonEnergyRecoverySql(current, meta.runState.memberIds, settledAt),
+      curEnergy: dungeonEnergyRecoverySql(snapshot, party.memberIds, settledAt),
       regenAt: settledAt,
       updatedAt: settledAt,
     })
     .where(
       and(
-        inArray(userData.userId, meta.runState.memberIds),
-        eq(userData.battleId, current.id),
+        inArray(userData.userId, party.memberIds),
+        eq(userData.battleId, party.battleId),
       ),
     );
 
@@ -609,39 +611,6 @@ export const expireDungeonRunWithoutBattle = (
       AND (${dungeonRun.expiresAt} <= NOW(3) OR (${dungeonRun.status} = 'LOBBY'
         AND ${dungeonRun.expiresAt} IS NULL
         AND ${dungeonRun.createdAt} <= TIMESTAMPADD(SECOND, ${-DUNGEON_LOBBY_SECONDS}, NOW(3))))`);
-
-/** Build the `userData` update for `expireDungeonRun`, using predicates on `userId` and `battleId`. */
-export const updateUserDataForExpireDungeonRun = (
-  client: Pick<DrizzleClient, "update">,
-  dungeonEnergyRecoverySql: (
-    snapshot: CompleteBattle | undefined,
-    memberIds: string[],
-    at: Date,
-  ) => SQL<unknown>,
-  snapshot: undefined | import("@/drizzle/schema").Battle,
-  run: { state: { memberIds: string[] }; battleId: string },
-  settledAt: Date,
-) =>
-  client
-    .update(userData)
-    .set({
-      status: "AWAKE",
-      battleId: null,
-      bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
-      bracketImmunityPausedAt: null,
-      curHealth: sql`${userData.maxHealth}`,
-      curChakra: sql`${userData.maxChakra}`,
-      curStamina: sql`${userData.maxStamina}`,
-      curEnergy: dungeonEnergyRecoverySql(snapshot, run.state.memberIds, settledAt),
-      updatedAt: settledAt,
-      regenAt: settledAt,
-    })
-    .where(
-      and(
-        inArray(userData.userId, run.state.memberIds),
-        eq(userData.battleId, run.battleId),
-      ),
-    );
 
 /** One active reservation identifies the queue owner and private squad navigation. */
 export const findActiveDungeonRun = (
