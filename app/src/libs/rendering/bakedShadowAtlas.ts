@@ -1,4 +1,5 @@
 import { Matrix, Rectangle, type Sprite, Texture } from "pixi.js";
+import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import published from "@/libs/rendering/bakedWorldSources.json";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
@@ -104,12 +105,14 @@ export const loadBakedShadowAtlas = async (
   }
   const emission =
     emissionLease && source.emissionFrame && source.emissionTrim
-      ? new Texture({
-          source: emissionSource.source,
-          frame: new Rectangle(...source.emissionFrame),
-          orig: new Rectangle(0, 0, ...(source.emissionSize ?? [1, 1])),
-          trim: new Rectangle(...source.emissionTrim),
-        })
+      ? stabilizeNearestTexture(
+          new Texture({
+            source: emissionSource.source,
+            frame: new Rectangle(...source.emissionFrame),
+            orig: new Rectangle(0, 0, ...(source.emissionSize ?? [1, 1])),
+            trim: new Rectangle(...source.emissionTrim),
+          }),
+        )
       : emissionSource;
   const width = source.cellWidth,
     height = source.cellHeight;

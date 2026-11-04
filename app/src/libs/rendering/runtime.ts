@@ -1,9 +1,12 @@
-import { Container, UniformGroup, WebGLRenderer } from "pixi.js";
+import { Container, GlProgram, UniformGroup, WebGLRenderer } from "pixi.js";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
+
+// Keep sub-texel UV offsets through sprite interpolation; Pixi falls back when highp is unavailable.
+GlProgram.defaultOptions.preferredFragmentPrecision = "highp";
 
 const frames = createFrameLoop(
   (callback) => requestAnimationFrame(callback),

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Sprite, Container, RenderLayer, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Sprite, Container, RenderLayer, Texture, Rectangle } from "pixi.js";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import * as shadows from "@/libs/rendering/primitives/shadow";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
@@ -8,7 +8,7 @@ import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
-import { createSceneAssets } from "@/libs/rendering/assets";
+import { createSceneAssets, stabilizeNearestTexture, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
 
@@ -16,6 +16,37 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("stabilizes nearest UVs without changing frame identity, trim, source bytes or linear sampling", () => {
+    const source = new BufferImageSource({ resource: new Uint8Array(8 * 8 * 4), width: 8, height: 8, scaleMode: "nearest" });
+    const texture = new Texture({ source, frame: new Rectangle(0.5, 1, 3.5, 4), orig: new Rectangle(0, 0, 8, 8), trim: new Rectangle(2, 1, 3.5, 4) });
+    const metadata = JSON.stringify([texture.frame, texture.orig, texture.trim]);
+    const pixels = source.resource;
+    stabilizeNearestTexture(texture);
+    expect(texture.uvs.x0).toBe(0.5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    expect(texture.uvs.y2).toBe(5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    const uvs = { ...texture.uvs };
+    stabilizeNearestTexture(texture);
+    expect(texture.uvs).toEqual(uvs);
+    expect(JSON.stringify([texture.frame, texture.orig, texture.trim])).toBe(metadata);
+    expect(source.resource).toBe(pixels);
+    texture.destroy(true);
+    const linear = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 1, height: 1, scaleMode: "linear" }) });
+    const linearUvs = { ...linear.uvs };
+    stabilizeNearestTexture(linear);
+    expect(linear.uvs).toEqual(linearUvs);
+    linear.destroy(true);
+  });
+  it("applies stable sampling to fractional scenery atlas views while preserving their source/frame contract", async () => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(8 * 8 * 4), width: 8, height: 8, scaleMode: "nearest" }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    const art = await createWorldSprites({ own() {}, signal: new AbortController().signal } as unknown as GameRenderer, [{ id: "seam-tree", kind: "tree", image: "nearest-seam-atlas.png", frame: { x: 0.5, y: 1, width: 3.5, height: 4 }, x: 0, y: 0, groundY: 0, size: 16, nearest: true }]);
+    cleanups.push(() => { art.dispose(); texture.destroy(true); });
+    const view = (art.entries[0]!.sprite as Sprite).texture;
+    expect(view.source).toBe(texture.source);
+    expect(view.frame).toMatchObject({ x: 0.5, y: 1, width: 3.5, height: 4 });
+    expect(view.uvs.x0).toBe(0.5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+    expect(view.uvs.y2).toBe(5 / 8 + NEAREST_TEXTURE_UV_BIAS);
+  });
   it("keeps clock-driven lamps independent of ambient/contact shading and updates a live preference at the same brightness", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);

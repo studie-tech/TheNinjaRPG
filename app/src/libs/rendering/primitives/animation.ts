@@ -1,5 +1,6 @@
 import { Rectangle, Sprite, Texture } from "pixi.js";
 import { type AnimationClip, sampleAnimationClip } from "@/libs/rendering/animation";
+import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 
 /** Each animation owns texture views; decoded image sources remain leased and immutable. */
@@ -25,15 +26,17 @@ export const createClipTextures = async (
     const frame = sources.length === 1 ? index : 0;
     const width = source.width / clip.columns,
       height = source.height / clip.rows;
-    return new Texture({
-      source: source.source,
-      frame: new Rectangle(
-        (frame % clip.columns) * width,
-        Math.floor(frame / clip.columns) * height,
-        width,
-        height,
-      ),
-    });
+    return stabilizeNearestTexture(
+      new Texture({
+        source: source.source,
+        frame: new Rectangle(
+          (frame % clip.columns) * width,
+          Math.floor(frame / clip.columns) * height,
+          width,
+          height,
+        ),
+      }),
+    );
   });
   let disposed = false;
   const dispose = () => {

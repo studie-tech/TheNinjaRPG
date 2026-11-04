@@ -7,7 +7,11 @@ import {
   Texture,
 } from "pixi.js";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
-import { createSceneAssets, textureOpaqueFrame } from "@/libs/rendering/assets";
+import {
+  createSceneAssets,
+  stabilizeNearestTexture,
+  textureOpaqueFrame,
+} from "@/libs/rendering/assets";
 import { worldLighting } from "@/libs/rendering/color";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
@@ -189,10 +193,12 @@ export const createWorldSprites = async (
       let { texture } = result.value;
       if (texture && description.frame) {
         const { x, y, width, height } = description.frame;
-        texture = new Texture({
-          source: texture.source,
-          frame: new Rectangle(x, y, width, height),
-        });
+        texture = stabilizeNearestTexture(
+          new Texture({
+            source: texture.source,
+            frame: new Rectangle(x, y, width, height),
+          }),
+        );
         views.push(texture);
       }
       const sprite =
@@ -250,7 +256,9 @@ export const createWorldSprites = async (
             (frame.y - texture.frame.y)) /
             frame.height,
         );
-        texture = new Texture({ source: texture.source, frame });
+        texture = stabilizeNearestTexture(
+          new Texture({ source: texture.source, frame }),
+        );
         views.push(texture);
         sprite.texture = texture;
         sprite.scale.copyFrom(scale);

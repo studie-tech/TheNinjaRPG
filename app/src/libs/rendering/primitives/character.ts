@@ -6,6 +6,7 @@ import {
   lpcFrameDuration,
   spriteLayerSheets,
 } from "@/libs/lpc/catalog";
+import { stabilizeNearestTexture } from "@/libs/rendering/assets";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
@@ -233,14 +234,16 @@ const frameTexture = (
   const key = `${sample.x}:${sample.y}:${sample.width}:${sample.height}:${sample.size}:${sample.trim?.x ?? ""}:${sample.trim?.y ?? ""}`;
   let texture = views.get(key);
   if (!texture) {
-    texture = new Texture({
-      source,
-      frame: new Rectangle(sample.x, sample.y, sample.width, sample.height),
-      orig: new Rectangle(0, 0, sample.size, sample.size),
-      trim: sample.trim
-        ? new Rectangle(sample.trim.x, sample.trim.y, sample.width, sample.height)
-        : undefined,
-    });
+    texture = stabilizeNearestTexture(
+      new Texture({
+        source,
+        frame: new Rectangle(sample.x, sample.y, sample.width, sample.height),
+        orig: new Rectangle(0, 0, sample.size, sample.size),
+        trim: sample.trim
+          ? new Rectangle(sample.trim.x, sample.trim.y, sample.width, sample.height)
+          : undefined,
+      }),
+    );
     views.set(key, texture);
   }
   return texture;

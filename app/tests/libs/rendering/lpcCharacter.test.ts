@@ -1,3 +1,4 @@
+import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from "pixi.js";
@@ -50,6 +51,27 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("stabilizes every cached character frame while retaining atlas/trim coordinates and shared source ownership", async () => {
+    const { game, source } = gameFixture();
+    source.source.style.scaleMode = "nearest";
+    const character = await characters.createLpcCharacter(game, resolveSpriteAppearance({}), "travel");
+    const verify = () => {
+      for (const { sprite } of character.layers) {
+        const view = sprite.texture;
+        expect(view.source).toBe(source.source);
+        expect(view.orig.width).toBe(64);
+        expect(view.uvs.x0).toBe(view.frame.x / source.source.width + NEAREST_TEXTURE_UV_BIAS);
+        expect(view.uvs.y0).toBe(view.frame.y / source.source.height + NEAREST_TEXTURE_UV_BIAS);
+      }
+    };
+    verify();
+    character.render(frame(180), "walk", 1);
+    verify();
+    character.render(frame(360), "walk", 2);
+    verify();
+    expect(source.uvs.x0).toBe(0);
+    expect(source.source.destroyed).toBe(false);
+  });
   it("retains a pose between authored frame boundaries while responding immediately to facing and reduced motion", async () => {
     const { game } = gameFixture();
     const character = await characters.createLpcCharacter(game, resolveSpriteAppearance({}), "travel");

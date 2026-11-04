@@ -15,6 +15,7 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
+import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import type { BakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -1629,6 +1630,7 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
     Math.abs(determinant) > 0.000001
       ? [(-h * d) / determinant, (h * a) / determinant, (d * c - a * f) / determinant]
       : [0, 1, 0];
+  // Match albedo sampling at texel boundaries so receiver normals/coverage do not reintroduce bands.
   if (instanced) {
     const { orig, trim } = entry.record.sprite.texture;
     // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
@@ -1641,8 +1643,8 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
       m[3] ?? 0,
       m[5] ?? 0,
       entry.material.height,
-      (frame.x * sourceRatio) / entry.material.width,
-      (frame.y * heightRatio) / entry.material.height,
+      (frame.x * sourceRatio) / entry.material.width + NEAREST_TEXTURE_UV_BIAS,
+      (frame.y * heightRatio) / entry.material.height + NEAREST_TEXTURE_UV_BIAS,
       (frame.width * sourceRatio) / entry.material.width,
       (frame.height * heightRatio) / entry.material.height,
       h,
@@ -1679,8 +1681,10 @@ const receiverVertices = (entry: VisibleCaster, instanced: boolean) => {
     vertices.push(
       (m[4] ?? 0) + (m[0] ?? 0) * logicalU + (m[2] ?? 0) * logicalV,
       (m[5] ?? 0) + (m[1] ?? 0) * logicalU + (m[3] ?? 0) * logicalV,
-      ((frame.x + u * frame.width) * sourceRatio) / entry.material.width,
-      ((frame.y + v * frame.height) * heightRatio) / entry.material.height,
+      ((frame.x + u * frame.width) * sourceRatio) / entry.material.width +
+        NEAREST_TEXTURE_UV_BIAS,
+      ((frame.y + v * frame.height) * heightRatio) / entry.material.height +
+        NEAREST_TEXTURE_UV_BIAS,
       entry.height,
       index,
       entry.material.isBillboard

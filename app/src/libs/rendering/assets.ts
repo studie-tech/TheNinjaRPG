@@ -14,11 +14,29 @@ const textures = createLeaseCache<Texture>({
           ? "loadSVG"
           : "loadTextures",
       data: { scaleMode: url.endsWith("#tnr-nearest") ? "nearest" : "linear" },
-    }),
+    }).then(stabilizeNearestTexture),
   unload: (url) => Assets.unload(url),
   bytes: (texture) => texture.source.pixelWidth * texture.source.pixelHeight * 4,
   idleBudget: IDLE_TEXTURE_BUDGET,
 });
+
+/** A sub-texel UV bias resolves Float32 interpolation ties; below 0.016 source pixels at 16K. */
+export const NEAREST_TEXTURE_UV_BIAS = 2 ** -20;
+
+/**
+ * Keep nearest-sampled artwork free of internal pixel bands at fractional positions/zoom.
+ * Bias only UVs: canonical frame/orig/trim metadata must still identify authored materials and bakes.
+ * Recomputing first makes this idempotent; linear textures retain their original sampling.
+ */
+export const stabilizeNearestTexture = (texture: Texture) => {
+  if (texture.source.style.scaleMode !== "nearest") return texture;
+  texture.updateUvs();
+  for (const corner of [0, 1, 2, 3] as const) {
+    texture.uvs[`x${corner}`] += NEAREST_TEXTURE_UV_BIAS;
+    texture.uvs[`y${corner}`] += NEAREST_TEXTURE_UV_BIAS;
+  }
+  return texture;
+};
 
 /**
  * Scene leases share decoded images; callers must not destroy returned textures/sources.
