@@ -415,8 +415,6 @@ export const reapplySanctions = async (
         ),
       ),
     ) ?? sql`TRUE`;
-  // Drizzle INSERT SELECT requires every table column, including defaults. These small
-  // records need subset columns and an account-absence guard, so use parameterized SQL.
   const insertRecord = (
     table: typeof userReport | typeof userReportComment | typeof actionLog,
     values: Record<string, unknown>,

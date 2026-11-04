@@ -247,7 +247,6 @@ export const registerRouter = createTRPCRouter({
         );
 
       // INSERT SELECT publishes flags only with durable cases and unchanged sources.
-      // Drizzle's builder requires every table column for SELECT, including defaults.
       const createdUser = await retryOnDeadlock(() =>
         executeCreatedUserForCreateCharacter(ctx.drizzle, values, sanctionGuard, input),
       ).catch(async (error: unknown) => {

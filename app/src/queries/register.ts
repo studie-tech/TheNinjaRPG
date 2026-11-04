@@ -1,6 +1,7 @@
 /**
  * Database access for register; authorization and transaction scopes stay in callers.
  */
+
 import { and, eq, getTableColumns, inArray, or, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -26,6 +27,7 @@ import {
   village,
   visitorLog,
 } from "@/drizzle/schema";
+import { insertValuesWhere } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { createStarterHomeItems } from "@/server/utils/homeFurniture";
 import { hashIp } from "@/server/utils/ipHash";
@@ -153,19 +155,12 @@ export const executeCreatedUserForCreateCharacter = (
   sanctionGuard: undefined | SQL<unknown>,
   input: { username: string },
 ) => {
-  const columns = getTableColumns(userData);
-  const keys = Object.keys(values) as (keyof typeof values)[];
-  return client.execute(sql`
-        INSERT INTO ${userData} (${sql.join(
-          keys.map((key) => sql.identifier(columns[key].name)),
-          sql`, `,
-        )})
-        SELECT ${sql.join(
-          keys.map((key) => sql.param(values[key] ?? null, columns[key])),
-          sql`, `,
-        )}
-        WHERE ${sanctionGuard} AND NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${eq(userData.username, input.username)})
-      `);
+  return insertValuesWhere(
+    client,
+    userData,
+    values,
+    sql`${sanctionGuard} AND NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${eq(userData.username, input.username)})`,
+  );
 };
 
 /**
