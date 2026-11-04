@@ -55,6 +55,7 @@ import {
   chatPanelAtom,
   chatTavernActivityAtom,
   combineChatCounts,
+  countTavernUnread,
   getInboxNews,
   isConversationUnread,
 } from "@/libs/chatPanel";
@@ -108,11 +109,7 @@ export default function ChatPanelBody({
 
   if (!userData) return null;
   const inboxNews = mutes.chatMuted ? 0 : getInboxNews(notifications);
-  const tavernMentions = mutes.chatMuted
-    ? 0
-    : Object.entries(combineChatCounts(mentions, tavernActivity))
-        .filter(([id]) => !mutes.isSilenced(id))
-        .reduce((sum, [, count]) => sum + count, 0);
+  const tavernMentions = countTavernUnread(userData, mentions, tavernActivity);
   const activeTab: ChatTab =
     isPhone && panel.tab !== "ai" ? (phoneChat ? phoneChat.kind : "tavern") : panel.tab;
 

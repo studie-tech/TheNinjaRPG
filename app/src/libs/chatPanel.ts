@@ -97,6 +97,13 @@ export const countChatNotifications = (
   return inboxNews + mentionCount;
 };
 
+/** New tavern messages and mentions across unmuted taverns, for the Tavern tab and menu entry. */
+export const countTavernUnread = (
+  user: ChatMuteUser | null | undefined,
+  mentions: Record<string, number>,
+  activity: Record<string, number>,
+) => countChatNotifications(user, 0, combineChatCounts(mentions, activity));
+
 /** A conversation is unread when it changed after the player last opened it. */
 export const isConversationUnread = (convo: {
   updatedAt: Date;

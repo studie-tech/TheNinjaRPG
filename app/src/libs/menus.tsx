@@ -1,3 +1,4 @@
+import { useAtomValue } from "jotai";
 import {
   AlertCircle,
   Atom,
@@ -25,6 +26,11 @@ import { type ReactNode, useMemo } from "react";
 import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
+import {
+  chatMentionsAtom,
+  chatTavernActivityAtom,
+  countTavernUnread,
+} from "@/libs/chatPanel";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
@@ -102,6 +108,8 @@ export const useGameMenu = () => {
     village: user.village,
     isOutlaw: user.isOutlaw,
     status: user.status,
+    chatMuted: user.chatMuted,
+    mutedConversationIds: user.mutedConversationIds,
   }));
   const pathname = usePublicPathname();
   const { notifications } = useUserInfo();
@@ -115,6 +123,10 @@ export const useGameMenu = () => {
     notifications?.find((n) => n.href === "/support")?.notificationCount || 0;
   const newInProfile =
     notifications?.find((n) => n.href.includes("/profile"))?.notificationCount || 0;
+  // Counted in the browser from live tavern messages, like the chat button.
+  const mentions = useAtomValue(chatMentionsAtom);
+  const tavernActivity = useAtomValue(chatTavernActivityAtom);
+  const newInTavern = countTavernUnread(userData, mentions, tavernActivity);
 
   const status = userData?.status;
   const systems = useMemo(() => {
@@ -131,6 +143,7 @@ export const useGameMenu = () => {
         href: "/tavern",
         name: "Tavern",
         icon: <MessagesSquare key="tavern" className="h-6 w-6" />,
+        notificationCount: newInTavern,
       },
       {
         id: "tutorial-users",
@@ -217,7 +230,7 @@ export const useGameMenu = () => {
     }
 
     return systems;
-  }, [newInInbox, newInReports, newInSupport, newInProfile, status]);
+  }, [newInInbox, newInReports, newInSupport, newInProfile, newInTavern, status]);
 
   const { sectorVillage: sector } = useSectorVillage(userData);
 

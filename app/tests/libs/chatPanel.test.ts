@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   combineChatCounts,
   countChatNotifications,
+  countTavernUnread,
   getInboxNews,
   isConversationMuted,
   isConversationUnread,
@@ -63,5 +64,16 @@ describe("tavern activity", () => {
       village: 2,
       ally: 1,
     });
+  });
+});
+
+describe("tavern unread", () => {
+  it("adds new messages and mentions per tavern, leaving out muted ones", () => {
+    expect(countTavernUnread(user(false, ["akikaze"]), { global: 1 }, { global: 3, akikaze: 2, ally: 1 })).toBe(4);
+  });
+
+  it("is zero while all chat is muted or without a player", () => {
+    expect(countTavernUnread(user(true), { global: 1 }, { global: 3 })).toBe(0);
+    expect(countTavernUnread(null, { global: 1 }, { global: 3 })).toBe(0);
   });
 });
