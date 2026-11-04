@@ -139,7 +139,7 @@ describe("TutorialAssistant highlight activation", () => {
     render(
       <BattleFocusView
         battle={undefined}
-        timer={<p>Timer</p>}
+        renderTimer={(exitButton) => <div><p>Timer</p>{exitButton}</div>}
         field={<p>Field</p>}
         dock={<p>Actions</p>}
         log={<p>Log</p>}

@@ -69,7 +69,7 @@ const renderView = (
     <BattleFocusView
       battle={battle}
       controlledActorId="me"
-      timer={<p>Timer</p>}
+      renderTimer={(exitButton) => <div><p>Timer</p>{exitButton}</div>}
       field={<p>Field</p>}
       fieldRatio={0.6}
       dock={<p>Dock</p>}
@@ -181,7 +181,7 @@ describe("BattleFocusView", () => {
       <BattleFocusView
         battle={battle}
         controlledActorId="me"
-        timer={<p>Timer</p>}
+        renderTimer={(exitButton) => <div><p>Timer</p>{exitButton}</div>}
         field={props.field}
         fieldRatio={0.6}
         dock={<p>Dock</p>}

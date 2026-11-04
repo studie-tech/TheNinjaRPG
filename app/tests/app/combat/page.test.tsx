@@ -139,6 +139,8 @@ it.each([false, true])("returns keyboard focus to the shown battle layout with r
     battle, result: finished ? { outcome: "Won" } : null,
   }) as unknown as Response, { battleFocus: true, setBattleFocus, layoutOrder: ["timer", "battlefield"] });
   const exit = await view.findByRole("button", { name: "Show layout" });
+  expect(exit.closest("#tutorial-combat-action-timer")).toBeTruthy();
+  expect(exit.closest("[inert]")).toBeNull();
   expect(document.activeElement).toBe(exit);
   fireEvent.click(exit);
   await waitFor(() => expect(view.queryByRole("button", { name: "Show layout" })).toBeNull());

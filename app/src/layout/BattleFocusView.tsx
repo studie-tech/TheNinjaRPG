@@ -24,7 +24,7 @@ export function BattleFocusView({
   battle,
   controlledActorId,
   swapFocusPanels = false,
-  timer,
+  renderTimer,
   field,
   fieldRatio,
   dock,
@@ -117,13 +117,13 @@ export function BattleFocusView({
       ref={exitButtonRef}
       type="button"
       variant="outline"
-      size="sm"
-      className="h-[32px] shrink-0 gap-[6px] px-[10px] text-[12px]"
+      size="icon"
+      className="h-10 w-10"
+      aria-label="Show layout"
       onClick={onShowLayout}
       title="Show the game layout around the battle"
     >
-      <Minimize2 className="h-[14px] w-[14px]" aria-hidden />
-      Show layout
+      <Minimize2 className="h-5 w-5" aria-hidden />
     </Button>
   );
 
@@ -168,7 +168,6 @@ export function BattleFocusView({
         aria-label="Your side"
         className="flex min-h-0 flex-col gap-[8px] overflow-y-auto overscroll-contain"
       >
-        {exitButton}
         {allies.map((user) => (
           <FighterCard
             key={user.userId}
@@ -180,7 +179,7 @@ export function BattleFocusView({
         {autoControl}
       </aside>
       <main aria-label="Battle" className="flex min-h-0 min-w-0 flex-col gap-[8px]">
-        <div className="shrink-0">{timer}</div>
+        <div className="shrink-0">{renderTimer(exitButton)}</div>
         {fieldBox}
         <section
           aria-label={swapFocusPanels ? "Battle history" : "Battle actions"}
@@ -220,8 +219,7 @@ export function BattleFocusView({
     </div>
   ) : (
     <div className="flex h-full flex-col gap-[6px] overflow-y-auto overscroll-contain p-[6px]">
-      <div className="flex shrink-0 items-center gap-[6px]">{exitButton}</div>
-      <div className="shrink-0">{timer}</div>
+      <div className="shrink-0">{renderTimer(exitButton)}</div>
       <div className="grid shrink-0 grid-cols-2 gap-[6px]">
         {me && <FighterCard battle={battle} user={me} compact />}
         {enemies[0] && (
@@ -413,7 +411,8 @@ interface BattleFocusViewProps {
   controlledActorId?: string;
   /** Desktop preference: history below the field and actions below the opponents. */
   swapFocusPanels?: boolean;
-  timer: ReactNode;
+  /** Places the focus exit beside the timer's other controls. */
+  renderTimer: (exitButton: ReactNode) => ReactNode;
   field: ReactNode;
   /** Height per width of the battlefield; undefined while results replace it. */
   fieldRatio?: number;

@@ -3,6 +3,7 @@
 import { useAtom, useSetAtom } from "jotai";
 import { Loader2, Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ export default function CombatPage() {
     const shouldRestoreFocus = wasBattleFocusRef.current && !config.battleFocus;
     wasBattleFocusRef.current = config.battleFocus;
     if (!shouldRestoreFocus) return;
-    // The focus button remounts with the layout; finished timers are inert.
+    // The focus button remounts with the layout; finished battle controls are inert.
     const button = battleFocusButtonRef.current;
     const target = button && !button.closest("[inert]") ? button : layoutRef.current;
     target?.focus({ preventScroll: true });
@@ -191,7 +192,7 @@ export default function CombatPage() {
     : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
   const actionAspect = config.useSmallActions ? "aspect-square" : undefined;
   const showActionLabels = !config.useSmallActions;
-  // Keep a finished battle's timer and actions dimmed and inert until the player leaves.
+  // Keep a finished battle's actions and settings dimmed and inert until the player leaves.
   const isInBattle = userData?.status === "BATTLE" || !!results;
   // After "Go Again" the finished battle is held in state until the next one's data is
   // applied; keep the scene back until then rather than remount the finished battle.
@@ -558,66 +559,72 @@ export default function CombatPage() {
     toggleAutoCombat,
   ]);
 
-  // Component renderers
-  const renderTimer = useCallback(() => {
-    if (!battle || !user || !isInBattle || !battleState) {
-      // Hold the timer's height while the battle loads, so nothing below it moves.
-      return isInBattle ? <div className="h-16" /> : null;
-    }
-    return (
-      <div
-        className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
-        id="tutorial-combat-action-timer"
-        inert={!!results}
-      >
-        <ActionTimer
-          action={actions.find((a) => a.id === actionId)}
-          user={{
-            userId: controlledActorId,
-            actionPoints: user?.actionPoints ?? 0,
-          }}
-          battle={battle}
-          isPending={battleState.isPending}
-          options={
-            <>
-              {!config.battleFocus && (
-                <Button
-                  ref={battleFocusButtonRef}
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10"
-                  aria-label="Battle focus"
-                  title="Battle focus: full-window battle screen"
-                  onClick={() => config.setBattleFocus(true)}
-                >
-                  <Maximize2 className="h-5 w-5" />
-                </Button>
-              )}
-              <UserCombatSettings
-                config={config}
-                userData={userData}
-                autoCombatControl={renderAutoControl()}
-              />
-            </>
-          }
-        />
-      </div>
-    );
-  }, [
-    battle,
-    user,
-    isInBattle,
-    battleState,
-    results,
-    actions,
-    actionId,
-    userId,
-    controlledActorId,
-    config,
-    userData,
-    renderAutoControl,
-  ]);
+  /** Shares timer controls across layouts while keeping the exit available for held results. */
+  const renderTimer = useCallback(
+    (focusExit?: ReactNode) => {
+      if (!battle || !user || !isInBattle || !battleState) {
+        // Hold the timer's height while the battle loads, so nothing below it moves.
+        return isInBattle ? <div className="h-16" /> : null;
+      }
+      return (
+        <div
+          className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
+          id="tutorial-combat-action-timer"
+        >
+          <ActionTimer
+            action={actions.find((a) => a.id === actionId)}
+            user={{
+              userId: controlledActorId,
+              actionPoints: user?.actionPoints ?? 0,
+            }}
+            battle={battle}
+            isPending={battleState.isPending}
+            options={
+              <>
+                {focusExit}
+                {!config.battleFocus && (
+                  <Button
+                    ref={battleFocusButtonRef}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    aria-label="Battle focus"
+                    inert={!!results}
+                    title="Battle focus: full-window battle screen"
+                    onClick={() => config.setBattleFocus(true)}
+                  >
+                    <Maximize2 className="h-5 w-5" />
+                  </Button>
+                )}
+                <div className="flex" inert={!!results}>
+                  <UserCombatSettings
+                    config={config}
+                    userData={userData}
+                    autoCombatControl={renderAutoControl()}
+                  />
+                </div>
+              </>
+            }
+          />
+        </div>
+      );
+    },
+    [
+      battle,
+      user,
+      isInBattle,
+      battleState,
+      results,
+      actions,
+      actionId,
+      userId,
+      controlledActorId,
+      config,
+      userData,
+      renderAutoControl,
+    ],
+  );
 
   const renderBattlefield = useCallback(() => {
     // Reserve the canvas while loading. Settled results use their content height so
@@ -882,7 +889,7 @@ export default function CombatPage() {
           battle={battle}
           controlledActorId={controlledActorId}
           swapFocusPanels={config.swapFocusPanels}
-          timer={renderTimer()}
+          renderTimer={renderTimer}
           field={renderBattlefield()}
           fieldRatio={
             results ? undefined : getBattlefieldHeightRatio(battle.width, battle.height)

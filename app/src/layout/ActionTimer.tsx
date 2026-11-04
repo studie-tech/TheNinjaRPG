@@ -98,13 +98,13 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
       <div className="relative w-full overflow-hidden rounded-lg border bg-slate-700/70 shadow-lg backdrop-blur-sm">
         <div className="flex flex-row">
           {/* Round & action bar */}
-          <div className="flex grow flex-col px-4 py-1">
+          <div className="flex grow flex-col px-2 py-1 sm:px-4">
             <div className="flex flex-wrap items-center gap-3 font-semibold text-[11px] text-slate-200 uppercase tracking-wide">
-              <div className="flex w-full items-center gap-3 whitespace-nowrap">
+              <div className="flex w-full items-center gap-1 whitespace-nowrap sm:gap-3">
                 <span>Round {battle.round}</span>
                 <div className="grow"></div>
                 <div
-                  className={`flex items-center gap-2 rounded-full px-3 pt-1 text-[11px] ${state.waiting ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
+                  className={`flex items-center gap-2 rounded-full px-2 pt-1 text-[11px] sm:px-3 ${state.waiting ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
                 >
                   <span
                     className={`h-2 w-2 rounded-full ${state.waiting ? "bg-amber-300" : "bg-emerald-300"}`}
@@ -164,7 +164,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
             </span>
           </div>
           {props?.options && (
-            <div className="flex shrink-0 items-center justify-center gap-1 pt-1 pr-2">
+            // Layout controls stay reachable while an action response is pending.
+            <div className="relative z-10 flex shrink-0 items-center justify-center gap-2 pt-1 pr-2">
               {props.options}
             </div>
           )}
