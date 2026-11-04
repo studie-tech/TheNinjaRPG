@@ -1,39 +1,11 @@
-import {
-  ItemRarities,
-  type ItemRarity,
-  type ItemSlot,
-  ItemSlots,
-  ItemSlotTypes,
-  type ItemType,
-  ItemTypes,
-} from "@/drizzle/constants";
+import type { ItemRarity, ItemSlot, ItemType } from "@/drizzle/constants";
+import { ItemRarities, ItemSlots, ItemSlotTypes, ItemTypes } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { byItemName, isCompatibleEquipSlot } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 
-/** Orders the backpack can be shown in. */
-export type BackpackSort =
-  | "rarity"
-  | "type"
-  | "slot"
-  | "name"
-  | "newest"
-  | "durability";
-
-/** What the backpack shows: a name search plus one type chip. */
-export type BackpackFilter = {
-  query: string;
-  type: ItemType | "ALL" | "NEEDS_REPAIR";
-};
-
-/** A backpack item that fits a slot, with where it is worn and why it cannot be. */
-export type SlotCandidate<T> = {
-  userItem: T;
-  equippedIn: ItemSlot | null;
-  blockedReason: string | null;
-};
-
+/** Supported backpack sort choices and their player-facing labels. */
 export const BACKPACK_SORTS: { value: BackpackSort; label: string }[] = [
   { value: "rarity", label: "Rarity" },
   { value: "type", label: "Type" },
@@ -57,11 +29,6 @@ const TYPE_LABELS: Record<ItemType, string> = {
   OTHER: "Other",
 };
 
-type SortableItem = Pick<
-  UserItemWithRelations,
-  "durability" | "createdAt" | "activeVariantId" | "item"
->;
-
 /** Higher for rarer items. */
 const rarityRank = (rarity: ItemRarity) => ItemRarities.indexOf(rarity);
 
@@ -69,6 +36,7 @@ const rarityRank = (rarity: ItemRarity) => ItemRarities.indexOf(rarity);
 const durabilityRatio = (ui: SortableItem) =>
   ui.item.maxDurability > 0 ? ui.durability / ui.item.maxDurability : 1;
 
+/** Compares active-variant names using the shared item-name sorting rules. */
 const byName = (a: SortableItem, b: SortableItem) =>
   byItemName(applyActiveVariant(a), applyActiveVariant(b));
 
@@ -202,3 +170,30 @@ export const equipLimitReason = <T extends UserItemWithRelations>(
   const [first] = equipped;
   return first ? `Already equipped in ${slotName(first.equipped)}` : null;
 };
+
+/** Orders the backpack can be shown in. */
+export type BackpackSort =
+  | "rarity"
+  | "type"
+  | "slot"
+  | "name"
+  | "newest"
+  | "durability";
+
+/** What the backpack shows: a name search plus one type chip. */
+export type BackpackFilter = {
+  query: string;
+  type: ItemType | "ALL" | "NEEDS_REPAIR";
+};
+
+/** A backpack item that fits a slot, with where it is worn and why it cannot be. */
+export type SlotCandidate<T> = {
+  userItem: T;
+  equippedIn: ItemSlot | null;
+  blockedReason: string | null;
+};
+
+type SortableItem = Pick<
+  UserItemWithRelations,
+  "durability" | "createdAt" | "activeVariantId" | "item"
+>;

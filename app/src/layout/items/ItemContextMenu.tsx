@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useRef } from "react";
 import {
   ContextMenu,
@@ -9,7 +10,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { type ItemSlot, NonActionItemTypes } from "@/drizzle/constants";
+import type { ItemSlot } from "@/drizzle/constants";
+import { NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { hasFinePointer } from "@/libs/combat/hotkeys";
 import { applyActiveVariant } from "@/libs/combat/util";
@@ -17,24 +19,6 @@ import { nonCombatConsume } from "@/libs/item";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
 import { needsInventoryRepair } from "@/libs/repair";
 import type { UserWithRelations } from "@/routers/profile";
-
-interface ItemContextMenuProps {
-  userItem: UserItemWithRelations;
-  /** Every carried item, to tell empty slots from ones an equip would swap. */
-  allUserItems: UserItemWithRelations[];
-  userData: NonNullable<UserWithRelations>;
-  getBlockedReason: (userItem: UserItemWithRelations, slot: ItemSlot) => string | null;
-  /** The mounted card or equipment button remains the inspector's focus return target. */
-  onInspect: (userItemId: string, trigger?: HTMLButtonElement | null) => void;
-  onEquip: (userItemId: string, slot: ItemSlot) => void;
-  onUnequip: (userItemId: string, slot: ItemSlot) => void;
-  onMerge: (userItem: UserItemWithRelations) => void;
-  onSetHotkey?: (userItem: UserItemWithRelations) => void;
-  children: React.ReactNode;
-}
-
-/** A click right after the menu opened is the end of a long press, not a selection. */
-const LONG_PRESS_CLICK_MS = 700;
 
 /**
  * Right-click (and long-press on touch screens) actions for an item. Quick actions run
@@ -118,6 +102,7 @@ export function ItemContextMenu({
   );
 }
 
+/** Offers equipped or backpack actions, sending operations with dialogs to the inspector. */
 function ItemMenuEntries({
   userItem,
   allUserItems,
@@ -219,4 +204,22 @@ function ItemMenuEntries({
       </ContextMenuItem>
     </>
   );
+}
+
+/** A click right after the menu opened is the end of a long press, not a selection. */
+const LONG_PRESS_CLICK_MS = 700;
+
+interface ItemContextMenuProps {
+  userItem: UserItemWithRelations;
+  /** Every carried item, to tell empty slots from ones an equip would swap. */
+  allUserItems: UserItemWithRelations[];
+  userData: NonNullable<UserWithRelations>;
+  getBlockedReason: (userItem: UserItemWithRelations, slot: ItemSlot) => string | null;
+  /** The mounted card or equipment button remains the inspector's focus return target. */
+  onInspect: (userItemId: string, trigger?: HTMLButtonElement | null) => void;
+  onEquip: (userItemId: string, slot: ItemSlot) => void;
+  onUnequip: (userItemId: string, slot: ItemSlot) => void;
+  onMerge: (userItem: UserItemWithRelations) => void;
+  onSetHotkey?: (userItem: UserItemWithRelations) => void;
+  children: React.ReactNode;
 }

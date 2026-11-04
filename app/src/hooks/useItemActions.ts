@@ -18,9 +18,9 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
- * Every action on a single carried item, shared by the backpack, the slot picker, the
- * inspector and the item menus. `onDone` runs once an action settles, so the caller can
- * close whatever panel or dialog started it.
+ * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
+ * Each action owns when onDone dismisses its initiating view; repairs dismiss only after
+ * confirmed success, while actions with settlement handlers also dismiss after rejection.
  */
 export const useItemActions = ({
   userData,
@@ -38,7 +38,7 @@ export const useItemActions = ({
   const { prepareConsumptionUpdate, updateConsumption } =
     useItemConsumptionCacheUpdate();
 
-  // Handler for when mutations are settled
+  // Dismiss the initiating view for actions that finish on settlement.
   const onSettled = () => {
     onDone();
   };

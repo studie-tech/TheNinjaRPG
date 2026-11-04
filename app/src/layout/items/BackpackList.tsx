@@ -1,14 +1,14 @@
 "use client";
 
 import { Search } from "lucide-react";
+import type React from "react";
 import { useState } from "react";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { ItemCard } from "@/layout/items/ItemCard";
+import type { BackpackFilter, BackpackSort } from "@/libs/itemsPage";
 import {
   BACKPACK_SORTS,
-  type BackpackFilter,
-  type BackpackSort,
   backpackFilterChips,
   filterBackpack,
   sortBackpack,
@@ -16,20 +16,6 @@ import {
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
-
-interface BackpackListProps {
-  items: UserItemWithRelations[];
-  userData: Pick<NonNullable<UserWithRelations>, "userId" | "role">;
-  selectedId: string | undefined;
-  onSelect: (userItemId: string) => void;
-  /** Called with the item a drag starts on, and with null when it ends. */
-  onDragItem?: (userItem: UserItemWithRelations | null) => void;
-  /** Wraps each card, e.g. in a context menu. */
-  wrapCard?: (
-    userItem: UserItemWithRelations,
-    card: React.ReactNode,
-  ) => React.ReactNode;
-}
 
 /**
  * The carried items of one bag with name search, type chips and a sort order. Sort and chip
@@ -142,4 +128,18 @@ export function BackpackList({
       )}
     </div>
   );
+}
+
+interface BackpackListProps {
+  items: UserItemWithRelations[];
+  userData: Pick<NonNullable<UserWithRelations>, "userId" | "role">;
+  selectedId: string | undefined;
+  onSelect: (userItemId: string) => void;
+  /** Called with the item a drag starts on, and with null when it ends. */
+  onDragItem?: (userItem: UserItemWithRelations | null) => void;
+  /** Wraps each card, e.g. in a context menu. */
+  wrapCard?: (
+    userItem: UserItemWithRelations,
+    card: React.ReactNode,
+  ) => React.ReactNode;
 }

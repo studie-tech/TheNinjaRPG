@@ -137,7 +137,7 @@ it("marks the selected card", () => {
   expect(screen.getByRole("button", { name: /Worn Vest/ }).getAttribute("aria-current")).toBe("true");
 });
 
-it("shows gear level in the card's text instead of a badge on its art", () => {
+it("shows gear level in the card text", () => {
   renderList();
   const card = screen.getByRole("button", { name: /^Worn Vest/ });
   expect(card.textContent).toContain("Common · Chest · Lv 1");

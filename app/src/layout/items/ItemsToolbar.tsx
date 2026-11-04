@@ -16,12 +16,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import { fedItemLoadouts } from "@/utils/paypal";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-interface ItemsToolbarProps {
-  userData: NonNullable<UserWithRelations>;
-  /** Every carried item, for repair costs and kits. */
-  userItems: UserItemWithRelations[] | undefined;
-}
-
 /**
  * The item loadout selector and whole-inventory actions: unequip all, merge all stacks,
  * repair all (with kits, or ryo for crafters) and auto equip, each behind its confirmation.
@@ -335,3 +329,9 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
 // Alias the procedure so its action name is not interpreted as a React hook. Optional
 // access lets the module load where tests replace the client without this router.
 const repairAllWithKits = api.item?.useRepairAll;
+
+interface ItemsToolbarProps {
+  userData: NonNullable<UserWithRelations>;
+  /** Every carried item, for repair costs and kits. */
+  userItems: UserItemWithRelations[] | undefined;
+}

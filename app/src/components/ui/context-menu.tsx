@@ -4,18 +4,21 @@ import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import type * as React from "react";
 import { cn } from "@/libs/shadui";
 
+/** Coordinates pointer and keyboard context-menu interactions through Radix. */
 function ContextMenu({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
 }
 
+/** Forwards trigger props and refs for right-click and touch activation. */
 function ContextMenuTrigger({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
   return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />;
 }
 
+/** Portals scrollable menu content within the available viewport space. */
 function ContextMenuContent({
   className,
   ...props
@@ -34,6 +37,7 @@ function ContextMenuContent({
   );
 }
 
+/** Renders an action with shared keyboard, disabled and destructive styles. */
 function ContextMenuItem({
   className,
   variant = "default",
@@ -54,6 +58,7 @@ function ContextMenuItem({
   );
 }
 
+/** Labels a group of related context-menu actions. */
 function ContextMenuLabel({
   className,
   ...props
@@ -70,6 +75,7 @@ function ContextMenuLabel({
   );
 }
 
+/** Separates related action groups with the shared divider style. */
 function ContextMenuSeparator({
   className,
   ...props

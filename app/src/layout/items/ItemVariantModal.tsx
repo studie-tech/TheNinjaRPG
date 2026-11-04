@@ -1,4 +1,6 @@
 "use client";
+
+import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -11,15 +13,7 @@ import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
 
-/**
- * Variant Modal for browsing, purchasing, and selecting item variants
- */
-interface ItemVariantModalProps {
-  userItem: UserItemWithVariants;
-  allUserItems: UserItemWithRelations[] | undefined;
-  onClose: () => void;
-}
-
+/** Browses, purchases, unlocks and selects item variants, refreshing affected inventory views. */
 export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   userItem,
   allUserItems,
@@ -231,3 +225,9 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     </Modal>
   );
 };
+
+interface ItemVariantModalProps {
+  userItem: UserItemWithVariants;
+  allUserItems: UserItemWithRelations[] | undefined;
+  onClose: () => void;
+}

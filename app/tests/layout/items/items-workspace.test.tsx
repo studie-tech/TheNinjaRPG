@@ -425,7 +425,7 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
     fireEvent.click(card("Raijin Tanto"));
   });
   const sheet = screen.getByRole("dialog");
-  // One close button in the panel header, instead of the sheet's own above it.
+  // The panel header owns the sheet's sole close control.
   expect(within(sheet).getAllByRole("button", { name: /close/i }).map((b) => b.textContent)).toEqual(["Close inspector"]);
 });
 

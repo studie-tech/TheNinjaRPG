@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleDollarSign, Wrench } from "lucide-react";
+import type React from "react";
 import { Button } from "@/components/ui/button";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import Confirm from "@/layout/Confirm";
@@ -8,17 +9,6 @@ import ContentImage from "@/layout/ContentImage";
 import Modal from "@/layout/Modal";
 import { calcItemRepairCost } from "@/libs/item";
 import type { UserWithRelations } from "@/routers/profile";
-
-type SetIsOpenType = React.Dispatch<React.SetStateAction<boolean>>;
-
-interface RepairItemModalProps {
-  isOpen: boolean;
-  setIsOpen: SetIsOpenType;
-  targetItem: UserItemWithRelations;
-  repairItems: UserItemWithRelations[];
-  onSelectRepairItem: (repairItemId: string, targetItemId: string) => void;
-  isPending?: boolean;
-}
 
 /** Lets players choose a repair kit with a durability preview and pending-state guard. */
 export function RepairItemSelectionModal({
@@ -115,15 +105,6 @@ export function RepairItemSelectionModal({
   );
 }
 
-interface ItemDurabilityRepairActionsProps {
-  useritem: UserItemWithRelations;
-  userData: NonNullable<UserWithRelations>;
-  repairItemsCount: number;
-  onOpenRepairModal: () => void;
-  onRepairWithRyo: (userItemId: string) => void;
-  isRepairingWithRyo?: boolean;
-}
-
 /** Offers repair-kit selection and crafter ryo repair with cost and affordability checks. */
 export function ItemDurabilityRepairActions({
   useritem,
@@ -188,4 +169,24 @@ export function ItemDurabilityRepairActions({
       )}
     </>
   );
+}
+
+type SetIsOpenType = React.Dispatch<React.SetStateAction<boolean>>;
+
+interface RepairItemModalProps {
+  isOpen: boolean;
+  setIsOpen: SetIsOpenType;
+  targetItem: UserItemWithRelations;
+  repairItems: UserItemWithRelations[];
+  onSelectRepairItem: (repairItemId: string, targetItemId: string) => void;
+  isPending?: boolean;
+}
+
+interface ItemDurabilityRepairActionsProps {
+  useritem: UserItemWithRelations;
+  userData: NonNullable<UserWithRelations>;
+  repairItemsCount: number;
+  onOpenRepairModal: () => void;
+  onRepairWithRyo: (userItemId: string) => void;
+  isRepairingWithRyo?: boolean;
 }

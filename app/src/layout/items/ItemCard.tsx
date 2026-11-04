@@ -8,15 +8,6 @@ import { applyActiveVariant } from "@/libs/combat/util";
 import { showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
 
-interface ItemCardProps {
-  userItem: UserItemWithRelations;
-  isSelected: boolean;
-  onSelect: (userItemId: string) => void;
-  /** Makes the card a drag-to-equip source; the page passes it on devices with a mouse or trackpad. */
-  onDragStart?: (userItem: UserItemWithRelations) => void;
-  onDragEnd?: () => void;
-}
-
 /** One backpack item: art, name, rarity and where it goes, with stack size or wear. */
 export function ItemCard({
   userItem,
@@ -90,6 +81,7 @@ export function ItemCard({
 /** Data-transfer type carrying a dragged user item's id. */
 export const USER_ITEM_DRAG_TYPE = "application/x-tnr-user-item";
 
+/** Player-facing rarity names shared by cards and inspectors. */
 export const rarityLabel: Record<ItemRarity, string> = {
   COMMON: "Common",
   RARE: "Rare",
@@ -97,6 +89,7 @@ export const rarityLabel: Record<ItemRarity, string> = {
   LEGENDARY: "Legendary",
 };
 
+/** Rarity text colors shared by cards and inspectors. */
 export const rarityTextClass: Record<ItemRarity, string> = {
   COMMON: "text-slate-600 dark:text-slate-300",
   RARE: "text-blue-700 dark:text-blue-300",
@@ -119,3 +112,12 @@ const itemDetail = (userItem: UserItemWithRelations) => {
   }
   return null;
 };
+
+interface ItemCardProps {
+  userItem: UserItemWithRelations;
+  isSelected: boolean;
+  onSelect: (userItemId: string) => void;
+  /** Makes the card a drag-to-equip source; the page passes it on devices with a mouse or trackpad. */
+  onDragStart?: (userItem: UserItemWithRelations) => void;
+  onDragEnd?: () => void;
+}

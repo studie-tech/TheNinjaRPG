@@ -1,11 +1,9 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import {
-  IMG_EQUIP_SILHOUETTE,
-  type ItemRarity,
-  type ItemSlot,
-} from "@/drizzle/constants";
+import type React from "react";
+import type { ItemRarity, ItemSlot } from "@/drizzle/constants";
+import { IMG_EQUIP_SILHOUETTE } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
@@ -13,27 +11,6 @@ import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
-
-interface EquipmentFigureProps {
-  /** Carried items; the figure shows those equipped. */
-  userItems: UserItemWithRelations[];
-  /** Slot whose picker is open. */
-  activeSlot: ItemSlot | undefined;
-  /** While an item is dragged: the slots it can be dropped on. */
-  dropTargets: ItemSlot[] | undefined;
-  /** Why an equipped item does not work in battle, if it does not. */
-  masteryWarning: (userItem: UserItemWithRelations) => string | undefined;
-  /** Battle keys by item id, shown on devices with a keyboard. */
-  hotkeys?: Record<string, string>;
-  onSlotClick: (slot: ItemSlot) => void;
-  onDropItem: (userItemId: string, slot: ItemSlot) => void;
-  /** Wraps each tile, e.g. in a context menu. */
-  wrapTile?: (
-    slot: ItemSlot,
-    userItem: UserItemWithRelations | undefined,
-    tile: React.ReactNode,
-  ) => React.ReactNode;
-}
 
 /**
  * The character silhouette with its 15 equipment slots, in reading order so keyboard focus
@@ -222,3 +199,24 @@ const rarityBorderClass: Record<ItemRarity, string> = {
   EPIC: "border-violet-500",
   LEGENDARY: "border-amber-500",
 };
+
+interface EquipmentFigureProps {
+  /** Carried items; the figure shows those equipped. */
+  userItems: UserItemWithRelations[];
+  /** Slot whose picker is open. */
+  activeSlot: ItemSlot | undefined;
+  /** While an item is dragged: the slots it can be dropped on. */
+  dropTargets: ItemSlot[] | undefined;
+  /** Why an equipped item does not work in battle, if it does not. */
+  masteryWarning: (userItem: UserItemWithRelations) => string | undefined;
+  /** Battle keys by item id, shown on devices with a keyboard. */
+  hotkeys?: Record<string, string>;
+  onSlotClick: (slot: ItemSlot) => void;
+  onDropItem: (userItemId: string, slot: ItemSlot) => void;
+  /** Wraps each tile, e.g. in a context menu. */
+  wrapTile?: (
+    slot: ItemSlot,
+    userItem: UserItemWithRelations | undefined,
+    tile: React.ReactNode,
+  ) => React.ReactNode;
+}

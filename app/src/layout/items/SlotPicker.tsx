@@ -11,21 +11,6 @@ import { applyActiveVariant } from "@/libs/combat/util";
 import { rankSlotCandidates, slotName } from "@/libs/itemsPage";
 import { cn } from "@/libs/shadui";
 
-interface SlotPickerProps {
-  slot: ItemSlot;
-  /** Carried items that can be equipped. */
-  userItems: UserItemWithRelations[];
-  /** Why the server would refuse to equip an item here, if it would. */
-  getBlockedReason: (userItem: UserItemWithRelations, slot: ItemSlot) => string | null;
-  onEquip: (userItemId: string, slot: ItemSlot) => void;
-  onUnequip: (userItemId: string, slot: ItemSlot) => void;
-  onInspect: (userItemId: string) => void;
-  onShowInBackpack: () => void;
-  onClose: () => void;
-  /** An equip or unequip is saving; the buttons wait for it. */
-  isPending?: boolean;
-}
-
 /**
  * Choose gear for one slot: what is worn there now, then every item that fits, rarest and
  * least worn first. Items the server would refuse stay listed, last, with the reason.
@@ -171,6 +156,7 @@ export function SlotPicker({
   );
 }
 
+/** Displays the active variant art with the item rarity. */
 function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
   const look = applyActiveVariant(userItem as UserItemWithVariants);
   return (
@@ -185,7 +171,23 @@ function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
   );
 }
 
+/** Adds a remaining-durability label only for items that can wear. */
 const wearText = (userItem: UserItemWithRelations) =>
   userItem.item.maxDurability > 0
     ? ` · durability ${Math.round((userItem.durability / userItem.item.maxDurability) * 100)}%`
     : "";
+
+interface SlotPickerProps {
+  slot: ItemSlot;
+  /** Carried items that can be equipped. */
+  userItems: UserItemWithRelations[];
+  /** Why the server would refuse to equip an item here, if it would. */
+  getBlockedReason: (userItem: UserItemWithRelations, slot: ItemSlot) => string | null;
+  onEquip: (userItemId: string, slot: ItemSlot) => void;
+  onUnequip: (userItemId: string, slot: ItemSlot) => void;
+  onInspect: (userItemId: string) => void;
+  onShowInBackpack: () => void;
+  onClose: () => void;
+  /** An equip or unequip is saving; the buttons wait for it. */
+  isPending?: boolean;
+}

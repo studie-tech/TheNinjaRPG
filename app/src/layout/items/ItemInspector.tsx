@@ -54,24 +54,6 @@ import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 
-interface ItemInspectorProps {
-  userItem: UserItemWithRelations;
-  /** Every carried item, for repair kits and variant tokens held elsewhere. */
-  allUserItems: UserItemWithRelations[] | undefined;
-  userData: NonNullable<UserWithRelations>;
-  onClose: () => void;
-  /** Uses the workspace guard so panel changes cannot repeat an in-flight toggle. */
-  onEquip: (
-    input: { userItemId: string; slot?: ItemSlot },
-    onSettled: () => void,
-  ) => void;
-  isEquipping: boolean;
-  /** Opens battle-key assignment; offered on devices with a keyboard. */
-  onSetHotkey?: (userItem: UserItemWithRelations) => void;
-  /** Why the item does not work in battle while equipped, if it does not. */
-  masteryWarning?: string;
-}
-
 /**
  * Everything about one carried item and every action on it: effects and level, equip or
  * unequip, stacks, meals and consumables, repair, variants, evolution, imbuements and
@@ -643,4 +625,22 @@ export function ItemInspector({
       )}
     </section>
   );
+}
+
+interface ItemInspectorProps {
+  userItem: UserItemWithRelations;
+  /** Every carried item, for repair kits and variant tokens held elsewhere. */
+  allUserItems: UserItemWithRelations[] | undefined;
+  userData: NonNullable<UserWithRelations>;
+  onClose: () => void;
+  /** Uses the workspace guard so panel changes cannot repeat an in-flight toggle. */
+  onEquip: (
+    input: { userItemId: string; slot?: ItemSlot },
+    onSettled: () => void,
+  ) => void;
+  isEquipping: boolean;
+  /** Opens battle-key assignment; offered on devices with a keyboard. */
+  onSetHotkey?: (userItem: UserItemWithRelations) => void;
+  /** Why the item does not work in battle while equipped, if it does not. */
+  masteryWarning?: string;
 }

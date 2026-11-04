@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,26 +22,6 @@ import { cn } from "@/libs/shadui";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
-
-/** What the side panel shows: the backpack, one slot's picker, or one item. */
-export type ItemsView =
-  | { kind: "backpack" }
-  | { kind: "slot"; slot: ItemSlot }
-  | { kind: "item"; userItemId: string };
-
-interface ItemsWorkspaceProps {
-  userData: NonNullable<UserWithRelations>;
-  /** Every carried, usable item across bags. */
-  userItems: UserItemWithRelations[];
-  /** Unequipped items of the selected bag. */
-  bagItems: UserItemWithRelations[];
-  /** The selected bag; panels opened in another bag close on a switch. */
-  bag: string;
-  /** Shown beside the Backpack heading: the bag's capacity and slot purchase. */
-  backpackStatus?: React.ReactNode;
-  /** Shown under the Backpack heading: the bag switcher. */
-  bagTabs?: React.ReactNode;
-}
 
 /**
  * The Equipped figure beside the backpack, where a slot opens its picker and an item its
@@ -359,6 +340,7 @@ export function ItemsWorkspace({
   );
 }
 
+/** Uses shared tab semantics and focus handling for the compact inventory view switcher. */
 function PhoneTab({ value, children }: { value: string; children: React.ReactNode }) {
   return (
     <TabsTrigger
@@ -368,4 +350,24 @@ function PhoneTab({ value, children }: { value: string; children: React.ReactNod
       {children}
     </TabsTrigger>
   );
+}
+
+/** What the side panel shows: the backpack, one slot's picker, or one item. */
+export type ItemsView =
+  | { kind: "backpack" }
+  | { kind: "slot"; slot: ItemSlot }
+  | { kind: "item"; userItemId: string };
+
+interface ItemsWorkspaceProps {
+  userData: NonNullable<UserWithRelations>;
+  /** Every carried, usable item across bags. */
+  userItems: UserItemWithRelations[];
+  /** Unequipped items of the selected bag. */
+  bagItems: UserItemWithRelations[];
+  /** The selected bag; panels opened in another bag close on a switch. */
+  bag: string;
+  /** Shown beside the Backpack heading: the bag's capacity and slot purchase. */
+  backpackStatus?: React.ReactNode;
+  /** Shown under the Backpack heading: the bag switcher. */
+  bagTabs?: React.ReactNode;
 }
