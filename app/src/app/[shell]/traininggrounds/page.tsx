@@ -943,7 +943,7 @@ const StatsTraining: React.FC<
             </p>
           </div>
           <div inert={isPending}>
-            <div className="grid grid-cols-3 text-center font-bold">
+            <div className="grid grid-cols-3 items-start text-center font-bold">
               {(props.section === "Elements" ? BasicElementName : MasteryNames).map(
                 (stat, i) => {
                   const label = getTrainingLabel(stat);
@@ -1022,6 +1022,12 @@ const StatsTraining: React.FC<
                           })}{" "}
                           / {cap.toLocaleString()}
                         </div>
+                        {stat === "sageMastery" && (
+                          <div className="font-normal text-muted-foreground text-xs">
+                            Trains Sage Mastery for jutsu and item requirements. Sage
+                            Mode rank comes from quests.
+                          </div>
+                        )}
                       </div>
                       {overCap && (
                         <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
