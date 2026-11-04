@@ -343,7 +343,7 @@ export const useCombatPreferences = () => {
     DEFAULT_LAYOUT_ORDER,
   );
   const [useTabs, setUseTabs] = useLocalStorage<boolean>("combatUseTabs", false);
-  // Full-window battle screen; off shows the battle inside the game layout.
+  // Battle dialog; off shows the battle inside the game layout.
   const [battleFocus, setBattleFocus] = useLocalStorage<boolean>(
     "combatBattleFocus",
     true,

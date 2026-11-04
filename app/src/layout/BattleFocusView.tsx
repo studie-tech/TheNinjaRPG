@@ -2,8 +2,13 @@
 
 import { Minimize2, Swords } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogPortal,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -15,9 +20,10 @@ import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 
 /**
- * Full-window battlefield, fighters, actions and history above the game layout.
+ * Inset battle dialog with fighters, actions and history above the game layout.
  * Desktop panels fit the viewport; phones scroll when the field and usable action
- * space need more height. Popovers, toasts and tutorials can open above this portal.
+ * space need more height. Non-modal Radix behavior keeps the external chat and
+ * tutorial portals usable; covered layout branches remain inert.
  * Raised layout siblings opt into keyboard access with data-battle-focus-layer.
  */
 export function BattleFocusView({
@@ -34,13 +40,11 @@ export function BattleFocusView({
   onShowLayout,
 }: BattleFocusViewProps) {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const [mounted, setMounted] = useState(false);
-  const viewRef = useRef<HTMLElement>(null);
+  const [viewElement, setViewElement] = useState<HTMLDivElement | null>(null);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
 
   // The page behind stays put while the battle covers it.
   useEffect(() => {
-    setMounted(true);
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -49,8 +53,7 @@ export function BattleFocusView({
   }, []);
 
   useEffect(() => {
-    const view = viewRef.current;
-    if (!mounted || !view) return;
+    if (!viewElement) return;
     const covered = new Set<HTMLElement>();
     const restore = () => {
       for (const element of covered) element.removeAttribute("inert");
@@ -64,7 +67,7 @@ export function BattleFocusView({
     const isolateBattle = () => {
       restore();
       const layers = new Set<Element>([
-        view,
+        viewElement,
         ...document.body.querySelectorAll(
           "[data-battle-focus-layer], body > [data-state], [data-radix-popper-content-wrapper], [data-sonner-toaster]",
         ),
@@ -101,9 +104,7 @@ export function BattleFocusView({
       observer.disconnect();
       restore();
     };
-  }, [mounted]);
-
-  if (!mounted) return null;
+  }, [viewElement]);
 
   const me = battle?.usersState.find((user) => user.userId === controlledActorId);
   const fighters = (battle?.usersState ?? []).filter(
@@ -283,15 +284,41 @@ export function BattleFocusView({
     </div>
   );
 
-  return createPortal(
-    <section
-      ref={viewRef}
-      aria-label="Battle"
-      className="bg-background text-foreground fixed inset-0 z-50 h-dvh"
-    >
-      {view}
-    </section>,
-    document.body,
+  return (
+    <Dialog open modal={false} onOpenChange={(open) => !open && onShowLayout()}>
+      <DialogPortal>
+        {/* Radix omits its backdrop for non-modal roots. */}
+        <div
+          data-battle-focus-layer
+          data-battle-focus-backdrop
+          aria-hidden="true"
+          className="fixed inset-0 z-50 bg-black/60"
+        />
+      </DialogPortal>
+      <DialogContent
+        ref={setViewElement}
+        data-battle-focus-dialog
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="flex h-[calc(100dvh-2rem)] w-[calc(100vw-1rem)] max-w-none flex-col gap-0 overflow-hidden rounded-lg p-0 shadow-xl sm:h-[90dvh] sm:w-[92vw] md:max-w-[1600px]"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onInteractOutside={(event) => {
+          // Only the backdrop dismisses; chat, toasts and tutorials keep the battle open.
+          if (
+            !(event.target instanceof Element) ||
+            !event.target.closest("[data-battle-focus-backdrop]")
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <DialogTitle className="sr-only">Battle focus</DialogTitle>
+        <section aria-label="Battle" className="min-h-0 flex-1">
+          {view}
+        </section>
+      </DialogContent>
+    </Dialog>
   );
 }
 

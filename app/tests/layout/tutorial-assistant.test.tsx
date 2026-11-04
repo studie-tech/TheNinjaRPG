@@ -66,10 +66,12 @@ vi.mock("@/layout/Image", () => ({ default: () => null }));
 const dialogContent = ({ children }: { children: ReactNode }) => <div>{children}</div>;
 const dialogMocks = { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: dialogContent, DialogDescription: dialogContent, DialogHeader: dialogContent, DialogTitle: dialogContent };
 const componentSpies: { mockRestore: () => void }[] = [];
+const dialogSpies: { mockRestore: () => void }[] = [];
 
 let close: (() => void) | undefined;
 const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
 const customEvent = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
+const browserEvent = Object.getOwnPropertyDescriptor(globalThis, "Event");
 // The assistant re-places Lemu's portrait whenever its dock resizes.
 const resizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
 beforeEach(() => {
@@ -83,12 +85,13 @@ beforeEach(() => {
   }));
   localStorage.clear();
   Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
+  Object.defineProperty(globalThis, "Event", { configurable: true, value: window.Event });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
   componentSpies.push(vi.spyOn(sortableList, "SortableList").mockImplementation(() => null));
   for (const [name, implementation] of Object.entries(dialogMocks)) {
-    componentSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
+    dialogSpies.push(vi.spyOn(dialogComponents, name as keyof typeof dialogMocks).mockImplementation(implementation as never));
   }
   vi.clearAllMocks();
   mocks.client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -133,6 +136,7 @@ describe("TutorialAssistant highlight activation", () => {
   });
 
   it("keeps the highlighted tutorial control interactive above battle focus", async () => {
+    for (const spy of dialogSpies.splice(0)) spy.mockRestore();
     componentSpies.push(vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(false));
     mocks.step = { ...mocks.step, elementIds: ["lesson-control"], proceedOnHighlightClick: true };
     const view = render(highlightedAssistant());
@@ -159,11 +163,14 @@ afterEach(() => {
   cleanup();
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   for (const spy of componentSpies.splice(0)) spy.mockRestore();
+  for (const spy of dialogSpies.splice(0)) spy.mockRestore();
   close?.();
   close = undefined;
   mocks.client.clear();
   if (customEvent) Object.defineProperty(globalThis, "CustomEvent", customEvent);
   else Reflect.deleteProperty(globalThis, "CustomEvent");
+  if (browserEvent) Object.defineProperty(globalThis, "Event", browserEvent);
+  else Reflect.deleteProperty(globalThis, "Event");
   if (animationFrame) Object.defineProperty(globalThis, "requestAnimationFrame", animationFrame);
   else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
   if (resizeObserver) Object.defineProperty(globalThis, "ResizeObserver", resizeObserver);

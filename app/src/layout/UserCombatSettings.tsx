@@ -156,7 +156,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
             {supportsBattleFocus && (
               <SettingsToggle
                 label="Battle focus"
-                description="Full-window battlefield with compact actions, log and timeline"
+                description="Battle dialog with compact actions, log and timeline"
                 checked={battleFocus}
                 onCheckedChange={config.setBattleFocus}
               />

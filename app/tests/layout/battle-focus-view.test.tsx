@@ -11,8 +11,13 @@ import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
 
 let isDesktop = true;
+const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
 beforeEach(() => {
+  Object.defineProperties(globalThis, {
+    Event: { configurable: true, value: window.Event },
+    CustomEvent: { configurable: true, value: window.CustomEvent },
+  });
   vi.spyOn(mediaQuery, "useMediaQuery").mockImplementation(() => isDesktop);
   vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
   vi.spyOn(pools, "useEffectivePools").mockReturnValue({
@@ -30,11 +35,16 @@ beforeEach(() => {
   vi.spyOn(profileBox, "VisualizeEffects").mockReturnValue(null as never);
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   vi.restoreAllMocks();
   document.body.innerHTML = "";
   document.body.style.overflow = "";
+  for (const [key, descriptor] of eventDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
 });
 
 const fighter = (userId: string, direction: "left" | "right", extra = {}) => ({
@@ -82,6 +92,29 @@ const renderView = (
   );
 
 describe("BattleFocusView", () => {
+  it("names the battle dialog and dismisses it with Escape", () => {
+    const onShowLayout = vi.fn();
+    renderView(onShowLayout);
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Battle focus" }), { key: "Escape" });
+    expect(onShowLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses from the backdrop without dismissing from chat", async () => {
+    const chat = document.createElement("button");
+    chat.setAttribute("data-battle-focus-layer", "");
+    document.body.append(chat);
+    const onShowLayout = vi.fn();
+    renderView(onShowLayout);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.pointerDown(chat, { pointerType: "mouse", button: 0 });
+    fireEvent.click(chat);
+    expect(onShowLayout).not.toHaveBeenCalled();
+    const backdrop = document.querySelector("[data-battle-focus-backdrop]")!;
+    fireEvent.pointerDown(backdrop, { pointerType: "mouse", button: 0 });
+    fireEvent.click(backdrop);
+    await waitFor(() => expect(onShowLayout).toHaveBeenCalledTimes(1));
+  });
+
   it("puts allies beside the player and opponents beside the log, without summons", () => {
     isDesktop = true;
     renderView();

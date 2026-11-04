@@ -591,7 +591,7 @@ export default function CombatPage() {
                     className="h-10 w-10"
                     aria-label="Battle focus"
                     inert={!!results}
-                    title="Battle focus: full-window battle screen"
+                    title="Battle focus: open the battle dialog"
                     onClick={() => config.setBattleFocus(true)}
                   >
                     <Maximize2 className="h-5 w-5" />

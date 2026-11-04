@@ -73,8 +73,9 @@ export const isBattleHotkeyBlocked = (event: KeyboardEvent): boolean => {
   )
     return true;
   // Radix popovers use role=dialog; select options are portalled outside them.
+  // The battle dialog hosts shortcuts; every other dialog still suspends them.
   return !!document.querySelector(
-    "[role='dialog']:not([data-state='closed']), [role='alertdialog']:not([data-state='closed']), [role='listbox']:not([data-state='closed']), [role='menu']:not([data-state='closed'])",
+    "[role='dialog']:not([data-battle-focus-dialog]):not([data-state='closed']), [role='alertdialog']:not([data-state='closed']), [role='listbox']:not([data-state='closed']), [role='menu']:not([data-state='closed'])",
   );
 };
 
