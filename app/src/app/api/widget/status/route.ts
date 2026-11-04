@@ -1,6 +1,5 @@
 import { findUserDeviceForGET } from "@/queries/push";
 import { drizzleDB } from "@/server/db";
-import { secondsFromNow } from "@/utils/time";
 
 /**
  * Status for the home screen widgets.

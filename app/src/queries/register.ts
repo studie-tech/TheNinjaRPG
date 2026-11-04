@@ -2,7 +2,7 @@
  * Database access for register; authorization and transaction scopes stay in callers.
  */
 
-import { and, eq, getTableColumns, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type RecruitEligibilityReason,
