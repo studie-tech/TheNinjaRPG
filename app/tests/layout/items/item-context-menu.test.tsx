@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -129,13 +129,26 @@ it("disables slots the server would refuse", () => {
   expect(screen.getByRole("menuitem", { name: /Item 3/ }).getAttribute("aria-disabled")).toBe("true");
 });
 
-it("opens the inspector for actions with their own confirmation", () => {
+it("opens the inspector for actions with their own confirmation", async () => {
   const { onInspect } = renderMenu(salve);
   openMenu("Healing Salve");
   act(() => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Sell…" }));
   });
-  expect(onInspect).toHaveBeenCalledWith("Healing Salve");
+  await waitFor(() => expect(onInspect).toHaveBeenCalledWith("Healing Salve", screen.getByRole("button", { name: "Healing Salve card" })));
+});
+
+it("returns focus to its card when Escape dismisses the menu", async () => {
+  const { onInspect } = renderMenu(salve);
+  const trigger = screen.getByRole("button", { name: "Healing Salve card" });
+  act(() => trigger.focus());
+  openMenu("Healing Salve");
+  const inspect = screen.getByRole("menuitem", { name: "Inspect" });
+  act(() => inspect.focus());
+  act(() => fireEvent.keyDown(inspect, { key: "Escape" }));
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+  expect(onInspect).not.toHaveBeenCalled();
 });
 
 it("offers set hotkey only for equipped items, and not on touch-only devices", () => {

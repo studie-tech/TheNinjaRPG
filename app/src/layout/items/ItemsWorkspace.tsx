@@ -130,9 +130,10 @@ export function ItemsWorkspace({
     return () => observer.disconnect();
   }, []);
 
-  const openView = (next: ItemsView) => {
-    if (document.activeElement instanceof HTMLElement) {
-      openerRef.current = document.activeElement;
+  const openView = (next: ItemsView, opener = document.activeElement) => {
+    // Panel controls disappear on navigation; retain the equipment/card trigger.
+    if (opener instanceof HTMLElement && !panelRef.current?.contains(opener)) {
+      openerRef.current = opener;
     }
     setOpened({ bag, view: next });
   };
@@ -143,13 +144,11 @@ export function ItemsWorkspace({
     if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
   };
 
-  // Move focus into a newly opened panel so Escape and Tab start there.
-  const panelKey =
-    view.kind === "slot" ? view.slot : view.kind === "item" ? view.userItemId : "";
+  // Opening or reselecting a panel moves focus there so Escape and Tab work there.
   useEffect(() => {
-    if (!panelKey) return;
+    if (opened.view.kind === "backpack") return;
     panelRef.current?.querySelector<HTMLElement>("button")?.focus();
-  }, [panelKey]);
+  }, [opened]);
 
   // Battles unequip worn gear and hide weapons whose mastery gate is unmet; activated
   // skills count toward masteries as they do there.
@@ -186,7 +185,9 @@ export function ItemsWorkspace({
       allUserItems={userItems}
       userData={userData}
       getBlockedReason={getBlockedReason}
-      onInspect={(userItemId) => openView({ kind: "item", userItemId })}
+      onInspect={(userItemId, trigger) =>
+        openView({ kind: "item", userItemId }, trigger)
+      }
       onEquip={(userItemId, slot) => equipOnce({ userItemId, slot })}
       onUnequip={(userItemId, slot) => equipOnce({ userItemId, slot })}
       onMerge={(target) => merge({ itemId: target.itemId })}
@@ -322,6 +323,7 @@ export function ItemsWorkspace({
       {isNarrow && (
         <Sheet open={hasPanel} onOpenChange={(open) => !open && closeView()}>
           <SheetContent
+            ref={panelRef}
             side="bottom"
             // The panels draw their own close button beside "← Backpack".
             showCloseButton={false}

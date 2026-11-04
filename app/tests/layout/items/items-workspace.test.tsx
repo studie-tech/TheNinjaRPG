@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
@@ -149,6 +149,63 @@ it("opens the slot picker for a slot and the inspector for an item", () => {
     fireEvent.click(card("Raijin Tanto"));
   });
   expect(screen.getByRole("region", { name: "Inspecting Raijin Tanto" })).toBeDefined();
+});
+
+it.each([1000, 390])("returns focus to the equipment tile after inspecting from its picker at width %s", async (width) => {
+  useRealInspector();
+  containerWidth = width;
+  renderWorkspace();
+  const trigger = slotOf("HAND_1");
+  act(() => trigger.focus());
+  act(() => fireEvent.click(trigger));
+  const inspect = screen.getByRole("button", { name: "Inspect" });
+  act(() => inspect.focus());
+  act(() => fireEvent.click(inspect));
+  expect(inspect.isConnected).toBe(false);
+  const close = await screen.findByRole("button", { name: "← Backpack" });
+  await waitFor(() => expect(document.activeElement === close).toBe(true));
+  act(() => fireEvent.keyDown(close, { key: "Escape" }));
+  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+});
+
+it.each(["backpack", "equipment"])("returns focus to the %s trigger after inspecting through its menu", async (source) => {
+  useRealInspector();
+  renderWorkspace();
+  const trigger = source === "backpack" ? card("Raijin Tanto") : slotOf("HAND_1");
+  // A pointer context menu need not focus the card before focusing its menu item.
+  act(() => fireEvent.contextMenu(trigger));
+  const inspect = screen.getByRole("menuitem", { name: "Inspect" });
+  act(() => inspect.focus());
+  act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
+  const close = await screen.findByRole("button", { name: "← Backpack" });
+  await waitFor(() => expect(document.activeElement === close).toBe(true));
+  expect(inspect.isConnected).toBe(false);
+  act(() => fireEvent.keyDown(close, { key: "Escape" }));
+  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+});
+
+it("returns focus to another equipment tile when it opens a new picker", async () => {
+  renderWorkspace();
+  act(() => slotOf("HAND_1").focus());
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  const trigger = slotOf("HEAD");
+  act(() => trigger.focus());
+  act(() => fireEvent.click(trigger));
+  act(() => fireEvent.keyDown(screen.getByRole("button", { name: "Close slot picker" }), { key: "Escape" }));
+  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+});
+
+it("focuses the inspector when its equipment menu selects the already inspected item", async () => {
+  useRealInspector();
+  renderWorkspace();
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Inspect" })));
+  act(() => fireEvent.contextMenu(slotOf("HAND_1")));
+  const inspect = screen.getByRole("menuitem", { name: "Inspect" });
+  act(() => inspect.focus());
+  act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "← Backpack" })).toBe(true));
 });
 
 it("equips from the slot picker into that slot", () => {
@@ -353,7 +410,7 @@ it("shares an unequip guard and pending state with the inspector opened from its
   expect(screen.getByText("Equipping")).toBeDefined();
 });
 
-it("keeps an inspector unequip guarded after closing it and inspecting through the equipment menu", () => {
+it("keeps an inspector unequip guarded after closing it and inspecting through the equipment menu", async () => {
   useRealInspector();
   renderWorkspace();
   act(() => fireEvent.click(slotOf("HAND_1")));
@@ -364,7 +421,7 @@ it("keeps an inspector unequip guarded after closing it and inspecting through t
   fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
   act(() => fireEvent.contextMenu(slotOf("HAND_1")));
   act(() => fireEvent.click(screen.getByRole("menuitem", { name: "Inspect" })));
-  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Unequip" }));
   expect(equip).toHaveBeenCalledTimes(1);
   expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: katana.id, slot: "HAND_1" });
   expect(inspectorEquip).not.toHaveBeenCalled();

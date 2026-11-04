@@ -24,7 +24,8 @@ interface ItemContextMenuProps {
   allUserItems: UserItemWithRelations[];
   userData: NonNullable<UserWithRelations>;
   getBlockedReason: (userItem: UserItemWithRelations, slot: ItemSlot) => string | null;
-  onInspect: (userItemId: string) => void;
+  /** The mounted card or equipment button remains the inspector's focus return target. */
+  onInspect: (userItemId: string, trigger?: HTMLButtonElement | null) => void;
   onEquip: (userItemId: string, slot: ItemSlot) => void;
   onUnequip: (userItemId: string, slot: ItemSlot) => void;
   onMerge: (userItem: UserItemWithRelations) => void;
@@ -52,6 +53,8 @@ export function ItemContextMenu({
   children,
 }: ItemContextMenuProps) {
   const openedAt = useRef(0);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const pendingInspection = useRef<string | null>(null);
   return (
     <ContextMenu
       onOpenChange={(open) => {
@@ -59,6 +62,7 @@ export function ItemContextMenu({
       }}
     >
       <ContextMenuTrigger
+        ref={triggerRef}
         className="contents"
         onClickCapture={(event) => {
           if (Date.now() - openedAt.current < LONG_PRESS_CLICK_MS) {
@@ -69,13 +73,24 @@ export function ItemContextMenu({
       >
         {children}
       </ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent
+        onCloseAutoFocus={(event) => {
+          const userItemId = pendingInspection.current;
+          if (!userItemId) return;
+          // Open after the menu releases its focus trap so the inspector can take focus.
+          event.preventDefault();
+          pendingInspection.current = null;
+          onInspect(userItemId, triggerRef.current?.querySelector("button") ?? null);
+        }}
+      >
         <ItemMenuEntries
           userItem={userItem}
           allUserItems={allUserItems}
           userData={userData}
           getBlockedReason={getBlockedReason}
-          onInspect={onInspect}
+          onInspect={(userItemId) => {
+            pendingInspection.current = userItemId;
+          }}
           onEquip={onEquip}
           onUnequip={onUnequip}
           onMerge={onMerge}
