@@ -1,4 +1,4 @@
-import { BattleTypes, UserRanks } from "@/drizzle/constants";
+import { BattleTypes, MAX_PLAYER_LEVEL, UserRanks } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -42,8 +42,22 @@ const makeSchema = () =>
         defaultValue: [],
         dataSource: "villages",
       },
-      { id: "minLevel", label: "Min Level", type: "number", defaultValue: undefined },
-      { id: "maxLevel", label: "Max Level", type: "number", defaultValue: undefined },
+      {
+        id: "minLevel",
+        label: "Min Level",
+        type: "number",
+        defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
+      },
+      {
+        id: "maxLevel",
+        label: "Max Level",
+        type: "number",
+        defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
+      },
     ] as const,
   });
 
