@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as itemActions from "@/hooks/useItemActions";
@@ -7,9 +8,11 @@ import * as contentImage from "@/layout/ContentImage";
 import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
 import * as image from "@/layout/Image";
+import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as inspector from "@/layout/items/ItemInspector";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
+import * as itemLib from "@/libs/item";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
 
@@ -17,6 +20,8 @@ const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let equip: ReturnType<typeof vi.fn>;
 let settle: () => void;
+let inspectorEquip: ReturnType<typeof vi.fn>;
+let isEquipping = false;
 let containerWidth = 1000;
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 const originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, "ResizeObserver");
@@ -33,10 +38,12 @@ beforeEach(() => {
   }
   window.localStorage.clear();
   equip = vi.fn();
+  inspectorEquip = vi.fn();
+  isEquipping = false;
   settle = () => {};
-  vi.spyOn(itemActions, "useItemActions").mockImplementation(((options: { onDone: () => void }) => {
-    settle = options.onDone;
-    return { equip, merge: vi.fn(), isEquipping: false };
+  vi.spyOn(itemActions, "useItemActions").mockImplementation(((options: { useritem?: UserItemWithRelations; onDone: () => void }) => {
+    if (!options.useritem) settle = options.onDone;
+    return { equip: options.useritem ? inspectorEquip : equip, merge: vi.fn(), isEquipping: options.useritem ? false : isEquipping, isPending: false };
   }) as never);
   setFinePointer(true);
   containerWidth = 1000;
@@ -48,6 +55,7 @@ beforeEach(() => {
       observe() {
         this.callback([{ contentRect: { width: containerWidth } }]);
       }
+      unobserve() {}
       disconnect() {}
     },
   });
@@ -304,4 +312,70 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
   const sheet = screen.getByRole("dialog");
   // One close button, beside "← Backpack", instead of the sheet's own above it.
   expect(within(sheet).getAllByRole("button", { name: /close/i }).map((b) => b.textContent)).toEqual(["Close inspector"]);
+});
+
+/** Keep the inspector's real action controls to exercise toggles across panel changes. */
+const useRealInspector = () => {
+  vi.spyOn(inspector, "ItemInspector").mockRestore();
+  Object.assign(vi.spyOn(client, "api" as never), {
+    item: { getEvolutions: { useQuery: () => ({ data: [] }) } },
+  });
+  vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);
+  vi.spyOn(itemLib, "calcItemSellingPrice").mockReturnValue(120);
+};
+
+it("shares an unequip guard and pending state with the inspector opened from its slot", () => {
+  useRealInspector();
+  const { rerender } = renderWorkspace();
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Inspect" })));
+  // The ref also guards a second click before React renders mutation pending state.
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  expect(equip).toHaveBeenCalledTimes(1);
+  expect(inspectorEquip).not.toHaveBeenCalled();
+  isEquipping = true;
+  rerender({});
+  expect(screen.queryByRole("button", { name: "Unequip" })).toBeNull();
+  expect(screen.getByText("Equipping")).toBeDefined();
+});
+
+it("keeps an inspector unequip guarded after closing it and inspecting through the equipment menu", () => {
+  useRealInspector();
+  renderWorkspace();
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Inspect" })));
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Close inspector" })));
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  act(() => fireEvent.contextMenu(slotOf("HAND_1")));
+  act(() => fireEvent.click(screen.getByRole("menuitem", { name: "Inspect" })));
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  expect(equip).toHaveBeenCalledTimes(1);
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: katana.id, slot: "HAND_1" });
+  expect(inspectorEquip).not.toHaveBeenCalled();
+});
+
+it("keeps an inspector equip guarded across backpack reopen and releases it when that equip settles", () => {
+  useRealInspector();
+  const { rerender } = renderWorkspace();
+  act(() => fireEvent.click(card("Raijin Tanto")));
+  fireEvent.click(screen.getByRole("button", { name: "Equip" }));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "← Backpack" })));
+  act(() => fireEvent.click(card("Raijin Tanto")));
+  fireEvent.click(screen.getByRole("button", { name: "Equip" }));
+  expect(equip).toHaveBeenCalledTimes(1);
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: tanto.id });
+  expect(inspectorEquip).not.toHaveBeenCalled();
+  isEquipping = true;
+  rerender({});
+  expect(screen.queryByRole("button", { name: "Equip" })).toBeNull();
+  act(() => equip.mock.calls[0]?.[1]?.onSettled?.());
+  isEquipping = false;
+  rerender({});
+  expect(document.querySelector("[data-items-panel]")).toBeNull();
+  act(() => fireEvent.click(card("Raijin Tanto")));
+  fireEvent.click(screen.getByRole("button", { name: "Equip" }));
+  expect(equip).toHaveBeenCalledTimes(2);
 });

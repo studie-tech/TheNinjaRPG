@@ -72,7 +72,7 @@ const player = { userId: "user-1", status: "AWAKE", battleId: null, level: 30, v
 
 const renderInspector = (props: Partial<Parameters<typeof ItemInspector>[0]> = {}) => {
   const onClose = vi.fn();
-  render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={onClose} {...props} />);
+  render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={onClose} onEquip={equip} isEquipping={false} {...props} />);
   return { onClose };
 };
 
@@ -93,7 +93,7 @@ it("offers no equip for items without an equipment slot", () => {
 });
 
 it("shows equip for backpack items and unequip for equipped ones", () => {
-  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);
+  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(screen.getByRole("button", { name: /^Equip$/ })).toBeDefined();
   expect(screen.queryByRole("button", { name: /Unequip/ })).toBeNull();
   view.unmount();
@@ -101,11 +101,11 @@ it("shows equip for backpack items and unequip for equipped ones", () => {
   expect(screen.getByText("Equipped in Hand 2")).toBeDefined();
   expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /Unequip/ }));
-  expect(equip).toHaveBeenCalledWith({ userItemId: "ui-1", slot: "HAND_2" });
+  expect(equip).toHaveBeenCalledWith({ userItemId: "ui-1", slot: "HAND_2" }, expect.any(Function));
 });
 
 it("shows eat meal only for meals", () => {
-  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);
+  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(screen.queryByRole("button", { name: /Eat meal/ })).toBeNull();
   view.unmount();
   renderInspector({ userItem: userItem({ itemType: "MEAL", canStack: true }) });
@@ -113,7 +113,7 @@ it("shows eat meal only for meals", () => {
 });
 
 it("shows split only for stacks of 2+", () => {
-  const view = render(<ItemInspector userItem={userItem({ canStack: true, quantity: 1 })} allUserItems={[]} userData={player} onClose={vi.fn()} />);
+  const view = render(<ItemInspector userItem={userItem({ canStack: true, quantity: 1 })} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(screen.getByRole("button", { name: /Merge Stacks/ })).toBeDefined();
   expect(screen.queryByRole("button", { name: /Split Stack/ })).toBeNull();
   view.unmount();
@@ -122,7 +122,7 @@ it("shows split only for stacks of 2+", () => {
 });
 
 it("shows drop for event or non-shop items and sell otherwise", () => {
-  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);
+  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(nativeButton("Sell Item [120 ryo]")).toBeDefined();
   view.unmount();
   renderInspector({ userItem: userItem({ isEventItem: true }) });
@@ -130,7 +130,7 @@ it("shows drop for event or non-shop items and sell otherwise", () => {
 });
 
 it("offers set hotkey for equipped items only, and hides it on touch-only devices", () => {
-  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);
+  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} />);
   expect(screen.queryByRole("button", { name: "Set hotkey" })).toBeNull();
   view.unmount();
   const onSetHotkey = vi.fn();

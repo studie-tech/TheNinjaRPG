@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import type { ItemSlot } from "@/drizzle/constants";
 import { ITEM_LEVEL_CAP, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { useItemActions } from "@/hooks/useItemActions";
@@ -59,6 +60,12 @@ interface ItemInspectorProps {
   allUserItems: UserItemWithRelations[] | undefined;
   userData: NonNullable<UserWithRelations>;
   onClose: () => void;
+  /** Uses the workspace guard so panel changes cannot repeat an in-flight toggle. */
+  onEquip: (
+    input: { userItemId: string; slot?: ItemSlot },
+    onSettled: () => void,
+  ) => void;
+  isEquipping: boolean;
   /** Opens battle-key assignment; offered on devices with a keyboard. */
   onSetHotkey?: (userItem: UserItemWithRelations) => void;
   /** Why the item does not work in battle while equipped, if it does not. */
@@ -75,6 +82,8 @@ export function ItemInspector({
   allUserItems,
   userData,
   onClose,
+  onEquip,
+  isEquipping,
   onSetHotkey,
   masteryWarning,
 }: ItemInspectorProps) {
@@ -89,17 +98,15 @@ export function ItemInspector({
     merge,
     consume,
     sell,
-    equip,
     splitStack,
     repairWithKit: mutateRepairItem,
     repairWithRyo: mutateRepairWithRyo,
     evolve: evolveItem,
     removeImbuement,
-    isPending: isLoading,
+    isPending,
     isMerging,
     isConsuming,
     isSelling,
-    isEquipping,
     isEvolving,
     isSplitting,
     isUsingRepairItem,
@@ -119,6 +126,8 @@ export function ItemInspector({
     { itemId: useritem.itemId },
     { staleTime: 5 * 60 * 1000 },
   );
+
+  const isLoading = isPending || isEquipping;
 
   // Derived
   const structures = userData?.village?.structures;
@@ -242,14 +251,16 @@ export function ItemInspector({
         <>
           <div className="flex flex-row flex-wrap items-center gap-2">
             {canEquip && (
-              <Button onClick={() => equip({ userItemId: useritem.id })}>
+              <Button onClick={() => onEquip({ userItemId: useritem.id }, onClose)}>
                 <Shirt className="mr-2 h-5 w-5" />
                 Equip
               </Button>
             )}
             {equippedIn && (
               <Button
-                onClick={() => equip({ userItemId: useritem.id, slot: equippedIn })}
+                onClick={() =>
+                  onEquip({ userItemId: useritem.id, slot: equippedIn }, onClose)
+                }
               >
                 <Shirt className="mr-2 h-5 w-5" />
                 Unequip

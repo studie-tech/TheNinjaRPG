@@ -73,13 +73,17 @@ export function ItemsWorkspace({
     useritem: undefined,
     onDone: () => {},
   });
-  const equipOnce = (input: { userItemId: string; slot: ItemSlot }) => {
+  const equipOnce = (
+    input: { userItemId: string; slot?: ItemSlot },
+    onSettled?: () => void,
+  ) => {
     if (equipInFlight.current) return;
     equipInFlight.current = true;
     // Released by this equip alone; other actions settling must not open the guard.
     equip(input, {
       onSettled: () => {
         equipInFlight.current = false;
+        onSettled?.();
       },
     });
   };
@@ -222,6 +226,8 @@ export function ItemsWorkspace({
           allUserItems={userItems}
           userData={userData}
           onClose={closeView}
+          onEquip={equipOnce}
+          isEquipping={isEquipping}
           onSetHotkey={setHotkey}
           masteryWarning={masteryWarning(inspected)}
         />
