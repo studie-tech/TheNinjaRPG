@@ -220,7 +220,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const height = page?.style.height ?? "";
     if (page) {
       // The world is portalled to body. Preserve the covered page's scroll extent while suspending its paint.
-      page.style.height = `${page.offsetHeight}px`;
+      page.style.height = `${Math.max(page.offsetHeight, page.scrollHeight)}px`;
       page.setAttribute("data-world-covered", "true");
     }
     exit?.focus({ preventScroll: true });
