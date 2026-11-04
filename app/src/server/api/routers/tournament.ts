@@ -47,6 +47,10 @@ import { eventTournamentProcedures, syncEventTournament } from "./tournamentEven
 
 const TOURNAMENT_FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";
+const TOURNAMENT_SYNCHRONIZED: BaseServerResponse = {
+  success: true,
+  message: "Tournament synchronized.",
+};
 
 export const tournamentRouter = createTRPCRouter({
   ...eventTournamentProcedures,
@@ -273,7 +277,7 @@ const promoteOpenTournamentIfStarted = async (
   if (startResult.rowsAffected > 0) {
     const refetched = await fetchTournamentForSync(client, tournamentId);
     if (!refetched) {
-      return [data, { success: true, message: "Tournament synchronized." }];
+      return [data, TOURNAMENT_SYNCHRONIZED];
     }
     return [refetched, null];
   }
@@ -291,7 +295,7 @@ const tryAdvanceTournamentRoundOrWait = async (
   allWon: boolean,
 ): Promise<BaseServerResponse | null> => {
   if (currentData.status === "IN_PROGRESS" && !(now > roundEndAt || allWon)) {
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   if (currentData.status === "IN_PROGRESS" && matches.length > 1) {
@@ -334,7 +338,7 @@ const tryAdvanceTournamentRoundOrWait = async (
       );
     }
 
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   return null;
@@ -353,7 +357,7 @@ const handleTournamentRecordLedger = async (
   }
   if (currentData.status === "COMPLETED") {
     await cleanupCompletedTournament(client, tournamentId);
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
   return errorResponse(TOURNAMENT_FINALIZATION_INCOMPLETE);
 };
@@ -427,7 +431,7 @@ const finalizeTournamentAndPayWinner = async (
 ): Promise<BaseServerResponse> => {
   const winnerId = getWinner(finalMatch);
   if (!winnerId) {
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   if (currentData.status !== "IN_PROGRESS") {
@@ -448,9 +452,8 @@ const finalizeTournamentAndPayWinner = async (
       const latestTournament = await fetchTournamentForSync(client, tournamentId);
       if (latestTournament?.status === "COMPLETED") {
         await cleanupCompletedTournament(client, tournamentId);
-        return { success: true, message: "Tournament synchronized." };
       }
-      return { success: true, message: "Tournament synchronized." };
+      return TOURNAMENT_SYNCHRONIZED;
     }
     if (recordAfterInsertError) {
       return errorResponse(TOURNAMENT_FINALIZATION_INCOMPLETE);
@@ -470,7 +473,7 @@ const finalizeTournamentAndPayWinner = async (
         client,
         tournamentId,
       );
-      return { success: true, message: "Tournament synchronized." };
+      return TOURNAMENT_SYNCHRONIZED;
     }
     return errorResponse(TOURNAMENT_FINALIZATION_INCOMPLETE);
   }
@@ -515,7 +518,7 @@ const finalizeTournamentAndPayWinner = async (
     }
   });
 
-  return { success: true, message: "Tournament synchronized." };
+  return TOURNAMENT_SYNCHRONIZED;
 };
 
 /**
@@ -540,7 +543,7 @@ export const syncTournamentState = async (
   const now = new Date();
   if (data.type === "EVENT") {
     await syncEventTournament(client, tournamentId);
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   const [afterOpen, earlyAfterOpen] = await promoteOpenTournamentIfStarted(
@@ -553,7 +556,7 @@ export const syncTournamentState = async (
   data = afterOpen;
 
   if (data.status !== "IN_PROGRESS" && data.status !== "COMPLETED") {
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   const currentData = data;
@@ -586,7 +589,7 @@ export const syncTournamentState = async (
   if (ledgerResult) return ledgerResult;
 
   if (!finalMatch) {
-    return { success: true, message: "Tournament synchronized." };
+    return TOURNAMENT_SYNCHRONIZED;
   }
 
   return await finalizeTournamentAndPayWinner(

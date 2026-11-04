@@ -5,6 +5,7 @@ import {
 } from "@/drizzle/constants";
 import { collapseRewards } from "@/libs/rewards";
 import type {
+  EventGame,
   EventParticipant,
   EventSeries,
   EventSlot,
@@ -28,6 +29,18 @@ export const createEventState = (
   audit: [],
 });
 
+/** Earliest round with an unfinished series; Infinity once every series is complete. */
+export const currentEventRound = (event: Pick<EventTournamentState, "series">) =>
+  Math.min(...event.series.filter((s) => !s.complete).map((s) => s.round));
+
+/** Whether a series of the given round has both seats resolved and waits to be begun. */
+export const isSeriesAwaitingBegin = (series: EventSeries, round: number) =>
+  series.round === round && series.resolved && !series.complete && !series.begun;
+
+/** Whether a game has been launched and its battle has not concluded yet. */
+export const isGameInFlight = (game: EventGame) =>
+  ["STARTING", "FIGHTING"].includes(game.status);
+
 /** Explain eligibility failures against the player's frozen entry snapshot. */
 export const eligibilityFailures = (
   config: EventTournamentConfig,
@@ -46,6 +59,12 @@ export const eligibilityFailures = (
     ? [`Requires ${config.minMasteredJutsu} mastered jutsu`]
     : []),
 ];
+
+/** Join the eligibility failures into one rejection; empty when the player qualifies. */
+export const eligibilityError = (
+  config: EventTournamentConfig,
+  snapshot: EventParticipant["snapshot"],
+) => eligibilityFailures(config, snapshot).join(". ");
 
 /**
  * Seed accepted entrants and build the bracket in place, stopping at the staff start gate.
@@ -276,13 +295,9 @@ export const beginEventRound = (
   seriesId?: string,
 ) => {
   resolveEventSlots(event);
-  const round = Math.min(
-    ...event.series.filter((s) => !s.complete).map((s) => s.round),
-  );
+  const round = currentEventRound(event);
   if (!Number.isFinite(round)) return "No matches remain";
-  const candidates = event.series.filter(
-    (s) => s.round === round && s.resolved && !s.complete && !s.begun,
-  );
+  const candidates = event.series.filter((s) => isSeriesAwaitingBegin(s, round));
   if (event.config.scheduling === "SEQUENTIAL") {
     if (event.series.some((s) => s.begun && !s.complete))
       return "Another series is in progress";

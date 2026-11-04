@@ -43,8 +43,7 @@ import {
   insertUserTowerDefenseUpgradeForPurchasePermanentUpgrade,
   listTowerDefenseCharacterForGetAssetConfigs,
   listTowerDefenseCharacterForGetCharacters,
-  listTowerDefenseCharacterForInitiateSecureSession,
-  listTowerDefenseCharacterForInitiateSecureSession2,
+  listTowerDefenseCharacterForInitiateSession,
   listTowerDefenseRunForGetLeaderboard,
   listTowerDefenseRunForGetRunHistory,
   listTowerDefenseUpgradeForGetUpgrades,
@@ -64,6 +63,7 @@ import {
   publicProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   areTowerDefenseClaimsEnabled,
@@ -175,13 +175,11 @@ export const towerDefenseRouter = createTRPCRouter({
     })
     .use(ratelimitMiddleware)
     .mutation(async ({ ctx }) => {
-      const [userUpgrades, upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
-        await Promise.all([
-          listUserTowerDefenseUpgradeForGetUserUpgrades(ctx.drizzle, ctx),
-          listTowerDefenseUpgradeForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession2(ctx.drizzle),
-        ]);
+      const [userUpgrades, definitions] = await Promise.all([
+        listUserTowerDefenseUpgradeForGetUserUpgrades(ctx.drizzle, ctx),
+        fetchSessionDefinitions(ctx.drizzle),
+      ]);
+      const { upgradeDefinitions } = definitions;
 
       const baseShuriken = getShurikenAbility();
       const ability = applyUpgradesToAbility(
@@ -197,9 +195,7 @@ export const towerDefenseRouter = createTRPCRouter({
         ability,
         playerBonuses,
         maxHealth,
-        upgradeDefinitions,
-        enemyDefinitionsDb,
-        playerCharactersDb,
+        ...definitions,
       });
     }),
 
@@ -214,13 +210,7 @@ export const towerDefenseRouter = createTRPCRouter({
       mcp: { description: "Start a guest tower defense session" },
     })
     .mutation(async ({ ctx }) => {
-      const [upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
-        await Promise.all([
-          listTowerDefenseUpgradeForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession2(ctx.drizzle),
-        ]);
-
+      const definitions = await fetchSessionDefinitions(ctx.drizzle);
       const ability = getShurikenAbility();
       const playerBonuses = getDefaultPlayerBonuses();
       const maxHealth = TD_PLAYER_BASE_HEALTH;
@@ -230,9 +220,7 @@ export const towerDefenseRouter = createTRPCRouter({
         ability,
         playerBonuses,
         maxHealth,
-        upgradeDefinitions,
-        enemyDefinitionsDb,
-        playerCharactersDb,
+        ...definitions,
         isGuest: true,
       });
     }),
@@ -965,6 +953,19 @@ function extractClientParams(sessionParams: SessionParams) {
     sessionParams;
   return clientParams;
 }
+
+/** Load the definitions a session signs; enemies keep their wave order. */
+const fetchSessionDefinitions = async (client: DrizzleClient) => {
+  const [upgradeDefinitions, characters] = await Promise.all([
+    listTowerDefenseUpgradeForInitiateSecureSession(client),
+    listTowerDefenseCharacterForInitiateSession(client),
+  ]);
+  return {
+    upgradeDefinitions,
+    enemyDefinitionsDb: characters.filter((c) => !c.isPlayer),
+    playerCharactersDb: characters.filter((c) => c.isPlayer),
+  };
+};
 
 /**
  * Shared logic for initiating a tower defense session

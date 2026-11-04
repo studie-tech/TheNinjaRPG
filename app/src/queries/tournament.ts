@@ -1,11 +1,16 @@
 /**
  * Database access for tournament; authorization and transaction scopes stay in callers.
  */
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, type SQL } from "drizzle-orm";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
+
+const matchUsers = {
+  user1: { columns: { userId: true, username: true, avatar: true } },
+  user2: { columns: { userId: true, username: true, avatar: true } },
+} as const;
 
 /**
  * Fetches a tournament from the database.
@@ -14,18 +19,10 @@ import type { DrizzleClient } from "@/server/db";
  * @returns The tournament and matches, or undefined if missing or completed.
  */
 export const fetchTournament = async (client: DrizzleClient, tournamentId: string) => {
-  return client.query.tournament.findFirst({
-    where: and(eq(tournament.id, tournamentId), ne(tournament.status, "COMPLETED")),
-    with: {
-      matches: {
-        with: {
-          user1: { columns: { userId: true, username: true, avatar: true } },
-          user2: { columns: { userId: true, username: true, avatar: true } },
-        },
-        orderBy: (table, { asc }) => [asc(table.match)],
-      },
-    },
-  });
+  return findTournamentWithMatches(
+    client,
+    and(eq(tournament.id, tournamentId), ne(tournament.status, "COMPLETED")),
+  );
 };
 
 /** Load a tournament and ordered match/player data, including completed tournaments needed by synchronization. */
@@ -33,19 +30,20 @@ export const fetchTournamentForSync = async (
   client: DrizzleClient,
   tournamentId: string,
 ) => {
-  return client.query.tournament.findFirst({
-    where: eq(tournament.id, tournamentId),
+  return findTournamentWithMatches(client, eq(tournament.id, tournamentId));
+};
+
+/** Build the tournament read with its matches in bracket order and their players. */
+const findTournamentWithMatches = (client: DrizzleClient, where: SQL | undefined) =>
+  client.query.tournament.findFirst({
+    where,
     with: {
       matches: {
-        with: {
-          user1: { columns: { userId: true, username: true, avatar: true } },
-          user2: { columns: { userId: true, username: true, avatar: true } },
-        },
+        with: matchUsers,
         orderBy: (table, { asc }) => [asc(table.match)],
       },
     },
   });
-};
 
 /** Load a tournament record by its record ID; a missing record yields undefined. */
 export const fetchTournamentRecord = async (
@@ -67,10 +65,7 @@ export const fetchTournamentRecord = async (
 export const fetchMatch = async (client: DrizzleClient, matchId: string) => {
   return client.query.tournamentMatch.findFirst({
     where: eq(tournamentMatch.id, matchId),
-    with: {
-      user1: { columns: { userId: true, username: true, avatar: true } },
-      user2: { columns: { userId: true, username: true, avatar: true } },
-    },
+    with: matchUsers,
   });
 };
 
