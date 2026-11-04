@@ -4,17 +4,23 @@ import { useEffect } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import {
   DEFAULT_FONT_SCALE,
+  FONT_SCALE_VALUES,
   type FontScaleValue,
   persistFontScaleCookie,
   toFontScale,
 } from "@/libs/layoutPreference";
 
-export const FONT_SCALE_OPTIONS = [
-  { value: 0.9, label: "Small" },
-  { value: 1, label: "Default" },
-  { value: 1.15, label: "Large" },
-  { value: 1.3, label: "Extra Large" },
-] as const;
+const FONT_SCALE_LABELS: Record<FontScaleValue, string> = {
+  0.9: "Small",
+  1: "Default",
+  1.15: "Large",
+  1.3: "Extra Large",
+};
+
+export const FONT_SCALE_OPTIONS = FONT_SCALE_VALUES.map((value) => ({
+  value,
+  label: FONT_SCALE_LABELS[value],
+}));
 
 export type { FontScaleValue };
 

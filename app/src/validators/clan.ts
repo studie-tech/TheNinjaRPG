@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClanBoostTypes } from "@/drizzle/constants";
+import { CLAN_ASSASSIN_SLOTS, ClanBoostTypes } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
 import {
   createReservedNameField,
@@ -57,10 +57,10 @@ export const clanGetRequestSchema = z.object({
 });
 
 /**
- * Checks if a user is a clan leader.
+ * Checks if a user is a clan co-leader.
  * @param userId - The ID of the user to check.
- * @param clan - The clan object to check against.
- * @returns A boolean indicating whether the user is a clan leader.
+ * @param clanData - The clan object to check against.
+ * @returns A boolean indicating whether the user is a clan co-leader.
  */
 export const checkCoLeader = (userId: string, clanData?: Clan | null) => {
   return [clanData?.coLeader1, clanData?.coLeader2, clanData?.coLeader3].includes(
@@ -75,18 +75,7 @@ export const checkCoLeader = (userId: string, clanData?: Clan | null) => {
  * @returns A boolean indicating whether the user is an assassin.
  */
 export const checkAssassin = (userId: string, clanData?: Clan | null) => {
-  return [
-    clanData?.assassin1,
-    clanData?.assassin2,
-    clanData?.assassin3,
-    clanData?.assassin4,
-    clanData?.assassin5,
-    clanData?.assassin6,
-    clanData?.assassin7,
-    clanData?.assassin8,
-    clanData?.assassin9,
-    clanData?.assassin10,
-  ].includes(userId);
+  return CLAN_ASSASSIN_SLOTS.some((slot) => clanData?.[slot] === userId);
 };
 
 // Clan search schema (used in Clan.tsx for searching clans)
