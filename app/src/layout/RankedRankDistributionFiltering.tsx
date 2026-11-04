@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -21,8 +22,22 @@ const makeSchema = () =>
         defaultValue: undefined,
         normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
       },
-      { id: "minLevel", label: "Min Level", type: "number", defaultValue: undefined },
-      { id: "maxLevel", label: "Max Level", type: "number", defaultValue: undefined },
+      {
+        id: "minLevel",
+        label: "Min Level",
+        type: "number",
+        defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
+      },
+      {
+        id: "maxLevel",
+        label: "Max Level",
+        type: "number",
+        defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
+      },
     ] as const,
   });
 

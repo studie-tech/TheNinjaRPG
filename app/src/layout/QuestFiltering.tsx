@@ -9,12 +9,13 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import { allObjectiveTasks } from "@/validators/objectives";
+import { QUEST_FILTER_MAX_LEVEL } from "@/validators/quest";
 
 interface QuestFilteringProps {
   state: QuestFilteringState;
 }
 
-const makeSchema = () =>
+export const makeQuestFilteringSchema = () =>
   defineFilteringSchema({
     fields: [
       { id: "name", label: "Name", type: "text", defaultValue: "" },
@@ -60,6 +61,7 @@ const makeSchema = () =>
         label: "User Level",
         type: "number",
         defaultValue: undefined,
+        max: QUEST_FILTER_MAX_LEVEL,
       },
       {
         id: "village",
@@ -106,7 +108,7 @@ const QuestFiltering: React.FC<QuestFilteringProps> = (props) => {
   };
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={makeQuestFilteringSchema()}
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-quests"
@@ -117,10 +119,10 @@ const QuestFiltering: React.FC<QuestFilteringProps> = (props) => {
 export default QuestFiltering;
 
 export const getFilter = (state: QuestFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, makeQuestFilteringSchema());
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(makeQuestFilteringSchema());
   return {
     ...cf.values,
     cf,

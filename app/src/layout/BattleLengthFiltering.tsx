@@ -1,4 +1,4 @@
-import { BattleTypes } from "@/drizzle/constants";
+import { BattleTypes, MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
@@ -33,24 +33,32 @@ const makeSchema = () =>
         label: "Min Winner Level",
         type: "number",
         defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
       },
       {
         id: "maxWinnerLevel",
         label: "Max Winner Level",
         type: "number",
         defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
       },
       {
         id: "minLoserLevel",
         label: "Min Loser Level",
         type: "number",
         defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
       },
       {
         id: "maxLoserLevel",
         label: "Max Loser Level",
         type: "number",
         defaultValue: undefined,
+        min: 1,
+        max: MAX_PLAYER_LEVEL,
       },
     ] as const,
   });

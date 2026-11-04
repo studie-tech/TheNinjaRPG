@@ -67,12 +67,22 @@ export interface DateFieldConfig<Id extends string> {
   visibleIf?: (ctx?: unknown) => boolean;
 }
 
-/** Numeric input (undefined considered empty) */
+/**
+ * Numeric input (undefined considered empty).
+ *
+ * Bounds should mirror the endpoint's input validator. Stepping down from a blank input
+ * starts at 0, so without `min` a single click or arrow key produces -1. Values outside
+ * the bounds stay editable, but are treated as empty and never reach the API.
+ */
 export interface NumberFieldConfig<Id extends string> {
   id: Id;
   label: string;
   type: "number";
   defaultValue: number | undefined;
+  /** Lowest accepted value; defaults to 0 since no content filter takes negatives. */
+  min?: number;
+  /** Highest accepted value; unbounded when omitted. */
+  max?: number;
   filterKey?: string;
   doubleWidth?: boolean;
   countActive?: (value: number | undefined) => number;
@@ -753,6 +763,8 @@ export const ContentFiltering = <
                       optional
                       onOptionalValueChange={setter}
                       step="any"
+                      min={field.min ?? 0}
+                      max={field.max}
                     />
                   </div>
                 );
