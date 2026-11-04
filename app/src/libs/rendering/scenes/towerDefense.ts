@@ -1,4 +1,3 @@
-import { ring } from "honeycomb-grid";
 import { Container, Graphics } from "pixi.js";
 import {
   HEX_ASPECT_RATIO,
@@ -7,9 +6,12 @@ import {
 } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import { getAudioPreference } from "@/libs/audioPreferences";
-import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
+import { hexGridHeightRatio } from "@/libs/hexgrid";
 import { createMapControls } from "@/libs/rendering/mapControls";
-import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
+import {
+  createWorldSprites,
+  fadeSceneryNearPositions,
+} from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { createTowerDefenseActors } from "@/libs/rendering/scenes/towerDefenseActors";
@@ -55,7 +57,7 @@ export const createTowerDefenseScene = async (options: {
   const game = await createGameRenderer({
     ...options,
     background: 0x1a1a2e,
-    height: (width) => width * calculateWidth2Height(currentSize, currentSize + 2),
+    height: (width) => width * hexGridHeightRatio(currentSize, currentSize),
   });
   game.setAnimating(false);
   try {
@@ -122,7 +124,7 @@ export const createTowerDefenseScene = async (options: {
         terrainLayer.addChild(terrain.container);
         sceneryLayer.addChild(scenery.container);
         const width = game.renderer.width,
-          height = width * calculateWidth2Height(size, size + 2);
+          height = width * hexGridHeightRatio(size, size);
         game.renderer.resize(width, height);
         occupancy = "";
         rangeKey = "";
@@ -198,24 +200,11 @@ export const createTowerDefenseScene = async (options: {
         .join("|");
       if (art && nextOccupancy !== occupancy) {
         occupancy = nextOccupancy;
-        const affected = new Set<string>();
-        for (const enemy of enemies)
-          if (enemy.health > 0) {
-            const tile = data.grid.getHex(enemy.position);
-            if (!tile) continue;
-            affected.add(`${tile.col},${tile.row}`);
-            for (const neighbor of data.grid.traverse(
-              ring({ radius: 1, center: tile }),
-            ))
-              affected.add(`${neighbor.col},${neighbor.row}`);
-          }
-        for (const entry of art.entries)
-          if (!entry.description.small)
-            entry.sprite.alpha = affected.has(
-              entry.description.id.replace("scenery:", ""),
-            )
-              ? 0.5
-              : 1;
+        fadeSceneryNearPositions(
+          art.entries,
+          data.grid,
+          enemies.filter((enemy) => enemy.health > 0).map((enemy) => enemy.position),
+        );
       }
       if (snapshot.sfxUrl && audioUrl !== snapshot.sfxUrl) {
         audioUrl = snapshot.sfxUrl;

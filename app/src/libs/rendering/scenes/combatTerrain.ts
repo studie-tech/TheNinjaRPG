@@ -1,5 +1,4 @@
 import { createNoise2D } from "simplex-noise";
-import { HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import {
   COMBAT_BORDER_BOTTOM,
   COMBAT_BORDER_LEFT,
@@ -8,6 +7,7 @@ import {
 } from "@/libs/combat/constants";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
+import { stackedHexWidths } from "@/libs/hexgrid";
 import {
   getProceduralTerrain,
   proceduralDecoration,
@@ -22,8 +22,7 @@ export const prepareCombatTerrain = (
   prng: () => number,
   lightLayout: boolean,
 ) => {
-  const hexSize =
-    width / (battle.width - HEX_STACKING_DISPLACEMENT * (battle.width - 1));
+  const hexSize = width / stackedHexWidths(battle.width);
   const noise = createNoise2D(prng),
     assets = createNoise2D(prng);
   const grid = getBattleGrid(hexSize, battle, {

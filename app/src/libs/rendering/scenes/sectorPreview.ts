@@ -1,8 +1,8 @@
 import alea from "alea";
 import { Container, Graphics, getMaxFragmentPrecision, RenderLayer } from "pixi.js";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
+import { hexGridHeightRatio } from "@/libs/hexgrid";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
-import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer } from "@/libs/rendering/runtime";
@@ -41,7 +41,7 @@ export const createSectorPreview = async (options: {
 }) => {
   const { map, sector, decorationAssets, terrainRegistry, villageType } = options.data;
   const structures = options.data.structures ?? [];
-  const ratio = calculateWidth2Height(map.width, map.height + 2);
+  const ratio = hexGridHeightRatio(map.width, map.height);
   const game = await createGameRenderer({
     ...options,
     touchAction: options.canMove() ? "none" : "auto",

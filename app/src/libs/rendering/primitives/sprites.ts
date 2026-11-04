@@ -1,3 +1,4 @@
+import type { Grid } from "honeycomb-grid";
 import {
   Color,
   Container,
@@ -6,6 +7,7 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
+import { type TerrainHex, tileKeysNear } from "@/libs/hexgrid";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import {
   createSceneAssets,
@@ -817,4 +819,22 @@ export const createWorldSprites = async (
       }
     },
   };
+};
+
+/** Scenery on or next to `positions` turns translucent so it cannot hide what stands there. */
+export const fadeSceneryNearPositions = (
+  entries: {
+    description: { id: string; small?: boolean };
+    sprite: { alpha: number };
+  }[],
+  grid: Grid<TerrainHex>,
+  positions: { col: number; row: number }[],
+) => {
+  const affected = tileKeysNear(grid, positions);
+  for (const entry of entries) {
+    if (entry.description.small) continue;
+    entry.sprite.alpha = affected.has(entry.description.id.replace("scenery:", ""))
+      ? 0.5
+      : 1;
+  }
 };

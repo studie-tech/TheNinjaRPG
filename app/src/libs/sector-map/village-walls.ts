@@ -1,3 +1,4 @@
+import { oddQHexDistance, oddQToCube } from "@/libs/hexgrid";
 import type {
   NormalizedSectorAnchor,
   NormalizedSectorTile,
@@ -106,12 +107,6 @@ const inBounds = (
   point: SectorCoordinate,
 ) => isCoordinateInSectorMap(map, point);
 
-const oddQToCube = (point: SectorCoordinate) => {
-  const x = point.x;
-  const z = point.y - (point.x - (point.x & 1)) / 2;
-  return { x, y: -x - z, z };
-};
-
 /**
  * Structure art occupies its center and first ring. The wall sits beyond one
  * additional clear ring and keeps one exterior map ring available, so a
@@ -152,7 +147,7 @@ const buildConvexInterior = (
   structures: SectorCoordinate[],
 ) => {
   const padding = VILLAGE_STRUCTURE_FOOTPRINT_RADIUS + VILLAGE_WALL_CLEARANCE;
-  const cubes = structures.map(oddQToCube);
+  const cubes = structures.map((point) => oddQToCube(point.x, point.y));
   const minX = Math.min(...cubes.map((point) => point.x)) - padding;
   const maxX = Math.max(...cubes.map((point) => point.x)) + padding;
   const minY = Math.min(...cubes.map((point) => point.y)) - padding;
@@ -162,7 +157,7 @@ const buildConvexInterior = (
   const interior = new Set<string>();
   for (let x = 0; x < map.width; x++) {
     for (let y = 0; y < map.height; y++) {
-      const cube = oddQToCube({ x, y });
+      const cube = oddQToCube(x, y);
       if (
         cube.x >= minX &&
         cube.x <= maxX &&
@@ -227,11 +222,8 @@ const edgeVertexIds = (tile: SectorCoordinate, direction: number) => {
   ];
 };
 
-export const getOddQHexDistance = (a: SectorCoordinate, b: SectorCoordinate) => {
-  const ac = oddQToCube(a);
-  const bc = oddQToCube(b);
-  return Math.max(Math.abs(ac.x - bc.x), Math.abs(ac.y - bc.y), Math.abs(ac.z - bc.z));
-};
+export const getOddQHexDistance = (a: SectorCoordinate, b: SectorCoordinate) =>
+  oddQHexDistance(a.x, a.y, b.x, b.y);
 
 /**
  * Pick a small, well-spaced set of visually significant contour corners.

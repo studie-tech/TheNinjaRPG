@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, Container, Texture, UniformGroup } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
 import type { GroundEffect } from "@/libs/combat/types";
-import { getBattlefieldHeightRatio } from "@/libs/combat/util";
+import { hexGridHeightRatio } from "@/libs/hexgrid";
 import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
@@ -25,7 +25,7 @@ const setup = async (zoom = 2, lightLayout = true, extra: { groundEffects?: Grou
   const user = makeBattleUser("camera-user", { isAi: true, isOriginal: true, longitude: 6, latitude: 5 });
   const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10, background: lightLayout ? "ground" : "ocean", groundEffects: extra.groundEffects ?? [] });
   let snapshot = { battle, userId: user.userId, actions: [], timeDiff: 0, assets: extra.assets ?? [], requestedIds: new Set(), active: true, sound: false, volume: 0, showGridNumbers: false, inspect: true } as unknown as CombatSceneSnapshot;
-  const height = 390 * getBattlefieldHeightRatio(12, 10), canvas = document.createElement("canvas");
+  const height = 390 * hexGridHeightRatio(12, 10), canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, height);
   const listeners = new window.AbortController(), owned = new Set<() => void>();
   let update = (_frame: GameFrame) => {}, resize = (_width: number, _height: number) => {}, disposed = false;

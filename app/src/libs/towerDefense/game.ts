@@ -6,23 +6,14 @@
  */
 
 import { TD_PROJECTILE_SPEED, type TDEnemyDirection } from "@/drizzle/constants";
+import { oddQHexDistance } from "@/libs/hexgrid";
 import type { HexPosition, SpriteDirection } from "@/validators/towerDefense";
 
 /**
  * Calculate axial distance between two hexes.
  */
-export const calculateHexDistance = (a: HexPosition, b: HexPosition): number => {
-  const aq = a.col;
-  const ar = a.row - Math.floor((a.col - (a.col & 1)) / 2);
-  const bq = b.col;
-  const br = b.row - Math.floor((b.col - (b.col & 1)) / 2);
-
-  const dq = Math.abs(aq - bq);
-  const dr = Math.abs(ar - br);
-  const ds = Math.abs(aq + ar - (bq + br));
-
-  return Math.max(dq, Math.max(dr, ds));
-};
+export const calculateHexDistance = (a: HexPosition, b: HexPosition): number =>
+  oddQHexDistance(a.col, a.row, b.col, b.row);
 
 /**
  * Interpolate a projectile's flight, 0 to 1, from its local spawn time. The server only

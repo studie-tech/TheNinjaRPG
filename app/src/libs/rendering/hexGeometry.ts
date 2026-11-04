@@ -1,15 +1,4 @@
-import { HEX_ASPECT_RATIO, HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
-
-/**
- * Calculates the width to height ratio for a hex grid based on its dimensions.
- * Used for maintaining proper aspect ratio in orthographic views.
- */
-export const calculateWidth2Height = (width: number, height: number): number => {
-  return (
-    (height * HEX_ASPECT_RATIO) / (width - HEX_STACKING_DISPLACEMENT * (width - 1))
-  );
-};
 
 /**
  * Returns the standard hex point indices used for tile face and ground geometry

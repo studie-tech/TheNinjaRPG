@@ -1,4 +1,4 @@
-import { Grid, Orientation, rectangle } from "honeycomb-grid";
+import type { Grid } from "honeycomb-grid";
 import type {
   AvatarFacing,
   BattleType,
@@ -13,8 +13,6 @@ import {
   CombatStatTypes,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
-  HEX_ASPECT_RATIO,
-  HEX_STACKING_DISPLACEMENT,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -85,7 +83,7 @@ import { checkAssassin, checkCoLeader } from "@/validators/clan";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
-import { defineHex } from "../hexgrid";
+import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
@@ -938,8 +936,6 @@ export const reconcileLobbyPools = (
 /**
  * Height of the rendered battlefield as a fraction of its width, for a grid of the given size
  */
-export const getBattlefieldHeightRatio = (width: number, height: number) =>
-  ((height + 2) * HEX_ASPECT_RATIO) / (width - HEX_STACKING_DISPLACEMENT * (width - 1));
 
 /**
  * Gets the default width and height of the battle grid based on the type of battle and the level of the user
@@ -1002,28 +998,7 @@ export const getBattleGrid = (
   hexsize: number,
   battle: ReturnedBattle,
   origin?: { x: number; y: number },
-) => {
-  const Tile = defineHex({
-    dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
-    origin,
-    orientation: Orientation.FLAT,
-  });
-
-  const grid = new Grid(Tile, rectangle({ width: battle.width, height: battle.height }))
-    .filter((tile) => {
-      try {
-        return tile.width !== 0;
-      } catch (_e) {
-        return false;
-      }
-    })
-    .map((tile) => {
-      tile.cost = 1;
-      tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
-      return tile;
-    });
-  return grid;
-};
+) => createHexGrid(hexsize, battle.width, battle.height, origin).map(nameArenaTile);
 
 /**
  * Finds a user in the battle state based on location
@@ -3394,38 +3369,6 @@ export const getActionAffectedTiles = (
 };
 
 /**
- * Calculate the hex distance between two positions using axial/cube coordinates.
- * For FLAT orientation hex grids with odd offset (-1) as used by honeycomb-grid.
- *
- * In honeycomb-grid with FLAT orientation:
- * - q = col (axial q is just the column)
- * - r = row - floor((col - (col & 1)) / 2) (offset applied to columns)
- */
-export const calcHexDistance = (
-  aCol: number,
-  aRow: number,
-  bCol: number,
-  bRow: number,
-): number => {
-  // Convert FLAT orientation offset coordinates to axial (q, r)
-  // For FLAT with odd offset: q = col, r = row - floor((col - (col & 1)) / 2)
-  const aq = aCol;
-  const ar = aRow - Math.floor((aCol - (aCol & 1)) / 2);
-
-  const bq = bCol;
-  const br = bRow - Math.floor((bCol - (bCol & 1)) / 2);
-
-  // Calculate cube distance using axial coordinates
-  // Cube coords: x = q, z = r, y = -x - z
-  // Distance = max(|dx|, |dy|, |dz|) = max(|dq|, |dr|, |dq + dr|)
-  const dq = Math.abs(aq - bq);
-  const dr = Math.abs(ar - br);
-  const ds = Math.abs(aq + ar - (bq + br));
-
-  return Math.max(dq, dr, ds);
-};
-
-/**
  * Get the distance to the closest enemy from a user's position.
  * Returns null if no enemies found or user not found.
  * Distance follows battle teams regardless of faction or controller identity.
@@ -3447,7 +3390,7 @@ export const getDistanceToClosestEnemy = (
 
   // Calculate distance to each enemy and return the minimum
   const distances = enemies.map((enemy) =>
-    calcHexDistance(user.longitude, user.latitude, enemy.longitude, enemy.latitude),
+    oddQHexDistance(user.longitude, user.latitude, enemy.longitude, enemy.latitude),
   );
 
   return Math.min(...distances);

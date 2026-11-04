@@ -4,10 +4,10 @@ import { Container, RenderLayer } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
+import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
-import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
@@ -85,7 +85,7 @@ export const createTravelScene = async (options: {
   const logicalWidth = 1024;
   const displayRatio = () => {
     const map = options.getSnapshot().window[0]?.map;
-    return map ? calculateWidth2Height(map.width, map.height + 2) : 0.7;
+    return map ? hexGridHeightRatio(map.width, map.height) : 0.7;
   };
   const game = await createGameRenderer({
     ...options,
@@ -581,8 +581,7 @@ export const createTravelScene = async (options: {
             startScenery,
             position,
             height:
-              logicalWidth *
-              calculateWidth2Height(entry.map.width, entry.map.height + 2),
+              logicalWidth * hexGridHeightRatio(entry.map.width, entry.map.height),
             margin: (grid.toArray()[0]?.width ?? 50) * 3,
           };
           sectors.set(entry.sector, installed);

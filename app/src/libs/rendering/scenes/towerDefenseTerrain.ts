@@ -1,8 +1,7 @@
 import alea from "alea";
-import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { createNoise2D } from "simplex-noise";
-import { HEX_ASPECT_RATIO, TD_HEX_SIZE } from "@/drizzle/constants";
-import { defineHex } from "@/libs/hexgrid";
+import { TD_HEX_SIZE } from "@/drizzle/constants";
+import { createHexGrid, nameArenaTile } from "@/libs/hexgrid";
 import {
   getProceduralTerrain,
   proceduralDecoration,
@@ -22,20 +21,17 @@ export const prepareTowerDefenseTerrain = (
   size: number,
   center: HexPosition,
 ) => {
-  const Tile = defineHex({
-    dimensions: { width: TD_HEX_SIZE, height: TD_HEX_SIZE * HEX_ASPECT_RATIO },
-    origin: { x: -TD_HEX_SIZE / 2, y: -TD_HEX_SIZE / 2 },
-    orientation: Orientation.FLAT,
+  const grid = createHexGrid(TD_HEX_SIZE, size, size, {
+    x: -TD_HEX_SIZE / 2,
+    y: -TD_HEX_SIZE / 2,
   });
-  const grid = new Grid(Tile, rectangle({ width: size, height: size }));
   const prng = alea(seed),
     noise = createNoise2D(prng),
     assets = createNoise2D(prng);
   const scenery: WorldSpriteDescription[] = [];
   const looks = new Map<string, ReturnType<typeof getProceduralTerrain>>();
   for (const tile of grid) {
-    tile.cost = 1;
-    tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
+    nameArenaTile(tile);
     tile.level = noise(tile.col / size - 0.5, tile.row / size - 0.5) / 2 + 0.5;
     tile.assetStrength = assets(tile.col / size - 0.5, tile.row / size - 0.5) / 2 + 0.5;
   }
