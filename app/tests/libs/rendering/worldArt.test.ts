@@ -27,6 +27,21 @@ describe("world art skinning", () => {
     expect(resolveWorldDecoration(custom)).toBe(custom);
   });
 
+  it("recognizes stock decorations from persisted file keys, CDN aliases and renditions", () => {
+    for (const asset of DECORATION_ASSETS_BY_KEY.values()) {
+      const expected = resolveWorldDecoration(asset);
+      if (expected === asset) continue;
+      const raw = asset.filepath.replace(/\.webp$/, "");
+      for (const filepath of [raw, `${raw}?width=128`, raw.replace("uploadthing.b-cdn.net", "ui0arpl8sm.ufs.sh"), raw.replace("uploadthing.b-cdn.net", "utfs.io")]) {
+        expect(resolveWorldDecoration({ ...asset, filepath })).toEqual(expected);
+      }
+      const custom = { ...asset, filepath: raw.replace("/f/", "/f/custom-") };
+      expect(resolveWorldDecoration(custom)).toBe(custom);
+      const otherHost = { ...asset, filepath: raw.replace("uploadthing.b-cdn.net", "custom.example.com") };
+      expect(resolveWorldDecoration(otherHost)).toBe(otherHost);
+    }
+  });
+
   it("uses dry stock rock views in the desert while preserving wet and custom artwork", () => {
     for (const key of ["rock.sand", "rock.grey", "rock.slate"]) {
       const asset = DECORATION_ASSETS_BY_KEY.get(key)!;

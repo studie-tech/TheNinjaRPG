@@ -1,3 +1,4 @@
+import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Sprite, Container, RenderLayer, Texture, Rectangle } from "pixi.js";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -8,7 +9,7 @@ import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
-import { createSceneAssets, stabilizeNearestTexture, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
+import { createSceneAssets, stabilizeNearestTexture, textureOpaqueFrame, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
 
@@ -133,7 +134,7 @@ describe("world sprite atlas ownership", () => {
     const layers = { ground: new RenderLayer(), world: new RenderLayer(), ui: new RenderLayer() };
     art.attachLayers(layers);
     const sprite = art.entries[0]!.sprite;
-    const owner = sprite.parent;
+    const owner = art.container;
     const frame = { now: 0, delta: 0, reducedMotion: false };
     art.animate(frame, 0.25);
     expect(sprite.alpha).toBe(0); expect(sprite.renderable).toBe(false);
@@ -152,13 +153,49 @@ describe("world sprite atlas ownership", () => {
     art.setViewport({ minX: 200, minY: 200, maxX: 300, maxY: 300 }, 0);
     art.animate(frame, 2);
     expect(sprite.alpha).toBe(0.8); expect(sprite.renderable).toBe(false);
-    expect(sprite.parentRenderLayer).toBe(layers.world);
-    expect(sprite.parent).toBe(owner);
-    expect(layers.ground.renderLayerChildren).toHaveLength(0);
+    expect(sprite.parent?.parentRenderLayer).toBe(layers.ground);
+    expect(sprite.parent?.parent).toBe(owner);
+    expect(layers.ground.renderLayerChildren).toHaveLength(1);
     art.animate(frame, 1);
     expect(sprite.parent?.parentRenderLayer).toBe(layers.ground);
     expect(sprite.parent?.parent).toBe(owner);
   });
+  it("samples fractional atlas cuts at integer texels and shares occupied bounds between views", () => {
+    const pixels = new Uint8Array(16 * 16 * 4);
+    for (let y = 2; y < 10; y++) for (let x = 3; x < 13; x++) pixels[(y * 16 + x) * 4 + 3] = 255;
+    const original = new Texture({source:new BufferImageSource({resource:pixels,width:16,height:16})});
+    const first = new Texture({source:original.source,frame:new Rectangle(.5,.5,14,14)});
+    const second = new Texture({source:original.source,frame:first.frame.clone()});
+    const read = vi.fn(() => pixels);
+    try {
+      expect(textureOpaqueFrame(first, read)).toMatchObject({x:3,y:2,width:10,height:8});
+      expect(textureOpaqueFrame(second, read)).toBe(textureOpaqueFrame(first, read));
+      expect(read).toHaveBeenCalledTimes(1);
+    } finally {first.destroy(false);second.destroy(false);original.destroy(true);}
+  });
+
+  it("sorts padded upright scenery by visible feet while preserving authored structure contacts", async () => {
+    const pixels = new Uint8Array(16 * 16 * 4);
+    for (let y = 2; y < 10; y++) for (let x = 3; x < 13; x++) pixels[(y * 16 + x) * 4 + 3] = 255;
+    const original = new Texture({source:new BufferImageSource({resource:pixels,width:16,height:16})});
+    vi.spyOn(Assets, "load").mockImplementation(async () => original);
+    const game = {own() {}, signal:new AbortController().signal} as unknown as GameRenderer;
+    const descriptions = ["decoration", "garden", "structure"].map((kind, i) => ({id:kind,kind,image:"padded-scenery.png",size:32,x:i*40,y:40,groundY:24}));
+    const art = await createWorldSprites(game, descriptions);
+    const layers = {ground:new RenderLayer(),world:new RenderLayer(),ui:new RenderLayer()};
+    art.attachLayers(layers, 100);
+    const actor = new Container();actor.zIndex = -(30 + 100);layers.world.attach(actor);layers.world.sortRenderLayerChildren();
+    try {
+      expect(art.entries.map(e=>e.groundY)).toEqual([36,36,24]);
+      expect(layers.world.renderLayerChildren.indexOf(actor)).toBeGreaterThan(layers.world.renderLayerChildren.indexOf(art.entries[0]!.sprite));
+      actor.zIndex = -(40 + 100);layers.world.sortRenderLayerChildren();
+      expect(layers.world.renderLayerChildren.indexOf(actor)).toBeLessThan(layers.world.renderLayerChildren.indexOf(art.entries[0]!.sprite));
+      expect(art.entries[0]!.sprite.position).toMatchObject({x:0,y:40});
+      art.attachLayers(layers,-50);
+      expect(art.entries[0]!.sprite.zIndex).toBe(14);
+    } finally {art.dispose();actor.destroy();original.destroy(true);}
+  });
+
   it("retains authored character frames so material coordinates keep their published dimensions", async () => {
     const pixels = new Uint8Array(8 * 8 * 4); pixels[4 * (2 * 8 + 2) + 3] = 255;
     const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });
@@ -361,6 +398,22 @@ describe("world sprite atlas ownership", () => {
     expect(source.destroyed).toBe(false);
     original.destroy(true);
   });
+  it.each(["baked", "physical"] as const)("lets %s lighting own scenery footprints without an extra contact shadow", async (kind) => {
+    const original = new Texture({source:new BufferImageSource({resource:new Uint8Array(16*16*4),width:16,height:16})});
+    vi.spyOn(Assets, "load").mockImplementation(async () => original);
+    const contact = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    const release = Object.assign(() => {}, {ready:Promise.resolve()});
+    const provider = {kind, register:vi.fn(() => release)} as unknown as WorldShadows;
+    const game = {own() {}, signal:new AbortController().signal} as unknown as GameRenderer;
+    const art = await createWorldSprites(game, [{id:"tree",kind:"decoration",image:`contact-owner-${kind}.png`,size:40,x:0,y:20,groundY:0,shadow:.25,shadowCaster:"canopy"}], provider);
+    try {
+      expect(provider.register).toHaveBeenCalledTimes(1);
+      expect(art.entries[0]?.shadow).toBeUndefined();
+      expect(art.container.children.some(child => child.label === "scenery-shadows")).toBe(false);
+      expect(contact).not.toHaveBeenCalled();
+    } finally {art.dispose();original.destroy(true);contact.mockRestore();}
+  });
+
   it("shares one contact mask across scopes and releases it after the final owner", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16*16*4), width: 16, height: 16 }) });

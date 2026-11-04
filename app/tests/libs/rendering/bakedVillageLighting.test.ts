@@ -3,22 +3,23 @@ import { BufferImageSource, Container, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import * as fields from "@/libs/rendering/villageLightField";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import { shadowDirectionBlend } from "@/libs/rendering/bakedShadowAtlas";
+import { shadowDirectionIndex } from "@/libs/rendering/bakedShadowAtlas";
 import { createBakedVillageLighting, strongestShadowLights, type VillageLight } from "@/libs/rendering/bakedVillageLighting";
 
 describe("baked village shadow selection", () => {
   it.each(Array.from({ length: 8 }, (_, direction) => direction))("samples compass direction %i without requesting another texture", direction => {
     const angle = direction * Math.PI / 4;
-    const blend = shadowDirectionBlend(Math.cos(angle), Math.sin(angle));
-    expect(blend.first + blend.mix).toBeCloseTo(direction, 9);
-    expect(blend.second).toBe((blend.first + 1) % 8);
+    expect(shadowDirectionIndex(Math.cos(angle), Math.sin(angle))).toBe(direction);
   });
 
-  it("crossfades equally halfway between compass samples and wraps through east", () => {
-    const half = shadowDirectionBlend(Math.cos(Math.PI / 8), Math.sin(Math.PI / 8));
-    expect(half.first).toBe(0); expect(half.second).toBe(1); expect(half.mix).toBeCloseTo(0.5);
-    const seam = shadowDirectionBlend(1, -0.00001);
-    expect(seam.first).toBe(7); expect(seam.second).toBe(0); expect(seam.mix).toBeGreaterThan(0.999);
+  it("selects one complete silhouette between samples and wraps through east", () => {
+    for (let direction = 0; direction < 8; direction++) {
+      for (const offset of [-0.49, 0, 0.49]) {
+        const angle = (direction + offset) * Math.PI / 4;
+        expect(shadowDirectionIndex(Math.cos(angle), Math.sin(angle))).toBe(direction);
+      }
+    }
+    expect(shadowDirectionIndex(1, -0.00001)).toBe(0);
   });
 
   it("gives two equal nearby lights half the shadow opacity each", () => {

@@ -108,34 +108,50 @@ export const readTexturePixels = (texture: Texture, width: number, height: numbe
   return new Uint8Array(context.getImageData(0, 0, width, height).data);
 };
 
-const opaqueFrames = new WeakMap<Texture, Rectangle>();
+const opaqueFrames = new WeakMap<Texture["source"], Map<string, Rectangle>>();
 
-/** Character cutouts use their visible bounds as ground, without retaining a second pixel buffer. */
-export const textureOpaqueFrame = (texture: Texture) => {
-  const cached = opaqueFrames.get(texture);
-  if (cached) return cached;
+/** Shared atlas views cache occupied bounds without retaining a second pixel buffer. */
+export const textureOpaqueFrame = (texture: Texture, readPixels?: () => Uint8Array) => {
   const frame = texture.frame;
+  const key = `${frame.x}:${frame.y}:${frame.width}:${frame.height}`;
+  let frames = opaqueFrames.get(texture.source);
+  const cached = frames?.get(key);
+  if (cached) return cached;
   let result = frame;
   try {
     const width = texture.source.pixelWidth,
-      pixels = readTexturePixels(texture, width, texture.source.pixelHeight);
+      pixels =
+        readPixels?.() ?? readTexturePixels(texture, width, texture.source.pixelHeight);
     let minX = frame.right,
       minY = frame.bottom,
       maxX = -1,
       maxY = -1;
-    for (let y = frame.y; y < frame.bottom; y++)
-      for (let x = frame.x; x < frame.right; x++)
+    // Atlas cuts can start between texels; sample integer pixels and clip the bounds to the view.
+    for (let y = Math.floor(frame.y); y < Math.ceil(frame.bottom); y++)
+      for (let x = Math.floor(frame.x); x < Math.ceil(frame.right); x++)
         if ((pixels[(y * width + x) * 4 + 3] ?? 0) > 0) {
           minX = Math.min(minX, x);
           minY = Math.min(minY, y);
           maxX = Math.max(maxX, x);
           maxY = Math.max(maxY, y);
         }
-    if (maxX >= minX && maxY >= minY)
-      result = new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    if (maxX >= minX && maxY >= minY) {
+      const x = Math.max(frame.x, minX),
+        y = Math.max(frame.y, minY);
+      result = new Rectangle(
+        x,
+        y,
+        Math.min(frame.right, maxX + 1) - x,
+        Math.min(frame.bottom, maxY + 1) - y,
+      );
+    }
   } catch {
-    // Unreadable artwork remains visible with its full-frame contact point.
+    // Unreadable artwork remains visible with its declared frame contact point.
   }
-  opaqueFrames.set(texture, result);
+  if (!frames) {
+    frames = new Map();
+    opaqueFrames.set(texture.source, frames);
+  }
+  frames.set(key, result);
   return result;
 };

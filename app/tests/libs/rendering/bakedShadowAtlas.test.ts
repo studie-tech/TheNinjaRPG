@@ -6,7 +6,7 @@ import { BufferImageSource, Container, Matrix, Rectangle, Sprite, Texture } from
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import sources from "@/libs/rendering/bakedWorldSources.json";
-import { bakedShadowBasis, bakedShadowKey, bakedShadowTransform, hasBakedShadow, loadBakedShadowAtlas } from "@/libs/rendering/bakedShadowAtlas";
+import { bakedShadowBasis, bakedShadowBounds, bakedShadowKey, bakedShadowTransform, placeBakedShadow, hasBakedShadow, loadBakedShadowAtlas } from "@/libs/rendering/bakedShadowAtlas";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
@@ -87,6 +87,54 @@ describe("prebaked world assets", () => {
       }
     }
     expect(pages.size).toBeLessThan(40);
+  });
+
+  it("keeps every published footprint fixed while one opaque mask follows the light", async () => {
+    const page = texture(1024, 1024);
+    const game = { assets: { acquireTexture: () => ({resource: Promise.resolve(page), release() {}}) }, signal: new AbortController().signal, isDisposed: () => false } as unknown as GameRenderer;
+    try {
+      for (const [key] of Object.entries(sources)) {
+        const [, frame, , , authoredBasis] = JSON.parse(key);
+        const basis = authoredBasis ?? [1, 0, 0, -1];
+        const original = texture(frame.x + frame.width, frame.y + frame.height);
+        const view = new Texture({ source: original.source, frame: new Rectangle(frame.x, frame.y, frame.width, frame.height) });
+        const sprite = new Sprite(view), shadow = new Sprite();
+        sprite.anchor.set(.37, .88);
+        const pose = new Matrix(...basis);
+        for (const axis of ["a", "b", "c", "d"] as const) pose[axis] *= .4;
+        pose.tx = 123; pose.ty = -57;
+        pose.prepend(new Matrix(.85, .2, -.1, 1.3, 20, 15));
+        const atlas = await loadBakedShadowAtlas(game, key, false);
+        try {
+          const matrix = bakedShadowTransform(atlas, sprite, pose);
+          const corners = [[0, 0], [atlas.cellWidth, 0], [0, atlas.cellHeight], [atlas.cellWidth, atlas.cellHeight]].map(([x, y]) => matrix.apply({x: x!, y: y!}));
+          const bounds = bakedShadowBounds(atlas, matrix);
+          expect(bounds.minX).toBeCloseTo(Math.min(...corners.map(p => p.x)), 6);
+          expect(bounds.maxX).toBeCloseTo(Math.max(...corners.map(p => p.x)), 6);
+          expect(bounds.minY).toBeCloseTo(Math.min(...corners.map(p => p.y)), 6);
+          expect(bounds.maxY).toBeCloseTo(Math.max(...corners.map(p => p.y)), 6);
+          // A source ground point is expressed in the bake's fixed frame, independent of the light.
+          const foot = pose.apply({ x: frame.width * (.5 - sprite.anchor.x), y: frame.height * (1 - sprite.anchor.y) });
+          const ground = new Matrix(...basis).apply({ x: frame.width * .5, y: frame.height });
+          const point = { x: (ground.x / frame.height - atlas.minX) / atlas.width * atlas.cellWidth, y: (-ground.y / frame.height - atlas.minY) / atlas.height * atlas.cellHeight };
+          for (let direction = 0; direction < 8; direction++) {
+            for (const offset of [-.49, 0, .49]) {
+              const angle = (direction + offset) * Math.PI / 4;
+              placeBakedShadow(shadow, atlas, matrix, Math.cos(angle), Math.sin(angle), .3);
+              expect(shadow.texture).toBe(atlas.views[direction]!);
+              expect(shadow.visible).toBe(true);
+              expect(shadow.alpha).toBe(.3);
+              shadow.updateLocalTransform();
+              const contact = shadow.localTransform.apply(point);
+              expect(contact.x).toBeCloseTo(foot.x, 5);
+              expect(contact.y).toBeCloseTo(foot.y, 5);
+            }
+          }
+          placeBakedShadow(shadow, atlas, matrix, 1, 0, 0);
+          expect(shadow.visible).toBe(false);
+        } finally { atlas.destroy(); atlas.releaseTextures(); sprite.destroy(); shadow.destroy(); view.destroy(false); original.destroy(true); }
+      }
+    } finally { page.destroy(true); }
   });
 
   it("invalidates a bake when artwork, material metadata, or the atlas frame changes", () => {

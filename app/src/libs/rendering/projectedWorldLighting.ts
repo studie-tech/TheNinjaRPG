@@ -17,7 +17,7 @@ import {
   bakedShadowTransform,
   hasBakedShadow,
   loadBakedShadowAtlas,
-  placeBakedShadowPair,
+  placeBakedShadow,
 } from "@/libs/rendering/bakedShadowAtlas";
 import { worldLighting } from "@/libs/rendering/color";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
@@ -323,21 +323,19 @@ export const createProjectedWorldLighting = (
           continue;
         }
         if (!record.shadows.length) {
-          for (let i = 0; i < (record.atlas ? 2 : 1); i++) {
-            const shadow = new Sprite(record.source.texture);
-            shadow.anchor.set(record.source.anchor.x, 1);
-            shadow.tint = 0x202932;
-            shadow.alpha = 0.22;
-            shadow.zIndex = record.order;
-            shadow.label = `scenery-shadow:${record.description.id}`;
-            ground.addChild(shadow);
-            record.shadows.push(shadow);
-          }
+          const shadow = new Sprite(record.source.texture);
+          shadow.anchor.set(record.source.anchor.x, 1);
+          shadow.tint = 0x202932;
+          shadow.alpha = 0.22;
+          shadow.zIndex = record.order;
+          shadow.label = `scenery-shadow:${record.description.id}`;
+          ground.addChild(shadow);
+          record.shadows.push(shadow);
           record.poseDirty = true;
         }
         if (record.atlas) {
-          placeBakedShadowPair(
-            record.shadows,
+          placeBakedShadow(
+            record.shadows[0],
             record.atlas,
             record.transform,
             light.x,

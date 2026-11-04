@@ -5,7 +5,7 @@ import {
   bakedShadowKey,
   bakedShadowTransform,
   hasBakedShadow,
-  placeBakedShadowPair,
+  placeBakedShadow,
 } from "@/libs/rendering/bakedShadowAtlas";
 import {
   createCharacterShadowPoses,
@@ -114,24 +114,23 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     cache.set(node, matrix);
     return matrix;
   };
-  const pair = (target = ground) =>
-    Array.from({ length: 2 }, () => {
-      const sprite = new Sprite(Texture.EMPTY);
-      sprite.tint = 0x14202a;
-      sprite.visible = false;
-      target.addChild(sprite);
-      return sprite;
-    });
+  const shadowSprite = (target = ground) => {
+    const sprite = new Sprite(Texture.EMPTY);
+    sprite.tint = 0x14202a;
+    sprite.visible = false;
+    target.addChild(sprite);
+    return sprite;
+  };
   const place = (
     building: Building,
-    sprites: Sprite[],
+    sprite: Sprite,
     x: number,
     y: number,
     opacity: number,
   ) => {
     const atlas = building.atlas;
     if (!atlas) return;
-    placeBakedShadowPair(sprites, atlas, building.shadowPose, x, y, opacity);
+    placeBakedShadow(sprite, atlas, building.shadowPose, x, y, opacity);
   };
   const removeLighting = (source: Sprite) => {
     overlays.get(source)?.destroy();
@@ -300,8 +299,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       shadowPose: new Matrix(),
       height: 0,
       atlas: null,
-      sun: pair(),
-      lamps: [pair(localGround), pair(localGround)],
+      sun: shadowSprite(),
+      lamps: [shadowSprite(localGround), shadowSprite(localGround)],
       selected: [],
       active: true,
       fallback,
@@ -332,8 +331,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         buildings.delete(building);
         fallback();
         atlasLease.release();
-        for (const sprite of [...building.sun, ...building.lamps.flat()])
-          sprite.destroy();
+        for (const sprite of [building.sun, ...building.lamps]) sprite.destroy();
         removeLighting(source);
         dirty = true;
         fixtures.delete(source);
@@ -700,14 +698,9 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               texture = record.source.texture,
               height = record.height,
               foot = record.foot;
-            if (
-              record.shadows.length !== (record.atlas ? 4 : 2) &&
-              record.selected.length
-            ) {
+            if (record.shadows.length !== 2 && record.selected.length) {
               for (const shadow of record.shadows) shadow.destroy();
-              record.shadows = record.atlas
-                ? [...pair(localGround), ...pair(localGround)]
-                : pair(localGround);
+              record.shadows = [shadowSprite(localGround), shadowSprite(localGround)];
               for (const shadow of record.shadows) {
                 shadow.texture = texture;
                 shadow.anchor.set(record.source.anchor.x, 1);
@@ -718,8 +711,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               const pose = bakedShadowTransform(record.atlas, record.source, m);
               for (let i = 0; i < 2; i++) {
                 const selected = record.selected[i];
-                placeBakedShadowPair(
-                  record.shadows.slice(i * 2, i * 2 + 2),
+                placeBakedShadow(
+                  record.shadows[i],
                   record.atlas,
                   pose,
                   (selected?.light.x ?? foot.x) - foot.x,
@@ -882,8 +875,8 @@ type Building = {
   shadowPose: Matrix;
   height: number;
   atlas: BakedShadowAtlas | null;
-  sun: Sprite[];
-  lamps: Sprite[][];
+  sun: Sprite;
+  lamps: Sprite[];
   selected: WeightedLight[];
   active: boolean;
   fallback: () => void;

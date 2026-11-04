@@ -35,6 +35,19 @@ describe("projected world lighting", () => {
       await release.ready;
       const wide = { minX: -1000, maxX: 1000, minY: -1000, maxY: 1000 };
       f.lighting.update({ x: 1, y: 0, z: .5, day: 1 }, wide);
+      const ground = f.lighting.container.children[0]!;
+      expect(ground.children).toHaveLength(1);
+      const shadow = ground.children[0] as Sprite;
+      shadow.updateLocalTransform();
+      const anchored = shadow.localTransform.clone();
+      for (const angle of [Math.PI / 8 - .01, Math.PI / 8 + .01, Math.PI / 4, Math.PI / 2]) {
+        f.lighting.update({ x: Math.cos(angle), y: Math.sin(angle), z: .5, day: 1 }, wide);
+        expect(ground.children).toHaveLength(1);
+        expect(shadow.alpha).toBe(.3);
+        shadow.updateLocalTransform();
+        expect(shadow.localTransform).toEqual(anchored);
+      }
+
       update.mockClear();
       f.lighting.update({ x: 0, y: 1, z: .5, day: 1 }, wide);
       expect(update).not.toHaveBeenCalled();

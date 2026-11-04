@@ -38,6 +38,7 @@ import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
+import type { LpcDirection } from "@/validators/lpc";
 
 /** Actor identity and art stay stable across position and presence updates. */
 export const createTravelActors = (
@@ -294,14 +295,12 @@ export const createTravelActors = (
         y: previous?.y ?? -recipe.tile.center.y,
         facing: previous?.facing ?? 2,
         depth: 0,
+        contactY:
+          recipe.tile.height *
+          (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5),
       };
       root.position.set(record.x, record.y);
-      root.zIndex = -(
-        record.y +
-        recipe.tile.height *
-          (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
-        container.y
-      );
+      root.zIndex = -(record.y + record.contactY + container.y);
       record.depth = root.zIndex;
       const body = recipe.parts.find((entry) => entry.character);
       if (body) {
@@ -352,6 +351,11 @@ export const createTravelActors = (
         (art) => {
           if (scope.isDisposed()) return;
           record.art = art;
+          const avatar = art.entries.find(
+            (entry) => entry.description.kind === "avatar",
+          );
+          if (avatar?.description.shadowCaster === "character")
+            record.contactY = avatar.groundY;
           art.setLighting(brightness);
           root.addChild(art.container);
           if (layers?.ground) art.attachGroundEffects(layers.ground);
@@ -587,12 +591,7 @@ export const createTravelActors = (
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
       // Contact uses the interpolated/orbiting position and the current sector origin.
-      record.depth = -(
-        root.y +
-        recipe.tile.height *
-          (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
-        container.y
-      );
+      record.depth = -(root.y + record.contactY + container.y);
     }
     if (
       paintedOriginY !== container.y ||
@@ -1008,11 +1007,12 @@ type ActorRecipe = {
 };
 type ActorRecord = {
   depth: number;
+  contactY: number;
   tile: TerrainHex;
   path: TerrainHex[];
   x: number;
   y: number;
-  facing: import("@/validators/lpc").LpcDirection;
+  facing: LpcDirection;
   recipe: ActorRecipe;
   signature: string;
   scope: GameRenderer;
