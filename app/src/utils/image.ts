@@ -25,19 +25,12 @@ export const transformImageUrl = (src: string) => {
 };
 
 /** Requests a Bunny rendition width, forcing detection for extensionless uploads. */
-export const bunnyImageUrl = (src: string, width: number) => {
-  const transformed = transformImageUrl(src);
-  if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
-    return transformed;
-  }
-
-  const url = new URL(transformed);
-  url.searchParams.set("width", String(Math.round(width)));
-  if (!/\.[a-z0-9]+$/i.test(url.pathname)) {
-    url.searchParams.set("optimizer", "image");
-  }
-  return url.toString();
-};
+export const bunnyImageUrl = (src: string, width: number) =>
+  withBunnyWidth(src, width, (url) => {
+    if (!/\.[a-z0-9]+$/i.test(url.pathname)) {
+      url.searchParams.set("optimizer", "image");
+    }
+  });
 
 /**
  * Game texture URL: host rewrite plus an optional Bunny width.
@@ -45,13 +38,21 @@ export const bunnyImageUrl = (src: string, width: number) => {
  * Omit `optimizer=image`: forcing optimization of extensionless UploadThing keys
  * can cache renditions incompatible with travel-map portraits.
  */
-export const textureImageUrl = (src: string, width = 50) => {
+export const textureImageUrl = (src: string, width = 50) => withBunnyWidth(src, width);
+
+/** Rewrite the host and, for a valid width on Bunny, request that rendition. */
+const withBunnyWidth = (
+  src: string,
+  width: number,
+  customize?: (url: URL) => void,
+) => {
   const transformed = transformImageUrl(src);
   if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
     return transformed;
   }
   const url = new URL(transformed);
   url.searchParams.set("width", String(Math.round(width)));
+  customize?.(url);
   return url.toString();
 };
 

@@ -8,7 +8,7 @@ import {
   PetRarities,
 } from "@/drizzle/constants";
 import type { PetSpecies, UserData } from "@/drizzle/schema";
-import { getPetDayKey } from "@/utils/time";
+import { getUtcDayKey } from "@/utils/time";
 
 /** A catalogue ID persisted on pets, with authored display and model-prompt text. */
 export type PetAppearanceOption = {
@@ -151,7 +151,7 @@ export const getDailyPetOptions = (
   userId: string,
   federalStatus: FederalStatus,
   species: readonly PetSpeciesOption[],
-  dayKey = getPetDayKey(),
+  dayKey = getUtcDayKey(),
   claims?: UserData["petDailyClaims"],
 ) => {
   const count = PET_OPTION_COUNTS[federalStatus];

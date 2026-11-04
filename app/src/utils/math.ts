@@ -50,5 +50,5 @@ export const clamp = (value: number, min: number, max: number) => {
  */
 export const calculatePercent = (current: number, max: number): number => {
   const safeMax = max || 1;
-  return Math.min(100, Math.max(0, (current / safeMax) * 100));
+  return clamp((current / safeMax) * 100, 0, 100);
 };

@@ -22,6 +22,7 @@ import type {
   SessionUpgrade,
 } from "./bindings/types";
 import { getSpacetimeDBConfig, type SpacetimeDBConfig } from "./config";
+import { sleep } from "@/utils/time";
 
 export type {
   CompletedRun,
@@ -176,7 +177,7 @@ export class SpacetimeDBConnection {
       if (this.wsReady) {
         return;
       }
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await sleep(delayMs);
     }
 
     throw new Error("WebSocket not ready after maximum wait time");

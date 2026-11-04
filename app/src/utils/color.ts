@@ -1,3 +1,5 @@
+import { clamp } from "@/utils/math";
+
 /** Inclusive HSL lightness bounds for UI-readable village colours */
 const MIN_LIGHTNESS = 0.28;
 const MAX_LIGHTNESS = 0.72;
@@ -36,7 +38,7 @@ export const relativeLuminance = ({ r, g, b }: Rgb): number => {
 };
 
 const toHexChannel = (n: number) =>
-  Math.round(Math.min(255, Math.max(0, n)))
+  Math.round(clamp(n, 0, 255))
     .toString(16)
     .padStart(2, "0");
 
@@ -100,7 +102,7 @@ export const getReadableVillageHexColor = (hex: string): string => {
   const rgb = parseHexColor(hex);
   if (!rgb) return "#9ca3af";
   const { h, s, l } = rgbToHsl(rgb);
-  const clampedL = Math.min(MAX_LIGHTNESS, Math.max(MIN_LIGHTNESS, l));
+  const clampedL = clamp(l, MIN_LIGHTNESS, MAX_LIGHTNESS);
   if (clampedL === l) return rgbToHex(rgb);
   return rgbToHex(hslToRgb(h, s, clampedL));
 };

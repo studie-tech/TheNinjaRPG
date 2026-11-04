@@ -1,12 +1,13 @@
 import type {
+  BanState,
   StaffApprovalGroup,
   SupportTicketStatus,
   UserRole,
 } from "@/drizzle/constants";
 import {
+  isStaffApprovalGroup,
   MESSAGING_MIN_LEVEL,
   messagingLevelMessage,
-  StaffApprovalGroups,
   SUPPORT_TICKET_STATUS_TRANSITIONS,
   UserRoles,
 } from "@/drizzle/constants";
@@ -19,22 +20,75 @@ import type {
   UserReport,
 } from "@/drizzle/schema";
 
-export const canChangeContent = (role: UserRole) => {
-  return [
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
+// Annotated rather than `as const` so `.includes` accepts any role.
+const SENIOR_ADMIN_ROLES: readonly UserRole[] = [
+  "OWNER",
+  "CODING-ADMIN",
+  "CONTENT-ADMIN",
+  "EVENT-ADMIN",
+];
+const ADMIN_ROLES: readonly UserRole[] = [...SENIOR_ADMIN_ROLES, "MODERATOR-ADMIN"];
+const ADMIN_AND_HEAD_MODERATOR_ROLES: readonly UserRole[] = [
+  ...ADMIN_ROLES,
+  "HEAD_MODERATOR",
+];
+const CONTENT_TEAM_ROLES: readonly UserRole[] = [
+  "CONTENT",
+  "BALANCE",
+  "HEAD_CONTENT",
+  "HEAD_BALANCE",
+];
+const EVENT_TEAM_ROLES: readonly UserRole[] = ["EVENT", "HEAD_EVENT"];
+const WAR_MANAGER_ROLES: readonly UserRole[] = [
+  ...SENIOR_ADMIN_ROLES,
+  ...CONTENT_TEAM_ROLES,
+  ...EVENT_TEAM_ROLES,
+];
+const CONTENT_MANAGER_ROLES: readonly UserRole[] = [
+  ...ADMIN_ROLES,
+  ...CONTENT_TEAM_ROLES,
+  ...EVENT_TEAM_ROLES,
+];
+const CONTENT_EDITOR_ROLES: readonly UserRole[] = [...CONTENT_MANAGER_ROLES, "CODER"];
+const SENIOR_STAFF_ROLES: readonly UserRole[] = [
+  ...CONTENT_EDITOR_ROLES,
+  "HEAD_MODERATOR",
+  "MODERATOR",
+];
+
+/** Moderation always rests with these three; each report state adds its own reviewers. */
+const REPORT_ADMIN_ROLES: readonly UserRole[] = [
+  "MODERATOR-ADMIN",
+  "OWNER",
+  "CODING-ADMIN",
+];
+const REPORT_MODERATORS: Record<BanState, readonly UserRole[]> = {
+  UNVIEWED: [
+    ...REPORT_ADMIN_ROLES,
     "CONTENT-ADMIN",
-    "CODER",
-  ].includes(role);
+    "EVENT-ADMIN",
+    "HEAD_MODERATOR",
+    "MODERATOR",
+    "JR_MODERATOR",
+  ],
+  OFFICIAL_WARNING: [...REPORT_ADMIN_ROLES, "MODERATOR"],
+  BAN_ACTIVATED: [...REPORT_ADMIN_ROLES, "HEAD_MODERATOR"],
+  BAN_ESCALATED: [...REPORT_ADMIN_ROLES, "HEAD_MODERATOR"],
+  // Moderators must retain access to clear trade bans after the initial decision.
+  TRADE_BAN_ACTIVATED: [...REPORT_ADMIN_ROLES, "HEAD_MODERATOR", "MODERATOR"],
+  SILENCE_ACTIVATED: [...REPORT_ADMIN_ROLES, "HEAD_MODERATOR", "MODERATOR"],
+  SILENCE_ESCALATED: [...REPORT_ADMIN_ROLES, "HEAD_MODERATOR"],
+  TIMEOUT_ACTIVATED: [
+    ...REPORT_ADMIN_ROLES,
+    "CONTENT-ADMIN",
+    "EVENT-ADMIN",
+    "HEAD_MODERATOR",
+    "MODERATOR",
+  ],
+  REPORT_CLEARED: [],
 };
+
+export const canChangeContent = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
 export const isStaffMember = (user: Pick<UserData, "staffAccount">) => {
   return user.staffAccount;
@@ -61,43 +115,16 @@ export const canAccessHiddenSkillTree = (role?: UserRole | null) => {
   );
 };
 
-export const canMarkAdminResolved = (role: UserRole) => {
-  return (
-    role === "OWNER" ||
-    role === "HEAD_MODERATOR" ||
-    role === "CODING-ADMIN" ||
-    role === "CONTENT-ADMIN" ||
-    role === "EVENT-ADMIN" ||
-    role === "MODERATOR-ADMIN"
-  );
-};
+export const canMarkAdminResolved = (role: UserRole) =>
+  ADMIN_AND_HEAD_MODERATOR_ROLES.includes(role);
 
-export const canTakeKage = (role: UserRole) => {
-  return [
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR",
-    "HEAD_MODERATOR",
-    "MODERATOR-ADMIN",
-    "CONTENT-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canTakeKage = (role: UserRole) => SENIOR_STAFF_ROLES.includes(role);
 
 export const canModerateReskin = (role: UserRole) => {
   return isStaffRole(role);
 };
 
-export const canControlBackups = (role: UserRole) => {
-  return ["OWNER", "CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
-};
+export const canControlBackups = (role: UserRole) => SENIOR_ADMIN_ROLES.includes(role);
 
 // Recruitment analytics visibility (admins only)
 export const canViewRecruitmentAnalytics = (role: UserRole) => {
@@ -125,24 +152,8 @@ export const canPlayHiddenQuests = (role: UserRole) => {
   ].includes(role);
 };
 
-export const canSubmitNotification = (role: UserRole) => {
-  return [
-    "CODER",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "HEAD_MODERATOR",
-    "MODERATOR",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-  ].includes(role);
-};
+export const canSubmitNotification = (role: UserRole) =>
+  SENIOR_STAFF_ROLES.includes(role);
 
 export const canPostAsAi = (role: UserRole) => {
   return [
@@ -184,34 +195,12 @@ export const canModifyCombatSettings = (role: UserRole) => {
   return canChangeContent(role);
 };
 
-export const canEnableGlobalTavern = (role: UserRole) => {
-  return [
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canEnableGlobalTavern = (role: UserRole) => ADMIN_ROLES.includes(role);
 
-export const canChangeDefaultAiProfile = (role: UserRole) => {
-  return ["OWNER", "CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
-};
+export const canChangeDefaultAiProfile = (role: UserRole) =>
+  SENIOR_ADMIN_ROLES.includes(role);
 
-export const canAdministrateWars = (role: UserRole) => {
-  return [
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-  ].includes(role);
-};
+export const canAdministrateWars = (role: UserRole) => WAR_MANAGER_ROLES.includes(role);
 
 export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   if (role === "OWNER") {
@@ -316,7 +305,7 @@ export const canModerateRoles: UserRole[] = [
   "CODING-ADMIN",
   "CONTENT-ADMIN",
   "EVENT-ADMIN",
-] as const;
+];
 export const canModerate = (role: UserRole) => {
   return canModerateRoles.includes(role);
 };
@@ -344,8 +333,7 @@ export const canSeeReport = (user: UserData, report: UserReport) => {
     return true;
   if (canTimeoutUsers(user))
     return report.status === "UNVIEWED" || report.status === "TIMEOUT_ACTIVATED";
-  if (!canModerateRoles.includes(user.role)) return false;
-  return true;
+  return canModerate(user.role);
 };
 
 export const canPostReportComment = (report: UserReport) => {
@@ -355,48 +343,7 @@ export const canPostReportComment = (report: UserReport) => {
 export const canModerateReports = (user: UserData, report: UserReport) => {
   return (
     report.reportedUserId !== user.userId &&
-    ((user.role === "MODERATOR-ADMIN" && report.status === "UNVIEWED") ||
-      (user.role === "OWNER" && report.status === "UNVIEWED") ||
-      (user.role === "CODING-ADMIN" && report.status === "UNVIEWED") ||
-      (user.role === "CONTENT-ADMIN" && report.status === "UNVIEWED") ||
-      (user.role === "EVENT-ADMIN" && report.status === "UNVIEWED") ||
-      (user.role === "MODERATOR" && report.status === "UNVIEWED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "UNVIEWED") ||
-      (user.role === "JR_MODERATOR" && report.status === "UNVIEWED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "OFFICIAL_WARNING") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "BAN_ACTIVATED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "TRADE_BAN_ACTIVATED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "BAN_ESCALATED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "SILENCE_ACTIVATED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "SILENCE_ESCALATED") ||
-      (user.role === "OWNER" && report.status === "OFFICIAL_WARNING") ||
-      (user.role === "OWNER" && report.status === "BAN_ACTIVATED") ||
-      (user.role === "OWNER" && report.status === "TRADE_BAN_ACTIVATED") ||
-      (user.role === "OWNER" && report.status === "BAN_ESCALATED") ||
-      (user.role === "OWNER" && report.status === "SILENCE_ACTIVATED") ||
-      (user.role === "OWNER" && report.status === "SILENCE_ESCALATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "OFFICIAL_WARNING") ||
-      (user.role === "CODING-ADMIN" && report.status === "BAN_ACTIVATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "TRADE_BAN_ACTIVATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "BAN_ESCALATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "SILENCE_ACTIVATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "SILENCE_ESCALATED") ||
-      (user.role === "CONTENT-ADMIN" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "EVENT-ADMIN" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "MODERATOR-ADMIN" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "OWNER" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "CODING-ADMIN" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "MODERATOR" && report.status === "TIMEOUT_ACTIVATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "BAN_ACTIVATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "TRADE_BAN_ACTIVATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "BAN_ESCALATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "SILENCE_ACTIVATED") ||
-      (user.role === "HEAD_MODERATOR" && report.status === "SILENCE_ESCALATED") ||
-      (user.role === "MODERATOR" && report.status === "OFFICIAL_WARNING") ||
-      // Moderators must retain access to clear trade bans after the initial decision.
-      (user.role === "MODERATOR" && report.status === "TRADE_BAN_ACTIVATED") ||
-      (user.role === "MODERATOR" && report.status === "SILENCE_ACTIVATED"))
+    REPORT_MODERATORS[report.status].includes(user.role)
   );
 };
 
@@ -451,16 +398,8 @@ export const canDeleteComment = (user: UserData, commentAuthorId: string) => {
   );
 };
 
-export const canDeleteConceptArt = (role: UserRole) => {
-  return [
-    "OWNER",
-    "HEAD_MODERATOR",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canDeleteConceptArt = (role: UserRole) =>
+  ADMIN_AND_HEAD_MODERATOR_ROLES.includes(role);
 
 /** Returns a restriction message if the user is banned or silenced, otherwise null. */
 export const getBanOrSilenceRestriction = (
@@ -535,15 +474,7 @@ export const canOnlyEditSelf = (userRole: UserRole) => {
   return ["CONTENT", "BALANCE", "EVENT", "CODER"].includes(userRole);
 };
 
-export const canAwardReputation = (role: UserRole) => {
-  return [
-    "MODERATOR-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-  ].includes(role);
-};
+export const canAwardReputation = (role: UserRole) => ADMIN_ROLES.includes(role);
 
 export const canReviewLinkPromotions = (role: UserRole) => {
   return ["OWNER"].includes(role);
@@ -564,69 +495,14 @@ export const canEditClans = (role: UserRole) => {
   ].includes(role);
 };
 
-export const canAddNonCustomPollOptions = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
-    "EVENT-ADMIN",
-    "EVENT",
-    "HEAD_EVENT",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-  ].includes(role);
-};
+export const canAddNonCustomPollOptions = (role: UserRole) =>
+  CONTENT_MANAGER_ROLES.includes(role);
 
-export const canCreatePolls = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
-    "EVENT-ADMIN",
-    "EVENT",
-    "HEAD_EVENT",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-  ].includes(role);
-};
+export const canCreatePolls = (role: UserRole) => CONTENT_MANAGER_ROLES.includes(role);
 
-export const canEditPolls = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
-    "EVENT-ADMIN",
-    "EVENT",
-    "HEAD_EVENT",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-  ].includes(role);
-};
+export const canEditPolls = (role: UserRole) => CONTENT_MANAGER_ROLES.includes(role);
 
-export const canClosePolls = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "MODERATOR-ADMIN",
-    "EVENT-ADMIN",
-    "EVENT",
-    "HEAD_EVENT",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-  ].includes(role);
-};
+export const canClosePolls = (role: UserRole) => CONTENT_MANAGER_ROLES.includes(role);
 
 export const canDeletePollOptions = (role: UserRole) => {
   return [
@@ -646,58 +522,19 @@ export const canDeletePollOptions = (role: UserRole) => {
   ].includes(role);
 };
 
-export const canViewFullBattleLog = (role: UserRole) => {
-  return [
-    "CODER",
-    "CONTENT",
-    "BALANCE",
-    "MODERATOR",
-    "HEAD_MODERATOR",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canViewFullBattleLog = (role: UserRole) =>
+  SENIOR_STAFF_ROLES.includes(role);
 
-export const canViewOtherUsersBattleLogs = (role: UserRole) => {
-  return [
-    "HEAD_MODERATOR",
-    "MODERATOR-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "EVENT-ADMIN",
-  ].includes(role);
-};
+export const canViewOtherUsersBattleLogs = (role: UserRole) =>
+  ADMIN_AND_HEAD_MODERATOR_ROLES.includes(role);
 
-export const canCloneUser = (role: UserRole) => {
-  return ["OWNER", "CODING-ADMIN", "CONTENT-ADMIN", "EVENT-ADMIN"].includes(role);
-};
+export const canCloneUser = (role: UserRole) => SENIOR_ADMIN_ROLES.includes(role);
 
 export const canInteractWithPolls = (rank: UserRank) => {
   return rank !== "STUDENT";
 };
 
-export const canClearSectors = (role: UserRole) => {
-  return [
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-  ].includes(role);
-};
+export const canClearSectors = (role: UserRole) => WAR_MANAGER_ROLES.includes(role);
 
 export const canDeleteReferral = (role: UserRole) => {
   return ["HEAD_MODERATOR", "MODERATOR-ADMIN", "OWNER"].includes(role);
@@ -725,192 +562,38 @@ export const canApproveApplications = (role: UserRole) => {
  */
 export const getApprovalGroup = (role: UserRole): StaffApprovalGroup | null => {
   if (role === "OWNER") return "CODING-ADMIN";
-  if (StaffApprovalGroups.includes(role as StaffApprovalGroup)) {
-    return role as StaffApprovalGroup;
-  }
-  return null;
+  return isStaffApprovalGroup(role) ? role : null;
 };
 
-export const canUnequipAllUsers = (user: UserData) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(user.role);
-};
+export const canUnequipAllUsers = (user: UserData) =>
+  CONTENT_MANAGER_ROLES.includes(user.role);
 
-export const canEditUsername = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "HEAD_MODERATOR",
-    "MODERATOR",
-    "CODER",
-  ].includes(role);
-};
+export const canEditUsername = (role: UserRole) => SENIOR_STAFF_ROLES.includes(role);
 
-export const canEditBloodline = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditBloodline = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
-export const canEditVillage = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditVillage = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
-export const canEditRank = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditRank = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
-export const canEditJutsus = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditJutsus = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
-export const canEditItems = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditItems = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
-export const canEditQuests = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "CONTENT",
-    "BALANCE",
-    "HEAD_CONTENT",
-    "HEAD_BALANCE",
-    "EVENT",
-    "HEAD_EVENT",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-    "CODER",
-  ].includes(role);
-};
+export const canEditQuests = (role: UserRole) => CONTENT_EDITOR_ROLES.includes(role);
 
 export const canEditStarterQuests = (role: UserRole) => {
   return ["OWNER", "CONTENT-ADMIN"].includes(role);
 };
 
-export const canEditStaffAccountFlag = (role: UserRole) => {
-  return (
-    role === "OWNER" ||
-    role === "CODING-ADMIN" ||
-    role === "CONTENT-ADMIN" ||
-    role === "EVENT-ADMIN" ||
-    role === "MODERATOR-ADMIN"
-  );
-};
+export const canEditStaffAccountFlag = (role: UserRole) => ADMIN_ROLES.includes(role);
 
-export const canEditRankedLp = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canEditRankedLp = (role: UserRole) => ADMIN_ROLES.includes(role);
 
-export const canEditSeichiSilver = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canEditSeichiSilver = (role: UserRole) => ADMIN_ROLES.includes(role);
 
-export const canRemoveBloodlineFromPool = (role: UserRole) => {
-  return [
-    "CONTENT-ADMIN",
-    "OWNER",
-    "CODING-ADMIN",
-    "EVENT-ADMIN",
-    "MODERATOR-ADMIN",
-  ].includes(role);
-};
+export const canRemoveBloodlineFromPool = (role: UserRole) =>
+  ADMIN_ROLES.includes(role);
 
 export const canSeeHiddenBountyInfo = (role: UserRole) => {
   return isStaffRole(role);

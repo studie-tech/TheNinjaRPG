@@ -6,7 +6,7 @@ import { getPetAppearancePrompt } from "@/libs/pets/appearance";
 import { getDailyPetOptions, isAvailablePetAppearance, PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES, PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import { canUsePet, getMaxPetRank, getPetLevel, petRankUpBlockMessage } from "@/libs/pets/progression";
 import { calcLevelRequirements } from "@/libs/profile";
-import { getPetDayKey } from "@/utils/time";
+import { getUtcDayKey } from "@/utils/time";
 import { acquirePetSchema, assignPetExperienceSchema, petNameSchema, updatePetAiSchema } from "@/validators/pets";
 import { initialPetSpecies } from "./pets/helpers/species";
 
@@ -38,7 +38,7 @@ describe("companion appearance choices", () => {
   });
 
   it("uses UTC days and rejects an unavailable trait", () => {
-    expect(getPetDayKey(new Date("2026-10-11T23:30:00-05:00"))).toBe("2026-10-12");
+    expect(getUtcDayKey(new Date("2026-10-11T23:30:00-05:00"))).toBe("2026-10-12");
     const choices = getDailyPetOptions("player", "NONE", initialPetSpecies, "2026-10-11");
     const selection = { speciesId: choices.species[0]!.id, paletteIndex: choices.palettes[0]!.index, characteristicIndex: choices.characteristics[0]!.index, auraIndex: choices.auras[0]!.index };
     expect(isAvailablePetAppearance(selection, choices)).toBe(true);

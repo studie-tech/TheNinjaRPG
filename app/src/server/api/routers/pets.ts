@@ -86,7 +86,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { getPetDayKey, getPetFeedAvailableAt } from "@/utils/time";
+import { getUtcDayKey, getPetFeedAvailableAt } from "@/utils/time";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
@@ -334,7 +334,7 @@ export const petsRouter = createTRPCRouter({
       ]);
       if (!user) throw serverError("NOT_FOUND", "User not found");
       const now = new Date();
-      const dayKey = getPetDayKey(now);
+      const dayKey = getUtcDayKey(now);
       const capacity = getPetCollectionCapacity(user);
       const federalStatus = getUserFederalStatus(user);
       const options = getDailyPetOptions(
@@ -442,7 +442,7 @@ export const petsRouter = createTRPCRouter({
         return errorResponse(
           "Unlock another collection slot or release a companion before adopting another.",
         );
-      const dayKey = getPetDayKey();
+      const dayKey = getUtcDayKey();
       if (input.dayKey !== dayKey)
         return errorResponse(
           "Today's companion choices changed. Refresh and choose again.",
@@ -818,7 +818,7 @@ export const petsRouter = createTRPCRouter({
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
       const now = new Date();
-      const dayKey = getPetDayKey(now);
+      const dayKey = getUtcDayKey(now);
       if (hasActiveGeneration(pet, now))
         return errorResponse(
           "Your companion's appearance is already generating. Please wait.",

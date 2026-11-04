@@ -314,6 +314,7 @@ import { sanitizeVariantText } from "@/utils/sanitize";
 import { validateUrlForSsrf } from "@/utils/ssrf";
 import type { QueryCondition } from "@/utils/typeutils";
 import { getStrucBoost } from "@/utils/village";
+import { getUtcDayKey } from "@/utils/time";
 import {
   HealTag,
   IncreaseJutsuSlots,
@@ -4027,7 +4028,7 @@ export const itemDatabaseFilter = (
       ? [
           or(
             isNull(item.expireFromStoreAt),
-            gt(item.expireFromStoreAt, new Date().toISOString().slice(0, 10)),
+            gt(item.expireFromStoreAt, getUtcDayKey()),
           ),
         ]
       : []),

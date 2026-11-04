@@ -102,7 +102,7 @@ import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
-import { getTimeOfLastReset, secondsFromNow } from "@/utils/time";
+import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
 /** Build the `userData` update for `GET`. */
@@ -1445,7 +1445,7 @@ export const findUserDataForGetPublicUser2 = (
         where: and(
           eq(battleHistory.attackedId, input.userId),
           notInArray(battleHistory.battleType, ["SPARRING", "COMBAT"]),
-          gte(battleHistory.createdAt, getTimeOfLastReset()),
+          gte(battleHistory.createdAt, periodStart("daily", new Date())),
         ),
       },
     },

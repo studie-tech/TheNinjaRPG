@@ -7,6 +7,7 @@ import { canChangeContent } from "@/utils/permissions";
 import type { MapLocation } from "@/validators/mapLocation";
 import { mapLocationFields } from "@/validators/mapLocation";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
+import { getUtcDayKey } from "@/utils/time";
 
 /** Cosmetic map and designer edits preserve accepted quest runs. */
 export const isQuestPresentationOnlyChange = <
@@ -48,7 +49,7 @@ export const publicQuestLocations = (
   })[],
   now = new Date(),
 ): MapLocation[] => {
-  const today = now.toISOString().slice(0, 10);
+  const today = getUtcDayKey(now);
   return quests.flatMap((quest) => {
     if (
       quest.hidden ||

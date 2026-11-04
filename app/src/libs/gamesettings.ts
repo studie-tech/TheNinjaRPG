@@ -21,8 +21,8 @@ import {
   addDays,
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
-  getWeekNumber,
   isDifferentDay,
+  periodStart,
 } from "@/utils/time";
 
 /**
@@ -149,9 +149,7 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
 
 /** Atomically claim once per UTC calendar day. */
 export const lockWithDailyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(client, name, (previous, now) =>
-    isDifferentDay(now, previous),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("daily"));
   return {
     ...claim,
     isNewDay: claim.isClaimed,
@@ -161,13 +159,9 @@ export const lockWithDailyTimer = async (client: DrizzleClient, name: string) =>
   };
 };
 
-/** Atomically claim when the existing calendar week number changes. */
+/** Atomically claim once per UTC calendar week, starting on Monday. */
 export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(
-    client,
-    name,
-    (previous, now) => getWeekNumber(now) !== getWeekNumber(previous),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("weekly"));
   return {
     ...claim,
     isNewWeek: claim.isClaimed,
@@ -179,13 +173,7 @@ export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) =
 
 /** Atomically claim once per UTC calendar month. */
 export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(
-    client,
-    name,
-    (previous, now) =>
-      now.getUTCFullYear() !== previous.getUTCFullYear() ||
-      now.getUTCMonth() !== previous.getUTCMonth(),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("monthly"));
   return {
     ...claim,
     isNewMonth: claim.isClaimed,
@@ -194,6 +182,11 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
     ),
   };
 };
+
+/** Whether a new UTC calendar period began after the timer's last claim. */
+const startedSince =
+  (period: "daily" | "weekly" | "monthly") => (previous: Date, now: Date) =>
+    periodStart(period, now) > previous;
 
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();

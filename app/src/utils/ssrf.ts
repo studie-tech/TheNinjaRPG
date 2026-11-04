@@ -1,6 +1,7 @@
 import dns from "node:dns";
 import { isIPv4 } from "node:net";
 import { promisify } from "node:util";
+import { sleep } from "@/utils/time";
 
 const lookup = promisify(dns.lookup);
 
@@ -165,7 +166,7 @@ export async function validateUrlForSsrf(
     }
 
     // Short delay to mitigate DNS rebinding
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await sleep(100);
 
     // Second independent DNS resolution
     const { address: addr2 } = await timedLookup(hostname);

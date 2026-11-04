@@ -1,3 +1,4 @@
+import { sleep } from "@/utils/time";
 /**
  * MySQL / Vitess duplicate-key detection for catch blocks around INSERTs guarded by UNIQUE.
  * Driver and layer (Drizzle, mysql2, vttablet) vary in error message text; this covers common shapes.
@@ -55,7 +56,7 @@ export const retryOnDeadlock = async <T>(
       return await run();
     } catch (error) {
       if (!isMysqlDeadlockError(error) || attempt >= attempts) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 50 * 2 ** (attempt - 1)));
+      await sleep(50 * 2 ** (attempt - 1));
     }
   }
 };

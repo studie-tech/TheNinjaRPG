@@ -57,6 +57,7 @@ import {
   towerDefenseProjectileSchema,
   towerDefenseStateSchema,
 } from "@/validators/towerDefense";
+import { sleep } from "@/utils/time";
 
 // ============================================================================
 // MODULE-LEVEL HUD STORE
@@ -1133,9 +1134,7 @@ export const useTowerDefense = (userId?: string) => {
 
       // The subscription will also receive any new/updated sessions
       // Give it a moment to receive any existing session data from network if just connected
-      await new Promise((resolve) =>
-        setTimeout(resolve, TD_EXISTING_SESSION_CHECK_TIMEOUT_MS),
-      );
+      await sleep(TD_EXISTING_SESSION_CHECK_TIMEOUT_MS);
     } catch (error) {
       // Silently fail - this is just a check
       console.log("[useTowerDefense] Failed to check for existing session:", error);

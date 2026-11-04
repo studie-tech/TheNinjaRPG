@@ -295,6 +295,7 @@ import {
   canUnstuckVillage,
   canUseMonitoringTests,
 } from "@/utils/permissions";
+import { sleep } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -1022,8 +1023,6 @@ export const staffRouter = createTRPCRouter({
  * Delay execution for a specified number of milliseconds.
  * @param ms - The number of milliseconds to delay.
  */
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Delete a user and associated data, retrying MySQL deadlocks with bounded backoff.
@@ -1066,7 +1065,7 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
           },
         });
 
-        await delay(delayMs);
+        await sleep(delayMs);
         continue;
       }
       throw error;

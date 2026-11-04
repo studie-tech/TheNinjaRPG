@@ -1,4 +1,5 @@
 import type { DiscordConfig } from "@/server/utils/discord/config";
+import { sleep } from "@/utils/time";
 
 /**
  * Minimal Discord REST client: OAuth for the linking flow and bot calls for guild
@@ -36,7 +37,6 @@ export const isDiscordRequestError = (error: unknown): error is DiscordRequestEr
 const requestError = (status: number, message: string, code?: number) =>
   Object.assign(new Error(message), { status, code }) as DiscordRequestError;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type Auth = { bot: string } | { bearer: string } | null;
 

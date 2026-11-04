@@ -1,6 +1,6 @@
 import { TERR_BOT_ID } from "@/drizzle/constants";
 import type { moderationScan, UserReport } from "@/drizzle/schema";
-import { DAY_S, getUtcDayWindowStart, periodStart } from "@/utils/time";
+import { DAY_S, getUtcDayKey, getUtcDayWindowStart, periodStart } from "@/utils/time";
 import type { ModBotPerformanceInput } from "@/validators/reports";
 
 /** Source aliases describe the same surfaces across automatic and human reports. */
@@ -32,7 +32,7 @@ export const buildModBotStats = (
   const periods = new Map<string, Counts>();
   for (let at = start.getTime(); at <= now.getTime(); at += DAY_S * 1000) {
     periods.set(
-      periodStart(input.interval, new Date(at)).toISOString().slice(0, 10),
+      getUtcDayKey(periodStart(input.interval, new Date(at))),
       emptyCounts(),
     );
   }
@@ -48,7 +48,7 @@ export const buildModBotStats = (
       summary,
       group(surfaces, moderationSurface(report.system)),
       periods.get(
-        periodStart(input.interval, report.createdAt).toISOString().slice(0, 10),
+        getUtcDayKey(periodStart(input.interval, report.createdAt)),
       ),
     ];
     if (report.predictedAt && report.promptVersion)
@@ -101,7 +101,7 @@ export const buildModBotStats = (
       summary,
       group(surfaces, moderationSurface(scan.relationType)),
       periods.get(
-        periodStart(input.interval, scan.createdAt).toISOString().slice(0, 10),
+        getUtcDayKey(periodStart(input.interval, scan.createdAt)),
       ),
       group(versions, scan.promptVersion),
     ];

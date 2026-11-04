@@ -3,6 +3,7 @@
  */
 
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { clamp } from "@/utils/math";
 
 /** Sound effect volume the player chose in the game settings; 0.8 until they change it. */
 export const savedSfxVolume = () => {
@@ -27,17 +28,6 @@ export const isSafariOrIOS = (): boolean => {
   const isIOS = /iPad|iPhone|iPod/.test(userAgent);
 
   return isSafari || isIOS;
-};
-
-/**
- * Detect if the current browser is mobile
- */
-export const isMobile = (): boolean => {
-  if (typeof window === "undefined") return false;
-
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    window.navigator.userAgent,
-  );
 };
 
 /**
@@ -240,7 +230,7 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
     try {
       await resumeAudioContext(ctx);
       const gain = ctx.createGain();
-      const vol = Math.min(1, Math.max(0, volume));
+      const vol = clamp(volume, 0, 1);
       gain.gain.value = vol;
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -273,7 +263,7 @@ export const playPreloadedAudio = async (url: string, volume = 0.8): Promise<voi
     audioCache.set(url, audio);
   }
   const node = audio.cloneNode(true) as HTMLAudioElement;
-  node.volume = Math.min(1, Math.max(0, volume));
+  node.volume = clamp(volume, 0, 1);
   try {
     node.crossOrigin = "anonymous";
   } catch {}
@@ -422,17 +412,7 @@ export const muteUserIframe = (iframe: HTMLIFrameElement): void => {
       iframe.src = url.toString();
       return;
     }
-    const allowedSpotifyHosts = [
-      "open.spotify.com",
-      "embed.spotify.com",
-      "www.spotify.com",
-    ];
-    if (allowedSpotifyHosts.includes(url.hostname)) {
-      // Spotify does not support a mute flag; limit autoplay as a fallback
-      removeAutoplayPermission(iframe);
-      return;
-    }
-    // Generic fallback: remove autoplay permission
+    // Generic fallback for providers without a mute flag, such as Spotify
     removeAutoplayPermission(iframe);
   } catch {
     // As a last resort, remove autoplay permission
@@ -463,22 +443,6 @@ export const unmuteUserIframe = (iframe: HTMLIFrameElement): void => {
     if (host === "player.vimeo.com" || host === "vimeo.com") {
       url.searchParams.delete("muted");
       iframe.src = url.toString();
-      return;
-    }
-    const soundcloudHosts = ["soundcloud.com", "www.soundcloud.com"];
-    if (soundcloudHosts.includes(host)) {
-      // No-op; SoundCloud mute toggle not supported via URL; keep autoplay controls only
-      return;
-    }
-    const spotifyHosts = [
-      "spotify.com",
-      "open.spotify.com",
-      "play.spotify.com",
-      "embed.spotify.com",
-      "community.spotify.com",
-    ];
-    if (spotifyHosts.includes(host)) {
-      restoreAutoplayPermission(iframe);
       return;
     }
     // Generic fallback: restore autoplay permission if we removed it

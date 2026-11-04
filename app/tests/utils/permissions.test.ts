@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { UserRole } from "@/drizzle/constants";
-import { UserRoles } from "@/drizzle/constants";
+import type { BanState, UserRole } from "@/drizzle/constants";
+import { BanStates, UserRoles } from "@/drizzle/constants";
 import type { UserData, UserReport } from "@/drizzle/schema";
 import {
   canApproveApplications,
@@ -187,5 +187,28 @@ test("trade bans can be managed and cleared by the roles that impose them", () =
     const target = { userId: "target", role } as UserData;
     expect(canModerateReports(target, report)).toBe(false);
     expect(canClearReport(target, report)).toBe(false);
+  }
+});
+
+test("report moderation follows the role table for every report state", () => {
+  const reportAdmins = ["MODERATOR-ADMIN", "OWNER", "CODING-ADMIN"];
+  const expected: Record<BanState, string[]> = {
+    UNVIEWED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"],
+    OFFICIAL_WARNING: [...reportAdmins, "MODERATOR"],
+    BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR"],
+    BAN_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
+    TRADE_BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
+    SILENCE_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
+    SILENCE_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
+    TIMEOUT_ACTIVATED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR"],
+    REPORT_CLEARED: [],
+  };
+  for (const status of BanStates) {
+    const report = { status, reportedUserId: "reported" } as UserReport;
+    const allowed = UserRoles.filter((role) =>
+      canModerateReports({ role, userId: "moderator" } as UserData, report),
+    );
+    expect([...allowed].sort()).toEqual([...expected[status]].sort() as UserRole[]);
+    expect(canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report)).toBe(false);
   }
 });
