@@ -88,6 +88,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   let preloadKey = "";
   let preloadRevision = 0;
   let preloadReady: Promise<void> | null = null;
+  let hasPreloadedField = false;
   let pendingAtlases = 0;
   const settleAtlas = <T>(resource: Promise<T>) => {
     pendingAtlases++;
@@ -361,6 +362,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       const key = `${sceneKey}:${position.x}:${position.y}`;
       if (key === preloadKey) return preloadReady;
       preloadKey = key;
+      if (hasPreloadedField) base.setWarmField(null);
+      hasPreloadedField = false;
       const revision = ++preloadRevision;
       preloadLease?.release();
       const lease = acquirePrebakedVillageLightField(sceneKey, position);
@@ -368,6 +371,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       preloadReady = lease.resource
         .then((field) => {
           if (disposed || revision !== preloadRevision || !field) return;
+          hasPreloadedField = true;
           base.setWarmField(field);
           game.invalidate();
         })
@@ -576,7 +580,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             if (!lease) {
               fieldLease?.release();
               fieldLease = null;
-              base.setWarmField(null);
+              // Artwork registers fixtures only after its images finish loading.
+              if (!hasPreloadedField) base.setWarmField(null);
               return;
             }
             pendingField = lease;
@@ -590,6 +595,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
                 fieldLease = lease;
                 pendingField = null;
                 base.setWarmField(field);
+                hasPreloadedField = false;
                 preloadRevision++;
                 preloadLease?.release();
                 preloadLease = null;

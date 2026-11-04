@@ -434,6 +434,8 @@ export const createTravelScene = async (options: {
           existing.terrain.container.position.copyFrom(position);
           existing.art.container.position.copyFrom(position);
           placeArt(existing.art, position);
+          if (entry.sector === snapshot.sector)
+            currentSceneryReady = existing.startScenery();
           continue;
         }
         const scope = createRenderScope(game);
@@ -517,11 +519,19 @@ export const createTravelScene = async (options: {
               (error: unknown) => ({ error }),
             );
           };
+          let promoteScenery!: () => void;
+          const promoted = new Promise<void>((resolve) => {
+            promoteScenery = resolve;
+          });
           // The occupied sector's artwork gets bandwidth and decoding time before the surrounding window.
           const scenery =
             entry.sector === snapshot.sector
               ? loadScenery()
-              : currentSceneryReady.then(loadScenery);
+              : Promise.race([currentSceneryReady, promoted]).then(loadScenery);
+          const startScenery = () => {
+            promoteScenery();
+            return scenery.then(() => {});
+          };
           if (entry.sector === snapshot.sector)
             currentSceneryReady = scenery.then(() => {});
           const [terrain, art] = await Promise.all([
@@ -562,6 +572,7 @@ export const createTravelScene = async (options: {
             data,
             terrain,
             art,
+            startScenery,
             position,
             height:
               logicalWidth *
@@ -936,6 +947,7 @@ type TravelSector = {
   data: HexTerrainData;
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
+  startScenery: () => Promise<void>;
 };
 
 /** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */

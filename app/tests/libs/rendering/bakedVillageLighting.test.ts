@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
-import { Container, Sprite, Texture } from "pixi.js";
+import { BufferImageSource, Container, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import * as fields from "@/libs/rendering/villageLightField";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { shadowDirectionBlend } from "@/libs/rendering/bakedShadowAtlas";
 import { createBakedVillageLighting, strongestShadowLights, type VillageLight } from "@/libs/rendering/bakedVillageLighting";
@@ -105,4 +106,74 @@ it("adds artwork-shaped local scenery shadows lazily and releases emissive fixtu
     expect(local.every(shadow => !shadow.visible)).toBe(true);
     releaseTree(); expect(local.every(shadow => shadow.destroyed)).toBe(true); expect(Texture.WHITE.destroyed).toBe(false);
   } finally { world.destroy({ children: true }); for (const fn of cleanups) fn(); canvas.mockRestore(); }
+});
+
+
+it("retains a matching pool through cold artwork, replaces it at runtime, and clears an unknown layout", async () => {
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 1, height: 1 }) });
+  const field = { texture, bounds: { minX: 0, maxX: 100, minY: 0, maxY: 100 } };
+  const preload = { resource: Promise.resolve(field), release: vi.fn() };
+  const unknown = { resource: Promise.resolve(null), release: vi.fn() };
+  const acquire = vi.spyOn(fields, "acquirePrebakedVillageLightField").mockReturnValue(preload);
+  const runtime = { resource: Promise.resolve({ ...field, texture: Texture.WHITE }), release: vi.fn() };
+  const runtimeAcquire = vi.spyOn(fields, "acquireVillageLightField").mockImplementation(lights => lights.length ? runtime : null);
+  let timer: (() => void) | null = null;
+  const schedule = vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void) => { timer = fn; return 1; }) as never);
+  const clear = vi.spyOn(globalThis, "clearTimeout").mockImplementation(() => {});
+  const cleanups: (() => void)[] = [], world = new Container();
+  const game = { renderer: { resolution: 1 }, signal: new AbortController().signal, visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
+    own: (fn: () => void) => cleanups.push(fn), isDisposed: () => false, invalidate: vi.fn() } as unknown as GameRenderer;
+  try {
+    const lighting = createBakedVillageLighting(game, world); world.addChild(lighting.container);
+    const filter = lighting.container.filters![0]!;
+    const update = () => lighting.update({ x: 0, y: 1, z: 1, day: 0 }, field.bounds);
+    await lighting.preloadField("matching-layout", { x: 0, y: 0 });
+    update(); expect(timer).not.toBeNull(); timer!();
+    expect(filter.resources.uWarmMap).toBe(texture.source);
+    expect(preload.release).not.toHaveBeenCalled();
+    const lamp = new Sprite(Texture.WHITE); lamp.width = 20; lamp.height = 40; world.addChild(lamp);
+    const releaseLamp = lighting.register(lamp, { id: "lamp", kind: "structure", image: "fixture-lamp", size: 40, x: 0, y: 0, groundY: 0, light: 1, shadowCaster: "column" });
+    update(); timer!(); await Promise.resolve();
+    expect(filter.resources.uWarmMap).toBe(Texture.WHITE.source);
+    expect(preload.release).toHaveBeenCalledTimes(1);
+    releaseLamp(); update(); timer!();
+    expect(filter.resources.uWarmMap).toBe(Texture.EMPTY.source);
+    await lighting.preloadField("another-matching-layout", { x: 0, y: 0 });
+    expect(filter.resources.uWarmMap).toBe(texture.source);
+    acquire.mockReturnValue(unknown);
+    await lighting.preloadField("unknown-layout", { x: 0, y: 0 });
+    expect(filter.resources.uWarmMap).toBe(Texture.EMPTY.source);
+  } finally {
+    for (const fn of cleanups) fn(); world.destroy({ children: true }); texture.destroy(true);
+    canvas.mockRestore(); acquire.mockRestore(); runtimeAcquire.mockRestore(); schedule.mockRestore(); clear.mockRestore();
+  }
+});
+
+it("ignores stale and disposed pool preloads", async () => {
+  const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  let resolve!: (field: { texture: Texture; bounds: { minX: number; maxX: number; minY: number; maxY: number } }) => void;
+  const pending = new Promise<Parameters<typeof resolve>[0]>(done => { resolve = done; });
+  const stale = { resource: pending, release: vi.fn() };
+  const unknown = { resource: Promise.resolve(null), release: vi.fn() };
+  const acquire = vi.spyOn(fields, "acquirePrebakedVillageLightField").mockReturnValueOnce(stale).mockReturnValueOnce(unknown).mockReturnValueOnce(stale);
+  const cleanups: (() => void)[] = [], world = new Container();
+  const game = { renderer: { resolution: 1 }, signal: new AbortController().signal, visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
+    own: (fn: () => void) => cleanups.push(fn), isDisposed: () => false, invalidate: vi.fn() } as unknown as GameRenderer;
+  try {
+    const lighting = createBakedVillageLighting(game, world); world.addChild(lighting.container);
+    const filter = lighting.container.filters![0]!;
+    const first = lighting.preloadField("stale-layout", { x: 0, y: 0 });
+    await lighting.preloadField("unknown-layout", { x: 0, y: 0 });
+    resolve({ texture: Texture.WHITE, bounds: { minX: 0, maxX: 100, minY: 0, maxY: 100 } });
+    await first;
+    expect(filter.resources.uWarmMap).toBe(Texture.EMPTY.source);
+    expect(stale.release).toHaveBeenCalledTimes(1);
+    const last = lighting.preloadField("disposed-layout", { x: 0, y: 0 });
+    for (const fn of cleanups.splice(0)) fn();
+    (game.invalidate as ReturnType<typeof vi.fn>).mockClear();
+    await last;
+    expect(game.invalidate).not.toHaveBeenCalled();
+    expect(stale.release).toHaveBeenCalledTimes(2);
+  } finally { for (const fn of cleanups) fn(); world.destroy({ children: true }); canvas.mockRestore(); acquire.mockRestore(); }
 });

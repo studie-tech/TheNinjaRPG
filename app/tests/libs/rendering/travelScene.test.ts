@@ -221,6 +221,36 @@ describe("travel scene ground depth", () => {
     if(!cancel)expect(scene.sectors.get(725)!.art.entries.some(entry=>entry.description.id==="building")).toBe(true);
   });
 
+  it.each([false, true])("promotes retained artwork on crossing once and owns cancellation (%s)", async cancel => {
+    const state = snapshotFixture(), neighbor = windowEntry(725, 1);
+    state.window.push(neighbor);
+    state.window[0]!.structures[0]!.image = `crossing-old-${cancel}.png`;
+    neighbor.structures[0]!.image = `crossing-new-${cancel}.png`;
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    const load = vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes(`crossing-old-${cancel}`) ? pending : Texture.WHITE);
+    const { scene, advance } = await sceneFixture(state);
+    await scene.updateWindow(); await settle();
+    const retained = scene.sectors.get(725)!;
+    const newRequests = () => load.mock.calls.filter(([input]) => JSON.stringify(input).includes(`crossing-new-${cancel}`)).length;
+    expect(newRequests()).toBe(0);
+    state.sector = 725; state.viewer = { ...state.viewer!, sector: 725 }; state.actorRevision++;
+    state.window = [{ ...neighbor, dy: 0 }, { ...state.window[0]!, dy: -1 }];
+    if (cancel) scene.dispose();
+    else {
+      await scene.updateWindow(); advance(); await settle();
+      expect(scene.sectors.get(725)).toBe(retained);
+      expect(retained.art.entries.some(entry => entry.description.id === "building")).toBe(true);
+      expect(newRequests()).toBe(1);
+    }
+    const art = retained.art;
+    release(Texture.WHITE); await settle(); await settle();
+    if (!cancel) { await scene.updateWindow(); await settle(); }
+    expect(newRequests()).toBe(cancel ? 0 : 1);
+    expect(retained.art).toBe(art);
+    if (cancel) expect(retained.scope.isDisposed()).toBe(true);
+  });
+
   it("grounds border walls in neighboring water and refreshes their retained terrain after a layout change", async () => {
     const state=snapshotFixture(),water=state.window[0]!,village=windowEntry(725,1);
     const ocean=(entry:TravelWindowEntry)=>{
