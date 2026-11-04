@@ -86,6 +86,36 @@ describe("backpack sorting", () => {
     sortBackpack(rows, "rarity");
     expect(ids(rows)).toEqual(before);
   });
+
+  it("sorts by the displayed active variant name, including name tie-breaks", () => {
+    const swords = ["Alpha Blade", "Zebra Blade"].map((id, index) => {
+      const base = userItem({ id });
+      return {
+        ...base,
+        activeVariantId: "active",
+        item: {
+          ...base.item,
+          variants: [{ id: "active", image: "/blade.webp", name: index === 0 ? "Zebra Blade" : "Alpha Blade" }],
+        },
+      } as UserItemWithRelations;
+    });
+    for (const sort of ["name", "rarity", "type", "slot", "newest", "durability"] as const) {
+      expect(ids(sortBackpack(swords, sort))).toEqual(["Zebra Blade", "Alpha Blade"]);
+    }
+  });
+
+  it.each([null, "missing", "unnamed"])("sorts by the base name when the active variant is %j", (activeVariantId) => {
+    const base = userItem({ id: "Alpha Blade" });
+    const sword = {
+      ...base,
+      activeVariantId,
+      item: {
+        ...base.item,
+        variants: [{ id: "unnamed", image: "/blade.webp", name: null }],
+      },
+    } as unknown as UserItemWithRelations;
+    expect(ids(sortBackpack([userItem({ id: "Zebra Blade" }), sword], "name"))).toEqual(["Alpha Blade", "Zebra Blade"]);
+  });
 });
 
 describe("backpack filtering", () => {

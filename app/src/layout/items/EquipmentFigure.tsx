@@ -68,7 +68,9 @@ export function EquipmentFigure({
             type="button"
             data-slot={slot}
             aria-label={
-              userItem ? `${label}: ${userItem.item.name}` : `${label} slot, empty`
+              userItem
+                ? `${label}: ${applyActiveVariant(userItem).name}`
+                : `${label} slot, empty`
             }
             aria-current={slot === activeSlot ? "true" : undefined}
             onClick={() => onSlotClick(slot)}
@@ -132,6 +134,7 @@ function EquippedTileContent({
   warning: string | undefined;
 }) {
   const { item } = userItem;
+  const look = applyActiveVariant(userItem as UserItemWithVariants);
   const durability =
     item.maxDurability > 0
       ? Math.round((userItem.durability / item.maxDurability) * 100)
@@ -140,9 +143,9 @@ function EquippedTileContent({
   return (
     <span className="relative block h-full w-full p-1">
       <ContentImage
-        image={applyActiveVariant(userItem as UserItemWithVariants).image}
+        image={look.image}
         hideBorder={true}
-        alt={item.name}
+        alt={look.name}
         rarity={item.rarity}
         className="rounded-lg"
       />

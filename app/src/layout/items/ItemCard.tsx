@@ -54,7 +54,7 @@ export function ItemCard({
       <span className="relative h-11 w-11 shrink-0">
         <ContentImage
           image={look.image}
-          alt={item.name}
+          alt={look.name}
           rarity={item.rarity}
           className="h-11 w-11"
         />

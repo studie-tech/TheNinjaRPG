@@ -90,6 +90,22 @@ it("remembers sort per player", () => {
   expect(window.localStorage.getItem("items:sort:user-1")).toContain("name");
 });
 
+it("shows active variant names in Name order with matching art labels", () => {
+  const swords = ["Alpha Blade", "Zebra Blade"].map((id, index) => {
+    const base = userItem({ id });
+    return {
+      ...base,
+      activeVariantId: "active",
+      item: { ...base.item, variants: [{ id: "active", image: "/blade.webp", name: index === 0 ? "Zebra Blade" : "Alpha Blade" }] },
+    } as UserItemWithRelations;
+  });
+  renderList({ items: swords });
+  fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "name" } });
+  const cards = within(screen.getByRole("list", { name: "Backpack items" })).getAllByRole("button");
+  expect(cards.map((card) => card.querySelector(".truncate")?.textContent)).toEqual(["Alpha Blade", "Zebra Blade"]);
+  expect(within(cards[0]!).getByText("Alpha Blade art")).toBeDefined();
+});
+
 it("hides hidden items from players but not content staff", () => {
   const view = renderList();
   expect(cardNames()).not.toContain("Secret Blade");

@@ -76,6 +76,19 @@ const renderInspector = (props: Partial<Parameters<typeof ItemInspector>[0]> = {
   return { onClose };
 };
 
+it("names the inspector and its art with the active variant's displayed heading", () => {
+  const base = userItem();
+  const sword = {
+    ...base,
+    activeVariantId: "blue",
+    item: { ...base.item, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Blade" }] },
+  } as UserItemWithRelations;
+  renderInspector({ userItem: sword });
+  expect(screen.getByRole("region", { name: "Blue Blade" })).toBeDefined();
+  expect(screen.getByRole("heading", { name: "Blue Blade" })).toBeDefined();
+  expect(screen.getByText("Blue Blade art")).toBeDefined();
+});
+
 it("renders rich descriptions as formatted text in the inspector", () => {
   const item = userItem();
   item.item.description = "<p>A <strong>tempered</strong> blade &amp; guard.</p>";

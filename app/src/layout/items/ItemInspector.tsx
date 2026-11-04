@@ -173,7 +173,7 @@ export function ItemInspector({
 
   return (
     <section
-      aria-label={useritem.item.name}
+      aria-label={look.name}
       className="flex flex-col gap-3"
       onKeyDown={(event) => {
         // Escape inside a confirmation or dialog opened from here belongs to that dialog.
@@ -205,7 +205,7 @@ export function ItemInspector({
         <span className="relative h-16 w-16 shrink-0">
           <ContentImage
             image={look.image}
-            alt={useritem.item.name}
+            alt={look.name}
             rarity={useritem.item.rarity}
             className="h-16 w-16"
           />

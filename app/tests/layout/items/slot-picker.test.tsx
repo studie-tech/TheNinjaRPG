@@ -87,6 +87,22 @@ it("unequips and inspects the current item", () => {
   expect(onInspect).toHaveBeenCalledWith("Shadowsteel Katana");
 });
 
+it("labels current and candidate gear with their active variant names while equipping by id", () => {
+  const variantItems = [items[0]!, items[1]!].map((base, index) => ({
+    ...base,
+    activeVariantId: "blue",
+    item: { ...base.item, variants: [{ id: "blue", image: "/blue.webp", name: index === 0 ? "Blue Katana" : "Blue Staff" }] },
+  })) as UserItemWithRelations[];
+  const { onEquip } = renderPicker({ userItems: variantItems });
+  const current = screen.getByRole("region", { name: "Equipped now" });
+  expect(within(current).getByText("Blue Katana")).toBeDefined();
+  expect(within(current).getByText("Blue Katana art")).toBeDefined();
+  expect(screen.getByText("Blue Staff")).toBeDefined();
+  expect(screen.getByText("Blue Staff art")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Equip Blue Staff" }));
+  expect(onEquip).toHaveBeenCalledWith("Oak Staff", "HAND_1");
+});
+
 it("shows an empty slot without an equipped card", () => {
   renderPicker({ slot: "HAND_2", userItems: items.filter((ui) => ui.id !== "Off Hand Kunai") });
   expect(screen.queryByRole("region", { name: "Equipped now" })).toBeNull();

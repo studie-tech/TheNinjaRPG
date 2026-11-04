@@ -13,6 +13,7 @@ import { EquipmentFigure } from "@/layout/items/EquipmentFigure";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import { SlotPicker } from "@/layout/items/SlotPicker";
+import { applyActiveVariant } from "@/libs/combat/util";
 import { dropTargetsFor, equipLimitReason, slotName } from "@/libs/itemsPage";
 import { gearMissingMastery } from "@/libs/mastery";
 import { cn } from "@/libs/shadui";
@@ -199,7 +200,7 @@ export function ItemsWorkspace({
     view.kind === "slot"
       ? `${slotName(view.slot)} slot`
       : inspected
-        ? inspected.item.name
+        ? applyActiveVariant(inspected).name
         : "Item";
   const panel = (
     <>

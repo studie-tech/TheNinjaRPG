@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { applyActiveVariant } from "@/libs/combat/util";
+import { byItemName } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
 
 /** Orders the backpack can be shown in. */
@@ -56,9 +57,10 @@ const TYPE_LABELS: Record<ItemType, string> = {
   OTHER: "Other",
 };
 
-type SortableItem = Pick<UserItemWithRelations, "durability" | "createdAt"> & {
-  item: Pick<Item, "name" | "rarity" | "itemType" | "slot" | "maxDurability">;
-};
+type SortableItem = Pick<
+  UserItemWithRelations,
+  "durability" | "createdAt" | "activeVariantId" | "item"
+>;
 
 /** Higher for rarer items. */
 const rarityRank = (rarity: ItemRarity) => ItemRarities.indexOf(rarity);
@@ -68,7 +70,7 @@ const durabilityRatio = (ui: SortableItem) =>
   ui.item.maxDurability > 0 ? ui.durability / ui.item.maxDurability : 1;
 
 const byName = (a: SortableItem, b: SortableItem) =>
-  a.item.name.localeCompare(b.item.name);
+  byItemName(applyActiveVariant(a), applyActiveVariant(b));
 
 /** Rarest first, then the least worn, then by name: the order gear is chosen in. */
 const byRarityThenDurability = (a: SortableItem, b: SortableItem) =>

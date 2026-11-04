@@ -12,6 +12,7 @@ import {
 import { type ItemSlot, NonActionItemTypes } from "@/drizzle/constants";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
 import { hasFinePointer } from "@/libs/combat/hotkeys";
+import { applyActiveVariant } from "@/libs/combat/util";
 import { nonCombatConsume } from "@/libs/item";
 import { fittingSlots, slotName } from "@/libs/itemsPage";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -97,6 +98,7 @@ function ItemMenuEntries({
   onSetHotkey,
 }: Omit<ItemContextMenuProps, "children">) {
   const { item } = userItem;
+  const look = applyActiveVariant(userItem);
   const inspect = () => onInspect(userItem.id);
   const equippedIn = userItem.equipped === "NONE" ? null : userItem.equipped;
   // Battle keys fire only for equipped items.
@@ -118,7 +120,7 @@ function ItemMenuEntries({
   if (equippedIn) {
     return (
       <>
-        <ContextMenuLabel>{item.name}</ContextMenuLabel>
+        <ContextMenuLabel>{look.name}</ContextMenuLabel>
         <ContextMenuItem onSelect={() => onUnequip(userItem.id, equippedIn)}>
           Unequip
         </ContextMenuItem>
@@ -138,7 +140,7 @@ function ItemMenuEntries({
   return (
     <>
       <ContextMenuLabel>
-        {item.name}
+        {look.name}
         {userItem.quantity > 1 ? ` ×${userItem.quantity}` : ""}
       </ContextMenuLabel>
       <ContextMenuItem onSelect={inspect}>Inspect</ContextMenuItem>

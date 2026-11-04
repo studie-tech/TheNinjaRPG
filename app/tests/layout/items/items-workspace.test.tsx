@@ -205,6 +205,19 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   expect(document.querySelector("[data-items-panel]")).toBeNull();
 });
 
+it("names the phone inspector sheet with the active variant name", () => {
+  containerWidth = 400;
+  const sword = {
+    ...tanto,
+    activeVariantId: "blue",
+    item: { ...tanto.item, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Tanto" }] },
+  } as UserItemWithRelations;
+  renderWorkspace({ userItems: [sword] });
+  act(() => fireEvent.click(screen.getAllByRole("tab")[1]!));
+  act(() => fireEvent.click(card("Blue Tanto")));
+  expect(screen.getByRole("dialog", { name: "Blue Tanto" })).toBeDefined();
+});
+
 it("show backpack from the picker switches the phone tab", () => {
   renderWorkspace();
   act(() => {

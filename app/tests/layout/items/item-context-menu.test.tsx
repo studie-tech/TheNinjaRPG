@@ -104,6 +104,16 @@ it("offers the backpack actions an item supports", () => {
   ]);
 });
 
+it.each(["NONE", "ITEM_2"] as const)("names the %s item's menu with its displayed variant name", (equipped) => {
+  const target = {
+    ...userItem({ id: "Base Salve", equipped, quantity: 5, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Salve" }] }),
+    activeVariantId: "blue",
+  } as UserItemWithRelations;
+  renderMenu(target);
+  openMenu("Base Salve");
+  expect(screen.getByText(equipped === "NONE" ? "Blue Salve ×5" : "Blue Salve")).toBeDefined();
+});
+
 it("equip in a chosen slot calls equip with that slot", () => {
   const { onEquip } = renderMenu(salve);
   openMenu("Healing Salve");

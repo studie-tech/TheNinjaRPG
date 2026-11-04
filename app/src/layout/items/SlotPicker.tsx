@@ -92,7 +92,9 @@ export function SlotPicker({
               <p className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wide">
                 Equipped now
               </p>
-              <p className="truncate font-bold text-sm">{current.item.name}</p>
+              <p className="truncate font-bold text-sm">
+                {applyActiveVariant(current).name}
+              </p>
               <p className={cn("text-xs", rarityTextClass[current.item.rarity])}>
                 {rarityLabel[current.item.rarity]}
                 {wearText(current)}
@@ -131,7 +133,9 @@ export function SlotPicker({
             >
               <ItemArt userItem={userItem} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-bold text-sm">{userItem.item.name}</p>
+                <p className="truncate font-bold text-sm">
+                  {applyActiveVariant(userItem).name}
+                </p>
                 <p className={cn("text-xs", rarityTextClass[userItem.item.rarity])}>
                   {rarityLabel[userItem.item.rarity]}
                   {wearText(userItem)}
@@ -145,7 +149,7 @@ export function SlotPicker({
               </div>
               <Button
                 size="sm"
-                aria-label={`Equip ${userItem.item.name}`}
+                aria-label={`Equip ${applyActiveVariant(userItem).name}`}
                 disabled={!!blockedReason || isPending}
                 onClick={() => onEquip(userItem.id, slot)}
               >
@@ -168,11 +172,12 @@ export function SlotPicker({
 }
 
 function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
+  const look = applyActiveVariant(userItem as UserItemWithVariants);
   return (
     <span className="relative h-11 w-11 shrink-0">
       <ContentImage
-        image={applyActiveVariant(userItem as UserItemWithVariants).image}
-        alt={userItem.item.name}
+        image={look.image}
+        alt={look.name}
         rarity={userItem.item.rarity}
         className="h-11 w-11"
       />

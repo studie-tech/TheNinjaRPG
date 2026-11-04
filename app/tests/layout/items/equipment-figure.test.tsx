@@ -71,6 +71,18 @@ it("opens a slot on click, filled or empty", () => {
   expect(onSlotClick.mock.calls).toEqual([["HAND_1"], ["WAIST"]]);
 });
 
+it("names equipped variant art and its slot with the displayed variant name", () => {
+  const base = items[0]!;
+  const sword = {
+    ...base,
+    activeVariantId: "blue",
+    item: { ...base.item, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Katana" }] },
+  } as UserItemWithRelations;
+  renderFigure({ userItems: [sword] });
+  expect(screen.getByRole("button", { name: "Hand: Blue Katana" })).toBeDefined();
+  expect(screen.getByText("Blue Katana art")).toBeDefined();
+});
+
 it("marks the active slot", () => {
   renderFigure({ activeSlot: "HAND_1" });
   expect(slotOf("HAND_1").getAttribute("aria-current")).toBe("true");
