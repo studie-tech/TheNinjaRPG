@@ -479,6 +479,29 @@ describe("travel scene ground depth", () => {
 });
 
 describe("travel scene window updates", () => {
+  it("invalidates each installed neighbor while later scenery is still loading", async () => {
+    const state = snapshotFixture(); state.users = [];
+    const { scene, game } = await sceneFixture(state);
+    const ready = windowEntry(725, 1), held = windowEntry(726, 2);
+    ready.structures[0]!.image = "ready-still-neighbor.png";
+    held.structures[0]!.image = "held-still-neighbor.png";
+    let release!: (texture: Texture) => void;
+    const pending = new Promise<Texture>(resolve => { release = resolve; });
+    vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes("held-still-neighbor") ? pending : Texture.WHITE);
+    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
+    invalidate.mockClear(); state.window.push(ready, held);
+    const updating = scene.updateWindow();
+    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
+    expect(scene.sectors.has(725)).toBe(true);
+    await updating;
+    expect(scene.sectors.has(726)).toBe(true);
+    expect(scene.sectors.get(726)!.art.entries).toHaveLength(0);
+    expect(invalidate).toHaveBeenCalled();
+    release(Texture.WHITE); await updating; await settle();
+    expect(scene.sectors.get(726)!.art.entries.length).toBeGreaterThan(0);
+  });
+
+
   it.each(["worldArt", "route"] as const)("rebuilds cached terrain and scenery after a structure %s edit", async (field) => {
     const state = snapshotFixture();
     state.libraryVersion = `structure-edit-${field}`;
@@ -552,25 +575,6 @@ describe("travel scene window updates", () => {
     }
     const restored = await sceneFixture(state);
     expect(restored.scene.sectors.get(724)!.data).not.toBe(data);
-  });
-
-  it("invalidates each installed neighbor while later scenery is still loading", async () => {
-    const state = snapshotFixture(); state.users = [];
-    const { scene, game } = await sceneFixture(state);
-    const ready = windowEntry(725, 1), held = windowEntry(726, 2);
-    ready.structures[0]!.image = "ready-still-neighbor.png";
-    held.structures[0]!.image = "held-still-neighbor.png";
-    let release!: (texture: Texture) => void;
-    const pending = new Promise<Texture>(resolve => { release = resolve; });
-    vi.spyOn(Assets, "load").mockImplementation(async input => JSON.stringify(input).includes("held-still-neighbor") ? pending : Texture.WHITE);
-    const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
-    invalidate.mockClear(); state.window.push(ready, held);
-    const updating = scene.updateWindow();
-    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
-    expect(scene.sectors.has(725)).toBe(true);
-    expect(scene.sectors.has(726)).toBe(false);
-    expect(invalidate).toHaveBeenCalled();
-    release(Texture.WHITE); await updating;
   });
 
   it("keeps a sector installed just before a newer window update interrupts it", async () => {

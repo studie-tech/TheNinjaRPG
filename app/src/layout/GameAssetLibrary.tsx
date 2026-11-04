@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type GameAssetType, GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
+import { useLpcCatalogInvalidation } from "@/hooks/lpc";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -52,6 +53,7 @@ export function GameAssetLibrary() {
   const params = useSearchParams();
   const router = useRouter();
   const utils = api.useUtils();
+  const invalidateLpcCatalog = useLpcCatalogInvalidation();
   const { data: user } = useUserData();
   const canEdit = !!user && canChangeContent(user.role);
   const canSuggest = canSuggestContent(user?.role);
@@ -227,7 +229,7 @@ export function GameAssetLibrary() {
     await Promise.all([
       utils.gameAsset.getAll.invalidate(),
       utils.gameAsset.getAllFolders.invalidate(),
-      utils.gameAsset.getLpcCatalog.invalidate(),
+      invalidateLpcCatalog(),
       utils.gameAsset.getAllNames.invalidate(),
       utils.misc.getAllGameAssetNames.invalidate(),
       utils.gameAsset.getNameTags.invalidate(),

@@ -119,8 +119,11 @@ export class WindSpritePipe {
   }
 
   execute(instruction: WindInstruction) {
-    // Pixi batches sync custom uniforms only on first use; retained gusts need each-frame binding.
-    if (instruction.shader) this.renderer.shader.bind(instruction.shader);
+    // Batch submission owns samplers and global transforms; retained gusts only need their changing group.
+    if (instruction.shader) {
+      this.renderer.shader.bind(instruction.shader, true);
+      this.renderer.shader.updateUniformGroup(this.wind);
+    }
   }
 
   updateRenderable(sprite: WindSprite) {

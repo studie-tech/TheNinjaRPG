@@ -4,6 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
+import { useLpcCatalogInvalidation } from "@/hooks/lpc";
 import type { FormEntry } from "@/layout/EditContent";
 import { assetTypeLabels } from "@/libs/assetLibrary";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
@@ -22,6 +23,7 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknow
   // Retain failure feedback until resubmission; editing a draft must not erase a new error.
   const [saveError, setSaveError] = useState<string | null>(null);
   const utils = api.useUtils();
+  const invalidateLpcCatalog = useLpcCatalogInvalidation();
 
   // Form handling
   const form = useForm<ZodGameAssetInput, unknown, ZodGameAssetType>({
@@ -40,8 +42,8 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknow
         if (data.success) {
           await Promise.all([
             refetch(),
-            ...(variables.data.type === "LPC"
-              ? [utils.gameAsset.getLpcCatalog.invalidate()]
+            ...(asset.type === "LPC" || variables.data.type === "LPC"
+              ? [invalidateLpcCatalog()]
               : []),
             utils.gameAsset.getAll.invalidate(),
             utils.gameAsset.getAllFolders.invalidate(),

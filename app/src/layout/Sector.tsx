@@ -34,7 +34,6 @@ import {
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
-import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
@@ -61,6 +60,7 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
@@ -139,6 +139,7 @@ export interface SectorWindowData {
 }
 
 interface SectorProps {
+  loadLpcCatalog: () => Promise<LpcCatalog>;
   sector: number;
   tile: GlobalTile;
   sectorWindow: SectorWindowData;
@@ -384,7 +385,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   // tRPC utility
   const utils = api.useUtils();
-  const loadLpcCatalog = useLpcCatalogLoader({ revalidateInBackground: true });
+  const loadLpcCatalog = props.loadLpcCatalog;
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db

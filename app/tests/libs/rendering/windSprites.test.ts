@@ -91,7 +91,7 @@ describe("scenery wind vertex data", () => {
         break: vi.fn(),
         addToBatch: (entry: BatchableSprite) => { entry._batcher = batcher; },
       } },
-      shader: { bind: (shader: Shader) => samples.push(Array.from((shader.resources.wind as UniformGroup).uniforms.uWind as Float32Array)) },
+      shader: { bind: vi.fn(), updateUniformGroup: (group: UniformGroup) => samples.push(Array.from(group.uniforms.uWind as Float32Array)) },
     } as unknown as WebGLRenderer;
     const pipe = new WindSpritePipe(renderer);
     Object.assign(renderer.renderPipes, { worldWindSprite: pipe });
@@ -106,6 +106,7 @@ describe("scenery wind vertex data", () => {
       const first = instructions.instructions[0] as Parameters<WindSpritePipe["execute"]>[0];
       updateWindSprites(renderer, breeze(1));
       pipe.execute(first);
+      expect(renderer.shader.bind).toHaveBeenLastCalledWith(first.shader, true);
       updateWindSprites(renderer, breeze(2));
       pipe.execute(first);
       expect(samples).toEqual([[1, 0, 0, 0], [2, 0, 0, 0]]);

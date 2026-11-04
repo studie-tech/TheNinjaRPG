@@ -65,6 +65,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
@@ -229,6 +230,10 @@ function Travel() {
   const positionChanged = useRef(() => {});
   const userRef = useUserDataRef(() => positionChanged.current());
   const userData = profile ? userRef.current : undefined;
+  const loadLpcCatalog = useLpcCatalogLoader({
+    revalidateInBackground: true,
+    preload: !!userData,
+  });
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const setScenePosition = useCallback(
     (point: SectorPoint | null) => {
@@ -886,6 +891,7 @@ function Travel() {
       sectorWindow &&
       currentSectorMap && (
         <Sector
+          loadLpcCatalog={loadLpcCatalog}
           tile={currentTile}
           sector={currentSector}
           sectorWindow={sectorWindow}
@@ -902,6 +908,7 @@ function Travel() {
       )
     );
   }, [
+    loadLpcCatalog,
     currentTile,
     currentSector,
     currentSectorMap,

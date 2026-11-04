@@ -75,7 +75,7 @@ beforeEach(() => {
       gameAsset: {
         getAll: { invalidate: () => cache.invalidateQueries({ queryKey: ["assets"] }) },
         getAllFolders: { invalidate: noOp },
-        getLpcCatalog: { invalidate: noOp }, getAllNames: { invalidate: noOp },
+        getLpcCatalog: { invalidate: noOp }, getLpcSceneCatalog: { invalidate: noOp }, getAllNames: { invalidate: noOp },
         getNameTags: { invalidate: noOp },
       },
       misc: { getAllGameAssetNames: { invalidate: noOp } },

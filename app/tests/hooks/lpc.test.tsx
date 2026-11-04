@@ -1,7 +1,7 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
-import { useLpcCatalogLoader } from "@/hooks/lpc";
+import { useLpcCatalogInvalidation, useLpcCatalogLoader } from "@/hooks/lpc";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import { lpcAssets } from "../setup/lpc";
 
@@ -23,14 +23,43 @@ const fixture = (cached?: typeof lpcAssets) => {
     compiled = await pending;
     return compiled;
   });
+  const discoveryInvalidation = vi.fn(async () => {}), sceneInvalidation = vi.fn(async () => {});
   const utils = {
-    gameAsset: { getLpcSceneCatalog: { getData: () => compiled, fetch } },
+    gameAsset: { getLpcCatalog: { invalidate: discoveryInvalidation }, getLpcSceneCatalog: { getData: () => compiled, fetch, invalidate: sceneInvalidation } },
   };
   Object.assign(vi.spyOn(client, "api" as never), { useUtils: () => utils });
-  return { resolve, reject, fetch, pending };
+  return { resolve, reject, fetch, pending, discoveryInvalidation, sceneInvalidation };
 };
 
 describe("scene character catalog loading", () => {
+  it("invalidates discovery and compiled snapshots together after saved artwork changes", async () => {
+    const request = fixture(lpcAssets);
+    const { result } = renderHook(() => useLpcCatalogInvalidation());
+    await result.current();
+    expect(request.discoveryInvalidation).toHaveBeenCalledTimes(1);
+    expect(request.sceneInvalidation).toHaveBeenCalledTimes(1);
+  });
+  it("shares a prepared request with the first scene and refreshes later scenes", async () => {
+    const request = fixture();
+    const { result } = renderHook(() => useLpcCatalogLoader({ preload: true }));
+    expect(request.fetch).toHaveBeenCalledTimes(1);
+    const loading = result.current();
+    expect(request.fetch).toHaveBeenCalledTimes(1);
+    request.resolve(lpcAssets);
+    expect(await loading).toEqual(buildLpcCatalog(lpcAssets));
+    await result.current();
+    expect(request.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands a preparation error to the scene without leaking a rejection", async () => {
+    const request = fixture();
+    const { result } = renderHook(() => useLpcCatalogLoader({ preload: true }));
+    request.reject(new Error("Catalog unavailable"));
+    await Promise.resolve();
+    await expect(result.current()).rejects.toThrow("Catalog unavailable");
+    expect(request.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("waits for artwork on a cold cache", async () => {
     const request = fixture();
     const { result } = renderHook(() => useLpcCatalogLoader({ revalidateInBackground: true }));

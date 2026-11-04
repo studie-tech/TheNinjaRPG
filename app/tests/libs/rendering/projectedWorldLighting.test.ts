@@ -9,7 +9,7 @@ import { worldSunlight } from "@/libs/rendering/worldSunlight";
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 const fixture = () => {
   const cleanups: (() => void)[] = [];
-  const game = { visualEffects: { lighting: true, shadows: true, animations: true },
+  const game = { visualEffects: { ...DEFAULT_VISUAL_EFFECTS },
     renderer: { resolution: 1 }, own: (cleanup: () => void) => cleanups.push(cleanup) } as unknown as GameRenderer;
   const world = new Container(), owner = new Container();
   const lighting = createProjectedWorldLighting(game, world);
@@ -183,7 +183,7 @@ describe("projected world lighting", () => {
       expect(ground.visible).toBe(true);
       f.game.visualEffects.shadows = false;
       f.lighting.update(worldSunlight(), viewport); expect(ground.visible).toBe(false);
-      f.game.visualEffects.shadows = true; f.game.visualEffects.lighting = false;
+      f.game.visualEffects.shadows = true; f.game.visualEffects.sunlight = false;
       f.lighting.update(worldSunlight(), viewport); expect(ground.visible).toBe(false);
       expect(f.lighting.container.filters?.[0]?.enabled).toBe(false);
     } finally { f.dispose(); }

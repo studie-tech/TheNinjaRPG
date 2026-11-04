@@ -16,7 +16,6 @@ import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { createWorldShadows } from "@/libs/rendering/worldShadows";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
-import { ensureDom } from "../../setup/dom.mjs";
 import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import * as visualEffects from "@/libs/visualEffects";

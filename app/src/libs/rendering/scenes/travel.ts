@@ -542,7 +542,7 @@ export const createTravelScene = async (options: {
             transform();
             setBackground(entry.map);
           }
-          // The scene applies the cycle tint to neutral terrain before drawing.
+          // The lit world supplies ambient color to neutral terrain and scenery together.
           terrain.setLighting(1);
           scope.own(shadows.registerTerrain(terrain.container, data));
           terrain.container.position.copyFrom(position);
@@ -634,15 +634,15 @@ export const createTravelScene = async (options: {
         entry = sectors.get(snapshot.sector);
       const isPreparing = snapshot.viewer?.status === "TRAVEL";
       isStill =
-        frame.reducedMotion &&
-        (sourceFrame.reducedMotion ||
-          (!game.visualEffects.weather && !game.visualEffects.wind)) &&
-        !game.visualEffects.sunlight &&
-        !game.visualEffects.dayNight &&
-        !game.visualEffects.localLights;
-      game.setAnimating(!isPreparing && !isStill);
+        isPreparing ||
+        (frame.reducedMotion &&
+          (sourceFrame.reducedMotion ||
+            (!game.visualEffects.weather && !game.visualEffects.wind)) &&
+          !game.visualEffects.sunlight &&
+          !game.visualEffects.dayNight &&
+          !game.visualEffects.localLights);
+      game.setAnimating(!isStill);
       lastFrameInputs = travelFrameInputs(snapshot);
-      // Compile destination scenery during the countdown without animating a hidden world.
       if (isPreparing) return;
       if (!entry) return;
       movements.clear();
@@ -938,21 +938,6 @@ type TravelSector = {
   art: Awaited<ReturnType<typeof createWorldSprites>>;
 };
 
-/**
- * Retain CPU terrain and descriptions for up to nine sectors across navigation.
- * Live users and renderer resources stay scene-local; insertion order controls eviction.
- */
-const cachedSectorData = new Map<
-  number,
-  {
-    key: string;
-    sourceKey: string;
-    grid: Grid<TerrainHex>;
-    data: HexTerrainData;
-    descriptions: WorldSpriteDescription[];
-  }
->();
-
 /** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */
 const travelFrameInputs = (snapshot: TravelSnapshot) =>
   [
@@ -974,3 +959,18 @@ const travelFrameInputs = (snapshot: TravelSnapshot) =>
     snapshot.routeTarget?.x,
     snapshot.routeTarget?.y,
   ] as const;
+
+/**
+ * Retain CPU terrain and descriptions for up to nine sectors across navigation.
+ * Live users and renderer resources stay scene-local; insertion order controls eviction.
+ */
+const cachedSectorData = new Map<
+  number,
+  {
+    key: string;
+    sourceKey: string;
+    grid: Grid<TerrainHex>;
+    data: HexTerrainData;
+    descriptions: WorldSpriteDescription[];
+  }
+>();
