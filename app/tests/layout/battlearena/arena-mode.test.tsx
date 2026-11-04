@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
 import * as tutorial from "@/hooks/tutorial";
@@ -48,6 +49,7 @@ beforeEach(() => {
   );
   vi.spyOn(sleep, "useSleepToggle").mockImplementation(() => ({ toggleSleep, isTogglingSleep: false }) as never);
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([true, vi.fn()]);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
   vi.spyOn(jutsuLoadout, "default").mockImplementation((() => <p>Jutsu loadout</p>) as never);
   vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);
   // biome-ignore lint/performance/noImgElement: isolated avatar fixture

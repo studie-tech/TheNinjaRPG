@@ -5,6 +5,7 @@ import {
   dummyPresetValues,
   matchDummyPreset,
   rankedProgress,
+  selectedLoadoutName,
   sparExamProgress,
   towerState,
 } from "@/libs/battleArena";
@@ -112,5 +113,22 @@ describe("towerState", () => {
     expect(towerState(tower(1), null)).toEqual({ kind: "missingItems", missing: 1 });
     expect(towerState(tower(2), null)).toEqual({ kind: "open" });
     expect(towerState({ id: "t-3", entryRequirements: [] }, null)).toEqual({ kind: "open" });
+  });
+});
+
+describe("selectedLoadoutName", () => {
+  const loadouts = [
+    { id: "a", name: "PvE build" },
+    { id: "b", name: null },
+  ];
+  it("uses the loadout's own name", () => {
+    expect(selectedLoadoutName(loadouts, "a", "Jutsu loadout")).toBe("PvE build");
+  });
+  it("falls back to the numbered label the pickers show", () => {
+    expect(selectedLoadoutName(loadouts, "b", "Jutsu loadout")).toBe("Jutsu loadout 2");
+  });
+  it("is null until the loadouts load or when nothing is selected", () => {
+    expect(selectedLoadoutName(undefined, "a", "Jutsu loadout")).toBeNull();
+    expect(selectedLoadoutName(loadouts, null, "Jutsu loadout")).toBeNull();
   });
 });

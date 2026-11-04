@@ -200,7 +200,7 @@ export function TrainingMode({
                     control={form.control}
                     name={stat}
                     render={({ field }) => (
-                      <FormItem className="grid grid-cols-[7rem_minmax(0,1fr)_7rem] items-center gap-3 space-y-0">
+                      <FormItem className="grid grid-cols-[6.5rem_minmax(0,1fr)_6rem] items-center gap-3 space-y-0">
                         <FormLabel>{capitalizeFirstLetter(stat)}</FormLabel>
                         <div aria-hidden className="bg-muted h-1.5 rounded-full">
                           <div
@@ -213,7 +213,8 @@ export function TrainingMode({
                         <FormControl>
                           <NumberInput
                             step="any"
-                            className="text-right"
+                            // Native steppers would push the value off the right edge.
+                            className="[appearance:textfield] text-right font-semibold tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             {...field}
                             value={field.value as number}
                             onValueChange={field.onChange}

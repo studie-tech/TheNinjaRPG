@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { ArenaModeShell } from "@/layout/battlearena/ArenaModeShell";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
@@ -40,6 +41,7 @@ beforeEach(() => {
     },
   } as never);
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([false, setAutoCombat]);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: "PvE build", item: "Item loadout 1" });
   vi.spyOn(jutsuLoadout, "default").mockImplementation((({ label }: { label?: string }) => <p>{label}</p>) as never);
   vi.spyOn(itemLoadout, "default").mockImplementation((({ label }: { label?: string }) => <p>{label}</p>) as never);
 });
@@ -106,4 +108,15 @@ it("holds loadouts, auto combat, extra options and the action", () => {
   fireEvent.click(screen.getAllByRole("switch", { name: "Toggle auto combat" })[0]!);
   expect(setAutoCombat).toHaveBeenCalledWith(true);
   expect(screen.getByRole("button", { name: "Fight Yama" })).toBeDefined();
+});
+
+it("summarises the setup on the phone row", () => {
+  render(<BattleSetupPanel autoCombat action={null} />);
+  expect(screen.getByText("PvE build · Item loadout 1 · Auto off")).toBeDefined();
+});
+
+it("names the options when there is no loadout to show", () => {
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
+  render(<BattleSetupPanel action={null} />);
+  expect(screen.getByText("Battle options")).toBeDefined();
 });

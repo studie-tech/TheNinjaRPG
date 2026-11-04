@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
 import { SparringMode } from "@/layout/battlearena/SparringMode";
 import * as image from "@/layout/Image";
@@ -98,6 +99,7 @@ beforeEach(() => {
     updateUser: vi.fn(),
   } as never);
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([false, vi.fn()]);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
   vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ push: vi.fn() } as never);
   vi.spyOn(jutsuLoadout, "default").mockImplementation((() => <p>Jutsu loadout</p>) as never);
   vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);

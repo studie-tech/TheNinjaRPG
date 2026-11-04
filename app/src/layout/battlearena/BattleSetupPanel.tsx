@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useAutoCombatSetting } from "@/hooks/combat";
+import { useLoadoutNames } from "@/hooks/useLoadoutNames";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Link from "@/layout/Link";
@@ -31,6 +32,15 @@ export function BattleSetupPanel({
 }: BattleSetupPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAutoCombat] = useAutoCombatSetting();
+  const loadoutNames = useLoadoutNames();
+  const summary =
+    [
+      loadoutNames.jutsu,
+      loadoutNames.item,
+      autoCombat && `Auto ${isAutoCombat ? "on" : "off"}`,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Battle options";
   return (
     <aside
       aria-label="Battle setup"
@@ -46,9 +56,7 @@ export function BattleSetupPanel({
         className="h-11 justify-between @min-[600px]:hidden"
         onClick={() => setIsOpen(true)}
       >
-        <span className="truncate">
-          Loadouts{autoCombat ? ` · auto combat ${isAutoCombat ? "on" : "off"}` : ""}
-        </span>
+        <span className="truncate">{summary}</span>
         <span className="text-primary flex items-center gap-1 font-semibold">
           <SlidersHorizontal className="h-4 w-4" aria-hidden /> Setup
         </span>

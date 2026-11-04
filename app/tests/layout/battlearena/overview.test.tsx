@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { ArenaOverview } from "@/layout/battlearena/ArenaOverview";
 import * as setupPanel from "@/layout/battlearena/BattleSetupPanel";
 import * as userContext from "@/utils/UserContext";
@@ -56,6 +57,10 @@ beforeEach(() => {
   );
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([true, vi.fn()]);
   vi.spyOn(setupPanel, "BattleSetupControls").mockImplementation(() => <p>Setup controls</p>);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
+    jutsu: "PvE build",
+    item: "Item loadout 1",
+  });
 });
 
 afterEach(() => {
@@ -101,4 +106,17 @@ it("opens a mode from its card", () => {
     "PVP Rank",
     "Training",
   ]);
+});
+
+it("summarises the selected loadouts and auto combat", () => {
+  render(<ArenaOverview onOpen={vi.fn()} />);
+  expect(
+    screen.getByText("Jutsu: PvE build · Items: Item loadout 1 · Auto combat on"),
+  ).toBeDefined();
+});
+
+it("leaves out loadouts a player cannot switch", () => {
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
+  render(<ArenaOverview onOpen={vi.fn()} />);
+  expect(screen.getByText("Auto combat on")).toBeDefined();
 });

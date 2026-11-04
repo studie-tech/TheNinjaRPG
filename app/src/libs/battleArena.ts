@@ -131,3 +131,14 @@ export const towerState = (
   );
   return missing > 0 ? { kind: "missingItems", missing } : { kind: "open" };
 };
+
+/** The selected loadout's name as the loadout pickers show it, or null when unknown. */
+export const selectedLoadoutName = (
+  loadouts: { id: string; name?: string | null }[] | undefined,
+  selectedId: string | null | undefined,
+  label: string,
+): string | null => {
+  const index = loadouts?.findIndex((loadout) => loadout.id === selectedId) ?? -1;
+  if (!loadouts || index < 0) return null;
+  return loadouts[index]?.name || `${label} ${index + 1}`;
+};

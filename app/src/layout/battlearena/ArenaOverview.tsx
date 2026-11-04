@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronRight,
   SlidersHorizontal,
   Swords,
   Target,
@@ -13,6 +14,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAutoCombatSetting } from "@/hooks/combat";
+import { useLoadoutNames } from "@/hooks/useLoadoutNames";
 import { BattleSetupControls } from "@/layout/battlearena/BattleSetupPanel";
 import { type ArenaMode, rankedProgress, sparExamProgress } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
@@ -27,6 +29,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
   const { data: userData } = useRequiredUserData();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isAutoCombat] = useAutoCombatSetting();
+  const loadoutNames = useLoadoutNames();
   const enabled = !!userData;
   const { data: opponents } = api.profile.getAllAiNames.useQuery(
     { arenaOnly: true },
@@ -64,6 +67,13 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     (uq) => !uq.endAt && uq.quest?.questType === "battlepyramid",
   );
   const ranked = rankedProgress(userData.rankedLp);
+  const setupSummary = [
+    loadoutNames.jutsu && `Jutsu: ${loadoutNames.jutsu}`,
+    loadoutNames.item && `Items: ${loadoutNames.item}`,
+    `Auto combat ${isAutoCombat ? "on" : "off"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const cards: OverviewCard[] = [
     {
@@ -139,12 +149,9 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
           <ModeCard key={card.mode} card={card} onOpen={onOpen} />
         ))}
       </div>
-      <div className="bg-muted/50 flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-        <b>Your setup</b>
-        <span className="text-muted-foreground">
-          Jutsu and item loadouts · auto combat {isAutoCombat ? "on" : "off"}
-        </span>
-        <span className="flex-1" />
+      <div className="bg-muted/50 flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
+        <b className="shrink-0 @max-[600px]:sr-only">Your setup</b>
+        <span className="text-muted-foreground min-w-0 flex-1">{setupSummary}</span>
         <Button variant="outline" className="h-11" onClick={() => setIsSetupOpen(true)}>
           <SlidersHorizontal className="mr-2 h-4 w-4" aria-hidden /> Change
         </Button>
@@ -177,7 +184,8 @@ function ModeCard({
   return (
     <article
       className={cn(
-        "bg-card flex gap-3 rounded-xl border p-3",
+        // On phones the card is one compact row and its button covers the whole card.
+        "bg-card relative flex items-center gap-3 rounded-xl border p-3 @min-[600px]:items-stretch",
         card.wide ? "@min-[600px]:col-span-2" : "",
         "flex-row @min-[600px]:flex-col",
         card.wide && "@min-[600px]:flex-row",
@@ -187,19 +195,21 @@ function ModeCard({
         aria-hidden
         className={cn(
           "flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-100 to-amber-300 text-amber-900 dark:from-amber-900 dark:to-amber-700 dark:text-amber-100",
-          "h-16 w-16 @min-[600px]:h-20 @min-[600px]:w-full",
+          "h-14 w-14 @min-[600px]:h-20 @min-[600px]:w-full",
           card.wide && "@min-[600px]:h-auto @min-[600px]:w-56",
         )}
       >
-        <Icon className="h-8 w-8" />
+        <Icon className="h-7 w-7 @min-[600px]:h-8 @min-[600px]:w-8" />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <h2 className="text-lg font-bold">{card.title}</h2>
-        <p className="text-sm">{card.description}</p>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 @min-[600px]:gap-1">
+        <h2 className="text-base font-bold @min-[600px]:text-lg">{card.title}</h2>
+        <p className="text-muted-foreground @min-[600px]:text-foreground text-xs @min-[600px]:text-sm">
+          {card.description}
+        </p>
         {card.status && (
           <p
             className={cn(
-              "text-sm font-semibold",
+              "text-xs font-semibold @min-[600px]:text-sm",
               card.quiet ? "text-muted-foreground" : "text-primary",
             )}
           >
@@ -210,12 +220,16 @@ function ModeCard({
         <span className="flex-1" />
         <Button
           variant={card.quiet ? "outline" : "default"}
-          className="mt-2 h-11"
+          className="mt-2 h-11 @max-[600px]:absolute @max-[600px]:inset-0 @max-[600px]:z-10 @max-[600px]:mt-0 @max-[600px]:h-auto @max-[600px]:rounded-xl @max-[600px]:border-0 @max-[600px]:bg-transparent @max-[600px]:text-transparent @max-[600px]:shadow-none @max-[600px]:hover:bg-black/5"
           onClick={() => onOpen(card.mode)}
         >
           {card.action}
         </Button>
       </div>
+      <ChevronRight
+        aria-hidden
+        className="text-muted-foreground h-5 w-5 shrink-0 @min-[600px]:hidden"
+      />
     </article>
   );
 }
