@@ -1,6 +1,7 @@
 /**
  * Database access for quests; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -72,6 +73,7 @@ import {
   rewardChoiceContentIds,
 } from "@/libs/rewardChoice";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
+import { grantableTitleWhere } from "@/queries/title";
 import {
   extendWarParticipantSql,
   liftBracketImmunitySql,
@@ -324,13 +326,7 @@ export const fetchRewardChoiceOwnership = async (
         ? client
             .select({ id: title.id })
             .from(title)
-            .where(
-              and(
-                inArray(title.id, titleIds),
-                isNull(title.legacyOwnerId),
-                eq(title.archived, false),
-              ),
-            )
+            .where(grantableTitleWhere(titleIds))
         : [],
     ]);
   const toSet = (rows: { id: string | null }[]) =>
@@ -1115,14 +1111,7 @@ export const selectTitleForUpdateRewards = (
       userTitle,
       and(eq(userTitle.titleId, title.id), eq(userTitle.userId, user.userId)),
     )
-    .where(
-      and(
-        inArray(title.id, rewards.reward_titles),
-        eq(title.archived, false),
-        isNull(title.legacyOwnerId),
-        isNull(userTitle.userId),
-      ),
-    );
+    .where(and(grantableTitleWhere(rewards.reward_titles), isNull(userTitle.userId)));
 
 /** Build the `sageMode` selection for `updateRewards`, using predicates on `id` and `userId`. */
 export const selectSageModeForUpdateRewards = (
