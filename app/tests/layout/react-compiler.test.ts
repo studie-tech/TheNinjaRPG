@@ -31,6 +31,16 @@ const targets = [
   ["app/[shell]/travel/page.tsx", ["StealthControls"]],
   ["app/[shell]/profile/experience/page.tsx", ["AssignExperience"]],
   ["app/[shell]/village/page.tsx", ["VillageOverview"]],
+  ["app/[shell]/battlearena/page.tsx", ["Arena"]],
+  ["layout/battlearena/ArenaOverview.tsx", ["ArenaOverview", "ModeCard"]],
+  ["layout/battlearena/ArenaModeShell.tsx", ["ArenaModeShell"]],
+  ["layout/battlearena/BattleSetupPanel.tsx", ["BattleSetupPanel", "BattleSetupControls"]],
+  ["layout/battlearena/ArenaMode.tsx", ["ArenaMode", "OpponentDetails"]],
+  ["layout/battlearena/SparringMode.tsx", ["SparringMode", "OptionCheckbox"]],
+  ["layout/battlearena/OpponentFinder.tsx", ["OpponentFinder", "FilterChip"]],
+  ["layout/battlearena/TrainingMode.tsx", ["TrainingMode"]],
+  ["layout/battlearena/RankedMode.tsx", ["RankedMode"]],
+  ["layout/battlearena/PyramidMode.tsx", ["PyramidMode", "TowerHeading"]],
 ] as const;
 
 describe("React Compiler coverage", () => {
