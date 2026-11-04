@@ -1,4 +1,3 @@
-import { PUSH_TOKEN_STALE_DAYS } from "@/drizzle/constants";
 import { findUserDeviceForGET } from "@/queries/push";
 import { drizzleDB } from "@/server/db";
 import { secondsFromNow } from "@/utils/time";
@@ -25,14 +24,11 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // A device that stopped checking in is treated as gone, matching what the push fan-out
-  // already does with the same window.
-  const freshSince = secondsFromNow(-PUSH_TOKEN_STALE_DAYS * 24 * 60 * 60);
   // The profile comes back with the device rather than in a second hop: a widget refreshes
   // on the system's timeline budget for every install that has one, so this is the most
   // frequently hit new endpoint in the app. Drizzle emits this as a single statement with
   // a lateral join, not as two queries.
-  const device = await findUserDeviceForGET(drizzleDB, token, freshSince);
+  const device = await findUserDeviceForGET(drizzleDB, token);
   // Kept apart: an unknown or stale token is not authorised, whereas a device whose
   // account has since gone is a device pointing at nothing.
   if (!device) {

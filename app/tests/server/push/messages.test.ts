@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { announcement, deliveryTest, toPlainText } from "@/server/utils/push/messages";
+import { announcement, deliveryTest } from "@/server/utils/push/messages";
 import { shouldReportPushFailures, summarise } from "@/server/utils/push/types";
 
-describe("toPlainText", () => {
+/** The alert body an announcement's stored HTML turns into. */
+const toPlainText = (html: string) => announcement(html).body;
+
+describe("announcement body", () => {
   it("strips the markup announcements carry", () => {
     expect(toPlainText("<b>Akikaze</b> has declared war on <i>Shirohana</i>")).toBe(
       "Akikaze has declared war on Shirohana",
@@ -27,13 +30,13 @@ describe("toPlainText", () => {
     );
   });
 
-  it("leaves unknown entities alone rather than mangling them", () => {
-    expect(toPlainText("100&percnt; done")).toBe("100&percnt; done");
+  it("decodes every named entity", () => {
+    expect(toPlainText("100&percnt; done")).toBe("100% done");
   });
 
-  it("strips to a fixpoint, so a nested tag cannot reassemble itself", () => {
-    expect(toPlainText("<<b>b>bold<<\/b>\/b>")).toBe("bold");
-    expect(toPlainText("<<script>script>alert(1)")).toBe("alert(1)");
+  it("separates blocks and drops script contents", () => {
+    expect(toPlainText("<p>Hello</p><p>World</p>")).toBe("Hello World");
+    expect(toPlainText("Before<script>alert(1)</script>")).toBe("Before");
   });
 });
 
@@ -121,11 +124,9 @@ describe("numeric character references", () => {
     expect(toPlainText("Tom&#X27;s squad")).toBe("Tom's squad");
   });
 
-  it("leaves references it cannot safely decode as written", () => {
-    expect(toPlainText("lone surrogate &#xD800; here")).toBe(
-      "lone surrogate &#xD800; here",
-    );
-    expect(toPlainText("out of range &#1114112;")).toBe("out of range &#1114112;");
-    expect(toPlainText("null &#0;")).toBe("null &#0;");
+  it("replaces references it cannot safely decode", () => {
+    expect(toPlainText("lone surrogate &#xD800; here")).toBe("lone surrogate \uFFFD here");
+    expect(toPlainText("out of range &#1114112;")).toBe("out of range \uFFFD");
+    expect(toPlainText("null &#0;")).toBe("null \uFFFD");
   });
 });

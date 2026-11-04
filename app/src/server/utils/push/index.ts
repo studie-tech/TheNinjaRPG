@@ -13,13 +13,8 @@ import {
  */
 
 import * as Sentry from "@sentry/node";
-import {
-  PUSH_TOKEN_STALE_DAYS,
-  type PushCategory,
-  type PushPlatform,
-} from "@/drizzle/constants";
+import type { PushCategory, PushPlatform } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
-import { secondsFromNow } from "@/utils/time";
 import * as apns from "./apns";
 import * as fcm from "./fcm";
 import {
@@ -31,7 +26,7 @@ import {
   summarise,
 } from "./types";
 
-export { announcement, deliveryTest, toPlainText } from "./messages";
+export { announcement, deliveryTest } from "./messages";
 export type { PushMessage, PushSendSummary } from "./types";
 
 /** Whether either transport is configured. False in local development by default. */
@@ -51,11 +46,8 @@ export const sendPushToUsers = async (
 
   let summary = emptySummary();
   try {
-    // A device that has not checked in for a season is almost certainly uninstalled;
-    // skipping it keeps the fan-out small without needing a separate cleanup job.
-    const freshSince = secondsFromNow(-PUSH_TOKEN_STALE_DAYS * 24 * 60 * 60);
     const [devices, optOuts] = await Promise.all([
-      selectUserDeviceForSendPushToUsers(client, recipients, freshSince),
+      selectUserDeviceForSendPushToUsers(client, recipients),
       selectUserPushPreferenceForSendPushToUsers(client, recipients, message),
     ]);
 
