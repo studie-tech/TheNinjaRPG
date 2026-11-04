@@ -143,7 +143,7 @@ export const createProjectedWorldLighting = (
                 x: source.anchor.x * source.texture.orig.width,
                 y: source.texture.orig.height,
               },
-        shadows: [],
+        shadow: undefined,
         atlas: null,
         description,
         transform: new Matrix(),
@@ -162,16 +162,16 @@ export const createProjectedWorldLighting = (
             .then((atlas) => {
               if (!records.has(record)) return;
               record.atlas = atlas;
-              for (const shadow of record.shadows) shadow.destroy();
-              record.shadows = [];
+              record.shadow?.destroy();
+              record.shadow = undefined;
               dirty = true;
               game.invalidate();
             })
             .catch((error) => {
               if (!records.has(record) || game.isDisposed()) return;
               if (upright) record.contact = textureGroundContact(source.texture);
-              for (const shadow of record.shadows) shadow.destroy();
-              record.shadows = [];
+              record.shadow?.destroy();
+              record.shadow = undefined;
               dirty = true;
               game.invalidate();
               console.warn(
@@ -183,8 +183,8 @@ export const createProjectedWorldLighting = (
       return Object.assign(
         () => {
           records.delete(record);
-          for (const shadow of record.shadows) if (!shadow.destroyed) shadow.destroy();
-          record.shadows = [];
+          if (record.shadow && !record.shadow.destroyed) record.shadow.destroy();
+          record.shadow = undefined;
           record.releaseAtlas?.();
           dirty = true;
         },
@@ -347,11 +347,11 @@ export const createProjectedWorldLighting = (
       };
       for (const record of records) {
         if (!record.bounds || !boundsOverlap(record.bounds, viewport)) {
-          for (const shadow of record.shadows) if (!shadow.destroyed) shadow.destroy();
-          record.shadows = [];
+          if (record.shadow && !record.shadow.destroyed) record.shadow.destroy();
+          record.shadow = undefined;
           continue;
         }
-        if (!record.shadows.length) {
+        if (!record.shadow) {
           const shadow = new Sprite(record.source.texture);
           shadow.anchor.set(
             record.contact.x / record.source.texture.orig.width,
@@ -362,12 +362,12 @@ export const createProjectedWorldLighting = (
           shadow.zIndex = record.order;
           shadow.label = `scenery-shadow:${record.description.id}`;
           ground.addChild(shadow);
-          record.shadows.push(shadow);
+          record.shadow = shadow;
           record.poseDirty = true;
         }
         if (record.atlas) {
           placeBakedShadow(
-            record.shadows[0],
+            record.shadow,
             record.atlas,
             record.transform,
             light.x,
@@ -379,7 +379,7 @@ export const createProjectedWorldLighting = (
           );
           record.poseDirty = false;
         } else if (record.poseDirty) {
-          record.shadows[0]?.setFromMatrix(record.transform);
+          record.shadow.setFromMatrix(record.transform);
           record.poseDirty = false;
         }
       }
@@ -472,7 +472,7 @@ export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLight
 type ProjectedShadowRecord = {
   source: Sprite;
   contact: { x: number; y: number };
-  shadows: Sprite[];
+  shadow: Sprite | undefined;
   atlas: BakedShadowAtlas | null;
   releaseAtlas?: () => void;
   description: WorldSpriteDescription;

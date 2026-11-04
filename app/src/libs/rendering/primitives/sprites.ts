@@ -93,7 +93,6 @@ export const createWorldSprites = async (
   let lightTexture: Texture | null = null,
     shadowLease: ReturnType<typeof acquireSoftShadowTexture> | null = null;
   const container = new Container();
-  const pendingContacts = new Set<Container>();
   const entries: {
     sprite: Sprite | LpcCharacter["sprite"];
     character?: LpcCharacter;
@@ -106,6 +105,7 @@ export const createWorldSprites = async (
     idleTexture: Texture;
     motionFrame: number;
   }[] = [];
+  const pendingContacts = new Set<(typeof entries)[number]>();
   let disposed = false;
   let lastBrightness = Number.NaN;
   let lastDayNight: boolean | undefined;
@@ -393,13 +393,6 @@ export const createWorldSprites = async (
         shadow.alpha = 0.6;
         shadow.label = `shadow:${description.id}`;
         shadows.addChild(shadow);
-        if (
-          contactReplacement(
-            description,
-            sprite instanceof Sprite ? sprite : undefined,
-          ) === "pending"
-        )
-          pendingContacts.add(sprite);
       }
       let light: Sprite | undefined;
       if (
@@ -428,7 +421,7 @@ export const createWorldSprites = async (
         light.blendMode = "add";
         lights.addChild(light);
       }
-      entries.push({
+      const entry: (typeof entries)[number] = {
         sprite,
         character,
         shadow,
@@ -453,7 +446,16 @@ export const createWorldSprites = async (
           rotation: sprite.rotation,
           shearY: description.shearY,
         }),
-      });
+      };
+      entries.push(entry);
+      if (
+        shadow &&
+        contactReplacement(
+          description,
+          sprite instanceof Sprite ? sprite : undefined,
+        ) === "pending"
+      )
+        pendingContacts.add(entry);
       container.addChild(sprite);
     } else if (result.status === "rejected") {
       missing++;
@@ -695,14 +697,13 @@ export const createWorldSprites = async (
       if (disposed) return;
       // Bakes settle after art is visible; retire replacement contacts once without frame-time decoding.
       if (pendingContacts.size) {
-        for (const entry of softEffects) {
-          if (!pendingContacts.has(entry.sprite)) continue;
+        for (const entry of pendingContacts) {
           const replacement = contactReplacement(
             entry.description,
             entry.sprite instanceof Sprite ? entry.sprite : undefined,
           );
           if (replacement === "pending") continue;
-          pendingContacts.delete(entry.sprite);
+          pendingContacts.delete(entry);
           if (replacement === "replace") {
             entry.shadow?.destroy();
             entry.shadow = undefined;
