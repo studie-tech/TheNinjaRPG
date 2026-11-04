@@ -2,6 +2,7 @@ import {
   ELDER_MIN_VOTING_COUNT,
   KAGE_ELDER_REMOVAL_LOCK_SECS,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 import { resolveElderVote } from "@/libs/elder";
 import {
   findKageRemovalVoteById,
@@ -44,9 +45,7 @@ export const settleKageRemoval = async (
       ]);
       if (motion?.status !== "PENDING")
         return { success: true, message: "Removal vote already resolved" };
-      const electorate = new Set(
-        elders.filter((e) => e.userId !== motion.targetId).map((e) => e.userId),
-      );
+      const electorate = getKageRemovalElectorate(elders, motion.targetId);
       const yes = motion.entries.filter(
         (e) => electorate.has(e.userId) && e.vote === "YES",
       ).length;
@@ -99,3 +98,21 @@ export const settleKageRemoval = async (
     }),
   );
 };
+
+/** Holds an elder seat in the village, matching `listEligibleKageRemovalElders`. */
+export const isServingElder = <
+  T extends Pick<UserData, "rank" | "isAi" | "isBanned" | "villageId">,
+>(
+  user: T | null | undefined,
+  villageId: string,
+): user is T =>
+  user?.rank === "ELDER" &&
+  !user.isAi &&
+  !user.isBanned &&
+  user.villageId === villageId;
+
+/** The motion's target never counts toward the electorate deciding their removal. */
+export const getKageRemovalElectorate = (
+  elders: { userId: string }[],
+  targetId: string | null,
+) => new Set(elders.map((e) => e.userId).filter((userId) => userId !== targetId));

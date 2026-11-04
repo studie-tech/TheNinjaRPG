@@ -56,7 +56,11 @@ import {
 } from "@/server/api/trpc";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { withKageDefense } from "@/server/utils/kage";
-import { settleKageRemoval } from "@/server/utils/kageGovernance";
+import {
+  getKageRemovalElectorate,
+  isServingElder,
+  settleKageRemoval,
+} from "@/server/utils/kageGovernance";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getKageEligibility } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
@@ -347,12 +351,7 @@ export const kageRouter = createTRPCRouter({
             listVillageElderVoteForInitiateKageRemovalVote(tx, input),
           ]);
           const v = hall.village;
-          if (
-            user?.rank !== "ELDER" ||
-            user.isAi ||
-            user.isBanned ||
-            user.villageId !== input.villageId
-          )
+          if (!isServingElder(user, input.villageId))
             return errorResponse(
               "Only serving village elders can initiate a removal vote",
             );
@@ -379,8 +378,8 @@ export const kageRouter = createTRPCRouter({
             return errorResponse(
               `The village must wait ${KAGE_REMOVAL_COOLDOWN_DAYS} days after a failed removal vote`,
             );
-          const eligibleElders = elders.filter((e) => e.userId !== v.kageId);
-          if (eligibleElders.length < ELDER_MIN_VOTING_COUNT)
+          const electorate = getKageRemovalElectorate(elders, v.kageId);
+          if (electorate.size < ELDER_MIN_VOTING_COUNT)
             return errorResponse(
               `At least ${ELDER_MIN_VOTING_COUNT} elders are required`,
             );
@@ -392,7 +391,7 @@ export const kageRouter = createTRPCRouter({
           );
           if (!inserted.rowsAffected)
             return errorResponse("There is already a pending Kage removal vote");
-          const recipients = eligibleElders.map((e) => e.userId);
+          const recipients = [...electorate];
           // Commit publication and delivery with the motion so a failed request can retry
           // without leaving an unannounced pending vote that blocks further proposals.
           // Notification is a shared announcement; unread counters select its recipients.
@@ -428,18 +427,13 @@ export const kageRouter = createTRPCRouter({
             findKageRemovalVoteById(tx, input.voteId),
             listEligibleKageRemovalElders(tx, motion),
           ]);
-          if (
-            user?.rank !== "ELDER" ||
-            user.isAi ||
-            user.isBanned ||
-            user.villageId !== motion.villageId
-          )
+          if (!isServingElder(user, motion.villageId))
             return errorResponse("Only serving village elders can vote");
           if (current?.status !== "PENDING" || hall.now >= current.endsAt)
             return errorResponse("The voting period has ended");
           if (ctx.userId === current.targetId)
             return errorResponse("The Kage cannot vote on their own removal");
-          const count = elders.filter((e) => e.userId !== current.targetId).length;
+          const count = getKageRemovalElectorate(elders, current.targetId).size;
           if (count < ELDER_MIN_VOTING_COUNT)
             return errorResponse(
               `At least ${ELDER_MIN_VOTING_COUNT} eligible elders are required`,
@@ -494,11 +488,8 @@ export const kageRouter = createTRPCRouter({
               "A successful removal vote for this village is required",
             );
           if (
-            elder?.rank !== "ELDER" ||
-            elder.isBanned ||
-            elder.isAi ||
-            elder.userId === hall.state.vacancy?.removedUserId ||
-            elder.villageId !== input.villageId
+            !isServingElder(elder, input.villageId) ||
+            elder.userId === hall.state.vacancy?.removedUserId
           )
             return errorResponse("Only serving elders may nominate the successor");
           if (!candidate) return errorResponse("Candidate not found");

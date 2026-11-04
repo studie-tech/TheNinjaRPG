@@ -378,6 +378,7 @@ import {
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
+const voteSecret = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
 
 export const profileRouter = createTRPCRouter({
   getDashboard: protectedProcedure
@@ -2189,15 +2190,11 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("Votes already claimed");
       }
       // Update user's reputation points and mark votes as claimed
-      const smallNanoid = customAlphabet(
-        "1234567890abcdefghijklmnopqrstuvwxyzABCDEF",
-        8,
-      );
       // Only the request that flips `claimed` from false is credited, and the credit commits
       // together with that claim
       const claimed = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
-          const claim = await updateUserVoteForClaimVotes(tx, smallNanoid, ctx);
+          const claim = await updateUserVoteForClaimVotes(tx, voteSecret, ctx);
           if (claim.rowsAffected !== 1) return false;
           const credit = await updateUserDataForClaimVotes(tx, ctx);
           if (credit.rowsAffected !== 1)
@@ -2711,8 +2708,7 @@ const fetchUpdatedUserOnce = async (
 
   // Add votes entry if it doesn't exist
   if (user && !user.votes) {
-    const smallNanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
-    await insertUserVoteForFetchUpdatedUserOnce(client, user, smallNanoid);
+    await insertUserVoteForFetchUpdatedUserOnce(client, user, voteSecret);
   }
 
   let progressionQuestCandidates: NonNullable<typeof user>["userQuests"] = [];
