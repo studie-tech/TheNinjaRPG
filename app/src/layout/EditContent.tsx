@@ -3103,6 +3103,7 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
 
 // Form labels for different tag names
 export const FORM_LABEL_MAP: Record<string, string> = {
+  damageBonusPercent: "Damage bonus (%)",
   durationSeconds: "Duration (seconds)",
   reward_items: "Reward Items [drop chance % and quantity]",
   reward_jutsus: "Reward Jutsus",

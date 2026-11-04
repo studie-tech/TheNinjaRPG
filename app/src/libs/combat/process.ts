@@ -678,6 +678,7 @@ export const applyEffects = (
     battleRound: battle.round,
     sealEffects,
     eligibilityById: damageModifierEligibilityById,
+    curseEffects: newUsersEffects,
   });
 
   const modifierInfoConsequences = new Map<string, Consequence>();
@@ -2505,6 +2506,7 @@ export const applyDamageModifierPipelineToConsequences = ({
   battleRound,
   sealEffects,
   eligibilityById,
+  curseEffects,
 }: {
   consequences: Map<string, Consequence>;
   usersEffects: UserEffect[];
@@ -2512,10 +2514,26 @@ export const applyDamageModifierPipelineToConsequences = ({
   battleRound: number;
   sealEffects: UserEffect[];
   eligibilityById: Map<string, DamageModifierEligibility>;
+  curseEffects?: UserEffect[];
 }) => {
   const preBattleGearModifiers = extraState.preBattleGearModifiers ?? {};
   const effectById = new Map(usersEffects.map((e) => [e.id, e]));
   const modifierListsByPair = new Map<string, DamagePacketModifierLists>();
+  const curseBonusByUser = new Map<string, number>();
+  for (const effect of curseEffects ?? []) {
+    if (
+      effect.type === "curse" &&
+      effect.curseState &&
+      !effect.curseState.settled &&
+      isEffectEnabled(effect, curseEffects ?? [])
+    ) {
+      const previous = curseBonusByUser.get(effect.targetId) ?? 1;
+      curseBonusByUser.set(
+        effect.targetId,
+        previous * (1 + (effect.damageBonusPercent ?? 0) / 100),
+      );
+    }
+  }
 
   for (const [effectId, consequence] of consequences) {
     const damageKey =
@@ -2543,7 +2561,7 @@ export const applyDamageModifierPipelineToConsequences = ({
 
     const rawDamage = consequence[damageKey] ?? 0;
     const { damage } = computeDamagePacket({
-      rawDamage,
+      rawDamage: rawDamage * (curseBonusByUser.get(consequence.userId) ?? 1),
       damageEffect: dmgEffect,
       usersEffects,
       attackerId: consequence.userId,

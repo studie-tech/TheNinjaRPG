@@ -82,6 +82,26 @@ const expire = (battle: CompleteBattle) => {
 };
 
 describe("Curse", () => {
+  it("boosts only the active holder's damage and defaults to no bonus", () => {
+    expect(CurseTag.parse({}).damageBonusPercent).toBe(0);
+    expect(CurseTag.safeParse({ damageBonusPercent: -1 }).success).toBe(false);
+    const boosted = mark();
+    if (boosted.type !== "curse") throw new Error("Expected Curse");
+    boosted.damageBonusPercent = 50;
+    const battle = applyEffects(
+      scenario([boosted, hit(), hit("defender", "attacker")]),
+      "attacker",
+    ).newBattle;
+    expect(user(battle, "defender").curHealth).toBe(3500);
+    expect(user(battle).curHealth).toBe(4000);
+    expect(stored(battle)).toBe(625);
+  });
+
+  it("does not boost damage after Curse is removed", () => {
+    const battle = applyEffects(scenario([hit()]), "attacker").newBattle;
+    expect(user(battle, "defender").curHealth).toBe(4000);
+  });
+
   it("stores 250 from each 1000 damage direction and heals 500 only on expiry", () => {
     let battle = applyEffects(
       scenario([mark(), hit(), hit("defender", "attacker")]),
