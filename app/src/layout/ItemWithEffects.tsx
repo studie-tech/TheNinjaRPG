@@ -1403,6 +1403,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             {parsedEffect.power}
                           </span>
                         )}
+                        {parsedEffect.type === "curse" && (
+                          <span>
+                            <b>Damage Bonus: </b>
+                            {parsedEffect.damageBonusPercent}%
+                          </span>
+                        )}
                         {"rank" in parsedEffect && (
                           <span>
                             <b>Rank: </b>
