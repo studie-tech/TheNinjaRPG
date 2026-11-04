@@ -301,7 +301,8 @@ export const createCombatScene = async (options: {
         art = next;
         world.addChildAt(art.container, position);
         art.attachLayers({ ground: groundLayer, world: depthLayer, ui: uiLayer });
-        sync(options.getSnapshot(), false);
+        // The frame owns initial-appearance suppression, including effects arriving before first paint.
+        dirty = true;
         game.invalidate();
       })
       .catch((error: unknown) => {

@@ -186,6 +186,8 @@ export const createTravelActors = (
           return (
             Number(ownB) - Number(ownA) ||
             Number(b.onScreen) - Number(a.onScreen) ||
+            // Visible quest/hostile NPCs retain their controls within the same body budget.
+            Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
             (orderB?.order ?? 0) - (orderA?.order ?? 0) ||
             (orderB?.initialTime ?? 0) - (orderA?.initialTime ?? 0) ||
             a.key.localeCompare(b.key)

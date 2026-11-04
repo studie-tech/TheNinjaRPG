@@ -57,6 +57,12 @@ import { getBiomeFromTileType } from "@/libs/travel";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
+/** Scene-owned providers change only at the authored-village boundary, so other crossings retain their window. */
+export const travelLightingMode = (sector: number) =>
+  sector === WORLD_LANDMARKS.find((village) => village.name === "Akikaze")?.sector
+    ? "baked"
+    : "projected";
+
 /**
  * Owns retained sector scopes. Initialization awaits the current sector's terrain;
  * scenery loads independently. updateWindow reconciles the remaining sectors and edits.
@@ -106,9 +112,7 @@ export const createTravelScene = async (options: {
     actorGroundLayer.label = "travel-actor-ground";
     depthLayer.label = "travel-depth";
     uiLayer.label = "travel-overlay";
-    const bakedVillage =
-      options.getSnapshot().sector ===
-      WORLD_LANDMARKS.find((village) => village.name === "Akikaze")?.sector;
+    const bakedVillage = travelLightingMode(options.getSnapshot().sector) === "baked";
     const bakedLighting = bakedVillage
       ? createBakedVillageLighting(game, world)
       : undefined;
@@ -426,7 +430,7 @@ export const createTravelScene = async (options: {
           y: origin.y + entry.dy * spanY,
         };
         if (entry.sector === snapshot.sector)
-          await bakedLighting?.preloadField(preparedSector.sourceKey, position);
+          void bakedLighting?.preloadField(preparedSector.sourceKey, position);
         if (disposed || token !== generation) return;
         const existing = sectors.get(entry.sector);
         if (existing?.key === key) {
@@ -914,6 +918,7 @@ export type TravelSnapshot = Omit<TravelActorsSnapshot, "grid"> & {
   enabled: boolean;
   /** Committed destination takes precedence over hover while the journey is in progress. */
   routeTarget?: { sector: number; x: number; y: number } | null;
+  /** Ungated world-clock brightness; ambient and contact-shadow consumers apply their own preference. */
   brightness: number;
   motionSteps?: ReadonlyMap<
     string,

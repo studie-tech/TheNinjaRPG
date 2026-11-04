@@ -80,6 +80,7 @@ export const createWorldSprites = async (
   }[] = [];
   let disposed = false;
   let lastBrightness = Number.NaN;
+  let lastDayNight: boolean | undefined;
   let motionElapsed = 0;
   const dispose = () => {
     if (disposed) return;
@@ -509,9 +510,13 @@ export const createWorldSprites = async (
       if (lights)
         lights.visible = lights.alpha > 0 && game.visualEffects?.localLights !== false;
       brightness = Math.round(brightness * 256) / 256;
-      if (lastBrightness === brightness) return;
+      const dayNight = game.visualEffects?.dayNight !== false;
+      if (lastBrightness === brightness && lastDayNight === dayNight) return;
       lastBrightness = brightness;
+      lastDayNight = dayNight;
       const { night, tint } = worldLighting(brightness);
+      // Lamps follow the clock even when ambient colors and contact-shadow fading are disabled.
+      const contactNight = dayNight ? night : 0;
       if (lights) {
         lights.alpha = night * (simpleLighting ? 0.8 : 0.3);
         // Zero-opacity emitters must leave the draw list, including actor scopes without scenery animation.
@@ -519,16 +524,16 @@ export const createWorldSprites = async (
       }
       if (simpleLighting) {
         // Shared ambient uniforms keep fades independent of the number of loaded sprites.
-        if (shadows) shadows.alpha = 1 - night * 0.75;
+        if (shadows) shadows.alpha = 1 - contactNight * 0.75;
         return;
       }
       for (const entry of entries) {
         if (!entry.description.mask && !entry.description.unlit)
           entry.sprite.tint = Color.shared
             .setValue(entry.description.tint ?? 0xffffff)
-            .multiply(tint)
+            .multiply(dayNight ? tint : 0xffffff)
             .toNumber();
-        if (entry.shadow) entry.shadow.alpha = 0.6 * (1 - night * 0.75);
+        if (entry.shadow) entry.shadow.alpha = 0.6 * (1 - contactNight * 0.75);
       }
     },
     setViewport: (bounds: WorldBounds, padding: number) => {

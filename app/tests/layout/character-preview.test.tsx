@@ -1,3 +1,4 @@
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import * as lpcHooks from "@/hooks/lpc";
 import { lpcCatalog } from "../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
@@ -9,6 +10,7 @@ import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 
 const draw = vi.fn();
+const visualEffects = {...DEFAULT_VISUAL_EFFECTS};
 const disposals: ReturnType<typeof vi.fn>[] = [];
 const loadCatalog = async () => lpcCatalog;
 
@@ -16,6 +18,7 @@ let update: (frame: GameFrame) => void;
 let createActor: Mock<typeof character.createLpcCharacter>;
 
 beforeEach(() => {
+  Object.assign(visualEffects, DEFAULT_VISUAL_EFFECTS);
   vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(loadCatalog);
   draw.mockClear();
   disposals.length = 0;
@@ -31,6 +34,7 @@ beforeEach(() => {
     return {
       canvas,
       stage,
+      visualEffects,
       dispose,
       setUpdate: (callback: (frame: GameFrame) => void) => { update = callback; },
     } as unknown as GameRenderer;
@@ -50,6 +54,17 @@ afterEach(() => {
 });
 
 describe("manual character preview rotation", () => {
+  it("freezes preview sprites without mutating the source frame or rebuilding the renderer", async () => {
+    const view=render(<CharacterPreview user={{}} />);
+    await waitFor(()=>expect((view.getByRole("button",{name:"Rotate character preview"}) as HTMLButtonElement).disabled).toBe(false));
+    const frame={now:1000,delta:.1,reducedMotion:false};
+    visualEffects.spriteAnimations=false; update(frame);
+    expect(draw.mock.lastCall?.[0]).toEqual({...frame,reducedMotion:true});
+    expect(frame.reducedMotion).toBe(false);
+    visualEffects.spriteAnimations=true; update(frame);
+    expect(draw.mock.lastCall?.[0]).toBe(frame);
+    expect(runtime.createGameRenderer).toHaveBeenCalledTimes(1);
+  });
   it("holds its facing over time and turns through four views without reloading or submitting a form", async () => {
     const submit = vi.fn();
     const view = render(<form onSubmit={(event) => { event.preventDefault(); submit(); }}><CharacterPreview user={{}} /></form>);

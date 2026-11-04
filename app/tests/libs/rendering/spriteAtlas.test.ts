@@ -16,6 +16,23 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("keeps clock-driven lamps independent of ambient/contact shading and updates a live preference at the same brightness", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const visualEffects = { dayNight: false, shadows: true, localLights: true };
+    const game = { visualEffects, own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const provider = {kind:"projected",register:()=>Object.assign(()=>{}, {ready:Promise.resolve()}),invalidate(){}} as never;
+    const art = await createWorldSprites(game, [{id:"lamp",kind:"avatar",image:"lamp-test.png",size:20,x:0,y:0,groundY:0,shadow:.2,light:.6}], provider);
+    cleanups.push(art.dispose);
+    const light = art.entries[0]!.light!.parent!, shadow = art.entries[0]!.shadow!.parent!;
+    art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.visible).toBe(true); expect(light.alpha).toBeCloseTo(.8); expect(shadow.alpha).toBe(1);
+    visualEffects.dayNight = true; art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(light.alpha).toBeCloseTo(.8); expect(shadow.alpha).toBeCloseTo(.25);
+    visualEffects.dayNight = false; art.setLighting(WORLD_NIGHT_BRIGHTNESS);
+    expect(shadow.alpha).toBe(1);
+  });
+
   it("retires one derived texture binding without releasing another scene's active lease", async () => {
     const resource = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
     const load = vi.spyOn(Assets, "load").mockImplementation(async () => resource);

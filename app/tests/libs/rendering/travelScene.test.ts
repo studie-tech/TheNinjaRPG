@@ -1,3 +1,4 @@
+import * as bakedLighting from "@/libs/rendering/bakedVillageLighting";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -88,6 +89,15 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("still travel rendering", () => {
+  it("makes terrain ready while a published light-field request is still pending", async () => {
+    const original=bakedLighting.createBakedVillageLighting;
+    let release!:()=>void; const held=new Promise<void>(resolve=>{release=resolve});
+    vi.spyOn(bakedLighting,"createBakedVillageLighting").mockImplementation((...args)=>({...original(...args),preloadField:()=>held}));
+    let ready=false; const pending=sceneFixture().then(scene=>{ready=true;return scene});
+    try { for(let i=0;i<5;i++)await settle(); expect(ready).toBe(true); }
+    finally { release(); await pending; }
+  });
+
   it("keeps rain moving without sprite animation and sleeps only when every active category is off", async () => {
     const { game, world, state, advance } = await sceneFixture();
     state.weather = { kind: "rain", intensity: 1 };

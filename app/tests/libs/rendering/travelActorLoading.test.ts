@@ -7,7 +7,7 @@ import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldBounds } from "@/libs/rendering/visibility";
-import { createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
+import { travelActorRecipes, createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -59,6 +59,18 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it.each(["FRIENDLY","HOSTILE"] as const)("retains visible %s NPC interactions within the twenty-body budget", npcInteractionType => {
+    holdCharacters(); const {actors,snapshot}=fixture();
+    const users=Array.from({length:30},(_,i)=>player(i,{longitude:4,latitude:4,updatedAt:new Date(1000+i)}));
+    users.push(player(99,{isNpc:true,npcPlacementId:"guide",npcInteractionType,longitude:4,latitude:4,updatedAt:new Date(0)}));
+    actors.sync(snapshot(users));
+    const roots=actors.container.children.filter(root=>root.label.startsWith("user:")||root.label.startsWith("npc:"));
+    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide")).toBe(true);
+    const recipes=travelActorRecipes({...snapshot(users),characterKeys:new Set(roots.map(root=>root.label))});
+    expect(recipes.find(recipe=>recipe.key==="npc:guide")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
+    expect(recipes.find(recipe=>recipe.counter)?.counter).toBe(31);
+  });
+
   it("keeps moving contact effects on the ground and batches emitter pools together", async () => {
     const { actors, snapshot, ground } = fixture();
     actors.sync(snapshot([player(0), player(1)]));

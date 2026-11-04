@@ -40,7 +40,6 @@ import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
-import { useVisualEffects } from "@/hooks/visual-effects";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -79,6 +78,7 @@ import {
   createTravelScene,
   type TravelPick,
   type TravelSnapshot,
+  travelLightingMode,
 } from "@/libs/rendering/scenes/travel";
 import {
   type TravelMotionStep,
@@ -203,6 +203,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const sectorMap = centerEntry.map;
   const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
+  const expandedExitRef = useRef<HTMLButtonElement>(null);
   const setExpandedWorld = useSetAtom(expandedWorldAtom);
   useEffect(() => {
     setExpandedWorld(isWorldExpanded);
@@ -210,6 +211,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   }, [isWorldExpanded, setExpandedWorld]);
   useEffect(() => {
     if (!isWorldExpanded) return;
+    const returnFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const exit = expandedExitRef.current;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const page = document.querySelector<HTMLElement>("body > [data-world-page]");
@@ -219,6 +223,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       page.style.height = `${page.offsetHeight}px`;
       page.setAttribute("data-world-covered", "true");
     }
+    exit?.focus({ preventScroll: true });
     const onEscape = (event: KeyboardEvent) => {
       if (
         event.key === "Escape" &&
@@ -235,18 +240,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         page.style.height = height;
       }
       document.removeEventListener("keydown", onEscape);
+      // Do not steal focus from a dialog or navigation target that took it during dismissal.
+      if (
+        returnFocus?.isConnected &&
+        (document.activeElement === document.body || document.activeElement === exit)
+      )
+        returnFocus.focus({ preventScroll: true });
     };
   }, [isWorldExpanded, setWorldExpanded]);
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
-
-  // Day/night map shading preference — ref so the long-running render loop
-  // reacts without rebuilding the map
-  const { visualEffects } = useVisualEffects();
-  const showDayNightMapOverlays = visualEffects.dayNight;
-  const showDayNightMapOverlaysRef = useRef(showDayNightMapOverlays);
-  showDayNightMapOverlaysRef.current = showDayNightMapOverlays;
 
   // State pertaining to the sector
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
@@ -2328,9 +2332,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             lightDate,
             weather: weatherPreviewRef.current,
             weatherTime: Date.now() - timeDiffRef.current,
-            brightness: showDayNightMapOverlaysRef.current
-              ? getWorldCycleBrightness(lightDate)
-              : 1,
+            brightness: getWorldCycleBrightness(lightDate),
           };
         },
         onTap: (hit) => travelCallbacks.current.onTap(hit),
@@ -2349,7 +2351,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         },
       }),
-    `${lightLayout}:${isWorldExpanded}`,
+    `${lightLayout}:${isWorldExpanded}:${travelLightingMode(sector)}`,
   );
   const [showWorldLoader, setShowWorldLoader] = useState(false);
   useEffect(() => {
@@ -2477,6 +2479,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               size="icon"
               variant="outline"
               className="bg-background/90"
+              ref={expandedExitRef}
               aria-label="Exit expanded world"
               onClick={() => setWorldExpanded(false)}
             >
