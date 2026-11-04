@@ -110,6 +110,28 @@ it("adds artwork-shaped local scenery shadows lazily and releases emissive fixtu
 });
 
 
+it("anchors both local fallback shadows to an asymmetric opaque foot", () => {
+  const pixels = new Uint8Array(16*16*4);
+  for(let y=2;y<9;y++)for(let x=3;x<13;x++)pixels[(y*16+x)*4+3]=255;
+  pixels[(9*16+11)*4+3]=255;
+  const texture = new Texture({source:new BufferImageSource({resource:pixels,width:16,height:16})});
+  const cleanups:(()=>void)[]=[],world=new Container(),owner=new Container();world.addChild(owner);
+  const game={renderer:{resolution:1},signal:new AbortController().signal,visualEffects:{...DEFAULT_VISUAL_EFFECTS},own:(fn:()=>void)=>cleanups.push(fn),isDisposed:()=>false,invalidate:vi.fn()} as unknown as GameRenderer;
+  const canvas=vi.spyOn(HTMLCanvasElement.prototype,"getContext").mockReturnValue(null);
+  try {
+    const lighting=createBakedVillageLighting(game,world);world.addChild(lighting.container);
+    const tree=new Sprite(texture);tree.anchor.set(.5);tree.scale.set(2,-2);owner.addChild(tree);
+    lighting.register(tree,{id:"padded-tree",kind:"decoration",image:"padded-local-unknown.png",size:32,x:0,y:0,groundY:-16,shadowCaster:"canopy"},[],undefined,owner);
+    for(const x of [-20,20]){const lamp=new Sprite(Texture.WHITE);lamp.anchor.set(.5);lamp.width=20;lamp.height=40;lamp.scale.y*=-1;lamp.position.set(x,20);world.addChild(lamp);lighting.register(lamp,{id:`lamp:${x}`,kind:"structure",image:"custom-lamp",size:40,x,y:20,groundY:0,light:1,shadowCaster:"column"});}
+    lighting.update({x:0,y:1,z:1,day:0},{minX:-200,maxX:200,minY:-200,maxY:200});
+    const shadows=lighting.container.getChildByLabel("baked-village-local-ground")!.children.filter(child=>child.label==="baked-scenery-local-shadow") as Sprite[];
+    expect(shadows).toHaveLength(2);
+    const read=vi.spyOn(HTMLCanvasElement.prototype,"getContext");
+    for(const shadow of shadows){expect(shadow.visible).toBe(true);shadow.updateLocalTransform();const root=shadow.localTransform.apply({x:11.5-shadow.anchor.x*16,y:10-shadow.anchor.y*16});expect(root.x).toBeCloseTo(7,6);expect(root.y).toBeCloseTo(-4,6);}
+    lighting.invalidate();lighting.update({x:1,y:0,z:1,day:0},{minX:-200,maxX:200,minY:-200,maxY:200});expect(read).not.toHaveBeenCalled();read.mockRestore();
+  } finally {world.destroy({children:true});for(const fn of cleanups)fn();texture.destroy(true);canvas.mockRestore();}
+});
+
 it("retains a matching pool through cold artwork, replaces it at runtime, and clears an unknown layout", async () => {
   const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 1, height: 1 }) });

@@ -15,7 +15,7 @@ const fixture = () => {
   const lighting = createProjectedWorldLighting(game, world);
   world.addChild(owner, lighting.container);
   const source = new Sprite(Texture.WHITE);
-  source.anchor.set(0.5); source.position.set(20, 30); source.width = 20; source.height = 40;
+  source.anchor.set(0.5); source.position.set(20, 30); source.width = 20; source.height = 40; source.scale.y *= -1;
   owner.addChild(source);
   const register = () => lighting.register(source, { id: "tree", kind: "decoration", image: "tree.png", x: 20, y: 30, size: 40, groundY: 10, shadowCaster: "canopy" });
   return { game, world, owner, source, lighting, register, dispose: () => { for (const cleanup of cleanups) cleanup(); world.destroy({ children: true }); } };
@@ -74,6 +74,55 @@ describe("projected world lighting", () => {
       expect(await shared.resource).toBe(first);
       shared.release();
     } finally { held.release(); shared.release(); for (const lease of pressure) lease.release(); f.dispose(); atlasTexture.destroy(true); }
+  });
+
+  it.each(["canopy", "conifer", "column"] as const)("keeps padded %s roots fixed for custom art and failed bakes in every sun direction", async shadowCaster => {
+    for (const failedBake of [false, true]) {
+      const key = Object.keys(published).find(key => JSON.parse(key)[1].width === 124.5)!;
+      const [image, authoredFrame, , material] = JSON.parse(key);
+      const frame = failedBake ? authoredFrame : {x:0,y:0,width:16,height:16};
+      const width = failedBake ? 627 : 16, height = width;
+      const pixels = new Uint8Array(width * height * 4);
+      const footX = Math.floor(frame.x + frame.width * .65), footY = Math.floor(frame.y + frame.height) - 5;
+      for (let y = Math.ceil(frame.y) + 2; y < footY; y++) for (let x = Math.ceil(frame.x) + 2; x < frame.x + frame.width - 2; x++) pixels[(y * width + x) * 4 + 3] = 255;
+      pixels[(footY * width + footX) * 4 + 3] = 255;
+      const original = new Texture({source:new BufferImageSource({resource:pixels,width,height})});
+      const view = new Texture({source:original.source,frame:new Rectangle(frame.x,frame.y,frame.width,frame.height)});
+      const f = fixture();f.source.texture = view;f.source.anchor.set(.31,.67);f.source.scale.set(-2,-2);f.owner.position.set(12,-8);f.owner.rotation = .2;
+      const load = vi.fn(()=>({resource:Promise.reject(new Error("unavailable atlas")),release(){}}));
+      Object.assign(f.game,{assets:{acquireTexture:load},signal:new AbortController().signal,isDisposed:()=>false,invalidate:vi.fn()});
+      const warning = vi.spyOn(console,"warn").mockImplementation(()=>{});
+      const release = f.lighting.register(f.source,{id:"padded",kind:"decoration",image:failedBake?image:"padded-unknown.png",worldMaterial:failedBake?material:undefined,preserveAspect:true,size:frame.height*2,x:f.source.x,y:f.source.y,groundY:f.source.y-frame.height,shadowCaster});
+      try {
+        await release.ready;
+        expect(load).toHaveBeenCalledTimes(failedBake ? 1 : 0);
+        const contact = {x:footX+.5-frame.x,y:footY+1-frame.y};
+        f.source.updateLocalTransform();f.owner.updateLocalTransform();
+        const foot = f.owner.localTransform.apply(f.source.localTransform.apply({x:contact.x-f.source.anchor.x*frame.width,y:contact.y-f.source.anchor.y*frame.height}));
+        const read = vi.spyOn(HTMLCanvasElement.prototype,"getContext");
+        for(let direction=0;direction<8;direction++) {
+          const angle=direction*Math.PI/4;
+          f.lighting.update({x:Math.cos(angle),y:Math.sin(angle),z:.5,day:1},{minX:-2000,maxX:2000,minY:-2000,maxY:2000});
+          const shadow=f.lighting.container.children[0]!.children[0] as Sprite;shadow.updateLocalTransform();
+          const root=shadow.localTransform.apply({x:contact.x-shadow.anchor.x*frame.width,y:contact.y-shadow.anchor.y*frame.height});
+          expect(root.x).toBeCloseTo(foot.x,6);expect(root.y).toBeCloseTo(foot.y,6);
+        }
+        expect(read).not.toHaveBeenCalled();read.mockRestore();
+      } finally {release();warning.mockRestore();f.dispose();view.destroy(false);original.destroy(true);}
+    }
+  });
+
+  it.each(["building", "wall"] as const)("preserves the explicit %s entrance plane for fallback artwork", shadowCaster => {
+    const f = fixture();
+    try {
+      f.source.anchor.set(.37,.8);
+      f.lighting.register(f.source,{id:"foundation",kind:"structure",image:"custom-foundation.png",size:40,x:20,y:30,groundY:10,entrance:{x:20,y:17,width:10},shadowCaster});
+      for(const x of [-1,1]) {
+        f.lighting.update({x,y:0,z:.5,day:1},{minX:-100,maxX:100,minY:-100,maxY:100});
+        const shadow = f.lighting.container.children[0]!.children[0] as Sprite;
+        shadow.updateLocalTransform();expect(shadow.localTransform.tx).toBe(20);expect(shadow.localTransform.ty).toBe(17);
+      }
+    } finally {f.dispose();}
   });
 
   it("keeps unknown upright foliage from collapsing edge-on at horizontal light angles", () => {

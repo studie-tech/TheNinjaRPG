@@ -11,6 +11,7 @@ import {
   createSceneAssets,
   readTexturePixels,
   stabilizeNearestTexture,
+  textureGroundContact,
   textureOpaqueFrame,
 } from "@/libs/rendering/assets";
 import { worldLighting } from "@/libs/rendering/color";
@@ -194,19 +195,20 @@ export const createWorldSprites = async (
   let shadows: Container | null = null,
     lights: Container | null = null;
   const sourcePixels = new Map<Texture["source"], Uint8Array>();
+  const readSourcePixels = (texture: Texture) => {
+    let pixels = sourcePixels.get(texture.source);
+    if (!pixels) {
+      pixels = readTexturePixels(
+        texture,
+        texture.source.pixelWidth,
+        texture.source.pixelHeight,
+      );
+      sourcePixels.set(texture.source, pixels);
+    }
+    return pixels;
+  };
   const opaqueFrame = (texture: Texture) =>
-    textureOpaqueFrame(texture, () => {
-      let pixels = sourcePixels.get(texture.source);
-      if (!pixels) {
-        pixels = readTexturePixels(
-          texture,
-          texture.source.pixelWidth,
-          texture.source.pixelHeight,
-        );
-        sourcePixels.set(texture.source, pixels);
-      }
-      return pixels;
-    });
+    textureOpaqueFrame(texture, () => readSourcePixels(texture));
   for (const result of settled) {
     if (result.status === "fulfilled" && result.value) {
       const { description } = result.value;
@@ -285,11 +287,15 @@ export const createWorldSprites = async (
         sprite.scale.copyFrom(scale);
       }
       sprite.updateLocalTransform();
-      const characterFoot =
+      const characterContact =
         description.shadowCaster === "character" && sprite instanceof Sprite
+          ? textureGroundContact(sprite.texture, () => readSourcePixels(sprite.texture))
+          : undefined;
+      const characterFoot =
+        characterContact && sprite instanceof Sprite
           ? sprite.localTransform.apply({
-              x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
-              y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+              x: characterContact.x - sprite.anchor.x * sprite.texture.orig.width,
+              y: characterContact.y - sprite.anchor.y * sprite.texture.orig.height,
             })
           : undefined;
       const footY = character
@@ -297,6 +303,25 @@ export const createWorldSprites = async (
         : (characterFoot?.y ??
           description.entrance?.y ??
           description.y - description.size * (1 - (description.anchorY ?? 0.5)));
+      let groundY = character ? footY : (characterFoot?.y ?? description.groundY);
+      if (
+        sprite instanceof Sprite &&
+        !description.small &&
+        !description.mask &&
+        !description.unlit &&
+        !description.entrance &&
+        (description.kind === "decoration" || description.kind === "garden")
+      ) {
+        const contact = textureGroundContact(sprite.texture, () =>
+          readSourcePixels(sprite.texture),
+        );
+        // Transparent padding belongs to the artwork, not to its painter-order ground contact.
+        const foot = sprite.localTransform.apply({
+          x: contact.x - sprite.anchor.x * sprite.texture.orig.width,
+          y: contact.y - sprite.anchor.y * sprite.texture.orig.height,
+        });
+        groundY = foot.y;
+      }
       let shadow: Sprite | undefined;
       if (worldShadows && character) {
         for (const [index, layer] of character.layers.entries())
@@ -379,32 +404,6 @@ export const createWorldSprites = async (
         light.tint = 0xffaa52;
         light.blendMode = "add";
         lights.addChild(light);
-      }
-      let groundY = character ? footY : (characterFoot?.y ?? description.groundY);
-      if (
-        sprite instanceof Sprite &&
-        !description.small &&
-        !description.mask &&
-        !description.unlit &&
-        (description.kind === "decoration" || description.kind === "garden")
-      ) {
-        const occupied = opaqueFrame(sprite.texture);
-        const { frame, orig, trim } = sprite.texture;
-        // Transparent padding belongs to the artwork, not to its painter-order ground contact.
-        const foot = sprite.localTransform.apply({
-          x:
-            occupied.x -
-            frame.x +
-            occupied.width / 2 +
-            (trim?.x ?? 0) -
-            sprite.anchor.x * orig.width,
-          y: occupied.bottom - frame.y + (trim?.y ?? 0) - sprite.anchor.y * orig.height,
-        });
-        const frameFoot = sprite.localTransform.apply({
-          x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
-          y: sprite.texture.orig.height * (1 - sprite.anchor.y),
-        });
-        groundY += foot.y - frameFoot.y;
       }
       entries.push({
         sprite,

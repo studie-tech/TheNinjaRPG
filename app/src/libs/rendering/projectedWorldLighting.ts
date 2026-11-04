@@ -10,6 +10,7 @@ import {
   UniformGroup,
 } from "pixi.js";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
+import { textureGroundContact } from "@/libs/rendering/assets";
 import {
   type BakedShadowAtlas,
   bakedShadowBounds,
@@ -128,8 +129,20 @@ export const createProjectedWorldLighting = (
       ) {
         return Object.assign(() => {}, { ready: Promise.resolve() });
       }
+      const upright =
+        description.shadowCaster === "canopy" ||
+        description.shadowCaster === "conifer" ||
+        description.shadowCaster === "column";
+      const baked = hasBakedShadow(source.texture, description);
       const record: ProjectedShadowRecord = {
         source,
+        contact:
+          upright && !baked
+            ? textureGroundContact(source.texture)
+            : {
+                x: source.anchor.x * source.texture.orig.width,
+                y: source.texture.orig.height,
+              },
         shadows: [],
         atlas: null,
         description,
@@ -140,7 +153,7 @@ export const createProjectedWorldLighting = (
       };
       records.add(record);
       dirty = true;
-      const lease = hasBakedShadow(source.texture, description)
+      const lease = baked
         ? atlases.acquire(bakedShadowKey(source.texture, description))
         : null;
       record.releaseAtlas = lease?.release;
@@ -155,11 +168,16 @@ export const createProjectedWorldLighting = (
               game.invalidate();
             })
             .catch((error) => {
-              if (records.has(record) && !game.isDisposed())
-                console.warn(
-                  "Authored shadow unavailable; retaining the artwork fallback",
-                  error,
-                );
+              if (!records.has(record) || game.isDisposed()) return;
+              if (upright) record.contact = textureGroundContact(source.texture);
+              for (const shadow of record.shadows) shadow.destroy();
+              record.shadows = [];
+              dirty = true;
+              game.invalidate();
+              console.warn(
+                "Authored shadow unavailable; retaining the artwork fallback",
+                error,
+              );
             })
         : Promise.resolve();
       return Object.assign(
@@ -271,17 +289,28 @@ export const createProjectedWorldLighting = (
           }
           const height = Math.abs(source.height);
           const foot = description.entrance?.y ?? description.groundY;
-          const base = parent.apply({ x: description.x, y: foot });
+          source.updateLocalTransform();
+          const local = source.localTransform;
+          const upright =
+            description.shadowCaster === "canopy" ||
+            description.shadowCaster === "conifer" ||
+            description.shadowCaster === "column";
+          const x = record.contact.x - source.anchor.x * source.texture.orig.width,
+            y = record.contact.y - source.anchor.y * source.texture.orig.height;
+          const base = parent.apply(
+            upright
+              ? {
+                  x: local.tx + local.a * x + local.c * y,
+                  y: local.ty + local.b * x + local.d * y,
+                }
+              : { x: description.x, y: foot },
+          );
           const rise = height / Math.max(1, source.texture.orig.height);
           // Clamp grazing sun silhouettes to keep very long copies from covering distant scenery.
           const slopeX =
             Math.max(-1.4, Math.min(1.4, light.x / Math.max(0.3, light.z))) * rise;
           const slopeY = Math.min(-0.12, light.y / (2 * Math.max(0.3, light.z))) * rise;
-          if (
-            description.shadowCaster === "canopy" ||
-            description.shadowCaster === "conifer" ||
-            description.shadowCaster === "column"
-          ) {
+          if (upright) {
             const length = Math.hypot(light.x, light.y) || 1;
             const ux = -light.x / length,
               uy = -light.y / length;
@@ -297,7 +326,7 @@ export const createProjectedWorldLighting = (
             );
           } else
             record.transform.set(source.scale.x, 0, slopeX, slopeY, base.x, base.y);
-          record.bounds = projectedBounds(source, record.transform);
+          record.bounds = projectedBounds(source, record.transform, record.contact);
           record.poseDirty = true;
         }
       }
@@ -324,7 +353,10 @@ export const createProjectedWorldLighting = (
         }
         if (!record.shadows.length) {
           const shadow = new Sprite(record.source.texture);
-          shadow.anchor.set(record.source.anchor.x, 1);
+          shadow.anchor.set(
+            record.contact.x / record.source.texture.orig.width,
+            record.contact.y / record.source.texture.orig.height,
+          );
           shadow.tint = 0x202932;
           shadow.alpha = 0.22;
           shadow.zIndex = record.order;
@@ -357,27 +389,32 @@ export const createProjectedWorldLighting = (
 };
 
 /** The full untrimmed rectangle conservatively includes every projected artwork pixel. */
-const projectedBounds = (source: Sprite, matrix: Matrix): WorldBounds => {
-  const left = -source.anchor.x * source.texture.orig.width;
-  const right = (1 - source.anchor.x) * source.texture.orig.width;
-  const top = -source.texture.orig.height;
+const projectedBounds = (
+  source: Sprite,
+  matrix: Matrix,
+  contact: { x: number; y: number },
+): WorldBounds => {
+  const left = -contact.x;
+  const right = source.texture.orig.width - contact.x;
+  const top = -contact.y;
+  const bottom = source.texture.orig.height - contact.y;
   return {
     minX:
       matrix.tx +
       Math.min(matrix.a * left, matrix.a * right) +
-      Math.min(matrix.c * top, 0),
+      Math.min(matrix.c * top, matrix.c * bottom),
     maxX:
       matrix.tx +
       Math.max(matrix.a * left, matrix.a * right) +
-      Math.max(matrix.c * top, 0),
+      Math.max(matrix.c * top, matrix.c * bottom),
     minY:
       matrix.ty +
       Math.min(matrix.b * left, matrix.b * right) +
-      Math.min(matrix.d * top, 0),
+      Math.min(matrix.d * top, matrix.d * bottom),
     maxY:
       matrix.ty +
       Math.max(matrix.b * left, matrix.b * right) +
-      Math.max(matrix.d * top, 0),
+      Math.max(matrix.d * top, matrix.d * bottom),
   };
 };
 
@@ -434,6 +471,7 @@ export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLight
 
 type ProjectedShadowRecord = {
   source: Sprite;
+  contact: { x: number; y: number };
   shadows: Sprite[];
   atlas: BakedShadowAtlas | null;
   releaseAtlas?: () => void;

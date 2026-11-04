@@ -9,7 +9,7 @@ import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
-import { createSceneAssets, stabilizeNearestTexture, textureOpaqueFrame, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
+import { createSceneAssets, stabilizeNearestTexture, textureOpaqueFrame, textureGroundContact, NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
 
@@ -172,6 +172,14 @@ describe("world sprite atlas ownership", () => {
       expect(textureOpaqueFrame(second, read)).toBe(textureOpaqueFrame(first, read));
       expect(read).toHaveBeenCalledTimes(1);
     } finally {first.destroy(false);second.destroy(false);original.destroy(true);}
+  });
+
+  it("uses the opaque bottom row for foot contact while keeping faint fringes in culling bounds", () => {
+    const pixels=new Uint8Array(16*16*4);
+    for(let y=2;y<9;y++)for(let x=3;x<13;x++)pixels[(y*16+x)*4+3]=255;
+    pixels[(9*16+11)*4+3]=255;pixels[(14*16)*4+3]=64;
+    const original=new Texture({source:new BufferImageSource({resource:pixels,width:16,height:16})});
+    try {expect(textureGroundContact(original)).toEqual({x:11.5,y:10});expect(textureOpaqueFrame(original)).toMatchObject({x:0,y:2,width:13,height:13});}finally{original.destroy(true);}
   });
 
   it("sorts padded upright scenery by visible feet while preserving authored structure contacts", async () => {
