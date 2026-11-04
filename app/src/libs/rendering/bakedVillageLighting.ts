@@ -104,6 +104,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     disposed = false;
   let lights: VillageLight[] = [];
   let staticKey = "";
+  // Stop at the world root so camera transforms never enter cached shadow poses.
   const origin = (node: Container | null, cache: Map<Container, Matrix>): Matrix => {
     if (!node || node === world) return new Matrix();
     const cached = cache.get(node);
@@ -166,6 +167,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       blockers.set(source, atlas);
     dirty = true;
   };
+  /** Register one sprite; cleanup releases its silhouettes, while ready tracks asynchronous atlas installation. */
   const register: typeof base.register = (
     source,
     description,
@@ -358,6 +360,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   return {
     ...base,
     kind: "baked" as const,
+    /** Load a matching pool ahead of scenery; unknown or failed bakes leave fixture fallback available. */
     preloadField: (sceneKey: string, position: { x: number; y: number }) => {
       const key = `${sceneKey}:${position.x}:${position.y}`;
       if (key === preloadKey) return preloadReady;
@@ -390,6 +393,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       dirty = true;
       base.invalidate();
     },
+    /** Keep unquantized sunlight available while static artwork reuses sampled compass directions. */
     blendSun: (sun: ReturnType<typeof worldSunlight>) => {
       smoothSun = sun;
     },
@@ -569,6 +573,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               ),
             });
         }
+        // Only the current layout may replace the visible pool after asynchronous rasterization.
         const revision = ++fieldRevision;
         if (fieldTimer !== null) clearTimeout(fieldTimer);
         pendingField?.release();
@@ -851,6 +856,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   };
 };
 
+/** Fixture position in world-ground coordinates, with height/reach in scene units and optional emission. */
 export type VillageLight = {
   x: number;
   y: number;
@@ -894,4 +900,5 @@ type Character = {
   selected: WeightedLight[];
 };
 
+/** Scene-owned facade coordinating baked silhouettes, fixture spill and projected ambient color. */
 export type BakedVillageLighting = ReturnType<typeof createBakedVillageLighting>;

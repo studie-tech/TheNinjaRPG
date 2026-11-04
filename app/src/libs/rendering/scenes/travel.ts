@@ -434,6 +434,7 @@ export const createTravelScene = async (options: {
           existing.terrain.container.position.copyFrom(position);
           existing.art.container.position.copyFrom(position);
           placeArt(existing.art, position);
+          // A retained neighbor may become occupied before the previous sector finishes its artwork.
           if (entry.sector === snapshot.sector)
             currentSceneryReady = existing.startScenery();
           continue;
@@ -519,6 +520,7 @@ export const createTravelScene = async (options: {
               (error: unknown) => ({ error }),
             );
           };
+          // One promise races priority completion with occupation, so promotion cannot install art twice.
           let promoteScenery!: () => void;
           const promoted = new Promise<void>((resolve) => {
             promoteScenery = resolve;

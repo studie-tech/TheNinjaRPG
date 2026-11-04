@@ -18,7 +18,11 @@ export const withoutUserPosition = <T extends object>(user: T) => {
   return profile;
 };
 
-/** Preserve equal profile branches, including Dates decoded by SuperJSON. */
+/**
+ * Reuse equal immutable branches, including Dates decoded by SuperJSON. Movement-only
+ * changes retain the stationary profile projection; a copy is needed only when a
+ * child reuses an older reference instead of the incoming one.
+ */
 export const shareUserCache = (
   previous: unknown,
   next: unknown,

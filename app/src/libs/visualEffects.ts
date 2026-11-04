@@ -11,9 +11,12 @@ export const VISUAL_EFFECT_KEYS = {
   spriteAnimations: "showGameAnimations",
 } as const;
 
+/** One independently persisted visual control. */
 export type VisualEffect = keyof typeof VISUAL_EFFECT_KEYS;
+/** Complete preference snapshot; each control retains its own stored choice. */
 export type VisualEffects = Record<VisualEffect, boolean>;
 
+/** New devices enable every effect; saved device preferences override individual choices. */
 export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
   sunlight: true,
   dayNight: true,
@@ -24,7 +27,11 @@ export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
   spriteAnimations: true,
 };
 
-/** Seeds independent choices from saved groups; missing or malformed values default on. */
+/**
+ * Materialize missing split choices from saved groups; explicit split preferences win.
+ * New devices and malformed values default on. Persisting each split prevents later
+ * day/night or sprite toggles from recoupling the migrated sibling choices.
+ */
 export const readVisualEffects = (): VisualEffects => {
   const effects = Object.fromEntries(
     Object.entries(VISUAL_EFFECT_KEYS).map(([effect, key]) => [

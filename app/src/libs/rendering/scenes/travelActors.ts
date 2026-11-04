@@ -852,8 +852,10 @@ const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
+/** Repeated NPC appearances remain distinct through placement identity; players use account identity. */
 const userActorKey = (user: SectorUser) =>
   user.isNpc ? `npc:${user.npcPlacementId ?? user.userId}` : `user:${user.userId}`;
+/** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
 const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
   (snapshot.showUsers || user.userId === snapshot.viewer?.userId) &&
   (user.isNpc ||

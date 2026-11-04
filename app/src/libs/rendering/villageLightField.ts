@@ -39,6 +39,7 @@ const cache = createLeaseCache<Texture>({
   idleBudget: 4 * 1024 * 1024,
 });
 
+/** Browser-side SHA-256 must match the serialized layout/catalog fingerprints in the published manifest. */
 const digest = async (key: string) => {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
   return Array.from(new Uint8Array(bytes), (n) => n.toString(16).padStart(2, "0")).join(
@@ -46,6 +47,7 @@ const digest = async (key: string) => {
   );
 };
 let matchingCatalog: Promise<boolean> | null = null;
+/** Source URLs and geometry both affect this fingerprint; a mismatch uses the runtime rasterizer. */
 const hasPublishedCatalog = () =>
   (matchingCatalog ??= digest(JSON.stringify([bakedSources, worldSources])).then(
     (key) => key === published.catalog,
@@ -106,6 +108,7 @@ export const acquirePrebakedVillageLightField = (
   };
 };
 
+/** Decode raw, unresized RGB/eligibility tiles, then release the packed transport texture. */
 const loadPublishedField = async (source: BakedField) => {
   const assets = createSceneAssets();
   try {
@@ -145,6 +148,7 @@ export const unpackVillageLightField = (
   return pixels;
 };
 
+/** Alpha stores fixture eligibility, not opacity; premultiplication would erase valid ground RGB. */
 const createFieldTexture = (
   pixels: Uint8Array | Uint8ClampedArray,
   width: number,
@@ -270,6 +274,7 @@ export const lightOcclusionPolygon = (
   return convexHull(points);
 };
 
+/** Rasterize unpublished layouts once per cached signature, yielding between small lighting/occlusion slices. */
 const rasterize = async (layout: LightLayout) => {
   const canvas = document.createElement("canvas"),
     pool = document.createElement("canvas");
@@ -397,6 +402,7 @@ const rasterize = async (layout: LightLayout) => {
   return createFieldTexture(pixels, canvas.width, canvas.height);
 };
 
+/** Enclose a blocker and its projected footprint without mutating the authored input points. */
 const convexHull = (points: readonly Point[]) => {
   const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y),
     cross = (a: Point, b: Point, c: Point) =>
@@ -416,11 +422,13 @@ const convexHull = (points: readonly Point[]) => {
 
 type Point = { x: number; y: number };
 type BakedField = { image: string; width: number; height: number };
+/** World-ground footprint and elevation that clip fixture spill; matching owners avoid self-occlusion. */
 export type VillageLightBlocker = {
   points: readonly Point[];
   height: number;
   owner?: VillageLight["owner"];
 };
+/** Caller-leased RGB/eligibility texture and its world-ground sampling bounds. */
 export type VillageLightField = { texture: Texture; bounds: WorldBounds };
 type LightLayout = {
   width: number;

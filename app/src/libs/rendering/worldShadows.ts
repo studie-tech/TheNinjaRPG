@@ -1792,6 +1792,7 @@ export type WorldShadowShape =
   | "wall"
   | "character"
   | "column";
+/** Common registration/update contract for physical, projected and prebaked scene lighting. */
 export type WorldShadows =
   | ReturnType<typeof createWorldShadows>
   | ProjectedWorldLighting

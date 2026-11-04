@@ -21,6 +21,7 @@ import {
 } from "pixi.js";
 import { type WorldWind, worldWindShader } from "@/libs/rendering/worldWind";
 
+/** Renderer-local lookup tolerates missing extensions and development module reloads. */
 const windPipeFor = (renderer: Renderer) =>
   (renderer?.renderPipes as { worldWindSprite?: WindSpritePipe } | undefined)
     ?.worldWindSprite;
@@ -66,6 +67,7 @@ export class WindSpritePipe {
 
   constructor(private renderer: WebGLRenderer) {}
 
+  /** Mark the shared gust group for upload only when its sampled pose changes. */
   setWind(breeze: WorldWind) {
     if (this.windKey === breeze.key) return;
     this.windKey = breeze.key;

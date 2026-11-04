@@ -4,6 +4,7 @@ import { type Container, Matrix, type Sprite, Texture } from "pixi.js";
 export const createCharacterShadowPoses = () => {
   const cache = new Map<string, ShadowPose>();
   let bytes = 0;
+  /** Return a shared root-local silhouette; retained characters account for their pose.users lease. */
   const capture = (root: Container, parts: readonly Sprite[]) => {
     const visible = parts.filter(
       (part) =>
@@ -139,6 +140,7 @@ export const createCharacterShadowPoses = () => {
   };
 };
 
+/** Root-local bounds and active references; only owned textures may be destroyed by this cache. */
 export type ShadowPose = {
   texture: Texture;
   minX: number;
@@ -146,5 +148,6 @@ export type ShadowPose = {
   width: number;
   height: number;
   owned: boolean;
+  /** Active characters prevent their silhouette from being evicted with idle frames. */
   users: number;
 };

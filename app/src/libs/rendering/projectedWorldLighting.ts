@@ -103,6 +103,7 @@ export const createProjectedWorldLighting = (
     kind: "projected" as const,
     container,
     acquireAtlas: atlases.acquire,
+    /** Borrow the caller-leased field; screen-to-world sampling is refreshed on the next lighting update. */
     setWarmField: (field: VillageLightField | null) => {
       warmField = field;
       warmMappingDirty = true;
@@ -112,6 +113,7 @@ export const createProjectedWorldLighting = (
       dirty = true;
     },
     registerTerrain: (_parent: Container, _data: HexTerrainData) => () => {},
+    /** Return instance cleanup plus a ready promise; shared atlas pages remain governed by their leases. */
     register: (
       source: Sprite,
       description: WorldSpriteDescription,
@@ -429,6 +431,7 @@ void main() {
   gl_FragColor = vec4(min(vec3(1.0), lit) * source.a, source.a);
 }`;
 
+/** Shared lighting interface; the renderer scope owns cleanup and callers own warm-field leases. */
 export type ProjectedWorldLighting = ReturnType<typeof createProjectedWorldLighting>;
 
 type ProjectedShadowRecord = {

@@ -28,6 +28,7 @@ export const bakedShadowKey = (
 ) => {
   const published = worldAssetSource(description.image);
   const key: unknown[] = [
+    // Identity uses the canonical source URL; CDN rewriting belongs to texture delivery.
     published?.image ?? description.image,
     source.frame,
     source.orig,
@@ -65,10 +66,14 @@ export const bakedShadowBasis = (
   ) as [number, number, number, number];
 };
 
+/** Test the canonical artwork/frame/material identity before acquiring any bake textures. */
 export const hasBakedShadow = (source: Texture, description: WorldSpriteDescription) =>
   !!sources[bakedShadowKey(source, description)];
 
-/** All compass samples and window emission arrive together, before any direction transition. */
+/**
+ * Acquire all compass samples and optional window emission before direction transitions.
+ * destroy() disposes derived views; releaseTextures() separately returns the shared page leases.
+ */
 export const loadBakedShadowAtlas = async (
   game: GameRenderer,
   key: string,
@@ -141,6 +146,7 @@ export const loadBakedShadowAtlas = async (
   };
 };
 
+/** Borrowed page textures and instance-owned views with separate cleanup operations. */
 export type BakedShadowAtlas = Awaited<ReturnType<typeof loadBakedShadowAtlas>>;
 
 /** A baked ground footprint follows the asset pose; changing light direction never rotates its foundation. */
@@ -212,6 +218,7 @@ export const placeBakedShadowPair = (
   }
 };
 
+/** Published atlas frames use pixel units; footprints and emitters are normalized by artwork height. */
 type BakedSource = {
   aspect: number;
   minX: number;

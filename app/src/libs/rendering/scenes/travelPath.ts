@@ -196,6 +196,7 @@ const routeSamples = (origin: RoutePoint, route: RoutePoint[]): RouteSample[] =>
   return samples;
 };
 
+/** Pack neighboring positions and origin weights once; the shader expands the retained ribbon as the viewer moves. */
 const ribbonVertices = (samples: RouteSample[]) => {
   if (samples.length < 2) return new Float32Array(0);
   const capSegments = 8;
