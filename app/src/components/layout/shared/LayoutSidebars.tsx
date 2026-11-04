@@ -328,6 +328,7 @@ interface SignedInIconsProps {
   onThemeToggle?: () => void;
 }
 
+/** Shares header controls, arranging them vertically inside a `data-stacked-icons` container. */
 export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   variant,
   isSignedIn,
@@ -337,7 +338,6 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   onThemeToggle,
 }) => {
   return (
-    // A `data-stacked-icons` container shows the buttons as a column.
     <div className="flex flex-row items-center in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
       {isSignedIn && (
         <span

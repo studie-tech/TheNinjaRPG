@@ -75,7 +75,7 @@ const profileTabs = [
   "Sharing",
 ] as const;
 const iconProfileTabs = ["Achievements", "History", "Settings", "Sharing"] as const;
-/** Remembered or linked tab names that now open another tab. */
+/** Maps remembered and linked tab names to the current profile sections. */
 const profileTabAliases: Partial<Record<string, ProfileTab>> = {
   "Edit Character": "Settings",
 };
@@ -91,6 +91,7 @@ const profileTabValues: Record<ProfileTab, string> = {
   Sharing: "sharing",
 };
 
+/** Coordinates profile sections with URL and remembered tab selection, including settings aliases. */
 export function Profile() {
   const { data: userData, updateUser, notifications } = useRequiredUserData();
   const [tab, setTab] = useState<ProfileTab | null>(null);

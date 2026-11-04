@@ -43,6 +43,7 @@ import type { GameLayoutRenderProps } from "./shared/layoutTypes";
 import { isClerkElement } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
+/** Renders the Classic frame with account and settings controls available when its banner is hidden. */
 export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   children,
   userData,
