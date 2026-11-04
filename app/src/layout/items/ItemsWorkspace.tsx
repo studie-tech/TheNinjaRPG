@@ -65,7 +65,8 @@ export function ItemsWorkspace({
   const [isNarrow, setIsNarrow] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
+  const backpackRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   // Toggling an equip twice reverses it on the server, so one change is sent at a time.
   const equipInFlight = useRef(false);
   const hasFinePointer = useMediaQuery("(any-pointer: fine)");
@@ -134,15 +135,17 @@ export function ItemsWorkspace({
   const openView = (next: ItemsView, opener = document.activeElement) => {
     // Panel controls disappear on navigation; retain the equipment/card trigger.
     if (opener instanceof HTMLElement && !panelRef.current?.contains(opener)) {
-      openerRef.current = opener;
+      returnFocusRef.current = opener;
     }
     setOpened({ bag, view: next });
   };
   const closeView = () => {
     setOpened({ bag, view: { kind: "backpack" } });
-    // Return keyboard focus to whatever opened the panel.
-    const opener = openerRef.current;
-    if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+    // Inline panels restore focus after rendering; sheets wait until their focus scope closes.
+    const target = returnFocusRef.current;
+    if (!isNarrow && target?.isConnected) {
+      requestAnimationFrame(() => target.focus());
+    }
   };
 
   // Opening or reselecting a panel moves focus there so Escape and Tab work there.
@@ -216,6 +219,7 @@ export function ItemsWorkspace({
           onInspect={(userItemId) => openView({ kind: "item", userItemId })}
           onShowInBackpack={() => {
             setPhoneTab("backpack");
+            returnFocusRef.current = backpackRef.current;
             closeView();
           }}
           onClose={closeView}
@@ -289,6 +293,7 @@ export function ItemsWorkspace({
           </div>
         </TabsContent>
         <TabsContent
+          ref={backpackRef}
           value="backpack"
           forceMount
           tabIndex={isNarrow ? 0 : -1}
@@ -334,6 +339,12 @@ export function ItemsWorkspace({
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               (event.currentTarget as HTMLElement | null)?.focus();
+            }}
+            onCloseAutoFocus={(event) => {
+              if (returnFocusRef.current?.isConnected) {
+                event.preventDefault();
+                returnFocusRef.current.focus();
+              }
             }}
             // The sheet's strict containment would ignore the panel's height; keep it
             // content-sized up to the maximum.

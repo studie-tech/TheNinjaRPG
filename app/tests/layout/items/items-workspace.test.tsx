@@ -168,6 +168,21 @@ it.each([1000, 390])("returns focus to the equipment tile after inspecting from 
   await waitFor(() => expect(document.activeElement === trigger).toBe(true));
 });
 
+it.each([1000, 390])("focuses the backpack after navigating there from a slot picker at width %s", async (width) => {
+  containerWidth = width;
+  renderWorkspace();
+  const trigger = slotOf("HAND_1");
+  act(() => trigger.focus());
+  act(() => fireEvent.click(trigger));
+  const showBackpack = screen.getByRole("button", { name: "Show Backpack" });
+  act(() => showBackpack.focus());
+  act(() => fireEvent.click(showBackpack));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  const backpack = screen.getByRole("tabpanel", { name: "Backpack · 2" });
+  expect(screen.getByRole("tab", { name: "Backpack · 2" }).getAttribute("aria-selected")).toBe("true");
+  await waitFor(() => expect(document.activeElement === backpack).toBe(true));
+});
+
 it.each(["backpack", "equipment"])("returns focus to the %s trigger after inspecting through its menu", async (source) => {
   useRealInspector();
   renderWorkspace();
