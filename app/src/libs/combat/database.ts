@@ -50,6 +50,7 @@ import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import { allocateMasteryGains } from "@/libs/masteryProgression";
 import { isQuestComplete } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import {
   broadcastRaidAvailability,
   type PusherClient,
@@ -678,13 +679,7 @@ export const updateWars = async (
       // Village missions belong to a participating village, even when battle
       // teammates from unrelated factions share the team's war/shrine credit.
       const canCreditVillageMission =
-        !user.isAi &&
-        (userVillageId === killerSideVillageId ||
-          w.warAllies.some(
-            (ally) =>
-              ally.villageId === userVillageId &&
-              ally.supportVillageId === killerSideVillageId,
-          ));
+        !user.isAi && getWarSide(w, userVillageId) === killerSideVillageId;
       // Insert war kill for tracking purposes
       // Use per-war shrine HP change for village wars/raids (includes level diff adjustment)
       // For sector wars, use the total accumulated shrineChangeHp value

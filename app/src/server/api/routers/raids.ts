@@ -16,6 +16,7 @@ import {
   RAID_CLAIMING_TIMEOUT_MS,
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
+import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
 import {
@@ -205,16 +206,7 @@ export const raidsRouter = createTRPCRouter({
       // Sectors where user's village is attacker (or ally of attacker) and shrine is defeated
       const attackerDefeatedShrineSectors = new Set(
         activeSectorWars
-          .filter((w) => {
-            // User's village is the attacker
-            if (w.attackerVillageId === user.villageId) return true;
-            // User's village is an ally supporting the attacker
-            return w.warAllies.some(
-              (a) =>
-                a.villageId === user.villageId &&
-                a.supportVillageId === w.attackerVillageId,
-            );
-          })
+          .filter((w) => getWarSide(w, user.villageId) === w.attackerVillageId)
           .map((w) => w.sector),
       );
 
@@ -792,12 +784,7 @@ export const raidsRouter = createTRPCRouter({
         // Check if user's village is attacker or ally supporting the attacker
         const isAttackerOrAlly =
           sectorWar &&
-          (sectorWar.attackerVillageId === user.villageId ||
-            sectorWar.warAllies.some(
-              (a) =>
-                a.villageId === user.villageId &&
-                a.supportVillageId === sectorWar.attackerVillageId,
-            ));
+          getWarSide(sectorWar, user.villageId) === sectorWar.attackerVillageId;
 
         if (!sectorOwnership && !isAttackerOrAlly) {
           return reject("Your village does not control this sector");

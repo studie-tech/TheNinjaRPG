@@ -23,7 +23,7 @@ export const isWarMercenary = (
 export const getWarSide = (
   activeWar: Pick<War, "attackerVillageId" | "defenderVillageId"> & {
     id?: string;
-    warAllies: { villageId: string; supportVillageId: string }[];
+    warAllies?: { villageId: string; supportVillageId: string }[];
     warMercenaries?: { userId: string; sideVillageId: string }[];
     mercenaryWarIds?: Record<string, string>;
   },
@@ -40,7 +40,7 @@ export const getWarSide = (
   if ([activeWar.attackerVillageId, activeWar.defenderVillageId].includes(villageId))
     return villageId;
   return (
-    activeWar.warAllies.find((ally) => ally.villageId === villageId)
+    activeWar.warAllies?.find((ally) => ally.villageId === villageId)
       ?.supportVillageId ?? null
   );
 };

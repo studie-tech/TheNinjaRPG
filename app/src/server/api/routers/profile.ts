@@ -88,6 +88,7 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { deferModeration } from "@/libs/moderation/defer";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { isQuestComplete } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import { isNewOnlineRecord } from "@/libs/onlineRecord";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { hasActiveGeneration } from "@/libs/pets/progression";
@@ -2817,10 +2818,7 @@ const fetchUpdatedUserOnce = async (
   if (user?.villageId) {
     const userActiveWars = allActiveWars.filter(
       (w) =>
-        (!mercenaryWarId || w.id === mercenaryWarId) &&
-        (w.attackerVillageId === user.villageId ||
-          w.defenderVillageId === user.villageId ||
-          w.warAllies.some((a) => a.villageId === user.villageId)),
+        (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, user.villageId),
     );
     (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
   }
@@ -2847,12 +2845,7 @@ const fetchUpdatedUserOnce = async (
           (w) =>
             w.type === "SECTOR_WAR" &&
             w.defenderShrineHp <= 0 &&
-            (w.attackerVillageId === user.villageId ||
-              w.warAllies.some(
-                (ally) =>
-                  ally.villageId === user.villageId &&
-                  ally.supportVillageId === w.attackerVillageId,
-              )),
+            getWarSide(w, user.villageId) === w.attackerVillageId,
         )
         .map((w) => w.sector),
     );

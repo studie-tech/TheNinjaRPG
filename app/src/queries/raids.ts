@@ -98,7 +98,12 @@ export const listWarForGetAvailableRaids = (
       lte(war.defenderShrineHp, 0),
       input?.sector !== undefined ? eq(war.sector, input.sector) : undefined,
     ),
-    columns: { id: true, sector: true, attackerVillageId: true },
+    columns: {
+      id: true,
+      sector: true,
+      attackerVillageId: true,
+      defenderVillageId: true,
+    },
     with: {
       warAllies: {
         where: activeWarAllyWhere(),
@@ -497,7 +502,7 @@ export const findWarForJoinRaidQueue = (
       isNull(war.endedAt),
       lte(war.defenderShrineHp, 0),
     ),
-    columns: { attackerVillageId: true },
+    columns: { attackerVillageId: true, defenderVillageId: true },
     with: {
       warAllies: {
         where: activeWarAllyWhere(),
