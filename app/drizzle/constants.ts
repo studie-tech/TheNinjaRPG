@@ -898,6 +898,8 @@ export const PvpBattleTypes: BattleType[] = [
   "RANKED_PVP",
 ];
 
+export const RankedBattleTypes: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
+
 export const QuestBattleTypes: BattleType[] = [
   "HUNTING",
   "QUEST",

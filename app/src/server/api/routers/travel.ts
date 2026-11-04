@@ -119,7 +119,7 @@ import {
 import { canEnterWarCamp, fetchWarCampEntry } from "@/server/utils/warMercenary";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
-import { secondsFromNow, secondsPassed } from "@/utils/time";
+import { regenTicksSince, secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import type { QuestTrackerType } from "@/validators/objectives";
 import {
@@ -1216,10 +1216,7 @@ const completeGlobalTravel = async (
   user: UserData & { raidBuffs?: TimedBuff[] },
   questData?: QuestTrackerType[],
 ) => {
-  const recoveryTicks = Math.max(
-    0,
-    Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS),
-  );
+  const recoveryTicks = regenTicksSince(user.regenAt);
   const recovery = getTimedRegenerationGain(
     user.regeneration,
     regenerationBuffs(user),

@@ -27,6 +27,7 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryQueueKinds,
+  RankedBattleTypes,
   REGEN_SECONDS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
@@ -465,7 +466,7 @@ export const battleJutsuGateFailure = (
     return `${jutsu.name}: activate the required skill`;
   }
   // Ranked battles waive weapon and usability requirements, but not bloodline gates.
-  if (battleType !== "RANKED_PVP" && battleType !== "RANKED_SPARRING") {
+  if (!RankedBattleTypes.includes(battleType)) {
     if (!checkJutsuItems(jutsu, user.items)) {
       return `${jutsu.name}: no ${jutsu.jutsuWeapon.toLowerCase()} weapon equipped`;
     }

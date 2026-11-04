@@ -39,6 +39,7 @@ import {
   PoolTypes,
   PvpBattleTypes,
   RANKS_RESTRICTED_FROM_PVP,
+  RankedBattleTypes,
   REGEN_SECONDS,
   TERRITORY_WAR_TEAM_SIZE,
   VILLAGE_SYNDICATE_ID,
@@ -75,6 +76,7 @@ import {
 import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
+import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
 import {
   fitsBattleUsage,
   getBattleSpawnLocations,
@@ -118,6 +120,7 @@ import {
   getEffectiveMaxPool,
   getPoolKeys,
   getTurnControl,
+  inertUserItemColumns,
   maskBattle,
   mergeExtraState,
   reconcileLobbyPools,
@@ -130,7 +133,11 @@ import {
 import type { CoopEncounter } from "@/libs/coop";
 import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
-import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import {
+  buildJutsuEquipCaps,
+  compareByLoadoutOrder,
+  computeJutsuLoadoutCapAssignments,
+} from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   anonymousSpriteAppearance,
@@ -144,6 +151,7 @@ import {
   getWarRelationship,
   getWarSide,
   isObjectiveWarActive,
+  isWarMercenary,
 } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { canUsePet } from "@/libs/pets/progression";
@@ -278,7 +286,7 @@ import { getRandomElement } from "@/utils/array";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
-import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
+import { regenTicksSince, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { BaseServerResponse } from "@/validators/base";
 import {
@@ -490,7 +498,7 @@ export const combatRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const limit = input.limit ?? 30;
+      const limit = input.limit ?? BATTLE_LOG_PAGE_SIZE;
       const filter = input.userFilter ?? "all";
       const showBasicActions = input.showBasicActions ?? true;
 
@@ -1316,23 +1324,14 @@ export const combatRouter = createTRPCRouter({
             // Add missing UserItem fields needed for CombatQueryUserItem
             return {
               ...ref,
+              ...inertUserItemColumns(user.controllerId, now),
               item,
               imbuements: [],
               imbuementEffects: ref.imbuementEffects ?? [],
-              userId: user.controllerId,
-              createdAt: now,
-              updatedAt: now,
-              storedAtHome: false,
-              homeX: null,
-              homeY: null,
-              homeRotation: 0,
-              homeRoom: "main" as const,
-              isInAuction: false,
               activeVariantId: ref.activeVariantId ?? null,
               variantBattleDescription: ref.variantBattleDescription ?? null,
               variantImage: ref.variantImage ?? null,
               variantName: ref.variantName ?? null,
-              craftingFinishedAt: null,
             };
           })
           .filter((i): i is NonNullable<typeof i> => i !== null);
@@ -2286,7 +2285,7 @@ export const initiateBattle = async (
     )
       return [];
     const original = { ...user };
-    const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
+    const ticks = regenTicksSince(user.regenAt);
     const trainingUser = {
       ...user,
       // Existing training keeps its earned Energy when the next isolated floor starts.
@@ -2399,24 +2398,15 @@ export const initiateBattle = async (
             return {
               // Synthetic id so battle-end quantity/durability writes never touch
               // real inventory rows; XP is credited via progressionRowId instead.
+              ...inertUserItemColumns(user.userId, new Date()),
               id: nanoid(),
               progressionRowId: owned?.id ?? null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              userId: user.userId,
               itemId: item.id,
               quantity: 1,
               level: owned?.level ?? 1,
               experience: owned?.experience ?? 0,
               equipped: "ITEM_1" as const,
               item: { ...item, variants: owned?.item?.variants ?? [] },
-              storedAtHome: false,
-              homeX: null,
-              homeY: null,
-              homeRotation: 0,
-              homeRoom: "main" as const,
-              craftingFinishedAt: null,
-              isInAuction: false,
               activeVariantId: owned?.activeVariantId ?? null,
               imbuements: [],
               dropChancePerc: 0,
@@ -2801,14 +2791,8 @@ export const initiateBattle = async (
             const targetIsWarParticipant = t.warParticipantUntil > now;
             const atWar = getWarRelationship(activeWars, user, t) === "ENEMY";
             if (
-              (attackerIsWarParticipant ||
-                activeWars.some((w) =>
-                  w.warMercenaries?.some((m) => m.userId === user.userId),
-                )) &&
-              (targetIsWarParticipant ||
-                activeWars.some((w) =>
-                  w.warMercenaries?.some((m) => m.userId === t.userId),
-                )) &&
+              (attackerIsWarParticipant || isWarMercenary(activeWars, user.userId)) &&
+              (targetIsWarParticipant || isWarMercenary(activeWars, t.userId)) &&
               atWar
             )
               return false;
@@ -2846,8 +2830,7 @@ export const initiateBattle = async (
 
     // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
     // ELITE JONIN, so its distributions cap at that rank rather than the player's own.
-    const isRankedBattle =
-      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
+    const isRankedBattle = RankedBattleTypes.includes(battleType);
     capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
 
     // Add achievements to users for tracking
@@ -3339,9 +3322,7 @@ export const initiateBattle = async (
   }
   const equipCaps = buildJutsuEquipCaps(
     jutsuEquipLimits,
-    battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING"
-      ? "ranked"
-      : "unranked",
+    RankedBattleTypes.includes(battleType) ? "ranked" : "unranked",
   );
   for (const participant of usersState) {
     if (participant.isAi) continue;
@@ -3773,6 +3754,7 @@ export const processUsersForBattle = async (
         )?.jutsu ?? null,
     }));
   }
+  const isRankedBattle = RankedBattleTypes.includes(battleType);
   // Collect user effects here
   // Companion skills share the summon preload pipeline with character abilities.
   const allSummons: string[] = (info.petPreload?.pets ?? []).flatMap((pet) =>
@@ -3897,7 +3879,7 @@ export const processUsersForBattle = async (
             regenerationBuffs(inputUser),
             // Lobby reconstruction reads this timestamp from battle JSON.
             new Date(user.regenAt),
-            Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS)),
+            regenTicksSince(user.regenAt),
             REGEN_SECONDS,
           );
     user.curHealth = Math.min(user.curHealth + restored, user.maxHealth);
@@ -3917,10 +3899,7 @@ export const processUsersForBattle = async (
     }
 
     // Ranked players use the endgame level and pools regardless of their progression.
-    if (
-      (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") &&
-      !user.isAi
-    ) {
+    if (isRankedBattle && !user.isAi) {
       user.maxHealth = calcHP(MAX_PLAYER_LEVEL);
       user.maxChakra = calcCP(MAX_PLAYER_LEVEL);
       user.maxStamina = calcSP(MAX_PLAYER_LEVEL);
@@ -3975,7 +3954,7 @@ export const processUsersForBattle = async (
 
     // Update user level to the effective level if he had leveled up (to combat level-holding, as some things are scaled based on level)
     // Ranked battles keep their normalized level.
-    if (battleType !== "RANKED_SPARRING" && battleType !== "RANKED_PVP") {
+    if (!isRankedBattle) {
       user.level = getEffectiveLevel(user);
     }
 
@@ -4002,7 +3981,7 @@ export const processUsersForBattle = async (
 
     if (
       (battleType === "COMBAT" || battleType === "SHRINE_WAR") &&
-      info.wars.some((w) => w.warMercenaries?.some((m) => m.userId === user.userId))
+      isWarMercenary(info.wars, user.userId)
     ) {
       user.isMasked = true;
       user.username = "Mercenary";
@@ -4045,8 +4024,6 @@ export const processUsersForBattle = async (
     );
 
     // The mastery sources this battle applies; ranked battles skip bloodline and skills
-    const isRankedBattle =
-      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
     const wearer = {
       ...user,
       bloodline: isRankedBattle ? null : user.bloodline,
@@ -4125,12 +4102,7 @@ export const processUsersForBattle = async (
     }
 
     // Add skill tree effects
-    if (
-      user.userSkills &&
-      user.userSkills.length > 0 &&
-      battleType !== "RANKED_PVP" &&
-      battleType !== "RANKED_SPARRING"
-    ) {
+    if (user.userSkills && user.userSkills.length > 0 && !isRankedBattle) {
       user.userSkills.forEach(
         (userSkill: {
           skillId: string;
@@ -4262,14 +4234,7 @@ export const processUsersForBattle = async (
 
     // Sort if we have a loadout
     if (user?.loadout?.jutsuIds) {
-      user.jutsus.sort((a, b) => {
-        const aIndex = user?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
-        const bIndex = user?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
-        if (aIndex === -1 && bIndex === -1) return 0;
-        if (aIndex === -1) return 1;
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      });
+      user.jutsus.sort(compareByLoadoutOrder(user.loadout.jutsuIds));
     }
 
     // Determine equipped keystone item name for quick display later

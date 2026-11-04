@@ -19,6 +19,18 @@ import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
  * @param federalStatus
  * @returns
  */
+/** Sort comparator for jutsu by their loadout position, with unlisted jutsu last. */
+export const compareByLoadoutOrder =
+  (jutsuIds: string[] = []) =>
+  (a: { jutsuId: string }, b: { jutsuId: string }) => {
+    const aIndex = jutsuIds.indexOf(a.jutsuId);
+    const bIndex = jutsuIds.indexOf(b.jutsuId);
+    if (aIndex === -1 && bIndex === -1) return 0;
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  };
+
 export const getFreeTransfers = (federalStatus: FederalStatus) => {
   switch (federalStatus) {
     case "GOLD":

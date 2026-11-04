@@ -13,7 +13,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { userRegenerationGainSql } from "@/server/utils/regeneration";
+import { regenTicksSql, userRegenerationGainSql } from "@/server/utils/regeneration";
 import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
 
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
@@ -87,7 +87,7 @@ export const executeResultForUserHeal = (
                 ${recipient.regenAt} = ${
                   t.status === "HOSPITALIZED"
                     ? sql`NOW(3)`
-                    : sql`TIMESTAMPADD(SECOND, FLOOR(GREATEST(0, TIMESTAMPDIFF(SECOND, ${recipient.regenAt}, NOW(3))) / ${REGEN_SECONDS}) * ${REGEN_SECONDS}, ${recipient.regenAt})`
+                    : sql`TIMESTAMPADD(SECOND, ${regenTicksSql(recipient.regenAt, sql`NOW(3)`)} * ${REGEN_SECONDS}, ${recipient.regenAt})`
                 },
                 ${recipient.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${recipient.updatedAt}))
             WHERE ${and(

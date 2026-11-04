@@ -1,5 +1,8 @@
 import type { SuperJSONResult } from "superjson";
 
+/** Battle log entries per page when a request names no limit. */
+export const BATTLE_LOG_PAGE_SIZE = 30;
+
 /** Committed public combat changes; oversized payloads retain version/settlement recovery. */
 export type BattleUpdate = {
   version: number;

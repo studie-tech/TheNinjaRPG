@@ -4,6 +4,7 @@ import {
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
+  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
 } from "@/drizzle/constants";
 import { clamp } from "@/utils/math";
 import type { ObjectiveTrackerType } from "@/validators/objectives";
@@ -88,13 +89,20 @@ export const secondsFromDate = (seconds: number, date: Date) => {
   return new Date(date.getTime() + seconds * 1000);
 };
 
+/** End of the stealth cooldown after leaving combat, on the column's whole-second clock. */
+export const postCombatStealthCooldownAt = (settledAt: Date) =>
+  new Date(
+    Math.floor(settledAt.getTime() / 1000) * 1000 +
+      STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
+  );
+
+/** Whole regeneration ticks elapsed on the saved clock, adjusted for client/server time. */
+export const regenTicksSince = (regenAt: Date, timeDiff?: number) =>
+  Math.max(0, Math.floor(secondsPassed(regenAt, timeDiff) / REGEN_SECONDS));
+
 /** Next regeneration tick anchored to the saved clock, adjusted for client/server time. */
 export const nextRegenerationTickAt = (regenAt: Date, timeDiff?: number) =>
-  secondsFromDate(
-    (Math.max(0, Math.floor(secondsPassed(regenAt, timeDiff) / REGEN_SECONDS)) + 1) *
-      REGEN_SECONDS,
-    regenAt,
-  );
+  secondsFromDate((regenTicksSince(regenAt, timeDiff) + 1) * REGEN_SECONDS, regenAt);
 
 /**
  * Current date plus the given number of seconds

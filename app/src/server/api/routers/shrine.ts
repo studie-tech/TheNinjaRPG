@@ -17,6 +17,7 @@ import {
   areWarObjectivesRevealed,
   getWarSide,
   isObjectiveWarActive,
+  isWarMercenary,
 } from "@/libs/objectiveWar";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
@@ -842,10 +843,7 @@ export const shrineRouter = createTRPCRouter({
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
-      if (
-        !user.villageId &&
-        !activeWars.some((w) => w.warMercenaries?.some((m) => m.userId === ctx.userId))
-      )
+      if (!user.villageId && !isWarMercenary(activeWars, ctx.userId))
         return errorResponse("You must be in a village or serving as a mercenary");
       if (!shrineBattle) return errorResponse("Shrine battle not found");
       if (shrineBattle.battleId) return errorResponse("Shrine battle already started");

@@ -8,6 +8,7 @@ import {
   REGEN_SECONDS,
 } from "@/drizzle/constants";
 import type { BattleAction, UserData, UserTitle } from "@/drizzle/schema";
+import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
 import type {
   BattleState,
   BattleUserItem,
@@ -446,7 +447,7 @@ export const mergeBattleEntries = (
   nextVersion: number,
 ): BattleAction[] | undefined => {
   const version = input.refreshKey;
-  const limit = input.limit ?? 30;
+  const limit = input.limit ?? BATTLE_LOG_PAGE_SIZE;
   const targetVersion = (previous ?? []).reduce(
     (latest, row) => Math.max(latest, row.battleVersion + 1),
     Math.max(version ?? 0, nextVersion),

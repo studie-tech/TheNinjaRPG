@@ -41,6 +41,7 @@ import {
   KAGE_PRESTIGE_REQUIREMENT,
   MAP_WAKE_ISLAND_SECTOR,
   MasteryNames,
+  RankedBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   type TimedMasteryName,
@@ -105,6 +106,7 @@ import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
+import { postAuthorColumns } from "@/queries/profile";
 import { fetchSharedCooldowns } from "@/queries/sharedCooldown";
 import {
   activeWarAllyWhere,
@@ -128,7 +130,12 @@ import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { questAttemptIsActive } from "@/server/utils/questEntry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
-import { periodStart, secondsFromDate, secondsFromNow } from "@/utils/time";
+import {
+  periodStart,
+  postCombatStealthCooldownAt,
+  secondsFromDate,
+  secondsFromNow,
+} from "@/utils/time";
 import type { EncounterWave } from "@/validators/coop";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
@@ -305,28 +312,10 @@ export const findBattleHistoryForGetBattleHistoryEntry = (
     where: eq(battleHistory.battleId, input.battleId),
     with: {
       attacker: {
-        columns: {
-          username: true,
-          userId: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
       defender: {
-        columns: {
-          username: true,
-          userId: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: postAuthorColumns,
       },
     },
   });
@@ -1735,14 +1724,7 @@ export const updateUserDataForFinishBattle = (
       stealthActivatedAt: null,
       stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
       ...(sendToHospital
-        ? {
-            status: "HOSPITALIZED",
-            longitude: HOSPITAL_LONG,
-            latitude: HOSPITAL_LAT,
-            sector: teammate.allyVillage
-              ? teammate.sector
-              : getVillage(newBattle, teammate.villageId)?.sector,
-          }
+        ? hospitalPlacement(newBattle, teammate)
         : { status: "AWAKE" }),
     })
     .where(
@@ -2396,9 +2378,8 @@ export const updateUserDataForUpdateUser2 = (
             weeklyPvpKillsAt: settledAt,
           }
         : {}),
-      ...(curBattle.battleType !== "RANKED_PVP" &&
-      curBattle.battleType !== "SPARRING" &&
-      curBattle.battleType !== "RANKED_SPARRING"
+      ...(curBattle.battleType !== "SPARRING" &&
+      !RankedBattleTypes.includes(curBattle.battleType)
         ? {
             curHealth: result.curHealth,
             curStamina: result.curStamina,
@@ -2446,12 +2427,7 @@ export const updateUserDataForUpdateUser2 = (
       result.curHealth <= 0 &&
       !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(curBattle.battleType)
         ? {
-            status: "HOSPITALIZED",
-            longitude: HOSPITAL_LONG,
-            latitude: HOSPITAL_LAT,
-            sector: user.allyVillage
-              ? user.sector
-              : getVillage(curBattle, user.villageId)?.sector,
+            ...hospitalPlacement(curBattle, user),
             immunityUntil:
               curBattle.battleType === "COMBAT"
                 ? sql`NOW() + INTERVAL 1 MINUTE`
@@ -2461,10 +2437,7 @@ export const updateUserDataForUpdateUser2 = (
       // Deactivate stealth and set cooldown after leaving combat (20 seconds)
       stealthActive: false,
       stealthActivatedAt: null,
-      stealthCooldownAt: new Date(
-        Math.floor(settledAt.getTime() / 1000) * 1000 +
-          STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
-      ),
+      stealthCooldownAt: postCombatStealthCooldownAt(settledAt),
     })
     .where(
       and(
@@ -2553,3 +2526,16 @@ const xpGainOrLevelUpSet = (
     experience: sql`IF(${table.experience} >= ${threshold}, 0, ${table.experience} + ${gain})`,
   };
 };
+
+/** Userdata columns that put a defeated fighter in their sector's hospital. */
+const hospitalPlacement = (
+  battle: CompleteBattle,
+  fighter: { allyVillage: boolean; sector: number; villageId: null | string },
+) => ({
+  status: "HOSPITALIZED" as const,
+  longitude: HOSPITAL_LONG,
+  latitude: HOSPITAL_LAT,
+  sector: fighter.allyVillage
+    ? fighter.sector
+    : getVillage(battle, fighter.villageId)?.sector,
+});

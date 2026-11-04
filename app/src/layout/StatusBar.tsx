@@ -15,7 +15,7 @@ import {
   type RegenerationPeriod,
   type TimedBuff,
 } from "@/libs/timedBuffs";
-import { nextRegenerationTickAt, secondsPassed } from "@/utils/time";
+import { nextRegenerationTickAt, regenTicksSince, secondsPassed } from "@/utils/time";
 
 interface StatusBarProps {
   title: string;
@@ -63,10 +63,7 @@ export const calcCurrent = (
     regenAt &&
     ["AWAKE", "ASLEEP", "TRAVEL"].includes(status)
   ) {
-    const minutes = Math.max(
-      0,
-      Math.floor(secondsPassed(regenAt, timeDiff) / REGEN_SECONDS),
-    );
+    const minutes = regenTicksSince(regenAt, timeDiff);
     if (regen >= 0) {
       current = combatRegenerationPeriods
         ? combatCacheEnergy(

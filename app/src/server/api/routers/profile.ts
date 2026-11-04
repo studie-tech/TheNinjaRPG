@@ -344,6 +344,7 @@ import sanitize from "@/utils/sanitize";
 import {
   DAY_S,
   isDifferentDay,
+  regenTicksSince,
   secondsFromDate,
   secondsFromNow,
   secondsPassed,
@@ -3112,7 +3113,7 @@ const fetchUpdatedUserOnce = async (
 
     // Figure out if we're running update
     const sinceUpdate = secondsPassed(user.updatedAt);
-    const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
+    const ticks = regenTicksSince(user.regenAt);
     // Queued Energy and mastery training, settled in memory from the loaded rows.
     const regenerationGain = (fromTick: number, toTick: number) =>
       getTimedRegenerationGain(

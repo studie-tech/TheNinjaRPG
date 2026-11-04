@@ -7,6 +7,12 @@ import type { SectorType, War } from "@/drizzle/schema";
 import { shuffle } from "@/utils/array";
 import type { WarObjectiveState, WarRules } from "@/validators/war";
 
+/** Whether the user holds a mercenary appointment in any of the wars. */
+export const isWarMercenary = (
+  wars: { warMercenaries?: { userId: string }[] }[],
+  userId: string,
+) => wars.some((war) => war.warMercenaries?.some((m) => m.userId === userId));
+
 /**
  * Resolve the credited village; a mercenary appointment overrides the player's village
  * and excludes participation in other wars. Callers supply accepted, unended memberships,

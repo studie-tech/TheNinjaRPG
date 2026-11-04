@@ -18,7 +18,6 @@ import {
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   REGEN_SECONDS,
-  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
@@ -132,6 +131,7 @@ import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
+import { postCombatStealthCooldownAt } from "@/utils/time";
 
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
@@ -1731,10 +1731,7 @@ export const updateUser = async (
             curBattle.extraState.energyRegenerationPeriods?.[userId],
           ),
           regenAt: settledAt,
-          stealthCooldownAt: new Date(
-            Math.floor(settledAt.getTime() / 1000) * 1000 +
-              STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
-          ),
+          stealthCooldownAt: postCombatStealthCooldownAt(settledAt),
           pvpStreak: result.pvpStreak,
           questData: publicUser.questData,
           pveFights: baseline.pveFights + 1,
