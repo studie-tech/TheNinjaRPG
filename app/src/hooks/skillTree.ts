@@ -3,9 +3,9 @@ import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { SkillTreeEntryTypes, SkillTreeTargets } from "@/drizzle/constants";
 import type { SkillTree } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type {
@@ -28,6 +28,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   const skillTree = { ...data, effects: data.effects };
 
   // Form handling
+  const submitContent = useContentSubmit();
   const form = useForm<ZodSkillTreeInput, unknown, ZodSkillTreeType>({
     mode: "all",
     criteriaMode: "all",
@@ -55,25 +56,23 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   );
 
   // Mutation for updating skill
-  const { mutate: updateSkillTree, isPending: l2 } = api.skillTree.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        refetch();
-        void utils.skillTree.getAll.invalidate();
-      }
-    },
-  });
+  const { mutateAsync: updateSkillTree, isPending: l2 } =
+    api.skillTree.update.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        if (data.success) {
+          refetch();
+          void utils.skillTree.getAll.invalidate();
+        }
+      },
+    });
 
   // Form submission
   const handleSkillTreeSubmit = form.handleSubmit(
-    (data: ZodSkillTreeType) => {
-      const newSkillTree = { ...skillTree, ...data };
-      const diff = calculateContentDiff(skillTree, newSkillTree);
-      if (diff.length > 0) {
-        updateSkillTree({ id: skillTree.id, data: newSkillTree });
-      }
-    },
+    (data: ZodSkillTreeType) =>
+      submitContent(skillTree, { ...skillTree, ...data }, (newSkillTree) =>
+        updateSkillTree({ id: skillTree.id, data: newSkillTree }),
+      ),
     (errors) => showFormErrorsToast(errors),
   );
 

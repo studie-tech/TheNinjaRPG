@@ -1,6 +1,7 @@
 "use client";
 
 import { getQueryKey } from "@trpc/react-query";
+import type { RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getFarmBulkMutationUpdate, getFarmMutationUpdate } from "@/deltas/farming";
@@ -76,12 +77,28 @@ export function useFarmController() {
   );
 
   const setPendingPlot = useCallback((slotIndex: number, pending: boolean) => {
-    const next = new Set(pendingPlotSlotsRef.current);
-    if (pending) next.add(slotIndex);
-    else next.delete(slotIndex);
-    pendingPlotSlotsRef.current = next;
-    setPendingPlotSlots(next);
+    togglePending(pendingPlotSlotsRef, setPendingPlotSlots, slotIndex, pending);
   }, []);
+
+  const setPendingInventoryKey = useCallback((key: string, pending: boolean) => {
+    togglePending(pendingInventoryKeysRef, setPendingInventoryKeys, key, pending);
+  }, []);
+
+  const showResult = useCallback((result: FarmMutationResponse) => {
+    showMutationToast(result);
+    setAnnouncement(result.message);
+  }, []);
+
+  /** Report a transport failure, reconciling plots it may or may not have changed. */
+  const showFailure = useCallback(
+    (error: unknown, fallback: string) => {
+      void utils.farming.getFarmState.invalidate();
+      const message = error instanceof Error ? error.message : fallback;
+      setAnnouncement(message);
+      showMutationToast({ success: false, message });
+    },
+    [utils],
+  );
 
   /** Prevent overlapping plot actions and reconcile the revision captured before each write. */
   const runPlotAction = useCallback(
@@ -108,15 +125,12 @@ export function useFarmController() {
         );
         setEffectEvent({ id: Date.now(), slotIndex: plot.slotIndex, effect });
       } catch (error) {
-        void utils.farming.getFarmState.invalidate();
-        const message = error instanceof Error ? error.message : "Farm action failed";
-        setAnnouncement(message);
-        showMutationToast({ success: false, message });
+        showFailure(error, "Farm action failed");
       } finally {
         setPendingPlot(plot.slotIndex, false);
       }
     },
-    [setPendingPlot, farmCache, utils],
+    [setPendingPlot, farmCache, showFailure, showResult],
   );
 
   const plant = useCallback(
@@ -163,8 +177,7 @@ export function useFarmController() {
       setPendingBulkAction(key);
       try {
         const result = await request();
-        showMutationToast(result);
-        setAnnouncement(result.message);
+        showResult(result);
         // Partial bulk failures may already have changed plots or granted crops.
         await farmCache.updateCache(
           (current) =>
@@ -173,18 +186,14 @@ export function useFarmController() {
         );
         return result.success;
       } catch (error) {
-        void utils.farming.getFarmState.invalidate();
-        const message =
-          error instanceof Error ? error.message : "Bulk farm action failed";
-        setAnnouncement(message);
-        showMutationToast({ success: false, message });
+        showFailure(error, "Bulk farm action failed");
         return false;
       } finally {
         pendingBulkActionRef.current = null;
         setPendingBulkAction(null);
       }
     },
-    [farmCache, utils],
+    [farmCache, showFailure, showResult],
   );
 
   const plantAll = useCallback(
@@ -217,13 +226,10 @@ export function useFarmController() {
     ) => {
       if (pendingInventoryKeysRef.current.has(key)) return false;
       const snapshot = farmCache.prepareUpdate();
-      const pendingKeys = new Set(pendingInventoryKeysRef.current).add(key);
-      pendingInventoryKeysRef.current = pendingKeys;
-      setPendingInventoryKeys(pendingKeys);
+      setPendingInventoryKey(key, true);
       try {
         const result = await request();
-        showMutationToast(result);
-        setAnnouncement(result.message);
+        showResult(result);
         if (!result.success) return false;
         await farmCache.updateCache(
           (current) =>
@@ -239,19 +245,13 @@ export function useFarmController() {
         );
         return true;
       } catch (error) {
-        void utils.farming.getFarmState.invalidate();
-        const message = error instanceof Error ? error.message : "Transaction failed";
-        setAnnouncement(message);
-        showMutationToast({ success: false, message });
+        showFailure(error, "Transaction failed");
         return false;
       } finally {
-        const next = new Set(pendingInventoryKeysRef.current);
-        next.delete(key);
-        pendingInventoryKeysRef.current = next;
-        setPendingInventoryKeys(next);
+        setPendingInventoryKey(key, false);
       }
     },
-    [farmCache, utils],
+    [farmCache, setPendingInventoryKey, showFailure, showResult],
   );
 
   const buy = useCallback(
@@ -294,9 +294,7 @@ export function useFarmController() {
     async (crops: { userItemId: string; quantity: number; sellValue: number }[]) => {
       const key = "sell:all";
       if (pendingInventoryKeysRef.current.has(key)) return false;
-      const pendingKeys = new Set(pendingInventoryKeysRef.current).add(key);
-      pendingInventoryKeysRef.current = pendingKeys;
-      setPendingInventoryKeys(pendingKeys);
+      setPendingInventoryKey(key, true);
       let sold = 0;
       let earned = 0;
       let failure: string | null = null;
@@ -330,10 +328,7 @@ export function useFarmController() {
       } catch (error) {
         failure = error instanceof Error ? error.message : "Transaction failed";
       } finally {
-        const next = new Set(pendingInventoryKeysRef.current);
-        next.delete(key);
-        pendingInventoryKeysRef.current = next;
-        setPendingInventoryKeys(next);
+        setPendingInventoryKey(key, false);
         if (failure) void utils.farming.getFarmState.invalidate();
       }
       const summary = `Sold ${sold} ${sold === 1 ? "crop" : "crops"} for ${earned.toLocaleString()} farm coins`;
@@ -384,3 +379,17 @@ export function useFarmController() {
     extract,
   };
 }
+
+/** Replace a pending set so its ref and rendered state always hold the same members. */
+const togglePending = <T>(
+  pendingRef: RefObject<Set<T>>,
+  setPending: (next: Set<T>) => void,
+  key: T,
+  pending: boolean,
+) => {
+  const next = new Set(pendingRef.current);
+  if (pending) next.add(key);
+  else next.delete(key);
+  pendingRef.current = next;
+  setPending(next);
+};

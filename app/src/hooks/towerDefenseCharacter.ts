@@ -44,6 +44,7 @@ export const useTowerDefenseCharacterEditForm = (
     api.towerDefense.updateCharacter.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        if (!data.success) return;
         await utils.towerDefense.getCharacter.invalidate({ id: character.id });
         refetch();
       },

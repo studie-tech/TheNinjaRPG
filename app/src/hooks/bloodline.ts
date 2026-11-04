@@ -7,9 +7,9 @@ import {
   StatTypes,
 } from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import type {
   ZodAllTags,
   ZodBloodlineInput,
@@ -26,6 +26,7 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
   const bloodline = { ...data, effects: data.effects };
 
   // Form handling
+  const submitContent = useContentSubmit();
   const form = useForm<ZodBloodlineInput, unknown, ZodBloodlineType>({
     mode: "all",
     criteriaMode: "all",
@@ -38,22 +39,20 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
   const { data: villages, isPending: l1 } = api.village.getAllNames.useQuery(undefined);
 
   // Mutation for updating bloodline
-  const { mutate: updateBloodline, isPending: l2 } = api.bloodline.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      refetch();
-    },
-  });
+  const { mutateAsync: updateBloodline, isPending: l2 } =
+    api.bloodline.update.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        if (data.success) refetch();
+      },
+    });
 
   // Form submission
   const handleBloodlineSubmit = form.handleSubmit(
-    (data: ZodBloodlineType) => {
-      const newBloodline = { ...bloodline, ...data };
-      const diff = calculateContentDiff(bloodline, newBloodline);
-      if (diff.length > 0) {
-        updateBloodline({ id: bloodline.id, data: newBloodline });
-      }
-    },
+    (data: ZodBloodlineType) =>
+      submitContent(bloodline, { ...bloodline, ...data }, (newBloodline) =>
+        updateBloodline({ id: bloodline.id, data: newBloodline }),
+      ),
     (errors) => showFormErrorsToast(errors),
   );
 

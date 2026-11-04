@@ -4,9 +4,9 @@ import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { SAGE_MASTERY_REQUIRED_EXP } from "@/drizzle/constants";
 import type { SageMode } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import type { ZodAllTags, ZodSageModeType } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 
@@ -26,6 +26,7 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
     afterEffects: data.afterEffects,
   };
 
+  const submitContent = useContentSubmit();
   const form = useForm<ZodSageModeType, any, ZodSageModeType>({
     mode: "all",
     criteriaMode: "all",
@@ -40,21 +41,19 @@ export const useSageModeEditForm = (data: SageMode, refetch: () => void) => {
 
   const { data: villages, isPending: l1 } = api.village.getAllNames.useQuery(undefined);
 
-  const { mutate: updateSageMode, isPending: l2 } = api.sageMode.update.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      refetch();
-    },
-  });
+  const { mutateAsync: updateSageMode, isPending: l2 } =
+    api.sageMode.update.useMutation({
+      onSuccess: (data) => {
+        showMutationToast(data);
+        if (data.success) refetch();
+      },
+    });
 
   const handleSageModeSubmit = form.handleSubmit(
-    (data: ZodSageModeType) => {
-      const newSageMode = { ...sageMode, ...data };
-      const diff = calculateContentDiff(sageMode, newSageMode);
-      if (diff.length > 0) {
-        updateSageMode({ id: sageMode.id, data: newSageMode });
-      }
-    },
+    (data: ZodSageModeType) =>
+      submitContent(sageMode, { ...sageMode, ...data }, (newSageMode) =>
+        updateSageMode({ id: sageMode.id, data: newSageMode }),
+      ),
     (errors) => showFormErrorsToast(errors),
   );
 

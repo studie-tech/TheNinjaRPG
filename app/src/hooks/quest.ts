@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -22,11 +22,12 @@ import {
   UserRanks,
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
+import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
@@ -35,6 +36,7 @@ import type {
   ZodQuestFormType,
 } from "@/validators/objectives";
 import { QuestFormSchema } from "@/validators/objectives";
+import { type QuestRewardType, questRewardFields } from "@/validators/rewardPackages";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
 // A merged type for quest with its rewards, so that we can show both in the same form
@@ -42,7 +44,7 @@ export type ZodCombinedQuest = ZodQuestFormType;
 
 /** Manage quest fields, objective layouts and validated content saves in one form. */
 export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {
-  const submitInFlight = useRef(false);
+  const submitContent = useContentSubmit();
 
   // Get user data for permission checks
   const { data: userData } = useUserData();
@@ -116,9 +118,6 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
           utils.quests.getAchievementCatalogue.invalidate(),
         ]);
       },
-      onSettled: () => {
-        submitInFlight.current = false;
-      },
     });
 
   /** The quest.update payload for validated form values; shared by saving and suggesting. */
@@ -167,49 +166,9 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
         objectives: newObjectives,
         rewardMode: data.rewardMode,
         rewardPickCount: data.rewardPickCount,
-        reward: {
-          reward_packages: data.reward_packages,
-          reward_money: data.reward_money,
-          reward_seichi_silver: data.reward_seichi_silver,
-          reward_clanpoints: data.reward_clanpoints,
-          reward_anbupoints: data.reward_anbupoints,
-          reward_exp: data.reward_exp,
-          reward_pet_experience: data.reward_pet_experience,
-          reward_level: data.reward_level,
-          reward_stats: data.reward_stats,
-          reward_medical_experience: data.reward_medical_experience,
-          reward_hunting_experience: data.reward_hunting_experience,
-          reward_crafting_experience: data.reward_crafting_experience,
-          reward_gathering_experience: data.reward_gathering_experience,
-          reward_sage_mastery_experience: data.reward_sage_mastery_experience,
-          reward_mastery_stat: data.reward_mastery_stat,
-          reward_mastery_rank: data.reward_mastery_rank,
-          reward_ninjutsu_experience: data.reward_ninjutsu_experience,
-          reward_genjutsu_experience: data.reward_genjutsu_experience,
-          reward_taijutsu_experience: data.reward_taijutsu_experience,
-          reward_bukijutsu_experience: data.reward_bukijutsu_experience,
-          reward_bloodline_experience: data.reward_bloodline_experience,
-          reward_sage_stat_experience: data.reward_sage_stat_experience,
-
-          reward_tokens: data.reward_tokens,
-          reward_prestige: data.reward_prestige,
-          reward_reputation: data.reward_reputation,
-          reward_skillpoints: data.reward_skillpoints,
-          reward_jutsus: data.reward_jutsus,
-          reward_badges: data.reward_badges,
-          reward_titles: data.reward_titles,
-          reward_items: data.reward_items,
-          reward_hunter_items: data.reward_hunter_items,
-          reward_hunter_items_ids: data.reward_hunter_items_ids,
-          reward_gathering_items: data.reward_gathering_items,
-          reward_gathering_items_ids: data.reward_gathering_items_ids,
-          reward_rank: data.reward_rank,
-          reward_village_membership: data.reward_village_membership,
-          reward_bloodlines: data.reward_bloodlines,
-          reward_sage_modes: data.reward_sage_modes,
-          reward_war_damage: data.reward_war_damage,
-          reward_war_healing: data.reward_war_healing,
-        },
+        reward: Object.fromEntries(
+          objectKeys(questRewardFields).map((key) => [key, data[key]]),
+        ) as QuestRewardType,
       },
     };
     return newQuest;
@@ -218,21 +177,9 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   // Form submission
   const handleQuestSubmit = form.handleSubmit(
     async (data: ZodCombinedQuest) => {
-      // React Query's pending state is asynchronous. Claim this submission synchronously so a
-      // double-click can never enqueue a second update with the same objective graph.
-      if (submitInFlight.current) return;
-
-      const newQuest = toQuestPayload(data);
-      const diff = calculateContentDiff(quest, newQuest);
-      if (diff.length > 0) {
-        submitInFlight.current = true;
-        try {
-          await updateQuest({ id: quest.id, data: newQuest });
-        } catch {
-          // The shared tRPC error handler reports transport failures. Avoid resetting/refetching:
-          // all quest and objective drafts remain intact for a deliberate retry.
-        }
-      }
+      await submitContent(quest, toQuestPayload(data), (newQuest) =>
+        updateQuest({ id: quest.id, data: newQuest }),
+      );
     },
     (errors) => showFormErrorsToast(errors),
   );
