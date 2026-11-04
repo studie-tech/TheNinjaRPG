@@ -1,6 +1,7 @@
 /**
  * Database access for profile; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -100,6 +101,7 @@ import {
 } from "@/server/utils/achievementObjectives";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
@@ -195,10 +197,7 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
     where: eq(userData.userId, userId),
   });
   if (!user) {
-    throw serverError(
-      "NOT_FOUND",
-      `User not found: ${userId}. Please complete registration.`,
-    );
+    throw serverError("NOT_FOUND", missingUserMessage(userId));
   }
   return user;
 };

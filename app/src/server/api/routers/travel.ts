@@ -116,6 +116,7 @@ import {
   publishedMapsToPrefetchForMove,
   resolveSectorCrossing,
 } from "@/server/utils/sectorMap";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { canEnterWarCamp, fetchWarCampEntry } from "@/server/utils/warMercenary";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
@@ -336,10 +337,7 @@ export const travelRouter = createTRPCRouter({
       ]);
 
       if (!user) {
-        throw serverError(
-          "NOT_FOUND",
-          `User not found: ${ctx.userId}. Please complete registration.`,
-        );
+        throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
       }
 
       // Guard: Only awake/travel/queued users can scout

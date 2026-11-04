@@ -19,6 +19,7 @@ import { RYO_CAP } from "@/drizzle/constants";
 import { bankTransfers, dailyBankInterest, userData } from "@/drizzle/schema";
 import { serverError } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { getBankInterestDateRange } from "@/utils/time";
 
 /**
@@ -32,10 +33,7 @@ export const fetchUserBalances = async (client: DrizzleClient, userId: string) =
     columns: { money: true, bank: true },
   });
   if (!user) {
-    throw serverError(
-      "NOT_FOUND",
-      `User not found: ${userId}. Please complete registration.`,
-    );
+    throw serverError("NOT_FOUND", missingUserMessage(userId));
   }
   return user;
 };
