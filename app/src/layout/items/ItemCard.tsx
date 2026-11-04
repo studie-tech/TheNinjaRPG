@@ -53,7 +53,7 @@ export function ItemCard({
           <DurabilityBar
             currentDurability={userItem.durability}
             maxDurability={item.maxDurability}
-            size="medium"
+            size="small"
           />
         )}
       </span>
