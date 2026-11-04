@@ -352,6 +352,19 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     );
   });
 
+  it("seeds missing boost rows for a war without rules", async () => {
+    const db = await seed();
+    await addAlly(db);
+    await db.delete(gameSetting);
+    await handleWarEnd(await snapshot(db), db);
+    const settings = await db.select().from(gameSetting);
+    expect(settings.map((row) => [row.name, row.value]).sort()).toEqual([
+      ["war-ally-regen", WAR_WINNING_BOOST_REGEN_PERC],
+      ["war-attacker-regen", WAR_WINNING_BOOST_REGEN_PERC],
+      ["war-attacker-train", WAR_WINNING_BOOST_TRAINING_PERC],
+    ]);
+  });
+
   it("rolls back every balance and the claim if the core SQL update fails", async () => {
     const db = await seed();
     await addAlly(db);

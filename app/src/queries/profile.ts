@@ -88,6 +88,7 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
+import { userCardColumns } from "@/queries/userCard";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
@@ -781,18 +782,6 @@ export const listQuestPartyForGetUser = (
     with: { quest: true },
   });
 
-/** Build the `gameSetting` insert for `getUser`. */
-export const insertGameSettingForGetUser = (
-  client: Pick<DrizzleClient, "insert">,
-  warRegenName: string,
-) =>
-  client.insert(gameSetting).values({
-    id: nanoid(),
-    name: warRegenName,
-    value: 0,
-    time: new Date(),
-  });
-
 /** Build the `userReport` selection for `getUser`, using predicates on `status`. */
 export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
@@ -1314,14 +1303,7 @@ export const listUserDataForSearchUsers = (
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
     columns: {
-      userId: true,
-      username: true,
-      avatar: true,
-      rank: true,
-      isOutlaw: true,
-      level: true,
-      role: true,
-      federalStatus: true,
+      ...userCardColumns,
       isAi: true,
 
       nRecruited: true,

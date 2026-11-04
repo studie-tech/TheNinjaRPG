@@ -572,22 +572,17 @@ export const updateUserDataForFinishWarSettlement = (
 /** Execute the database statement for `finishWarSettlement`. */
 export const executeRowsForFinishWarSettlement = (
   client: Pick<DrizzleClient, "execute">,
-  winningIds: string[],
-  endedWar: { rules: null | import("@/validators/war").WarRules },
-  winnerId: string,
+  boostNames: string[],
+  trainBoostNames: string[],
   boostEnd: Date,
-
   stepGuard: (
     key: "boostsDelivered" | "structuresDelivered" | "notified",
   ) => SQL<unknown>,
 ) =>
   client.execute(sql`
-        UPDATE ${war} LEFT JOIN ${gameSetting} ON ${inArray(gameSetting.name, [...winningIds.map((id) => `war-${id}-regen`), ...(endedWar.rules ? winningIds : [winnerId]).map((id) => `war-${id}-train`)])}
+        UPDATE ${war} LEFT JOIN ${gameSetting} ON ${inArray(gameSetting.name, boostNames)}
         SET ${gameSetting.value} = CASE WHEN ${gameSetting.time} < ${boostEnd}
-          THEN CASE WHEN ${inArray(
-            gameSetting.name,
-            (endedWar.rules ? winningIds : [winnerId]).map((id) => `war-${id}-train`),
-          )} THEN ${WAR_WINNING_BOOST_TRAINING_PERC} ELSE ${WAR_WINNING_BOOST_REGEN_PERC} END ELSE ${gameSetting.value} END,
+          THEN CASE WHEN ${inArray(gameSetting.name, trainBoostNames)} THEN ${WAR_WINNING_BOOST_TRAINING_PERC} ELSE ${WAR_WINNING_BOOST_REGEN_PERC} END ELSE ${gameSetting.value} END,
             ${gameSetting.time} = GREATEST(${gameSetting.time}, ${boostEnd}),
             ${war.settlement} = ${stepReceipt("boostsDelivered")}
         WHERE ${stepGuard("boostsDelivered")}

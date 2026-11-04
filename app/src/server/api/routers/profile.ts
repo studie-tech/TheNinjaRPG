@@ -189,7 +189,6 @@ import {
   insertActionLogForUpdateUser,
   insertActionLogForUpdateUser2,
   insertActionLogForUpdateUsername,
-  insertGameSettingForGetUser,
   insertHistoricalIpForPersistPassiveRegenToDb,
   insertRecruitmentRewardsForLevelUp,
   insertTrainingLogForPersistPassiveRegenToDb,
@@ -338,6 +337,7 @@ import {
   canSeeIps,
   canSeeSecretData,
   getApprovalGroup,
+  getBanOrSilenceRestriction,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
@@ -969,7 +969,6 @@ export const profileRouter = createTRPCRouter({
       if (user) {
         // War-time regen boost
         const warRegenName = `war-${user.village?.id}-regen`;
-        const warRegenSetting = settings.find((s) => s.name === warRegenName);
         const warRegenBoost = getGameSettingBoost(warRegenName, settings);
         if (warRegenBoost) {
           notifications.push({
@@ -979,13 +978,9 @@ export const profileRouter = createTRPCRouter({
             group: "Active boosts",
           });
         }
-        if (!warRegenSetting) {
-          await insertGameSettingForGetUser(ctx.drizzle, warRegenName);
-        }
 
         // War-time training boost
         const warTrainingName = `war-${user.village?.id}-train`;
-        const warTrainingSetting = settings.find((s) => s.name === warTrainingName);
         const warTrainingBoost = getGameSettingBoost(warTrainingName, settings);
         if (warTrainingBoost) {
           notifications.push({
@@ -994,9 +989,6 @@ export const profileRouter = createTRPCRouter({
             color: "green",
             group: "Active boosts",
           });
-        }
-        if (!warTrainingSetting) {
-          await insertGameSettingForGetUser(ctx.drizzle, warTrainingName);
         }
 
         if (getTerritoryWarBoost(user) > 0)
@@ -1867,8 +1859,8 @@ export const profileRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
+      const restriction = getBanOrSilenceRestriction(user);
+      if (restriction) return errorResponse(restriction);
       if (ctx.userId !== input.userId && !canSeeSecretData(user.role)) {
         return errorResponse("You can't change for other users");
       }

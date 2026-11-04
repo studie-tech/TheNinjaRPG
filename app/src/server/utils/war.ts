@@ -342,6 +342,10 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
     winnerId === endedWar.attackerVillageId
       ? endedWar.defenderVillageId
       : endedWar.attackerVillageId;
+  const trainBoostNames = (endedWar.rules ? winningIds : [winnerId]).map(
+    (id) => `war-${id}-train`,
+  );
+  const boostNames = [...winningIds.map((id) => `war-${id}-regen`), ...trainBoostNames];
   const boostEnd = secondsFromDate(WAR_WINNING_BOOST_DAYS * DAY_S, endedAt);
   const structureEnd = secondsFromDate(
     WAR_VICTORY_STRUCTURE_BOOST_DAYS * DAY_S,
@@ -371,13 +375,9 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         ),
   );
   try {
-    if (endedWar.rules && !receipt.boostsDelivered) {
-      const names = [
-        ...winningIds.map((id) => `war-${id}-regen`),
-        ...(endedWar.rules ? winningIds : [winnerId]).map((id) => `war-${id}-train`),
-      ];
-      const existing = await listGameSettingForFinishWarSettlement(client, names);
-      const missing = names.filter(
+    if (!receipt.boostsDelivered) {
+      const existing = await listGameSettingForFinishWarSettlement(client, boostNames);
+      const missing = boostNames.filter(
         (name) => !existing.some((row) => row.name === name),
       );
       if (missing.length)
@@ -392,11 +392,9 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         ? retryOnDeadlock(() =>
             executeRowsForFinishWarSettlement(
               client,
-              winningIds,
-              endedWar,
-              winnerId,
+              boostNames,
+              trainBoostNames,
               boostEnd,
-
               stepGuard,
             ),
           )
