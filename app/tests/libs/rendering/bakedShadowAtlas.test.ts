@@ -1,6 +1,7 @@
 import { describe, expect, it, mock, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Container, Matrix, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
@@ -22,7 +23,7 @@ describe("prebaked world assets", () => {
       const description = {id:"wall",kind:"village_wall_panel",image,worldMaterial:material,size:frame.height*scale,width:frame.width*scale*basis[0],shearY:basis[1]/basis[0],shadowCaster:"wall",x:100,y:-40,groundY:-40} as WorldSpriteDescription;
       const sprite = new Sprite(view);sprite.anchor.set(.4,.7);
       const pose = new Matrix(basis[0]*scale,basis[1]*scale,0,-scale,100,-40);
-      const game = {assets:{acquireTexture:(path:string)=>({resource:Promise.resolve(path.includes("world-lighting")?glow:shadowTexture),release(){}})},signal:new AbortController().signal,isDisposed:()=>false} as unknown as GameRenderer;
+      const game = {assets:{acquireTexture:(path:string)=>({resource:Promise.resolve(Object.values(sources).some(source => "emission" in source && source.emission === path)?glow:shadowTexture),release(){}})},signal:new AbortController().signal,isDisposed:()=>false} as unknown as GameRenderer;
       try {
         expect(bakedShadowKey(view,description)).toBe(key);
         expect(bakedShadowBasis(view,description)).toEqual(basis);
@@ -37,12 +38,12 @@ describe("prebaked world assets", () => {
       } finally {sprite.destroy();view.destroy(false);original.destroy(true);shadowTexture.destroy(true);glow.destroy(true);}
     }
   });
-  it("retains canopy depth and occupied pixels in every baked compass direction", async () => {
+  it.skipIf(!worldArtDirectory)("retains canopy depth and occupied pixels in every baked compass direction", async () => {
     for (const width of [124.5, 110]) {
       const entry = Object.entries(sources).find(([key]) => { const [image, frame] = JSON.parse(key); return image === WORLD_ASSET_SOURCES["/world-art/woodland-village.webp"]?.image && frame.width === width; });
       expect(entry).toBeDefined();
       const [key, source] = entry!;
-      const { data, info } = await sharp(readFileSync(new URL(`../../../public${source.atlas}`, import.meta.url))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { data, info } = await sharp(readFileSync(worldArtFile(source.atlas))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       const cellWidth = source.cellWidth, cellHeight = source.cellHeight;
       for (let direction = 0; direction < 8; direction++) {
         let x0 = cellWidth, y0 = cellHeight, x1 = -1, y1 = -1;
@@ -63,12 +64,12 @@ describe("prebaked world assets", () => {
       finally { view.destroy(false); original.destroy(true); }
     }
   });
-  it("publishes every compass mask as a trimmed view within bounded shared pages", async () => {
+  it.skipIf(!worldArtDirectory)("publishes every compass mask as a trimmed view within bounded shared pages", async () => {
     const pages = new Map<string, { width: number; height: number }>();
     for (const source of Object.values(sources)) {
       let page = pages.get(source.atlas);
       if (!page) {
-        const m = await sharp(readFileSync(new URL(`../../../public${source.atlas}`, import.meta.url))).metadata();
+        const m = await sharp(readFileSync(worldArtFile(source.atlas))).metadata();
         page = {width:m.width!,height:m.height!}; pages.set(source.atlas,page);
       }
       expect(page.width).toBeLessThanOrEqual(1024); expect(page.height).toBeLessThanOrEqual(1024);
@@ -79,7 +80,7 @@ describe("prebaked world assets", () => {
         expect([w,h]).toEqual([tw,th]); expect(tx!+tw!).toBeLessThanOrEqual(source.cellWidth); expect(ty!+th!).toBeLessThanOrEqual(source.cellHeight);
       }
       if ("emission" in source) {
-        const m = await sharp(readFileSync(new URL(`../../../public${source.emission}`,import.meta.url))).metadata();
+        const m = await sharp(readFileSync(worldArtFile(source.emission))).metadata();
         const [x,y,w,h] = source.emissionFrame;
         expect(x!+w!).toBeLessThanOrEqual(m.width!); expect(y!+h!).toBeLessThanOrEqual(m.height!);
         expect(source.emissionBytes).toBe(w!*h!*4); expect(source.emitters.length).toBeGreaterThan(0);

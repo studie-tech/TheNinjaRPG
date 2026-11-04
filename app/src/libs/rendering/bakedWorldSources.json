@@ -92,7 +92,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/f4dee010b16f6b5e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeOCCEGyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 171496,
     "emissionFrame": [
       287,
@@ -161,7 +161,7 @@
         "height": 0.884808
       }
     ],
-    "emission": "/world-lighting/f816eee3039f147b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzbCFkZemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 265,
     "cellHeight": 184,
     "directions": [
@@ -372,7 +372,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 260480,
     "emissionFrame": [
       615,
@@ -425,7 +425,7 @@
         "height": 0.952013
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 278,
     "cellHeight": 184,
     "directions": [
@@ -580,7 +580,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 190440,
     "emissionFrame": [
       255,
@@ -649,7 +649,7 @@
         "height": 0.930886
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 264,
     "cellHeight": 184,
     "directions": [
@@ -874,7 +874,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 206172,
     "emissionFrame": [
       2,
@@ -948,7 +948,7 @@
         "height": 0.907766
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 270,
     "cellHeight": 184,
     "directions": [
@@ -1131,7 +1131,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 333264,
     "emissionFrame": [
       331,
@@ -1200,7 +1200,7 @@
         "height": 0.915918
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 270,
     "cellHeight": 184,
     "directions": [
@@ -1411,7 +1411,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 258720,
     "emissionFrame": [
       2,
@@ -1460,7 +1460,7 @@
         "height": 0.956325
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 278,
     "cellHeight": 184,
     "directions": [
@@ -1741,7 +1741,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 249952,
     "emissionFrame": [
       300,
@@ -1794,7 +1794,7 @@
         "height": 0.901171
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 279,
     "cellHeight": 184,
     "directions": [
@@ -2047,7 +2047,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 343200,
     "emissionFrame": [
       2,
@@ -2100,7 +2100,7 @@
         "height": 0.872857
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 271,
     "cellHeight": 184,
     "directions": [
@@ -2325,7 +2325,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 271168,
     "emissionFrame": [
       2,
@@ -2378,7 +2378,7 @@
         "height": 0.890497
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 280,
     "cellHeight": 184,
     "directions": [
@@ -2547,7 +2547,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/f4dee010b16f6b5e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeOCCEGyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 168700,
     "emissionFrame": [
       512,
@@ -2596,7 +2596,7 @@
         "height": 0.906408
       }
     ],
-    "emission": "/world-lighting/f816eee3039f147b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzbCFkZemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 280,
     "cellHeight": 184,
     "directions": [
@@ -2891,7 +2891,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 318384,
     "emissionFrame": [
       489,
@@ -2944,7 +2944,7 @@
         "height": 0.864263
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 317,
     "cellHeight": 184,
     "directions": [
@@ -3183,7 +3183,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 276804,
     "emissionFrame": [
       653,
@@ -3244,7 +3244,7 @@
         "height": 0.897374
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 275,
     "cellHeight": 184,
     "directions": [
@@ -3455,7 +3455,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/f4dee010b16f6b5e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeOCCEGyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 221428,
     "emissionFrame": [
       2,
@@ -3516,7 +3516,7 @@
         "height": 0.900194
       }
     ],
-    "emission": "/world-lighting/f816eee3039f147b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzbCFkZemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 284,
     "cellHeight": 184,
     "directions": [
@@ -3713,7 +3713,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/6e4e58f6dbc5f545.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbTaJcuAtYUndMi56GkX19q0A4PzyeIloBrEa",
     "emissionBytes": 215136,
     "emissionFrame": [
       2,
@@ -3770,7 +3770,7 @@
         "height": 0.919042
       }
     ],
-    "emission": "/world-lighting/cc05d40844a922a7.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCZg5jv26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "cellWidth": 267,
     "cellHeight": 184,
     "directions": [
@@ -4065,7 +4065,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9d78a80df0ca786.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJD3cbNNzEwoh0WXMnscL279N8ayVQUCbRzS3p",
     "emissionBytes": 215712,
     "emissionFrame": [
       2,
@@ -4134,7 +4134,7 @@
         "height": 0.88605
       }
     ],
-    "emission": "/world-lighting/d6434b9cdcf96e1e.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEOE16xLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 268,
     "cellHeight": 184,
     "directions": [
@@ -4317,7 +4317,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 264880,
     "emissionFrame": [
       310,
@@ -4386,7 +4386,7 @@
         "height": 0.888042
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 280,
     "cellHeight": 184,
     "directions": [
@@ -4512,7 +4512,7 @@
     "height": 1.125,
     "bytes": 361728,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "footprints": [
       {
         "points": [
@@ -4677,7 +4677,7 @@
     "height": 1.109375,
     "bytes": 347616,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "footprints": [
       {
         "points": [
@@ -4838,7 +4838,7 @@
     "height": 1.015625,
     "bytes": 287040,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "footprints": [
       {
         "points": [
@@ -5028,7 +5028,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "emissionBytes": 132012,
     "emissionFrame": [
       544,
@@ -5098,7 +5098,7 @@
         "height": 0.389535
       }
     ],
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 149,
     "cellHeight": 69,
     "directions": [
@@ -5253,7 +5253,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "emissionBytes": 136756,
     "emissionFrame": [
       137,
@@ -5340,7 +5340,7 @@
         "height": 0.350975
       }
     ],
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 135,
     "cellHeight": 67,
     "directions": [
@@ -5495,7 +5495,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "emissionBytes": 145600,
     "emissionFrame": [
       332,
@@ -5586,7 +5586,7 @@
         "height": 0.342857
       }
     ],
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 142,
     "cellHeight": 69,
     "directions": [
@@ -5712,7 +5712,7 @@
     "height": 1.15625,
     "bytes": 329152,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "footprints": [
       {
         "points": [
@@ -5876,7 +5876,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "emissionBytes": 100608,
     "emissionFrame": [
       2,
@@ -5917,7 +5917,7 @@
         "height": 0.339806
       }
     ],
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 147,
     "cellHeight": 78,
     "directions": [
@@ -6043,7 +6043,7 @@
     "height": 1.375,
     "bytes": 478720,
     "emitters": [],
-    "atlas": "/world-shadows/9642ac17da8dca57.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmj4G4SFHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A",
     "footprints": [
       {
         "points": [
@@ -6241,7 +6241,7 @@
     "height": 1.34375,
     "bytes": 470592,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [],
     "cellWidth": 171,
     "cellHeight": 86,
@@ -6368,7 +6368,7 @@
     "height": 1.25,
     "bytes": 458240,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [],
     "cellWidth": 179,
     "cellHeight": 80,
@@ -6495,7 +6495,7 @@
     "height": 1.140625,
     "bytes": 387776,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [],
     "cellWidth": 166,
     "cellHeight": 73,
@@ -6622,7 +6622,7 @@
     "height": 1.40625,
     "bytes": 495360,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [],
     "cellWidth": 172,
     "cellHeight": 90,
@@ -6749,7 +6749,7 @@
     "height": 1.0625,
     "bytes": 335104,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [
       {
         "points": [
@@ -7010,7 +7010,7 @@
     "height": 0.921875,
     "bytes": 251104,
     "emitters": [],
-    "atlas": "/world-shadows/9451dd4d9b5edbb1.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQBPzScjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
     "footprints": [
       {
         "points": [
@@ -7187,7 +7187,7 @@
     "height": 0.96875,
     "bytes": 305536,
     "emitters": [],
-    "atlas": "/world-shadows/64f701a9382089cd.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTxgifr5IU29dZYJPoOKSh5vmlqatMub3EigH",
     "footprints": [
       {
         "points": [
@@ -7426,7 +7426,7 @@
     "height": 1.328125,
     "bytes": 478720,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -7737,7 +7737,7 @@
     "height": 1.296875,
     "bytes": 470112,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -7882,7 +7882,7 @@
     "height": 1.3125,
     "bytes": 443520,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -8072,7 +8072,7 @@
     "height": 1.296875,
     "bytes": 443552,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [],
     "cellWidth": 167,
     "cellHeight": 83,
@@ -8312,7 +8312,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "emissionBytes": 70612,
     "emissionFrame": [
       2,
@@ -8349,7 +8349,7 @@
         "height": 0.081607
       }
     ],
-    "emission": "/world-lighting/f8ebd9ebdb48ea22.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzAD1ZdemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 149,
     "cellHeight": 77,
     "directions": [
@@ -8546,7 +8546,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "emissionBytes": 61920,
     "emissionFrame": [
       256,
@@ -8565,7 +8565,7 @@
       119.5
     ],
     "footprints": [],
-    "emission": "/world-lighting/f8ebd9ebdb48ea22.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzAD1ZdemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 157,
     "cellHeight": 75,
     "directions": [
@@ -8734,7 +8734,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "emissionBytes": 58072,
     "emissionFrame": [
       133,
@@ -8821,7 +8821,7 @@
         "height": 0.815599
       }
     ],
-    "emission": "/world-lighting/f8ebd9ebdb48ea22.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzAD1ZdemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 149,
     "cellHeight": 77,
     "directions": [
@@ -8947,7 +8947,7 @@
     "height": 1.15625,
     "bytes": 421504,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -9117,7 +9117,7 @@
     "height": 0.8125,
     "bytes": 159744,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -9318,7 +9318,7 @@
     "height": 0.953125,
     "bytes": 245952,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -9622,7 +9622,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "emissionBytes": 36464,
     "emissionFrame": [
       520,
@@ -9699,7 +9699,7 @@
         "height": 0.297758
       }
     ],
-    "emission": "/world-lighting/f8ebd9ebdb48ea22.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzAD1ZdemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 138,
     "cellHeight": 72,
     "directions": [
@@ -9882,7 +9882,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "emissionBytes": 58928,
     "emissionFrame": [
       389,
@@ -9944,7 +9944,7 @@
         "height": 0.771055
       }
     ],
-    "emission": "/world-lighting/f8ebd9ebdb48ea22.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzAD1ZdemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "cellWidth": 157,
     "cellHeight": 78,
     "directions": [
@@ -10070,7 +10070,7 @@
     "height": 1.0625,
     "bytes": 330752,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -10448,7 +10448,7 @@
     "height": 1.046875,
     "bytes": 334464,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -10687,7 +10687,7 @@
     "height": 1.359375,
     "bytes": 470496,
     "emitters": [],
-    "atlas": "/world-shadows/e9ec562d5a836b8b.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJSaaXjL3jWrEB7TyZlmpoAxMK5Qi16kNPVJuH",
     "footprints": [
       {
         "points": [
@@ -10857,7 +10857,7 @@
     "height": 0.828125,
     "bytes": 201824,
     "emitters": [],
-    "atlas": "/world-shadows/0c1189e4c5201618.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhf7XGmMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
     "footprints": [
       {
         "points": [
@@ -11054,7 +11054,7 @@
     "height": 1.0625,
     "bytes": 252416,
     "emitters": [],
-    "atlas": "/world-shadows/0c1189e4c5201618.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhf7XGmMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
     "footprints": [
       {
         "points": [
@@ -11235,7 +11235,7 @@
     "height": 0.859375,
     "bytes": 207680,
     "emitters": [],
-    "atlas": "/world-shadows/0c1189e4c5201618.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhf7XGmMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
     "footprints": [
       {
         "points": [
@@ -11412,7 +11412,7 @@
     "height": 0.9375,
     "bytes": 215040,
     "emitters": [],
-    "atlas": "/world-shadows/0c1189e4c5201618.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhf7XGmMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
     "footprints": [
       {
         "points": [
@@ -11630,7 +11630,7 @@
     "height": 1.265625,
     "bytes": 409536,
     "emitters": [],
-    "atlas": "/world-shadows/7612fa4b3313161f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0S9PRnygrYldRWJcD6vE10SjNsXHeA9pVMfQ",
     "footprints": [
       {
         "points": [
@@ -11795,7 +11795,7 @@
     "height": 1.265625,
     "bytes": 432864,
     "emitters": [],
-    "atlas": "/world-shadows/7612fa4b3313161f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0S9PRnygrYldRWJcD6vE10SjNsXHeA9pVMfQ",
     "footprints": [
       {
         "points": [
@@ -11985,7 +11985,7 @@
     "height": 1.328125,
     "bytes": 462400,
     "emitters": [],
-    "atlas": "/world-shadows/7612fa4b3313161f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0S9PRnygrYldRWJcD6vE10SjNsXHeA9pVMfQ",
     "footprints": [
       {
         "points": [
@@ -12192,7 +12192,7 @@
     "height": 1.328125,
     "bytes": 508640,
     "emitters": [],
-    "atlas": "/world-shadows/7612fa4b3313161f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0S9PRnygrYldRWJcD6vE10SjNsXHeA9pVMfQ",
     "footprints": [
       {
         "points": [
@@ -12516,7 +12516,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/224c9a996f766fa3.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJw8Gcm1T2j854CWbaITZyegfXimvd7s16cO0h",
     "emissionBytes": 236880,
     "emissionFrame": [
       2,
@@ -12601,7 +12601,7 @@
         "height": 0.947571
       }
     ],
-    "emission": "/world-lighting/970be3f28225cc29.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJw7Of0yOT2j854CWbaITZyegfXimvd7s16cO0",
     "cellWidth": 178,
     "cellHeight": 95,
     "directions": [
@@ -12826,7 +12826,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/180150de817ba4ca.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrBVSAbhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "emissionBytes": 216720,
     "emissionFrame": [
       2,
@@ -12883,7 +12883,7 @@
         "height": 0.912842
       }
     ],
-    "emission": "/world-lighting/275bfa51d8cfd854.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbwoz7HAtYUndMi56GkX19q0A4PzyeIloBrEa",
     "cellWidth": 178,
     "cellHeight": 92,
     "directions": [
@@ -13009,7 +13009,7 @@
     "height": 0.84375,
     "bytes": 221184,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [
       {
         "points": [
@@ -13158,7 +13158,7 @@
     "height": 0.84375,
     "bytes": 226368,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [
       {
         "points": [
@@ -13349,7 +13349,7 @@
     "height": 0.84375,
     "bytes": 209088,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [
       {
         "points": [
@@ -13498,7 +13498,7 @@
     "height": 0.84375,
     "bytes": 214272,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [
       {
         "points": [
@@ -13647,7 +13647,7 @@
     "height": 0.828125,
     "bytes": 239136,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [],
     "cellWidth": 141,
     "cellHeight": 53,
@@ -13774,7 +13774,7 @@
     "height": 0.78125,
     "bytes": 195200,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [
       {
         "points": [
@@ -13923,7 +13923,7 @@
     "height": 0.828125,
     "bytes": 228960,
     "emitters": [],
-    "atlas": "/world-shadows/1990faf201873c9f.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCmTotp26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "footprints": [],
     "cellWidth": 135,
     "cellHeight": 53,
@@ -14177,7 +14177,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5ed06840e81b5e14.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzrnLWvemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 223776,
     "emissionFrame": [
       2,
@@ -14242,7 +14242,7 @@
         "height": 0.91772
       }
     ],
-    "emission": "/world-lighting/f57614b6a4e555f1.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAa80MZoZUC4muiGcQNzjfEndY5y1w20B8hTW",
     "cellWidth": 177,
     "cellHeight": 92,
     "directions": [
@@ -14453,7 +14453,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/fe74985b810c4b78.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCyUtPn26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "emissionBytes": 203688,
     "emissionFrame": [
       2,
@@ -14518,7 +14518,7 @@
         "height": 0.911998
       }
     ],
-    "emission": "/world-lighting/f78de05a9a1a7b67.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYgzHV2OMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
     "cellWidth": 178,
     "cellHeight": 91,
     "directions": [
@@ -14813,7 +14813,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/37aec76f05941fc9.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpzvu9DbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 206640,
     "emissionFrame": [
       2,
@@ -14874,7 +14874,7 @@
         "height": 0.914979
       }
     ],
-    "emission": "/world-lighting/4688c39e47253ac6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJZMJC70aYQrBIUTu69nkMxWmS4ah0O7LVCp8b",
     "cellWidth": 177,
     "cellHeight": 93,
     "directions": [
@@ -15127,7 +15127,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/54b64ef6329095c8.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJDyjE8CuzEwoh0WXMnscL279N8ayVQUCbRzS3",
     "emissionBytes": 211680,
     "emissionFrame": [
       2,
@@ -15180,7 +15180,7 @@
         "height": 0.921211
       }
     ],
-    "emission": "/world-lighting/89e23a5efa19d3ff.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtx5pbp7UYJDfpFXWm3nrcPluEtIZqyLkaSV1",
     "cellWidth": 179,
     "cellHeight": 87,
     "directions": [
@@ -15475,7 +15475,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/88b92a6d6bdd050d.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpoVHspfbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75",
     "emissionBytes": 216720,
     "emissionFrame": [
       2,
@@ -15532,7 +15532,7 @@
         "height": 0.893145
       }
     ],
-    "emission": "/world-lighting/7cc14580d229e6a1.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6dWw7ODfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
     "cellWidth": 178,
     "cellHeight": 92,
     "directions": [
@@ -15827,7 +15827,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d014c6a32eb8782e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHyI94aQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 194580,
     "emissionFrame": [
       2,
@@ -15896,7 +15896,7 @@
         "height": 0.96182
       }
     ],
-    "emission": "/world-lighting/a33632990b58e437.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ05B7fxgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 188,
     "cellHeight": 95,
     "directions": [
@@ -16163,7 +16163,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d014c6a32eb8782e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHyI94aQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 178020,
     "emissionFrame": [
       241,
@@ -16249,7 +16249,7 @@
         "height": 0.954479
       }
     ],
-    "emission": "/world-lighting/a33632990b58e437.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ05B7fxgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 181,
     "cellHeight": 98,
     "directions": [
@@ -16460,7 +16460,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d014c6a32eb8782e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHyI94aQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 200196,
     "emissionFrame": [
       460,
@@ -16521,7 +16521,7 @@
         "height": 0.958872
       }
     ],
-    "emission": "/world-lighting/a33632990b58e437.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ05B7fxgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 191,
     "cellHeight": 100,
     "directions": [
@@ -16760,7 +16760,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d014c6a32eb8782e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHyI94aQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 180808,
     "emissionFrame": [
       713,
@@ -16821,7 +16821,7 @@
         "height": 0.952053
       }
     ],
-    "emission": "/world-lighting/a33632990b58e437.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ05B7fxgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 185,
     "cellHeight": 97,
     "directions": [
@@ -17116,7 +17116,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 353384,
     "emissionFrame": [
       2,
@@ -17169,7 +17169,7 @@
         "height": 0.875828
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 179,
     "cellHeight": 83,
     "directions": [
@@ -17394,7 +17394,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 343672,
     "emissionFrame": [
       332,
@@ -17479,7 +17479,7 @@
         "height": 0.916817
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 169,
     "cellHeight": 90,
     "directions": [
@@ -17718,7 +17718,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 283328,
     "emissionFrame": [
       659,
@@ -17763,7 +17763,7 @@
         "height": 0.896832
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 182,
     "cellHeight": 84,
     "directions": [
@@ -18044,7 +18044,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 282952,
     "emissionFrame": [
       2,
@@ -18105,7 +18105,7 @@
         "height": 0.891554
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 188,
     "cellHeight": 89,
     "directions": [
@@ -18400,7 +18400,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 260480,
     "emissionFrame": [
       319,
@@ -18449,7 +18449,7 @@
         "height": 0.888551
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 182,
     "cellHeight": 81,
     "directions": [
@@ -18744,7 +18744,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 259600,
     "emissionFrame": [
       619,
@@ -18793,7 +18793,7 @@
         "height": 0.951234
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 184,
     "cellHeight": 94,
     "directions": [
@@ -19088,7 +19088,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 255200,
     "emissionFrame": [
       2,
@@ -19145,7 +19145,7 @@
         "height": 0.955783
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 193,
     "cellHeight": 96,
     "directions": [
@@ -19440,7 +19440,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 246528,
     "emissionFrame": [
       296,
@@ -19485,7 +19485,7 @@
         "height": 0.900643
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 180,
     "cellHeight": 79,
     "directions": [
@@ -19780,7 +19780,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 338244,
     "emissionFrame": [
       588,
@@ -19825,7 +19825,7 @@
         "height": 0.872778
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 207,
     "cellHeight": 93,
     "directions": [
@@ -20120,7 +20120,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 218592,
     "emissionFrame": [
       2,
@@ -20169,7 +20169,7 @@
         "height": 0.914228
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 172,
     "cellHeight": 81,
     "directions": [
@@ -20380,7 +20380,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 210312,
     "emissionFrame": [
       270,
@@ -20425,7 +20425,7 @@
         "height": 0.897725
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 180,
     "cellHeight": 79,
     "directions": [
@@ -20678,7 +20678,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 195288,
     "emissionFrame": [
       528,
@@ -20727,7 +20727,7 @@
         "height": 0.948489
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 188,
     "cellHeight": 95,
     "directions": [
@@ -20938,7 +20938,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9d9068fbfbf04260.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvASPJVEmSnXwslYEpV1yOeNL8gMtqhjPdf36",
     "emissionBytes": 169168,
     "emissionFrame": [
       769,
@@ -21003,7 +21003,7 @@
         "height": 0.886502
       }
     ],
-    "emission": "/world-lighting/45a5d0aa1f8261d4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jLBwRgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
     "cellWidth": 177,
     "cellHeight": 80,
     "directions": [
@@ -21284,7 +21284,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b07b08ced0e89ed6.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7ecmQzXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "emissionBytes": 219420,
     "emissionFrame": [
       596,
@@ -21341,7 +21341,7 @@
         "height": 0.916728
       }
     ],
-    "emission": "/world-lighting/82a5ff22229b9264.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdHsNSVP62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "cellWidth": 171,
     "cellHeight": 87,
     "directions": [
@@ -21580,7 +21580,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c0847d67ee80ceec.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjj7fyeHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A",
     "emissionBytes": 224136,
     "emissionFrame": [
       2,
@@ -21649,7 +21649,7 @@
         "height": 0.899346
       }
     ],
-    "emission": "/world-lighting/da189c0e9535f2b8.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe1qzMTyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "cellWidth": 184,
     "cellHeight": 80,
     "directions": [
@@ -21832,7 +21832,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c0847d67ee80ceec.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjj7fyeHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A",
     "emissionBytes": 165900,
     "emissionFrame": [
       289,
@@ -21889,7 +21889,7 @@
         "height": 0.908283
       }
     ],
-    "emission": "/world-lighting/da189c0e9535f2b8.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJe1qzMTyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "cellWidth": 179,
     "cellHeight": 94,
     "directions": [
@@ -22170,7 +22170,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 358804,
     "emissionFrame": [
       2,
@@ -22231,7 +22231,7 @@
         "height": 0.874134
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 178,
     "cellHeight": 82,
     "directions": [
@@ -22456,7 +22456,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 351120,
     "emissionFrame": [
       337,
@@ -22525,7 +22525,7 @@
         "height": 0.923073
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 168,
     "cellHeight": 89,
     "directions": [
@@ -22736,7 +22736,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 277248,
     "emissionFrame": [
       671,
@@ -22777,7 +22777,7 @@
         "height": 0.877756
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 189,
     "cellHeight": 85,
     "directions": [
@@ -23030,7 +23030,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 282048,
     "emissionFrame": [
       2,
@@ -23087,7 +23087,7 @@
         "height": 0.893483
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 181,
     "cellHeight": 81,
     "directions": [
@@ -23382,7 +23382,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 269280,
     "emissionFrame": [
       318,
@@ -23427,7 +23427,7 @@
         "height": 0.888209
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 181,
     "cellHeight": 80,
     "directions": [
@@ -23666,7 +23666,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 264000,
     "emissionFrame": [
       628,
@@ -23731,7 +23731,7 @@
         "height": 0.960373
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 178,
     "cellHeight": 86,
     "directions": [
@@ -24026,7 +24026,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 253440,
     "emissionFrame": [
       2,
@@ -24079,7 +24079,7 @@
         "height": 0.940738
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 194,
     "cellHeight": 99,
     "directions": [
@@ -24374,7 +24374,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 248240,
     "emissionFrame": [
       294,
@@ -24419,7 +24419,7 @@
         "height": 0.905313
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 176,
     "cellHeight": 80,
     "directions": [
@@ -24714,7 +24714,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 333480,
     "emissionFrame": [
       588,
@@ -24763,7 +24763,7 @@
         "height": 0.876519
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 208,
     "cellHeight": 82,
     "directions": [
@@ -25058,7 +25058,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 223560,
     "emissionFrame": [
       2,
@@ -25119,7 +25119,7 @@
         "height": 0.915723
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 172,
     "cellHeight": 82,
     "directions": [
@@ -25386,7 +25386,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 206172,
     "emissionFrame": [
       276,
@@ -25439,7 +25439,7 @@
         "height": 0.894866
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 178,
     "cellHeight": 78,
     "directions": [
@@ -25650,7 +25650,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c13e2206fd1a3ec4.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzw5p5iemvaQu94EYJs8HpxVzofny6iPtbgCZ",
     "emissionBytes": 205344,
     "emissionFrame": [
       529,
@@ -25727,7 +25727,7 @@
         "height": 0.873474
       }
     ],
-    "emission": "/world-lighting/af9bced3f3ce12bf.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlsc1dIrWYxAsuC7ofQn9pM45OD0ERqkdBXJU",
     "cellWidth": 188,
     "cellHeight": 94,
     "directions": [
@@ -25966,7 +25966,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 309288,
     "emissionFrame": [
       2,
@@ -26031,7 +26031,7 @@
         "height": 0.910883
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 164,
     "cellHeight": 86,
     "directions": [
@@ -26326,7 +26326,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 322400,
     "emissionFrame": [
       300,
@@ -26403,7 +26403,7 @@
         "height": 0.937207
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 182,
     "cellHeight": 93,
     "directions": [
@@ -26698,7 +26698,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 406060,
     "emissionFrame": [
       614,
@@ -26767,7 +26767,7 @@
         "height": 0.946109
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 207,
     "cellHeight": 102,
     "directions": [
@@ -26992,7 +26992,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 253504,
     "emissionFrame": [
       2,
@@ -27057,7 +27057,7 @@
         "height": 0.954065
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 185,
     "cellHeight": 98,
     "directions": [
@@ -27338,7 +27338,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 244984,
     "emissionFrame": [
       278,
@@ -27407,7 +27407,7 @@
         "height": 0.958533
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 181,
     "cellHeight": 99,
     "directions": [
@@ -27702,7 +27702,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 252560,
     "emissionFrame": [
       553,
@@ -27759,7 +27759,7 @@
         "height": 0.90477
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 171,
     "cellHeight": 81,
     "directions": [
@@ -27956,7 +27956,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 249040,
     "emissionFrame": [
       2,
@@ -28037,7 +28037,7 @@
         "height": 0.962938
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 192,
     "cellHeight": 99,
     "directions": [
@@ -28318,7 +28318,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 233200,
     "emissionFrame": [
       289,
@@ -28367,7 +28367,7 @@
         "height": 0.951961
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 200,
     "cellHeight": 99,
     "directions": [
@@ -28662,7 +28662,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 253200,
     "emissionFrame": [
       558,
@@ -28719,7 +28719,7 @@
         "height": 0.953549
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 206,
     "cellHeight": 103,
     "directions": [
@@ -28930,7 +28930,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 203688,
     "emissionFrame": [
       2,
@@ -28991,7 +28991,7 @@
         "height": 0.952822
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 186,
     "cellHeight": 99,
     "directions": [
@@ -29230,7 +29230,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/10b34de525ab179e.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAacWlkhoZUC4muiGcQNzjfEndY5y1w20B8hT",
     "emissionBytes": 151200,
     "emissionFrame": [
       252,
@@ -29291,7 +29291,7 @@
         "height": 0.963494
       }
     ],
-    "emission": "/world-lighting/0723f90d56590b9b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRsRMEN0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "cellWidth": 181,
     "cellHeight": 97,
     "directions": [
@@ -29586,7 +29586,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 346680,
     "emissionFrame": [
       2,
@@ -29655,7 +29655,7 @@
         "height": 0.874389
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 183,
     "cellHeight": 90,
     "directions": [
@@ -29894,7 +29894,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 343440,
     "emissionFrame": [
       327,
@@ -29975,7 +29975,7 @@
         "height": 0.909016
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 171,
     "cellHeight": 96,
     "directions": [
@@ -30270,7 +30270,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 372564,
     "emissionFrame": [
       2,
@@ -30315,7 +30315,7 @@
         "height": 0.956564
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 179,
     "cellHeight": 83,
     "directions": [
@@ -30554,7 +30554,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 264600,
     "emissionFrame": [
       709,
@@ -30595,7 +30595,7 @@
         "height": 0.879995
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 176,
     "cellHeight": 89,
     "directions": [
@@ -30834,7 +30834,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 276624,
     "emissionFrame": [
       399,
@@ -30891,7 +30891,7 @@
         "height": 0.888368
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 185,
     "cellHeight": 82,
     "directions": [
@@ -31130,7 +31130,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 264880,
     "emissionFrame": [
       2,
@@ -31191,7 +31191,7 @@
         "height": 0.895921
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 181,
     "cellHeight": 88,
     "directions": [
@@ -31402,7 +31402,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 263120,
     "emissionFrame": [
       307,
@@ -31459,7 +31459,7 @@
         "height": 0.954699
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 185,
     "cellHeight": 87,
     "directions": [
@@ -31712,7 +31712,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 252560,
     "emissionFrame": [
       610,
@@ -31769,7 +31769,7 @@
         "height": 0.956392
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 184,
     "cellHeight": 97,
     "directions": [
@@ -32022,7 +32022,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 251664,
     "emissionFrame": [
       2,
@@ -32108,7 +32108,7 @@
         "height": 0.04496
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 194,
     "cellHeight": 97,
     "directions": [
@@ -32403,7 +32403,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/221e1121da40d586.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ4oAvkTlYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "emissionBytes": 218592,
     "emissionFrame": [
       300,
@@ -32493,7 +32493,7 @@
         "height": 0.589622
       }
     ],
-    "emission": "/world-lighting/de6d652ee458a7d0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEuWUW6LfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 177,
     "cellHeight": 89,
     "directions": [
@@ -32718,7 +32718,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5e48812dc6374a47.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZOmoG6AtYUndMi56GkX19q0A4PzyeIloBrE",
     "emissionBytes": 203000,
     "emissionFrame": [
       258,
@@ -32775,7 +32775,7 @@
         "height": 0.944099
       }
     ],
-    "emission": "/world-lighting/fec6db91fed7b033.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn3RNezmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
     "cellWidth": 188,
     "cellHeight": 100,
     "directions": [
@@ -33028,7 +33028,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5e48812dc6374a47.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZOmoG6AtYUndMi56GkX19q0A4PzyeIloBrE",
     "emissionBytes": 208656,
     "emissionFrame": [
       2,
@@ -33089,7 +33089,7 @@
         "height": 0.833653
       }
     ],
-    "emission": "/world-lighting/fec6db91fed7b033.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn3RNezmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
     "cellWidth": 174,
     "cellHeight": 97,
     "directions": [
@@ -33370,7 +33370,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5e48812dc6374a47.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZOmoG6AtYUndMi56GkX19q0A4PzyeIloBrE",
     "emissionBytes": 219180,
     "emissionFrame": [
       512,
@@ -33423,7 +33423,7 @@
         "height": 0.899191
       }
     ],
-    "emission": "/world-lighting/fec6db91fed7b033.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn3RNezmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
     "cellWidth": 185,
     "cellHeight": 86,
     "directions": [
@@ -33634,7 +33634,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5e48812dc6374a47.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZOmoG6AtYUndMi56GkX19q0A4PzyeIloBrE",
     "emissionBytes": 176928,
     "emissionFrame": [
       2,
@@ -33699,7 +33699,7 @@
         "height": 0.887658
       }
     ],
-    "emission": "/world-lighting/fec6db91fed7b033.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn3RNezmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
     "cellWidth": 177,
     "cellHeight": 82,
     "directions": [
@@ -33924,7 +33924,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5e48812dc6374a47.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJbZOmoG6AtYUndMi56GkX19q0A4PzyeIloBrE",
     "emissionBytes": 169400,
     "emissionFrame": [
       234,
@@ -33973,7 +33973,7 @@
         "height": 0.907061
       }
     ],
-    "emission": "/world-lighting/fec6db91fed7b033.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJn3RNezmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
     "cellWidth": 173,
     "cellHeight": 92,
     "directions": [
@@ -34212,7 +34212,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/ad24fe6867fc40b5.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcN1JgOSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
     "emissionBytes": 220384,
     "emissionFrame": [
       2,
@@ -34273,7 +34273,7 @@
         "height": 0.901889
       }
     ],
-    "emission": "/world-lighting/50d239868c51e40f.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJw7ZjpzYT2j854CWbaITZyegfXimvd7s16cO0",
     "cellWidth": 193,
     "cellHeight": 85,
     "directions": [
@@ -34484,7 +34484,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/ad24fe6867fc40b5.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcN1JgOSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
     "emissionBytes": 171136,
     "emissionFrame": [
       290,
@@ -34553,7 +34553,7 @@
         "height": 0.874725
       }
     ],
-    "emission": "/world-lighting/50d239868c51e40f.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJw7ZjpzYT2j854CWbaITZyegfXimvd7s16cO0",
     "cellWidth": 180,
     "cellHeight": 84,
     "directions": [
@@ -34736,7 +34736,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/ad24fe6867fc40b5.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJcN1JgOSnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
     "emissionBytes": 165900,
     "emissionFrame": [
       518,
@@ -34789,7 +34789,7 @@
         "height": 0.908934
       }
     ],
-    "emission": "/world-lighting/50d239868c51e40f.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJw7ZjpzYT2j854CWbaITZyegfXimvd7s16cO0",
     "cellWidth": 168,
     "cellHeight": 91,
     "directions": [
@@ -35084,7 +35084,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 346184,
     "emissionFrame": [
       2,
@@ -35129,7 +35129,7 @@
         "height": 0.876223
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 202,
     "cellHeight": 84,
     "directions": [
@@ -35396,7 +35396,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 269080,
     "emissionFrame": [
       403,
@@ -35445,7 +35445,7 @@
         "height": 0.961833
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 195,
     "cellHeight": 97,
     "directions": [
@@ -35740,7 +35740,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 253308,
     "emissionFrame": [
       717,
@@ -35826,7 +35826,7 @@
         "height": 0.130755
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 182,
     "cellHeight": 83,
     "directions": [
@@ -36121,7 +36121,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 216108,
     "emissionFrame": [
       2,
@@ -36198,7 +36198,7 @@
         "height": 0.918341
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 173,
     "cellHeight": 81,
     "directions": [
@@ -36423,7 +36423,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 206848,
     "emissionFrame": [
       267,
@@ -36472,7 +36472,7 @@
         "height": 0.867866
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 183,
     "cellHeight": 99,
     "directions": [
@@ -36683,7 +36683,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 222216,
     "emissionFrame": [
       527,
@@ -36740,7 +36740,7 @@
         "height": 0.904503
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 184,
     "cellHeight": 89,
     "directions": [
@@ -36993,7 +36993,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/91a1d38fb0f52b79.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJTXZQAv65IU29dZYJPoOKSh5vmlqatMub3Eig",
     "emissionBytes": 173048,
     "emissionFrame": [
       2,
@@ -37062,7 +37062,7 @@
         "height": 0.892743
       }
     ],
-    "emission": "/world-lighting/6af61c79528c940a.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYFkyP4uOMAlNnPZ41ev6fCGcFK3hmjX9I8W7",
     "cellWidth": 180,
     "cellHeight": 96,
     "directions": [
@@ -37357,7 +37357,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/8148a313ca53a3cc.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyEQU99ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
     "emissionBytes": 223560,
     "emissionFrame": [
       2,
@@ -37455,7 +37455,7 @@
         "height": 0.567896
       }
     ],
-    "emission": "/world-lighting/91332058543145b0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr34JOohuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 153,
     "cellHeight": 86,
     "directions": [
@@ -37750,7 +37750,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/8148a313ca53a3cc.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyEQU99ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
     "emissionBytes": 203688,
     "emissionFrame": [
       276,
@@ -37832,7 +37832,7 @@
         "height": 0.602178
       }
     ],
-    "emission": "/world-lighting/91332058543145b0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr34JOohuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 148,
     "cellHeight": 82,
     "directions": [
@@ -38127,7 +38127,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/8148a313ca53a3cc.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyEQU99ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
     "emissionBytes": 201204,
     "emissionFrame": [
       526,
@@ -38184,7 +38184,7 @@
         "height": 0.826358
       }
     ],
-    "emission": "/world-lighting/91332058543145b0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr34JOohuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 156,
     "cellHeight": 83,
     "directions": [
@@ -38479,7 +38479,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/8148a313ca53a3cc.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyEQU99ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
     "emissionBytes": 225924,
     "emissionFrame": [
       2,
@@ -38524,7 +38524,7 @@
         "height": 0.844761
       }
     ],
-    "emission": "/world-lighting/91332058543145b0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr34JOohuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 175,
     "cellHeight": 86,
     "directions": [
@@ -38819,7 +38819,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/8148a313ca53a3cc.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyEQU99ukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp",
     "emissionBytes": 163100,
     "emissionFrame": [
       287,
@@ -38909,7 +38909,7 @@
         "height": 0.546454
       }
     ],
-    "emission": "/world-lighting/91332058543145b0.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJr34JOohuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 153,
     "cellHeight": 87,
     "directions": [
@@ -39078,7 +39078,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/af51310467e33d7d.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCnIuXvyV3OvUJQExAi0bGoIZDF74LqSnHRd",
     "emissionBytes": 164500,
     "emissionFrame": [
       2,
@@ -39135,7 +39135,7 @@
         "height": 0.902374
       }
     ],
-    "emission": "/world-lighting/2650eb36f2fb6f93.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ7YJSu2XKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "cellWidth": 172,
     "cellHeight": 85,
     "directions": [
@@ -39430,7 +39430,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 357720,
     "emissionFrame": [
       2,
@@ -39503,7 +39503,7 @@
         "height": 0.877541
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 179,
     "cellHeight": 83,
     "directions": [
@@ -39756,7 +39756,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 338772,
     "emissionFrame": [
       336,
@@ -39833,7 +39833,7 @@
         "height": 0.905372
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 167,
     "cellHeight": 88,
     "directions": [
@@ -40128,7 +40128,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 396144,
     "emissionFrame": [
       2,
@@ -40169,7 +40169,7 @@
         "height": 0.923309
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 187,
     "cellHeight": 87,
     "directions": [
@@ -40436,7 +40436,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 278668,
     "emissionFrame": [
       399,
@@ -40481,7 +40481,7 @@
         "height": 0.891456
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 191,
     "cellHeight": 89,
     "directions": [
@@ -40776,7 +40776,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 279336,
     "emissionFrame": [
       702,
@@ -40829,7 +40829,7 @@
         "height": 0.891246
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 185,
     "cellHeight": 91,
     "directions": [
@@ -41124,7 +41124,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 272800,
     "emissionFrame": [
       2,
@@ -41177,7 +41177,7 @@
         "height": 0.95756
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 187,
     "cellHeight": 94,
     "directions": [
@@ -41472,7 +41472,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 262240,
     "emissionFrame": [
       316,
@@ -41533,7 +41533,7 @@
         "height": 0.954505
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 192,
     "cellHeight": 96,
     "directions": [
@@ -41828,7 +41828,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 270684,
     "emissionFrame": [
       618,
@@ -41869,7 +41869,7 @@
         "height": 0.891784
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 183,
     "cellHeight": 81,
     "directions": [
@@ -42164,7 +42164,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 207828,
     "emissionFrame": [
       2,
@@ -42229,7 +42229,7 @@
         "height": 0.899456
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 178,
     "cellHeight": 78,
     "directions": [
@@ -42482,7 +42482,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 205344,
     "emissionFrame": [
       257,
@@ -42535,7 +42535,7 @@
         "height": 0.921056
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 191,
     "cellHeight": 94,
     "directions": [
@@ -42830,7 +42830,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 221428,
     "emissionFrame": [
       509,
@@ -42887,7 +42887,7 @@
         "height": 0.90559
       }
     ],
-    "emission": "/world-lighting/cc3bfa49bf72ff78.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmP1ANlHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 188,
     "cellHeight": 86,
     "directions": [
@@ -43112,7 +43112,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/798f06d57a120b43.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuyFSP6emvaQu94EYJs8HpxVzofny6iPtbgC",
     "emissionBytes": 167300,
     "emissionFrame": [
       2,
@@ -43157,7 +43157,7 @@
         "height": 0.911273
       }
     ],
-    "emission": "/world-lighting/0d0966407faee642.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOUcKnNVHevxIThUauQkGJEBY3D2cPqy8f5sp",
     "cellWidth": 175,
     "cellHeight": 92,
     "directions": [
@@ -43452,7 +43452,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/2437d8ee416a2577.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ6CNEGYDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
     "emissionBytes": 179256,
     "emissionFrame": [
       2,
@@ -43517,7 +43517,7 @@
         "height": 0.872923
       }
     ],
-    "emission": "/world-lighting/124803da10db7197.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRcCMPaU0udmODoNtpa0FMcwI4k2Eq7nJhyvj",
     "cellWidth": 180,
     "cellHeight": 80,
     "directions": [
@@ -43812,7 +43812,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 360972,
     "emissionFrame": [
       2,
@@ -43922,7 +43922,7 @@
         "height": 0.066408
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 173,
     "cellHeight": 87,
     "directions": [
@@ -44119,7 +44119,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 338000,
     "emissionFrame": [
       339,
@@ -44196,7 +44196,7 @@
         "height": 0.922831
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 172,
     "cellHeight": 94,
     "directions": [
@@ -44463,7 +44463,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 285192,
     "emissionFrame": [
       668,
@@ -44512,7 +44512,7 @@
         "height": 0.898486
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 184,
     "cellHeight": 87,
     "directions": [
@@ -44765,7 +44765,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 276624,
     "emissionFrame": [
       2,
@@ -44826,7 +44826,7 @@
         "height": 0.995731
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 198,
     "cellHeight": 102,
     "directions": [
@@ -45065,7 +45065,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 270160,
     "emissionFrame": [
       312,
@@ -45122,7 +45122,7 @@
         "height": 0.890374
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 181,
     "cellHeight": 83,
     "directions": [
@@ -45417,7 +45417,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 264000,
     "emissionFrame": [
       623,
@@ -45466,7 +45466,7 @@
         "height": 0.943586
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 177,
     "cellHeight": 100,
     "directions": [
@@ -45677,7 +45677,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/5152553577819463.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHcxPLVQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     "emissionBytes": 188384,
     "emissionFrame": [
       2,
@@ -45750,7 +45750,7 @@
         "height": 0.914408
       }
     ],
-    "emission": "/world-lighting/8f7dab6d69ba99f6.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE4nYwvLfKL5D7TAFe29bymSaPCIQ846MdzGg",
     "cellWidth": 183,
     "cellHeight": 98,
     "directions": [
@@ -46045,7 +46045,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/864017affcde890a.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwJ2fORT2j854CWbaITZyegfXimvd7s16cO0h",
     "emissionBytes": 218592,
     "emissionFrame": [
       2,
@@ -46102,7 +46102,7 @@
         "height": 0.929783
       }
     ],
-    "emission": "/world-lighting/d430fabb0a94430b.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJh3yKhhMfUBdnwAX5LTajlNc4mrgzi0RJtqpM",
     "cellWidth": 177,
     "cellHeight": 82,
     "directions": [
@@ -46397,7 +46397,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 359384,
     "emissionFrame": [
       2,
@@ -46470,7 +46470,7 @@
         "height": 0.995785
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 186,
     "cellHeight": 107,
     "directions": [
@@ -46765,7 +46765,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 337288,
     "emissionFrame": [
       340,
@@ -46850,7 +46850,7 @@
         "height": 0.874192
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 161,
     "cellHeight": 88,
     "directions": [
@@ -47145,7 +47145,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 273076,
     "emissionFrame": [
       661,
@@ -47247,7 +47247,7 @@
         "height": 0.674643
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 177,
     "cellHeight": 87,
     "directions": [
@@ -47542,7 +47542,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 286568,
     "emissionFrame": [
       2,
@@ -47591,7 +47591,7 @@
         "height": 0.815727
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 162,
     "cellHeight": 88,
     "directions": [
@@ -47886,7 +47886,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 265760,
     "emissionFrame": [
       323,
@@ -47935,7 +47935,7 @@
         "height": 0.720402
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 158,
     "cellHeight": 83,
     "directions": [
@@ -48230,7 +48230,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 245520,
     "emissionFrame": [
       629,
@@ -48324,7 +48324,7 @@
         "height": 0.580579
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 154,
     "cellHeight": 82,
     "directions": [
@@ -48619,7 +48619,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 268704,
     "emissionFrame": [
       2,
@@ -48696,7 +48696,7 @@
         "height": 0.74319
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 179,
     "cellHeight": 85,
     "directions": [
@@ -48991,7 +48991,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 252520,
     "emissionFrame": [
       317,
@@ -49040,7 +49040,7 @@
         "height": 0.834314
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 156,
     "cellHeight": 88,
     "directions": [
@@ -49335,7 +49335,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 330120,
     "emissionFrame": [
       616,
@@ -49384,7 +49384,7 @@
         "height": 0.79238
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 190,
     "cellHeight": 79,
     "directions": [
@@ -49679,7 +49679,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/b9d4535ceef81885.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFhOIAMG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
     "emissionBytes": 158304,
     "emissionFrame": [
       2,
@@ -49752,7 +49752,7 @@
         "height": 0.632918
       }
     ],
-    "emission": "/world-lighting/b4d57f1ad41e60c4.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJy2MaAyvukVH2MI5Lo4ehEfAXvZdcmtWqPg7r",
     "cellWidth": 139,
     "cellHeight": 72,
     "directions": [
@@ -50047,7 +50047,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9a9950f268d2a04a.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJekOvzHyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 352560,
     "emissionFrame": [
       2,
@@ -50100,7 +50100,7 @@
         "height": 0.950627
       }
     ],
-    "emission": "/world-lighting/23585da5bef55e92.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPgNykrpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
     "cellWidth": 169,
     "cellHeight": 82,
     "directions": [
@@ -50395,7 +50395,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9a9950f268d2a04a.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJekOvzHyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 335664,
     "emissionFrame": [
       345,
@@ -50456,7 +50456,7 @@
         "height": 0.775862
       }
     ],
-    "emission": "/world-lighting/23585da5bef55e92.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPgNykrpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
     "cellWidth": 178,
     "cellHeight": 85,
     "directions": [
@@ -50751,7 +50751,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9a9950f268d2a04a.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJekOvzHyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 283856,
     "emissionFrame": [
       682,
@@ -50804,7 +50804,7 @@
         "height": 0.902703
       }
     ],
-    "emission": "/world-lighting/23585da5bef55e92.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPgNykrpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
     "cellWidth": 202,
     "cellHeight": 97,
     "directions": [
@@ -51099,7 +51099,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/9a9950f268d2a04a.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJekOvzHyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
     "emissionBytes": 249096,
     "emissionFrame": [
       2,
@@ -51140,7 +51140,7 @@
         "height": 0.900864
       }
     ],
-    "emission": "/world-lighting/23585da5bef55e92.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPgNykrpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
     "cellWidth": 189,
     "cellHeight": 93,
     "directions": [
@@ -51435,7 +51435,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 548448,
     "emissionFrame": [
       2,
@@ -51492,7 +51492,7 @@
         "height": 0.941998
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 168,
     "cellHeight": 87,
     "directions": [
@@ -51787,7 +51787,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 401432,
     "emissionFrame": [
       400,
@@ -51877,7 +51877,7 @@
         "height": 0.933887
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 188,
     "cellHeight": 93,
     "directions": [
@@ -52172,7 +52172,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 389200,
     "emissionFrame": [
       2,
@@ -52229,7 +52229,7 @@
         "height": 0.897305
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 174,
     "cellHeight": 83,
     "directions": [
@@ -52524,7 +52524,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 409504,
     "emissionFrame": [
       356,
@@ -52589,7 +52589,7 @@
         "height": 0.90533
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 178,
     "cellHeight": 90,
     "directions": [
@@ -52884,7 +52884,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 350860,
     "emissionFrame": [
       2,
@@ -52986,7 +52986,7 @@
         "height": 0.881081
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 198,
     "cellHeight": 105,
     "directions": [
@@ -53281,7 +53281,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 270296,
     "emissionFrame": [
       337,
@@ -53375,7 +53375,7 @@
         "height": 0.751871
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 186,
     "cellHeight": 100,
     "directions": [
@@ -53670,7 +53670,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 246792,
     "emissionFrame": [
       640,
@@ -53727,7 +53727,7 @@
         "height": 0.959336
       }
     ],
-    "emission": "/world-lighting/f1d9e96209b5a828.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmEWs8sHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
     "cellWidth": 183,
     "cellHeight": 95,
     "directions": [
@@ -54022,7 +54022,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/d9c93af0da91dcc7.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpUCKx1bKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
     "emissionBytes": 285936,
     "emissionFrame": [
       2,
@@ -54071,7 +54071,7 @@
         "height": 0.868031
       }
     ],
-    "emission": "/world-lighting/ff4977b008c72ab8.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrmgRFahuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
     "cellWidth": 179,
     "cellHeight": 82,
     "directions": [
@@ -54197,7 +54197,7 @@
     "height": 0.8125,
     "bytes": 216320,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       0.638853,
       0.294915,
@@ -54368,7 +54368,7 @@
     "height": 1.078125,
     "bytes": 220800,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       0.319097,
       0.043679,
@@ -54535,7 +54535,7 @@
     "height": 1.03125,
     "bytes": 204864,
     "emitters": [],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       0.368645,
       0.012244,
@@ -54731,7 +54731,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       1,
       0.064264,
@@ -54739,7 +54739,7 @@
       -1
     ],
     "emissionBytes": 132012,
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "emissionFrame": [
       544,
       2,
@@ -54962,7 +54962,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       1,
       0.264264,
@@ -54970,7 +54970,7 @@
       -1
     ],
     "emissionBytes": 132012,
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "emissionFrame": [
       544,
       2,
@@ -55193,7 +55193,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       1,
       -0.175758,
@@ -55201,7 +55201,7 @@
       -1
     ],
     "emissionBytes": 136756,
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "emissionFrame": [
       137,
       2,
@@ -55441,7 +55441,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       1,
       0.201657,
@@ -55449,7 +55449,7 @@
       -1
     ],
     "emissionBytes": 145600,
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "emissionFrame": [
       332,
       2,
@@ -55693,7 +55693,7 @@
         ]
       }
     ],
-    "atlas": "/world-shadows/c9572ab5b2210576.webp",
+    "atlas": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJlMhY7vPrWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
     "basis": [
       1,
       -0.098343,
@@ -55701,7 +55701,7 @@
       -1
     ],
     "emissionBytes": 145600,
-    "emission": "/world-lighting/d8c0cddbab7e1b34.webp",
+    "emission": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJdvVN75P62PI3ciLaYzgVX8FopBADxSrGmvQl",
     "emissionFrame": [
       332,
       2,

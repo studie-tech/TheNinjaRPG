@@ -7,6 +7,7 @@ import {
 } from "@/libs/rendering/worldAssetSources";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
+import { transformImageUrl } from "@/utils/image";
 
 const loaded = new Map<string, WorldMaterial>();
 const materials = createLeaseCache<WorldMaterial>({
@@ -602,7 +603,7 @@ export const encodeWorldNormal = (x: number, y: number, z: number) => {
 /** Atlas geometry loads on demand and shares its material lease and idle-cache lifetime. */
 const readAuthoredSurfaces = async (url: string) => {
   try {
-    const response = await fetch(url);
+    const response = await fetch(transformImageUrl(url));
     if (!response.ok)
       throw new Error(`World surface request failed: ${response.status}`);
     const text = await response.text();

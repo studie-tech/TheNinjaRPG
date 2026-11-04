@@ -2,6 +2,7 @@ import { expect, it, vi } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Container, Texture } from "pixi.js";
 import { acquirePrebakedVillageLightField, acquireVillageLightField, lightOcclusionPolygon, unpackVillageLightField } from "@/libs/rendering/villageLightField";
 import published from "@/libs/rendering/bakedVillageLightFields.json";
@@ -20,10 +21,13 @@ it("preserves hidden RGB and independent window eligibility across opaque image 
   expect(() => unpackVillageLightField(packed.subarray(4),2,2)).toThrow();
 });
 
-it("publishes a lossless complete pool matching its authored source catalog", async () => {
+it("matches published light pools to their authored source catalog", () => {
   expect(createHash("sha256").update(JSON.stringify([bakedSources,worldSources])).digest("hex")).toBe(published.catalog);
+});
+
+it.skipIf(!worldArtDirectory)("publishes a lossless complete pool", async () => {
   for (const field of Object.values(published.fields)) {
-    const {data,info}=await sharp(readFileSync(new URL(`../../../public${field.image}`,import.meta.url))).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+    const {data,info}=await sharp(readFileSync(worldArtFile(field.image))).ensureAlpha().raw().toBuffer({resolveWithObject:true});
     expect([info.width,info.height]).toEqual([field.width*2,field.height]);
     const pixels=unpackVillageLightField(data,field.width,field.height);
     expect(createHash("sha256").update(pixels).digest("hex")).toBe(field.rgbaSha256);

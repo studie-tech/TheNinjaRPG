@@ -28,9 +28,8 @@ export const createSceneAssets = () => {
   const owned = new Map<string, ReturnType<typeof textures.acquire>>();
   const leases = new Set<() => void>();
   const textureKey = (path: string, width: number, sampling: "linear" | "nearest") => {
-    const source =
-      worldAssetSource(path)?.image ??
-      (width === 0 ? path : textureImageUrl(path, width));
+    const published = worldAssetSource(path);
+    const source = textureImageUrl(published?.image ?? path, published ? 0 : width);
     return sampling === "nearest" ? `${source.split("#")[0]}#tnr-nearest` : source;
   };
   let disposed = false;

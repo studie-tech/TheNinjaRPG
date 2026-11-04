@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
+import { transformImageUrl } from "@/utils/image";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { BufferImageSource, Polygon, Rectangle, Texture } from "pixi.js";
@@ -237,7 +238,7 @@ describe("world material loading", () => {
     try {
       const loaded = await lease.resource;
       expect(request).toHaveBeenCalledTimes(failure === "unknown" ? 0 : 1);
-      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(loaded.surfaceFrames).toBeUndefined();
       expect(loaded.isBillboard).toBe(true);
       expect(loaded.pixels[2]).toBe(Math.round((1 - 0.5 / height) * 255));
@@ -296,7 +297,7 @@ describe("world material loading", () => {
       const [source, repeated] = await Promise.all([first.resource, second.resource]);
       expect(source).toBe(repeated);
       expect(fixture.request).toHaveBeenCalledTimes(1);
-      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(fixture.loadTexture).toHaveBeenCalledTimes(2);
       expect(source.surfaceFrames).toEqual([definition]);
       expect(source.surfaceBytes).toBe(text.length * 4);
@@ -342,7 +343,7 @@ describe("world material loading", () => {
       expect(source.isBillboard).toBe(false);
       expect(fixture.loadTexture).toHaveBeenCalledWith("persisted-structure.webp", 0, "nearest");
       expect(fixture.loadTexture).toHaveBeenCalledWith(published.material, 0, "nearest");
-      expect(fixture.request).toHaveBeenCalledWith(published.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(published.surfaces));
     } finally { lease.release(); fixture.restore(); }
   });
 
@@ -357,7 +358,7 @@ describe("world material loading", () => {
     const lease = acquireWorldMaterial(image, "column");
     try {
       const source = await lease.resource;
-      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(worldAssetSource(image)!.surfaces));
       expect(source.surfaceFrames).toBeUndefined();
       expect(source.surfaceBytes ?? 0).toBe(0);
       expect(source.isBillboard).toBe(true);

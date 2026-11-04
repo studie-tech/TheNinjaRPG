@@ -9,6 +9,8 @@ import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { createSceneAssets } from "@/libs/rendering/assets";
+import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import { textureImageUrl } from "@/utils/image";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
@@ -147,13 +149,26 @@ describe("world sprite atlas ownership", () => {
     expect(texture.destroyed).toBe(false);
     expect(texture.source.destroyed).toBe(false);
   });
-  it("preserves native source URLs while positive rendition widths use the image CDN", async () => {
+  it("resolves logical scenery keys to native Bunny textures for both asset lease APIs", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const assets = createSceneAssets();
+    cleanups.push(() => assets.dispose());
+    const source = WORLD_ASSET_SOURCES["/world-art/woodland-village.webp"]!;
+    const lease = assets.acquireTexture("/world-art/woodland-village.webp", 128);
+    try {
+      await lease.resource;
+      await assets.texture(source.material, 0, "nearest");
+      expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: textureImageUrl(source.image, 0) }));
+      expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: `${textureImageUrl(source.material, 0)}#tnr-nearest` }));
+    } finally { lease.release(); }
+  });
+  it("routes native sources and renditions through the image CDN", async () => {
     const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
     const assets = createSceneAssets();
     cleanups.push(() => assets.dispose());
     const image = "https://ui0arpl8sm.ufs.sh/f/native-material-source-test.png";
     await assets.texture(image, 0, "nearest");
-    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: `${image}#tnr-nearest` }));
+    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: "https://uploadthing.b-cdn.net/f/native-material-source-test.png#tnr-nearest" }));
     await assets.texture(image, 64, "nearest");
     expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: "https://uploadthing.b-cdn.net/f/native-material-source-test.png?width=64#tnr-nearest" }));
   });
