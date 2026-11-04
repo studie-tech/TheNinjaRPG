@@ -4,6 +4,7 @@
 import { and, eq, gte, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { UserRole } from "@/drizzle/constants";
+import { SKILL_RESET_STAFF_RELATED_MSG } from "@/drizzle/constants";
 import { actionLog, skillTree, skillTreeFolder, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
@@ -127,7 +128,7 @@ export const insertActionLogForReset = (
     userId: ctx.userId,
     tableName: "skillReset",
     changes: ["Bloodright reset"],
-    relatedMsg: isStaff ? "Free reset for staff member" : "Bloodright reset",
+    relatedMsg: isStaff ? SKILL_RESET_STAFF_RELATED_MSG : "Bloodright reset",
     relatedValue: cost,
     relatedImage: user.avatarLight,
   });

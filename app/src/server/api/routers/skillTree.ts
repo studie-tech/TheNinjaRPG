@@ -9,6 +9,7 @@ import {
 import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,
+  SKILL_RESET_STAFF_RELATED_MSG,
   SKILL_TREE_RESET_FREE_GOLD,
   SKILL_TREE_RESET_FREE_NORMAL,
   SKILL_TREE_RESET_FREE_SILVER,
@@ -542,12 +543,11 @@ export const skillTreeRouter = createTRPCRouter({
 
       // Determine if this reset should be free (GOLD supporters get first two per month free)
       const federalStatus = getUserFederalStatus(user);
-      const freeResets = getFreeResetAmount(user);
-      const resetState = getMonthlyResetState(user);
-      const freeResetsUsed = resetState.count;
-      const hasFreeResetAvailable = freeResetsUsed < freeResets;
-      const isStaffFreeReset = isStaffMember(user);
-      const isFreeReset = hasFreeResetAvailable || isStaffFreeReset;
+      const {
+        isFree: isFreeReset,
+        isStaff: isStaffFreeReset,
+        next: monthlySkillResets,
+      } = getResetAllowance(user);
 
       // Guard: if not free, ensure user can afford
       if (!isFreeReset && user.reputationPoints < COST_SKILL_RESET) {
@@ -561,8 +561,7 @@ export const skillTreeRouter = createTRPCRouter({
         ctx.drizzle,
         user,
         isFreeReset,
-        resetState,
-        isStaffFreeReset,
+        monthlySkillResets,
         ctx,
       );
       if (result.rowsAffected !== 1)
@@ -606,8 +605,7 @@ export const skillTreeRouter = createTRPCRouter({
         ...getResetSkillPointsUserUpdate({
           updatedUserRequiresUserRefresh: updatedUser.requiresUserRefresh,
           isFreeReset,
-          resetState,
-          isStaffFreeReset,
+          monthlySkillResets,
           user,
         }),
 
@@ -629,12 +627,9 @@ export const skillTreeRouter = createTRPCRouter({
       // Guard
       if (!user) return { isFree: false, freeResetsUsed: 0, freeResetsRemaining: 0 };
       // Derived
-      const freeResets = getFreeResetAmount(user);
-      const freeResetsUsed = getMonthlyResetState(user).count;
-      const freeResetsRemaining = Math.max(0, freeResets - freeResetsUsed);
-      const isFree = freeResetsRemaining > 0 || isStaffMember(user);
+      const { isFree, used, remaining } = getResetAllowance(user);
       // Return
-      return { isFree, freeResetsUsed, freeResetsRemaining };
+      return { isFree, freeResetsUsed: used, freeResetsRemaining: remaining };
     }),
 
   // Reset all users' skill points (staff only)
@@ -943,8 +938,6 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
   return filters;
 };
 
-const SKILL_RESET_STAFF_RELATED_MSG = "Free reset for staff member";
-
 /**
  * Get the free reset amount for a user
  * @param user - The user
@@ -968,6 +961,23 @@ export const isSkillVisible = (
   skill: { hidden: boolean; folder: { hidden: boolean } | null },
   includeHidden: boolean,
 ) => includeHidden || (!skill.hidden && !skill.folder?.hidden);
+
+/**
+ * The monthly allowance skill and Bloodright resets share. Staff reset for free without
+ * drawing on it; `next` is the state a reset persists.
+ */
+export const getResetAllowance = (user: UserData) => {
+  const state = getMonthlyResetState(user);
+  const isStaff = isStaffMember(user);
+  const remaining = Math.max(0, getFreeResetAmount(user) - state.count);
+  return {
+    isStaff,
+    isFree: remaining > 0 || isStaff,
+    used: state.count,
+    remaining,
+    next: { ...state, count: state.count + (isStaff ? 0 : 1) },
+  };
+};
 
 /** Free resets claimed this UTC month, persisted by the guarded reset UPDATE. */
 export const getMonthlyResetState = (user: UserData) => {

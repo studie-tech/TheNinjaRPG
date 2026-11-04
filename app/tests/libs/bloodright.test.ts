@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { getBloodrightRefundIds } from "@/libs/bloodright";
-import { getFreeResetAmount, getMonthlyResetState } from "@/server/api/routers/skillTree";
+import {
+  getFreeResetAmount,
+  getMonthlyResetState,
+  getResetAllowance,
+} from "@/server/api/routers/skillTree";
 import type { UserData } from "@/drizzle/schema";
 
 const tiers = [
@@ -33,5 +37,38 @@ describe("shared monthly reset allowance", () => {
   });
   it("starts a new allowance when the month changes", () => {
     expect(getMonthlyResetState({ monthlySkillResets: { month: "2000-01", count: 2 } } as UserData).count).toBe(0);
+  });
+});
+
+describe("getResetAllowance", () => {
+  const month = getMonthlyResetState({ monthlySkillResets: null } as unknown as UserData).month;
+  const user = (count: number, staffAccount = false) =>
+    ({
+      federalStatus: "GOLD",
+      staffAccount,
+      monthlySkillResets: { month, count },
+    }) as UserData;
+
+  it("counts a member's free reset against the month", () => {
+    expect(getResetAllowance(user(0))).toMatchObject({
+      isFree: true,
+      isStaff: false,
+      used: 0,
+      next: { month, count: 1 },
+    });
+  });
+
+  it("stops being free once the allowance runs out", () => {
+    const spent = getFreeResetAmount(user(0));
+    expect(getResetAllowance(user(spent))).toMatchObject({ isFree: false, remaining: 0 });
+  });
+
+  it("keeps staff resets free without drawing on the allowance", () => {
+    const spent = getFreeResetAmount(user(0));
+    expect(getResetAllowance(user(spent, true))).toMatchObject({
+      isFree: true,
+      isStaff: true,
+      next: { month, count: spent },
+    });
   });
 });

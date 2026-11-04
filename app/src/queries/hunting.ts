@@ -99,18 +99,6 @@ export const listItemForSave = (
     columns: { id: true },
   });
 
-/** Build the `sectorMap` listing for `save`, using predicates on `sector` and `status`. */
-export const listSectorMapForSave = (
-  client: Pick<DrizzleClient, "query">,
-  input: { content: { sectors: number[] } },
-) =>
-  client.query.sectorMap.findMany({
-    where: and(
-      inArray(sectorMap.sector, input.content.sectors),
-      eq(sectorMap.status, "PUBLISHED"),
-    ),
-  });
-
 /** Build the `huntingHabitat` update for `save`, setting `content` and `updatedAt`, using predicates on `id`. */
 export const updateHuntingHabitatForSave = (
   client: Pick<DrizzleClient, "update">,

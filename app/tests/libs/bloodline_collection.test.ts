@@ -3,7 +3,10 @@ import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "bun:test";
 import type { Bloodline } from "@/drizzle/schema";
 import { LetterRanks, type LetterRank } from "@/drizzle/constants";
-import { buildBloodlineCollectionProgress } from "@/libs/bloodline";
+import {
+  buildBloodlineCollectionProgress,
+  getBloodlineSwapAllowance,
+} from "@/libs/bloodline";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
@@ -360,5 +363,35 @@ describe("collection snapshot hydration", () => {
     await hydrateQuestCollections(client, user);
     expect(findBloodlines).not.toHaveBeenCalled();
     expect(findRolls).not.toHaveBeenCalled();
+  });
+});
+
+describe("getBloodlineSwapAllowance", () => {
+  const member = { staffAccount: false, federalStatus: "GOLD" as const };
+
+  it("spends the monthly allowance", () => {
+    expect(getBloodlineSwapAllowance(member, 0)).toMatchObject({
+      federalStatus: "GOLD",
+      hasFreeSwapAvailable: true,
+      isFree: true,
+    });
+    const { freeSwapsRemaining } = getBloodlineSwapAllowance(member, 0);
+    expect(getBloodlineSwapAllowance(member, freeSwapsRemaining)).toMatchObject({
+      freeSwapsRemaining: 0,
+      hasFreeSwapAvailable: false,
+      isFree: false,
+    });
+  });
+
+  it("keeps staff swaps free past the allowance", () => {
+    const allowance = getBloodlineSwapAllowance(
+      { staffAccount: true, federalStatus: "NONE" },
+      99,
+    );
+    expect(allowance).toMatchObject({
+      hasFreeSwapAvailable: false,
+      isStaffFree: true,
+      isFree: true,
+    });
   });
 });

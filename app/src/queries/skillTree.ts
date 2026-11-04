@@ -345,8 +345,7 @@ export const updateUserDataForResetSkillPoints = (
   client: Pick<DrizzleClient, "update">,
   user: { updatedAt: Date; monthlySkillResets: { month: string; count: number } },
   isFreeReset: false | true,
-  resetState: { month: string; count: number },
-  isStaffFreeReset: false | true,
+  monthlySkillResets: { month: string; count: number },
   ctx: { userId: string },
 ) =>
   client
@@ -354,10 +353,7 @@ export const updateUserDataForResetSkillPoints = (
     .set({
       updatedAt: getNextUserSnapshotAt(user.updatedAt),
       reputationPoints: sql`${userData.reputationPoints} - ${isFreeReset ? 0 : COST_SKILL_RESET}`,
-      monthlySkillResets: {
-        ...resetState,
-        count: resetState.count + (isStaffFreeReset ? 0 : 1),
-      },
+      monthlySkillResets,
     })
     .where(
       and(

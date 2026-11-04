@@ -25,7 +25,6 @@ import {
   listHuntingProgressForGetBoard,
   listItemForSave,
   listPublishedHuntingMaps,
-  listSectorMapForSave,
   listUserDataForGetBoard,
   selectHuntingSessionForGetSession,
   updateHuntingHabitatForSave,
@@ -136,23 +135,15 @@ export const huntingRouter = createTRPCRouter({
         findUserRoleById(ctx.drizzle, ctx.userId),
         aiIds.length ? listAiUserIds(ctx.drizzle, aiIds) : [],
         itemIds.length ? listItemForSave(ctx.drizzle, itemIds) : [],
-        listSectorMapForSave(ctx.drizzle, input),
+        listPublishedHuntingMaps(ctx.drizzle, input.content.sectors),
         listHuntingHabitats(ctx.drizzle),
       ]);
       if (!user || !canChangeContent(user.role))
         return errorResponse("You cannot edit hunting habitats.");
       if (ais.length !== aiIds.length || materials.length !== itemIds.length)
         return errorResponse("Choose existing AI creatures and huntable materials.");
-      if (
-        input.content.sectors.some(
-          (s) =>
-            !maps.some(
-              (m) =>
-                m.sector === s &&
-                findNearestReachableCoordinate(m.normalizedJson, { x: 0, y: 0 }),
-            ),
-        )
-      )
+      const reachableSectors = getReachableHuntingSectors(maps);
+      if (input.content.sectors.some((s) => !reachableSectors.has(s)))
         return errorResponse("Every habitat sector needs a published, reachable map.");
       if (
         habitats.some(
@@ -255,17 +246,12 @@ export const huntingRouter = createTRPCRouter({
           ...getUnchangedHuntingUserUpdate(),
           message: "Your existing encounter is still assigned.",
         };
-      // Maps carry large JSON payloads; load only the contract's sectors after
-      // eligibility and session guards pass.
-      const maps = await listPublishedHuntingMaps(ctx.drizzle, contract.sectors);
+      // Maps carry large JSON payloads, so they load only after the guards above.
+      const reachableSectors = getReachableHuntingSectors(
+        await listPublishedHuntingMaps(ctx.drizzle, contract.sectors),
+      );
       const locations = contract.sectors.filter(
-        (s) =>
-          habitat.content.sectors.includes(s) &&
-          maps.some(
-            (m) =>
-              m.sector === s &&
-              findNearestReachableCoordinate(m.normalizedJson, { x: 0, y: 0 }),
-          ),
+        (s) => habitat.content.sectors.includes(s) && reachableSectors.has(s),
       );
       const sector = getRandomElement(locations);
       if (sector === undefined)
@@ -437,16 +423,12 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse("Finish preparing before starting combat.");
       if (!progress || allowance.cooling || allowance.remaining < 1)
         return errorResponse("This contract is on cooldown.");
-      // Maps carry large JSON payloads; load only the assigned sector after
-      // eligibility and session guards pass.
-      const maps = await listPublishedHuntingMaps(ctx.drizzle, [session.sector]);
+      const reachableSectors = getReachableHuntingSectors(
+        await listPublishedHuntingMaps(ctx.drizzle, [session.sector]),
+      );
       if (
         !contract.sectors.includes(session.sector) ||
-        !maps.some(
-          (m) =>
-            m.sector === session.sector &&
-            findNearestReachableCoordinate(m.normalizedJson, { x: 0, y: 0 }),
-        )
+        !reachableSectors.has(session.sector)
       )
         return errorResponse(
           "The encounter location is no longer approved. Select another contract.",
@@ -513,3 +495,15 @@ const reconcileInactiveAllowance = async (
     habitat,
   );
 };
+
+/** Sectors whose published map offers a reachable coordinate. */
+const getReachableHuntingSectors = (
+  maps: Awaited<ReturnType<typeof listPublishedHuntingMaps>>,
+) =>
+  new Set(
+    maps
+      .filter((map) =>
+        findNearestReachableCoordinate(map.normalizedJson, { x: 0, y: 0 }),
+      )
+      .map((map) => map.sector),
+  );
