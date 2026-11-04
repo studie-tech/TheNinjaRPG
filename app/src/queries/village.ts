@@ -539,7 +539,7 @@ export const updateUserDataForDeclareEnemy = (
 ) =>
   client
     .update(userData)
-    .set({ unreadNotifications: sql`unreadNotifications + 1` })
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
     // Only members of the two villages; the kage's own row is bumped by the
     // prestige update below, as overlapping UserData updates can deadlock.
     .where(

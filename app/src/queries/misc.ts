@@ -104,7 +104,10 @@ export const insertNotificationForSubmitNotification = (
 /** Build the `userData` update for `submitNotification`, setting `unreadNotifications`. */
 export const updateUserDataForSubmitNotification = (
   client: Pick<DrizzleClient, "update">,
-) => client.update(userData).set({ unreadNotifications: sql`unreadNotifications + 1` });
+) =>
+  client
+    .update(userData)
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` });
 
 /** Build the `notification` listing for `getPreviousNotifications`. */
 export const listNotificationForGetPreviousNotifications = (
@@ -355,5 +358,5 @@ export const incrementNotificationCounters = (
 ) =>
   client
     .update(userData)
-    .set({ unreadNotifications: sql`unreadNotifications + 1` })
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
     .where(inArray(userData.userId, userIds));

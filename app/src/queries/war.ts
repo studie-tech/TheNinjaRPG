@@ -1684,7 +1684,7 @@ export const updateUserDataForDeclareSectorWar = (
 ) =>
   client
     .update(userData)
-    .set({ unreadNotifications: sql`unreadNotifications + 1` })
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
     .where(
       inArray(
         userData.villageId,
