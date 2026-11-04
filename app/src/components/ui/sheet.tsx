@@ -53,6 +53,8 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Content>>;
+  /** Off for content that draws its own close button. */
+  showCloseButton?: boolean;
 }
 
 const SheetContent = ({
@@ -61,6 +63,7 @@ const SheetContent = ({
   className,
   children,
   onInteractOutside,
+  showCloseButton = true,
   ...props
 }: SheetContentProps) => (
   <SheetPortal>
@@ -76,10 +79,12 @@ const SheetContent = ({
       onInteractOutside={ignoreToastInteractions(onInteractOutside)}
     >
       <div>
-        <SheetPrimitive.Close className="relative z-10 ml-auto flex size-[48px] items-center justify-center rounded-sm opacity-75 ring-offset-background hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:absolute sm:top-4 sm:right-4 sm:size-auto">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
+        {showCloseButton && (
+          <SheetPrimitive.Close className="relative z-10 ml-auto flex size-[48px] items-center justify-center rounded-sm opacity-75 ring-offset-background hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:absolute sm:top-4 sm:right-4 sm:size-auto">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        )}
         {children}
       </div>
     </SheetPrimitive.Content>

@@ -70,14 +70,14 @@ describe("inventory pages", () => {
     let isOpen = true;
     let selected: unknown = { item: { itemType: "MEAL" }, quantity: 3 };
     const toast = vi.fn();
-    const backpack = read("app/[shell]/items/page.tsx").split("const Backpack:")[1]!;
+    const backpack = read("hooks/useItemActions.ts");
     const settled = backpack.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
     const callbacks = backpack.match(/api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
-    if (!settled || !callbacks) throw new Error("Backpack consume callbacks were not found");
-    const onSettled = new Function("setIsOpen", "setUserItem", `return (${settled});`)(
-      (value: boolean) => { isOpen = value; },
-      (value: unknown) => { selected = value; },
-    );
+    if (!settled || !callbacks) throw new Error("Item action consume callbacks were not found");
+    const onSettled = new Function("onDone", `return (${settled});`)(() => {
+      isOpen = false;
+      selected = undefined;
+    });
     const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userData", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
       {
         profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: ["profile"] }) } },
@@ -114,7 +114,7 @@ describe("inventory pages", () => {
     }
   });
 
-  for (const file of ["app/[shell]/items/page.tsx", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
     it.each([
       { message: "Internal server error", cache: true, expected: undefined },
       { message: "Invalid input", cache: false, expected: undefined },
@@ -130,8 +130,10 @@ describe("inventory pages", () => {
       let selected: unknown = { item: { itemType: cache || pet ? "CONSUMABLE" : "MEAL", effects: cache || pet ? [{ type: "noncombatconsumereward", rewardMode: cache ? "weightedCache" : "standard", reward_pets: pet ? ["fox"] : [] }] : [] } };
       const setIsOpen = (value: boolean) => { isOpen = value; };
       const setUserItem = (value: unknown) => { selected = value; };
-      const settled = source.split("const Backpack:")[1]?.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
-      const onSettled = settled ? new Function("setIsOpen", "setUserItem", `return (${settled});`)(setIsOpen, setUserItem) : undefined;
+      // Item actions close their panel through onDone; the travel page owns its own handler.
+      const settled = (file.startsWith("hooks/") ? source : source.split("const Backpack:")[1])?.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
+      const onDone = () => { setIsOpen(false); setUserItem(undefined); };
+      const onSettled = settled ? new Function("setIsOpen", "setUserItem", "onDone", `return (${settled});`)(setIsOpen, setUserItem, onDone) : undefined;
       const options = new Function("showMutationToast", "getItemConsumeErrorMessage", "useritem", "onSettled", "setIsOpen", "setUserItem", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
         toast, getItemConsumeErrorMessage, selected, onSettled, setIsOpen, setUserItem, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined),
       ) as MutationObserverOptions<never, Error, z.input<typeof consumeItemInputSchema>>;
@@ -153,7 +155,7 @@ describe("inventory pages", () => {
     });
   }
 
-  for (const file of ["app/[shell]/items/page.tsx", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
     it(`${file} refreshes the companion collection and forwards its generation link after a pet reward`, async () => {
       const callbacks = read(file).match(/api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");
@@ -175,7 +177,7 @@ describe("inventory pages", () => {
     });
   }
 
-  for (const file of ["app/[shell]/items/page.tsx", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
     it(`${file} applies confirmed user changes instead of invalidating the profile`, async () => {
       const callbacks = read(file).match(/api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");

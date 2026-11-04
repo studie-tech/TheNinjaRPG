@@ -54,13 +54,12 @@ export const toHotkey = (key: string): string | undefined => {
   return (HOTKEY_KEYS as readonly string[]).includes(lower) ? lower : undefined;
 };
 
-/**
- * Match the setup controls and key badges' `not-any-pointer-fine:hidden` rule.
- * Ignore touch-generated context menus even when a mouse or trackpad is available.
- */
+/** Match the setup controls and key badges' `not-any-pointer-fine:hidden` rule. */
+export const hasFinePointer = () => window.matchMedia("(any-pointer: fine)").matches;
+
+/** Ignore touch-generated context menus even when a mouse or trackpad is available. */
 export const canSetHotkeys = (event: { nativeEvent: Event }) =>
-  window.matchMedia("(any-pointer: fine)").matches &&
-  (event.nativeEvent as PointerEvent).pointerType !== "touch";
+  hasFinePointer() && (event.nativeEvent as PointerEvent).pointerType !== "touch";
 
 /** Leave typing, Radix controls and open overlays to their own keyboard handling. */
 export const isBattleHotkeyBlocked = (event: KeyboardEvent): boolean => {

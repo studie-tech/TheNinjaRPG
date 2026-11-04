@@ -1,6 +1,6 @@
 "use client";
 
-import { Keyboard } from "lucide-react";
+import { Keyboard, Plus } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -135,7 +135,11 @@ export function HotkeyChip({
       title={hotkey ? "Change hotkey" : "Set hotkey"}
       className="bg-background hover:bg-muted inline-flex h-[26px] min-w-[26px] items-center justify-center rounded border px-[6px] font-mono text-[12px] font-bold"
     >
-      {hotkey ? hotkey.toUpperCase() : <span className="text-muted-foreground">+</span>}
+      {hotkey ? (
+        hotkey.toUpperCase()
+      ) : (
+        <Plus className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+      )}
     </button>
   );
 }
@@ -183,18 +187,15 @@ export function LoadoutHotkeysPanel({
       ) : rows.length === 0 ? (
         <p className="text-sm">Equip items to give them hotkeys.</p>
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-1">
+        <ul className="flex flex-wrap gap-x-6 gap-y-1.5">
           {rows.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between gap-2 text-sm"
-            >
-              <span className="truncate">{row.name}</span>
+            <li key={row.id} className="flex min-w-0 items-center gap-2 text-sm">
               <HotkeyChip
                 label={row.name}
                 hotkey={hotkeys.byAction[row.id]}
                 onClick={() => assign(row)}
               />
+              <span className="truncate">{row.name}</span>
             </li>
           ))}
         </ul>

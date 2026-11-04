@@ -11,6 +11,8 @@ const durabilityBarVariants = cva(
         "top-left": "top-1 left-1",
       },
       size: {
+        // Fits h-11 item art with equal top and bottom insets.
+        small: "h-9 w-1.5",
         medium: "h-12 w-1.5",
         large: "h-16 w-2",
       },
@@ -29,6 +31,7 @@ interface DurabilityBarProps extends VariantProps<typeof durabilityBarVariants> 
   maxDurability: number;
 }
 
+/** Vertical durability fill, clamped to its range and sized to the surrounding art. */
 export const DurabilityBar: React.FC<DurabilityBarProps> = ({
   currentDurability,
   maxDurability,

@@ -19,6 +19,7 @@ interface ItemLoadoutSelectorProps {
   label?: string;
   variant?: "sheet" | "dropdown";
   compact?: boolean;
+  renamable?: boolean;
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
 }

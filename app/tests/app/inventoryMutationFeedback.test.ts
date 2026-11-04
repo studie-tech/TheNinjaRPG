@@ -8,7 +8,11 @@ for (const procedure of ["item.mergeStacks", "item.mergeAllStacks", "item.sellUs
   it(`${procedure} shows failures, recovers observed caches and releases the action`, async () => {
     const isItem = procedure.startsWith("item.");
     const isMergeAll = procedure === "item.mergeAllStacks";
-    const file = isMergeAll ? "../../src/layout/MergeAllStacksButton.tsx" : `../../src/app/[shell]/${isItem ? "items" : "jutsus"}/page.tsx`;
+    const file = isMergeAll
+      ? "../../src/layout/MergeAllStacksButton.tsx"
+      : isItem
+        ? "../../src/hooks/useItemActions.ts"
+        : "../../src/app/[shell]/jutsus/page.tsx";
     const source = readFileSync(join(import.meta.dirname, file), "utf8");
     const call = source.indexOf(`api.${procedure}.useMutation(`);
     const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
