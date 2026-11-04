@@ -611,6 +611,14 @@ export const combatRouter = createTRPCRouter({
         actionId: z.string().optional(),
         longitude: z.number().optional(),
         latitude: z.number().optional(),
+        version: z
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .describe(
+            "Battle version from getBattle; required when actionId is provided",
+          ),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -628,6 +636,16 @@ export const combatRouter = createTRPCRouter({
           ctx.waitForRateLimit(),
         ]);
         if (!battle) return { updateClient: true };
+        // Manual choices belong to the displayed snapshot, including requests from older tabs.
+        if (input.actionId !== undefined && input.version !== battle.version) {
+          return {
+            updateClient: true,
+            notification:
+              input.version === undefined
+                ? "Reload the page before choosing a battle action."
+                : "Battle state changed. Choose your action again.",
+          };
+        }
         const stateBaseline = captureCombatStateUpdate(battle);
         advanceEncounterWave(battle, !!dungeonBattleOutcome(battle));
         // Create the grid for the battle
@@ -878,7 +896,13 @@ export const combatRouter = createTRPCRouter({
               fetchedVersion,
               pusher,
             );
-            if (!claim) return { updateClient: true };
+            if (!claim)
+              return {
+                updateClient: true,
+                ...(input.actionId !== undefined
+                  ? { notification: "Battle state changed. Choose your action again." }
+                  : {}),
+              };
             const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),

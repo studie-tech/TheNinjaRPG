@@ -199,6 +199,24 @@ it.each(["failure", "stale", "no-op"])("recovers an event not covered by a %s ac
   expect(reads).toHaveLength(2);
 });
 
+it("refreshes a rejected manual snapshot and releases pending state without an opponent event", async () => {
+  mount();
+  await beginAction();
+  await act(async () => finishAction({
+    updateClient: true,
+    notification: "Battle state changed. Choose your action again.",
+  }));
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  expect(latestState.isPending).toBe(false);
+  expect(reads).toHaveLength(2);
+  await act(async () => finishRead?.(stateAt(2)));
+  await waitFor(() => expect(latestState.battle?.version).toBe(2));
+  await act(async () => performAction());
+  await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+  await respond(3);
+  expect(reads).toHaveLength(2);
+});
+
 it("keeps spectator updates immediate and ignores versions already displayed", async () => {
   mount();
   await waitFor(() => expect(reads).toHaveLength(1));

@@ -32,7 +32,7 @@ describeWithDatabase("lethal combat history", () => {
     const snapshot = await startLethalBattle(battleType, auto);
     const caller = await callerFor(combatRouter, viewer);
     const result = await caller.performAction({ battleId: snapshot.id,
-      ...(auto ? {} : { actionId: "basicAttack", longitude: 1, latitude: 0 }) });
+      ...(auto ? {} : { version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 }) });
     expect(result, JSON.stringify(result)).toMatchObject({ updateClient: true, result: { outcome: viewer === "killer" ? "Won" : "Lost" } });
     const entries = await caller.getBattleEntries({ battleId: snapshot.id });
     expect(entries).toHaveLength(1);
@@ -79,7 +79,7 @@ describeWithDatabase("lethal combat history", () => {
     const observer = await callerFor(combatRouter, route === "performAction" ? "victim" : "killer");
     const pending = route === "performAction"
       ? actor.performAction({ battleId: snapshot.id,
-        actionId: "basicAttack", longitude: 1, latitude: 0 })
+        version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 })
       : actor.getBattle({ battleId: snapshot.id });
     try {
       await insertReady;
@@ -121,7 +121,7 @@ describeWithDatabase("lethal combat history", () => {
     snapshot.usersState.push({ ...killer, userId: "departed", controllerId: "departed", leftBattle: true });
     await db.update(battle).set({ usersState: snapshot.usersState }).where(eq(battle.id, snapshot.id));
     const response = await (await callerFor(combatRouter, "killer")).performAction({
-      battleId: snapshot.id, actionId: "basicAttack", longitude: 1, latitude: 0,
+      battleId: snapshot.id, version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0,
     });
     if (!("battleUpdate" in response) || !response.battleUpdate) throw new Error("Expected lethal action");
     expect(response.result?.outcome).toBe("Won");
@@ -143,7 +143,7 @@ describeWithDatabase("lethal combat history", () => {
     const battleRead = vi.spyOn(db.query.battle, "findFirst");
     const logRead = vi.spyOn(db.query.battleAction, "findMany");
     const response = await caller.performAction({ battleId: snapshot.id,
-      actionId: "basicAttack", longitude: 1, latitude: 0 });
+      version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 });
     if (!("battleUpdate" in response) || !response.battleUpdate) throw new Error("Expected combat action");
     expect(response.result).toBeNull();
     expect(battleRead).toHaveBeenCalledTimes(1);
@@ -190,7 +190,7 @@ describeWithDatabase("lethal combat history", () => {
     await db.update(battle).set({ usersState: snapshot.usersState, usersEffects: snapshot.usersEffects }).where(eq(battle.id, snapshot.id));
     const baseline = captureCombatStateUpdate((await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!);
     const response = await (await callerFor(combatRouter, "killer")).performAction({ battleId: snapshot.id,
-      actionId: "basicAttack", longitude: 1, latitude: 0 });
+      version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 });
     expect(response.result).toBeNull();
     const notification = [...trigger.mock.calls].reverse().find(([channel]) => channel === snapshot.id)?.[2] as BattleUpdate;
     const stateUpdate = buildCombatStateUpdate(baseline, (await db.query.battle.findFirst({ where: eq(battle.id, snapshot.id) }))!)!;
@@ -213,7 +213,7 @@ describeWithDatabase("lethal combat history", () => {
       return Reflect.get(target, key, receiver);
     } });
     const response = await (await callerForDatabase(combatRouter, "killer", failed)).performAction({ battleId: snapshot.id,
-      actionId: "basicAttack", longitude: 1, latitude: 0 });
+      version: snapshot.version, actionId: "basicAttack", longitude: 1, latitude: 0 });
     expect(response).toMatchObject({ updateClient: true, notification: "Unable to update battle. Please try again." });
     expect(trigger.mock.calls.filter(([channel]) => channel === snapshot.id)).toHaveLength(0);
   });

@@ -759,6 +759,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (canPerformAction()) {
             performAction({
               battleId: battleRef.current.id,
+              version: battleRef.current.version,
               actionId: "wait",
               longitude: actor.longitude,
               latitude: actor.latitude,
@@ -1022,6 +1023,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     document.body.style.cursor = "wait";
     performAction({
       battleId: battle.id,
+      version: battle.version,
       actionId: action.id,
       longitude: target.col,
       latitude: target.row,
