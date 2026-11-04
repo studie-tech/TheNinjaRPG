@@ -57,8 +57,12 @@ export const toHotkey = (key: string): string | undefined => {
 /**
  * Hotkeys need a keyboard, which touch-only devices lack: their setup controls and
  * key badges use `not-any-pointer-fine:hidden`, and this is the same check in code.
+ * Hybrid devices pass that check, so a touch long press is also ruled out by the
+ * pointer type that browsers report on the context menu event.
  */
-export const canSetHotkeys = () => window.matchMedia("(any-pointer: fine)").matches;
+export const canSetHotkeys = (event: { nativeEvent: Event }) =>
+  window.matchMedia("(any-pointer: fine)").matches &&
+  (event.nativeEvent as PointerEvent).pointerType !== "touch";
 
 /** Leave typing, Radix controls and open overlays to their own keyboard handling. */
 export const isBattleHotkeyBlocked = (event: KeyboardEvent): boolean => {

@@ -38,8 +38,9 @@ const renderActions = () => {
     />,
   );
   const target = view.getByText("Fireball");
-  const openContextMenu = () => {
+  const openContextMenu = (pointerType?: string) => {
     const event = new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    if (pointerType) Object.defineProperty(event, "pointerType", { value: pointerType });
     fireEvent(target, event);
     return event;
   };
@@ -59,4 +60,13 @@ it("leaves a touch-only long press alone and hides the key badge", () => {
   expect(openContextMenu().defaultPrevented).toBe(false);
   expect(onAssignHotkey).not.toHaveBeenCalled();
   expect(view.getByText("F").className).toContain("not-any-pointer-fine:hidden");
+});
+
+it("leaves a touch long press alone on hybrid devices with a mouse or trackpad", () => {
+  setFinePointer(true);
+  const { onAssignHotkey, openContextMenu } = renderActions();
+  expect(openContextMenu("touch").defaultPrevented).toBe(false);
+  expect(onAssignHotkey).not.toHaveBeenCalled();
+  expect(openContextMenu("mouse").defaultPrevented).toBe(true);
+  expect(onAssignHotkey).toHaveBeenCalledTimes(1);
 });

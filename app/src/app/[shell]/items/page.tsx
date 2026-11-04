@@ -1907,7 +1907,7 @@ const Equip: React.FC<EquipProps> = (props) => {
         canAssignHotkey && props.onAssignHotkey
           ? (event) => {
               // A long press on a touch screen also opens the context menu.
-              if (!canSetHotkeys()) return;
+              if (!canSetHotkeys(event)) return;
               event.preventDefault();
               props.onAssignHotkey?.(item);
             }
