@@ -28,10 +28,12 @@ afterEach(() => {
 it("persists the chosen side and collapsed state without disabling the tutorial", () => {
   const view = render(<ActivityDock>Saved lesson</ActivityDock>);
   expect(view.getByText("Saved lesson")).toBeTruthy();
+  expect(view.getByRole("complementary", { name: "Activity" }).hasAttribute("data-battle-focus-layer")).toBe(true);
   fireEvent.click(view.getByRole("button", { name: "Swap Chat and Activity sides" }));
   expect(view.getByRole("complementary", { name: "Activity" }).className).toContain("right-4");
   fireEvent.click(view.getByRole("button", { name: "Collapse Activity" }));
   expect(view.queryByText("Saved lesson")).toBeNull();
+  expect(view.getByRole("complementary", { name: "Activity" }).hasAttribute("data-battle-focus-layer")).toBe(false);
   expect(user.tutorialOn).toBe(true);
   view.unmount();
   const reopened = render(<ActivityDock>Saved lesson</ActivityDock>);
@@ -67,6 +69,7 @@ it("pins active quest attempts, restores pins, and removes completed attempts fr
   const view = render(<ActivityDock>Lesson</ActivityDock>);
   fireEvent.mouseDown(view.getByRole("tab", { name: "Quests" }), { button: 0, ctrlKey: false });
   expect(view.queryByText("Lesson")).toBeNull();
+  expect(view.getByRole("complementary", { name: "Activity" }).hasAttribute("data-battle-focus-layer")).toBe(false);
   fireEvent.click(view.getByRole("button", { name: "Pin Second mission" }));
   expect(view.getByText("Progress for Second mission")).toBeTruthy();
   expect(view.container.querySelector("article")?.textContent).toContain("Second mission");

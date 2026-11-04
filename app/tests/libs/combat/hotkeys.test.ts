@@ -59,6 +59,24 @@ describe("battle hotkey focus", () => {
     event.preventDefault();
     expect(isBattleHotkeyBlocked(event)).toBe(true);
   });
+
+  it("allows battle keys inside its dialog but suspends them for nested settings", () => {
+    const battle = document.createElement("div");
+    battle.setAttribute("role", "dialog");
+    battle.setAttribute("data-battle-focus-dialog", "");
+    document.body.append(battle);
+    try {
+      const event = new window.KeyboardEvent("keydown", { key: "a" });
+      battle.dispatchEvent(event);
+      expect(isBattleHotkeyBlocked(event)).toBe(false);
+      const settings = document.createElement("div");
+      settings.setAttribute("role", "dialog");
+      battle.append(settings);
+      expect(isBattleHotkeyBlocked(event)).toBe(true);
+    } finally {
+      battle.remove();
+    }
+  });
 });
 
 describe("battle hotkeys", () => {

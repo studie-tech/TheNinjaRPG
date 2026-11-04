@@ -1,5 +1,6 @@
 "use client";
 
+import { useSetAtom } from "jotai";
 import { Flag } from "lucide-react";
 import dynamic from "next/dynamic";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
@@ -13,7 +14,7 @@ import Loader from "@/layout/Loader";
 import ReportUser from "@/layout/Report";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import type { BattleState } from "@/libs/combat/types";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
 
 const loadCombat = () => import("@/layout/Combat");
 const Combat = dynamic(loadCombat, {
@@ -21,6 +22,7 @@ const Combat = dynamic(loadCombat, {
   loading: () => <Loader explanation="Loading Battlefield" />,
 });
 
+/** Renders the embedded battle viewer while preserving live-combat layout preferences. */
 export default function BattleLog(props: { params: Promise<{ battleid: string }> }) {
   const params = use(props.params);
   // State
@@ -29,6 +31,15 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   const [battleState, setBattleState] = useState<BattleState | undefined>(undefined);
   const battleId = params.battleid;
   const utils = api.useUtils();
+  const setBattleAtom = useSetAtom(userBattleAtom);
+
+  // Shared combat handlers can publish snapshots while this viewer is mounted.
+  useEffect(
+    () => () => {
+      setBattleAtom(undefined);
+    },
+    [setBattleAtom],
+  );
 
   useEffect(() => {
     void loadCombat().catch(() => undefined);
@@ -119,7 +130,11 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
                   />
                 </TooltipProvider>
               )}
-              <UserCombatSettings config={config} userData={userData} />
+              <UserCombatSettings
+                config={config}
+                userData={userData}
+                supportsBattleFocus={false}
+              />
             </div>
           }
         />

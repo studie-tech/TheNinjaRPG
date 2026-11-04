@@ -14,7 +14,6 @@ import {
 import {
   type CombatPreferences,
   shouldInvalidateEndedBattleCaches,
-  useAutoCombatSetting,
   useBattleMaps,
   useCombatUpdates,
 } from "@/hooks/combat";
@@ -76,7 +75,6 @@ import {
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
-import type { StatSchemaType } from "@/validators/combat";
 import Countdown from "./Countdown";
 
 interface CombatProps {
@@ -87,6 +85,8 @@ interface CombatProps {
   config: CombatPreferences;
   /** Key that ends the turn; follows the player's hotkey for End Turn. */
   endTurnKey?: string;
+  /** Arena retries are owned by the page so layout remounts retain paid actions. */
+  arenaActions?: React.ReactNode;
 }
 
 /** Coordinate battle controls and snapshots with the owned battlefield renderer. */
@@ -126,8 +126,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const isPageActive = usePageActive();
   const wasPageActiveRef = useRef(true);
   const lastActionsRef = useRef<Date[]>([]);
-  const arenaHealInFlightRef = useRef(false);
-  const arenaStartInFlightRef = useRef(false);
   const readyInFlightBattleIdRef = useRef<string | null>(null);
   const loadoutInFlightRef = useRef<{
     battleId: string;
@@ -181,11 +179,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       battleState.battle.createdAt.getTime() > Date.now() - timeDiff,
   );
   const { updateLogs, startAction, settleAction } = useCombatUpdates(battleState);
-  const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
-    "statDistribution",
-    undefined,
-  );
-  const [autoCombat] = useAutoCombatSetting();
   const suid = userData?.userId;
   // The actor the human drives right now: themselves on their turn, or their
   // piloted summon on the summon's turn. Resolved by page.tsx from the same
@@ -346,98 +339,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       });
       return false;
     }
-  };
-
-  // A successful arena heal is a paid, one-shot action for the current finished
-  // battle. Keep it settled locally even if the follow-up battle start or an
-  // authoritative refresh fails, so stale UI can never charge the player twice.
-  const arenaHealBattleKey = battleId ?? "finished-arena";
-  const [arenaHealSettledBattleId, setArenaHealSettledBattleId] = useState<
-    string | null
-  >(null);
-  const hasSettledArenaHeal = arenaHealSettledBattleId === arenaHealBattleKey;
-
-  // Mutation for healing before starting another arena fight
-  const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
-    api.combat.battleArenaHeal.useMutation({
-      onSuccess: (data) => {
-        if (data.success) {
-          setArenaHealSettledBattleId(arenaHealBattleKey);
-          if (arenaOpponentId) {
-            handleStartArenaBattle("post-heal");
-          } else {
-            showMutationToast(data);
-          }
-        } else {
-          showMutationToast(data);
-        }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
-      onSettled: () => {
-        arenaHealInFlightRef.current = false;
-      },
-    });
-
-  // Mutation for starting a fight
-  const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
-    api.combat.startArenaBattle.useMutation({
-      onSuccess: (result) => {
-        if (result.success && result.battleId) {
-          setBattleAtom(undefined);
-          // The finished battle and its result stay in place until the next battle
-          // loads, so the battlefield keeps its reserved size and nothing turns live.
-          void updateUser({
-            status: "BATTLE",
-            battleId: result.battleId,
-            updatedAt: new Date(),
-          });
-          void utils.combat.getBattle.invalidate();
-        } else {
-          showMutationToast(result);
-        }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
-      onSettled: () => {
-        arenaStartInFlightRef.current = false;
-      },
-    });
-
-  const handleStartArenaBattle = (source: "repeat" | "post-heal") => {
-    if (
-      arenaStartInFlightRef.current ||
-      isStartingArenaBattle ||
-      (source === "repeat" && isArenaHealPending) ||
-      !arenaOpponentId
-    ) {
-      return;
-    }
-    arenaStartInFlightRef.current = true;
-    startArenaBattle({
-      aiId: arenaOpponentId,
-      stats:
-        battleRef.current?.battleType === "TRAINING" ? statDistribution : undefined,
-      autoCombat,
-    });
-  };
-
-  const handleArenaHealAndGo = () => {
-    if (
-      arenaHealInFlightRef.current ||
-      isArenaHealPending ||
-      isStartingArenaBattle ||
-      hasSettledArenaHeal ||
-      !needsArenaHealing ||
-      !canAffordArenaHealing ||
-      !canHealFromCurrentStatus
-    ) {
-      return;
-    }
-    arenaHealInFlightRef.current = true;
-    battleArenaHealAndGo();
   };
 
   // User Action
@@ -1121,13 +1022,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     lightingPreviewDate,
     weatherPreview,
   ]);
-  useEffect(
-    () => () => {
-      void setBattleAtom(undefined);
-    },
-    [setBattleAtom],
-  );
-
   useEffect(() => {
     lastHoverKeyRef.current = null;
     setHoveredEffect(null);
@@ -1151,13 +1045,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   }, []);
 
   // Derived variables
-  const showNextMatch =
-    result?.outcome === "Won" && (battleType === "ARENA" || battleType === "TRAINING");
   const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
   const showTravelBtn = battleType === "QUEST" && !getIsolatedPyramid(userData);
-  const arenaOpponentId = battleRef.current?.usersState.find(
-    (u) => u.userId !== suid && !u.isSummon && u.isAi,
-  )?.controllerId;
   const initiveWinner = battleRef.current?.usersState.find(
     (u) => u.userId === battleRef.current?.activeUserId,
   );
@@ -1165,14 +1054,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     (q) => q.questId === logbookModalQuestId,
   );
   const modalTracker = userData?.questData?.find((q) => q.id === logbookModalQuestId);
-  const needsArenaHealing =
-    !!userData &&
-    !!result &&
-    (result.curHealth < userData.maxHealth ||
-      result.curStamina < userData.maxStamina ||
-      result.curChakra < userData.maxChakra);
-  const canAffordArenaHealing = (userData?.money ?? 0) >= 500;
-  const canHealFromCurrentStatus = userData?.status === "AWAKE";
   const toHospital =
     battleType &&
     result &&
@@ -1449,59 +1330,7 @@ const Combat: React.FC<CombatProps> = (props) => {
                   </Button>
                 </Link>
               )}
-              {showNextMatch &&
-                arenaOpponentId &&
-                (!currentStep || !userData?.tutorialOn) && (
-                  <div className="space-y-2">
-                    <Button
-                      id="return"
-                      className="w-full"
-                      disabled={isArenaHealPending || isStartingArenaBattle}
-                      aria-busy={isStartingArenaBattle}
-                      aria-live="polite"
-                      onClick={() => handleStartArenaBattle("repeat")}
-                    >
-                      {isStartingArenaBattle && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      )}
-                      {isStartingArenaBattle ? "Starting" : "Go Again"}
-                    </Button>
-
-                    <Button
-                      id="heal-return"
-                      className="w-full"
-                      disabled={
-                        isArenaHealPending ||
-                        isStartingArenaBattle ||
-                        hasSettledArenaHeal ||
-                        !needsArenaHealing ||
-                        !canAffordArenaHealing ||
-                        !canHealFromCurrentStatus
-                      }
-                      aria-busy={isArenaHealPending || isStartingArenaBattle}
-                      aria-live="polite"
-                      onClick={handleArenaHealAndGo}
-                    >
-                      {(isArenaHealPending ||
-                        (hasSettledArenaHeal && isStartingArenaBattle)) && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      )}
-                      {isArenaHealPending
-                        ? "Healing"
-                        : hasSettledArenaHeal && isStartingArenaBattle
-                          ? "Starting"
-                          : hasSettledArenaHeal
-                            ? "Healed — use Go Again"
-                            : !canHealFromCurrentStatus
-                              ? "Healing unavailable"
-                              : !needsArenaHealing
-                                ? "Already fully healed"
-                                : !canAffordArenaHealing
-                                  ? "Need 500 Ryo to heal"
-                                  : "Heal and Go Again (-500 Ryo)"}
-                    </Button>
-                  </div>
-                )}
+              {props.arenaActions}
               {battleType === "RANKED_PVP" && (
                 <Link href="/battlearena#PVP%20Rank" className="w-full">
                   <Button id="toPvpRank" className="w-full">

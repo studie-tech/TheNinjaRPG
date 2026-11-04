@@ -33,6 +33,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   config,
   userData,
   autoCombatControl,
+  supportsBattleFocus = true,
 }) => {
   const { sfxOn, setSfxEnabled, lightLayout, setLightLayout } =
     useGameSettings(userData);
@@ -46,17 +47,20 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   const [initialLightLayout] = React.useState(lightLayout);
   const lightLayoutChanged = lightLayout !== initialLightLayout;
   const resourceBarsId = React.useId();
+  const battleFocus = supportsBattleFocus && config.battleFocus;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           aria-label="Open combat settings"
-          className="flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="h-10 w-10"
         >
-          <Settings2 className="h-6 w-6" />
-        </button>
+          <Settings2 className="h-5 w-5" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         aria-label="Combat settings"
@@ -125,12 +129,14 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 checked={config.showGridNumbers}
                 onCheckedChange={config.toggleGridNumbers}
               />
-              <SettingsToggle
-                label="Small action icons"
-                description="Hide labels and fit more per row"
-                checked={config.useSmallActions}
-                onCheckedChange={config.toggleSmallActions}
-              />
+              {!battleFocus && (
+                <SettingsToggle
+                  label="Small action icons"
+                  description="Hide labels and fit more per row"
+                  checked={config.useSmallActions}
+                  onCheckedChange={config.toggleSmallActions}
+                />
+              )}
               <SettingsToggle
                 label="Aggro meters"
                 description="Team aggro against NPCs; tap for details"
@@ -147,77 +153,105 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </TabsContent>
           <TabsContent value="layout" className="space-y-3 pt-2">
             <p className="text-base font-semibold">Combat layout</p>
+            {supportsBattleFocus && (
+              <SettingsToggle
+                label="Battle focus"
+                description="Battle dialog with compact actions, log and timeline"
+                checked={battleFocus}
+                onCheckedChange={config.setBattleFocus}
+              />
+            )}
+            {/* Focus always exposes history; desktop can swap it with the actions. */}
+            {battleFocus && (
+              <div className="hidden lg:block">
+                <SettingsToggle
+                  label="Swap actions and log"
+                  description="Put the log below the field and actions beside it"
+                  checked={config.swapFocusPanels}
+                  onCheckedChange={config.setSwapFocusPanels}
+                />
+              </div>
+            )}
             <div className="divide-border/50 divide-y">
-              <SettingsToggle
-                label="Show battle log"
-                description="Combat history below the field"
-                checked={config.showBattleLog}
-                onCheckedChange={config.toggleBattleLog}
-              />
-              <SettingsToggle
-                label="Show timeline"
-                description="Recent actions in the battle"
-                checked={config.showTimeline}
-                onCheckedChange={config.toggleTimeline}
-              />
+              {!battleFocus && (
+                <>
+                  <SettingsToggle
+                    label="Show battle log"
+                    description="Combat history below the field"
+                    checked={config.showBattleLog}
+                    onCheckedChange={config.toggleBattleLog}
+                  />
+                  <SettingsToggle
+                    label="Show timeline"
+                    description="Recent actions in the battle"
+                    checked={config.showTimeline}
+                    onCheckedChange={config.toggleTimeline}
+                  />
+                </>
+              )}
               <SettingsToggle
                 label="Show basic actions"
                 description="Include basic actions in the timeline"
                 checked={config.showBasicActions}
-                disabled={!config.showTimeline}
+                disabled={!battleFocus && !config.showTimeline}
                 onCheckedChange={config.toggleBasicActions}
               />
-              <SettingsToggle
-                label="Use tabs"
-                description="Group actions, timeline and log in tabs"
-                checked={config.useTabs}
-                onCheckedChange={config.toggleUseTabs}
-              />
+              {!battleFocus && (
+                <SettingsToggle
+                  label="Use tabs"
+                  description="Group actions, timeline and log in tabs"
+                  checked={config.useTabs}
+                  onCheckedChange={config.toggleUseTabs}
+                />
+              )}
             </div>
-            <div className="space-y-2 border-t pt-3">
-              <div className="flex min-h-8 items-center justify-between gap-2">
-                <p className="text-sm font-medium">Panel order</p>
-                {JSON.stringify(config.layoutOrder) !==
-                  JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    onClick={config.resetLayoutOrder}
-                  >
-                    <RotateCcw className="mr-1 h-3 w-3" />
-                    Reset
-                  </Button>
-                )}
+            {!battleFocus && (
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex min-h-8 items-center justify-between gap-2">
+                  <p className="text-sm font-medium">Panel order</p>
+                  {JSON.stringify(config.layoutOrder) !==
+                    JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={config.resetLayoutOrder}
+                    >
+                      <RotateCcw className="mr-1 h-3 w-3" />
+                      Reset
+                    </Button>
+                  )}
+                </div>
+                <SortableList
+                  items={config.layoutOrder
+                    .filter((id) => {
+                      if (id === "timeline" && !config.showTimeline) return false;
+                      if (id === "battlelog" && !config.showBattleLog) return false;
+                      return true;
+                    })
+                    .map((id) => ({
+                      id,
+                      label:
+                        COMBAT_LAYOUT_COMPONENTS.find(
+                          (component) => component.id === id,
+                        )?.label ?? id,
+                    }))}
+                  onReorder={(items) => {
+                    const reorderedIds = items.map(
+                      (item) => item.id as CombatLayoutComponentId,
+                    );
+                    // Hidden panels retain their relative order until shown again.
+                    const hiddenIds = config.layoutOrder.filter(
+                      (id) =>
+                        (id === "timeline" && !config.showTimeline) ||
+                        (id === "battlelog" && !config.showBattleLog),
+                    );
+                    config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
+                  }}
+                  itemClassName="py-1.5"
+                />
               </div>
-              <SortableList
-                items={config.layoutOrder
-                  .filter((id) => {
-                    if (id === "timeline" && !config.showTimeline) return false;
-                    if (id === "battlelog" && !config.showBattleLog) return false;
-                    return true;
-                  })
-                  .map((id) => ({
-                    id,
-                    label:
-                      COMBAT_LAYOUT_COMPONENTS.find((component) => component.id === id)
-                        ?.label ?? id,
-                  }))}
-                onReorder={(items) => {
-                  const reorderedIds = items.map(
-                    (item) => item.id as CombatLayoutComponentId,
-                  );
-                  // Hidden panels retain their relative order until shown again.
-                  const hiddenIds = config.layoutOrder.filter(
-                    (id) =>
-                      (id === "timeline" && !config.showTimeline) ||
-                      (id === "battlelog" && !config.showBattleLog),
-                  );
-                  config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
-                }}
-                itemClassName="py-1.5"
-              />
-            </div>
+            )}
             <div className="border-t">
               <SettingsToggle
                 label="Light layout"
@@ -248,6 +282,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
 
 interface UserCombatSettingsProps {
   config: CombatPreferences;
+  /** Embedded viewers keep their layout controls without changing the saved live preference. */
+  supportsBattleFocus?: boolean;
   /** The page owns the mutation and checks whether the battle permits switching control. */
   autoCombatControl?: React.ReactNode;
   userData?: UserWithRelations | null;

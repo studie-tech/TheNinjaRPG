@@ -15,6 +15,7 @@ interface ActionTimerProps {
   options?: React.ReactNode;
 }
 
+/** Shows turn timing, projected AP and layout controls within the available width. */
 const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   // Destructure props
   const { action, user, battle, isPending } = props;
@@ -94,23 +95,42 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   }, [isPending, battle, user, timeDiff, precomputedActions, isPageActive]);
 
   return (
-    <div className="grow pb-1">
+    <div className="@container/timer grow pb-1">
       <div className="relative w-full overflow-hidden rounded-lg border bg-slate-700/70 shadow-lg backdrop-blur-sm">
         <div className="flex flex-row">
           {/* Round & action bar */}
-          <div className="flex grow flex-col px-4 py-1">
+          <div className="flex grow flex-col px-2 py-1 @min-[400px]/timer:px-4">
             <div className="flex flex-wrap items-center gap-3 font-semibold text-[11px] text-slate-200 uppercase tracking-wide">
-              <div className="flex w-full items-center gap-3 whitespace-nowrap">
-                <span>Round {battle.round}</span>
+              <div className="flex w-full items-center gap-1 whitespace-nowrap @min-[400px]/timer:gap-3">
+                {/* Compact labels leave room for both controls in narrow timers. */}
+                <span title={`Round ${battle.round}`}>
+                  <span className="hidden @min-[400px]/timer:inline">Round </span>
+                  <span className="@min-[400px]/timer:hidden">R</span>
+                  {battle.round}
+                </span>
                 <div className="grow"></div>
                 <div
-                  className={`flex items-center gap-2 rounded-full px-3 pt-1 text-[11px] ${state.waiting ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
+                  className={`flex items-center gap-2 rounded-full px-2 pt-1 text-[11px] @min-[400px]/timer:px-3 ${state.waiting ? "bg-amber-500/10 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
                 >
                   <span
                     className={`h-2 w-2 rounded-full ${state.waiting ? "bg-amber-300" : "bg-emerald-300"}`}
                   />
-                  <span className={`font-semibold ${state.label ? "" : "invisible"}`}>
-                    {state.label || "..."}
+                  <span
+                    title={state.label}
+                    className={`font-semibold ${state.label ? "" : "invisible"}`}
+                  >
+                    {state.label.startsWith("Opponent:") ? (
+                      <>
+                        <span className="@min-[400px]/timer:hidden">
+                          {state.label.replace("Opponent:", "Opp:")}
+                        </span>
+                        <span className="hidden @min-[400px]/timer:inline">
+                          {state.label}
+                        </span>
+                      </>
+                    ) : (
+                      state.label || "..."
+                    )}
                   </span>
                 </div>
               </div>
@@ -141,8 +161,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
             </div>
           </div>
           {/* Cost before & after */}
-          <div className="flex flex-col items-center gap-1 pt-1 pr-2">
-            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold">
+          <div className="flex flex-col items-center gap-1 pt-1 pr-1 @min-[400px]/timer:pr-2">
+            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2 font-semibold @min-[400px]/timer:px-2.5">
               <span className="text-[11px] text-slate-400 uppercase tracking-wide">
                 Cost
               </span>
@@ -151,7 +171,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                 {cost ? `${cost.toFixed(1)}%` : "N/A"}
               </span>
             </span>
-            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2.5 font-semibold">
+            <span className="flex w-full items-center gap-1 rounded-full bg-slate-800/70 px-2 font-semibold @min-[400px]/timer:px-2.5">
               <span className="text-[11px] text-slate-400 uppercase tracking-wide">
                 After
               </span>
@@ -164,7 +184,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
             </span>
           </div>
           {props?.options && (
-            <div className="flex flex-col items-center justify-center gap-1 pt-1 pr-2">
+            // Layout controls stay reachable while an action response is pending.
+            <div className="relative z-10 flex shrink-0 items-center justify-center gap-2 pt-1 pr-2">
               {props.options}
             </div>
           )}

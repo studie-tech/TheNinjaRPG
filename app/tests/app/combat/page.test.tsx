@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
+import { type ReactNode, Suspense } from "react";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as preferences from "@/hooks/combat";
@@ -13,38 +14,63 @@ import * as userContext from "@/utils/UserContext";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
+import * as mediaQuery from "@/hooks/useMediaQuery";
+import * as combatSettings from "@/layout/UserCombatSettings";
+import * as avatar from "@/layout/Avatar";
+import MenuBoxProfile from "@/layout/MenuBoxProfile";
+import * as statusBar from "@/layout/StatusBar";
+import * as menus from "@/libs/menus";
+import * as toast from "@/libs/toast";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
 const scene = vi.spyOn(dynamic, "default").mockReturnValue(
-  (({ battleState }: { battleState: BattleState }) => {
+  (({ battleState, arenaActions }: { battleState: BattleState; arenaActions?: ReactNode }) => {
     loadingEvents.push(`scene:${battleState.battle?.id}`);
-    return <p>{battleState.result ? "Finished battle result" : `Active battle ${battleState.battle?.id}`}</p>;
+    return <><p>{battleState.result ? "Finished battle result" : `Active battle ${battleState.battle?.id}`}</p>{arenaActions}</>;
   }) as never,
 );
 const { default: CombatPage } = await import("@/app/[shell]/combat/page");
+const { default: BattleLog } = await import("@/app/[shell]/battlelog/[battleid]/page");
 scene.mockRestore();
 
 type Response = RouterOutputs["combat"]["getBattle"];
 const empty: Response = { battle: null, result: null };
 const clients: QueryClient[] = [];
+const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 
-afterEach(() => {
+beforeEach(() => {
+  Object.defineProperties(globalThis, {
+    Event: { configurable: true, value: window.Event },
+    CustomEvent: { configurable: true, value: window.CustomEvent },
+  });
+});
+
+afterEach(async () => {
   cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   getDefaultStore().set(userContext.combatActionIdAtom, undefined);
+  getDefaultStore().set(userContext.userBattleAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   vi.restoreAllMocks();
+  for (const [key, descriptor] of eventDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
 });
 
-const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}) => {
+const mount = (battleId: string | null, read: (id: string) => Promise<Response>, config: Partial<ReturnType<typeof preferences.useCombatPreferences>> = {}, spectate = false, arena: { heal?: () => Promise<{ success: boolean; message: string }>; start?: () => Promise<{ success: boolean; message: string; battleId?: string }> } = {}) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(queryClient);
-  let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [] };
+  let profile = { userId: "player", status: battleId ? "BATTLE" : "AWAKE", battleId, userQuests: [], money: 2000, curHealth: 50, curStamina: 50, curChakra: 50, maxHealth: 100, maxStamina: 100, maxChakra: 100 };
   const refetchProfile = vi.fn(async () => undefined);
   const push = vi.fn();
   const toggleAutoCombat = vi.fn();
+  const heal = vi.fn(arena.heal ?? (async () => ({ success: false, message: "Unused heal" })));
+  const start = vi.fn(arena.start ?? (async () => ({ success: false, message: "Daily arena limit reached" })));
+  const mutationToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   const prefetchAssets = vi.fn(async ({ ids }: { ids: string[] }) => {
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
@@ -55,9 +81,12 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({ data: profile }) as never);
-  vi.spyOn(preferences, "useCombatPreferences").mockReturnValue({
+  vi.spyOn(userContext, "useUserData").mockImplementation(() => ({ data: profile, timeDiff: 0 }) as never);
+  let combatConfig = {
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false, ...config,
-  } as never);
+  };
+  vi.spyOn(preferences, "useAutoCombatSetting").mockReturnValue([false, vi.fn()]);
+  vi.spyOn(preferences, "useCombatPreferences").mockImplementation(() => combatConfig as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
   vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({
     ...resolveHotkeys(null, null), hasJutsuLoadout: false, hasItemLoadout: false,
@@ -67,19 +96,138 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>,
     useUtils: () => utils,
     combat: {
       getBattleEntries: { useQuery: () => ({ data: [], isFetching: false }) },
+      getBattleHistoryEntry: { useQuery: () => ({ data: undefined }) },
       getBattle: { useQuery: (input: { battleId?: string | null }, options: object) => useQuery({
         ...options, queryKey: ["combat", input.battleId], queryFn: () => read(input.battleId!),
       }) },
+      battleArenaHeal: { useMutation: (options: object) => useMutation({ ...options, mutationFn: heal }) },
+      startArenaBattle: { useMutation: (options: object) => useMutation({ ...options, mutationFn: start }) },
       toggleAutoCombat: { useMutation: () => ({ mutate: toggleAutoCombat, isPending: false }) },
     },
   });
-  const tree = () => <QueryClientProvider client={queryClient}><CombatPage /></QueryClientProvider>;
+  const params = Promise.resolve({ battleid: battleId! });
+  const tree = () => <QueryClientProvider client={queryClient}><Suspense fallback={null}>{spectate ? <BattleLog params={params} /> : <CombatPage />}</Suspense></QueryClientProvider>;
   const view = render(tree());
-  return { view, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeBattle: (id: string | null) => {
+  return { view, heal, start, mutationToast, changeProfile: (values: Partial<typeof profile>) => {
+    profile = { ...profile, ...values };
+    view.rerender(tree());
+  }, refetchProfile, push, toggleAutoCombat, queryClient, prefetchAssets, changeLayout: (next: Partial<typeof combatConfig>) => {
+    combatConfig = { ...combatConfig, ...next };
+    view.rerender(tree());
+  }, changeBattle: (id: string | null) => {
     profile = { ...profile, battleId: id, status: id ? "BATTLE" : "AWAKE" };
     view.rerender(tree());
   } };
 };
+
+it("retains the shared battle across focus and viewport layout changes and clears it on page exit", async () => {
+  const viewport = vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: "layout-switch", usersState: [makeUser({ userId: "player" })] });
+  const read = vi.fn(async () => ({ battle, result: null }) as unknown as Response);
+  const { view, changeLayout } = mount(battle.id, read, { battleFocus: true });
+  const desktopScene = await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  const shared = store.get(userContext.userBattleAtom);
+  expect(shared?.id).toBe(battle.id);
+  viewport.mockReturnValue(false);
+  changeLayout({});
+  const mobileScene = view.getByText(`Active battle ${battle.id}`);
+  expect(mobileScene).not.toBe(desktopScene);
+  expect(store.get(userContext.userBattleAtom)).toBe(shared);
+  changeLayout({ battleFocus: false });
+  expect(view.getByText(`Active battle ${battle.id}`)).not.toBe(mobileScene);
+  expect(store.get(userContext.userBattleAtom)).toBe(shared);
+  expect(read).toHaveBeenCalledTimes(1);
+  view.unmount();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
+
+it.each([false, true])("returns keyboard focus to the shown battle layout with results=%s", async (finished) => {
+  vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: "focus-return", usersState: [makeUser({ userId: "player" })] });
+  const setBattleFocus = (battleFocus: boolean) => changeLayout({ battleFocus });
+  const { view, changeLayout } = mount(battle.id, async () => ({
+    battle, result: finished ? { outcome: "Won" } : null,
+  }) as unknown as Response, { battleFocus: true, setBattleFocus, layoutOrder: ["timer", "battlefield"] });
+  const exit = await view.findByRole("button", { name: "Show layout" });
+  expect(exit.closest("#tutorial-combat-action-timer")).toBeTruthy();
+  expect(exit.closest("[inert]")).toBeNull();
+  expect(document.activeElement).toBe(exit);
+  fireEvent.click(exit);
+  await waitFor(() => expect(view.queryByRole("button", { name: "Show layout" })).toBeNull());
+  const button = view.queryByRole("button", { name: "Battle focus" });
+  expect(document.activeElement === (finished ? view.container.firstElementChild : button)).toBe(true);
+  expect(document.activeElement?.closest("[inert]")).toBeNull();
+});
+
+it.each(["settled", "healing", "starting"] as const)("retains arena heal protection across viewport and focus remounts while %s", async (phase) => {
+  const viewport = vi.spyOn(mediaQuery, "useMediaQuery").mockReturnValue(true);
+  vi.spyOn(combatSettings, "UserCombatSettings").mockReturnValue(null as never);
+  const battle = makeCompleteBattle({ id: `heal-${phase}`, battleType: "ARENA", usersState: [
+    makeUser({ userId: "player" }), makeUser({ userId: "opponent", isAi: true, controllerId: "arena-opponent" }),
+  ] });
+  let finishHeal!: () => void;
+  let finishStart!: () => void;
+  const { view, heal, start, mutationToast, changeLayout, changeProfile } = mount(battle.id, async () => ({
+    battle, result: { outcome: "Won", curHealth: 50, curStamina: 50, curChakra: 50 },
+  }) as unknown as Response, { battleFocus: true }, false, {
+    heal: async () => {
+      if (phase === "healing") await new Promise<void>((resolve) => { finishHeal = resolve; });
+      changeProfile({ money: 1500, curHealth: 100, curStamina: 100, curChakra: 100 });
+      return { success: true, message: "Healed" };
+    },
+    start: async () => {
+      if (phase === "starting") await new Promise<void>((resolve) => { finishStart = resolve; });
+      return { success: false, message: "Daily arena limit reached" };
+    },
+  });
+  await view.findByText("Finished battle result");
+  changeProfile({ status: "AWAKE", battleId: null });
+  fireEvent.click(view.getByRole("button", { name: "Heal and Go Again (-500 Ryo)" }));
+  if (phase === "healing") await waitFor(() => expect(heal).toHaveBeenCalledTimes(1));
+  else await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+  if (phase === "settled") await view.findByRole("button", { name: "Healed — use Go Again" });
+  const desktopResult = view.getByText("Finished battle result");
+  viewport.mockReturnValue(false);
+  changeLayout({});
+  expect(view.getByText("Finished battle result")).not.toBe(desktopResult);
+  const mobileResult = view.getByText("Finished battle result");
+  changeLayout({ battleFocus: false });
+  expect(view.getByText("Finished battle result")).not.toBe(mobileResult);
+  const healButton = view.container.querySelector<HTMLButtonElement>("#heal-return")!;
+  expect(healButton.disabled).toBe(true);
+  fireEvent.click(healButton);
+  if (phase !== "settled") {
+    const repeatButton = view.container.querySelector<HTMLButtonElement>("#return")!;
+    expect(repeatButton.disabled).toBe(true);
+    fireEvent.click(repeatButton);
+    await act(async () => phase === "healing" ? finishHeal() : finishStart());
+  }
+  await waitFor(() => expect(mutationToast).toHaveBeenCalledWith({ success: false, message: "Daily arena limit reached" }));
+  expect(heal).toHaveBeenCalledTimes(1);
+  expect(start).toHaveBeenCalledTimes(1);
+  expect(view.getByRole("button", { name: "Healed — use Go Again" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(view.getByRole("button", { name: "Go Again" }));
+  await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+  expect(heal).toHaveBeenCalledTimes(1);
+});
+
+it("clears shared combat handler snapshots on spectator exit without publishing the viewed battle", async () => {
+  const battle = makeCompleteBattle({ id: "spectated", usersState: [makeUser({ userId: "player" })] });
+  let mounted!: ReturnType<typeof mount>;
+  await act(async () => {
+    mounted = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response, {}, true);
+  });
+  const { view } = mounted;
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  act(() => store.set(userContext.userBattleAtom, battle as unknown as NonNullable<Response["battle"]>));
+  view.unmount();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
 
 it("starts asset loading before mounting each new battle scene, preserving the query input order", async () => {
   const resolvers = new Map<string, (value: Response) => void>();
@@ -118,6 +266,50 @@ it("recovers a settled battle missing behind a cached character ID", async () =>
   expect(refetchProfile).toHaveBeenCalledTimes(1);
   expect(view.getByRole("link", { name: "Return to Profile" }).getAttribute("href")).toBe("/profile");
   expect(push).not.toHaveBeenCalled();
+});
+
+it.each(["query", "profile"])("releases battle pools when the %s confirms combat ended while the page stays mounted", async (source) => {
+  const battle = makeCompleteBattle({ id: "externally-settled", usersState: [
+    makeUser({ userId: "player", curHealth: 23, maxHealth: 100, curChakra: 31, maxChakra: 100, curStamina: 42, maxStamina: 100 }),
+  ] });
+  const { view, queryClient, changeProfile } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  expect(store.get(userContext.userBattleAtom)?.id).toBe(battle.id);
+  if (source === "query") {
+    await act(async () => queryClient.setQueryData(["combat", battle.id], empty));
+    await view.findByText("You are not in an active battle.");
+    expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  }
+  changeProfile({ status: "AWAKE", battleId: null, curHealth: 90, curChakra: 91, curStamina: 92 });
+  expect(view.getByText("You are not in an active battle.")).toBeDefined();
+  expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => ({
+    timeDiff: 0, data: select({ ...userContext.useRequiredUserData().data, level: 10, experience: 0, rank: "GENIN", regeneration: 7, raidBuffs: [], titles: [] } as never),
+  }) as never);
+  vi.spyOn(avatar, "default").mockReturnValue(null as never);
+  vi.spyOn(menus, "useGameMenu").mockReturnValue({} as never);
+  vi.spyOn(statusBar, "default").mockImplementation(({ title, current, regen }) => <p>{title}: {current}; regen: {regen}</p>);
+  Object.assign(client.api, {
+    profile: { getSidebarTimers: { useQuery: () => ({ data: undefined }) } },
+    raids: { getUserRaidBuffs: { useQuery: () => ({ data: undefined }) } },
+  });
+  const sidebar = render(<MenuBoxProfile />);
+  expect(sidebar.getByText("HP: 90; regen: 7")).toBeDefined();
+  expect(sidebar.getByText("CP: 91; regen: 7")).toBeDefined();
+  expect(sidebar.getByText("SP: 92; regen: 7")).toBeDefined();
+});
+
+it("preserves a newer shared battle snapshot when the rendered battle disappears", async () => {
+  const battle = makeCompleteBattle({ id: "older", usersState: [makeUser({ userId: "player" })] });
+  const newer = { ...battle, id: "newer" } as unknown as NonNullable<Response["battle"]>;
+  const { view, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response);
+  await view.findByText(`Active battle ${battle.id}`);
+  const store = getDefaultStore();
+  act(() => store.set(userContext.userBattleAtom, newer));
+  await act(async () => queryClient.setQueryData(["combat", battle.id], empty));
+  await view.findByText("You are not in an active battle.");
+  expect(store.get(userContext.userBattleAtom)).toBe(newer);
 });
 
 it("offers a return path when the character has no battle, without querying", () => {
@@ -173,6 +365,7 @@ it("keeps an already displayed result when a later lookup or profile loses its b
   changeBattle(null);
   expect(view.getByText("Finished battle result")).toBeDefined();
   expect(view.queryByRole("link", { name: "Return to Profile" })).toBeNull();
+  expect(getDefaultStore().get(userContext.userBattleAtom)?.id).toBe(battle.id);
 });
 
 it("preserves dungeon recovery when a different member settles its battle", async () => {

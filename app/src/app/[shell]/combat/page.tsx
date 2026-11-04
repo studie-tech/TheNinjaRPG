@@ -1,18 +1,30 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
+import { Loader2, Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AutoBattleTypes, ManualStartBattleTypes } from "@/drizzle/constants";
-import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import {
+  AutoBattleTypes,
+  BATTLE_ARENA_HEAL_COST,
+  ManualStartBattleTypes,
+} from "@/drizzle/constants";
+import {
+  type CombatLayoutComponentId,
+  useAutoCombatSetting,
+  useCombatPreferences,
+} from "@/hooks/combat";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
+import { BattleFocusView } from "@/layout/BattleFocusView";
 import { ActionSelector } from "@/layout/CombatActions";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import CombatHistory from "@/layout/CombatHistory";
@@ -39,6 +51,7 @@ import {
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
+import type { StatSchemaType } from "@/validators/combat";
 
 const loadCombat = () => import("@/layout/Combat");
 const Combat = dynamic(loadCombat, {
@@ -46,6 +59,7 @@ const Combat = dynamic(loadCombat, {
   loading: () => <Loader explanation="Loading Battlefield" />,
 });
 
+/** Keeps battle state, handover and hotkeys shared between focus and game layouts. */
 export default function CombatPage() {
   // State
   const router = useRouter();
@@ -56,6 +70,26 @@ export default function CombatPage() {
   const [activeTab, setActiveTab] = useState<string>("actions");
   const [autoCombatError, setAutoCombatError] = useState<string>();
   const [hotkeyTarget, setHotkeyTarget] = useState<HotkeyTarget | null>(null);
+  const arenaHealInFlightRef = useRef(false);
+  const arenaStartInFlightRef = useRef(false);
+  const battleFocusButtonRef = useRef<HTMLButtonElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const wasBattleFocusRef = useRef(config.battleFocus);
+  const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
+    "statDistribution",
+    undefined,
+  );
+  const [autoCombat] = useAutoCombatSetting();
+
+  useEffect(() => {
+    const shouldRestoreFocus = wasBattleFocusRef.current && !config.battleFocus;
+    wasBattleFocusRef.current = config.battleFocus;
+    if (!shouldRestoreFocus) return;
+    // The focus button remounts with the layout; finished battle controls are inert.
+    const button = battleFocusButtonRef.current;
+    const target = button && !button.closest("[inert]") ? button : layoutRef.current;
+    target?.focus({ preventScroll: true });
+  }, [config.battleFocus]);
 
   // Download and evaluate the scene while the battle query is in flight.
   useEffect(() => {
@@ -64,6 +98,13 @@ export default function CombatPage() {
 
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
+  // The page owns shared battle state across battlefield layout remounts.
+  useEffect(
+    () => () => {
+      setBattleAtom(undefined);
+    },
+    [setBattleAtom],
+  );
   const utils = api.useUtils();
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
@@ -114,6 +155,20 @@ export default function CombatPage() {
     itemLoadoutId: sessionBattleUser?.itemLoadout,
   });
   const isAutoCombatActive = !!sessionBattleUser?.isAutoCombat;
+  const arenaOpponentId = battle?.usersState.find(
+    (u) => u.userId !== userId && !u.isSummon && u.isAi,
+  )?.controllerId;
+  const needsArenaHealing =
+    !!userData &&
+    !!results &&
+    (results.curHealth < userData.maxHealth ||
+      results.curStamina < userData.maxStamina ||
+      results.curChakra < userData.maxChakra);
+  const canAffordArenaHealing = (userData?.money ?? 0) >= BATTLE_ARENA_HEAL_COST;
+  const canHealFromCurrentStatus = userData?.status === "AWAKE";
+  const showNextMatch =
+    results?.outcome === "Won" &&
+    (battle?.battleType === "ARENA" || battle?.battleType === "TRAINING");
   const visibleTab =
     isAutoCombatActive && activeTab === "actions"
       ? config.showTimeline
@@ -137,7 +192,7 @@ export default function CombatPage() {
     : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
   const actionAspect = config.useSmallActions ? "aspect-square" : undefined;
   const showActionLabels = !config.useSmallActions;
-  // Keep a finished battle's timer and actions dimmed and inert until the player leaves.
+  // Keep a finished battle's actions and settings dimmed and inert until the player leaves.
   const isInBattle = userData?.status === "BATTLE" || !!results;
   // After "Go Again" the finished battle is held in state until the next one's data is
   // applied; keep the scene back until then rather than remount the finished battle.
@@ -207,6 +262,9 @@ export default function CombatPage() {
   // A different client can settle combat while this profile still holds its ID.
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
+    if (userId && !results && (!userData?.battleId || isBattleMissing)) {
+      setBattleAtom((current) => (current?.id === battle?.id ? undefined : current));
+    }
     if (isBattleMissing) {
       if (userData?.battleId) void utils.profile.getUser.invalidate();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
@@ -215,10 +273,12 @@ export default function CombatPage() {
     }
   }, [
     isBattleMissing,
+    userId,
     userData?.battleId,
     battle?.id,
     battle?.extraState.dungeon,
     results,
+    setBattleAtom,
     router,
     utils,
   ]);
@@ -228,6 +288,150 @@ export default function CombatPage() {
   const actions = useMemo(() => {
     return availableUserActions(battleState?.battle, controlledActorId);
   }, [versionId, controlledActorId]);
+
+  // A successful arena heal is a paid, one-shot action for the current finished
+  // battle. The page owns settlement and pending requests so battlefield layout
+  // remounts cannot expose another charge or a duplicate battle start.
+  const arenaHealBattleKey = battle?.id ?? "finished-arena";
+  const [arenaHealSettledBattleId, setArenaHealSettledBattleId] = useState<
+    string | null
+  >(null);
+  const hasSettledArenaHeal = arenaHealSettledBattleId === arenaHealBattleKey;
+
+  // Mutation for healing before starting another arena fight
+  const { mutate: battleArenaHealAndGo, isPending: isArenaHealPending } =
+    api.combat.battleArenaHeal.useMutation({
+      onSuccess: (data) => {
+        if (data.success) {
+          setArenaHealSettledBattleId(arenaHealBattleKey);
+        }
+        if (data.success && arenaOpponentId) {
+          handleStartArenaBattle("post-heal");
+        } else {
+          showMutationToast(data);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaHealInFlightRef.current = false;
+      },
+    });
+
+  // Mutation for starting a fight
+  const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
+    api.combat.startArenaBattle.useMutation({
+      onSuccess: (result) => {
+        if (result.success && result.battleId) {
+          setBattleAtom(undefined);
+          // The finished battle and its result stay in place until the next battle
+          // loads, so the battlefield keeps its reserved size and nothing turns live.
+          void updateUser({
+            status: "BATTLE",
+            battleId: result.battleId,
+            updatedAt: new Date(),
+          });
+          void utils.combat.getBattle.invalidate();
+        } else {
+          showMutationToast(result);
+        }
+      },
+      onError: (error) => {
+        showMutationToast({ success: false, message: error.message });
+      },
+      onSettled: () => {
+        arenaStartInFlightRef.current = false;
+      },
+    });
+
+  /** Reserves one retry, allowing a successful heal to hand off before its mutation settles. */
+  const handleStartArenaBattle = (source: "repeat" | "post-heal") => {
+    if (
+      arenaStartInFlightRef.current ||
+      isStartingArenaBattle ||
+      (source === "repeat" && isArenaHealPending) ||
+      !arenaOpponentId
+    ) {
+      return;
+    }
+    arenaStartInFlightRef.current = true;
+    startArenaBattle({
+      aiId: arenaOpponentId,
+      stats: battle?.battleType === "TRAINING" ? statDistribution : undefined,
+      autoCombat,
+    });
+  };
+
+  /** Reserves one paid heal for this result before handing off to the next match. */
+  const handleArenaHealAndGo = () => {
+    if (
+      arenaHealInFlightRef.current ||
+      isArenaHealPending ||
+      isStartingArenaBattle ||
+      hasSettledArenaHeal ||
+      !needsArenaHealing ||
+      !canAffordArenaHealing ||
+      !canHealFromCurrentStatus
+    ) {
+      return;
+    }
+    arenaHealInFlightRef.current = true;
+    battleArenaHealAndGo();
+  };
+
+  const arenaActions = showNextMatch &&
+    arenaOpponentId &&
+    (!currentStep || !userData?.tutorialOn) && (
+      <div className="space-y-2">
+        <Button
+          id="return"
+          className="w-full"
+          disabled={isArenaHealPending || isStartingArenaBattle}
+          aria-busy={isStartingArenaBattle}
+          aria-live="polite"
+          onClick={() => handleStartArenaBattle("repeat")}
+        >
+          {isStartingArenaBattle && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          )}
+          {isStartingArenaBattle ? "Starting" : "Go Again"}
+        </Button>
+
+        <Button
+          id="heal-return"
+          className="w-full"
+          disabled={
+            isArenaHealPending ||
+            isStartingArenaBattle ||
+            hasSettledArenaHeal ||
+            !needsArenaHealing ||
+            !canAffordArenaHealing ||
+            !canHealFromCurrentStatus
+          }
+          aria-busy={isArenaHealPending || isStartingArenaBattle}
+          aria-live="polite"
+          onClick={handleArenaHealAndGo}
+        >
+          {(isArenaHealPending || (hasSettledArenaHeal && isStartingArenaBattle)) && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          )}
+          {isArenaHealPending
+            ? "Healing"
+            : hasSettledArenaHeal && isStartingArenaBattle
+              ? "Starting"
+              : hasSettledArenaHeal
+                ? "Healed — use Go Again"
+                : !canHealFromCurrentStatus
+                  ? "Healing unavailable"
+                  : !needsArenaHealing
+                    ? "Already fully healed"
+                    : !canAffordArenaHealing
+                      ? `Need ${BATTLE_ARENA_HEAL_COST} Ryo to heal`
+                      : `Heal and Go Again (-${BATTLE_ARENA_HEAL_COST} Ryo)`}
+        </Button>
+      </div>
+    );
 
   // Battle scene. Pass the CONTROLLED actor (self, or the piloted summon on its
   // turn) so Combat does not have to re-derive it from the same battle object.
@@ -245,6 +449,7 @@ export default function CombatPage() {
           setBattleState={setBattleState}
           config={config}
           endTurnKey={hotkeys.byAction.wait}
+          arenaActions={arenaActions}
         />
       )
     );
@@ -257,6 +462,7 @@ export default function CombatPage() {
     config.resourceBarsVisibility,
     actions,
     hotkeys.byAction.wait,
+    arenaActions,
   ]);
 
   // Battle hotkeys select actions by id. A bound action that is unavailable
@@ -326,74 +532,99 @@ export default function CombatPage() {
     [actionId, setActionId],
   );
 
-  // Component renderers
-  const renderTimer = useCallback(() => {
-    if (!battle || !user || !isInBattle || !battleState) {
-      // Hold the timer's height while the battle loads, so nothing below it moves.
-      return isInBattle ? <div className="h-16" /> : null;
-    }
+  /** Shares the same handover guards and feedback in settings and the focus view. */
+  const renderAutoControl = useCallback(() => {
+    if (!battle || !canToggleAutoCombat || results) return null;
+    // The tutorial teaches manual fighting; it only offers the switch to hand back a
+    // battle that is already running on auto.
+    if (isTutorialRunning && !isAutoCombatActive) return null;
     return (
-      <div
-        className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
-        id="tutorial-combat-action-timer"
-        inert={!!results}
-      >
-        <ActionTimer
-          action={actions.find((a) => a.id === actionId)}
-          user={{
-            userId: controlledActorId,
-            actionPoints: user?.actionPoints ?? 0,
-          }}
-          battle={battle}
-          isPending={battleState.isPending}
-          options={
-            <UserCombatSettings
-              config={config}
-              userData={userData}
-              autoCombatControl={
-                // The tutorial teaches manual fighting; it only offers the switch to
-                // hand back a battle that is already running on auto.
-                canToggleAutoCombat &&
-                !results &&
-                (!isTutorialRunning || isAutoCombatActive) ? (
-                  <AutoCombatControl
-                    key={battle.id}
-                    isActive={isAutoCombatActive}
-                    isPending={isTogglingAutoCombat}
-                    requiresConfirmation={ManualStartBattleTypes.includes(
-                      battle.battleType,
-                    )}
-                    error={autoCombatError}
-                    onChange={(enabled) =>
-                      toggleAutoCombat({ battleId: battle.id, enabled })
-                    }
-                  />
-                ) : undefined
-              }
-            />
-          }
-        />
-      </div>
+      <AutoCombatControl
+        key={battle.id}
+        isActive={isAutoCombatActive}
+        isPending={isTogglingAutoCombat}
+        requiresConfirmation={ManualStartBattleTypes.includes(battle.battleType)}
+        error={autoCombatError}
+        onChange={(enabled) => toggleAutoCombat({ battleId: battle.id, enabled })}
+      />
     );
   }, [
     battle,
-    user,
-    isInBattle,
-    battleState,
-    results,
-    actions,
-    actionId,
-    userId,
-    controlledActorId,
-    config,
-    userData,
     canToggleAutoCombat,
+    results,
     isAutoCombatActive,
     isTutorialRunning,
     isTogglingAutoCombat,
     autoCombatError,
     toggleAutoCombat,
   ]);
+
+  /** Shares timer controls across layouts while keeping the exit available for held results. */
+  const renderTimer = useCallback(
+    (focusExit?: ReactNode) => {
+      if (!battle || !user || !isInBattle || !battleState) {
+        // Hold the timer's height while the battle loads, so nothing below it moves.
+        return isInBattle ? <div className="h-16" /> : null;
+      }
+      return (
+        <div
+          className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
+          id="tutorial-combat-action-timer"
+        >
+          <ActionTimer
+            action={actions.find((a) => a.id === actionId)}
+            user={{
+              userId: controlledActorId,
+              actionPoints: user?.actionPoints ?? 0,
+            }}
+            battle={battle}
+            isPending={battleState.isPending}
+            options={
+              <>
+                {focusExit}
+                {!config.battleFocus && (
+                  <Button
+                    ref={battleFocusButtonRef}
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    aria-label="Battle focus"
+                    inert={!!results}
+                    title="Battle focus: open the battle dialog"
+                    onClick={() => config.setBattleFocus(true)}
+                  >
+                    <Maximize2 className="h-5 w-5" />
+                  </Button>
+                )}
+                <div className="flex" inert={!!results}>
+                  <UserCombatSettings
+                    config={config}
+                    userData={userData}
+                    autoCombatControl={renderAutoControl()}
+                  />
+                </div>
+              </>
+            }
+          />
+        </div>
+      );
+    },
+    [
+      battle,
+      user,
+      isInBattle,
+      battleState,
+      results,
+      actions,
+      actionId,
+      userId,
+      controlledActorId,
+      config,
+      userData,
+      renderAutoControl,
+    ],
+  );
 
   const renderBattlefield = useCallback(() => {
     // Reserve the canvas while loading. Settled results use their content height so
@@ -436,81 +667,92 @@ export default function CombatPage() {
     toggleAutoCombat,
   ]);
 
-  const renderActions = useCallback(() => {
-    if (!isInBattle || !battle || isAutoCombatActive) return null;
-    return (
-      <div
-        className={cn("flex flex-col gap-1", results && "opacity-50")}
-        inert={!!results}
-      >
-        <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
-        <ActionSelector
-          showInfoIcon={true}
-          items={actions}
-          currentRound={battle.round}
-          className="p-1"
-          showBgColor={true}
-          eagerImages={true}
-          showLabels={showActionLabels}
-          selectedId={actionId}
-          combatMode={true}
-          userActionPoints={user?.actionPoints}
+  /** Focus uses compact icons while retaining action selection and editable hotkeys. */
+  const renderActions = useCallback(
+    (focus = false) => {
+      if (!isInBattle || !battle || isAutoCombatActive) return null;
+      return (
+        <div
+          className={cn("flex flex-col gap-1", results && "opacity-50")}
+          inert={!!results}
+        >
+          <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
+          <ActionSelector
+            showInfoIcon={true}
+            items={actions}
+            currentRound={battle.round}
+            className="p-1"
+            showBgColor={true}
+            eagerImages={true}
+            showLabels={!focus && showActionLabels}
+            selectedId={actionId}
+            combatMode={true}
+            userActionPoints={user?.actionPoints}
+            battle={battle}
+            userId={controlledActorId}
+            gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
+            aspectRatioClass={focus ? "aspect-square" : actionAspect}
+            onClick={handleActionClick}
+            hotkeys={hotkeys.byAction}
+            onAssignHotkey={(item) =>
+              setHotkeyTarget({
+                id: item.id,
+                name: item.name,
+                kind: item.type === "item" ? "item" : "jutsu",
+              })
+            }
+          />
+        </div>
+      );
+    },
+    [
+      userId,
+      isInBattle,
+      battle,
+      isAutoCombatActive,
+      results,
+      actions,
+      showActionLabels,
+      actionId,
+      user?.actionPoints,
+      controlledActorId,
+      actionGridClass,
+      actionAspect,
+      handleActionClick,
+      hotkeys.byAction,
+    ],
+  );
+
+  // Focus keeps history available independently of the embedded layout preferences.
+  const renderTimeline = useCallback(
+    (focus = false) => {
+      if ((!focus && !config.showTimeline) || !battle) return null;
+      return (
+        <CombatTimeline
+          battleId={battle.id}
           battle={battle}
-          userId={controlledActorId}
-          gridClassNameOverwrite={actionGridClass}
-          aspectRatioClass={actionAspect}
-          onClick={handleActionClick}
-          hotkeys={hotkeys.byAction}
-          onAssignHotkey={(item) =>
-            setHotkeyTarget({
-              id: item.id,
-              name: item.name,
-              kind: item.type === "item" ? "item" : "jutsu",
-            })
-          }
+          battleVersion={battle.version}
+          showBasicActions={config.showBasicActions}
         />
-      </div>
-    );
-  }, [
-    userId,
-    isInBattle,
-    battle,
-    isAutoCombatActive,
-    results,
-    actions,
-    showActionLabels,
-    actionId,
-    user?.actionPoints,
-    controlledActorId,
-    actionGridClass,
-    actionAspect,
-    handleActionClick,
-    hotkeys.byAction,
-  ]);
+      );
+    },
+    [config.showTimeline, config.showBasicActions, battle],
+  );
 
-  const renderTimeline = useCallback(() => {
-    if (!config.showTimeline || !battle) return null;
-    return (
-      <CombatTimeline
-        battleId={battle.id}
-        battle={battle}
-        battleVersion={battle.version}
-        showBasicActions={config.showBasicActions}
-      />
-    );
-  }, [config.showTimeline, config.showBasicActions, battle]);
-
-  const renderBattleLog = useCallback(() => {
-    if (!config.showBattleLog || !battle) return null;
-    return (
-      <CombatHistory
-        battleId={battle.id}
-        battleVersion={battle.version}
-        battleRound={battle.round}
-        results={results}
-      />
-    );
-  }, [config.showBattleLog, battle, results]);
+  const renderBattleLog = useCallback(
+    (focus = false) => {
+      if ((!focus && !config.showBattleLog) || !battle) return null;
+      return (
+        <CombatHistory
+          battleId={battle.id}
+          battleVersion={battle.version}
+          battleRound={battle.round}
+          results={results}
+        />
+      );
+    },
+    [config.showBattleLog, battle, results],
+  );
 
   // Component renderer based on ID
   const renderComponent = useCallback(
@@ -622,11 +864,65 @@ export default function CombatPage() {
     );
   }
 
+  // Both layouts expose the same hotkey editor for the controlled actor's actions.
+  const hotkeyDialog = (
+    <HotkeyCaptureDialog
+      target={hotkeyTarget}
+      currentKey={hotkeyTarget ? hotkeys.byAction[hotkeyTarget.id] : undefined}
+      onAssign={(key) =>
+        hotkeyTarget &&
+        hotkeys.setHotkey(
+          hotkeyTarget.kind,
+          hotkeyTarget.id,
+          key,
+          Object.fromEntries(actions.map((action) => [action.id, action.name])),
+        )
+      }
+      onClose={() => setHotkeyTarget(null)}
+    />
+  );
+
+  if (config.battleFocus && battle) {
+    return (
+      <>
+        <BattleFocusView
+          battle={battle}
+          controlledActorId={controlledActorId}
+          swapFocusPanels={config.swapFocusPanels}
+          renderTimer={renderTimer}
+          field={renderBattlefield()}
+          fieldRatio={
+            results ? undefined : getBattlefieldHeightRatio(battle.width, battle.height)
+          }
+          dock={
+            <>
+              {renderActions(true)}
+              {actionId && !results && !isAutoCombatActive && (
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  <span className="text-green-700">Green</span>: affected ·{" "}
+                  <span className="text-red-500">Red</span>: not affected ·{" "}
+                  <span className="text-blue-500">Blue</span>: move
+                  {hotkeys.byAction.wait &&
+                    ` · ${hotkeys.byAction.wait.toUpperCase()}: end turn`}
+                </p>
+              )}
+            </>
+          }
+          autoControl={renderAutoControl()}
+          log={renderBattleLog(true)}
+          timeline={renderTimeline(true)}
+          onShowLayout={() => config.setBattleFocus(false)}
+        />
+        {hotkeyDialog}
+      </>
+    );
+  }
+
   // Determine which components are tabbed vs standalone
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
   return (
-    <div className="flex flex-col gap-1 sm:container">
+    <div ref={layoutRef} tabIndex={-1} className="flex flex-col gap-1 sm:container">
       {config.useTabs ? (
         // Tabs mode: render non-tabbed components in order, then tabs
         <>
@@ -662,20 +958,10 @@ export default function CombatPage() {
           </div>
         </div>
       )}
-      <HotkeyCaptureDialog
-        target={hotkeyTarget}
-        currentKey={hotkeyTarget ? hotkeys.byAction[hotkeyTarget.id] : undefined}
-        onAssign={(key) =>
-          hotkeyTarget &&
-          hotkeys.setHotkey(
-            hotkeyTarget.kind,
-            hotkeyTarget.id,
-            key,
-            Object.fromEntries(actions.map((action) => [action.id, action.name])),
-          )
-        }
-        onClose={() => setHotkeyTarget(null)}
-      />
+      {hotkeyDialog}
     </div>
   );
 }
+
+/** Battle focus packs every action into one grid of icons that wraps as needed. */
+const FOCUS_ACTION_GRID = "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1";

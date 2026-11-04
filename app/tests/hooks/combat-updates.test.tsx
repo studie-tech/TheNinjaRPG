@@ -29,6 +29,7 @@ let reads: string[];
 let finishRead: ((state: BattleState) => void) | undefined;
 let pauseSuccess: Promise<void> | undefined;
 let latestState: BattleState;
+let remountControls: () => void;
 
 const stateAt = (version: number, patch: Partial<BattleState> = {}) =>
   ({ battle: { id: "battle", version, updatedAt: new Date(0) }, result: null, isPending: false, ...patch }) as BattleState;
@@ -62,12 +63,17 @@ const mount = (initial = stateAt(1)) => {
     const [state, updateState] = useState(initial);
     setState = updateState;
     latestState = state;
-    const updates = useCombatUpdates(state);
-    const { startAction, settleAction } = updates;
-    updateLogs = updates.updateLogs;
+    const [layout, setLayout] = useState(0);
+    remountControls = () => setLayout((current) => current + 1);
     const { data } = testApi.combat.getBattle.useQuery({ battleId: state.battle?.id });
     // The combat page applies query responses independently of the mutation.
     useEffect(() => { if (data?.battle) updateState({ ...data, isPending: false }); }, [data]);
+    return <Controls key={layout} state={state} updateState={updateState} />;
+  }
+  function Controls({ state, updateState }: { state: BattleState; updateState: (update: (state: BattleState) => BattleState) => void }) {
+    const updates = useCombatUpdates(state);
+    const { startAction, settleAction } = updates;
+    updateLogs = updates.updateLogs;
     const action = testApi.combat.performAction.useMutation({
       onMutate: () => { updateState((current) => ({ ...current, isPending: true })); },
       onSuccess: async (data) => {
@@ -158,6 +164,26 @@ it("blocks synchronous duplicate submissions and retains an uncovered opponent e
   await waitFor(() => expect(queryClient.isMutating()).toBe(1));
   await respond(4);
   expect(reads).toHaveLength(2);
+});
+
+it.each(["success", "failure", "no-op"])("retains action protection across layout remounts until %s settles", async (outcome) => {
+  mount();
+  await beginAction();
+  // The page can render a poll while focus or breakpoint changes remount its controls.
+  await act(async () => { setState(stateAt(1)); remountControls(); });
+  expect(latestState.isPending).toBe(false);
+  await act(async () => performAction());
+  expect(queryClient.isMutating()).toBe(1);
+  await act(async () => {
+    if (outcome === "failure") failAction(new Error("Connection lost"));
+    else finishAction(outcome === "success" ? actionResponse(2) : { notification: "Not your turn" });
+  });
+  await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+  if (outcome === "failure") await act(async () => finishRead?.(stateAt(1)));
+  await act(async () => performAction());
+  await waitFor(() => expect(queryClient.isMutating()).toBe(1));
+  await respond(3);
+  expect(latestState.battle?.version).toBe(3);
 });
 
 it.each(["failure", "no-op"])("allows another submission after a %s settles", async (outcome) => {

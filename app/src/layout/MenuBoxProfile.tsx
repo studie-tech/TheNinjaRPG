@@ -1272,7 +1272,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
   // ------------ Render ------------
   return (
-    <div className="relative flex flex-col gap-4 text-base md:text-xs lg:text-base">
+    <div
+      className={cn(
+        "relative flex flex-col gap-4 text-base md:text-xs lg:text-base",
+        // The filter needs space even when all of the battle's effects have expired.
+        effects.length > 0 && "min-h-5",
+      )}
+    >
       {effects.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
