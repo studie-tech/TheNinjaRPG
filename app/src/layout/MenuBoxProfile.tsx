@@ -74,7 +74,6 @@ import {
   getPreventTypeName,
   getStatTypeLabels,
   isEffectActive,
-  isEffectEnabled,
 } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import {
@@ -1346,24 +1345,21 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         </div>
       )}
 
-      {activeCurses.map((effect) => {
-        const isEnabled = isEffectEnabled(effect, effects);
-        return (
-          <div key={`stored-${effect.id}`}>
-            <div className="mb-1 font-semibold">Curse Healing</div>
-            <div>
-              {effect.curseState?.storedHealing.toFixed(2)} HP stored · {effect.rounds}{" "}
-              {effect.rounds === 1 ? "round" : "rounds"} remaining
-            </div>
-            {effect.type === "curse" && (
-              <div className={cn("text-xs", !isEnabled && "line-through")}>
-                Damage bonus: +{effect.damageBonusPercent ?? 0}%
-                {!isEnabled && " (sealed)"}
-              </div>
-            )}
+      {/* Ground seals are projected during combat processing, so show configuration here. */}
+      {activeCurses.map((effect) => (
+        <div key={`stored-${effect.id}`}>
+          <div className="mb-1 font-semibold">Curse Healing</div>
+          <div>
+            {effect.curseState?.storedHealing.toFixed(2)} HP stored · {effect.rounds}{" "}
+            {effect.rounds === 1 ? "round" : "rounds"} remaining
           </div>
-        );
-      })}
+          {effect.type === "curse" && (
+            <div className="text-xs">
+              Configured damage bonus: +{effect.damageBonusPercent ?? 0}%
+            </div>
+          )}
+        </div>
+      ))}
 
       {diffuseDebt > 0 && (
         <div>

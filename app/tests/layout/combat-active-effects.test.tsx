@@ -48,7 +48,7 @@ describe("combat active effects", () => {
     expect(view.queryByText(/^Curse healing power \+/)).toBeNull();
     expect(view.queryByText("Curse Healing")).toBeNull();
     expect(view.queryByText(/125\.00 HP stored/)).toBeNull();
-    expect(view.queryByText(/Damage bonus:/)).toBeNull();
+    expect(view.queryByText(/Configured damage bonus:/)).toBeNull();
   });
 
   it.each([1, 2])("labels stored Curse healing with %s remaining rounds", (rounds) => {
@@ -59,36 +59,29 @@ describe("combat active effects", () => {
   it("distinguishes Curse healing power from its configured damage bonus", () => {
     const view = render(<VisualizeEffects effects={[storedCurse()]} userId={userId} />);
     expect(view.getByText("Curse healing power +50% ↻ 2")).toBeTruthy();
-    expect(view.getByText("Damage bonus: +70%")).toBeTruthy();
+    expect(view.getByText("Configured damage bonus: +70%")).toBeTruthy();
   });
 
   it("keeps stacked Curse bonuses separate rather than displaying an additive total", () => {
     const second = { ...storedCurse(3, 20), id: "second-curse", creatorId: "ally" };
     const view = render(<VisualizeEffects effects={[storedCurse(), second]} userId={userId} />);
-    expect(view.getByText("Damage bonus: +70%")).toBeTruthy();
-    expect(view.getByText("Damage bonus: +20%")).toBeTruthy();
-    expect(view.queryByText("Damage bonus: +90%")).toBeNull();
+    expect(view.getByText("Configured damage bonus: +70%")).toBeTruthy();
+    expect(view.getByText("Configured damage bonus: +20%")).toBeTruthy();
+    expect(view.queryByText("Configured damage bonus: +90%")).toBeNull();
   });
 
-  it("marks a sealed bonus even when the sealing source is filtered out", () => {
+  it("shows the configured bonus when a Seal disables the Curse", () => {
     window.localStorage.setItem("ve_include_item", "false");
     const curse = { ...storedCurse(), fromType: "bloodline" as const };
     const seal = makeEffect("seal", { rounds: 2 }, { ...runtime, fromType: "item", isNew: false });
     const view = render(<VisualizeEffects effects={[curse, seal]} userId={userId} />);
-    expect(view.getByText("Damage bonus: +70% (sealed)").className).toContain("line-through");
-  });
-
-  it.each([true, false])("ignores %s new or expired seals for damage bonus display", (isNew) => {
-    const curse = { ...storedCurse(), fromType: "bloodline" as const };
-    const seal = makeEffect("seal", { rounds: isNew ? 2 : 0 }, { ...runtime, isNew });
-    const view = render(<VisualizeEffects effects={[curse, seal]} userId={userId} />);
-    expect(view.getByText("Damage bonus: +70%").className).not.toContain("line-through");
+    expect(view.getByText("Configured damage bonus: +70%").className).not.toContain("line-through");
   });
 
   it("hides damage bonuses for expired and settled Curses", () => {
     const expired = { ...storedCurse(), rounds: 0 };
     const settled = { ...storedCurse(), id: "settled", curseState: { storedHealing: 125, activatedRound: 1, ready: true, settled: true } };
     const view = render(<VisualizeEffects effects={[expired, settled]} userId={userId} />);
-    expect(view.queryByText(/Damage bonus:/)).toBeNull();
+    expect(view.queryByText(/Configured damage bonus:/)).toBeNull();
   });
 });
