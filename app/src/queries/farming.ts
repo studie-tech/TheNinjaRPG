@@ -25,10 +25,6 @@ import {
   userItem,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import {
-  completedQuestHistoryRelation,
-  userQuestHistoryRelation,
-} from "@/server/utils/achievementObjectives";
 
 /** Load a seed and its yield definition; a missing seed leaves seedItem undefined and yieldItem null. */
 export const fetchFarmSeedAndYield = async (
@@ -114,21 +110,6 @@ export const fetchFarmPlots = async (client: DrizzleClient, userId: string) => {
     where: eq(farmPlot.userId, userId),
     orderBy: (plot, { asc }) => [asc(plot.slotIndex)],
     with: { seedItem: true },
-  });
-};
-
-/**
- * Thin quest-state fetch for farming objective emits. This keeps the tracker
- * snapshot internally consistent without pulling the full user relation graph.
- */
-export const fetchFarmingQuestState = async (client: DrizzleClient, userId: string) => {
-  return await client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: { userId: true, questData: true, updatedAt: true },
-    with: {
-      userQuests: userQuestHistoryRelation,
-      completedQuests: completedQuestHistoryRelation,
-    },
   });
 };
 

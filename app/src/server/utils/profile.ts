@@ -1,6 +1,6 @@
 import {
   claimUserAnnouncements,
-  findUserRoleById,
+  fetchViewerRole,
   listNotificationForGetUser,
   listPublicUserRows,
 } from "@/queries/profile";
@@ -59,14 +59,14 @@ export const fetchPublicUsers = async (info: {
 }) => {
   const { client, input, userId, includeEffects } = info;
   const { skip, cursorAfter } = offsetPage(input);
-  const [users, user] = await Promise.all([
+  const [users, viewerRole] = await Promise.all([
     listPublicUserRows(client, input, skip, includeEffects),
     // The online-players sidebar needs only the caller's role to decide IP visibility.
-    userId ? findUserRoleById(client, userId) : null,
+    fetchViewerRole(client, userId),
   ]);
 
   // IP-based searches require permission even when the result list is empty.
-  if (input.ip && (!user || !canSeeIps(user.role))) {
+  if (input.ip && !canSeeIps(viewerRole)) {
     throw serverError("FORBIDDEN", "You are not allowed to search IPs");
   }
   // Normalize proxy addresses before hiding all IPs from unauthorized viewers.
@@ -75,7 +75,7 @@ export const fetchPublicUsers = async (info: {
     .forEach((u) => {
       u.lastIp = "Proxied";
     });
-  if (!user || !canSeeIps(user.role)) {
+  if (!canSeeIps(viewerRole)) {
     users.forEach((u) => {
       u.lastIp = "hidden";
     });

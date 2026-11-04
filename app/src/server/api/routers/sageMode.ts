@@ -7,7 +7,7 @@ import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
-import { fetchUser, findUserRoleById } from "@/queries/profile";
+import { fetchUser, fetchViewerRole } from "@/queries/profile";
 import {
   deleteSageModeForDelete,
   fetchSageMode,
@@ -66,8 +66,8 @@ export const sageModeRouter = createTRPCRouter({
    * only for content staff (`canChangeContent`); everyone else sees visible rows.
    */
   getAllNames: publicProcedure.query(async ({ ctx }) => {
-    const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
-    const allowHidden = user ? canChangeContent(user.role) : false;
+    const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+    const allowHidden = canChangeContent(viewerRole);
     return await listSageModeForGetAllNames(ctx.drizzle, allowHidden);
   }),
 
@@ -84,8 +84,8 @@ export const sageModeRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
-      const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
-      const allowHiddenFilter = user ? canChangeContent(user.role) : false;
+      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const allowHiddenFilter = canChangeContent(viewerRole);
       const baseFilters = sageModeDatabaseFilter(input, allowHiddenFilter);
       const results = await listSageModeForGetAll(
         ctx.drizzle,

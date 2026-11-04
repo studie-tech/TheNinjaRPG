@@ -26,6 +26,7 @@ import type { z } from "zod";
 import {
   IMG_AVATAR_DEFAULT,
   type VariantCostType,
+  type VariantCurrencyField,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
@@ -62,10 +63,6 @@ import { nextSnapshotAtSql } from "@/queries/concurrency";
 import { lpcDesignAssignmentGuard } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
 import {
-  completedQuestHistoryRelation,
-  userQuestHistoryRelation,
-} from "@/server/utils/achievementObjectives";
-import {
   hasNoHuntingBattle,
   userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
@@ -74,22 +71,6 @@ import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
 import type { FurnitureVariantData } from "@/validators/itemFurniture";
 import type { cacheConsumptionResponseSchema } from "@/validators/weightedCache";
-
-/**
- * Thin quest-state fetch for tracker emits: only the relations getNewTrackers needs
- * (active + achievement userQuests, plus completedQuests for availability checks).
- * Avoids fetchUpdatedUser's fat row and its regen side-writes.
- */
-export const fetchUserQuestState = async (client: DrizzleClient, userId: string) => {
-  return await client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: { userId: true, questData: true },
-    with: {
-      userQuests: userQuestHistoryRelation,
-      completedQuests: completedQuestHistoryRelation,
-    },
-  });
-};
 
 /** Load an item definition by ID; a missing definition yields undefined. */
 export const fetchItem = async (client: DrizzleClient, id: string) => {
@@ -1158,11 +1139,7 @@ export const findUserItemVariantForPurchaseVariant = (
 export const updateUserDataForPurchaseVariant = (
   client: Pick<DrizzleClient, "update">,
   currency: {
-    decrementSet:
-      | { money: SQL<unknown> }
-      | { reputationPoints: SQL<unknown> }
-      | { seichiSilver: SQL<unknown> }
-      | { villagePrestige: SQL<unknown> };
+    decrementSet: Partial<Record<VariantCurrencyField, SQL>>;
     where: SQL<unknown>;
   },
   ctx: { userId: string },
@@ -1176,11 +1153,7 @@ export const updateUserDataForPurchaseVariant = (
 export const updateUserDataForRefundCurrency = (
   client: Pick<DrizzleClient, "update">,
   currency: {
-    incrementSet:
-      | { money: SQL<unknown> }
-      | { reputationPoints: SQL<unknown> }
-      | { seichiSilver: SQL<unknown> }
-      | { villagePrestige: SQL<unknown> };
+    incrementSet: Partial<Record<VariantCurrencyField, SQL>>;
   },
   ctx: { userId: string },
 ) =>

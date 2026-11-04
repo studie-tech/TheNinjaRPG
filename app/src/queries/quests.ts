@@ -79,6 +79,10 @@ import {
 } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -146,19 +150,19 @@ export const fetchQuest = async (client: DrizzleClient, id: string) => {
 };
 
 /**
- * Role of the (possibly signed-out) caller of a public content-browsing endpoint. Defaults to
- * "USER" so an unauthenticated visitor is redacted exactly like an ordinary player.
+ * Thin quest-state fetch for tracker emits: only the relations getNewTrackers needs
+ * (active + achievement userQuests, plus completedQuests for availability checks).
+ * Avoids fetchUpdatedUser's fat row and its regen side-writes.
  */
-export const fetchViewerRole = async (
-  client: DrizzleClient,
-  userId: string | null | undefined,
-) => {
-  if (!userId) return "USER" as UserRole;
-  const viewer = await client.query.userData.findFirst({
-    columns: { role: true },
+export const fetchQuestTrackerState = async (client: DrizzleClient, userId: string) => {
+  return await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
+    columns: { userId: true, questData: true, updatedAt: true },
+    with: {
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
+    },
   });
-  return viewer?.role ?? ("USER" as UserRole);
 };
 
 /**

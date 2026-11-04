@@ -89,18 +89,6 @@ export const fetchMasterySources = async (
   };
 };
 
-/** Load only the viewer role for caller-owned visibility checks; omit the read when no viewer ID is supplied. */
-export const fetchSkillTreeViewer = async (
-  client: DrizzleClient,
-  userId: string | null | undefined,
-) =>
-  userId
-    ? client.query.userData.findFirst({
-        where: eq(userData.userId, userId),
-        columns: { role: true },
-      })
-    : undefined;
-
 import { asc, gte, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { COST_SKILL_RESET, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";

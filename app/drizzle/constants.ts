@@ -16,6 +16,16 @@ export const VARIANT_COST_TYPES = [
 ] as const;
 export type VariantCostType = (typeof VARIANT_COST_TYPES)[number];
 
+/** Balance paying for each variant currency; VARIANT_TOKEN consumes an item instead. */
+export const VARIANT_CURRENCY_FIELD = {
+  MONEY: "money",
+  REPUTATION: "reputationPoints",
+  SEICHI_SILVER: "seichiSilver",
+  VILLAGE_PRESTIGE: "villagePrestige",
+} as const satisfies Record<Exclude<VariantCostType, "VARIANT_TOKEN">, string>;
+export type VariantCurrency = keyof typeof VARIANT_CURRENCY_FIELD;
+export type VariantCurrencyField = (typeof VARIANT_CURRENCY_FIELD)[VariantCurrency];
+
 export const MAX_ITEM_VARIANTS = 7;
 /** Rows in the sidebar banner of users with the most ranked LP. */
 export const STRONGEST_USERS_COUNT = 10;

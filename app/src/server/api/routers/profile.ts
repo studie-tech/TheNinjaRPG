@@ -168,7 +168,7 @@ import {
   findUserById,
   findUserDataForFetchUpdatedUserOnce,
   findUserDataForGetAi,
-  findUserDataForGetPublicUser,
+  fetchViewerRole,
   findUserDataForGetPublicUser2,
   findUserDataForGetSeichiSilverForStaff,
   findUserDataForGetUsername,
@@ -1952,38 +1952,34 @@ export const profileRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const [requester, user] = await Promise.all([
-        findUserDataForGetPublicUser(ctx.drizzle, ctx),
+      const [viewerRole, user] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         findUserDataForGetPublicUser2(ctx.drizzle, input),
       ]);
       // Guard
       if (!user) return null;
       // Hide secrets
       const isSelf = ctx.userId === user.userId;
-      if (!isSelf && (!requester || !canSeeSecretData(requester.role))) {
+      if (!isSelf && !canSeeSecretData(viewerRole)) {
         user.earnedExperience = 8008;
         user.isBanned = false;
         user.aiProfileId = null;
         // Editors submit these ownership lists with the full profile form.
-        const canEditTarget = requester && !canOnlyEditSelf(requester.role);
-        if (!canEditTarget || !canEditJutsus(requester.role)) {
+        const canEditTarget = !canOnlyEditSelf(viewerRole);
+        if (!canEditTarget || !canEditJutsus(viewerRole)) {
           user.jutsus = [];
         }
-        if (!canEditTarget || !canEditItems(requester.role)) {
+        if (!canEditTarget || !canEditItems(viewerRole)) {
           user.items = [];
         }
       }
-      if (!requester || !canSeeIps(requester.role)) {
+      if (!canSeeIps(viewerRole)) {
         user.lastIp = "hidden";
       }
       if (user.bloodline && user.activeReskin) {
         user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
       }
-      if (
-        user.sageMode?.hidden &&
-        !isSelf &&
-        !(requester && canChangeContent(requester.role))
-      ) {
+      if (user.sageMode?.hidden && !isSelf && !canChangeContent(viewerRole)) {
         user.sageMode = null;
         user.sageModeId = null;
       }
@@ -1998,9 +1994,7 @@ export const profileRouter = createTRPCRouter({
       // Hide PvP W/L unless the owner opted in, the viewer is the owner, or staff.
       // Null (not omit) so the public payload shape stays stable for clients.
       const canSeePvpRecord =
-        isSelf ||
-        user.showPvpRecord ||
-        Boolean(requester && canSeeSecretData(requester.role));
+        isSelf || user.showPvpRecord || canSeeSecretData(viewerRole);
       if (!canSeePvpRecord) {
         return { ...user, pvpWins: null, pvpLosses: null };
       }

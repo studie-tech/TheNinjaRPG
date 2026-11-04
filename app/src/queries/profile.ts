@@ -1326,16 +1326,6 @@ export const listUserDataForSearchUsers = (
     limit: 5,
   });
 
-/** Build the `userData` lookup for `getPublicUser`, selecting only `role`, using predicates on `userId`. */
-export const findUserDataForGetPublicUser = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userId: null | string },
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, ctx.userId ?? ""),
-    columns: { role: true },
-  });
-
 /** Build the `userData` lookup for `getPublicUser`, including predicates on `userId`, `attackedId`, `battleType`. */
 export const findUserDataForGetPublicUser2 = (
   client: Pick<DrizzleClient, "query">,
@@ -2229,6 +2219,19 @@ export const findUserRoleById = (
     columns: { role: true },
     where: eq(userData.userId, userId),
   });
+
+/**
+ * Role of a possibly signed-out viewer of a public endpoint. Defaults to "USER" so an
+ * unauthenticated visitor is treated exactly like an ordinary player.
+ */
+export const fetchViewerRole = async (
+  client: Pick<DrizzleClient, "query">,
+  userId: string | null | undefined,
+): Promise<UserRole> => {
+  if (!userId) return "USER";
+  const viewer = await findUserRoleById(client, userId);
+  return viewer?.role ?? "USER";
+};
 
 /** Build a public-profile row by ID with its display title and village; callers apply indexability checks. */
 export const findPublicProfileById = (

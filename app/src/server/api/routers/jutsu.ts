@@ -199,7 +199,7 @@ import {
   fetchLoadoutUser,
   fetchUser,
   findUserDataForGetUsername,
-  findUserRoleById,
+  fetchViewerRole,
   incrementUserMoney,
   refundUserReputationPoints,
 } from "@/queries/profile";
@@ -821,12 +821,11 @@ export const jutsuRouter = createTRPCRouter({
     })
     .input(getEvolutionsSchema)
     .query(async ({ ctx, input }) => {
-      const [user, evolutions] = await Promise.all([
-        ctx.userId ? findUserRoleById(ctx.drizzle, ctx.userId) : Promise.resolve(null),
+      const [viewerRole, evolutions] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         listJutsuForGetEvolutions(ctx.drizzle, input),
       ]);
-      const canViewHidden = !!user && canChangeContent(user.role);
-      return filterVisibleEvolutions(evolutions, canViewHidden);
+      return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
     }),
 
   evolveJutsu: protectedProcedure

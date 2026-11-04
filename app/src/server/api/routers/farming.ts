@@ -49,7 +49,6 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   deleteFarmExtractionForExtractSeeds,
   deleteFarmExtractionForPayOutExtractions,
-  fetchFarmingQuestState,
   fetchFarmPlots,
   fetchFarmPlotsWithItems,
   fetchFarmPlotWithItems,
@@ -89,6 +88,7 @@ import {
   updateUserItemForAwardItemToUser,
 } from "@/queries/farming";
 import { fetchItem, insertUserItems, listItemsByIds } from "@/queries/item";
+import { fetchQuestTrackerState } from "@/queries/quests";
 import { fetchMasterySources, fetchUserSkills } from "@/queries/skillTree";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
@@ -137,7 +137,7 @@ export const farmingRouter = createTRPCRouter({
         fetchUserItems(ctx.drizzle, ctx.userId),
         findFarmPlotForPlantSeed(ctx.drizzle, input, ctx),
         fetchFarmSeedAndYield(ctx.drizzle, input.seedItemId),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       const userSkills = passiveSources.userSkills;
@@ -263,7 +263,7 @@ export const farmingRouter = createTRPCRouter({
       const [user, plot, questState] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
       ]);
 
       const guard = guardFarmingMutation(user);
@@ -326,7 +326,7 @@ export const farmingRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
@@ -438,7 +438,7 @@ export const farmingRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
       ]);
 
       const guard = guardFarmingMutation(user);
@@ -540,7 +540,7 @@ export const farmingRouter = createTRPCRouter({
           fetchUserItems(ctx.drizzle, ctx.userId),
           fetchItem(ctx.drizzle, input.seedItemId),
           listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-          fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
           fetchMasterySources(ctx.drizzle, ctx.userId),
         ]);
       const userSkills = passiveSources.userSkills;
@@ -659,7 +659,7 @@ export const farmingRouter = createTRPCRouter({
       const [user, plots, questState] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listFarmPlotForWaterAll(ctx.drizzle, ctx),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
       ]);
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -726,7 +726,7 @@ export const farmingRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       const guard = guardFarmingMutation(user);
@@ -845,7 +845,7 @@ export const farmingRouter = createTRPCRouter({
           },
         }),
         fetchFarmPlotsWithItems(ctx.drizzle, ctx.userId),
-        fetchFarmingQuestState(ctx.drizzle, ctx.userId),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
       ]);
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -2135,7 +2135,7 @@ type FarmingQuestTask =
 
 /** Only the claim's own unchanged quest snapshot may inherit its new CAS timestamp. */
 const farmingQuestStateAfterClaim = (
-  questState: Awaited<ReturnType<typeof fetchFarmingQuestState>>,
+  questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   updatedAt: Date,
   claimedAt: Date,
 ) =>
@@ -2159,7 +2159,7 @@ const awardFarmingProgress = async (
   client: DrizzleClient,
   user: Awaited<ReturnType<typeof fetchUser>>,
   xpGain: number,
-  questState: Awaited<ReturnType<typeof fetchFarmingQuestState>>,
+  questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   task: FarmingQuestTask,
   increment = 1,
   loadFarmingCollectionCount?: () => Promise<number>,
@@ -2175,7 +2175,7 @@ const awardFarmingProgress = async (
   /** Trackers this action would produce from one snapshot of the user's quest state. */
   const questUpdateFor = async (
     snapshotUser: Awaited<ReturnType<typeof fetchUser>>,
-    snapshotQuests: Awaited<ReturnType<typeof fetchFarmingQuestState>>,
+    snapshotQuests: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   ) => {
     const advancesObjective = snapshotQuests?.userQuests.some((uq) =>
       uq.quest?.content.objectives.some((objective) => {
@@ -2262,7 +2262,7 @@ const awardFarmingProgress = async (
     if (attempt > 0) {
       [snapshotUser, snapshotQuests] = await Promise.all([
         fetchUser(client, user.userId),
-        fetchFarmingQuestState(client, user.userId),
+        fetchQuestTrackerState(client, user.userId),
       ]);
       update = await questUpdateFor(snapshotUser, snapshotQuests);
       if (!update.advancesObjective) {
@@ -2277,7 +2277,7 @@ const awardFarmingProgress = async (
       }
     }
     // The guard has to come from the same read as the payload. fetchUser and
-    // fetchFarmingQuestState are separate queries, so a write landing between them
+    // fetchQuestTrackerState are separate queries, so a write landing between them
     // pairs a current timestamp with a stale document, and the CAS waves it through.
     if (!snapshotQuests) return null;
     const claim = await claimUserSnapshot({
