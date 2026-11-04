@@ -311,7 +311,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       !(description.worldMaterial || worldAssetSource(description.image))
     )
       return fallback;
-    if (!hasBakedShadow(source.texture, description))
+    if (!baked)
       return Object.assign(
         () => {
           fixtures.delete(source);
