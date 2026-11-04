@@ -91,6 +91,7 @@ import {
   isAvailableUserQuests,
   isQuestRankAllowed,
   isWarMissionAvailable,
+  listUpcomingQuests,
   missionHallStartBlockedMessage,
   postProcessRewards,
   type QuestConsequence,
@@ -540,6 +541,33 @@ export const questsRouter = createTRPCRouter({
             }),
           ),
         }));
+    }),
+  upcomingQuests: protectedProcedure
+    .meta({
+      mcp: {
+        description: "Get quests of a type the user still needs a level or mastery for",
+      },
+    })
+    .input(z.object({ questType: z.enum(QuestTypes) }))
+    .query(async ({ ctx, input }) => {
+      if (isRestrictedQuestType(input.questType)) {
+        return [];
+      }
+      // Query without the level cap so quests above the user's level are included
+      const [{ user }, quests] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: [input.questType],
+        }),
+      ]);
+      if (!user) return [];
+      quests.forEach((r) => {
+        controlShownQuestLocationInformation(r);
+      });
+      return listUpcomingQuests(quests, user);
     }),
   startRandom: protectedProcedure
     .meta({ mcp: { description: "Start a random mission or errand" } })
