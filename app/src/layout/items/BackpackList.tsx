@@ -29,9 +29,6 @@ interface BackpackListProps {
     userItem: UserItemWithRelations,
     card: React.ReactNode,
   ) => React.ReactNode;
-  /** Chip to show, when the page asks for one (e.g. a slot's item type). */
-  filterType?: BackpackFilter["type"];
-  onFilterTypeChange?: (type: BackpackFilter["type"]) => void;
 }
 
 /**
@@ -45,8 +42,6 @@ export function BackpackList({
   onSelect,
   onDragItem,
   wrapCard,
-  filterType,
-  onFilterTypeChange,
 }: BackpackListProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useLocalStorage<BackpackSort>(
@@ -61,13 +56,8 @@ export function BackpackList({
     ? items
     : items.filter((ui) => !ui.item.hidden);
   const chips = backpackFilterChips(visible);
-  const requested = filterType ?? storedType;
   // A chip remembered from another bag falls back to everything in this one.
-  const type = chips.some((chip) => chip.value === requested) ? requested : "ALL";
-  const selectType = (value: BackpackFilter["type"]) => {
-    setStoredType(value);
-    onFilterTypeChange?.(value);
-  };
+  const type = chips.some((chip) => chip.value === storedType) ? storedType : "ALL";
   const shown = sortBackpack(
     filterBackpack(visible, { query, type }),
     BACKPACK_SORTS.some((option) => option.value === sort) ? sort : "rarity",
@@ -110,7 +100,7 @@ export function BackpackList({
               key={chip.value}
               type="button"
               aria-pressed={isActive}
-              onClick={() => selectType(chip.value)}
+              onClick={() => setStoredType(chip.value)}
               className={cn(
                 "h-8 rounded-full border px-2.5 text-xs",
                 isActive
