@@ -1,5 +1,5 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { getUserCaps, MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
+import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { craftingStartBlockMessage } from "@/libs/crafting";
 import { huntingSessionStage } from "@/libs/hunting/contracts";
