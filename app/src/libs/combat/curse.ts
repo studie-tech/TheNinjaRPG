@@ -8,6 +8,27 @@ import type {
 } from "./types";
 import { canStackEffect, getEffectStackKey, isEffectEnabled } from "./util";
 
+/** Multiply the holder's resolved Curse bonuses using the full context for ground seals. */
+export const getCurseDamageMultiplier = (
+  effects: UserEffect[],
+  userId: string,
+  preventionEffects: UserEffect[],
+) => {
+  let multiplier = 1;
+  for (const effect of effects) {
+    if (
+      effect.type === "curse" &&
+      effect.targetId === userId &&
+      effect.curseState &&
+      !effect.curseState.settled &&
+      isEffectEnabled(effect, preventionEffects)
+    ) {
+      multiplier *= 1 + (effect.damageBonusPercent ?? 0) / 100;
+    }
+  }
+  return multiplier;
+};
+
 /** Store each opponent HP loss once for eligible Curse holders on either side. */
 export const accumulateCurseDamage = (
   effects: UserEffect[],

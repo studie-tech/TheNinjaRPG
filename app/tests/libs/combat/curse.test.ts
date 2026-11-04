@@ -12,10 +12,15 @@ import {
   makeEffect,
 } from "./helpers/battleScenario";
 
-const mark = (power = 50, targetId = "attacker", id = `curse-${targetId}`) =>
+const mark = (
+  power = 50,
+  targetId = "attacker",
+  id = `curse-${targetId}`,
+  damageBonusPercent = 0,
+) =>
   makeEffect(
     "curse",
-    { power, rounds: 3 },
+    { power, rounds: 3, damageBonusPercent },
     {
       id,
       creatorId: targetId,
@@ -98,9 +103,149 @@ describe("Curse", () => {
   });
 
   it("does not boost damage after Curse is removed", () => {
-    const battle = applyEffects(scenario([hit()]), "attacker").newBattle;
+    const clear = makeEffect(
+      "clear",
+      { power: 100, rounds: 0 },
+      {
+        creatorId: "defender",
+        targetId: "attacker",
+        targetType: "user",
+        createdRound: 3,
+        isNew: true,
+      },
+    );
+    const battle = applyEffects(
+      scenario([mark(50, "attacker", "boosted", 50), clear, hit()]),
+      "attacker",
+    ).newBattle;
     expect(user(battle, "defender").curHealth).toBe(4000);
+    expect(battle.usersEffects.some((effect) => effect.type === "curse")).toBe(false);
   });
+
+  it.each([0, 50])(
+    "boosts Pierce by %i percent while preserving its damage-reduction bypass",
+    (bonus) => {
+      const pierce = makeEffect(
+        "pierce",
+        { power: 1250, calculation: "static", rounds: 0 },
+        {
+          creatorId: "attacker",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 3,
+          isNew: true,
+        },
+      );
+      const reduction = makeEffect(
+        "decreasedamagetaken",
+        { power: 50, calculation: "percentage", rounds: 3 },
+        {
+          creatorId: "defender",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 1,
+        },
+      );
+      const battle = applyEffects(
+        scenario([mark(50, "attacker", "boosted", bonus), pierce, reduction]),
+        "attacker",
+      ).newBattle;
+      expect(user(battle, "defender").curHealth).toBe(5000 - 1250 * (1 + bonus / 100));
+    },
+  );
+
+  it.each([1200, 1600])(
+    "uses Curse-boosted damage for Diffuse lethality at %i HP",
+    (health) => {
+      const diffuse = makeEffect(
+        "diffuse",
+        { power: 50, rounds: 3, delayRounds: 1 },
+        {
+          creatorId: "defender",
+          targetId: "defender",
+          targetType: "user",
+          createdRound: 1,
+        },
+      );
+      const initial = scenario([mark(50, "attacker", "boosted", 50), hit(), diffuse]);
+      user(initial, "defender").curHealth = health;
+      const battle = applyEffects(initial, "attacker").newBattle;
+      const defender = user(battle, "defender");
+      expect(defender.curHealth).toBe(health === 1200 ? 0 : 850);
+      expect(
+        defender.diffuseDamage?.reduce(
+          (total, debt) => total + debt.remainingDamage,
+          0,
+        ) ?? 0,
+      ).toBe(health === 1200 ? 0 : 750);
+    },
+  );
+
+  it.each(["damage", "pierce"] as const)(
+    "suppresses a bloodline Curse's %s bonus under a ground Seal",
+    (type) => {
+      const effect = mark(50, "attacker", "boosted", 50);
+      effect.fromType = "bloodline";
+      effect.curseState = { storedHealing: 0, activatedRound: 1 };
+      const attack =
+        type === "damage"
+          ? hit()
+          : makeEffect(
+              "pierce",
+              { power: 1250, calculation: "static", rounds: 0 },
+              {
+                creatorId: "attacker",
+                targetId: "defender",
+                targetType: "user",
+                createdRound: 3,
+                isNew: true,
+              },
+            );
+      const initial = scenario([effect, attack]);
+      initial.groundEffects = [
+        {
+          ...makeEffect(
+            "seal",
+            { power: 100, rounds: 3 },
+            {
+              creatorId: "defender",
+              targetType: "user",
+              createdRound: 1,
+            },
+          ),
+          longitude: user(initial).longitude,
+          latitude: user(initial).latitude,
+        },
+      ];
+      const battle = applyEffects(initial, "attacker").newBattle;
+      expect(user(battle, "defender").curHealth).toBe(type === "damage" ? 4000 : 3750);
+    },
+  );
+
+  it.each(["expired", "settled", "prevented"] as const)(
+    "does not boost damage with a %s Curse",
+    (state) => {
+      const effect = mark(50, "attacker", "boosted", 50);
+      if (state === "expired") effect.rounds = 0;
+      if (state === "settled")
+        effect.curseState = { storedHealing: 0, activatedRound: 1, settled: true };
+      const prevent = makeEffect(
+        "buffprevent",
+        { power: 100, rounds: 3 },
+        {
+          creatorId: "defender",
+          targetId: "attacker",
+          targetType: "user",
+          createdRound: 0,
+        },
+      );
+      const battle = applyEffects(
+        scenario([effect, hit(), ...(state === "prevented" ? [prevent] : [])]),
+        "attacker",
+      ).newBattle;
+      expect(user(battle, "defender").curHealth).toBe(4000);
+    },
+  );
 
   it("stores 250 from each 1000 damage direction and heals 500 only on expiry", () => {
     let battle = applyEffects(

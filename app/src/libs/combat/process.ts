@@ -34,7 +34,11 @@ import {
   damageReductionTypes,
   dmgConfig as defaultDmgConfig,
 } from "./constants";
-import { accumulateCurseConsequence, accumulateCurseDamage } from "./curse";
+import {
+  accumulateCurseConsequence,
+  accumulateCurseDamage,
+  getCurseDamageMultiplier,
+} from "./curse";
 import { type DiffusePacket, deferDiffuseDamage, repayDiffuseDamage } from "./diffuse";
 import { areBattleAllies } from "./participants";
 import {
@@ -1580,7 +1584,9 @@ export const applySingleEffect = (
               config,
             );
           } else if (effect.type === "pierce" && isTargetOrNew) {
-            const modifier = calcDmgModifier(effect, curTarget, usersEffects);
+            const modifier =
+              calcDmgModifier(effect, curTarget, usersEffects) *
+              getCurseDamageMultiplier(newUsersEffects, effect.creatorId, usersEffects);
             info = damageUser(
               effect,
               newUser,
@@ -2520,20 +2526,6 @@ export const applyDamageModifierPipelineToConsequences = ({
   const effectById = new Map(usersEffects.map((e) => [e.id, e]));
   const modifierListsByPair = new Map<string, DamagePacketModifierLists>();
   const curseBonusByUser = new Map<string, number>();
-  for (const effect of curseEffects ?? []) {
-    if (
-      effect.type === "curse" &&
-      effect.curseState &&
-      !effect.curseState.settled &&
-      isEffectEnabled(effect, curseEffects ?? [])
-    ) {
-      const previous = curseBonusByUser.get(effect.targetId) ?? 1;
-      curseBonusByUser.set(
-        effect.targetId,
-        previous * (1 + (effect.damageBonusPercent ?? 0) / 100),
-      );
-    }
-  }
 
   for (const [effectId, consequence] of consequences) {
     const damageKey =
@@ -2559,9 +2551,18 @@ export const applyDamageModifierPipelineToConsequences = ({
       modifierListsByPair.set(pairKey, modifierLists);
     }
 
+    let curseBonus = curseBonusByUser.get(consequence.userId);
+    if (curseBonus === undefined) {
+      curseBonus = getCurseDamageMultiplier(
+        curseEffects ?? [],
+        consequence.userId,
+        usersEffects,
+      );
+      curseBonusByUser.set(consequence.userId, curseBonus);
+    }
     const rawDamage = consequence[damageKey] ?? 0;
     const { damage } = computeDamagePacket({
-      rawDamage: rawDamage * (curseBonusByUser.get(consequence.userId) ?? 1),
+      rawDamage: rawDamage * curseBonus,
       damageEffect: dmgEffect,
       usersEffects,
       attackerId: consequence.userId,
@@ -2573,7 +2574,9 @@ export const applyDamageModifierPipelineToConsequences = ({
     });
 
     consequence[damageKey] = damage;
-    consequence.baseDamageForModifiers ??= rawDamage;
+    // Diffuse recomputes pre-DR lethality from the same boosted base.
+    consequence.baseDamageForModifiers =
+      (consequence.baseDamageForModifiers ?? rawDamage) * curseBonus;
   }
 };
 
