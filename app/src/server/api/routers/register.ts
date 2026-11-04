@@ -100,7 +100,8 @@ export const registerRouter = createTRPCRouter({
   // Create Character
   createCharacter: protectedProcedure
     .meta({ mcp: { description: "Create a new character" } })
-    .input(registrationSchema)
+    // Campaign attribution is recorded separately; open forms may still send this hint.
+    .input(registrationSchema.safeExtend({ utm_source: utmSourceSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query

@@ -172,4 +172,22 @@ describe("battle response privacy", () => {
     expect(masked.extraState.textureAssets).not.toContain("uncast-animation");
     expect(masked.extraState.sfxAssets).not.toContain("uncast-sound");
   });
+
+  it("redacts private target stats from persisted effects for opponents and spectators", () => {
+    const battle = battleWithLoadouts();
+    const effect = Object.assign(makeEffect("visual", {}, {
+      creatorId: "foe", targetId: "foe", highestGenerals: ["speed", "willpower"],
+    }), { targetHighestGenerals: ["speed", "willpower"] });
+    battle.usersEffects = [effect];
+    battle.groundEffects = [{ ...effect, targetType: "ground" } as never];
+    const before = structuredClone(battle);
+    for (const viewer of ["me", "spectator"]) {
+      const masked = maskBattle(battle, viewer);
+      for (const result of [...masked.usersEffects, ...masked.groundEffects]) {
+        expect(result).not.toHaveProperty("highestGenerals");
+        expect(result).not.toHaveProperty("targetHighestGenerals");
+      }
+    }
+    expect(battle).toEqual(before);
+  });
 });

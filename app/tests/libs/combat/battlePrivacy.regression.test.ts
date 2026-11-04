@@ -108,6 +108,10 @@ describe("battle privacy regressions", () => {
     expect(battle.extraState.items.keystone?.effects[0]).toMatchObject({
       highestGenerals: ["speed", "willpower"],
     });
+    for (const definition of [battle.extraState.bloodlines.line, battle.extraState.items.keystone,
+      battle.extraState.keystoneItems.keystone]) {
+      Object.assign(definition!.effects[0]!, { targetHighestGenerals: ["speed", "willpower"] });
+    }
     const before = structuredClone(battle);
     for (const viewer of ["me", "spectator"]) {
       const response = maskBattle(battle, viewer);
@@ -117,6 +121,7 @@ describe("battle privacy regressions", () => {
         expect(definition?.effects).toHaveLength(1);
         expect(definition?.effects[0]).toMatchObject(authored);
         expect(definition?.effects[0]).not.toHaveProperty("highestGenerals");
+        expect(definition?.effects[0]).not.toHaveProperty("targetHighestGenerals");
       }
     }
     expect(battle).toEqual(before);

@@ -1783,6 +1783,8 @@ const maskBattleExtraState = (battle: Battle, userId: string): ReturnedExtraStat
           effects: definition.effects.map((effect) => {
             const masked = { ...effect } as BattleEffect;
             delete masked.highestGenerals;
+            // Persisted catalog tags can contain private target metadata outside the runtime type.
+            Reflect.deleteProperty(masked, "targetHighestGenerals");
             return masked;
           }),
         },
@@ -1909,6 +1911,8 @@ const maskBattleEffects = <T extends BattleEffect>(
     .map((effect) => {
       const masked = { ...effect };
       if (!controlledIds.has(effect.creatorId)) delete masked.highestGenerals;
+      // Saved effects can carry unused target stats; omit them from every response.
+      Reflect.deleteProperty(masked, "targetHighestGenerals");
       return {
         ...masked,
         // Passive modifiers are visible in the effects panel; their equipment and

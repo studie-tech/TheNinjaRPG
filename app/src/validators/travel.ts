@@ -12,8 +12,10 @@ export const sectorIdSchema = z.coerce
   .min(MAP_SECTOR_ID_MIN)
   .max(MAP_SECTOR_ID_MAX);
 
-/** Clients send only the target sector; the server derives departure and landing. */
-export const startGlobalMoveSchema = z.strictObject({ sector: sectorIdSchema });
+/** Accept the departure hint while deriving departure and landing from server state. */
+export const startGlobalMoveSchema = z
+  .strictObject({ sector: sectorIdSchema, curSector: sectorIdSchema.optional() })
+  .transform(({ sector }) => ({ sector }));
 
 export const quickTravelSchema = z.object({ sector: sectorIdSchema });
 export type QuickTravelSchemaInput = z.input<typeof quickTravelSchema>;
