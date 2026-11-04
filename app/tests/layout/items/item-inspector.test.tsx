@@ -59,7 +59,7 @@ const userItem = ({ equipped = "NONE", itemType = "WEAPON", quantity = 1, canSta
     isInAuction: false,
     craftingFinishedAt: null,
     item: {
-      id: "item-1", name: "Twin Fang Blade", image: null, rarity: "EPIC", itemType, slot: itemType === "MEAL" ? "NONE" : "HAND",
+      id: "item-1", name: "Twin Fang Blade", image: null, rarity: "EPIC", itemType, slot: itemType === "MEAL" || itemType === "MATERIAL" ? "NONE" : "HAND",
       maxDurability: 50, canStack, isEventItem, inShop, canBeImbued: true, effects: [], mealDurationSeconds: 600, variants: [],
     },
   }) as unknown as UserItemWithRelations;
@@ -75,6 +75,11 @@ const renderInspector = (props: Partial<Parameters<typeof ItemInspector>[0]> = {
   render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={onClose} {...props} />);
   return { onClose };
 };
+
+it("offers no equip for items without an equipment slot", () => {
+  renderInspector({ userItem: userItem({ itemType: "MATERIAL" }) });
+  expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();
+});
 
 it("shows equip for backpack items and unequip for equipped ones", () => {
   const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} />);

@@ -46,7 +46,7 @@ import {
   showsItemLevelBadge,
 } from "@/libs/item";
 import { getItemConsumeInput } from "@/libs/itemConsumption";
-import { slotName } from "@/libs/itemsPage";
+import { fittingSlots, slotName } from "@/libs/itemsPage";
 import { getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
@@ -150,9 +150,7 @@ export function ItemInspector({
   };
   const look = applyActiveVariant(useritem as UserItemWithVariants);
   const canEquip =
-    useritem.equipped === "NONE" &&
-    useritem.item.itemType !== "FURNITURE" &&
-    useritem.item.itemType !== "MEAL";
+    useritem.equipped === "NONE" && fittingSlots(useritem.item).length > 0;
   const canConsume = !isMeal && nonCombatConsume(useritem.item, userData);
   const hasVariants =
     ((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0;

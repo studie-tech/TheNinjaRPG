@@ -71,14 +71,17 @@ export function ItemsWorkspace({
   const { equip, merge, isEquipping } = useItemActions({
     userData,
     useritem: undefined,
-    onDone: () => {
-      equipInFlight.current = false;
-    },
+    onDone: () => {},
   });
   const equipOnce = (input: { userItemId: string; slot: ItemSlot }) => {
     if (equipInFlight.current) return;
     equipInFlight.current = true;
-    equip(input);
+    // Released by this equip alone; other actions settling must not open the guard.
+    equip(input, {
+      onSettled: () => {
+        equipInFlight.current = false;
+      },
+    });
   };
   const {
     hotkeys,

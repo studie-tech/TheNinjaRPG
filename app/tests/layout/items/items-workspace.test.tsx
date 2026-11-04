@@ -149,7 +149,7 @@ it("equips from the slot picker into that slot", () => {
     fireEvent.click(slotOf("HAND_2"));
   });
   fireEvent.click(screen.getByRole("button", { name: "Equip Raijin Tanto" }));
-  expect(equip).toHaveBeenCalledWith({ userItemId: "Raijin Tanto", slot: "HAND_2" });
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: "Raijin Tanto", slot: "HAND_2" });
 });
 
 it("changing bag resets the right column", () => {
@@ -224,7 +224,7 @@ it("drags a backpack item onto a fitting slot only", () => {
   act(() => {
     fireEvent.drop(slotOf("HAND_2"), { dataTransfer: { getData } });
   });
-  expect(equip).toHaveBeenCalledWith({ userItemId: "Raijin Tanto", slot: "HAND_2" });
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: "Raijin Tanto", slot: "HAND_2" });
 });
 
 it("does not drag worn gear, which the server will not move", () => {
@@ -248,7 +248,11 @@ it("sends one equip per change until it settles", () => {
   fireEvent.click(button);
   fireEvent.click(button);
   expect(equip).toHaveBeenCalledTimes(1);
+  // Another action settling, such as a merge, does not release the pending equip.
   act(() => settle());
+  fireEvent.click(button);
+  expect(equip).toHaveBeenCalledTimes(1);
+  act(() => equip.mock.calls[0]?.[1]?.onSettled?.());
   fireEvent.click(button);
   expect(equip).toHaveBeenCalledTimes(2);
 });

@@ -124,7 +124,7 @@ const LoadoutSelector = <T extends LoadoutData>(
             onSubmit={(value) => submitRename(selected.id, value, selected.name)}
           />
         ) : (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Select
               value={selectedId ?? undefined}
               onValueChange={handleSelect}
@@ -144,7 +144,7 @@ const LoadoutSelector = <T extends LoadoutData>(
             {canRename && (
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
                 aria-label={`Rename ${selectedName}`}
                 title="Rename loadout"
                 disabled={renameMutation.isPending}
