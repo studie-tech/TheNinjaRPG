@@ -1,7 +1,19 @@
 /**
  * Database access for concurrency; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gt, gte, isNull, lt, lte, ne, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  gte,
+  isNull,
+  lt,
+  lte,
+  ne,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -298,19 +310,26 @@ export const selectMpvpBattleUserForBattleClaimRollbackStatus = (
       ),
     );
 
-/** Build the `rankedPvpQueue` selection for `battleClaimRollbackStatus`, using predicates on `userId` and `hasClaimed`. */
-export const selectRankedPvpQueueForBattleClaimRollbackStatus = (
+/** Build the EXISTS subquery for a user holding a claimed ranked-queue entry. */
+export const selectClaimedRankedQueueEntry = (
   client: Pick<DrizzleClient, "select">,
+  userId: string | SQLWrapper,
 ) =>
   client
     .select({ one: sql`1` })
     .from(rankedPvpQueue)
-    .where(
-      and(
-        eq(rankedPvpQueue.userId, userData.userId),
-        eq(rankedPvpQueue.hasClaimed, true),
-      ),
-    );
+    .where(and(eq(rankedPvpQueue.userId, userId), eq(rankedPvpQueue.hasClaimed, true)));
+
+/** Build the EXISTS subquery for a user sitting in a clan lobby without a winner. */
+export const selectUnresolvedClanLobbyEntry = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string | SQLWrapper,
+) =>
+  client
+    .select({ one: sql`1` })
+    .from(mpvpBattleUser)
+    .innerJoin(mpvpBattleQueue, eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id))
+    .where(and(eq(mpvpBattleUser.userId, userId), isNull(mpvpBattleQueue.winnerId)));
 
 /**
  * Build the `table` update for `reservePityCredit`, setting `pityRolls` and

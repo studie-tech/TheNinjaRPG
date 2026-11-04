@@ -13,7 +13,6 @@ import {
   like,
   lt,
   ne,
-  not,
   notExists,
   or,
   type SQL,
@@ -45,7 +44,6 @@ import {
   conversation,
   mpvpBattleQueue,
   mpvpBattleUser,
-  rankedPvpQueue,
   sector,
   userData,
   userRequest,
@@ -55,6 +53,10 @@ import {
   warAlly,
   warKill,
 } from "@/drizzle/schema";
+import {
+  selectClaimedRankedQueueEntry,
+  selectUnresolvedClanLobbyEntry,
+} from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
@@ -644,12 +646,7 @@ export const updateClanForConvertPointsToRyo = (
       and(
         eq(clan.id, input.clanId),
         gte(clan.points, input.points),
-        or(
-          eq(clan.leaderId, ctx.userId),
-          eq(clan.coLeader1, ctx.userId),
-          eq(clan.coLeader2, ctx.userId),
-          eq(clan.coLeader3, ctx.userId),
-        ),
+        clanLeadershipCondition(ctx.userId),
       ),
     );
 
@@ -728,17 +725,7 @@ export const updateUserDataForChallengeClan = (
             .from(mpvpBattleUser)
             .where(eq(mpvpBattleUser.userId, user.userId)),
         ),
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, user.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, user.userId)),
       ),
     );
 
@@ -780,12 +767,7 @@ export const listClanForDeleteClanBattle = (
   ctx: { userId: string },
 ) =>
   client.query.clan.findMany({
-    where: or(
-      eq(clan.leaderId, ctx.userId),
-      eq(clan.coLeader1, ctx.userId),
-      eq(clan.coLeader2, ctx.userId),
-      eq(clan.coLeader3, ctx.userId),
-    ),
+    where: clanLeadershipCondition(ctx.userId),
   });
 
 /** Build the `actionLog` insert for `deleteClanBattle`. */
@@ -862,19 +844,7 @@ export const updateUserDataForInitiateClanBattle = (
               ),
             ),
         ),
-        not(
-          exists(
-            client
-              .select({ id: rankedPvpQueue.id })
-              .from(rankedPvpQueue)
-              .where(
-                and(
-                  eq(rankedPvpQueue.userId, userData.userId),
-                  eq(rankedPvpQueue.hasClaimed, true),
-                ),
-              ),
-          ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
       ),
     );
 
@@ -960,14 +930,7 @@ export const findMpvpBattleQueueForHasClanBattleJoin = (
             ),
           ),
       ),
-      notExists(
-        client
-          .select({ id: rankedPvpQueue.id })
-          .from(rankedPvpQueue)
-          .where(
-            and(eq(rankedPvpQueue.userId, userId), eq(rankedPvpQueue.hasClaimed, true)),
-          ),
-      ),
+      notExists(selectClaimedRankedQueueEntry(client, userId)),
     ),
   });
 
@@ -994,36 +957,8 @@ export const updateUserDataForUndoClanBattleJoin = (
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
         withoutDungeonReservation(),
-        not(
-          exists(
-            client
-              .select({ id: rankedPvpQueue.id })
-              .from(rankedPvpQueue)
-              .where(
-                and(
-                  eq(rankedPvpQueue.userId, userData.userId),
-                  eq(rankedPvpQueue.hasClaimed, true),
-                ),
-              ),
-          ),
-        ),
-        not(
-          exists(
-            client
-              .select({ one: sql`1` })
-              .from(mpvpBattleUser)
-              .innerJoin(
-                mpvpBattleQueue,
-                eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id),
-              )
-              .where(
-                and(
-                  eq(mpvpBattleUser.userId, userId),
-                  isNull(mpvpBattleQueue.winnerId),
-                ),
-              ),
-          ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
+        notExists(selectUnresolvedClanLobbyEntry(client, userId)),
       ),
     );
 
@@ -1342,17 +1277,7 @@ export const updateUserDataForDeleteClanBattle = (
             .from(mpvpBattleUser)
             .where(eq(mpvpBattleUser.clanBattleId, snapshot.id)),
         ),
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, userData.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
       ),
     );
 
@@ -1391,3 +1316,12 @@ export const deleteBattleActionForClearClanCombat = (
   client: Pick<DrizzleClient, "delete">,
   battleId: string,
 ) => client.delete(battleAction).where(eq(battleAction.battleId, battleId));
+
+/** Match a clan where the user holds the leader or a co-leader seat. */
+const clanLeadershipCondition = (userId: string) =>
+  or(
+    eq(clan.leaderId, userId),
+    eq(clan.coLeader1, userId),
+    eq(clan.coLeader2, userId),
+    eq(clan.coLeader3, userId),
+  );

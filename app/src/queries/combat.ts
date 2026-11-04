@@ -74,7 +74,6 @@ import {
   notification,
   quest,
   raidParticipation,
-  rankedPvpQueue,
   type SectorType,
   territoryWar,
   tournament,
@@ -104,6 +103,7 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
+import { selectClaimedRankedQueueEntry } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { postAuthorColumns } from "@/queries/profile";
@@ -1266,17 +1266,7 @@ export const updateUserDataForCreateBattle = (
           : battleType === "RANKED_PVP"
             ? and(
                 eq(userData.status, "QUEUED"),
-                exists(
-                  client
-                    .select({ one: sql`1` })
-                    .from(rankedPvpQueue)
-                    .where(
-                      and(
-                        eq(rankedPvpQueue.userId, userData.userId),
-                        eq(rankedPvpQueue.hasClaimed, true),
-                      ),
-                    ),
-                ),
+                exists(selectClaimedRankedQueueEntry(client, userData.userId)),
               )
             : or(
                 eq(userData.status, "AWAKE"),

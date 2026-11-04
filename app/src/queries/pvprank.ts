@@ -8,7 +8,6 @@ import {
   gt,
   gte,
   inArray,
-  isNull,
   lt,
   lte,
   notExists,
@@ -27,14 +26,16 @@ import {
   item,
   logQueueLengths,
   logRankedPicks,
-  mpvpBattleQueue,
-  mpvpBattleUser,
   rankedLoadout,
   rankedPvpQueue,
   rankedSeason,
   rankedUserRewards,
   userData,
 } from "@/drizzle/schema";
+import {
+  selectClaimedRankedQueueEntry,
+  selectUnresolvedClanLobbyEntry,
+} from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
@@ -249,32 +250,8 @@ export const updateUserDataForGetRankedPvpQueue = (
         eq(userData.status, "QUEUED"),
         withoutDungeonReservation(),
         // Independent reads may precede a ranked claim or belong to a clan lobby.
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, userData.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
-        notExists(
-          client
-            .select({ id: mpvpBattleUser.id })
-            .from(mpvpBattleUser)
-            .innerJoin(
-              mpvpBattleQueue,
-              eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id),
-            )
-            .where(
-              and(
-                eq(mpvpBattleUser.userId, userData.userId),
-                isNull(mpvpBattleQueue.winnerId),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
+        notExists(selectUnresolvedClanLobbyEntry(client, userData.userId)),
       ),
     );
 

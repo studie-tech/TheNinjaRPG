@@ -24,8 +24,8 @@ import {
   deleteUserItemWhere,
   insertUserItemForRefundUserItemQuantityAtomically,
   insertUserItemForRefundUserItemQuantityAtomically2,
+  selectClaimedRankedQueueEntry,
   selectMpvpBattleUserForBattleClaimRollbackStatus,
-  selectRankedPvpQueueForBattleClaimRollbackStatus,
   updateBloodlineRollsForRemoveBloodlineFromPoolAtomically,
   updateTableForReservePityCredit,
   updateUserDataForAdjustSeichiSilverAtomically,
@@ -335,7 +335,7 @@ export const battleClaimRollbackStatus = (
   }
   if (battleType === "RANKED_PVP") {
     return sql`CASE WHEN ${exists(
-      selectRankedPvpQueueForBattleClaimRollbackStatus(client),
+      selectClaimedRankedQueueEntry(client, userData.userId),
     )} THEN "QUEUED" ELSE "AWAKE" END`;
   }
   return "AWAKE" as const;

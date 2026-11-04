@@ -111,6 +111,7 @@ import type { FactionColorEditSchema, FactionEditSchema } from "@/validators/cla
 import {
   type ClanSearchSchema,
   checkAssassin,
+  checkClanLeadership,
   checkCoLeader,
   factionColorEditSchema,
   factionEditSchema,
@@ -3163,8 +3164,7 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
   if (!userData) return <Loader explanation="Loading user data" />;
 
   // Derived
-  const isLeader = userData.userId === clanData.leaderId;
-  const isColeader = checkCoLeader(userData.userId, clanData);
+  const leaderLike = checkClanLeadership(userData.userId, clanData);
 
   // Render
   return (
@@ -3190,17 +3190,17 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
             <ClanOrders
               clanId={clanData.id}
               order={clanData.leaderOrder}
-              canPost={isLeader || isColeader}
+              canPost={leaderLike}
             />
           </TabsContent>
           <TabsContent value="battles">
-            <ClanBattles clanId={clanData.id} canCreate={isLeader || isColeader} />
+            <ClanBattles clanId={clanData.id} canCreate={leaderLike} />
           </TabsContent>
           <TabsContent value="requests">
             <ClanRequests
               clanId={clanData.id}
               clanLeaderId={clanData.leaderId}
-              isLeaderOrColeader={isLeader || isColeader}
+              isLeaderOrColeader={leaderLike}
             />
           </TabsContent>
           <TabsContent value="tournaments">
@@ -3211,7 +3211,7 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
               title={`Tournaments`}
               subtitle="Initiated by leader"
               type="CLAN"
-              canCreate={(isLeader || isColeader) && clanData.bank > 0}
+              canCreate={leaderLike && clanData.bank > 0}
               canJoin={userData.clanId === clanData.id}
             />
           </TabsContent>

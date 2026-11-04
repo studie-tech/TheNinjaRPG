@@ -68,6 +68,10 @@ export const checkCoLeader = (userId: string, clanData?: Clan | null) => {
   );
 };
 
+/** Whether the user holds the leader or a co-leader seat. */
+export const checkClanLeadership = (userId: string, clanData?: Clan | null) =>
+  clanData?.leaderId === userId || checkCoLeader(userId, clanData);
+
 /**
  * Checks if a user is an assassin in a faction.
  * @param userId - The ID of the user to check.

@@ -50,6 +50,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
+import { selectClaimedRankedQueueEntry } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
@@ -347,17 +348,7 @@ export const updateUserDataForGET3 = (
             .from(mpvpBattleUser)
             .where(eq(mpvpBattleUser.userId, userData.userId)),
         ),
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, userData.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
       ),
     );
 
