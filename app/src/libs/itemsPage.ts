@@ -8,6 +8,7 @@ import {
   ItemTypes,
 } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
+import { applyActiveVariant } from "@/libs/combat/util";
 import { needsInventoryRepair } from "@/libs/repair";
 
 /** Orders the backpack can be shown in. */
@@ -100,7 +101,7 @@ export const sortBackpack = <T extends SortableItem>(
   sort: BackpackSort,
 ): T[] => [...items].sort(comparators[sort]);
 
-/** Backpack items matching the name search and the selected chip. */
+/** Backpack items matching the displayed or base name and the selected chip. */
 export const filterBackpack = <T extends UserItemWithRelations>(
   items: T[],
   filter: BackpackFilter,
@@ -108,7 +109,9 @@ export const filterBackpack = <T extends UserItemWithRelations>(
   const query = filter.query.trim().toLowerCase();
   return items.filter(
     (ui) =>
-      (!query || ui.item.name.toLowerCase().includes(query)) &&
+      (!query ||
+        ui.item.name.toLowerCase().includes(query) ||
+        applyActiveVariant(ui).name.toLowerCase().includes(query)) &&
       (filter.type === "ALL" ||
         (filter.type === "NEEDS_REPAIR"
           ? needsInventoryRepair(ui)

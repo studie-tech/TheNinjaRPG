@@ -102,6 +102,40 @@ describe("backpack filtering", () => {
     expect(filterBackpack(rows, { query: "kunai", type: "ALL" })).toEqual([]);
   });
 
+  it("finds the active variant's displayed name and retains the base name alias", () => {
+    const base = userItem({ id: "Base Sword" });
+    const sword = {
+      ...base,
+      activeVariantId: "blue",
+      item: {
+        ...base.item,
+        variants: [
+          { id: "blue", image: "/blue.webp", name: "Blue Sword" },
+          { id: "red", image: "/red.webp", name: "Red Sword" },
+        ],
+      },
+    } as UserItemWithRelations;
+    expect(filterBackpack([sword], { query: "  BLUE sword ", type: "ALL" })).toEqual([sword]);
+    expect(filterBackpack([sword], { query: "Base Sword", type: "WEAPON" })).toEqual([sword]);
+    expect(filterBackpack([sword], { query: "Red Sword", type: "ALL" })).toEqual([]);
+    expect(filterBackpack([sword], { query: "Blue Sword", type: "ARMOR" })).toEqual([]);
+    expect(filterBackpack([sword], { query: "Blue Sword", type: "NEEDS_REPAIR" })).toEqual([]);
+  });
+
+  it.each([null, "missing"])("finds only the base name when the active variant is %j", (activeVariantId) => {
+    const base = userItem({ id: "Base Sword" });
+    const sword = {
+      ...base,
+      activeVariantId,
+      item: {
+        ...base.item,
+        variants: [{ id: "blue", image: "/blue.webp", name: "Blue Sword" }],
+      },
+    } as UserItemWithRelations;
+    expect(filterBackpack([sword], { query: "Base Sword", type: "ALL" })).toEqual([sword]);
+    expect(filterBackpack([sword], { query: "Blue Sword", type: "ALL" })).toEqual([]);
+  });
+
   it("builds chips from present types only", () => {
     expect(backpackFilterChips(rows)).toEqual([
       { value: "ALL", label: "All", count: 3 },
