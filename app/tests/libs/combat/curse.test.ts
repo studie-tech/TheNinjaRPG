@@ -90,9 +90,7 @@ describe("Curse", () => {
   it("boosts only the active holder's damage and defaults to no bonus", () => {
     expect(CurseTag.parse({}).damageBonusPercent).toBe(0);
     expect(CurseTag.safeParse({ damageBonusPercent: -1 }).success).toBe(false);
-    const boosted = mark();
-    if (boosted.type !== "curse") throw new Error("Expected Curse");
-    boosted.damageBonusPercent = 50;
+    const boosted = mark(50, "attacker", "curse-attacker", 50);
     const battle = applyEffects(
       scenario([boosted, hit(), hit("defender", "attacker")]),
       "attacker",
