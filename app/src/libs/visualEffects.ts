@@ -24,19 +24,45 @@ export const DEFAULT_VISUAL_EFFECTS: VisualEffects = {
   spriteAnimations: true,
 };
 
+/** Effects split from a combined setting keep its saved opt-out until they are saved themselves. */
+const LEGACY_VISUAL_EFFECTS: Partial<Record<VisualEffect, VisualEffect>> = {
+  sunlight: "dayNight",
+  localLights: "dayNight",
+  weather: "spriteAnimations",
+  wind: "spriteAnimations",
+};
+
+const readPreference = (key: string) => safeLocalStorageGetItem(key) !== "false";
+
 /** Missing or malformed preferences keep the full visual presentation enabled. */
 export const readVisualEffects = (): VisualEffects =>
   Object.fromEntries(
-    Object.entries(VISUAL_EFFECT_KEYS).map(([effect, key]) => [
-      effect,
-      safeLocalStorageGetItem(key) !== "false",
-    ]),
+    (Object.entries(VISUAL_EFFECT_KEYS) as [VisualEffect, string][]).map(
+      ([effect, key]) => {
+        const legacy = LEGACY_VISUAL_EFFECTS[effect];
+        return [
+          effect,
+          readPreference(
+            legacy && safeLocalStorageGetItem(key) === null
+              ? VISUAL_EFFECT_KEYS[legacy]
+              : key,
+          ),
+        ];
+      },
+    ),
   ) as VisualEffects;
 
 /** Publishes immediately to active scenes, including when browser storage is unavailable. */
 export const setVisualEffect = (effect: VisualEffect, enabled: boolean) => {
   const key = VISUAL_EFFECT_KEYS[effect];
   const value = JSON.stringify(enabled);
+  // Pin inherited effects first so this choice no longer changes them after a reload.
+  const current = readVisualEffects();
+  for (const [split, legacy] of Object.entries(LEGACY_VISUAL_EFFECTS)) {
+    const splitKey = VISUAL_EFFECT_KEYS[split as VisualEffect];
+    if (legacy === effect && safeLocalStorageGetItem(splitKey) === null)
+      safeLocalStorageSetItem(splitKey, JSON.stringify(current[split as VisualEffect]));
+  }
   safeLocalStorageSetItem(key, value);
   window.dispatchEvent(
     new window.CustomEvent("localStorageSync", { detail: { key, value } }),

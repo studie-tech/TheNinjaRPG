@@ -2,7 +2,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { useVisualEffects } from "@/hooks/visual-effects";
-import { VISUAL_EFFECT_KEYS, subscribeVisualEffects } from "@/libs/visualEffects";
+import { VISUAL_EFFECT_KEYS, readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
 const OverlayProbe = () => {
   const { visualEffects: { dayNight: showDayNightMapOverlays } } = useVisualEffects();
@@ -64,6 +64,26 @@ describe("useVisualEffects", () => {
     unsubscribe();
     act(() => hook.result.current.setVisualEffect("shadows", true));
     expect(changes).toHaveLength(6);
+  });
+
+  it("keeps combined opt-outs saved before the effects were split", () => {
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.dayNight, "false");
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.spriteAnimations, "false");
+    expect(readVisualEffects()).toMatchObject({ sunlight: false, dayNight: false, localLights: false, shadows: true, weather: false, wind: false, spriteAnimations: false });
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.sunlight, "true");
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.wind, "true");
+    expect(readVisualEffects()).toMatchObject({ sunlight: true, localLights: false, weather: false, wind: true });
+  });
+
+  it("keeps split effects independent after reloading a changed combined key", () => {
+    const hook = renderHook(() => useVisualEffects());
+    act(() => hook.result.current.setVisualEffect("spriteAnimations", false));
+    act(() => hook.result.current.setVisualEffect("dayNight", false));
+    expect(readVisualEffects()).toMatchObject({ sunlight: true, dayNight: false, localLights: true, weather: true, wind: true, spriteAnimations: false });
+    window.localStorage.clear();
+    window.localStorage.setItem(VISUAL_EFFECT_KEYS.spriteAnimations, "false");
+    act(() => hook.result.current.setVisualEffect("spriteAnimations", true));
+    expect(readVisualEffects()).toMatchObject({ weather: false, wind: false, spriteAnimations: true });
   });
 
   it("handles other-tab changes, removed preferences and malformed values", () => {
