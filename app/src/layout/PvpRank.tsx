@@ -624,6 +624,7 @@ export const RankedLoadoutSelector: React.FC = () => {
 
     // If equipping (not unequipping), check limits
     if (!alreadyEquipped) {
+      if (limitsQuery.data === undefined) return;
       const newJutsuLoadout = processedJutsu.filter((j) =>
         [...loadoutJutsus, jutsu.id].includes(j.id),
       );
@@ -929,6 +930,9 @@ export const RankedLoadoutSelector: React.FC = () => {
           isLoading={isSaving}
           keepOpenOnAccept={true}
           proceed_label={loadoutJutsus.includes(selectedJutsu.id) ? "Unequip" : "Equip"}
+          proceedDisabled={
+            !loadoutJutsus.includes(selectedJutsu.id) && limitsQuery.data === undefined
+          }
           proceed_loading_label="Saving"
           onAccept={() => {
             handleToggleJutsu(selectedJutsu);
@@ -936,6 +940,23 @@ export const RankedLoadoutSelector: React.FC = () => {
         >
           <div className="flex flex-col gap-4">
             <ItemWithEffects item={selectedJutsu} showStatistic="jutsu" />
+            {limitsQuery.data === undefined &&
+              (limitsQuery.isError ? (
+                <div role="alert" className="text-sm">
+                  <p>Could not load jutsu limits.</p>
+                  <Button
+                    variant="outline"
+                    disabled={limitsQuery.isFetching}
+                    onClick={() => void limitsQuery.refetch()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : (
+                <p role="status" className="text-muted-foreground text-sm">
+                  Loading jutsu limits
+                </p>
+              ))}
             <div className="flex gap-2">
               <Button
                 variant="outline"
