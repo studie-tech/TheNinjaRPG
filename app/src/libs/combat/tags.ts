@@ -1824,7 +1824,7 @@ export const curse = (
   return getInfo(
     target,
     effect,
-    `will store ${getPower(effect).power / 2}% of damage dealt and received as healing; Lifesteal, Absorb, and Vamp are disabled while Curse is active`,
+    `will store ${getPower(effect).power / 2}% of damage dealt and received as healing and gain ${effect.type === "curse" ? (effect.damageBonusPercent ?? 0) : 0}% damage; Lifesteal, Absorb, and Vamp are disabled while Curse is active`,
   );
 };
 
