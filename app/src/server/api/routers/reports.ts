@@ -1,7 +1,8 @@
-import { notExists } from "drizzle-orm";
+import { gt, gte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { ActiveBanStates, type BanState } from "@/drizzle/constants";
+import type { UserReport } from "@/drizzle/schema";
 import { getForumContext, resolveForumPost } from "@/libs/forum";
 import { buildModerationEvidence } from "@/libs/moderation/evidence";
 import { getRelatedReports } from "@/libs/moderation/reportSearch";
@@ -18,18 +19,14 @@ import {
 import { deleteUserNindo, fetchUser } from "@/queries/profile";
 import {
   clearUserBanWithoutActiveReport,
+  clearUserSilenceWithoutActiveReport,
+  clearUserTradeBanWithoutActiveReport,
   findConversationForGetInfraction,
   findUserReviewForUpsertStaffReview,
   insertHistoricalAvatarForUpdateUserAvatar,
   insertReportLogForClearNindo,
   insertReportLogForUpdateUserAvatar,
-  insertUserReportCommentForBan,
-  insertUserReportCommentForClear,
-  insertUserReportCommentForEscalate,
-  insertUserReportCommentForSilence,
-  insertUserReportCommentForTimeout,
-  insertUserReportCommentForTradeBan,
-  insertUserReportCommentForWarn,
+  insertUserReportDecisionComment,
   insertUserReportForInsertUserReport,
   insertUserReviewForUpsertStaffReview,
   listUserReportForClear,
@@ -38,6 +35,7 @@ import {
   listUserReportForGetUserReports,
   listUserReportForLoadReports,
   listUserReviewForGetUserStaffReviews,
+  noActiveReportGuard,
   selectAutomatedModerationForGetUserModerationSummary,
   selectDistinctUserReportForGetReportSystemNames,
   selectModerationScanForGetModBotPerformance,
@@ -47,13 +45,9 @@ import {
   selectUserReportForGetModBotPerformance,
   selectUserReportForGetReportStatistics,
   selectUserReportForGetReportStatistics2,
-  selectUserReportForNoActiveReport,
-  selectUserReportForNoActiveReport2,
   updateBattleActionForCreate,
   updateUserDataForAcceptWarning,
   updateUserDataForBan,
-  updateUserDataForClear2,
-  updateUserDataForClear3,
   updateUserDataForGetBan,
   updateUserDataForSilence,
   updateUserDataForTradeBan,
@@ -104,6 +98,8 @@ import {
 import type { DrizzleClient } from "../../db";
 
 const pusher = getServerPusher();
+const SANCTION_UNAVAILABLE_MESSAGE =
+  "Report or account is no longer available for this decision. Please refresh.";
 
 export const reportsRouter = createTRPCRouter({
   getReportSystemNames: protectedProcedure.query(async ({ ctx }) => {
@@ -197,15 +193,14 @@ export const reportsRouter = createTRPCRouter({
       );
     // Parallel reads can straddle registration or moderation. Recheck in the write;
     // a rejected reset reloads the cases so the sanction screen has a current report.
-    const noActiveReport = (statuses: BanState[]) =>
-      notExists(selectUserReportForNoActiveReport(ctx.drizzle, ctx, statuses));
+    const noActiveReport = noActiveReportGuard(ctx.drizzle, ctx.userId, gt);
     const resets = await Promise.all([
       ...(!activeReport("SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", ...ActiveBanStates) &&
       user.isSilenced
         ? [updateUserDataForGetBan(ctx.drizzle, ctx, noActiveReport)]
         : []),
       ...(!activeReport(...ActiveBanStates) && user.isBanned
-        ? [clearUserBanWithoutActiveReport(ctx.drizzle, ctx.userId, noActiveReport)]
+        ? [clearUserBanWithoutActiveReport(ctx.drizzle, [ctx.userId], noActiveReport)]
         : []),
     ]);
     if (
@@ -410,26 +405,18 @@ export const reportsRouter = createTRPCRouter({
       }
       const banEnd = getBanEndDate(input);
       // Update
-      if (
-        !(await updateSanctionReport(ctx.drizzle, report, {
+      const applied = await applySanction(
+        ctx,
+        report,
+        input,
+        {
           status: "BAN_ACTIVATED",
           adminResolved: canMarkAdminResolved(user.role),
           banEnd,
-        }))
-      )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
-      await Promise.all([
-        ...(report.reportedUserId
-          ? [
-              updateUserDataForBan(ctx.drizzle, {
-                reportedUserId: report.reportedUserId,
-              }),
-            ]
-          : []),
-        insertUserReportCommentForBan(ctx.drizzle, ctx, input),
-      ]);
+        },
+        updateUserDataForBan,
+      );
+      if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       // An indefinite ban or silence also bans the linked Discord account.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "User banned" };
@@ -456,26 +443,18 @@ export const reportsRouter = createTRPCRouter({
       }
       const banEnd = getBanEndDate(input);
       // Update
-      if (
-        !(await updateSanctionReport(ctx.drizzle, report, {
+      const applied = await applySanction(
+        ctx,
+        report,
+        input,
+        {
           status: "SILENCE_ACTIVATED",
           adminResolved: canMarkAdminResolved(user.role),
           banEnd,
-        }))
-      )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
-      await Promise.all([
-        ...(report.reportedUserId
-          ? [
-              updateUserDataForSilence(ctx.drizzle, {
-                reportedUserId: report.reportedUserId,
-              }),
-            ]
-          : []),
-        insertUserReportCommentForSilence(ctx.drizzle, ctx, input),
-      ]);
+        },
+        updateUserDataForSilence,
+      );
+      if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       // An indefinite ban or silence also bans the linked Discord account.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "User silenced" };
@@ -496,26 +475,18 @@ export const reportsRouter = createTRPCRouter({
       if (!hasModRights) return errorResponse("You cannot resolve this report");
       if (!canTimeoutUsers(user)) return errorResponse("You cannot timeout users");
       const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-      if (
-        !(await updateSanctionReport(ctx.drizzle, report, {
+      const applied = await applySanction(
+        ctx,
+        report,
+        input,
+        {
           status: "TIMEOUT_ACTIVATED",
           adminResolved: true,
           banEnd: oneHourFromNow,
-        }))
-      )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
-      await Promise.all([
-        ...(report.reportedUserId
-          ? [
-              updateUserDataForSilence(ctx.drizzle, {
-                reportedUserId: report.reportedUserId,
-              }),
-            ]
-          : []),
-        insertUserReportCommentForTimeout(ctx.drizzle, ctx, input),
-      ]);
+        },
+        updateUserDataForSilence,
+      );
+      if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       return { success: true, message: "User timed out (1 hour)" };
     }),
   // Issue warning to user
@@ -537,20 +508,18 @@ export const reportsRouter = createTRPCRouter({
       if (!hasModRights) return errorResponse("No permission to warn");
       if (!canWarnUsers(user)) return errorResponse("You cannot warn users");
       // Update
-      if (
-        !(await updateSanctionReport(ctx.drizzle, report, {
+      const applied = await applySanction(
+        ctx,
+        report,
+        input,
+        {
           status: "OFFICIAL_WARNING",
           adminResolved: canMarkAdminResolved(user.role),
           banEnd: null,
-        }))
-      )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
-      await Promise.all([
-        updateUserDataForWarn(ctx.drizzle, { reportedUserId: report.reportedUserId }),
-        insertUserReportCommentForWarn(ctx.drizzle, ctx, input),
-      ]);
+        },
+        updateUserDataForWarn,
+      );
+      if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       void pusher.trigger(report.reportedUserId, "event", {
         type: "userMessage",
         message: `You have been given a warning`,
@@ -578,7 +547,11 @@ export const reportsRouter = createTRPCRouter({
       if (escalated.rowsAffected === 0) {
         return errorResponse("Report changed. Refresh and try again");
       }
-      await insertUserReportCommentForEscalate(ctx.drizzle, ctx, input);
+      await insertUserReportDecisionComment(ctx.drizzle, ctx, {
+        reportId: input.object_id,
+        comment: input.comment,
+        decision: "BAN_ESCALATED",
+      });
       return { success: true, message: "Report escalated" };
     }),
   clear: protectedProcedure
@@ -601,9 +574,7 @@ export const reportsRouter = createTRPCRouter({
           status: "REPORT_CLEARED",
         }))
       )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
+        return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       const mutations: PromiseLike<unknown>[] = [];
       // If someone was reported
       if (report.reportedUserId) {
@@ -615,29 +586,44 @@ export const reportsRouter = createTRPCRouter({
         ]);
         // A character can be recreated after these reads; only reset flags while
         // no current report still enforces that restriction.
-        const noActiveReport = (statuses: BanState[]) =>
-          notExists(
-            selectUserReportForNoActiveReport2(ctx.drizzle, reportedUserId, statuses),
-          );
+        const noActiveReport = noActiveReportGuard(ctx.drizzle, reportedUserId, gte);
         mutations.push(
           ...(bans.length === 0
             ? [
                 clearUserBanWithoutActiveReport(
                   ctx.drizzle,
-                  reportedUserId,
+                  [reportedUserId],
                   noActiveReport,
                 ),
               ]
             : []),
           ...(activeSilenceOrTimeout.length === 0
-            ? [updateUserDataForClear2(ctx.drizzle, reportedUserId, noActiveReport)]
+            ? [
+                clearUserSilenceWithoutActiveReport(
+                  ctx.drizzle,
+                  [reportedUserId],
+                  noActiveReport,
+                ),
+              ]
             : []),
           ...(activeTradeBans.length === 0
-            ? [updateUserDataForClear3(ctx.drizzle, reportedUserId, noActiveReport)]
+            ? [
+                clearUserTradeBanWithoutActiveReport(
+                  ctx.drizzle,
+                  [reportedUserId],
+                  noActiveReport,
+                ),
+              ]
             : []),
         );
       }
-      mutations.push(insertUserReportCommentForClear(ctx.drizzle, ctx, report, input));
+      mutations.push(
+        insertUserReportDecisionComment(ctx.drizzle, ctx, {
+          reportId: report.id,
+          comment: input.comment,
+          decision: "REPORT_CLEARED",
+        }),
+      );
       await Promise.all(mutations);
       // Lifts the Discord ban once no other indefinite sanction remains.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
@@ -761,29 +747,46 @@ export const reportsRouter = createTRPCRouter({
         return errorResponse("Ban time must be specified.");
       }
       // Create a system report for the trade ban
-      if (
-        !(await updateSanctionReport(ctx.drizzle, report, {
+      const applied = await applySanction(
+        ctx,
+        report,
+        input,
+        {
           status: "TRADE_BAN_ACTIVATED",
           adminResolved: canMarkAdminResolved(user.role),
           banEnd: getBanEndDate(input),
-        }))
-      )
-        return errorResponse(
-          "Report or account is no longer available for this decision. Please refresh.",
-        );
-      await Promise.all([
-        ...(report.reportedUserId
-          ? [
-              updateUserDataForTradeBan(ctx.drizzle, {
-                reportedUserId: report.reportedUserId,
-              }),
-            ]
-          : []),
-        insertUserReportCommentForTradeBan(ctx.drizzle, ctx, input),
-      ]);
+        },
+        updateUserDataForTradeBan,
+      );
+      if (!applied) return errorResponse(SANCTION_UNAVAILABLE_MESSAGE);
       return { success: true, message: "User trade banned" };
     }),
 });
+
+/** Records a decision on the report and its author, then applies it to the reported user. */
+const applySanction = async (
+  ctx: { drizzle: DrizzleClient; userId: string },
+  report: Pick<UserReport, "id" | "reportedUserId">,
+  input: { object_id: string; comment: string },
+  decision: Pick<UserReport, "status" | "adminResolved"> & { banEnd: Date | null },
+  flagUser: (
+    client: DrizzleClient,
+    target: { reportedUserId: string },
+  ) => PromiseLike<unknown>,
+) => {
+  if (!(await updateSanctionReport(ctx.drizzle, report, decision))) return false;
+  await Promise.all([
+    ...(report.reportedUserId
+      ? [flagUser(ctx.drizzle, { reportedUserId: report.reportedUserId })]
+      : []),
+    insertUserReportDecisionComment(ctx.drizzle, ctx, {
+      reportId: input.object_id,
+      comment: input.comment,
+      decision: decision.status,
+    }),
+  ]);
+  return true;
+};
 
 export const getBanEndDate = (input: ReportCommentSchema) => {
   return input.banTime !== undefined && input.banTimeUnit !== undefined

@@ -1,12 +1,15 @@
+import { gt } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ActiveBanStates } from "@/drizzle/constants";
+import { userData } from "@/drizzle/schema";
 import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
 import {
+  clearUserBanWithoutActiveReport,
+  clearUserSilenceWithoutActiveReport,
+  clearUserTradeBanWithoutActiveReport,
   listUserReportForGET,
   listUserReportForGET2,
-  updateUserDataForGET,
-  updateUserDataForGET2,
-  updateUserDataForGET3,
+  noActiveReportGuard,
 } from "@/queries/reports";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
@@ -134,19 +137,35 @@ export async function GET(request: Request) {
       `Users to unban: ${usersToUnban.length}, Users to unsilence: ${usersToUnsilence.length}, Users to untrade ban: ${usersToUntradeBan.length}`,
     );
 
-    // Execute updates in batch if needed
+    // Execute updates in batch if needed. A sanction issued after the reads above
+    // keeps its flag through the guard.
     const updates = [];
+    const noActiveReport = noActiveReportGuard(drizzleDB, userData.userId, gt);
 
     if (usersToUnban.length > 0) {
-      updates.push(updateUserDataForGET(drizzleDB, usersToUnban));
+      updates.push(
+        clearUserBanWithoutActiveReport(drizzleDB, usersToUnban, noActiveReport),
+      );
     }
 
     if (usersToUnsilence.length > 0) {
-      updates.push(updateUserDataForGET2(drizzleDB, usersToUnsilence));
+      updates.push(
+        clearUserSilenceWithoutActiveReport(
+          drizzleDB,
+          usersToUnsilence,
+          noActiveReport,
+        ),
+      );
     }
 
     if (usersToUntradeBan.length > 0) {
-      updates.push(updateUserDataForGET3(drizzleDB, usersToUntradeBan));
+      updates.push(
+        clearUserTradeBanWithoutActiveReport(
+          drizzleDB,
+          usersToUntradeBan,
+          noActiveReport,
+        ),
+      );
     }
 
     if (updates.length > 0) {
