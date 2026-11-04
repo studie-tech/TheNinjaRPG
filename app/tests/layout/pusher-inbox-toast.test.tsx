@@ -23,7 +23,7 @@ const router = {
 
 beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
-  Object.assign(vi.spyOn(client, "api" as never), { tournament: testApi.tournament, useUtils: testApi.useUtils });
+  Object.assign(vi.spyOn(client, "api" as never), { profile: testApi.profile, tournament: testApi.tournament, useUtils: testApi.useUtils });
 });
 afterEach(() => {
   cleanup();
@@ -121,4 +121,45 @@ it("counts only public conversation pings as Tavern notifications", async () => 
   await act(async () => receiveEvent({ type: "pinged", conversationId: "tavern", isPublic: true }));
   expect(store.get(chatMentionsAtom)).toEqual({ tavern: 1 });
   store.set(chatMentionsAtom, {});
+});
+
+it("keeps the notification list when a battle event finds the derived combat entry", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation(function () {
+    return {
+      subscribe: () => ({ bind: (_event: string, handler: typeof receiveEvent) => { receiveEvent = handler; } }),
+      unsubscribe: vi.fn(), disconnect: vi.fn(),
+    };
+  } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  const pushToCombat = vi.spyOn(routing, "pushToCombat").mockImplementation(() => undefined);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClients.push(queryClient);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const notifications = [
+    { href: "/combat", name: "In combat", color: "red" },
+    { href: "/", name: "Saved", color: "toast" },
+  ];
+  queryClient.setQueryData(profileKey, {
+    userData: { userId: "player", status: "AWAKE", battleId: null, rank: "GENIN", titles: [], items: [] },
+    notifications,
+  });
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <testApi.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </testApi.Provider>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+
+  await act(async () => receiveEvent({ type: "battle", battleId: "battle-1" }));
+
+  const cached = queryClient.getQueryData<{
+    userData: { status: string; battleId: string };
+    notifications: typeof notifications;
+  }>(profileKey);
+  expect(cached?.userData).toMatchObject({ status: "BATTLE", battleId: "battle-1" });
+  // UserContext replays toast entries when this array changes identity.
+  expect(cached?.notifications).toBe(notifications);
+  expect(pushToCombat).toHaveBeenCalledWith(expect.anything(), "battle-1");
 });
