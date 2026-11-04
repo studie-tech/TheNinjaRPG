@@ -2,8 +2,6 @@ import type { UserQueueState } from "@/deltas/profile";
 
 import {
   COST_CHANGE_GENDER,
-  COST_EXTRA_ITEM_SLOT,
-  COST_EXTRA_JUTSU_SLOT,
   COST_REROLL_ELEMENT,
 } from "@/drizzle/constants";
 import { hasEnergyQueue } from "@/libs/queue";
@@ -65,23 +63,21 @@ export const getTakeOfferUserUpdate = ({
 });
 
 /**
- * Add the purchased item slot and debit its reputation cost unless queued energy work
- * requires reconciliation.
+ * Add the purchased slot and debit its reputation cost unless queued energy work requires
+ * reconciliation.
  */
-export const getBuyItemSlotUserUpdate = ({ user }: { user: UserQueueState }) => ({
+export const getBuySlotUserUpdate = ({
+  user,
+  column,
+  cost,
+}: {
+  user: UserQueueState;
+  column: "extraItemSlots" | "extraJutsuSlots";
+  cost: number;
+}) => ({
   userDelta: hasEnergyQueue(user)
     ? undefined
-    : { reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 },
-});
-
-/**
- * Add the purchased jutsu slot and debit its reputation cost unless queued energy work
- * requires reconciliation.
- */
-export const getBuyJutsuSlotUserUpdate = ({ user }: { user: UserQueueState }) => ({
-  userDelta: hasEnergyQueue(user)
-    ? undefined
-    : { reputationPoints: -COST_EXTRA_JUTSU_SLOT, extraJutsuSlots: 1 },
+    : { reputationPoints: -cost, [column]: 1 },
 });
 
 /**

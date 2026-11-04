@@ -6,6 +6,14 @@ import type { ElementName } from "@/drizzle/constants";
 import { ryoTrade } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
+/** A purchasable extra slot; `maxCurrentSlots` caps the count that can still accept one. */
+export type ExtraSlotPurchase = {
+  column: "extraItemSlots" | "extraJutsuSlots";
+  cost: number;
+  label: string;
+  maxCurrentSlots?: number;
+};
+
 /**
  * Fetches a ryo offer from the black market.
  *
@@ -36,14 +44,11 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   COST_CHANGE_GENDER,
-  COST_EXTRA_ITEM_SLOT,
-  COST_EXTRA_JUTSU_SLOT,
   COST_REROLL_ELEMENT,
   RYO_CAP,
   RYO_FOR_REP_RESERVE,
 } from "@/drizzle/constants";
 import { actionLog, userData } from "@/drizzle/schema";
-import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 
 /** Table alias for allowed joins, keeping its columns distinct from other participants. */
 const allowed = alias(userData, "allowed");
@@ -321,78 +326,45 @@ export const updateUserDataForChangeUserGender = (
     );
 
 /**
- * Build the `userData` update for `buyItemSlot`, setting `extraItemSlots` and
- * `reputationPoints`, using predicates on `userId` and `reputationPoints`.
+ * Build the `userData` update for a slot purchase, raising `column` and debiting
+ * `reputationPoints`, using predicates on `userId`, `reputationPoints` and, for capped
+ * slots, `column`.
  */
-export const updateUserDataForBuyItemSlot = (
+export const updateUserDataForBuySlot = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
+  slot: ExtraSlotPurchase,
 ) =>
   client
     .update(userData)
     .set({
-      extraItemSlots: sql`extraItemSlots + 1`,
-      reputationPoints: sql`reputationPoints - ${COST_EXTRA_ITEM_SLOT}`,
+      [slot.column]: sql`${userData[slot.column]} + 1`,
+      reputationPoints: sql`reputationPoints - ${slot.cost}`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        gte(userData.reputationPoints, COST_EXTRA_ITEM_SLOT),
+        gte(userData.reputationPoints, slot.cost),
+        slot.maxCurrentSlots === undefined
+          ? undefined
+          : lte(userData[slot.column], slot.maxCurrentSlots),
       ),
     );
 
-/** Build the `actionLog` insert for `buyItemSlot`. */
-export const insertActionLogForBuyItemSlot = (
+/** Build the `actionLog` insert for a slot purchase. */
+export const insertActionLogForBuySlot = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
   user: { avatarLight: null | string },
+  slot: Pick<ExtraSlotPurchase, "label">,
 ) =>
   client.insert(actionLog).values({
     id: nanoid(),
     userId: ctx.userId,
     tableName: "user",
-    changes: ["Item slot purchased"],
+    changes: [`${slot.label} slot purchased`],
     relatedId: ctx.userId,
-    relatedMsg: "Update: Item slot purchased",
-    relatedImage: user.avatarLight,
-  });
-
-/**
- * Build the `userData` update for `buyJutsuSlot`, setting `extraJutsuSlots` and
- * `reputationPoints`, using predicates on `userId`, `reputationPoints`,
- * `extraJutsuSlots`.
- */
-export const updateUserDataForBuyJutsuSlot = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({
-      extraJutsuSlots: sql`${userData.extraJutsuSlots} + 1`,
-      reputationPoints: sql`reputationPoints - ${COST_EXTRA_JUTSU_SLOT}`,
-    })
-    .where(
-      and(
-        eq(userData.userId, ctx.userId),
-        gte(userData.reputationPoints, COST_EXTRA_JUTSU_SLOT),
-        lte(userData.extraJutsuSlots, getJutsuSlotIncreaseLimit()),
-      ),
-    );
-
-/** Build the `actionLog` insert for `buyJutsuSlot`. */
-export const insertActionLogForBuyJutsuSlot = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  user: { avatarLight: null | string },
-) =>
-  client.insert(actionLog).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    tableName: "user",
-    changes: ["Jutsu slot purchased"],
-    relatedId: ctx.userId,
-    relatedMsg: "Update: Jutsu slot purchased",
+    relatedMsg: `Update: ${slot.label} slot purchased`,
     relatedImage: user.avatarLight,
   });
 

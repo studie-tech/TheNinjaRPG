@@ -1,8 +1,7 @@
 import { eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
-  getBuyItemSlotUserUpdate,
-  getBuyJutsuSlotUserUpdate,
+  getBuySlotUserUpdate,
   getChangedGenderUserPatch,
   getCreateOfferUserUpdate,
   getDelistOfferUserUpdate,
@@ -30,7 +29,10 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
+import {
+  getJutsuSlotIncreaseError,
+  getJutsuSlotIncreaseLimit,
+} from "@/libs/jutsuSlots";
 import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
@@ -41,11 +43,11 @@ import { getBloodlineElements } from "@/libs/userElements";
 import {
   addElementRoll,
   deleteRyoTradeForDelistOffer,
+  type ExtraSlotPurchase,
   fetchActiveUserOffers,
   fetchOffer,
   findUserDataForTakeOffer,
-  insertActionLogForBuyItemSlot,
-  insertActionLogForBuyJutsuSlot,
+  insertActionLogForBuySlot,
   insertActionLogForRerollElement,
   insertActionLogForTakeOffer,
   insertActionLogForTakeOffer2,
@@ -56,8 +58,7 @@ import {
   selectRyoTradeForGetRyoOffers,
   updateRyoTradeForTakeOffer,
   updateRyoTradeForTakeOffer2,
-  updateUserDataForBuyItemSlot,
-  updateUserDataForBuyJutsuSlot,
+  updateUserDataForBuySlot,
   updateUserDataForChangeUserGender,
   updateUserDataForCreateOffer,
   updateUserDataForRerollElement,
@@ -335,51 +336,28 @@ export const blackMarketRouter = createTRPCRouter({
   buyItemSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra item slot" } })
     .output(userDeltaResponseSchema)
-    .mutation(async ({ ctx }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      // Guard
-      if (user.reputationPoints < COST_EXTRA_ITEM_SLOT) {
-        return errorResponse("Not enough reputation points");
-      }
-      // Mutate
-      const result = await updateUserDataForBuyItemSlot(ctx.drizzle, ctx);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
-      } else {
-        await insertActionLogForBuyItemSlot(ctx.drizzle, ctx, user);
-        return {
-          success: true,
-          message: "Item slot purchased",
-          ...getBuyItemSlotUserUpdate({ user }),
-        };
-      }
-    }),
+    .mutation(({ ctx }) =>
+      buyExtraSlot(ctx, {
+        column: "extraItemSlots",
+        cost: COST_EXTRA_ITEM_SLOT,
+        label: "Item",
+      }),
+    ),
   buyJutsuSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra jutsu slot" } })
     .output(userDeltaResponseSchema)
-    .mutation(async ({ ctx }) => {
-      // Fetch
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      // Guard
-      if (user.reputationPoints < COST_EXTRA_JUTSU_SLOT) {
-        return errorResponse("Not enough reputation points");
-      }
-      const slotError = getJutsuSlotIncreaseError(user.extraJutsuSlots);
-      if (slotError) return errorResponse(slotError);
-      // Mutate
-      const result = await updateUserDataForBuyJutsuSlot(ctx.drizzle, ctx);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
-      } else {
-        await insertActionLogForBuyJutsuSlot(ctx.drizzle, ctx, user);
-        return {
-          success: true,
-          message: "Jutsu slot purchased",
-          ...getBuyJutsuSlotUserUpdate({ user }),
-        };
-      }
-    }),
+    .mutation(({ ctx }) =>
+      buyExtraSlot(
+        ctx,
+        {
+          column: "extraJutsuSlots",
+          cost: COST_EXTRA_JUTSU_SLOT,
+          label: "Jutsu",
+          maxCurrentSlots: getJutsuSlotIncreaseLimit(),
+        },
+        getJutsuSlotIncreaseError,
+      ),
+    ),
   rerollElement: protectedProcedure
     .meta({
       mcp: { description: "Reroll primary or secondary element" },
@@ -672,5 +650,30 @@ const rerollElementType = (
     element: getRandomElement(available) ?? null,
     reset: shouldReset,
     changes: [`${elementType} element rerolled ${shouldReset ? "(reset)" : ""}`],
+  };
+};
+
+/** Trade reputation for one extra slot; `getSlotError` rejects a slot count at its cap. */
+const buyExtraSlot = async (
+  ctx: { drizzle: DrizzleClient; userId: string },
+  slot: ExtraSlotPurchase,
+  getSlotError?: (currentSlots: number) => string | null,
+) => {
+  // Fetch
+  const user = await fetchUser(ctx.drizzle, ctx.userId);
+  // Guard
+  if (user.reputationPoints < slot.cost) {
+    return errorResponse("Not enough reputation points");
+  }
+  const slotError = getSlotError?.(user[slot.column]);
+  if (slotError) return errorResponse(slotError);
+  // Mutate
+  const result = await updateUserDataForBuySlot(ctx.drizzle, ctx, slot);
+  if (result.rowsAffected === 0) return errorResponse("Could not update user");
+  await insertActionLogForBuySlot(ctx.drizzle, ctx, user, slot);
+  return {
+    success: true,
+    message: `${slot.label} slot purchased`,
+    ...getBuySlotUserUpdate({ user, column: slot.column, cost: slot.cost }),
   };
 };
