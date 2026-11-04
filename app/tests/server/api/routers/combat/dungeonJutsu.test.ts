@@ -58,20 +58,21 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     await db.insert(village).values({ id: "home", name: "Home", sector: 1, kageId: "leader" });
     await db.insert(aiProfile).values({ id: "Default", userId: "enemy", rules: [] });
     await db.insert(dungeon).values({ id: "dungeon", content: dungeonContent(), updatedAt: new Date() });
-    await db.insert(jutsu).values(BattleUsageTypes.map((usage) => ({
-      id: `jutsu-${usage}`, name: `Jutsu ${usage}`, image: "", description: "Restore health",
+    await db.insert(jutsu).values(members.flatMap((userId) => BattleUsageTypes.map((usage) => ({
+      id: `jutsu-${usage}-${userId}`, name: `Jutsu ${usage} ${userId}`, image: "", description: "Restore health",
       battleDescription: "%user restores their health", jutsuType: "NORMAL" as const,
       battleUsageType: usage, requiredRank: "STUDENT" as const, target: "SELF" as const,
       range: 0, chakraCost: 0, staminaCost: 0, actionCostPerc: 40,
       effects: [getTagSchema("heal").parse({ power: 5, calculation: "static", target: "SELF" })],
-    })));
+    }))));
     await db.insert(userJutsu).values(members.flatMap((userId) =>
       BattleUsageTypes.map((usage) => ({
-        id: `${userId}-${usage}`, userId, jutsuId: `jutsu-${usage}`, equipped: false,
+        id: `${userId}-${usage}`, userId, jutsuId: `jutsu-${usage}-${userId}`, equipped: false,
       })),
     ));
     await db.insert(jutsuLoadout).values(members.map((userId) => ({
-      id: `loadout-${userId}`, userId, jutsuIds: BattleUsageTypes.map((usage) => `jutsu-${usage}`),
+      id: `loadout-${userId}`, userId,
+      jutsuIds: BattleUsageTypes.map((usage) => `jutsu-${usage}-${userId}`),
     })));
   });
 
@@ -84,7 +85,7 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
       expect((await loadouts.selectJutsuLoadout({ id: `loadout-${userId}` })).success).toBe(true);
       const equipped = await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, userId) });
       expect(equipped.filter((entry) => entry.equipped).map((entry) => entry.jutsuId).sort())
-        .toEqual(BattleUsageTypes.map((usage) => `jutsu-${usage}`).sort());
+        .toEqual(BattleUsageTypes.map((usage) => `jutsu-${usage}-${userId}`).sort());
     }
     const leader = await callerFor(dungeonRouter, "leader");
     const created = await leader.create({ id: "dungeon" });
@@ -106,8 +107,8 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     for (const userId of members) {
       const response = await (await callerFor(combatRouter, userId)).getBattle({ battleId: saved.id });
       const actions = availableUserActions(response.battle, userId).map((action) => action.id);
-      expect(actions).toEqual(expect.arrayContaining(["jutsu-PVE", "jutsu-BOTH"]));
-      expect(actions).not.toContain("jutsu-PVP");
+      expect(actions).toEqual(expect.arrayContaining([`jutsu-PVE-${userId}`, `jutsu-BOTH-${userId}`]));
+      expect(actions).not.toContain(`jutsu-PVP-${userId}`);
     }
     const current = await db.query.battle.findFirst({ where: eq(battle.id, saved.id) });
     const actor = current?.usersState.find((entry) => entry.userId === current.activeUserId);
@@ -115,12 +116,12 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     const combat = await callerFor(combatRouter, actor.userId);
     const input = { battleId: current.id, version: current.version, longitude: actor.longitude, latitude: actor.latitude };
     // An invalid PvP cast must preserve the turn/version so the PvE cast can still execute.
-    expect(await combat.performAction({ ...input, actionId: "jutsu-PVP" })).toMatchObject({
+    expect(await combat.performAction({ ...input, actionId: `jutsu-PVP-${actor.userId}` })).toMatchObject({
       notification: "Action not valid anymore. Try something else",
     });
-    expect(await combat.performAction({ ...input, actionId: "jutsu-PVE" })).toMatchObject({ updateClient: true });
+    expect(await combat.performAction({ ...input, actionId: `jutsu-PVE-${actor.userId}` })).toMatchObject({ updateClient: true });
     expect(await db.query.battleAction.findMany()).toContainEqual(expect.objectContaining({
-      battleId: saved.id, userId: actor.userId, actionId: "jutsu-PVE",
+      battleId: saved.id, userId: actor.userId, actionId: `jutsu-PVE-${actor.userId}`,
     }));
   });
 });
