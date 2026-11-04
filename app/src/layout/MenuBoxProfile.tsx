@@ -359,8 +359,8 @@ const MenuBoxProfile: React.FC = () => {
                     href="/profile/experience"
                     className="block text-center text-xs underline"
                   >
-                    {unassignedExperience.toLocaleString()} unassigned XP, assign to
-                    level up
+                    {unassignedExperience.toLocaleString()} unassigned XP, assign toward
+                    your next level
                   </Link>
                 )}
               </>
