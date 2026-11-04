@@ -71,15 +71,14 @@ const profileTabs = [
   "Pet",
   "Achievements",
   "History",
-  "Edit Character",
+  "Settings",
   "Sharing",
 ] as const;
-const iconProfileTabs = [
-  "Achievements",
-  "History",
-  "Edit Character",
-  "Sharing",
-] as const;
+const iconProfileTabs = ["Achievements", "History", "Settings", "Sharing"] as const;
+/** Maps remembered and linked tab names to the current profile sections. */
+const profileTabAliases: Partial<Record<string, ProfileTab>> = {
+  "Edit Character": "Settings",
+};
 const tutorialProfileTabs = ["Character", "Pet", ...iconProfileTabs] as const;
 type ProfileTab = (typeof profileTabs)[number];
 const profileTabValues: Record<ProfileTab, string> = {
@@ -88,17 +87,21 @@ const profileTabValues: Record<ProfileTab, string> = {
   Pet: "pet",
   Achievements: "achievements",
   History: "history",
-  "Edit Character": "edit",
+  Settings: "edit",
   Sharing: "sharing",
 };
 
+/** Coordinates profile sections with URL and remembered tab selection, including settings aliases. */
 export function Profile() {
   const { data: userData, updateUser, notifications } = useRequiredUserData();
   const [tab, setTab] = useState<ProfileTab | null>(null);
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const urlTab = profileTabs.find(
-    (option) => option === requestedTab || profileTabValues[option] === requestedTab,
+    (option) =>
+      option === requestedTab ||
+      profileTabValues[option] === requestedTab ||
+      (requestedTab !== null && profileTabAliases[requestedTab] === option),
   );
 
   if (!userData) return <Loader explanation="Loading profile page..." />;
@@ -162,6 +165,7 @@ export function Profile() {
             remember={userData.rememberProfileTab}
             current={urlTab || tab !== null ? activeTab : null}
             options={visibleTabs}
+            aliases={profileTabAliases}
             onChange={selectTab}
             accessibleTabs
             label="Profile sections"
@@ -186,9 +190,7 @@ export function Profile() {
               ),
               Achievements: <Trophy className="h-[20px] w-[20px]" aria-hidden="true" />,
               History: <History className="h-[20px] w-[20px]" aria-hidden="true" />,
-              "Edit Character": (
-                <Wrench className="h-[20px] w-[20px]" aria-hidden="true" />
-              ),
+              Settings: <Wrench className="h-[20px] w-[20px]" aria-hidden="true" />,
               Sharing: <Share2 className="h-[20px] w-[20px]" aria-hidden="true" />,
             }}
             iconOnlyOptions={profileTabs}

@@ -176,6 +176,29 @@ describe("sidebar sides in flex layouts", () => {
   });
 });
 
+describe("Classic light layout", () => {
+  it.each([false, true])(
+    "keeps one set of account and settings buttons when the banner is hidden (%p)",
+    (lightLayout) => {
+      mockFrameChrome();
+      const view = render(
+        <ClassicGameLayout
+          {...renderProps("default")}
+          lightLayout={lightLayout}
+          signedInIcons={<button type="button">Game settings</button>}
+        />,
+      );
+      const settings = view.getAllByRole("button", { name: "Game settings" });
+      expect(settings).toHaveLength(1);
+      // Without the banner, the buttons stack down the page edge.
+      expect(!!settings[0]?.closest("[data-stacked-icons]")).toBe(lightLayout);
+      expect(
+        view.getByRole("button", { name: lightLayout ? "Show Layout" : "Hide Layout" }),
+      ).toBeDefined();
+    },
+  );
+});
+
 describe("game settings categories", () => {
   const CombatSettingsProbe = () => <UserCombatSettings config={useCombatPreferences()} />;
   const renderSettings = (withCombat = false) => {

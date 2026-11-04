@@ -69,7 +69,7 @@
   align-items: center;
   justify-content: center;
 }
-.theme-account-controls svg {
+.theme-account-controls svg:not([data-muted-mark]) {
   width: 1.75rem;
   height: 1.75rem;
 }

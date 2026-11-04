@@ -190,7 +190,7 @@ describe("game settings sections", () => {
     }
   });
 
-  it("gives character owners a top-bar sound switch that links to all settings", async () => {
+  it("gives character owners a top-bar settings gear with sound controls and a link to all settings", async () => {
     renderInAudio(<SignedInIcons
       variant="default"
       isSignedIn
@@ -209,13 +209,29 @@ describe("game settings sections", () => {
       onEventClick={() => {}}
     />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
     });
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
     expect(screen.queryByLabelText(LIGHTING)).toBeNull();
     const link = screen.getByRole("link", { name: "All settings" });
     expect(link.getAttribute("href")).toBe(SETTINGS_HREF);
     expect(screen.queryByRole("tab", { name: "Game layout" })).toBeNull();
+  });
+
+  it.each([true, false])("marks the top-bar settings gear only while music is off (music on: %p)", (musicOn) => {
+    const playing = audioHook.useAudio({ src: "" });
+    vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({ ...playing, enabled: musicOn }));
+    renderInAudio(<SignedInIcons
+      variant="default"
+      isSignedIn
+      updateUser={async () => undefined}
+      onEventClick={() => {}}
+    />);
+    const mark = screen
+      .getByRole("button", { name: "Game settings" })
+      .querySelector("[data-muted-mark]");
+    expect(mark).not.toBeNull();
+    expect(mark?.getAttribute("class")?.split(" ").includes("hidden")).toBe(musicOn);
   });
 
   it.each([false, true])("keeps full top-bar settings without a character when isSignedIn=%s", async (isSignedIn) => {
@@ -226,7 +242,7 @@ describe("game settings sections", () => {
       onEventClick={() => {}}
     />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Audio settings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
     });
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
     expect(screen.queryByRole("link", { name: "All settings" })).toBeNull();
