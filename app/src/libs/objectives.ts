@@ -47,6 +47,36 @@ export const canRetryQuestBattle = (
 ) => !!goal?.recentlyDied && !goal.done;
 
 /**
+ * Outgoing links of an objective, in display order: next (a string, or one per dialog branch),
+ * then fail, then reset. Unset and empty ids are left out.
+ */
+export const objectiveLinks = (objective: AllObjectivesType): ObjectiveLink[] => {
+  const { nextObjectiveId, failObjectiveId, resetObjectiveId } = objective as {
+    nextObjectiveId?: unknown;
+    failObjectiveId?: unknown;
+    resetObjectiveId?: unknown;
+  };
+  const nextIds: unknown[] = Array.isArray(nextObjectiveId)
+    ? nextObjectiveId.map((branch) => branch?.nextObjectiveId)
+    : [nextObjectiveId];
+  return [
+    ...nextIds.map((target) => ({ target, kind: "next" as const })),
+    { target: failObjectiveId, kind: "fail" as const },
+    { target: resetObjectiveId, kind: "reset" as const },
+  ].filter(
+    (link): link is ObjectiveLink => !!link.target && typeof link.target === "string",
+  );
+};
+
+type ObjectiveLink = { target: string; kind: "next" | "fail" | "reset" };
+
+/** Whether completing or failing `objective` can lead to `targetId`; a reset is not progress. */
+const leadsTo = (objective: AllObjectivesType, targetId: string) =>
+  objectiveLinks(objective).some(
+    (link) => link.kind !== "reset" && link.target === targetId,
+  );
+
+/**
  * Finds the predecessor objective for a given target objective id.
  * @param objectives - The list of all objectives.
  * @param targetId - The id of the objective whose predecessor to find.
@@ -55,20 +85,7 @@ export const canRetryQuestBattle = (
 export const findPredecessor = (
   objectives: AllObjectivesType[],
   targetId: string,
-): AllObjectivesType | undefined => {
-  return objectives.find((obj) => {
-    if ((obj as { failObjectiveId?: string }).failObjectiveId === targetId) {
-      return true;
-    }
-    if (obj.task === "dialog" && Array.isArray(obj.nextObjectiveId)) {
-      return obj.nextObjectiveId.some(
-        (entry: { nextObjectiveId?: string }) => entry.nextObjectiveId === targetId,
-      );
-    } else {
-      return (obj as { nextObjectiveId?: string }).nextObjectiveId === targetId;
-    }
-  });
-};
+): AllObjectivesType | undefined => objectives.find((obj) => leadsTo(obj, targetId));
 
 /**
  * Finds the predecessor objective for a given target objective id, and checks if it is completed.
@@ -86,16 +103,7 @@ export const findCompletedPredecessor = (
     // An objective cannot be its own predecessor
     if (obj.id === targetId) return false;
 
-    // Check if it is a predecessor
-    let isPredecessor = "failObjectiveId" in obj && obj.failObjectiveId === targetId;
-    if (obj.task === "dialog" && Array.isArray(obj.nextObjectiveId)) {
-      isPredecessor ||= obj.nextObjectiveId.some(
-        (entry) => entry.nextObjectiveId === targetId,
-      );
-    } else if ("nextObjectiveId" in obj && typeof obj.nextObjectiveId === "string") {
-      isPredecessor ||= obj.nextObjectiveId === targetId;
-    }
-    if (!isPredecessor) return false;
+    if (!leadsTo(obj, targetId)) return false;
 
     // Check if predecessor is complete
     const status = tracker.goals.find((goal) => goal.id === obj.id);
@@ -121,26 +129,30 @@ export const isQuestComplete = (
     );
   }
 
-  // Find the starting objective (no predecessor)
-  const startingObjective = objectives.find(
-    (obj) => !findPredecessor(objectives, obj.id),
-  );
-  if (!startingObjective) return false;
+  const { ids, cyclic } = selectedObjectivePath(objectives, tracker);
+  if (ids.length === 0 || cyclic) return false;
+  return ids.every((id) => {
+    const objective = objectives.find((obj) => obj.id === id);
+    return !!objective && !!isObjectiveComplete(tracker, objective).done;
+  });
+};
 
-  // Traverse the selectedNextObjectiveId path in tracker.goals
-  let currentId = startingObjective.id;
+/**
+ * Objective ids along the branch the tracker selected, from the starting objective (the one
+ * without a predecessor). `cyclic` reports a selection that loops back on itself.
+ */
+const selectedObjectivePath = (
+  objectives: AllObjectivesType[],
+  tracker: QuestTrackerType,
+) => {
   const visited = new Set<string>();
-  while (true) {
-    const currentObjective = objectives.find((obj) => obj.id === currentId);
-    if (!currentObjective) return false;
-    if (!isObjectiveComplete(tracker, currentObjective).done) return false;
-    const goal = tracker.goals.find((g) => g.id === currentId);
-    if (!goal?.selectedNextObjectiveId) break;
-    if (visited.has(currentId)) return false; // Prevent infinite loops
+  let currentId = objectives.find((obj) => !findPredecessor(objectives, obj.id))?.id;
+  while (currentId && !visited.has(currentId)) {
     visited.add(currentId);
-    currentId = goal.selectedNextObjectiveId;
+    const id = currentId;
+    currentId = tracker.goals.find((goal) => goal.id === id)?.selectedNextObjectiveId;
   }
-  return true;
+  return { ids: [...visited], cyclic: !!currentId };
 };
 
 /**
@@ -162,29 +174,7 @@ export const isQuestObjectiveAvailable = (
   const currentObjective = objectives[objectiveIdx];
   if (!currentObjective) return false;
 
-  // Build a map of id -> objective
-  const idToObjective = new Map<string, AllObjectivesType>();
-  objectives.forEach((obj) => {
-    idToObjective.set(obj.id, obj);
-  });
-
-  // Find the starting objective (no predecessor)
-  const startingObjective = objectives.find(
-    (obj) => !findPredecessor(objectives, obj.id),
-  );
-  if (!startingObjective) return false;
-
-  // Traverse the selectedNextObjectiveId path in tracker.goals
-  let currentId = startingObjective.id;
-  const visited = new Set<string>();
-  while (true) {
-    if (currentId === currentObjective.id) return true;
-    if (visited.has(currentId)) return false; // Prevent infinite loops
-    visited.add(currentId);
-    const goal = tracker.goals.find((g) => g.id === currentId);
-    if (!goal?.selectedNextObjectiveId) return false;
-    currentId = goal.selectedNextObjectiveId;
-  }
+  return selectedObjectivePath(objectives, tracker).ids.includes(currentObjective.id);
 };
 
 /**
@@ -195,10 +185,11 @@ export const isQuestObjectiveAvailable = (
  */
 export const getActiveObjective = (quest: Quest, tracker: QuestTrackerType) => {
   if (!quest.consecutiveObjectives) return null;
-  return quest.content.objectives.find((o, i) => {
-    const isAvailable = isQuestObjectiveAvailable(quest, tracker, i);
+  const objectives = quest.content.objectives;
+  const { ids } = selectedObjectivePath(objectives, tracker);
+  return objectives.find((o) => {
     const trackerObjective = tracker.goals.find((g) => g.id === o.id);
-    return isAvailable && !trackerObjective?.done;
+    return ids.includes(o.id) && !trackerObjective?.done;
   });
 };
 
@@ -227,84 +218,27 @@ export const buildObjectiveEdges = (
   const edges: ElementDefinition[] = [];
   const seen = new Set<string>(); // Ensure unique edge ids
 
-  objectives.forEach((obj) => {
-    // Handle dialog objectives where nextObjectiveId is an array of objects
-    if (obj.task === "dialog") {
-      const nextList = Array.isArray(obj.nextObjectiveId) ? obj.nextObjectiveId : [];
-      nextList.forEach((entry) => {
-        const targetId = entry.nextObjectiveId;
-        if (!targetId || !validIds.has(targetId)) return;
-        const edgeId = `${obj.id}__to__${targetId}`;
-        if (seen.has(edgeId)) return;
-        seen.add(edgeId);
-        edges.push({
-          data: {
-            id: edgeId,
-            source: obj.id,
-            target: targetId,
-            label: "",
-          },
-        });
-      });
-    } else {
-      // Non-dialog objectives – expect a single string id
-      const nextId = (obj as { nextObjectiveId?: string }).nextObjectiveId;
-      if (nextId && validIds.has(nextId)) {
-        const edgeId = `${obj.id}__to__${nextId}`;
-        if (!seen.has(edgeId)) {
-          seen.add(edgeId);
-          edges.push({
-            data: {
-              id: edgeId,
-              source: obj.id,
-              target: nextId,
-              label: "",
-            },
-          });
-        }
-      }
+  for (const obj of objectives) {
+    for (const { target, kind } of objectiveLinks(obj)) {
+      const edgeId = `${obj.id}${EDGE_ID_SEPARATOR[kind]}${target}`;
+      if (!validIds.has(target) || seen.has(edgeId)) continue;
+      seen.add(edgeId);
+      const data = { id: edgeId, source: obj.id, target };
+      edges.push(
+        kind === "next"
+          ? { data: { ...data, label: "" } }
+          : { data, classes: `${kind}-edge` },
+      );
     }
-
-    // Handle Fail Edges
-    if ("failObjectiveId" in obj && obj.failObjectiveId) {
-      const failId = obj.failObjectiveId;
-      if (failId && validIds.has(failId)) {
-        const edgeId = `${obj.id}__fail_to__${failId}`;
-        if (!seen.has(edgeId)) {
-          seen.add(edgeId);
-          edges.push({
-            data: {
-              id: edgeId,
-              source: obj.id,
-              target: failId,
-            },
-            classes: "fail-edge",
-          });
-        }
-      }
-    }
-
-    // Handle Reset Edges
-    if ("resetObjectiveId" in obj && obj.resetObjectiveId) {
-      const resetId = obj.resetObjectiveId;
-      if (resetId && validIds.has(resetId)) {
-        const edgeId = `${obj.id}__reset_to__${resetId}`;
-        if (!seen.has(edgeId)) {
-          seen.add(edgeId);
-          edges.push({
-            data: {
-              id: edgeId,
-              source: obj.id,
-              target: resetId,
-            },
-            classes: "reset-edge",
-          });
-        }
-      }
-    }
-  });
+  }
 
   return edges;
+};
+
+const EDGE_ID_SEPARATOR: Record<ObjectiveLink["kind"], string> = {
+  next: "__to__",
+  fail: "__fail_to__",
+  reset: "__reset_to__",
 };
 
 /**

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import { chunkArray, countNames, shuffle } from "@/utils/array";
 
 test("chunkArray splits values into bounded batches", () => {

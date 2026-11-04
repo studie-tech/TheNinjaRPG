@@ -14,6 +14,7 @@ import {
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
+import { getClanBoost } from "@/libs/clanBoost";
 import { getCookingLevel, getCookingSeconds } from "@/libs/cooking";
 import {
   calculateItemConsumption,
@@ -356,10 +357,7 @@ export const occupationRouter = createTRPCRouter({
       }
 
       // Award crafting experience (from item config, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/strongholds)
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const clanCraftingExpBoost = getClanBoost(user, "craftingExpBoost");
       const baseExpGain = isMeal
         ? 0
         : (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
@@ -824,10 +822,7 @@ export const occupationRouter = createTRPCRouter({
       );
 
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/strongholds)
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const clanCraftingExpBoost = getClanBoost(user, "craftingExpBoost");
       const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
       const expGain = Math.floor(
         boostPvpGain(

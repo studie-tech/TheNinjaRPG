@@ -728,7 +728,6 @@ export const overworldAiRouter = createTRPCRouter({
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
             allowedRanks.includes(q.questRank) &&
             (!quota || quota.current < quota.limit) &&
-            !(q.startsAt && q.startsAt > now.toISOString()) &&
             warEligible &&
             !questTypeConcurrentBlockMessage(q, activeUser) &&
             !attemptCapReached(

@@ -7,6 +7,7 @@ import { collapseRewards } from "@/libs/rewards";
 import type { QuestContentType } from "@/validators/objectives";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import {
+  hasMasteryPromotion,
   hasReward,
   ObjectiveReward,
   type ObjectiveRewardType,
@@ -15,7 +16,6 @@ import {
   REWARD_CHOICE_CONTENT_FIELDS,
   type RewardChoiceAmountField,
   type RewardChoiceCard,
-  hasMasteryPromotion,
 } from "@/validators/rewards";
 
 /**
@@ -61,6 +61,20 @@ export const getFixedChoiceRewards = (
     reward_gathering_items: reward.reward_gathering_items,
     reward_gathering_items_ids: reward.reward_gathering_items_ids,
   });
+
+/** Distinct content ids per reward field, looking inside bundled package cards. */
+export const rewardChoiceContentIds = (cards: RewardChoiceCard[]) => {
+  const expandedCards = cards.flatMap((card) =>
+    card.rewards ? buildRewardChoiceCards(card.rewards) : [card],
+  );
+  return (field: RewardChoiceCard["field"]) => [
+    ...new Set(
+      expandedCards.flatMap((card) =>
+        card.field === field && card.contentId ? [card.contentId] : [],
+      ),
+    ),
+  ];
+};
 
 /** Split direct fields into cards and each saved package into one bundle, with stable ids/order. */
 export const buildRewardChoiceCards = (reward: QuestRewardType): RewardChoiceCard[] => {

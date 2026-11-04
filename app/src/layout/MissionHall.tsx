@@ -19,6 +19,7 @@ import {
   IMG_BUILDING_MISSIONHALL,
   IMG_MISSION_WAR,
   MEDICAL_MISSIONS_PER_DAY,
+  MISSION_HALL_SOLO_QUEST_TYPES,
   MISSIONS_FULL_REWARD_COUNT,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
@@ -71,9 +72,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
   } | null>(null);
 
   const currentQuest = userData?.userQuests?.find(
-    (q) =>
-      ["mission", "crime", "errand", "medical", "pvp"].includes(q.quest.questType) &&
-      !q.endAt,
+    (q) => MISSION_HALL_SOLO_QUEST_TYPES.includes(q.quest.questType) && !q.endAt,
   );
   const currentTracker = userData?.questData?.find(
     (q) => q.id === currentQuest?.questId,

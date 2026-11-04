@@ -1,5 +1,6 @@
 import { MasteryTypes } from "@/drizzle/constants";
 import {
+  hasMasteryPromotion,
   MASTERY_EXPERIENCE_FIELDS,
   type ObjectiveRewardType,
   hasMasteryPromotion,

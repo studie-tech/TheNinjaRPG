@@ -1,5 +1,7 @@
 import type { Quest, QuestParty } from "@/drizzle/schema";
+import { isInArray } from "@/utils/array";
 import type { ObjectiveTrackerType, QuestTrackerType } from "@/validators/objectives";
+import { PassiveSnapshotTasks } from "@/validators/objectives";
 
 /** Record personal deltas in the outgoing trackers in place; copied team totals never contribute. */
 export const recordPartyContributions = (
@@ -78,29 +80,7 @@ export const mergePartyProgress = (
       const usesMaximum =
         objective &&
         (("singleBattle" in objective && objective.singleBattle) ||
-          [
-            "user_level",
-            "farming_level",
-            "farming_collection_log",
-            "bloodline_collection",
-            "days_in_village",
-            "days_as_kage",
-            "minutes_passed",
-            "reputation_points",
-            "errands_total",
-            "a_missions_total",
-            "b_missions_total",
-            "c_missions_total",
-            "d_missions_total",
-            "a_crimes_total",
-            "b_crimes_total",
-            "c_crimes_total",
-            "d_crimes_total",
-            "medical_experience",
-            "crafting_experience",
-            "hunting_experience",
-            "gathering_experience",
-          ].includes(objective.task));
+          isInArray(objective.task, PassiveSnapshotTasks));
       if (
         objective?.task === "damage_dealt" &&
         objective.singleBattle &&

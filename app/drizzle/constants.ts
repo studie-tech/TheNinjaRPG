@@ -1035,6 +1035,19 @@ export const QuestTypes = [
   "special",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
+/** Solo assignments from the Mission Hall; one can be active at a time. */
+export const MISSION_HALL_SOLO_QUEST_TYPES: readonly QuestType[] = [
+  "mission",
+  "crime",
+  "errand",
+  "medical",
+  "pvp",
+];
+/** Daily-capped assignments accepted at the Mission Hall. */
+export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
+  ...MISSION_HALL_SOLO_QUEST_TYPES,
+  "war",
+];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
 /** Contracts a companion may take on. */
 export const PET_TASK_QUEST_TYPES = [

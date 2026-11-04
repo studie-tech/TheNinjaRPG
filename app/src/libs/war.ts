@@ -7,62 +7,26 @@ import {
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure, War } from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
+import { getWarSide } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
-import { getUnique } from "@/utils/grouping";
 
 /**
- * Checks if two users are war allies
- * @param targetWars - The wars to check
- * @param userWars - The wars to check
- * @param targetVillageId - The village ID to check
- * @param userVillageId - The village ID to check
- * @returns The war if found, otherwise undefined
- */
-export const findWarAllies = (
-  targetWars: BattleWar[],
-  userWars: BattleWar[],
-  targetVillageId: string | null | undefined,
-  userVillageId: string | null | undefined,
-) => {
-  return getUnique([...targetWars, ...userWars], "id").filter((w) => {
-    const attackerVillageIds = [
-      w.attackerVillageId,
-      ...w.warAllies
-        .filter((wa) => wa.supportVillageId === w.attackerVillageId)
-        .map((wa) => wa.villageId),
-    ];
-    const defenderVillageIds = [
-      w.defenderVillageId,
-      ...w.warAllies
-        .filter((wa) => wa.supportVillageId === w.defenderVillageId)
-        .map((wa) => wa.villageId),
-    ];
-    const check1 =
-      attackerVillageIds.includes(targetVillageId ?? "") &&
-      attackerVillageIds.includes(userVillageId ?? "");
-    const check2 =
-      defenderVillageIds.includes(targetVillageId ?? "") &&
-      defenderVillageIds.includes(userVillageId ?? "");
-    return check1 || check2;
-  });
-};
-
-/**
- * Checks if two users are war allies
+ * Checks if two villages fight on the same side of any war
  * @param wars - The wars to check
  * @param targetVillageId - The village ID to check
  * @param userVillageId - The village ID to check
- * @returns Whether the users are war allies
+ * @returns Whether the villages are war allies
  */
 export const isWarAllies = (
   wars: BattleWar[] | null | undefined,
   targetVillageId: string | null | undefined,
   userVillageId: string | null | undefined,
-) => {
-  if (!wars) return false;
-  return findWarAllies(wars, wars, targetVillageId, userVillageId).length > 0;
-};
+) =>
+  !!wars?.some((war) => {
+    const side = getWarSide(war, targetVillageId ?? null);
+    return !!side && side === getWarSide(war, userVillageId ?? null);
+  });
 
 /**
  * Checks if a village can join a war
@@ -137,8 +101,11 @@ export const getShrineHpByLevel = (level?: number | null): number =>
 export const isVillageInvolvedInAnyWar = (
   activeWars: (Pick<
     FetchActiveWarsReturnType,
-    "id" | "type" | "attackerVillageId" | "defenderVillageId"
-  > & { warAllies: { villageId: string }[] })[],
+    "attackerVillageId" | "defenderVillageId"
+  > &
+    Partial<Pick<FetchActiveWarsReturnType, "id" | "type">> & {
+      warAllies: { villageId: string }[];
+    })[],
   villageId: string,
   excludeWarId?: string,
   types?: readonly WarType[],
@@ -150,7 +117,7 @@ export const isVillageInvolvedInAnyWar = (
     }
 
     // Skip if types are provided and war type is not in them
-    if (types && !types.includes(war.type)) {
+    if (types && (!war.type || !types.includes(war.type))) {
       return false;
     }
 

@@ -23,6 +23,7 @@ import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Modal from "@/layout/Modal";
 import { getActivityBonuses } from "@/libs/activityBonuses";
+import { getClanBoost } from "@/libs/clanBoost";
 import {
   formatCraftingRank,
   getCraftingRank,
@@ -121,9 +122,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     boostPvpGain(
       (selectedItem?.craftingExperience ?? 0) *
         craftQuantity *
-        (1 +
-          (userData?.isOutlaw ? 0 : (userData?.clan?.craftingExpBoost ?? 0) / 100) +
-          territoryWarBoost),
+        (1 + getClanBoost(userData, "craftingExpBoost") + territoryWarBoost),
       userData?.pvpBoost?.totalPercent ?? 0,
     ),
   );

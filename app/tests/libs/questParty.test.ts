@@ -55,6 +55,14 @@ describe("quest team progress", () => {
     expect(merged.tracker.goals[0]?.value).toBe(40);
     expect(merged.tracker.goals[0]?.done).toBe(false);
   });
+  it("uses a maximum for completion snapshots instead of adding lifetime totals", () => {
+    const { quest, party } = fixture("dungeons_completed", 60);
+    const members = [contributor(party, "one", 35), contributor(party, "two", 40)];
+    members[0]!.questData[0]!.goals[0]!.value = 35;
+    members[1]!.questData[0]!.goals[0]!.value = 40;
+    expect(mergePartyProgress(party, members, quest).tracker.goals[0]?.value).toBe(40);
+  });
+
   it("preserves personal reward collection and timers without transferring them to replacements", () => {
     const { party } = fixture();
     const personal = projectPartyTracker(party);

@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type {
+  BattleType,
   ItemType,
   LetterRank,
   RankedRank,
@@ -43,6 +44,7 @@ import {
   deleteLogBattleLengthsForClearAllBattleLengths,
   deleteLogQueueLengthsForClearAllQueueLengths,
   findUserDataForGetStatistics,
+  hasNoReferralSource,
   insertActionLogForClearAllBattleLengths,
   insertActionLogForClearAllQueueLengths,
   insertActionLogForDeleteAllDataBattleAction,
@@ -52,6 +54,7 @@ import {
   listJutsuForGetJutsuEffectsBalanceStatistics,
   listSkillTreeForGetSkillTreeBalanceStatistics,
   listSkillTreeForGetSkillTreeEffectsBalanceStatistics,
+  recruitmentUserConditions,
   selectAbEventForGetAbTests,
   selectBloodlineForGetBloodlineBalanceStatistics,
   selectDataBattleActionForGetAiBalanceStatistics,
@@ -100,8 +103,7 @@ import {
 } from "@/queries/data";
 import { fetchItem } from "@/queries/item";
 import { fetchJutsu } from "@/queries/jutsu";
-import { fetchUser } from "@/queries/profile";
-import { fetchSkillTreeViewer } from "@/queries/skillTree";
+import { fetchUser, fetchViewerRole } from "@/queries/profile";
 
 import {
   baseServerResponse,
@@ -516,66 +518,31 @@ export const dataRouter = createTRPCRouter({
         );
       }
       // Filtering
-      const selected = input.sources?.length ? input.sources : undefined;
-      const wantsDynamic = selected?.includes("Dynamic") ?? false;
-      const wantsRecruited = selected?.includes("Recruited") ?? false;
-      const realSources = selected?.filter((s) => s !== "Dynamic" && s !== "Recruited");
+      const { selected, realSources, wantsDynamic, wantsRecruited, wantReal } =
+        parseRecruitmentSources(input.sources);
       const metric = input.metric ?? "level";
-      // Build referred and dynamic queries and run in parallel when applicable
-      const wantReal = !selected || (realSources && realSources.length > 0);
 
       // Base where clauses shared by all branches
-      const baseUserWhere: QueryCondition[] = [eq(userData.isAi, false)];
-      if (input.startDate)
-        baseUserWhere.push(gte(userData.createdAt, new Date(input.startDate)));
-      if (input.endDate)
-        baseUserWhere.push(lte(userData.createdAt, new Date(input.endDate)));
+      const baseUserWhere = recruitmentUserConditions(input);
 
-      // Referrals-specific where
+      // Referrals-specific where; every referral source when none is named
       const realWhere: QueryCondition[] = [...baseUserWhere];
-      if (!selected) {
-        // all referred via inner join
-      } else if (realSources && realSources.length > 0) {
+      if (realSources?.length) {
         realWhere.push(inArray(referralSource.source, realSources));
       }
       // Dynamic and Recruited specifics
       const dynamicWhere: QueryCondition[] = [
         ...baseUserWhere,
-        sql`NOT EXISTS(SELECT 1 FROM ${referralSource} rs2 WHERE rs2.userId = ${userData.userId})`,
+        hasNoReferralSource(ctx.drizzle),
       ];
       const recruitedWhere: QueryCondition[] = [
         ...baseUserWhere,
-        sql`${userData.recruiterId} IS NOT NULL`,
+        isNotNull(userData.recruiterId),
       ];
 
-      const metricColumn = (() => {
-        switch (metric) {
-          case "level":
-            return userData.level;
-          case "pveFights":
-            return userData.pveFights;
-          case "pvpFights":
-            return userData.pvpFights;
-          case "missionsD":
-            return userData.missionsD;
-          case "missionsC":
-            return userData.missionsC;
-          case "missionsB":
-            return userData.missionsB;
-          case "missionsA":
-            return userData.missionsA;
-          case "crimesD":
-            return userData.crimesD;
-          case "crimesC":
-            return userData.crimesC;
-          case "crimesB":
-            return userData.crimesB;
-          case "crimesA":
-            return userData.crimesA;
-          default:
-            return userData.level;
-        }
-      })();
+      // Quest counts come from QuestHistory, so clampedExpr goes unused for that metric
+      const metricColumn =
+        metric === "completedQuests" ? userData.level : userData[metric];
 
       const clampMax = RecruitmentMetricMax[metric];
       const clampedExpr = sql<number>`LEAST(GREATEST(${metricColumn}, 0), ${clampMax})`;
@@ -703,10 +670,8 @@ export const dataRouter = createTRPCRouter({
         );
       }
       // Filtering
-      const selected = input.sources?.length ? input.sources : undefined;
-      const wantsDynamic = selected?.includes("Dynamic") ?? false;
-      const wantsRecruited = selected?.includes("Recruited") ?? false;
-      const realSources = selected?.filter((s) => s !== "Dynamic" && s !== "Recruited");
+      const { selected, realSources, wantsDynamic, wantsRecruited } =
+        parseRecruitmentSources(input.sources);
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
       // No selection: only users with any referral source (historical behavior)
@@ -745,23 +710,14 @@ export const dataRouter = createTRPCRouter({
         );
       }
       // Filtering
-      const selected = input.sources?.length ? input.sources : undefined;
-      const wantsDynamic = selected?.includes("Dynamic") ?? false;
-      const wantsRecruited = selected?.includes("Recruited") ?? false;
-      const realSources = selected?.filter((s) => s !== "Dynamic" && s !== "Recruited");
-      const wantReal = !selected || (realSources && realSources.length > 0);
+      const { selected, realSources, wantsDynamic, wantsRecruited, wantReal } =
+        parseRecruitmentSources(input.sources);
 
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
       // Referred series
-      const realWhere: QueryCondition[] = [eq(userData.isAi, false)];
-      if (input.startDate)
-        realWhere.push(gte(userData.createdAt, new Date(input.startDate)));
-      if (input.endDate)
-        realWhere.push(lte(userData.createdAt, new Date(input.endDate)));
-      if (!selected) {
-        // all referred
-      } else if (realSources && realSources.length > 0) {
+      const realWhere = recruitmentUserConditions(input);
+      if (realSources?.length) {
         realWhere.push(inArray(referralSource.source, realSources));
       }
 
@@ -981,12 +937,7 @@ export const dataRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       // Build where conditions
-      const whereConditions: QueryCondition[] = [eq(dataBattleAction.type, "jutsu")];
-
-      // Add battle type filter
-      if (input.battleTypes && input.battleTypes.length > 0) {
-        whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
-      }
+      const whereConditions = contentBalanceConditions("jutsu", input);
 
       // Perform the filter by jutsu effects directly in the main query using JSON_SEARCH in the WHERE clause if needed
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
@@ -1000,13 +951,6 @@ export const dataRouter = createTRPCRouter({
                 sql`JSON_SEARCH(${jutsu.effects}, 'one', ${effect}, NULL, '$[*].type') IS NOT NULL`,
             ),
           ),
-        );
-      }
-
-      // Build bloodline filter if needed
-      if (input.bloodlineIds && input.bloodlineIds.length > 0) {
-        whereConditions.push(
-          inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds),
         );
       }
 
@@ -1167,15 +1111,15 @@ export const dataRouter = createTRPCRouter({
       }
 
       // Run userCounts and skill queries in parallel for efficiency
-      const [user, userCounts, skills] = await Promise.all([
-        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+      const [viewerRole, userCounts, skills] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         // Get user counts per skill
         selectUserSkillForGetSkillTreeBalanceStatistics(ctx.drizzle),
 
         // Get all skills (filtered by effects/tiers if specified)
         listSkillTreeForGetSkillTreeBalanceStatistics(ctx.drizzle, whereConditions),
       ]);
-      const includeHidden = canAccessHiddenSkillTree(user?.role);
+      const includeHidden = canAccessHiddenSkillTree(viewerRole);
 
       // Create a map for quick lookup
       const userCountMap = new Map(
@@ -1206,12 +1150,12 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const baseFilters = skillTreeDatabaseFilter(input);
       // Fetch results
-      const [user, results] = await Promise.all([
-        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+      const [viewerRole, results] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeForGetSkillTreeEffectsBalanceStatistics(ctx.drizzle, baseFilters),
       ]);
       return results
-        .filter((skill) => isSkillVisible(skill, canAccessHiddenSkillTree(user?.role)))
+        .filter((skill) => isSkillVisible(skill, canAccessHiddenSkillTree(viewerRole)))
         .map(({ id, name, tier, costSkillPoints, effects }) => ({
           id,
           name,
@@ -1231,12 +1175,7 @@ export const dataRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       // Build where conditions
-      const whereConditions: QueryCondition[] = [eq(dataBattleAction.type, "item")];
-
-      // Add battle type filter
-      if (input.battleTypes && input.battleTypes.length > 0) {
-        whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
-      }
+      const whereConditions = contentBalanceConditions("item", input);
 
       // Perform the filter by item types directly in the main query
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
@@ -1244,13 +1183,6 @@ export const dataRouter = createTRPCRouter({
       // Build item type filter if needed
       if (input.itemTypes && input.itemTypes.length > 0) {
         whereConditions.push(inArray(item.itemType, input.itemTypes as ItemType[]));
-      }
-
-      // Build bloodline filter if needed
-      if (input.bloodlineIds && input.bloodlineIds.length > 0) {
-        whereConditions.push(
-          inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds),
-        );
       }
 
       // Run equippedCounts and usage queries in parallel for efficiency
@@ -1642,3 +1574,30 @@ export const dataRouter = createTRPCRouter({
       }
     }),
 });
+
+/** Battle-action filters shared by the jutsu and item balance tables. */
+const contentBalanceConditions = (
+  type: "jutsu" | "item",
+  input: { battleTypes?: BattleType[]; bloodlineIds?: string[] },
+): QueryCondition[] => [
+  eq(dataBattleAction.type, type),
+  ...(input.battleTypes?.length
+    ? [inArray(dataBattleAction.battleType, input.battleTypes)]
+    : []),
+  ...(input.bloodlineIds?.length
+    ? [inArray(dataBattleAction.relatedBloodlineId, input.bloodlineIds)]
+    : []),
+];
+
+/** Splits the requested series; Dynamic and Recruited are cohorts, not referral sources. */
+const parseRecruitmentSources = (sources: string[] | undefined) => {
+  const selected = sources?.length ? sources : undefined;
+  const realSources = selected?.filter((s) => s !== "Dynamic" && s !== "Recruited");
+  return {
+    selected,
+    realSources,
+    wantsDynamic: selected?.includes("Dynamic") ?? false,
+    wantsRecruited: selected?.includes("Recruited") ?? false,
+    wantReal: !selected || !!realSources?.length,
+  };
+};

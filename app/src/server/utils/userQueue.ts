@@ -19,6 +19,7 @@ import {
   type userItem,
   userQueue,
 } from "@/drizzle/schema";
+import { getClanBoost } from "@/libs/clanBoost";
 import {
   countsTowardInventoryStorage,
   getInventoryBucket,
@@ -865,7 +866,7 @@ const startQueuedCraft = async (
     return { finishesAt };
   }
   // Clan boosts apply to the experience as they do for a direct craft.
-  const clanBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
+  const clanBoost = getClanBoost(user, "craftingExpBoost");
   const expGain = Math.floor(
     boostPvpGain(
       (entry.item.craftingExperience ?? 0) *
