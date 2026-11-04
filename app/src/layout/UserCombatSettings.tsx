@@ -52,13 +52,15 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           aria-label="Open combat settings"
-          className="flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="h-10 w-10"
         >
-          <Settings2 className="h-6 w-6" />
-        </button>
+          <Settings2 className="h-5 w-5" />
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         aria-label="Combat settings"

@@ -164,7 +164,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
             </span>
           </div>
           {props?.options && (
-            <div className="flex flex-col items-center justify-center gap-1 pt-1 pr-2">
+            <div className="flex shrink-0 items-center justify-center gap-1 pt-1 pr-2">
               {props.options}
             </div>
           )}
