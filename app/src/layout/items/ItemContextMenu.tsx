@@ -54,7 +54,11 @@ export function ItemContextMenu({
 }: ItemContextMenuProps) {
   const openedAt = useRef(0);
   const triggerRef = useRef<HTMLSpanElement>(null);
-  const pendingInspection = useRef<string | null>(null);
+  const pendingAction = useRef<
+    | { kind: "inspect"; userItemId: string }
+    | { kind: "hotkey"; userItem: UserItemWithRelations }
+    | null
+  >(null);
   return (
     <ContextMenu
       onOpenChange={(open) => {
@@ -75,12 +79,19 @@ export function ItemContextMenu({
       </ContextMenuTrigger>
       <ContextMenuContent
         onCloseAutoFocus={(event) => {
-          const userItemId = pendingInspection.current;
-          if (!userItemId) return;
-          // Open after the menu releases its focus trap so the inspector can take focus.
+          const action = pendingAction.current;
+          if (!action) return;
+          // Open after the menu releases its focus trap so the destination can take focus.
           event.preventDefault();
-          pendingInspection.current = null;
-          onInspect(userItemId, triggerRef.current?.querySelector("button") ?? null);
+          pendingAction.current = null;
+          const trigger = triggerRef.current?.querySelector("button") ?? null;
+          if (action.kind === "inspect") {
+            onInspect(action.userItemId, trigger);
+          } else {
+            // The capture dialog remembers the mounted equipment button as its opener.
+            trigger?.focus();
+            onSetHotkey?.(action.userItem);
+          }
         }}
       >
         <ItemMenuEntries
@@ -89,12 +100,18 @@ export function ItemContextMenu({
           userData={userData}
           getBlockedReason={getBlockedReason}
           onInspect={(userItemId) => {
-            pendingInspection.current = userItemId;
+            pendingAction.current = { kind: "inspect", userItemId };
           }}
           onEquip={onEquip}
           onUnequip={onUnequip}
           onMerge={onMerge}
-          onSetHotkey={onSetHotkey}
+          onSetHotkey={
+            onSetHotkey
+              ? (userItem) => {
+                  pendingAction.current = { kind: "hotkey", userItem };
+                }
+              : undefined
+          }
         />
       </ContextMenuContent>
     </ContextMenu>

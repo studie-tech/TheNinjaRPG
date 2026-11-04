@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { HotkeyTarget } from "@/layout/HotkeyControls";
+import { HotkeyCaptureDialog } from "@/layout/HotkeyControls";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 
 // Radix dispatches DOM events through the global constructors.
@@ -161,6 +163,33 @@ it("offers set hotkey only for equipped items, and not on touch-only devices", (
   renderMenu(worn);
   openMenu("Smoke Bomb");
   expect(menuItems()).not.toContain("Set hotkey…");
+});
+
+it.each(["Escape", "k"])("returns focus to the equipped item after closing its hotkey dialog with %s", async (key) => {
+  const onAssign = vi.fn(() => true);
+  const content = (target: HotkeyTarget | null) => (
+    <HotkeyCaptureDialog target={target} currentKey="b" onAssign={onAssign} onClose={() => show(null)} />
+  );
+  const view = render(content(null));
+  const show = (target: HotkeyTarget | null) => view.rerender(content(target));
+  renderMenu(userItem({ id: "Smoke Bomb", equipped: "ITEM_1" }), {
+    onSetHotkey: (target) => show({ id: target.itemId, name: target.item.name, kind: "item" }),
+  });
+  const trigger = screen.getByRole("button", { name: "Smoke Bomb card" });
+  act(() => trigger.focus());
+  openMenu("Smoke Bomb");
+  const hotkey = screen.getByRole("menuitem", { name: "Set hotkey…" });
+  act(() => hotkey.focus());
+  fireEvent.click(hotkey);
+
+  await waitFor(() => expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true));
+  expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.keyDown(document.activeElement!, { key });
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+  expect(onAssign).toHaveBeenCalledTimes(key === "Escape" ? 0 : 1);
+  if (key !== "Escape") expect(onAssign).toHaveBeenCalledWith(key);
 });
 
 it("offers unequip and inspect for equipped items", () => {
