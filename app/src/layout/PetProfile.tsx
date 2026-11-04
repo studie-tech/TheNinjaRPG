@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CombatStatNames,
+  getCombatStatCap,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_FEED_COOLDOWN_HOURS,
@@ -890,12 +891,7 @@ export function PetProfile() {
                 {formatStat(pet[stat])}
                 <span className="font-normal text-muted-foreground text-xs">
                   {" "}
-                  /{" "}
-                  {formatStat(
-                    stat === "offence" || stat === "defence"
-                      ? caps.stats_cap
-                      : caps.gens_cap,
-                  )}
+                  / {formatStat(getCombatStatCap(caps, stat))}
                 </span>
               </dd>
             </div>

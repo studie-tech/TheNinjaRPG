@@ -1,3 +1,7 @@
+import { and, eq, gte, isNull } from "drizzle-orm";
+import { userData } from "@/drizzle/schema";
+import { addDays } from "@/utils/time";
+
 /**
  * Which player profiles are worth a search engine's attention.
  *
@@ -14,7 +18,7 @@ export const PROFILE_INDEX_ACTIVE_DAYS = 90;
 
 /** Oldest `updatedAt` a profile may carry and still be indexable. */
 export const profileIndexCutoff = (now = Date.now()) =>
-  new Date(now - PROFILE_INDEX_ACTIVE_DAYS * 24 * 60 * 60 * 1000);
+  addDays(new Date(now), -PROFILE_INDEX_ACTIVE_DAYS);
 
 export interface ProfileIndexFields {
   level: number;
@@ -26,7 +30,7 @@ export interface ProfileIndexFields {
 
 /**
  * isProfileIndexable
- * - Mirrors the WHERE clause profileEntries uses in @/libs/sitemap; keep the two in step.
+ * - The in-memory form of `profileIndexableWhere` below; keep the two in step.
  * @param user - The profile's level, activity and status fields
  * @param now - Injectable for tests
  */
@@ -37,3 +41,13 @@ export const isProfileIndexable = (user: ProfileIndexFields, now = Date.now()) =
   !user.isAi &&
   !user.isBanned &&
   user.deletionAt === null;
+
+/** The SQL form of `isProfileIndexable`, for the sitemap's profile list. */
+export const profileIndexableWhere = () =>
+  and(
+    gte(userData.level, PROFILE_INDEX_MIN_LEVEL),
+    gte(userData.updatedAt, profileIndexCutoff()),
+    eq(userData.isAi, false),
+    eq(userData.isBanned, false),
+    isNull(userData.deletionAt),
+  );

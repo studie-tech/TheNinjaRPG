@@ -17,6 +17,7 @@ import {
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  getCombatStatCap,
   getUserCaps,
   ITEM_XP_BATTLE_TYPES,
   ITEM_XP_ON_LOSS,
@@ -914,10 +915,7 @@ export const isStatTrainingCapped = (
   user: UserStatData & Pick<UserData, "rank">,
   stat: CombatStatName,
 ) => {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return (
-    user[stat] >= (stat === "offence" || stat === "defence" ? stats_cap : gens_cap)
-  );
+  return user[stat] >= getCombatStatCap(getUserCaps(user.rank), stat);
 };
 
 /** Offer training only when the player can start and at least one combat stat can gain. */
@@ -1032,6 +1030,16 @@ export const applyMasteryTrainingGains = (
  * `territoryBoost` is an additive fraction; timed sessions override the instantaneous
  * default with their period average, while Energy spending uses its actual tick.
  */
+/** Stat points one Energy buys at `at`, shared by instant and queued training. */
+export const statsPerEnergy = (
+  user: NonNullable<UserWithRelations>,
+  settings: GameSetting[],
+  at = new Date(),
+) =>
+  STATS_PER_ENERGY *
+  trainingBoost(user, settings, "STATS", at) *
+  getTrainingMultiplierBoost(user);
+
 export const trainingBoost = (
   user: NonNullable<UserWithRelations>,
   settings: GameSetting[],
@@ -1245,25 +1253,17 @@ export const settleEnergyTrainingQueue = (
     .filter((tick) => tick > 0 && tick <= ticks)
     .sort((a, b) => a - b);
   const rateAtTick = (tick: number) =>
-    STATS_PER_ENERGY *
-    trainingBoost(
-      user,
-      settings,
-      "STATS",
-      new Date(regenAt + tick * REGEN_SECONDS * 1000),
-    ) *
-    getTrainingMultiplierBoost(user);
+    statsPerEnergy(user, settings, new Date(regenAt + tick * REGEN_SECONDS * 1000));
   let rate = rateAtTick(0);
   // Sleeping is permitted for a previously authorized queue; all other training guards apply.
   const canTrain = !statTrainingBlockMessage({
     ...user,
     status: user.status === "ASLEEP" ? "AWAKE" : user.status,
   });
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  const caps = getUserCaps(user.rank);
   while (canTrain && entries.length > 0 && rate > 0) {
     const entry = entries[0]!;
-    const cap =
-      entry.stat === "offence" || entry.stat === "defence" ? stats_cap : gens_cap;
+    const cap = getCombatStatCap(caps, entry.stat);
     const room = Math.max(0, cap - user[entry.stat] - (gains[entry.stat] ?? 0));
     if (room === 0) {
       entries.shift();

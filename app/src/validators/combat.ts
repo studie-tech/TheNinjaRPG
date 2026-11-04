@@ -1,9 +1,55 @@
 import { z } from "zod";
-import { AdjustableBasicActions, AttackMethods, AttackTargets, type BasicElement, BattleUsageTypes, BloodlineDifficultyRatings, CACHE_MAX_GRANTED_ITEMS, DIFFUSE_DEFAULT_DELAY_ROUNDS, DIFFUSE_MAX_PERCENTAGE, ElementNames, GeneralTypes, getUserCaps, ITEM_XP_TO_LEVEL, ItemRarities, ItemSlotTypes, ItemTypes, JutsuTypes, LetterRanks, MAX_ACTIVITY_REDUCTION_PERCENT, MAX_COOKING_OUTPUT, MAX_EXTRA_JUTSU_SLOTS, MAX_GATHERING_BONUS_QUANTITY, MAX_HUNTING_BONUS_QUANTITY, MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY, MAX_ITEM_STACK_SIZE, MAX_MEAL_DURATION_SECONDS, MAX_PLAYER_LEVEL, MasteryTypes, MaxPoolTypes, NonActionItemTypes, PET_MAX_CONSUME_PETS, PoolTypes, SAGE_MASTERY_EXP_CAP, SAGE_MODE_MAX_LEVEL, SHIELD_MAX_HEALTH, SkillTreeEntryTypes, SkillTreeTargets, StatTypes, UserRanks, WeaponTypes, SkillTreePathTypes } from "@/drizzle/constants";
+import {
+  AdjustableBasicActions,
+  AttackMethods,
+  AttackTargets,
+  type BasicElement,
+  BattleUsageTypes,
+  BloodlineDifficultyRatings,
+  CACHE_MAX_GRANTED_ITEMS,
+  type CombatStatName,
+  DIFFUSE_DEFAULT_DELAY_ROUNDS,
+  DIFFUSE_MAX_PERCENTAGE,
+  ElementNames,
+  GeneralTypes,
+  getCombatStatCap,
+  getUserCaps,
+  ITEM_XP_TO_LEVEL,
+  ItemRarities,
+  ItemSlotTypes,
+  ItemTypes,
+  JutsuTypes,
+  LetterRanks,
+  MasteryTypes,
+  MAX_ACTIVITY_REDUCTION_PERCENT,
+  MAX_COOKING_OUTPUT,
+  MAX_EXTRA_JUTSU_SLOTS,
+  MAX_GATHERING_BONUS_QUANTITY,
+  MAX_HUNTING_BONUS_QUANTITY,
+  MAX_ITEM_CRAFTING_REQUIREMENT_QUANTITY,
+  MAX_ITEM_STACK_SIZE,
+  MAX_MEAL_DURATION_SECONDS,
+  MAX_PLAYER_LEVEL,
+  MaxPoolTypes,
+  NonActionItemTypes,
+  PET_MAX_CONSUME_PETS,
+  PoolTypes,
+  SAGE_MASTERY_EXP_CAP,
+  SAGE_MODE_MAX_LEVEL,
+  SHIELD_MAX_HEALTH,
+  SkillTreeEntryTypes,
+  SkillTreePathTypes,
+  SkillTreeTargets,
+  StatTypes,
+  TEMPORAL_AP_DELTA,
+  UserRanks,
+  WeaponTypes,
+} from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
 import {
   CACHE_RESTRICTED_REWARD_MESSAGE,
   isRestrictedCacheReward,
+  isWeightedCacheEffect,
 } from "@/libs/weightedCache";
 import { DateTimeRegExp } from "@/utils/regex";
 import { literalType } from "@/validators/base";
@@ -450,13 +496,13 @@ const TimeShiftAttributes = {
 export const TimeCompressionTag = z.object({
   ...TimeShiftAttributes,
   type: tagType("timecompression"),
-  description: msg("Increases AP cost of actions by 10"),
+  description: msg(`Increases AP cost of actions by ${TEMPORAL_AP_DELTA}`),
 });
 
 export const TimeDilationTag = z.object({
   ...TimeShiftAttributes,
   type: tagType("timedilation"),
-  description: msg("Decreases AP cost of actions by 10"),
+  description: msg(`Decreases AP cost of actions by ${TEMPORAL_AP_DELTA}`),
 });
 
 export const RedirectionTag = z.object({
@@ -1626,11 +1672,7 @@ const SuperRefineItem = (data: ItemValidatorType, ctx: z.RefinementCtx) => {
     addIssue(ctx, "Consumable items must be destroyed on use");
   }
   const caches = data.effects.flatMap((effect) =>
-    effect.type === "noncombatconsumereward" &&
-    effect.rewardMode === "weightedCache" &&
-    effect.weightedCache
-      ? [effect.weightedCache]
-      : [],
+    isWeightedCacheEffect(effect) && effect.weightedCache ? [effect.weightedCache] : [],
   );
   if (caches.length > 0 && !data.preventBattleUsage)
     addIssue(ctx, "Weighted caches must prevent battle usage");
@@ -2135,16 +2177,20 @@ export const createStatSchema = (
       >
     >,
 ) => {
-  const { gens_cap, stats_cap } = getUserCaps(user?.rank);
+  const caps = getUserCaps(user?.rank);
+  const roomFor = (stat: CombatStatName) => {
+    const cap = getCombatStatCap(caps, stat);
+    return cap - Math.min(user?.[stat] || 0, cap);
+  };
 
   // Calculate max values for each stat
   const maxValues = {
-    offence: stats_cap - Math.min(user?.offence || 0, stats_cap),
-    defence: stats_cap - Math.min(user?.defence || 0, stats_cap),
-    strength: gens_cap - Math.min(user?.strength || 0, gens_cap),
-    speed: gens_cap - Math.min(user?.speed || 0, gens_cap),
-    intelligence: gens_cap - Math.min(user?.intelligence || 0, gens_cap),
-    willpower: gens_cap - Math.min(user?.willpower || 0, gens_cap),
+    offence: roomFor("offence"),
+    defence: roomFor("defence"),
+    strength: roomFor("strength"),
+    speed: roomFor("speed"),
+    intelligence: roomFor("intelligence"),
+    willpower: roomFor("willpower"),
   };
 
   const schema = z.object({

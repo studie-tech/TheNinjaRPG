@@ -8,7 +8,7 @@ import {
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
-import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
+import { experienceToNextLevel, levelUpBlock } from "@/libs/profile";
 import {
   isAvailableUserQuests,
   isQuestRankAllowed,
@@ -36,23 +36,21 @@ import type { AllObjectivesType, QuestTrackerType } from "@/validators/objective
 
 type DashboardAvailability = "available" | "travel" | "blocked";
 
-export const dashboardLevelProgress = (
-  user: Parameters<typeof levelUpBlockMessage>[0],
-) => {
-  const reason = levelUpBlockMessage(user);
-  if (!reason) return { label: "Ready to level up", reason: null };
-  if (user.level >= getUserCaps(user.rank).lvl_cap) {
-    return { label: "Rank level cap reached", reason };
+export const dashboardLevelProgress = (user: Parameters<typeof levelUpBlock>[0]) => {
+  const block = levelUpBlock(user);
+  if (!block) return { label: "Ready to level up", reason: null };
+  switch (block.kind) {
+    case "cap":
+      return { label: "Rank level cap reached", reason: block.message };
+    case "milestone":
+      return { label: "Milestone required", reason: block.message };
+    case "experience": {
+      const remaining = Number(experienceToNextLevel(user).toFixed(0));
+      return { label: `${remaining.toLocaleString()} XP to go`, reason: null };
+    }
+    case "village":
+      return { label: "Progression required", reason: block.message };
   }
-  if (user.rank === "ELITE JONIN") return { label: "Milestone required", reason };
-  const remaining = Math.max(calcLevelRequirements(user.level) - user.experience, 0);
-  if (remaining > 0) {
-    return {
-      label: `${Number(remaining.toFixed(0)).toLocaleString()} XP to go`,
-      reason: null,
-    };
-  }
-  return { label: "Progression required", reason };
 };
 
 /** Match the training page's access gate before offering a link to it. */

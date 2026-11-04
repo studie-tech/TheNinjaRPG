@@ -13,6 +13,7 @@ import {
 } from "@/deltas/pets";
 import {
   CombatStatNames,
+  getCombatStatCap,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_COLLECTION_SLOT_COST,
@@ -704,7 +705,7 @@ export const petsRouter = createTRPCRouter({
         return errorResponse(
           "Finish your pet's appearance before assigning experience.",
         );
-      const { stats_cap, gens_cap } = getPetStatCaps(pet);
+      const caps = getPetStatCaps(pet);
       const gains = Object.fromEntries(
         CombatStatNames.map((stat) => [stat, Math.floor(input[stat])]),
       ) as Record<(typeof CombatStatNames)[number], number>;
@@ -719,7 +720,7 @@ export const petsRouter = createTRPCRouter({
         willpower: pet.willpower,
       };
       for (const stat of CombatStatNames) {
-        const cap = stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
+        const cap = getCombatStatCap(caps, stat);
         if (stats[stat] + gains[stat] > cap)
           return errorResponse("One or more companion stats exceed this rank's cap.");
         stats[stat] += gains[stat];

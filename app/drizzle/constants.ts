@@ -3481,6 +3481,12 @@ export function getUserCaps(rank?: UserRank | null) {
   };
 }
 
+/** Offence and defence stop at the stats cap, the four generals at the generals cap. */
+export const getCombatStatCap = (
+  caps: { stats_cap: number; gens_cap: number },
+  stat: CombatStatName,
+) => (stat === "offence" || stat === "defence" ? caps.stats_cap : caps.gens_cap);
+
 // ============================================
 // Tower Defense Constants
 // ============================================

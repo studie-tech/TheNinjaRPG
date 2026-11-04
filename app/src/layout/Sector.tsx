@@ -68,7 +68,11 @@ import {
   isArrivalPromptStale,
   resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
-import { getEffectiveLevel, getExpBracket, getScoutingUsers } from "@/libs/profile";
+import {
+  getKnownEffectiveLevel,
+  getKnownExpBracket,
+  getScoutingUsers,
+} from "@/libs/profile";
 import {
   GATHERING_CANCEL_PREFIX,
   getBoundObjectiveCandidates,
@@ -2892,19 +2896,8 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const isPvpRestrictedRank = RANKS_RESTRICTED_FROM_PVP.includes(user.rank);
           const showAttack = !isPvpRestrictedRank && (props.allyAttack || !isAlly);
           const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;
-          // Elite rank/level remain known when a partial map update omits experience.
-          const userBracket =
-            user.rank === "ELITE JONIN"
-              ? MAX_PVP_BRACKET
-              : user.experience == null
-                ? null
-                : getExpBracket(user.experience, user.rank);
-          const userLevel =
-            user.rank === "ELITE JONIN"
-              ? user.level
-              : user.experience == null
-                ? null
-                : getEffectiveLevel({ ...user, experience: user.experience });
+          const userBracket = getKnownExpBracket(user);
+          const userLevel = getKnownEffectiveLevel(user);
 
           // Show user
           return (
