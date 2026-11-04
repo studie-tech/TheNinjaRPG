@@ -410,6 +410,22 @@ export const canAssignExperience = (
   );
 };
 
+/**
+ * Whole unassigned experience points that can still move the player toward their
+ * next level. Zero once the level is already reachable or blocked by anything other
+ * than experience, such as the rank level cap.
+ */
+export const unassignedExperienceTowardLevel = (
+  user: Parameters<typeof canAssignExperience>[0] &
+    Parameters<typeof levelUpBlockMessage>[0] &
+    Pick<UserData, "earnedExperience">,
+) => {
+  const required = calcLevelRequirements(user.level);
+  if (user.experience >= required) return 0;
+  if (levelUpBlockMessage({ ...user, experience: required })) return 0;
+  return canAssignExperience(user) ? Math.floor(user.earnedExperience) : 0;
+};
+
 /** Elite milestone progression forbids XP assignment while preserving earned XP. */
 export const experienceAssignmentBlockMessage = (user: Pick<UserData, "rank">) =>
   user.rank === "ELITE JONIN"

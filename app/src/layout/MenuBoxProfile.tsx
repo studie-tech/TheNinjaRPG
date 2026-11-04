@@ -76,7 +76,12 @@ import {
   isEffectActive,
 } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
-import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
+import {
+  calcLevelRequirements,
+  getExpBracket,
+  levelUpBlockMessage,
+  unassignedExperienceTowardLevel,
+} from "@/libs/profile";
 import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
@@ -235,7 +240,8 @@ const MenuBoxProfile: React.FC = () => {
     userData && Math.max(0, userData.experience - (expRequired ?? 0));
   const expNeededForNextLevel =
     userData && Math.max(1, (expForNextLevel ?? 0) - (expRequired ?? 0));
-  const canLevelUp = !!userData && userData.experience >= (expForNextLevel ?? 0);
+  const canLevelUp = !!userData && !levelUpBlockMessage(userData);
+  const unassignedExperience = userData ? unassignedExperienceTowardLevel(userData) : 0;
 
   return (
     <>
@@ -332,18 +338,32 @@ const MenuBoxProfile: React.FC = () => {
             ) : canLevelUp ? (
               <LevelUpBtn />
             ) : (
-              <StatusBar
-                title="XP"
-                tooltip="Experience required for next level"
-                color="bg-yellow-500"
-                showText={true}
-                lastRegenAt={userData?.regenAt}
-                regen={0}
-                status={userData?.status}
-                current={expTowardsNextLevel}
-                total={expNeededForNextLevel}
-                timeDiff={timeDiff}
-              />
+              <>
+                <StatusBar
+                  title="XP"
+                  tooltip="Experience required for next level"
+                  color="bg-yellow-500"
+                  showText={true}
+                  lastRegenAt={userData?.regenAt}
+                  regen={0}
+                  status={userData?.status}
+                  current={Math.min(
+                    expTowardsNextLevel ?? 0,
+                    expNeededForNextLevel ?? 1,
+                  )}
+                  total={expNeededForNextLevel}
+                  timeDiff={timeDiff}
+                />
+                {unassignedExperience > 0 && (
+                  <Link
+                    href="/profile/experience"
+                    className="block text-center text-xs underline"
+                  >
+                    {unassignedExperience.toLocaleString()} unassigned XP, assign to
+                    level up
+                  </Link>
+                )}
+              </>
             )}
           </div>
         </div>

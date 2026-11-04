@@ -21,6 +21,7 @@ import {
   manuallyAssignUserStats,
   passesBracketFilter,
   scaleUserStats,
+  unassignedExperienceTowardLevel,
 } from "@/libs/profile";
 
 test("Confirm that level<->experience calculations are consistent", () => {
@@ -544,4 +545,58 @@ test("canAssignExperience stays true while any assignable mastery is below its c
       speed: gens_cap - 1,
     }),
   ).toBe(true);
+});
+
+describe("unassignedExperienceTowardLevel", () => {
+  const user = {
+    rank: "GENIN" as const,
+    level: 12,
+    experience: calcLevelRequirements(12) - 1,
+    earnedExperience: 1234.5,
+    village: { name: "Akikaze" },
+    masteryRanks: {},
+    offence: 100,
+    defence: 100,
+    strength: 100,
+    speed: 100,
+    intelligence: 100,
+    willpower: 100,
+    ninjutsuMastery: 0,
+    genjutsuMastery: 0,
+    taijutsuMastery: 0,
+    bukijutsuMastery: 0,
+    bloodlineMastery: 0,
+    sageMastery: 0,
+  };
+
+  test("returns whole points while the bar still has room", () => {
+    expect(unassignedExperienceTowardLevel(user)).toBe(1234);
+  });
+
+  test("is zero without unassigned experience", () => {
+    expect(unassignedExperienceTowardLevel({ ...user, earnedExperience: 0 })).toBe(0);
+  });
+
+  test("is zero once the level is already reachable", () => {
+    expect(
+      unassignedExperienceTowardLevel({
+        ...user,
+        experience: calcLevelRequirements(12),
+      }),
+    ).toBe(0);
+  });
+
+  test("is zero when assigning cannot lead to a level", () => {
+    const { lvl_cap } = getUserCaps("GENIN");
+    const atRankCap = {
+      ...user,
+      level: lvl_cap,
+      experience: calcLevelRequirements(lvl_cap) - 1,
+    };
+    expect(unassignedExperienceTowardLevel(atRankCap)).toBe(0);
+    expect(
+      unassignedExperienceTowardLevel({ ...user, village: { name: "Horizon" } }),
+    ).toBe(0);
+    expect(unassignedExperienceTowardLevel({ ...user, rank: "ELITE JONIN" })).toBe(0);
+  });
 });
