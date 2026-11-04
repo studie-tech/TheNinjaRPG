@@ -2,7 +2,7 @@ import { gt } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { ActiveBanStates } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   clearUserBanWithoutActiveReport,
   clearUserSilenceWithoutActiveReport,
@@ -22,9 +22,8 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-reports", async () => {
     // Get all active bans, silences, and trade bans that have expired
     const expiredReports = await listUserReportForGET(drizzleDB);
 
@@ -189,9 +188,5 @@ export async function GET(request: Request) {
         usersToUntradeBan,
       },
     });
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

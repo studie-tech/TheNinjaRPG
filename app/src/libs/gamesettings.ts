@@ -188,6 +188,36 @@ const startedSince =
   (period: "daily" | "weekly" | "monthly") => (previous: Date, now: Date) =>
     periodStart(period, now) > previous;
 
+/**
+ * Run a cron's work under a period claim: answer with the wait response when another run
+ * holds it, and hand the period back on failure so the next invocation retries.
+ * `keepClaimOnError` is for work a same-period rerun must not repeat.
+ */
+export const runClaimedCron = async (
+  claim: {
+    isClaimed: boolean;
+    response: Response;
+    release: () => Promise<boolean>;
+  },
+  endpoint: string,
+  work: () => Promise<Response>,
+  { keepClaimOnError = false } = {},
+) => {
+  if (!claim.isClaimed) return claim.response;
+  try {
+    return await work();
+  } catch (cause) {
+    if (!keepClaimOnError) {
+      try {
+        await claim.release();
+      } catch (rollbackCause) {
+        console.error(`Failed to release the ${endpoint} timer`, rollbackCause);
+      }
+    }
+    return handleEndpointError(cause, { endpoint });
+  }
+};
+
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
   const remaining = previous.getTime() + durationMs - Date.now();
   if (remaining <= 0) return Response.json("Timer already claimed; try again later");

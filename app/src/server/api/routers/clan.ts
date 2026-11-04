@@ -43,6 +43,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
+import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/train";
@@ -1290,9 +1291,15 @@ export const clanRouter = createTRPCRouter({
         clanData.elderCutoffYear === currentYear;
       if (!hasCutoffSnapshot) {
         // Fallback: calculate live eligibility if cutoff snapshot is missing
-        const liveRankings = await listClanForNominateElder(ctx.drizzle, clanData);
-        const isInTop3 = liveRankings.some((c) => c.id === clanData.id);
-        if (!isInTop3) {
+        const villageClans = await listClanForNominateElder(ctx.drizzle, clanData);
+        if (
+          !isElderCandidateWithoutCutoff(
+            villageClans,
+            clanData.id,
+            currentMonth,
+            currentYear,
+          )
+        ) {
           return errorResponse(
             "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
           );

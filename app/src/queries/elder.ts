@@ -174,24 +174,8 @@ export const updateClanForHandleCutoff2 = (
     })
     .where(eq(clan.id, c.id));
 
-/** Build the `clan` listing for `handleRotation`, using predicates on `elderCutoffRank`. */
-export const listClanForHandleRotation = (client: Pick<DrizzleClient, "query">) =>
-  client.query.clan.findMany({
-    where: isNotNull(clan.elderCutoffRank),
-    columns: {
-      id: true,
-      name: true,
-      villageId: true,
-      leaderId: true,
-      elderNomineeId: true,
-      elderCutoffRank: true,
-      activityPoints: true,
-      points: true,
-    },
-  });
-
 /** Build the `clan` listing for `handleRotation`, using predicates on `villageId`. */
-export const listClanForHandleRotation2 = (client: Pick<DrizzleClient, "query">) =>
+export const listClanForHandleRotation = (client: Pick<DrizzleClient, "query">) =>
   client.query.clan.findMany({
     where: isNotNull(clan.villageId),
     columns: {

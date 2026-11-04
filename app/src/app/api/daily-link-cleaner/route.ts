@@ -1,5 +1,5 @@
 import { forumPost, userNindo } from "@/drizzle/schema";
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   listForumPostForGET,
   listUserNindoForGET,
@@ -64,9 +64,8 @@ export const GET = async (request: Request) => {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-link-cleaner", async () => {
     // Find all content with URLs
     const urlRegex = /(https?:\/\/[^\s"]+)/g;
     const [nindos, posts] = await Promise.all([
@@ -81,8 +80,5 @@ export const GET = async (request: Request) => {
     ]);
 
     return Response.json(`OK`);
-  } catch (cause) {
-    await timerCheck.release();
-    return handleEndpointError(cause, { endpoint: "/api/daily-link-cleaner" });
-  }
+  });
 };

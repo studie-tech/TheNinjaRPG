@@ -3,7 +3,7 @@ import {
   KAGE_ELDER_REMOVAL_LOCK_SECS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import { resolveElderVote } from "@/libs/elder";
+import { resolveElderVote, tallyElderVotes } from "@/libs/elder";
 import {
   findKageRemovalVoteById,
   findVillageElderVoteForSettleKageRemoval,
@@ -46,12 +46,7 @@ export const settleKageRemoval = async (
       if (motion?.status !== "PENDING")
         return { success: true, message: "Removal vote already resolved" };
       const electorate = getKageRemovalElectorate(elders, motion.targetId);
-      const yes = motion.entries.filter(
-        (e) => electorate.has(e.userId) && e.vote === "YES",
-      ).length;
-      const no = motion.entries.filter(
-        (e) => electorate.has(e.userId) && e.vote === "NO",
-      ).length;
+      const { yes, no } = tallyElderVotes(motion.entries, electorate);
       const isValid =
         !!v &&
         v.kageId === motion.targetId &&

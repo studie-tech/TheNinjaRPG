@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithMinuteTimer } from "@/libs/gamesettings";
+import { lockWithMinuteTimer, runClaimedCron } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { deliverDueTimedPushes } from "@/server/utils/push/timed";
@@ -10,11 +10,7 @@ export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
   const timer = await lockWithMinuteTimer(drizzleDB, TIMER);
-  if (!timer.isNewMinute) return timer.response;
-  try {
+  return runClaimedCron(timer, "/api/push-timers", async () => {
     return Response.json(await deliverDueTimedPushes(drizzleDB));
-  } catch (error) {
-    await timer.release();
-    return handleEndpointError(error);
-  }
+  });
 }

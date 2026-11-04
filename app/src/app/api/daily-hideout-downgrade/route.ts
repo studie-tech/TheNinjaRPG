@@ -2,7 +2,7 @@ import { and, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { STRONGHOLD_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
 import { clan, village } from "@/drizzle/schema";
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   executeRowsForGET,
   selectVillageForGET,
@@ -20,9 +20,8 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-hideout-downgrade", async () => {
     // Fetch Strongholds whose monthly maintenance is due.
     const strongholdsDueForMaintainance = await selectVillageForGET(drizzleDB);
 
@@ -49,9 +48,5 @@ export async function GET(request: Request) {
       success: true,
       message: `Processed ${strongholdsDueForMaintainance.length} strongholds`,
     });
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

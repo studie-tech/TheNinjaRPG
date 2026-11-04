@@ -3,7 +3,6 @@
  */
 import {
   and,
-  desc,
   eq,
   exists,
   getTableColumns,
@@ -30,7 +29,6 @@ import {
   HIDEOUT_COST,
   IMG_AVATAR_DEFAULT,
   IMG_VILLAGE_FACTION,
-  KAGE_MAX_ELDERS,
   STRONGHOLD_MONTHLY_MAINTENANCE,
   STRONGHOLD_REESTABLISH_COST,
   VILLAGE_SYNDICATE_ID,
@@ -649,16 +647,20 @@ export const updateClanForPurchaseBoost = (
       ),
     );
 
-/** Build the `clan` listing for `nominateElder`, selecting only `id`, using predicates on `villageId`. */
+/** Build the `clan` listing for `nominateElder`, selecting elder ranking columns, using predicates on `villageId`. */
 export const listClanForNominateElder = (
   client: Pick<DrizzleClient, "query">,
   clanData: { villageId: string },
 ) =>
   client.query.clan.findMany({
     where: eq(clan.villageId, clanData.villageId),
-    orderBy: [desc(clan.activityPoints), desc(clan.points)],
-    limit: KAGE_MAX_ELDERS,
-    columns: { id: true },
+    columns: {
+      id: true,
+      activityPoints: true,
+      points: true,
+      elderCutoffMonth: true,
+      elderCutoffYear: true,
+    },
   });
 
 /** Build the `clan` update for `nominateElder`, setting `elderNomineeId`, using predicates on `id`. */

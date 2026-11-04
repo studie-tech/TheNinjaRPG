@@ -1,3 +1,4 @@
+import { KAGE_MAX_ELDERS } from "@/drizzle/constants";
 import {
   type ElderRotationLogEntry,
   fetchElderVote,
@@ -161,7 +162,8 @@ export const castElderVoteEntry = async (
   elderCount: number,
 ): Promise<{
   outcome: "APPROVED" | "REJECTED" | "PENDING";
-  freshEntries: NonNullable<Awaited<ReturnType<typeof fetchElderVote>>>["entries"];
+  yes: number;
+  no: number;
 } | null> => {
   const insertResult = await insertVillageElderVoteEntryForCastElderVoteEntry(
     client,
@@ -173,8 +175,51 @@ export const castElderVoteEntry = async (
 
   const freshVote = await fetchElderVote(client, voteId);
   const freshEntries = freshVote?.entries ?? [];
-  const yesCount = freshEntries.filter((e) => e.vote === "YES").length;
-  const noCount = freshEntries.filter((e) => e.vote === "NO").length;
-  const outcome = resolveElderVote(yesCount, noCount, elderCount);
-  return { outcome, freshEntries };
+  const { yes, no } = tallyElderVotes(freshEntries);
+  return { outcome: resolveElderVote(yes, no, elderCount), yes, no };
 };
+
+/** Count ballots, only those of `electorate` when given. */
+export const tallyElderVotes = (
+  entries: readonly { userId: string; vote: string }[],
+  electorate?: ReadonlySet<string>,
+) => {
+  const counted = electorate
+    ? entries.filter((entry) => electorate.has(entry.userId))
+    : entries;
+  return {
+    yes: counted.filter((entry) => entry.vote === "YES").length,
+    no: counted.filter((entry) => entry.vote === "NO").length,
+  };
+};
+
+/** The clans a village's elders come from: most activity first, then points; none idle. */
+export const rankElderCandidates = <
+  T extends { activityPoints: number; points: number },
+>(
+  clans: readonly T[],
+) =>
+  clans
+    .filter((clan) => clan.activityPoints > 0)
+    .sort((a, b) => b.activityPoints - a.activityPoints || b.points - a.points)
+    .slice(0, KAGE_MAX_ELDERS);
+
+/**
+ * Whether a clan without this month's cutoff snapshot can still seat an elder. The rotation
+ * ranks live only when its whole village has no snapshot; otherwise the snapshot is final.
+ */
+export const isElderCandidateWithoutCutoff = (
+  villageClans: readonly {
+    id: string;
+    activityPoints: number;
+    points: number;
+    elderCutoffMonth: number | null;
+    elderCutoffYear: number | null;
+  }[],
+  clanId: string,
+  month: number,
+  year: number,
+) =>
+  !villageClans.some(
+    (clan) => clan.elderCutoffMonth === month && clan.elderCutoffYear === year,
+  ) && rankElderCandidates(villageClans).some((clan) => clan.id === clanId);

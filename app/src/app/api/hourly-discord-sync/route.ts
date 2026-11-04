@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
+import { lockWithHourlyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { isDiscordLinkingEnabled } from "@/server/utils/discord/config";
@@ -19,17 +19,8 @@ export async function GET(request: Request) {
   if (!isDiscordLinkingEnabled()) return Response.json({ skipped: true });
 
   const timer = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timer.isNewHour) return timer.response;
 
-  try {
+  return runClaimedCron(timer, "/api/hourly-discord-sync", async () => {
     return Response.json(await reconcileDiscordLinks(drizzleDB));
-  } catch (cause) {
-    try {
-      // Invoked every ten minutes; release the hour so the next invocation retries.
-      await timer.release();
-    } catch (rollbackCause) {
-      console.error("Failed to restore Discord sync timer", rollbackCause);
-    }
-    return handleEndpointError(cause, { endpoint: `/api/${ENDPOINT_NAME}` });
-  }
+  });
 }

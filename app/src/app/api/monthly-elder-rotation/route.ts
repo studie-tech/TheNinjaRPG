@@ -1,15 +1,13 @@
 import {
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
-  KAGE_MAX_ELDERS,
 } from "@/drizzle/constants";
-import { resolveElderRotation } from "@/libs/elder";
-import { handleEndpointError, lockWithMonthlyTimer } from "@/libs/gamesettings";
+import { rankElderCandidates, resolveElderRotation } from "@/libs/elder";
+import { lockWithMonthlyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   insertActionLogForHandleRotation,
   listClanForHandleCutoff,
   listClanForHandleRotation,
-  listClanForHandleRotation2,
   listUserDataForHandleRotation,
   listUserDataForHandleRotationElders,
   listVillageForHandleCutoff,
@@ -52,9 +50,8 @@ export async function GET(request: Request) {
  */
 async function handleCutoff() {
   const timerCheck = await lockWithMonthlyTimer(drizzleDB, "monthly-elder-cutoff");
-  if (!timerCheck.isNewMonth && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/monthly-elder-rotation", async () => {
     const now = new Date();
     const currentMonth = now.getUTCMonth() + 1; // 1-12
     const currentYear = now.getUTCFullYear();
@@ -82,17 +79,9 @@ async function handleCutoff() {
     }
 
     // Determine clans to mark with cutoff rank
-    type ClanType = (typeof allClans)[number];
     const clansToMark: { id: string; rank: number }[] = [];
     for (const [, clans] of clansByVillage) {
-      const sorted = clans
-        .filter((c: ClanType) => c.activityPoints > 0)
-        .sort(
-          (a: ClanType, b: ClanType) =>
-            b.activityPoints - a.activityPoints || b.points - a.points,
-        )
-        .slice(0, KAGE_MAX_ELDERS);
-      sorted.forEach((c: ClanType, i: number) => {
+      rankElderCandidates(clans).forEach((c, i) => {
         clansToMark.push({ id: c.id, rank: i + 1 });
       });
     }
@@ -109,10 +98,7 @@ async function handleCutoff() {
     return Response.json(
       `OK - Elder cutoff snapshot completed for ${villages.length} villages`,
     );
-  } catch (cause) {
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }
 
 /**
@@ -121,42 +107,33 @@ async function handleCutoff() {
  */
 async function handleRotation() {
   const timerCheck = await lockWithMonthlyTimer(drizzleDB, "monthly-elder-rotation");
-  if (!timerCheck.isNewMonth && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/monthly-elder-rotation", async () => {
     // Fetch all data in parallel
-    const [villages, clansWithCutoff, allClans] = await Promise.all([
+    const [villages, allClans] = await Promise.all([
       listVillageForHandleCutoff(drizzleDB),
       listClanForHandleRotation(drizzleDB),
-      listClanForHandleRotation2(drizzleDB),
     ]);
 
     type VillageType = (typeof villages)[number];
-    type ClanWithCutoffType = (typeof clansWithCutoff)[number];
-    type AllClanType = (typeof allClans)[number];
+    type ClanType = (typeof allClans)[number];
     const villageIds = villages.map((v: VillageType) => v.id);
 
     // Build eligible clans per village (cutoff snapshot or fallback)
-    const eligibleByVillage = new Map<string, typeof clansWithCutoff>();
+    const eligibleByVillage = new Map<string, typeof allClans>();
     for (const villageId of villageIds) {
-      const cutoffClans = clansWithCutoff
-        .filter((c: ClanWithCutoffType) => c.villageId === villageId)
+      const villageClans = allClans.filter((c: ClanType) => c.villageId === villageId);
+      const cutoffClans = villageClans
+        .filter((c: ClanType) => c.elderCutoffRank !== null)
         .sort(
-          (a: ClanWithCutoffType, b: ClanWithCutoffType) =>
+          (a: ClanType, b: ClanType) =>
             (a.elderCutoffRank ?? 0) - (b.elderCutoffRank ?? 0),
         );
       if (cutoffClans.length > 0) {
         eligibleByVillage.set(villageId, cutoffClans);
       } else {
         // Fallback to live calculation
-        const fallback = allClans
-          .filter((c: AllClanType) => c.villageId === villageId && c.activityPoints > 0)
-          .sort(
-            (a: AllClanType, b: AllClanType) =>
-              b.activityPoints - a.activityPoints || b.points - a.points,
-          )
-          .slice(0, KAGE_MAX_ELDERS);
-        eligibleByVillage.set(villageId, fallback);
+        eligibleByVillage.set(villageId, rankElderCandidates(villageClans));
       }
     }
 
@@ -206,8 +183,5 @@ async function handleRotation() {
     );
 
     return Response.json(`OK - Elder rotation completed`);
-  } catch (cause) {
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

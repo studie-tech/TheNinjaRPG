@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
+import { lockWithHourlyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   deleteBountySignups,
   listBountyForBountyExpire,
@@ -27,30 +27,33 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewHour && timerCheck.response) return timerCheck.response;
 
-  try {
-    // Expired bounties
-    const [expiredBounties, activeCount, expiredAnalytics, villageMaintenance] =
-      await Promise.all([
-        bountyExpire(),
-        dailyActivePlayers(timerCheck),
-        deleteExpiredVisitorAnalytics(),
-        accrueVillageStructureMaintenance(drizzleDB),
-      ]);
+  return runClaimedCron(
+    timerCheck,
+    "/api/hourly-maintainance",
+    async () => {
+      // Expired bounties
+      const [expiredBounties, activeCount, expiredAnalytics, villageMaintenance] =
+        await Promise.all([
+          bountyExpire(),
+          dailyActivePlayers(timerCheck),
+          deleteExpiredVisitorAnalytics(),
+          accrueVillageStructureMaintenance(drizzleDB),
+        ]);
 
-    // Return response
-    return NextResponse.json({
-      success: true,
-      message: `Expired ${expiredBounties.length} bounties and refunded all contributions and updated active players count to ${activeCount}`,
-      expiredBountiesCount: expiredBounties.length,
-      activeCount: activeCount,
-      expiredAnalytics,
-      villageMaintenance,
-    });
-  } catch (error) {
-    return await handleEndpointError(error);
-  }
+      // Return response
+      return NextResponse.json({
+        success: true,
+        message: `Expired ${expiredBounties.length} bounties and refunded all contributions and updated active players count to ${activeCount}`,
+        expiredBountiesCount: expiredBounties.length,
+        activeCount: activeCount,
+        expiredAnalytics,
+        villageMaintenance,
+      });
+      // The hour stays claimed: the bounty refunds are not guarded against a rerun.
+    },
+    { keepClaimOnError: true },
+  );
 }
 
 /**

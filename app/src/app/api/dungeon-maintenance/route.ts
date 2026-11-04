@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithMinuteTimer } from "@/libs/gamesettings";
+import { lockWithMinuteTimer, runClaimedCron } from "@/libs/gamesettings";
 import { listExpiredDungeonRuns } from "@/queries/dungeon";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
@@ -12,13 +12,9 @@ export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
   const timer = await lockWithMinuteTimer(drizzleDB, "dungeon-maintenance");
-  if (!timer.isNewMinute) return timer.response;
-  try {
+  return runClaimedCron(timer, "/api/dungeon-maintenance", async () => {
     const runs = await listExpiredDungeonRuns(drizzleDB);
     await Promise.all(runs.map((run) => expireDungeonRun(drizzleDB, run)));
     return Response.json({ success: true });
-  } catch (error) {
-    await timer.release();
-    return handleEndpointError(error);
-  }
+  });
 }

@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { env } from "@/env/server.mjs";
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   executeRowsForGET,
   insertEmailReminderForGET,
@@ -72,9 +72,8 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-emails-sync", async () => {
     // Fetch all the emails currently in the database
     const reminders = await listEmailReminderForGET(drizzleDB);
     const userIds = reminders.map(
@@ -164,8 +163,5 @@ export async function GET(request: Request) {
     console.log(`Total Clerk users fetched: ${allClerkUsers.length}`);
 
     return Response.json(`OK - Fetched ${allClerkUsers.length} users`);
-  } catch (cause) {
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

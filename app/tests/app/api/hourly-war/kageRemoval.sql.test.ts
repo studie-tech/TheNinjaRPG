@@ -18,7 +18,7 @@ describeWithDatabase("expired elder kage removal protection", () => {
     await resetTables(clan, notification, userData, village, villageElderVote, villageElderVoteEntry, villageStructure, war);
     stubCronAuth(() => null);
     spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") }));
-    spies.push(vi.spyOn(gamesettings, "getGameSetting").mockResolvedValue({ id: "daily-timer", name: "daily-war-decay", time: now, value: 0 }));
+    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isClaimed: false, isNewDay: false, prevTime: now, response: Response.json("Wait") }));
   });
   afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore();

@@ -1890,7 +1890,7 @@ export const warRouter = createTRPCRouter({
         elderCount,
       );
       if (!voteResult) return errorResponse("You have already voted");
-      const { outcome, freshEntries } = voteResult;
+      const { outcome, yes, no } = voteResult;
       if (outcome === "APPROVED") {
         // Atomically claim the motion and pre-fetch needed data in parallel
         const [claimResult, defenderVillage, currentActiveWars] = await Promise.all([
@@ -1999,7 +1999,7 @@ export const warRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Vote recorded. Current tally: ${freshEntries.filter((e) => e.vote === "YES").length} YES, ${freshEntries.filter((e) => e.vote === "NO").length} NO`,
+        message: `Vote recorded. Current tally: ${yes} YES, ${no} NO`,
       };
     }),
 });
