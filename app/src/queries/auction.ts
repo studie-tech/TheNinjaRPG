@@ -76,30 +76,7 @@ export const findAuctionListingForGetAuctionListing = (
   client.query.auctionListing.findFirst({
     where: eq(auctionListing.id, auctionId),
     with: {
-      userItem: {
-        with: {
-          item: true,
-          imbuements: {
-            with: {
-              item: true,
-            },
-          },
-        },
-      },
-      seller: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
-      targetUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
+      ...auctionListingRelations,
       bids: {
         with: {
           bidder: {
@@ -114,6 +91,13 @@ export const findAuctionListingForGetAuctionListing = (
       },
     },
   });
+
+/** Relations every auction listing read loads; each query adds its own `bids`. */
+const auctionListingRelations = {
+  userItem: { with: { item: true, imbuements: { with: { item: true } } } },
+  seller: { columns: { userId: true, username: true, avatar: true } },
+  targetUser: { columns: { userId: true, username: true, avatar: true } },
+} as const;
 
 /** Build the `auctionBid` selection for `getAuctionListings`, using predicates on `auctionId`, `id`, `bidderId`. */
 export const selectAuctionBidForGetAuctionListings = (
@@ -148,30 +132,7 @@ export const listAuctionListingForGetAuctionListings = (
   client.query.auctionListing.findMany({
     where: inArray(auctionListing.id, listingIds),
     with: {
-      userItem: {
-        with: {
-          item: true,
-          imbuements: {
-            with: {
-              item: true,
-            },
-          },
-        },
-      },
-      seller: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
-      targetUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
+      ...auctionListingRelations,
       bids: {
         orderBy: desc(auctionBid.amount),
         limit: 1,

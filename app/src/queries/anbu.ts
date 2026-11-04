@@ -210,15 +210,7 @@ export const fetchSquad = async (client: DrizzleClient, squadId: string) => {
         columns: userSummaryWithLightColumns,
       },
       members: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-          avatarLight: true,
-          pvpExperience: true,
-        },
+        columns: { ...userSummaryWithLightColumns, pvpExperience: true },
       },
       kageOrder: true,
       leaderOrder: true,

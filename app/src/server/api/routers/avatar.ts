@@ -5,6 +5,7 @@ import {
   getSelectedAvatarPatch,
   getUnchargedAvatarUserUpdate,
 } from "@/deltas/avatar";
+import type { UserRole } from "@/drizzle/constants";
 import { COST_GENERATE_AVATAR, ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
@@ -114,10 +115,7 @@ export const avatarRouter = createTRPCRouter({
       ]);
       // Guard
       if (!avatar) return errorResponse("Avatar not found");
-      if (
-        (avatar.userId !== ctx.userId && avatar.status !== "content-success") ||
-        (!canChangeContent(user.role) && avatar.status === "content-success")
-      ) {
+      if (isHistoricalAvatarOffLimits(avatar, ctx.userId, user.role)) {
         return errorResponse("Not yours");
       }
       if (user.isBanned) return errorResponse("You are banned");
@@ -158,10 +156,7 @@ export const avatarRouter = createTRPCRouter({
       if (!avatar) {
         return errorResponse("Avatar not found");
       }
-      if (
-        (avatar.userId !== ctx.userId && avatar.status !== "content-success") ||
-        (!canChangeContent(user.role) && avatar.status === "content-success")
-      ) {
+      if (isHistoricalAvatarOffLimits(avatar, ctx.userId, user.role)) {
         return errorResponse("Not your avatar");
       }
       // Mutation
@@ -169,6 +164,15 @@ export const avatarRouter = createTRPCRouter({
       return { success: true, message: "Avatar deleted" };
     }),
 });
+
+/** Users manage their own avatars; content-success avatars belong to content staff. */
+const isHistoricalAvatarOffLimits = (
+  avatar: { userId: string; status: string | null },
+  userId: string,
+  role: UserRole,
+) =>
+  (avatar.userId !== userId && avatar.status !== "content-success") ||
+  (!canChangeContent(role) && avatar.status === "content-success");
 
 /**
  * Create a user avatar
