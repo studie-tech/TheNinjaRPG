@@ -8,27 +8,16 @@
  * trivially exploitable.
  */
 
+import { createSerialQueue } from "@/utils/async";
 import { getPlatform, invoke, invokeSafe } from "./bridge";
 import type { NativePurchaseHistory } from "./purchaseSettlement";
 
 const PLUGIN = "Purchases";
 
 interface PurchaseIdentityScopeState {
-  identityQueue: Promise<void>;
+  enqueueIdentityOperation: ReturnType<typeof createSerialQueue>;
   configuredApiKey: string | undefined;
 }
-
-const runPurchaseIdentityOperationInScope = <T>(
-  scope: PurchaseIdentityScopeState,
-  operation: () => Promise<T>,
-): Promise<T> => {
-  const pending = scope.identityQueue.catch(() => undefined).then(operation);
-  scope.identityQueue = pending.then(
-    () => undefined,
-    () => undefined,
-  );
-  return pending;
-};
 
 /**
  * A separately-scoped identity coordinator for consumers which own a distinct SDK process.
@@ -37,12 +26,12 @@ const runPurchaseIdentityOperationInScope = <T>(
  */
 export const createPurchaseIdentityScope = () => {
   const state: PurchaseIdentityScopeState = {
-    identityQueue: Promise.resolve(),
+    enqueueIdentityOperation: createSerialQueue(),
     configuredApiKey: undefined,
   };
   return {
     run: async <T>(operation: () => Promise<T>): Promise<T> =>
-      await runPurchaseIdentityOperationInScope(state, operation),
+      await state.enqueueIdentityOperation(operation),
     bind: async (apiKey: string, appUserId: string): Promise<StoreBinding> =>
       await bindInPurchaseIdentityScope(state, apiKey, appUserId),
   };
@@ -168,7 +157,7 @@ const configureOnce = async (
   }
   await configure(apiKey, appUserId);
   // Record success only after the bridge resolves so a transient first failure remains
-  // retryable. This function is called inside identityQueue, so no second configure can
+  // retryable. This function is called inside the identity queue, so no second configure can
   // observe or race the in-flight attempt.
   scope.configuredApiKey = apiKey;
 };
@@ -225,7 +214,7 @@ const bindInPurchaseIdentityScope = async (
   apiKey: string,
   appUserId: string,
 ): Promise<StoreBinding> =>
-  await runPurchaseIdentityOperationInScope(scope, async () => {
+  await scope.enqueueIdentityOperation(async () => {
     await configureOnce(scope, apiKey, appUserId);
     await logIn(appUserId);
     const packages = await getPackages();

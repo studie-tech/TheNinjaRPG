@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "bun:test";
-import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
+import { createNativeWidgetOperations } from "@/libs/native/widgetOperations";
 
 describe("native widget ownership queue", () => {
   it("advances the persisted owner only after a confirmed native mutation", async () => {
-    const operations = new NativeWidgetOperations();
+    const operations = createNativeWidgetOperations();
     const confirmed = vi.fn();
 
     await expect(
@@ -37,7 +37,7 @@ describe("native widget ownership queue", () => {
   });
 
   it("invalidates queued stale writes and orders an in-flight write before clear", async () => {
-    const operations = new NativeWidgetOperations();
+    const operations = createNativeWidgetOperations();
     const events: string[] = [];
     let finishInFlight: (() => void) | undefined;
 

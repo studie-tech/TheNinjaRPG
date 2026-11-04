@@ -15,6 +15,7 @@ import {
   push,
   toSafePath,
 } from "@/libs/native";
+import { createSerialQueue } from "@/utils/async";
 
 /** Token last handed to the server, so a resume does not re-register the same value. */
 const LAST_TOKEN_KEY = "native-push-token";
@@ -65,7 +66,7 @@ const sameDetach = (left: PendingDetach, right: PendingDetach): boolean =>
  */
 let registrationEpoch = 0;
 /** Serialises ownership changes for the one OS token shared by every account on a phone. */
-let registrationQueue: Promise<void> = Promise.resolve();
+const enqueueRegistration = createSerialQueue();
 
 interface UseNativePushOptions {
   /** Register only once the player is signed in; tokens are bound to an account. */
@@ -109,36 +110,16 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
   );
 
   const retryPendingDetach = useCallback(async () => {
-    const pending = registrationQueue
-      .catch(() => undefined)
-      .then(async () => {
+    await enqueueRegistration(async () => {
+      try {
         const detached = readPendingDetach();
         if (!detached) return;
         await detachToken(detached);
-
-        const currentPending = readPendingDetach();
-        if (currentPending && sameDetach(currentPending, detached)) {
-          safeLocalStorageRemoveItem(PENDING_DETACH_KEY);
-        }
-        // A replacement account can bind the same OS token while this old conditional
-        // cleanup is pending. Clear the live credential pair only if both values still
-        // belong to the detach which just succeeded.
-        if (
-          safeLocalStorageGetItem(LAST_TOKEN_KEY) === detached.token &&
-          safeLocalStorageGetItem(OWNER_TOKEN_KEY) === detached.widgetToken
-        ) {
-          safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
-          safeLocalStorageRemoveItem(OWNER_TOKEN_KEY);
-        }
-      })
-      .catch(() => {
+        clearDetachedCredentials(detached);
+      } catch {
         // The durable token/widget proof remains for foreground or network recovery.
-      });
-    registrationQueue = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    await pending;
+      }
+    });
   }, [detachToken]);
 
   const detachOwnedDevice = useCallback(async () => {
@@ -157,37 +138,22 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     // Resolve the proof inside the queue. A registration already in flight may be the
     // operation which creates it; resolving before that operation settles would lose the
     // only credential capable of conditionally deleting its row.
-    const pending = registrationQueue
-      .catch(() => undefined)
-      .then(async () => {
+    await enqueueRegistration(async () => {
+      try {
         const ownershipToken =
           safeLocalStorageGetItem(OWNER_TOKEN_KEY) ?? fallbackOwnershipToken;
         const token = safeLocalStorageGetItem(LAST_TOKEN_KEY);
-        if (!token || !ownershipToken) return undefined;
+        if (!token || !ownershipToken) return;
         const detached = { token, widgetToken: ownershipToken };
         // Persist before the request: sign-out disables the registration effect, and the
         // app can be suspended immediately after this call fails.
         writePendingDetach(detached);
         await detachToken(detached);
-        if (sameDetach(readPendingDetach() ?? detached, detached)) {
-          safeLocalStorageRemoveItem(PENDING_DETACH_KEY);
-        }
-        if (
-          safeLocalStorageGetItem(LAST_TOKEN_KEY) === detached.token &&
-          safeLocalStorageGetItem(OWNER_TOKEN_KEY) === detached.widgetToken
-        ) {
-          safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
-          safeLocalStorageRemoveItem(OWNER_TOKEN_KEY);
-        }
-      })
-      .catch(() => {
+        clearDetachedCredentials(detached);
+      } catch {
         // The exact proof is durable; the lifecycle recovery effect retries it.
-      });
-    registrationQueue = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    await pending;
+      }
+    });
   }, [detachToken]);
 
   // Detach recovery must outlive the enabled registration effect: sign-out is precisely
@@ -238,21 +204,17 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
       if (registeredToken.current === token) return;
       registeredToken.current = token;
       const epoch = registrationEpoch;
-      const pending = registrationQueue
-        .catch(() => undefined)
-        .then(async () => {
+      void enqueueRegistration(async () => {
+        try {
           // If this request has not started yet, a newer account owns the token now. Do
           // not authenticate the old task with the new Clerk session.
-          if (epoch !== registrationEpoch) return undefined;
-          return await sendToken({
+          if (epoch !== registrationEpoch) return;
+          const result = await sendToken({
             token,
             platform,
             appVersion: parseNativeUserAgent(navigator.userAgent)?.version,
             locale: navigator.language.slice(0, 16),
           });
-        })
-        .then((result) => {
-          if (!result) return;
           if (!result.success) {
             if (epoch === registrationEpoch && registeredToken.current === token) {
               registeredToken.current = null;
@@ -274,19 +236,14 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
             setWidgetToken(result.widgetToken);
             setWidgetTokenOwner(accountId);
           }
-        })
-        .catch((error) => {
+        } catch (error) {
           // Leave the ref cleared so the next resume retries the handoff.
           if (epoch === registrationEpoch && registeredToken.current === token) {
             registeredToken.current = null;
           }
           console.warn("Push device registration failed", error);
-        });
-      registrationQueue = pending.then(
-        () => undefined,
-        () => undefined,
-      );
-      void pending;
+        }
+      });
     });
 
     const unsubscribeError = push.onRegistrationError((error) => {
@@ -335,6 +292,25 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     unregister,
     widgetToken: accountId && widgetTokenOwner === accountId ? widgetToken : undefined,
   };
+};
+
+/**
+ * Clear what a successful detach proved. A replacement account can bind the same OS token
+ * while an old conditional cleanup is pending, so the live credential pair goes only if both
+ * values still belong to this detach.
+ */
+const clearDetachedCredentials = (detached: PendingDetach): void => {
+  const currentPending = readPendingDetach();
+  if (currentPending && sameDetach(currentPending, detached)) {
+    safeLocalStorageRemoveItem(PENDING_DETACH_KEY);
+  }
+  if (
+    safeLocalStorageGetItem(LAST_TOKEN_KEY) === detached.token &&
+    safeLocalStorageGetItem(OWNER_TOKEN_KEY) === detached.widgetToken
+  ) {
+    safeLocalStorageRemoveItem(LAST_TOKEN_KEY);
+    safeLocalStorageRemoveItem(OWNER_TOKEN_KEY);
+  }
 };
 
 /**
