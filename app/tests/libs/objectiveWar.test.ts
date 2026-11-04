@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { MAP_RESERVED_SECTORS, WAR_OBJECTIVES_PER_SIDE } from "@/drizzle/constants";
-import { getWarSide, maskWarObjectives, selectWarObjectives, withMercenaryParticipation } from "@/libs/objectiveWar";
+import { findObjectiveWarForSector, findShrineAttackWar, getWarSide, maskWarObjectives, selectWarObjectives, withMercenaryParticipation } from "@/libs/objectiveWar";
 import { defaultWarRules, warRulesSchema } from "@/validators/war";
 import type { War } from "@/drizzle/schema";
 
@@ -58,4 +58,66 @@ it("removes expired contract identity and exclusivity before combat state is bui
   const [war] = withMercenaryParticipation([closed]);
   expect(war?.warMercenaries).toEqual([]);
   expect(war?.mercenaryWarIds).toEqual({});
+});
+
+describe("shrine war lookup", () => {
+  const baseWar = {
+    id: "war",
+    status: "ACTIVE",
+    type: "VILLAGE_WAR",
+    sector: 300,
+    rules: null,
+    objectiveState: null,
+    attackerVillageId: "a",
+    defenderVillageId: "d",
+    attackerVillage: { sector: 100 },
+    defenderVillage: { sector: 200 },
+    attackerShrineHp: 100,
+    attackerShrineMaxHp: 100,
+    defenderShrineHp: 50,
+    defenderShrineMaxHp: 100,
+    attackerWarHealth: 100,
+    defenderWarHealth: 100,
+    combatStartedAt: new Date(Date.now() - 1000),
+    endedAt: null,
+    warAllies: [],
+  } as unknown as Parameters<typeof findShrineAttackWar>[0][number];
+  const objectiveWar = (overrides: { attackerEspionage?: number; destroyed?: boolean } = {}) => ({
+    ...baseWar,
+    rules: defaultWarRules,
+    objectiveState: {
+      attackerEspionage: overrides.attackerEspionage ?? 1000,
+      defenderEspionage: 0,
+      objectives: [{ sector: 200, villageId: "d", hp: 1, maxHp: 1, isReserve: false, destroyed: !!overrides.destroyed }],
+    },
+  }) as unknown as typeof baseWar;
+
+  it("admits a side at the opposing village and ignores other wars", () => {
+    expect(findShrineAttackWar([baseWar], "a", "user", 200)).toBe(baseWar);
+    expect(findShrineAttackWar([baseWar], "d", "user", 100)).toBe(baseWar);
+    expect(findShrineAttackWar([baseWar], "d", "user", 200)).toBeUndefined();
+    expect(findShrineAttackWar([{ ...baseWar, status: "ATTACKER_VICTORY" }], "a", "user", 200)).toBeUndefined();
+  });
+  it("admits a damaged shrine's own side only when defending is allowed", () => {
+    expect(findShrineAttackWar([baseWar], "d", "user", 200, { allowDefend: true })).toBe(baseWar);
+    expect(findShrineAttackWar([baseWar], "a", "user", 100, { allowDefend: true })).toBeUndefined();
+  });
+  it("limits sector wars to attackers on the war's sector", () => {
+    const sectorWar = { ...baseWar, type: "SECTOR_WAR" } as typeof baseWar;
+    expect(findShrineAttackWar([sectorWar], "a", "user", 300)).toBe(sectorWar);
+    expect(findShrineAttackWar([sectorWar], "d", "user", 300, { allowDefend: true })).toBeUndefined();
+  });
+  it("requires a live, revealed, intact enemy objective in objective wars", () => {
+    const open = objectiveWar();
+    expect(findShrineAttackWar([open], "a", "user", 200)).toBe(open);
+    expect(findShrineAttackWar([open], "d", "user", 200)).toBeUndefined();
+    expect(findShrineAttackWar([objectiveWar({ attackerEspionage: 0 })], "a", "user", 200)).toBeUndefined();
+    expect(findShrineAttackWar([objectiveWar({ destroyed: true })], "a", "user", 200)).toBeUndefined();
+  });
+  it("finds objective wars by sector regardless of who is asking", () => {
+    const open = objectiveWar({ attackerEspionage: 0 });
+    expect(findObjectiveWarForSector([baseWar, open], 200)).toBe(open);
+    expect(findObjectiveWarForSector([baseWar, open], 300)).toBeUndefined();
+    expect(findObjectiveWarForSector([baseWar, open], null)).toBeUndefined();
+  });
 });

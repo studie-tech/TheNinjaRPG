@@ -52,7 +52,11 @@ import { JutsuLoadoutSharing } from "@/layout/JutsuLoadoutSharing";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
-import { compareByLoadoutOrder, getFreeTransfers } from "@/libs/jutsu";
+import {
+  compareByLoadoutOrder,
+  filterFreeJutsuTransfers,
+  getFreeTransfers,
+} from "@/libs/jutsu";
 import { getJutsuMaxLevel, getJutsuXpToLevel } from "@/libs/jutsuProgression";
 import type { MasterySources } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
@@ -172,12 +176,9 @@ export default function MyJutsu() {
   });
 
   // Transfer costs
-  const prevFreeTransfers =
-    recentTransfers?.filter((t) =>
-      (t.changes as string[]).some((c) => c.includes("Used free transfer.")),
-    ) || [];
+  const prevFreeTransfers = filterFreeJutsuTransfers(recentTransfers ?? []);
   const freeTransfers = getFreeTransfers(userData?.federalStatus || "NONE");
-  const usedTransfers = prevFreeTransfers?.length || 0;
+  const usedTransfers = prevFreeTransfers.length;
 
   // Calculate when free transfers reset
   const getFreeTransferResetTime = () => {

@@ -12,9 +12,31 @@ import {
   getUnlockAiDefenderUserUpdate,
   getUpgradeShrineUserUpdate,
 } from "@/deltas/shrine";
-import { IMG_AVATAR_DEFAULT, MAP_RESERVED_SECTORS, SHRINE_AI_UNLOCK_COST, SHRINE_BATTLE_LOBBY_SECONDS, SHRINE_BATTLE_MAX_USERS_PER_SIDE, SHRINE_BATTLE_MIN_ATTACKERS, SHRINE_BOOST_COST, SHRINE_BOOST_DURATION_HOURS, SHRINE_BOOST_TYPES, SHRINE_MAX_AI_ASSIGNMENTS, SHRINE_MAX_LEVEL, SHRINE_UPGRADE_COST, SHRINE_WEEKLY_MAINTENANCE_COST, shrineLobbyFreshAfter, VILLAGE_SYNDICATE_ID, WAR_SHRINE_MAINTENANCE_DAYS, MPVP_BATTLE_SIDES } from "@/drizzle/constants";
+import {
+  IMG_AVATAR_DEFAULT,
+  MAP_RESERVED_SECTORS,
+  MPVP_BATTLE_SIDES,
+  SHRINE_AI_UNLOCK_COST,
+  SHRINE_BATTLE_LOBBY_SECONDS,
+  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
+  SHRINE_BATTLE_MIN_ATTACKERS,
+  SHRINE_BOOST_COST,
+  SHRINE_BOOST_DURATION_HOURS,
+  SHRINE_BOOST_REQUIRED_LEVEL,
+  SHRINE_BOOST_TYPES,
+  SHRINE_MAX_AI_ASSIGNMENTS,
+  SHRINE_MAX_LEVEL,
+  SHRINE_UPGRADE_COST,
+  SHRINE_WEEKLY_MAINTENANCE_COST,
+  shrineLobbyFreshAfter,
+  VILLAGE_PROTECTOR_AI_ID,
+  VILLAGE_SYNDICATE_ID,
+  WAR_SHRINE_MAINTENANCE_DAYS,
+} from "@/drizzle/constants";
 import {
   areWarObjectivesRevealed,
+  findObjectiveWarForSector,
+  findShrineAttackWar,
   getWarSide,
   isObjectiveWarActive,
   isWarMercenary,
@@ -188,7 +210,7 @@ export const shrineRouter = createTRPCRouter({
       };
     }),
 
-  // Activate village-wide boost (requires level 3 shrine)
+  // Activate village-wide boost (requires a boost-level shrine)
   activateBoost: protectedProcedure
     .meta({ mcp: { description: "Activate village-wide shrine boost" } })
     .input(z.object({ boostType: z.enum(SHRINE_BOOST_TYPES), villageId: z.string() }))
@@ -213,7 +235,9 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Only the Kage or Elders can activate boosts");
       }
       if (!hasShrine) {
-        return errorResponse("Need at least one Level 3 shrine to activate boosts");
+        return errorResponse(
+          `Need at least one Level ${SHRINE_BOOST_REQUIRED_LEVEL} shrine to activate boosts`,
+        );
       }
       if (user.village.tokens < SHRINE_BOOST_COST) {
         return errorResponse(
@@ -511,7 +535,7 @@ export const shrineRouter = createTRPCRouter({
       }
       if (!hasShrine) {
         return errorResponse(
-          "Need at least one Level 3 shrine to set a boost template",
+          `Need at least one Level ${SHRINE_BOOST_REQUIRED_LEVEL} shrine to set a boost template`,
         );
       }
 
@@ -573,11 +597,7 @@ export const shrineRouter = createTRPCRouter({
       }
 
       return nonEmptyBattles.map((entry) => {
-        const activeWar = activeWars.find(
-          (w) =>
-            w.rules &&
-            w.objectiveState?.objectives.some((o) => o.sector === entry.sector),
-        );
+        const activeWar = findObjectiveWarForSector(activeWars, entry.sector);
         const side = activeWar
           ? getWarSide(activeWar, viewer.villageId, ctx.userId)
           : viewer.villageId;
@@ -643,45 +663,12 @@ export const shrineRouter = createTRPCRouter({
       ]);
 
       // Get the war the user is involved with
-      // For SECTOR_WAR: check war.sector matches and user is attacker
-      // For VILLAGE_WAR/WAR_RAID: check village sectors
-      const userWar = activeWars.find((w) => {
-        if (w.status !== "ACTIVE") return false;
-        const side = getWarSide(w, user?.villageId ?? null, user?.userId);
-        const isUserOnAttackerSide = side === w.attackerVillageId;
-        const isUserOnDefenderSide = side === w.defenderVillageId;
-
-        if (w.rules)
-          return (
-            !!side &&
-            isObjectiveWarActive(w) &&
-            areWarObjectivesRevealed(w, side) &&
-            !!w.objectiveState?.objectives.some(
-              (o) =>
-                o.sector === input.sectorNumber && o.villageId !== side && !o.destroyed,
-            )
-          );
-
-        if (w.type === "SECTOR_WAR") {
-          // Sector wars use war.sector and only attackers can attack
-          return w.sector === input.sectorNumber && isUserOnAttackerSide;
-        }
-
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
-          // Village wars/raids: check if user is at the opposing village's sector
-          // Attackers attack at defender's village sector
-          // Defenders counter-attack at attacker's village sector
-          const atDefenderVillage = w.defenderVillage?.sector === input.sectorNumber;
-          const atAttackerVillage = w.attackerVillage?.sector === input.sectorNumber;
-
-          return (
-            (atDefenderVillage && isUserOnAttackerSide) ||
-            (atAttackerVillage && isUserOnDefenderSide)
-          );
-        }
-
-        return false;
-      });
+      const userWar = findShrineAttackWar(
+        activeWars,
+        user?.villageId ?? null,
+        user?.userId,
+        input.sectorNumber,
+      );
 
       // Check if this is a Village War or Raid (allows attacking home sectors)
       const isVillageWarOrRaid =
@@ -730,11 +717,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Already in a battle queue");
       }
 
-      const objectiveWar = activeWars.find(
-        (w) =>
-          w.rules &&
-          w.objectiveState?.objectives.some((o) => o.sector === input.sectorNumber),
-      );
+      const objectiveWar = findObjectiveWarForSector(activeWars, input.sectorNumber);
       if (objectiveWar) {
         const side = getWarSide(objectiveWar, user.villageId, user.userId);
         if (
@@ -854,11 +837,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("Already in a battle queue");
       }
 
-      const objectiveWar = activeWars.find(
-        (w) =>
-          w.rules &&
-          w.objectiveState?.objectives.some((o) => o.sector === shrineBattle.sector),
-      );
+      const objectiveWar = findObjectiveWarForSector(activeWars, shrineBattle.sector);
       const side = objectiveWar
         ? getWarSide(objectiveWar, user.villageId, user.userId)
         : null;
@@ -1149,7 +1128,7 @@ export const shrineRouter = createTRPCRouter({
         }
         // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
-          defenderIds = ["MJMzOE67Cx2YP3NX8SAbh"];
+          defenderIds = [VILLAGE_PROTECTOR_AI_ID];
         }
       }
 
@@ -1219,7 +1198,8 @@ export const shrineRouter = createTRPCRouter({
 });
 
 /**
- * Returns whether the village controls at least one Level 3 shrine.
+ * Returns whether the village controls at least one boost-level shrine outside its
+ * boost lock.
  * Existence-only check — selects a single id rather than pulling full sector rows.
  */
 const hasLevel3Shrine = async (

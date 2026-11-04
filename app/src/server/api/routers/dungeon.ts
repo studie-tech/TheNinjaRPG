@@ -18,6 +18,7 @@ import {
   rollDungeonRewards,
 } from "@/libs/dungeonRewards";
 import { canUsePet } from "@/libs/pets/progression";
+import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import { listAiUserIds } from "@/queries/ai";
 import { listUserPetForInitiateBattle } from "@/queries/combat";
 import {
@@ -276,11 +277,7 @@ export const dungeonRouter = createTRPCRouter({
             drop.type === "cache" &&
             !items
               .find((entry) => entry.id === drop.id)
-              ?.effects.some(
-                (effect) =>
-                  effect.type === "noncombatconsumereward" &&
-                  effect.rewardMode === "weightedCache",
-              ),
+              ?.effects.some(isWeightedCacheEffect),
         )
       )
         return errorResponse("Choose a weighted cache for each cache reward.");

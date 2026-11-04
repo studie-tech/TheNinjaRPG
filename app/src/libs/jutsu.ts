@@ -14,6 +14,15 @@ import { canChangeContent } from "@/utils/permissions";
 import { tagTypes } from "@/validators/combat";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
+/** Text a free transfer leaves in its action log; stored rows carry it verbatim. */
+export const JUTSU_FREE_TRANSFER_MARKER = "Used free transfer.";
+
+/** The transfer logs paid with a free transfer rather than reputation. */
+export const filterFreeJutsuTransfers = <T extends { changes: unknown }>(logs: T[]) =>
+  logs.filter((log) =>
+    (log.changes as string[]).some((c) => c.includes(JUTSU_FREE_TRANSFER_MARKER)),
+  );
+
 /**
  * Get the number of free jutsu level transfers based on the federal status
  * @param federalStatus

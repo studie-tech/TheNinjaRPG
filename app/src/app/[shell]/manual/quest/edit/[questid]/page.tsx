@@ -9,7 +9,11 @@ import CytoscapeComponent from "react-cytoscapejs";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { VILLAGE_MISSION_RANK_POINTS, VILLAGE_MISSION_TASKS, isPetTaskQuestType } from "@/drizzle/constants";
+import {
+  VILLAGE_MISSION_RANK_POINTS,
+  VILLAGE_MISSION_TASKS,
+  isPetTaskQuestType,
+} from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { useQuestEditForm } from "@/hooks/quest";
 import ContentBox from "@/layout/ContentBox";

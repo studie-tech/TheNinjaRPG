@@ -31,10 +31,7 @@ export const buildModBotStats = (
   const summary = emptyCounts();
   const periods = new Map<string, Counts>();
   for (let at = start.getTime(); at <= now.getTime(); at += DAY_S * 1000) {
-    periods.set(
-      getUtcDayKey(periodStart(input.interval, new Date(at))),
-      emptyCounts(),
-    );
+    periods.set(getUtcDayKey(periodStart(input.interval, new Date(at))), emptyCounts());
   }
   const surfaces = new Map<string, Counts>();
   const versions = new Map<string, Counts>();
@@ -47,9 +44,7 @@ export const buildModBotStats = (
     const counts = [
       summary,
       group(surfaces, moderationSurface(report.system)),
-      periods.get(
-        getUtcDayKey(periodStart(input.interval, report.createdAt)),
-      ),
+      periods.get(getUtcDayKey(periodStart(input.interval, report.createdAt))),
     ];
     if (report.predictedAt && report.promptVersion)
       counts.push(group(versions, report.promptVersion));
@@ -100,9 +95,7 @@ export const buildModBotStats = (
     const counts = [
       summary,
       group(surfaces, moderationSurface(scan.relationType)),
-      periods.get(
-        getUtcDayKey(periodStart(input.interval, scan.createdAt)),
-      ),
+      periods.get(getUtcDayKey(periodStart(input.interval, scan.createdAt))),
       group(versions, scan.promptVersion),
     ];
     for (const bucket of counts) {

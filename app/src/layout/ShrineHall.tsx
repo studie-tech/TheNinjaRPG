@@ -29,6 +29,7 @@ import {
   SHRINE_BOOST_DISPLAY,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_PER_SHRINE_PERC,
+  SHRINE_BOOST_REQUIRED_LEVEL,
   type SHRINE_BOOST_TYPE,
   SHRINE_BOOST_TYPES,
   SHRINE_MAX_AI_ASSIGNMENTS,
@@ -370,7 +371,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const isElder = user.rank === "ELDER";
 
   const level3Shrines = countBoostingShrines(
-    capturedSectors?.filter((s) => s.shrineLevel === 3),
+    capturedSectors?.filter((s) => s.shrineLevel === SHRINE_BOOST_REQUIRED_LEVEL),
     now,
   );
 
@@ -431,15 +432,16 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
           <CardHeader>
             <CardTitle>Activate a Boost</CardTitle>
             <CardDescription>
-              Requires Level 3 shrine • Cost: {SHRINE_BOOST_COST.toLocaleString()}{" "}
-              tokens
+              Requires Level {SHRINE_BOOST_REQUIRED_LEVEL} shrine • Cost:{" "}
+              {SHRINE_BOOST_COST.toLocaleString()} tokens
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-3">
             {!level3Shrines ? (
               <p className="text-muted-foreground text-sm">
-                Need at least one Level 3 shrine to activate boosts
+                Need at least one Level {SHRINE_BOOST_REQUIRED_LEVEL} shrine to activate
+                boosts
               </p>
             ) : (
               SHRINE_BOOST_TYPES.map((boostType, i) => {

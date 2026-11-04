@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { availableUserActions, getActionPointCost, performBattleAction } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
-import { applyFinalStandDamage, heal, healPrevent } from "@/libs/combat/tags";
+import { applyFinalStandDamage, applyPreventTag, heal } from "@/libs/combat/tags";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import {
   alignBattle,
@@ -90,12 +90,12 @@ describe("Bloodline Seal", () => {
     const immunity = makeEffect("immunity", { blocks: "healprevent", rounds: 10 }, runtime);
     const castPrevent = () => makeEffect("healprevent", { power: 100, rounds: 3 }, {
       ...runtime, fromType: "jutsu", isNew: true, castThisRound: true, createdRound: 3,
-    });
+    }) as Parameters<typeof applyPreventTag>[0];
     const blocked = castPrevent();
-    healPrevent(blocked, [immunity], target());
+    applyPreventTag(blocked, [immunity], target());
     expect(blocked.rounds).toBe(0);
     const allowed = castPrevent();
-    healPrevent(allowed, [immunity, sealEffect()], target());
+    applyPreventTag(allowed, [immunity, sealEffect()], target());
     expect(allowed.rounds).toBe(3);
   });
 

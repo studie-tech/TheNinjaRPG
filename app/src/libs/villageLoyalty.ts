@@ -3,7 +3,10 @@ import type { UserData } from "@/drizzle/schema";
 import { getDaysHoursMinutesSeconds } from "@/utils/time";
 
 /** Membership fields shared by client previews, server rewards and battle snapshots. */
-export type VillageLoyaltyUser = Pick<UserData, "isOutlaw" | "joinedVillageAt" | "villageId">;
+export type VillageLoyaltyUser = Pick<
+  UserData,
+  "isOutlaw" | "joinedVillageAt" | "villageId"
+>;
 
 /** Cumulative percentage points, rather than final multiplication factors. */
 export type VillageLoyaltyBonuses = Record<VillageLoyaltyBonus, number>;

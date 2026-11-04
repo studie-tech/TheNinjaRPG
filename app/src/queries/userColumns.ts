@@ -18,7 +18,11 @@ export const userSummaryWithLightColumns = {
   avatarLight: true,
 } as const;
 
-/** Summary plus the role and standing shown on public user cards. */
+/**
+ * Summary plus the role and standing shown on public user cards.
+ * `maskStaffReportCommentAuthors` overwrites each of these to hide staff, so a new column
+ * needs a mask value there too.
+ */
 export const userCardColumns = {
   ...userSummaryColumns,
   isOutlaw: true,

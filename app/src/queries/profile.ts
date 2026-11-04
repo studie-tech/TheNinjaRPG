@@ -89,7 +89,7 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
-import { userCardColumns } from "@/queries/userCard";
+import { userCardColumns } from "@/queries/userColumns";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
@@ -107,18 +107,6 @@ import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
-
-/** Author fields behind the `user` prop of `layout/Post`. */
-export const postAuthorColumns = {
-  userId: true,
-  username: true,
-  avatar: true,
-  rank: true,
-  isOutlaw: true,
-  level: true,
-  role: true,
-  federalStatus: true,
-} as const;
 
 /** Build the `userData` update for `GET`. */
 export const updateUserDataForGET = (client: Pick<DrizzleClient, "update">) =>

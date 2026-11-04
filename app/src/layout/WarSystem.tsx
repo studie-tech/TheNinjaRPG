@@ -717,6 +717,7 @@ export const SectorWar: React.FC<{
             utils.war.getActiveWars.invalidate(),
             utils.war.getRaidOptions.invalidate(),
             utils.village.getSectorOwnerships.invalidate(),
+            utils.travel.getAllSectors.invalidate(),
           ]);
         }
       },

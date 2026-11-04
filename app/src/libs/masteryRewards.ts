@@ -3,7 +3,6 @@ import {
   hasMasteryPromotion,
   MASTERY_EXPERIENCE_FIELDS,
   type ObjectiveRewardType,
-  hasMasteryPromotion,
 } from "@/validators/rewards";
 
 /**

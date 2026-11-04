@@ -76,8 +76,3 @@ export const collapseRewards = (
 
   return collapsed;
 };
-
-/** The reward payloads of a reward's attached packages. */
-export const packageRewards = <T>(reward: {
-  reward_packages?: { rewards: T }[] | null;
-}) => (reward.reward_packages ?? []).map((pack) => pack.rewards);

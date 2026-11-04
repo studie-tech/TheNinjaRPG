@@ -41,11 +41,7 @@ export const bunnyImageUrl = (src: string, width: number) =>
 export const textureImageUrl = (src: string, width = 50) => withBunnyWidth(src, width);
 
 /** Rewrite the host and, for a valid width on Bunny, request that rendition. */
-const withBunnyWidth = (
-  src: string,
-  width: number,
-  customize?: (url: URL) => void,
-) => {
+const withBunnyWidth = (src: string, width: number, customize?: (url: URL) => void) => {
   const transformed = transformImageUrl(src);
   if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
     return transformed;

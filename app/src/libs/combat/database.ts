@@ -24,7 +24,7 @@ import {
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
-import { areBattleAllies } from "@/libs/combat/participants";
+import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import type {
   ActionEffect,
@@ -1231,13 +1231,7 @@ export const updateUser = async (
   }
   if (result && user) {
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
-    const hasHumanOpponent = curBattle.usersState.some(
-      (candidate) =>
-        candidate.userId !== userId &&
-        candidate.direction !== user.direction &&
-        !candidate.isAi &&
-        !candidate.isSummon,
-    );
+    const facedHuman = hasHumanOpponent(curBattle.usersState, user);
     result.energyReward =
       isPvpEnergyRewardBattle(curBattle, userId) &&
       curBattle.extraState.energyRewardEligible === true &&
@@ -1249,7 +1243,7 @@ export const updateUser = async (
     const farmActivityReductionSeconds = getPvpFarmActivityReductionSeconds(
       curBattle.battleType,
       result.outcome,
-      hasHumanOpponent,
+      facedHuman,
     );
     const farmActivityAt = new Date();
 
@@ -1345,7 +1339,7 @@ export const updateUser = async (
         inWarTornSector: isInWarTornSector,
         inTerritoryWar:
           curBattle.battleType === "COMBAT" &&
-          hasHumanOpponent &&
+          facedHuman &&
           curBattle.extraState.territoryWar !== undefined,
         isWarParticipant: isWarBattleParticipant,
         questBattleSource: curBattle.extraState.questBattleSource,
@@ -1651,7 +1645,7 @@ export const updateUser = async (
             userId,
             result,
             settledAt,
-            hasHumanOpponent,
+            facedHuman,
             user,
             updatedQuestData,
             tookKageSeat,

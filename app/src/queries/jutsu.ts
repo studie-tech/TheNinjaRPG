@@ -6,6 +6,7 @@ import type { z } from "zod";
 import { jutsu, jutsuLoadout, jutsuReskin, userData } from "@/drizzle/schema";
 import type { JutsuEquipCap } from "@/libs/jutsu";
 
+import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
@@ -202,7 +203,7 @@ export const insertActionLogForTransferLevel = (
     userId: ctx.userId,
     tableName: "userjutsu",
     changes: [
-      `Transferred ${transfer} level(s) from ${fromJutsu.name} (new level: ${fromUserJutsu.level - transfer}) to ${toJutsu.name} (new level: ${toUserJutsu.level + transfer}). ${!needsReputation ? ` Used free transfer.` : ""}`,
+      `Transferred ${transfer} level(s) from ${fromJutsu.name} (new level: ${fromUserJutsu.level - transfer}) to ${toJutsu.name} (new level: ${toUserJutsu.level + transfer}). ${!needsReputation ? ` ${JUTSU_FREE_TRANSFER_MARKER}` : ""}`,
     ],
     relatedId: ctx.userId,
     relatedMsg: "JutsuLevelTransfer",
@@ -1172,6 +1173,11 @@ export const updateUserJutsuForRemoveReskin = (
     })
     .where(and(eq(userJutsu.id, input.userJutsuId), eq(userJutsu.userId, ctx.userId)));
 
+/** Match content whose `effects` hold an `injectjutsus` tag naming this jutsu. */
+const injectsJutsuSql = (effects: AnyMySqlColumn, jutsuId: string) =>
+  sql`JSON_SEARCH(${effects}, 'one', ${jutsuId}, NULL, '$[*].jutsuIds[*]') IS NOT NULL
+      AND JSON_SEARCH(${effects}, 'one', 'injectjutsus', NULL, '$[*].type') IS NOT NULL`;
+
 /** Build the `jutsu` listing for `getJutsuRelations`, selecting only `id` and `name`, using predicates on `effects`. */
 export const listJutsuForGetJutsuRelations = (
   client: Pick<DrizzleClient, "query">,
@@ -1179,8 +1185,7 @@ export const listJutsuForGetJutsuRelations = (
 ) =>
   client.query.jutsu.findMany({
     columns: { id: true, name: true },
-    where: sql`JSON_SEARCH(${jutsu.effects}, 'one', ${jutsuId}, NULL, '$[*].jutsuIds[*]') IS NOT NULL
-               AND JSON_SEARCH(${jutsu.effects}, 'one', 'injectjutsus', NULL, '$[*].type') IS NOT NULL`,
+    where: injectsJutsuSql(jutsu.effects, jutsuId),
   });
 
 /** Build the `bloodline` listing for `getJutsuRelations`, selecting only `id` and `name`, using predicates on `effects`. */
@@ -1190,8 +1195,7 @@ export const listBloodlineForGetJutsuRelations = (
 ) =>
   client.query.bloodline.findMany({
     columns: { id: true, name: true },
-    where: sql`JSON_SEARCH(${bloodline.effects}, 'one', ${jutsuId}, NULL, '$[*].jutsuIds[*]') IS NOT NULL
-               AND JSON_SEARCH(${bloodline.effects}, 'one', 'injectjutsus', NULL, '$[*].type') IS NOT NULL`,
+    where: injectsJutsuSql(bloodline.effects, jutsuId),
   });
 
 /** Build the `skillTree` listing for `getJutsuRelations`, selecting only `id` and `name`, using predicates on `effects`. */
@@ -1201,8 +1205,7 @@ export const listSkillTreeForGetJutsuRelations = (
 ) =>
   client.query.skillTree.findMany({
     columns: { id: true, name: true },
-    where: sql`JSON_SEARCH(${skillTree.effects}, 'one', ${jutsuId}, NULL, '$[*].jutsuIds[*]') IS NOT NULL
-               AND JSON_SEARCH(${skillTree.effects}, 'one', 'injectjutsus', NULL, '$[*].type') IS NOT NULL`,
+    where: injectsJutsuSql(skillTree.effects, jutsuId),
   });
 
 /** Build the `item` listing for `getJutsuRelations`, selecting only `id` and `name`, using predicates on `effects`. */
@@ -1212,8 +1215,7 @@ export const listItemForGetJutsuRelations = (
 ) =>
   client.query.item.findMany({
     columns: { id: true, name: true },
-    where: sql`JSON_SEARCH(${item.effects}, 'one', ${jutsuId}, NULL, '$[*].jutsuIds[*]') IS NOT NULL
-               AND JSON_SEARCH(${item.effects}, 'one', 'injectjutsus', NULL, '$[*].type') IS NOT NULL`,
+    where: injectsJutsuSql(item.effects, jutsuId),
   });
 
 /** Build the `userJutsu` selection for `getJutsuRelations`, using predicates on `jutsuId` and `isAi`. */

@@ -86,6 +86,7 @@ const declareEnemy = mutation();
 const sectorWar = mutation();
 const buildShrine = mutation();
 const adminEndWar = mutation();
+const invalidateAllSectors = vi.fn(async () => {});
 const own = {
   id: "own",
   name: "Own",
@@ -125,10 +126,11 @@ beforeEach(() => {
     isOutlaw: false,
   } as NonNullable<UserWithRelations>;
   const invalidate = vi.fn(async () => {});
+  invalidateAllSectors.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       village: { getSectorOwnerships: { invalidate }, getAlliances: { invalidate } },
-      travel: { getAllSectors: { invalidate } },
+      travel: { getAllSectors: { invalidate: invalidateAllSectors } },
       war: { getActiveWars: { invalidate }, getRaidOptions: { invalidate } },
     }),
     travel: {
@@ -391,6 +393,13 @@ describe("paid sector shrine claims", () => {
     fireEvent.click(view.getAllByRole("button", { name: /Build Shrine/ })[0]!);
     fireEvent.click(view.getByRole("button", { name: "Proceed" }));
     expect(buildShrine.mutate).toHaveBeenCalledWith({ warId: "claim-sector" });
+  });
+
+  it("refreshes the war map's sector owners after claiming a shrine", async () => {
+    user = { ...user, village: { ...own, tokens: WAR_PURCHASE_SHRINE_TOKEN_COST } };
+    mountShrine();
+    await act(() => buildShrine.respond({ success: true, message: "Claimed" }));
+    expect(invalidateAllSectors).toHaveBeenCalledTimes(1);
   });
 });
 

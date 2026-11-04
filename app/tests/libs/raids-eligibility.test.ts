@@ -4,7 +4,7 @@ import {
   isBattleClaimId,
   raidCaptureClosedMessage,
 } from "@/libs/raids";
-import { isVillageOnAttackerSide } from "@/libs/war";
+import { getWarSide } from "@/libs/objectiveWar";
 
 describe("raidCaptureClosedMessage", () => {
   const now = new Date("2026-06-15T12:00:00Z");
@@ -44,22 +44,23 @@ describe("battle queue claims", () => {
   });
 });
 
-describe("isVillageOnAttackerSide", () => {
+describe("getWarSide", () => {
   const war = {
     attackerVillageId: "attacker",
+    defenderVillageId: "defender",
     warAllies: [
       { villageId: "ally", supportVillageId: "attacker" },
       { villageId: "other", supportVillageId: "defender" },
     ],
   };
 
-  it("covers the attacker and the allies supporting it", () => {
-    expect(isVillageOnAttackerSide(war, "attacker")).toBe(true);
-    expect(isVillageOnAttackerSide(war, "ally")).toBe(true);
+  it("puts the attacker and the allies supporting it on the attacking side", () => {
+    expect(getWarSide(war, "attacker")).toBe("attacker");
+    expect(getWarSide(war, "ally")).toBe("attacker");
   });
 
   it("excludes the defender's allies and users without a village", () => {
-    expect(isVillageOnAttackerSide(war, "other")).toBe(false);
-    expect(isVillageOnAttackerSide(war, null)).toBe(false);
+    expect(getWarSide(war, "other")).toBe("defender");
+    expect(getWarSide(war, null)).toBeNull();
   });
 });

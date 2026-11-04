@@ -3,7 +3,6 @@
  */
 
 import type { SupportTicketStatus, UserRole } from "@/drizzle/constants";
-import { userCardColumns } from "@/queries/userCard";
 
 /**
  * Fetches comments from the database.

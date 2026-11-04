@@ -169,7 +169,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import { type StatSchemaType, statSchema } from "@/validators/combat";
+import { type StatSchemaType } from "@/validators/combat";
 import {
   attributes,
   type Color,
