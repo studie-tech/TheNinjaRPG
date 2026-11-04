@@ -176,14 +176,19 @@ export const listStripeCheckoutForCreateCheckout = (
     where: and(
       eq(stripeCheckout.createdById, ctx.userId),
       ne(stripeCheckout.id, input.requestId),
-      isNull(stripeCheckout.closedAt),
-      gte(
-        stripeCheckout.createdAt,
-        sql`NOW() - INTERVAL ${STRIPE_CHECKOUT_RESERVATION_SECONDS} SECOND`,
-      ),
-      sql`NOT EXISTS (SELECT 1 FROM ${stripePayment} p WHERE p.checkoutId = ${stripeCheckout.id} AND p.grantedAt IS NOT NULL)`,
+      ...openReservationConditions(),
     ),
   });
+
+/** A checkout still reserving allowance: open, inside its window and not yet granted. */
+const openReservationConditions = () => [
+  isNull(stripeCheckout.closedAt),
+  gte(
+    stripeCheckout.createdAt,
+    sql`NOW() - INTERVAL ${STRIPE_CHECKOUT_RESERVATION_SECONDS} SECOND`,
+  ),
+  sql`NOT EXISTS (SELECT 1 FROM ${stripePayment} p WHERE p.checkoutId = ${stripeCheckout.id} AND p.grantedAt IS NOT NULL)`,
+];
 
 /**
  * Build the `stripeCheckout` listing for `createCheckout`, using predicates on
@@ -267,13 +272,8 @@ export const selectStripeCheckoutForGetPendingCheckouts = (
     .where(
       and(
         eq(stripeCheckout.createdById, ctx.userId),
-        isNull(stripeCheckout.closedAt),
         isNull(stripeCheckout.subscriptionId),
-        gte(
-          stripeCheckout.createdAt,
-          sql`NOW() - INTERVAL ${STRIPE_CHECKOUT_RESERVATION_SECONDS} SECOND`,
-        ),
-        sql`NOT EXISTS (SELECT 1 FROM ${stripePayment} p WHERE p.checkoutId = ${stripeCheckout.id} AND p.grantedAt IS NOT NULL)`,
+        ...openReservationConditions(),
       ),
     )
     .orderBy(desc(stripeCheckout.createdAt));
