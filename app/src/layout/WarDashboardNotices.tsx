@@ -10,16 +10,14 @@ import {
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { FeedbackAlert, type MutationFeedback } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import { MercenaryOffers } from "@/layout/WarMercenaries";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Surface open camps and expiring claims in the dashboard's standard themed container. */
 export const WarDashboardNotices = () => {
-  const [feedback, setFeedback] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const { timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
   const claims = api.war.getWarPointClaims.useQuery(undefined, {
@@ -144,16 +142,7 @@ export const WarDashboardNotices = () => {
                   </Button>
                 </div>
               ))}
-            {feedback && (
-              <Alert
-                variant={feedback.success ? "default" : "destructive"}
-                role={feedback.success ? "status" : "alert"}
-              >
-                <AlertDescription>
-                  <p className="text-foreground">{feedback.message}</p>
-                </AlertDescription>
-              </Alert>
-            )}
+            {feedback && <FeedbackAlert feedback={feedback} foreground />}
           </div>
         </ContentBox>
       </div>
