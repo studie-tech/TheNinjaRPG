@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DISCORD_INVITE_URL,
+  GITHUB_ISSUES_URL,
   IMG_ICON_DISCORD,
   IMG_ICON_FACEBOOK,
   IMG_ICON_GITHUB,
@@ -158,7 +159,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           <SideBannerTitle>Participate</SideBannerTitle>
           <div className="flex flex-row gap-4 pt-3">
             <Link
-              href="https://github.com/studie-tech/TheNinjaRPG/issues"
+              href={GITHUB_ISSUES_URL}
               aria-label="GitHub"
               className="flex flex-col items-center font-bold hover:opacity-50"
             >

@@ -1,4 +1,4 @@
-import { DISCORD_INVITE_URL } from "@/drizzle/constants";
+import { DISCORD_INVITE_URL, GITHUB_ISSUES_URL } from "@/drizzle/constants";
 import Link from "@/layout/Link";
 
 /** A short, player-specific introduction for signed-out visitors from search. */
@@ -33,29 +33,22 @@ export const bloodlineText = (name: string) => {
       toughest challenges our world has to offer. <br /> <br /> Ready to dive deeper
       into bloodlines and more? The{" "}
       <Link className="font-bold" href="/manual">
-        {" "}
-        game manual{" "}
+        game manual
       </Link>{" "}
       is your go-to source for advanced skill mechanics and mission strategies. You can
       also join our vibrant{" "}
       <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        {" "}
-        Discord community{" "}
+        Discord community
       </Link>{" "}
       to stay informed about the latest updates and discuss optimal builds with ninjas
       from all walks of life. If you have insights or suggestions to share, head over to
       our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        {" "}
-        GitHub repository{" "}
-      </Link>{" "}
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+        GitHub repository
+      </Link>
       , or visit the{" "}
       <Link className="font-bold" href="/forum">
-        {" "}
-        forums{" "}
+        forums
       </Link>{" "}
       for in-depth conversations on bloodline synergy, upcoming features, and more.{" "}
       <br /> <br /> Every bloodline, including <b>{name}</b>, offers a unique path to
@@ -87,29 +80,22 @@ export const jutsuText = (name: string) => {
       make informed decisions when fine-tuning your loadout and overall playstyle.{" "}
       <br /> <br /> Looking to dig deeper into jutsu mechanics and strategy? Our{" "}
       <Link className="font-bold" href="/manual">
-        {" "}
-        game manual{" "}
+        game manual
       </Link>{" "}
       covers everything from skill trees to mission tactics, while our lively{" "}
       <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        {" "}
-        Discord community{" "}
+        Discord community
       </Link>{" "}
       brings ninjas from around the globe together to share jutsu insights and stay
       up-to-date on game developments. You can also submit feedback, share innovative
       ideas, or report issues in our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        {" "}
-        GitHub repository{" "}
-      </Link>{" "}
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+        GitHub repository
+      </Link>
       , and discuss advanced jutsu concepts on the{" "}
       <Link className="font-bold" href="/forum">
-        {" "}
-        forums{" "}
-      </Link>{" "}
+        forums
+      </Link>
       , where players collaborate to tackle every challenge the ninja world throws their
       way. <br /> <br /> Every jutsu, including <b>{name}</b>, is meticulously crafted
       to push your strategic thinking and adaptability to new heights. By examining its
@@ -140,29 +126,22 @@ export const itemText = (name: string) => {
       where it matters most—on the battlefield. <br /> <br /> Looking to delve even
       deeper into item synergy and advanced tactics? The{" "}
       <Link className="font-bold" href="/manual">
-        {" "}
-        game manual{" "}
+        game manual
       </Link>{" "}
       offers a comprehensive overview of equipment mechanics, skill trees, and mission
       strategies. Join our bustling{" "}
       <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        {" "}
-        Discord community{" "}
+        Discord community
       </Link>{" "}
       to stay informed of the latest updates and discuss gear recommendations with
       ninjas from around the globe. You can also contribute your ideas or report any
       issues in our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        {" "}
-        GitHub repository{" "}
-      </Link>{" "}
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+        GitHub repository
+      </Link>
       , or head over to the{" "}
       <Link className="font-bold" href="/forum">
-        {" "}
-        forums{" "}
+        forums
       </Link>{" "}
       for in-depth discussions on item builds, upcoming features, and the evolving
       landscape of The Ninja RPG. <br /> <br /> Every piece of equipment has a purpose
@@ -195,30 +174,23 @@ export const aiText = (name: string) => {
       calculated and rewarding experience. <br /> <br /> Looking to sharpen your edge
       even more? Our{" "}
       <Link className="font-bold" href="/manual">
-        {" "}
-        game manual{" "}
+        game manual
       </Link>{" "}
       provides a comprehensive guide to mechanics, skill trees, and mission approaches,
       while our bustling{" "}
       <Link className="font-bold" href={DISCORD_INVITE_URL}>
-        {" "}
-        Discord community{" "}
+        Discord community
       </Link>{" "}
       brings ninjas from around the world together to swap strategies and stay updated
       on the latest AI developments. You can also contribute new ideas or report issues
       at our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
-        {" "}
-        GitHub repository{" "}
-      </Link>{" "}
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+        GitHub repository
+      </Link>
       , or explore deeper discussions in the{" "}
       <Link className="font-bold" href="/forum">
-        {" "}
-        forums{" "}
-      </Link>{" "}
+        forums
+      </Link>
       , where players collaborate on all aspects of the game. <br /> <br /> Every AI
       opponent in The Ninja RPG, including <b>{name}</b>, serves a greater purpose:
       testing your combat readiness and spurring you to refine your tactics. By
@@ -251,10 +223,7 @@ export const changelogText = () => {
       </Link>{" "}
       for real-time discussions about updates and changes. For technical details and
       development insights, check our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , where you can track issues and contribute to future improvements. The{" "}
@@ -311,10 +280,7 @@ export const battleCalcText = () => {
         forums
       </Link>
       , or report potential issues through our{" "}
-      <Link
-        className="font-bold"
-        href="https://github.com/studie-tech/TheNinjaRPG/issues"
-      >
+      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       . <br /> <br />

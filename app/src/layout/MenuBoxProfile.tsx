@@ -39,16 +39,8 @@ import type {
 } from "@/drizzle/constants";
 import {
   DIFFUSE_MAX_PERCENTAGE,
-  DISCORD_INVITE_URL,
   ELITE_JONIN_BRACKET,
   ERRANDS_PER_DAY,
-  IMG_ICON_DISCORD,
-  IMG_ICON_FACEBOOK,
-  IMG_ICON_INSTAGRAM,
-  IMG_ICON_REDDIT,
-  IMG_ICON_TIKTOK,
-  IMG_ICON_TWITTER,
-  IMG_ICON_YOUTUBE,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
   MAX_PVP_BRACKET,
@@ -57,6 +49,7 @@ import {
   MISSIONS_PER_DAY,
   PARRY_MAX_PERCENTAGE,
   PVP_MISSIONS_PER_DAY,
+  SOCIAL_LINKS,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
@@ -95,47 +88,6 @@ import {
   useUserDataSelector,
 } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
-
-/**
- * Social media links
- */
-export const socials = [
-  {
-    url: DISCORD_INVITE_URL,
-    image: IMG_ICON_DISCORD,
-    alt: "Discord",
-  },
-  {
-    url: "https://www.facebook.com/profile.php?id=61554961626034",
-    image: IMG_ICON_FACEBOOK,
-    alt: "Facebook",
-  },
-  {
-    url: "https://www.youtube.com/@fullstackscientist",
-    image: IMG_ICON_YOUTUBE,
-    alt: "Youtube",
-  },
-  {
-    url: "https://twitter.com/RealTheNinjaRPG",
-    image: IMG_ICON_TWITTER,
-    alt: "Twitter",
-  },
-  {
-    url: "https://www.instagram.com/theninjarpg/",
-    image: IMG_ICON_INSTAGRAM,
-    alt: "Instagram",
-  },
-  {
-    url: "https://www.tiktok.com/@theninjarpg",
-    image: IMG_ICON_TIKTOK,
-    alt: "Tiktok",
-  },
-  {
-    url: "https://www.reddit.com/r/theninjarpg/",
-    image: IMG_ICON_REDDIT,
-    alt: "Reddit",
-  },
-];
 
 const MenuBoxProfile: React.FC = () => {
   // State
@@ -713,7 +665,7 @@ const MenuBoxProfile: React.FC = () => {
       </div>
       <hr className="my-2" />
       <div className="flex justify-center px-2 pt-2 align-center">
-        {socials.map((social) => {
+        {SOCIAL_LINKS.map((social) => {
           return (
             <a
               target="_blank"
