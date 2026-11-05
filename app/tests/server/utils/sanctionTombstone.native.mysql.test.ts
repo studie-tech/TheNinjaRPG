@@ -366,10 +366,10 @@ describeWithDatabase("original sanctions during native deletion", () => {
       const later = await register("AfterRetry", ip);
       expect(later).toHaveLength(decision === "clear" ? 0 : 1);
       if (decision !== "clear")
-        expect(later[0]).toMatchObject({
+        expect(later[0]).toEqual(expect.objectContaining({
           status: decision === "ban" ? "BAN_ACTIVATED" : "SILENCE_ACTIVATED",
           banEnd: expected[0]!.sanctionEndsAt,
-        });
+        }));
       await finishDeletion();
     },
   );
@@ -468,10 +468,10 @@ describeWithDatabase("original sanctions during native deletion", () => {
         if (userId === "AfterCleanup") await finishDeletion();
         const reports = await register(userId);
         expect(reports).toHaveLength(1);
-        expect(reports[0]).toMatchObject({
+        expect(reports[0]).toEqual(expect.objectContaining({
           status: revisedStatus,
           banEnd: revised!.banEnd,
-        });
+        }));
         expect(
           await (await getTestDatabase()).query.sanctionTombstone.findMany(),
         ).toMatchObject([
@@ -559,10 +559,10 @@ describeWithDatabase("original sanctions during native deletion", () => {
         sources.find(
           (source) => source.sanction === (decision === "ban" ? "SILENCE" : "BAN"),
         ),
-      ).toMatchObject({
+      ).toEqual(expect.objectContaining({
         sourceId: "independent-same",
         sanctionEndsAt: independentEnd,
-      });
+      }));
       expect(
         await staff.clear({ ...decisionInput, object_id: "independent-other" }),
       ).toMatchObject({ success: true });
@@ -606,12 +606,12 @@ describeWithDatabase("original sanctions during native deletion", () => {
         where: eq(userReport.id, "original"),
       });
       const status = decision === "ban" ? "BAN_ACTIVATED" : "SILENCE_ACTIVATED";
-      expect(await register("DuringDelay")).toMatchObject([
-        { status, banEnd: revised!.banEnd },
+      expect(await register("DuringDelay")).toEqual([
+        expect.objectContaining({ status, banEnd: revised!.banEnd }),
       ]);
       await finishDeletion();
-      expect(await register("AfterCleanup")).toMatchObject([
-        { status, banEnd: revised!.banEnd },
+      expect(await register("AfterCleanup")).toEqual([
+        expect.objectContaining({ status, banEnd: revised!.banEnd }),
       ]);
     },
   );
@@ -621,8 +621,8 @@ describeWithDatabase("original sanctions during native deletion", () => {
     await addReport("original", "BAN_ACTIVATED", end);
     await startDeletion();
     await finishDeletion();
-    expect(await register("AfterCleanup")).toMatchObject([
-      { status: "BAN_ACTIVATED", banEnd: end },
+    expect(await register("AfterCleanup")).toEqual([
+      expect.objectContaining({ status: "BAN_ACTIVATED", banEnd: end }),
     ]);
   });
 
@@ -698,7 +698,7 @@ describeWithDatabase("original sanctions during native deletion", () => {
       await database.query.userReport.findFirst({
         where: eq(userReport.id, "original"),
       }),
-    ).toMatchObject({ banEnd: end });
+    ).toEqual(expect.objectContaining({ banEnd: end }));
     expect(end.getTime()).toBeLessThan(Date.now());
     await finishDeletion();
     expect(
@@ -724,18 +724,18 @@ describeWithDatabase("original sanctions during native deletion", () => {
         },
         lateIp,
       ),
-    ).toMatchObject([{ status: "BAN_ACTIVATED", banEnd: revised!.banEnd }]);
+    ).toEqual([expect.objectContaining({ status: "BAN_ACTIVATED", banEnd: revised!.banEnd })]);
     expect(
       await database.query.userData.findFirst({
         where: eq(userData.userId, "AfterCleanup"),
       }),
     ).toMatchObject({ isBanned: true });
-    expect(retained).toMatchObject({
+    expect(retained).toEqual(expect.objectContaining({
       ...hashes,
       sanction: "BAN",
       sanctionEndsAt: revised!.banEnd,
       ipHashes: expect.arrayContaining([hashSanctionIp(oldIp), hashSanctionIp(lateIp)]),
-    });
+    }));
   });
 
   it.each([
@@ -777,12 +777,12 @@ describeWithDatabase("original sanctions during native deletion", () => {
       if (decision === "clear") {
         expect(snapshot.some((source) => source.sourceId === "original")).toBe(false);
       } else {
-        expect(snapshot.find((source) => source.sourceId === "original")).toMatchObject(
-          {
+        expect(snapshot.find((source) => source.sourceId === "original")).toEqual(
+          expect.objectContaining({
             ...hashes,
             sanction: decision === "ban" ? "BAN" : "SILENCE",
             sanctionEndsAt: revised!.banEnd,
-          },
+          })
         );
       }
       // Late IP capture must leave the carryover's decision authoritative over the original report.
@@ -848,11 +848,11 @@ describeWithDatabase("original sanctions during native deletion", () => {
       if (hasIndependentSilence) {
         expect(
           snapshot.find((source) => source.sourceId === "independent-silence"),
-        ).toMatchObject({
+        ).toEqual(expect.objectContaining({
           ...hashes,
           sanction: "SILENCE",
           sanctionEndsAt: independentEnd,
-        });
+        }));
       } else if (decision === "clear") {
         expect(await database.query.sanctionTombstone.findMany()).toHaveLength(0);
       }
@@ -903,14 +903,14 @@ describeWithDatabase("original sanctions during native deletion", () => {
       const returned = await registerIdentity("AfterCleanup");
       const returnedBan = returned.find((report) => report.status === "BAN_ACTIVATED");
       if (decision === "ban") {
-        expect(returnedBan).toMatchObject({ banEnd: revised!.banEnd });
+        expect(returnedBan).toEqual(expect.objectContaining({ banEnd: revised!.banEnd }));
       } else {
         expect(returnedBan).toBeUndefined();
       }
       // The replacement's separate silence remains its own live moderation case.
       expect(
         returned.find((report) => report.status === "SILENCE_ACTIVATED"),
-      ).toMatchObject({ banEnd: independentEnd });
+      ).toEqual(expect.objectContaining({ banEnd: independentEnd }));
       expect(returned).toHaveLength(decision === "ban" ? 2 : 1);
       const active = await (await callerFor(reportsRouter, "AfterCleanup")).getBan();
       expect(active?.status === "BAN_ACTIVATED").toBe(decision === "ban");
@@ -1069,11 +1069,11 @@ describeWithDatabase("original sanctions during native deletion", () => {
         const active = await fetchActiveSanctionTombstones(database);
         expect(active).toHaveLength(later === "clear" ? 0 : 1);
         if (later !== "clear")
-          expect(active[0]).toMatchObject({
+          expect(active[0]).toEqual(expect.objectContaining({
             sanction: later === "ban" ? "BAN" : "SILENCE",
             sanctionEndsAt: current.banEnd,
             ...hashes,
-          });
+          }));
         await finishDeletion();
       } finally {
         release();
@@ -1082,11 +1082,11 @@ describeWithDatabase("original sanctions during native deletion", () => {
       const returned = await registerIdentity("AfterCleanup");
       expect(returned).toHaveLength(later === "clear" ? 0 : 1);
       if (later !== "clear")
-        expect(returned[0]).toMatchObject({
+        expect(returned[0]).toEqual(expect.objectContaining({
           status: current.status,
           banEnd: current.banEnd,
           adminResolved: true,
-        });
+        }));
     },
   );
 
@@ -1215,11 +1215,11 @@ describeWithDatabase("original sanctions during native deletion", () => {
       });
       expect(await database.query.userReportComment.findMany()).toHaveLength(0);
       expect(await database.query.sanctionTombstone.findMany()).toEqual(sources);
-      expect(await registerIdentity("AfterCleanup")).toMatchObject([
-        {
+      expect(await registerIdentity("AfterCleanup")).toEqual([
+        expect.objectContaining({
           status: decision === "timeout" ? "SILENCE_ACTIVATED" : "BAN_ACTIVATED",
           banEnd: end,
-        },
+        }),
       ]);
     },
   );
@@ -1248,10 +1248,10 @@ describeWithDatabase("original sanctions during native deletion", () => {
       const returned = await registerIdentity("AfterCleanup");
       expect(returned).toHaveLength(decision === "clear" ? 0 : 1);
       if (decision !== "clear")
-        expect(returned[0]).toMatchObject({
+        expect(returned[0]).toEqual(expect.objectContaining({
           status: current.status,
           banEnd: current.banEnd,
-        });
+        }));
     },
   );
 
@@ -1450,10 +1450,10 @@ describeWithDatabase("original sanctions during native deletion", () => {
       const returned = await registerIdentity("AfterCleanup", changedIdentity);
       expect(returned).toHaveLength(hasOwnSource ? 1 : 0);
       if (hasOwnSource)
-        expect(returned[0]).toMatchObject({
+        expect(returned[0]).toEqual(expect.objectContaining({
           status: "BAN_ACTIVATED",
           banEnd: revised!.banEnd,
-        });
+        }));
       expect(
         await database.query.userData.findFirst({
           columns: { isBanned: true },

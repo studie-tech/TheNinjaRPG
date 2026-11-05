@@ -474,7 +474,7 @@ describeWithDatabase("sanction tombstones", () => {
       const inherited = (await database.query.userReport.findFirst({
         where: eq(userReport.reportedUserId, "replacement"),
       }))!;
-      expect(inherited).toMatchObject({ status, banEnd: endsAt });
+      expect(inherited).toEqual(expect.objectContaining({ status, banEnd: endsAt }));
       const account = await database.query.userData.findFirst({
         where: eq(userData.userId, "replacement"),
       });
@@ -587,7 +587,7 @@ describeWithDatabase("sanction tombstones", () => {
     }
     expect(
       tombstones.find((source) => source.sourceId === "report-SILENCE_ACTIVATED"),
-    ).toMatchObject({ sanctionEndsAt: silenceEnd });
+    ).toEqual(expect.objectContaining({ sanctionEndsAt: silenceEnd }));
     expect(tombstones.map((source) => source.sourceId).sort()).toEqual([
       "report-SILENCE_ACTIVATED",
       "report-TIMEOUT_ACTIVATED",
@@ -649,13 +649,13 @@ describeWithDatabase("sanction tombstones", () => {
       database.query.actionLog.findMany({ where: eq(actionLog.userId, SANCTIONED) }),
     ]);
     expect(user).toMatchObject({ isBanned: true, isSilenced: false });
-    expect(reports).toMatchObject([
-      {
+    expect(reports).toEqual([
+      expect.objectContaining({
         status: "BAN_ACTIVATED",
         banEnd,
         system: "sanction_carryover",
         adminResolved: true,
-      },
+      }),
     ]);
     expect(reports[0]?.reason).not.toContain("original-ban");
     expect(logs).toHaveLength(1);
@@ -741,10 +741,10 @@ describeWithDatabase("sanction tombstones", () => {
         const revised = await database.query.userReport.findFirst({
           where: eq(userReport.id, "original-case"),
         });
-        expect(revised).toMatchObject({
+        expect(revised).toEqual(expect.objectContaining({
           status: decision === "clear" ? "REPORT_CLEARED" : "BAN_ACTIVATED",
           banEnd: originalEnd,
-        });
+        }));
       } finally {
         release();
         await deleting;
@@ -762,10 +762,10 @@ describeWithDatabase("sanction tombstones", () => {
       const original = sources.find((source) => source.sourceId === "original-case");
       if (decision === "clear") expect(original).toBeUndefined();
       else
-        expect(original).toMatchObject({
+        expect(original).toEqual(expect.objectContaining({
           sanction: "BAN",
           sanctionEndsAt: originalEnd,
-        });
+        }));
       for (const source of sources) {
         expect(source).toMatchObject({
           emailHash: hashSanctionIdentifier("email", "capture@example.com"),
@@ -930,8 +930,8 @@ describeWithDatabase("sanction tombstones", () => {
     const returned = await database.query.userReport.findMany({
       where: eq(userReport.reportedUserId, SANCTIONED),
     });
-    expect(returned).toMatchObject([
-      { status: "SILENCE_ACTIVATED", banEnd: revised!.banEnd },
+    expect(returned).toEqual([
+      expect.objectContaining({ status: "SILENCE_ACTIVATED", banEnd: revised!.banEnd }),
     ]);
     expect(
       await database.query.actionLog.findFirst({
@@ -986,7 +986,7 @@ describeWithDatabase("sanction tombstones", () => {
           eq(userReport.status, "SILENCE_ACTIVATED"),
         ),
       }),
-    ).toMatchObject({ banEnd: silenceEnd });
+    ).toEqual(expect.objectContaining({ banEnd: silenceEnd }));
     const [log] = await database.query.actionLog.findMany({
       where: eq(actionLog.userId, "user_returning"),
     });
@@ -1291,12 +1291,12 @@ describeWithDatabase("sanction tombstones", () => {
       };
       expect(await staff.ban(input)).toMatchObject({ success: true });
       expect(await staff[decision](input)).toMatchObject({ success: true });
-      expect(await tombstonesOf(SANCTIONED)).toMatchObject([
-        {
+      expect(await tombstonesOf(SANCTIONED)).toEqual([
+        expect.objectContaining({
           sourceId: "original-ban",
           sanction: "BAN",
           sanctionEndsAt: independentEnd,
-        },
+        }),
       ]);
       await deleteUser(database, "user_revised");
       expect(await register("user_revised")).toMatchObject({ success: true });
@@ -1304,7 +1304,7 @@ describeWithDatabase("sanction tombstones", () => {
         await database.query.userReport.findMany({
           where: eq(userReport.reportedUserId, "user_revised"),
         }),
-      ).toMatchObject([{ status: "BAN_ACTIVATED", banEnd: independentEnd }]);
+      ).toEqual([expect.objectContaining({ status: "BAN_ACTIVATED", banEnd: independentEnd })]);
       expect(
         await database.query.userData.findFirst({
           where: eq(userData.userId, "user_revised"),
@@ -1467,10 +1467,10 @@ describeWithDatabase("sanction tombstones", () => {
       }),
     ).toMatchObject({ success: true });
     const retained = await database.query.sanctionTombstone.findMany();
-    expect(retained).toMatchObject([
-      { sanction: "SILENCE", sanctionEndsAt: silenceEnd },
-      { sanction: "SILENCE", sanctionEndsAt: silenceEnd },
-      { sanction: "SILENCE", sanctionEndsAt: silenceEnd },
+    expect(retained).toEqual([
+      expect.objectContaining({ sanction: "SILENCE", sanctionEndsAt: silenceEnd }),
+      expect.objectContaining({ sanction: "SILENCE", sanctionEndsAt: silenceEnd }),
+      expect.objectContaining({ sanction: "SILENCE", sanctionEndsAt: silenceEnd }),
     ]);
     expect(retained.map((source) => source.sanctionEndsAt)).toEqual([
       silenceEnd, silenceEnd, silenceEnd,
@@ -1487,7 +1487,7 @@ describeWithDatabase("sanction tombstones", () => {
       await database.query.userReport.findMany({
         where: eq(userReport.reportedUserId, previousUserId),
       }),
-    ).toMatchObject([{ status: "SILENCE_ACTIVATED", banEnd: silenceEnd }]);
+    ).toEqual([expect.objectContaining({ status: "SILENCE_ACTIVATED", banEnd: silenceEnd })]);
   });
 
   it.each(["ban", "silence"] as const)(
@@ -1654,12 +1654,12 @@ describeWithDatabase("sanction tombstones", () => {
           revised = await database.query.userReport.findFirst({
             where: eq(userReport.id, "original"),
           });
-          expect(await tombstonesOf(SANCTIONED)).toMatchObject([
-            {
+          expect(await tombstonesOf(SANCTIONED)).toEqual([
+            expect.objectContaining({
               sourceId: "original",
               sanction: decision === "ban" ? "BAN" : "SILENCE",
               sanctionEndsAt: revised!.banEnd,
-            },
+            }),
           ]);
         } finally {
           release();
@@ -1667,11 +1667,11 @@ describeWithDatabase("sanction tombstones", () => {
         }
         expect(await deleting).toMatchObject({ success: true });
         expect(await register(SANCTIONED)).toMatchObject({ success: true });
-        expect(await database.query.userReport.findMany()).toMatchObject([
-          {
+        expect(await database.query.userReport.findMany()).toEqual([
+          expect.objectContaining({
             status: revised!.status,
             banEnd: revised!.banEnd,
-          },
+          }),
         ]);
         expect(
           await database.query.userData.findFirst({
