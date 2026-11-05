@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { CombatStatNames } from "@/drizzle/constants";
 import { actionLog, petSpecies, userData, userPet } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { petsRouter } from "@/server/api/routers/pets";
@@ -53,6 +54,32 @@ describeWithDatabase("companion potential and transfers", () => {
     expect(owner?.money).toBe(2_000_000); expect(owner?.petExperience).toBe(active ? 1200 : 500);
     expect(source).toMatchObject({ experience: 300, offence: 190, defence: 40, strength: 100, rank: 1 });
     expect(target?.storedExperience).toBe(active ? 100 : 800);
+  });
+  it.each([
+    { active: true, bank: 1000 }, { active: false, bank: 1000 },
+    { active: true, bank: 1 }, { active: false, bank: 1 },
+  ])("spends the exact XP bank after a proportional transfer (active: $active, bank: $bank)", async ({ active, bank }) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ activePetId: active ? sourceId : targetId, petExperience: active ? bank : 500 }).where(eq(userData.userId, ownerId));
+    await db.update(userPet).set({ experience: 6622, strength: 5932, storedExperience: active ? 0 : bank }).where(eq(userPet.id, sourceId));
+    const caller = callerForDatabase(petsRouter, ownerId, db);
+    expect((await caller.transferExperience({ petId: sourceId, destinationPetId: targetId, amount: 4635 })).success).toBe(true);
+    const source = (await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) }))!;
+    expect(Number.isInteger(source.offence)).toBe(false);
+    const gains = bank === 1000
+      ? { ...zero, offence: 250, defence: 250, strength: 250, speed: 250 }
+      : { ...zero, offence: 1 };
+    const result = await caller.assignExperience({ petId: sourceId, ...gains });
+    expect(result).toMatchObject({ success: true, message: `${bank.toLocaleString("en-US")} companion experience assigned.` });
+    expect(result.petUpdate).toBeUndefined();
+    expect(result.userPatch).toEqual(active ? undefined : {});
+    const saved = (await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) }))!;
+    for (const stat of CombatStatNames) expect(saved[stat]).toBeCloseTo(source[stat] + gains[stat], 8);
+    expect(saved.experience).toBe(6622 - 4635 + bank);
+    expect(saved.storedExperience).toBe(0);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, ownerId) }))?.petExperience).toBe(active ? 0 : 500 + 4635);
+    expect(await caller.assignExperience({ petId: sourceId, ...zero, offence: 1 })).toMatchObject({ success: false, message: "Not enough unused companion experience." });
+    expect(await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) })).toEqual(saved);
   });
   it("does not charge or move XP when the destination changes after the read", async () => {
     const db = await getTestDatabase();

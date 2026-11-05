@@ -55,7 +55,6 @@ import {
   isPetAppearanceReady,
   petRankUpBlockMessage,
 } from "@/libs/pets/progression";
-import { getAssignedCombatStatTotal } from "@/libs/profile";
 import { deleteEmptyUserItem } from "@/queries/item";
 import {
   deleteUserPetForReleasePet,
@@ -901,7 +900,7 @@ export const petsRouter = createTRPCRouter({
           return errorResponse("One or more companion stats exceed its potential cap.");
         stats[stat] += gains[stat];
       }
-      const spent = getAssignedCombatStatTotal(stats) - getAssignedCombatStatTotal(pet);
+      const spent = CombatStatNames.reduce((sum, stat) => sum + gains[stat], 0);
       const isActive = user.activePetId === pet.id;
       const availableExperience = isActive ? user.petExperience : pet.storedExperience;
       if (spent > availableExperience)
