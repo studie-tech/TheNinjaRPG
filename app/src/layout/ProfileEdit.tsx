@@ -41,7 +41,6 @@ import {
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -162,7 +161,7 @@ import {
   isStaffMember,
   isStaffRole,
 } from "@/utils/permissions";
-import { useUserSearch } from "@/utils/search";
+import { useUserPicker, useUserSearch } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -181,7 +180,6 @@ import {
   genders,
   getAttributeGroup,
   getCharacterAttributes,
-  getSearchValidator,
   type SkinColor,
   skin_colors,
 } from "@/validators/register";
@@ -1047,16 +1045,7 @@ const Marriage: React.FC = () => {
   const divorces = usePendingIds();
 
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   const { data: marriages } = api.marriage.getMarriedUsers.useQuery(
     {},

@@ -3,8 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BellOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,12 +29,12 @@ import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type CreateConversationSchema,
   createConversationSchema,
 } from "@/validators/comments";
-import { getSearchValidator } from "@/validators/register";
 
 /**
  * Component for creating a new conversation
@@ -82,36 +81,18 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     },
   });
 
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: {
-      username: "",
-      users: props.preSelectedUser ? [props.preSelectedUser] : [],
-    },
-  });
+  const { methods: userSearchMethods, users } = useUserPicker(
+    maxUsers,
+    props.preSelectedUser ? [props.preSelectedUser] : [],
+  );
 
   // User search for sender selection (AI posting)
   const maxSenderUsers = 1;
-  const senderSearchSchema = getSearchValidator({ max: maxSenderUsers });
-  const senderSearchMethods = useForm<z.infer<typeof senderSearchSchema>>({
-    resolver: zodResolver(senderSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const watchedSenderUsers = useWatch({
-    control: senderSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const senderUser = watchedSenderUsers?.[0];
+  const { methods: senderSearchMethods, user: senderUser } =
+    useUserPicker(maxSenderUsers);
   const canPostAsAI = userData && canPostAsAi(userData.role);
   const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
-  const users = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
   useEffect(() => {
     create.setValue(
       "users",

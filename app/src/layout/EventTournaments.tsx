@@ -4,7 +4,6 @@ import { sentenceCase as label } from "change-case";
 import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,8 +22,8 @@ import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { currentEventRound } from "@/libs/tournament/events";
 import { canManageTournaments } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
-import type { UserSearchResult } from "@/validators/register";
 import type { EventGame, EventTournamentState } from "@/validators/tournament";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -615,9 +614,7 @@ const StaffTournamentControls = ({
   const [scheduledAt, setScheduledAt] = useState("");
   const [seatId, setSeatId] = useState("");
   const [message, setMessage] = useState("");
-  const form = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
+  const { methods: form } = useUserPicker();
   const utils = api.useUtils();
   const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({

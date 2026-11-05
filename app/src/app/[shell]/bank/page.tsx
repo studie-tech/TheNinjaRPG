@@ -11,8 +11,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +41,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
+import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { calcBankInterest, getStrucBoost } from "@/utils/village";
@@ -50,7 +50,6 @@ import {
   type MoneyTransferSchema,
   type MoneyTransferSchemaInput,
 } from "@/validators/bank";
-import { getSearchValidator } from "@/validators/register";
 
 export default function Bank() {
   // State
@@ -142,40 +141,14 @@ export default function Bank() {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   // User search for ledger sender
-  const userSearchSchemaFrom = getSearchValidator({ max: maxUsers });
-  const userSearchMethodsFrom = useForm<z.infer<typeof userSearchSchemaFrom>>({
-    resolver: zodResolver(userSearchSchemaFrom),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUserFrom = useWatch({
-    control: userSearchMethodsFrom.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethodsFrom, user: targetUserFrom } =
+    useUserPicker(maxUsers);
 
   // User search for ledger receiver
-  const userSearchSchemaTo = getSearchValidator({ max: maxUsers });
-  const userSearchMethodsTo = useForm<z.infer<typeof userSearchSchemaTo>>({
-    resolver: zodResolver(userSearchSchemaTo),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUserTo = useWatch({
-    control: userSearchMethodsTo.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethodsTo, user: targetUserTo } = useUserPicker(maxUsers);
 
   // Getting bank transers
   const {

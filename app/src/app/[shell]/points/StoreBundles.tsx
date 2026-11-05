@@ -1,9 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,9 +41,9 @@ import { SearchSelect } from "@/layout/SearchSelect";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getStoreBundleMinimumPriceCents } from "@/utils/paypal";
 import { canManageStore } from "@/utils/permissions";
+import { useRecipientPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type StoreBundleInput, storeBundleSchemaForItems } from "@/validators/points";
-import { getSearchValidator } from "@/validators/register";
 import { StoreCheckout } from "./StoreCheckout";
 
 /** Show per-buyer availability and staff editing through the shared validated bundle catalog. */
@@ -58,15 +57,7 @@ export function StoreBundles() {
   const [message, setMessage] = useState<string>();
   const returnFocusRef = useRef<HTMLElement>(null);
   const selectedBundleRef = useRef<HTMLDivElement>(null);
-  const userSearchSchema = getSearchValidator({ max: 1 });
-  const methods = useForm<z.infer<typeof userSearchSchema>>({
-    defaultValues: { username: "", users: [] },
-    resolver: zodResolver(userSearchSchema),
-  });
-  const users = useWatch({ control: methods.control, name: "users", defaultValue: [] });
-  useEffect(() => {
-    if (user && users.length === 0) methods.setValue("users", [user]);
-  }, [user, users, methods]);
+  const { methods, users } = useRecipientPicker(user);
   const save = api.paypal.saveStoreBundle.useMutation({
     onSuccess: async (result) => {
       setMessage(result.message);

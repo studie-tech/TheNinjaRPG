@@ -1,6 +1,5 @@
 "use client";
 import { useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,8 +13,8 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { UserSearchResult } from "@/validators/register";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Private hiring controls: identities are returned only to the employing Kage and the player. */
@@ -24,10 +23,7 @@ export const WarMercenaries = ({ warId }: { warId: string }) => {
   const controlsRef = useRef<HTMLDetailsElement>(null);
   const { feedback, refresh, onError, onMutate } = useMercenaryFeedback();
   const roster = api.war.getMercenaries.useQuery({ warId }, { refetchInterval: 10000 });
-  const form = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
-  const selected = useWatch({ control: form.control, name: "users" })?.[0];
+  const { methods: form, user: selected } = useUserPicker();
   const invite = api.war.inviteMercenary.useMutation({
     onSuccess: refresh,
     onError,

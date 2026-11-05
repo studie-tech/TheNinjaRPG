@@ -23,7 +23,6 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -40,6 +39,7 @@ import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
+import { useUserPicker } from "@/utils/search";
 import { addDays } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -49,7 +49,6 @@ import {
   forumSectionSchema,
   forumStructureBoardSchema,
 } from "@/validators/forum";
-import { getSearchValidator } from "@/validators/register";
 
 /** Load one scoped staff workspace and retain scoped approvals, recovery, structure, access and audit views. */
 export default function ForumManagement() {
@@ -1010,11 +1009,7 @@ function RemoveStructure({
 }
 /** Keep staff-form targets synchronized when the existing player picker selects or clears a player. */
 function ForumPlayerSelect({ onSelect }: { onSelect: (id: string) => void }) {
-  const schema = getSearchValidator({ max: 1 });
-  const form = useForm<z.infer<typeof schema>>({
-    defaultValues: { username: "", users: [] },
-  });
-  const selected = useWatch({ control: form.control, name: "users" });
+  const { methods: form, users: selected } = useUserPicker();
   const selectedId = selected?.[0]?.userId ?? "";
   useEffect(() => onSelect(selectedId), [onSelect, selectedId]);
   return <UserSearchSelect useFormMethods={form} showYourself showAi maxUsers={1} />;
