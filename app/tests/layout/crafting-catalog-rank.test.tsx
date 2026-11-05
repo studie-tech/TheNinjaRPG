@@ -5,6 +5,7 @@ import * as client from "@/app/_trpc/client";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as combatActions from "@/layout/CombatActions";
+import * as contentImage from "@/layout/ContentImage";
 import { CraftingCatalog } from "@/layout/CraftingCatalog";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as modal from "@/layout/Modal";
@@ -225,6 +226,9 @@ describe("CraftingCatalog crafting rank gate", () => {
   });
 
   it("keeps a rarity-framed material icon inside its own row", () => {
+    vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
+      <span>{alt} art</span>
+    ));
     const material = {
       id: "material",
       name: "Sun Petal",
@@ -248,9 +252,8 @@ describe("CraftingCatalog crafting rank gate", () => {
     fireEvent.click(view.getByRole("button", { name: item.name }));
 
     // ContentImage positions its art absolutely over the rarity frame.
-    const art = view.getAllByAltText("Sun Petal").at(-1);
-    const positionedArt = art?.closest(".absolute");
-    expect(positionedArt?.parentElement?.className).toContain("relative");
-    expect(positionedArt?.parentElement?.className).toContain("h-8 w-8");
+    const wrapper = view.getByText("Sun Petal art").parentElement;
+    expect(wrapper?.className).toContain("relative");
+    expect(wrapper?.className).toContain("h-8 w-8");
   });
 });
