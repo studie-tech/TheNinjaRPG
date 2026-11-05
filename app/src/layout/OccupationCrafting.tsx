@@ -640,7 +640,7 @@ export default function OccupationCrafting() {
                         <p className="mb-2 text-muted-foreground text-sm">
                           Only crystals compatible with{" "}
                           <strong>{selectedImbuableItem.item?.itemType}</strong> items
-                          are shown.
+                          are shown. PvE-only crystals require a PvE-only item.
                         </p>
                         <ActionSelector
                           items={crystals
