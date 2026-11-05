@@ -90,7 +90,7 @@ import {
   getRewardPickCount,
   isRewardChoiceQuest,
 } from "@/libs/rewardChoice";
-import { collapseRewards } from "@/libs/rewards";
+import { collapseRewards, mergeMaterialDrops } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
@@ -531,6 +531,7 @@ export const getReward = (
         if (objective.reward_sage_modes) {
           rawRewards.reward_sage_modes.push(...objective.reward_sage_modes);
         }
+        mergeMaterialDrops(rawRewards, objective);
         if (objective.reward_rank !== "NONE") {
           rawRewards.reward_rank = objective.reward_rank;
         }
