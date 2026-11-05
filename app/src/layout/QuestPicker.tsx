@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, Gamepad2, X } from "lucide-react";
+import { CircleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,7 +9,6 @@ import type { QuestType } from "@/drizzle/constants";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
 import Accordion from "@/layout/Accordion";
-import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
@@ -17,9 +16,9 @@ import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import { PetTaskDispatch } from "@/layout/PetTasks";
 import { QuestTeams } from "@/layout/QuestTeams";
+import { TakeQuestButton } from "@/layout/TakeQuestButton";
 import { isPetTaskContract } from "@/libs/pets/tasks";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";
-import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialHighlightedQuestId } from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -291,68 +290,25 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                               completion or abandonment.
                             </p>
                           )}
-                          {quest.entryRequirements.length > 0 ||
-                          quest.content.isolated ? (
-                            <Confirm
-                              title={`Start ${quest.name}?`}
-                              disabled={quest.entryRequirements.some(
-                                (required) => required.owned < required.quantity,
-                              )}
-                              button={
-                                <Button
-                                  id={`tutorial-take-quest-${quest.id}`}
-                                  disabled={quest.entryRequirements.some(
-                                    (required) => required.owned < required.quantity,
-                                  )}
-                                >
-                                  <Gamepad2 className="mr-1 h-6 w-6" />
-                                  Take Quest
-                                </Button>
-                              }
-                              onAccept={() =>
-                                startQuest({
-                                  questId: quest.id,
-                                  userSector: userData.sector,
-                                  supportsAnnouncements: true,
-                                })
-                              }
-                            >
-                              {quest.entryRequirements.length > 0 && (
-                                <span className="block">
-                                  Entering costs{" "}
-                                  <strong>
-                                    {formatQuestEntryCost(
-                                      quest.entryRequirements.map((required) => ({
-                                        quantity: required.quantity,
-                                        name:
-                                          itemNames?.find(
-                                            (item) => item.id === required.itemId,
-                                          )?.name ?? required.name,
-                                      })),
-                                    )}
-                                  </strong>
-                                  . The items are consumed when you enter and are not
-                                  refunded on abandonment. Proceed?
-                                </span>
-                              )}
-                              {quest.content.isolated &&
-                                "Outside activities are blocked until this run is completed or abandoned."}
-                            </Confirm>
-                          ) : (
-                            <Button
-                              id={`tutorial-take-quest-${quest.id}`}
-                              onClick={() =>
-                                startQuest({
-                                  questId: quest.id,
-                                  userSector: userData.sector,
-                                  supportsAnnouncements: true,
-                                })
-                              }
-                            >
-                              <Gamepad2 className="mr-1 h-6 w-6" />
-                              Take Quest
-                            </Button>
-                          )}
+                          <TakeQuestButton
+                            quest={quest}
+                            entryCost={quest.entryRequirements.map((required) => ({
+                              quantity: required.quantity,
+                              name:
+                                itemNames?.find((item) => item.id === required.itemId)
+                                  ?.name ?? required.name,
+                            }))}
+                            disabled={quest.entryRequirements.some(
+                              (required) => required.owned < required.quantity,
+                            )}
+                            onStart={() =>
+                              startQuest({
+                                questId: quest.id,
+                                userSector: userData.sector,
+                                supportsAnnouncements: true,
+                              })
+                            }
+                          />
                           {isPetTaskContract(quest) && (
                             <PetTaskDispatch
                               questId={quest.id}
