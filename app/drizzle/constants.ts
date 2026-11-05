@@ -745,6 +745,17 @@ export const ItemTypes = [
 ] as const;
 export type ItemType = (typeof ItemTypes)[number];
 
+/** Item types that never enter combat, so they need no effects or effect assets. */
+export const NonBattleItemTypes = [
+  "MATERIAL",
+  "COOKING",
+  "CRYSTAL",
+  "FURNITURE",
+] as const satisfies readonly ItemType[];
+/** Description of a newly created item until staff replace it. */
+export const DEFAULT_ITEM_DESCRIPTION = "New item description";
+/** Shortest jutsu and bloodline description the content checks accept. */
+export const MIN_CONTENT_DESCRIPTION_LENGTH = 50;
 export const NonActionItemTypes: ItemType[] = [
   "MEAL",
   "MATERIAL",

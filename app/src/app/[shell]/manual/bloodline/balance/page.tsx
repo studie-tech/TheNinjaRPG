@@ -1,11 +1,10 @@
 "use client";
 
-import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useContentDetails } from "@/hooks/useContentDetails";
 import BloodlineBalanceFiltering, {
   getFilter,
   useFiltering,
@@ -14,15 +13,13 @@ import BloodlineFiltering, {
   getFilter as getBloodlineFilter,
   useFiltering as useBloodlineFiltering,
 } from "@/layout/BloodlineFiltering";
-import Confirm from "@/layout/Confirm";
+import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
-import ItemWithEffects from "@/layout/ItemWithEffects";
-import Link from "@/layout/Link";
+import { ContentDetailsModal } from "@/layout/ContentDetailsModal";
+import { ContentLinksCell } from "@/layout/ContentLinksCell";
 import Loader from "@/layout/Loader";
-import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
@@ -57,21 +54,12 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
   const state = useBloodlineFiltering();
   const { data: userData } = useUserData();
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedBloodlineId, setSelectedBloodlineId] = useState<string>("");
+  const details = useContentDetails();
 
   // Queries
   const { data, isPending } = api.data.getBloodlineEffectsBalanceStatistics.useQuery(
     getBloodlineFilter(state),
   );
-
-  // Bloodline details query for modal
-  const { data: bloodlineDetails, isPending: isBloodlineDetailsPending } =
-    api.bloodline.get.useQuery(
-      { id: selectedBloodlineId },
-      { enabled: !!selectedBloodlineId },
-    );
 
   // Set default effect to be damage
   useEffect(() => {
@@ -89,23 +77,12 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
         return {
           name: bloodline.name,
           links: (
-            <div className="flex items-center gap-2">
-              <Link href={`/manual/bloodline/statistics/${bloodline.id}`}>
-                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
-              {canEdit && (
-                <Link href={`/manual/bloodline/edit/${bloodline.id}`}>
-                  <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                </Link>
-              )}
-              <InfoIcon
-                className="h-4 w-4 text-muted-foreground hover:text-primary"
-                onClick={() => {
-                  setSelectedBloodlineId(bloodline.id);
-                  setIsModalOpen(true);
-                }}
-              />
-            </div>
+            <ContentLinksCell
+              type="bloodline"
+              id={bloodline.id}
+              canEdit={canEdit}
+              onInfo={() => details.open(bloodline.id)}
+            />
           ),
           rank: bloodline.rank,
           statClassification: bloodline.statClassification,
@@ -161,21 +138,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
         </div>
       )}
 
-      {/* Bloodline Details Modal */}
-      <Modal
-        title="Bloodline Details"
-        isOpen={isModalOpen}
-        setIsOpen={setIsModalOpen}
-        proceed_label={null}
-      >
-        {isBloodlineDetailsPending ? (
-          <Loader explanation="Loading bloodline details" />
-        ) : (
-          bloodlineDetails && (
-            <ItemWithEffects item={bloodlineDetails} showStatistic="bloodline" />
-          )
-        )}
-      </Modal>
+      <ContentDetailsModal type="bloodline" {...details} />
     </ContentBox>
   );
 };
@@ -192,33 +155,13 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   const filterState = useFiltering();
   const { data: userData } = useUserData();
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedBloodlineId, setSelectedBloodlineId] = useState<string>("");
+  const details = useContentDetails();
 
   // Get filter object
   const filter = getFilter(filterState);
 
   // Queries
   const { data, isPending } = api.data.getBloodlineBalanceStatistics.useQuery(filter);
-  const { data: bloodlineNames } = api.bloodline.getAllNames.useQuery();
-  const { data: bloodlineDetails, isPending: isBloodlineDetailsPending } =
-    api.bloodline.get.useQuery(
-      { id: selectedBloodlineId },
-      { enabled: !!selectedBloodlineId },
-    );
-
-  // Mutations
-  const { mutate: deleteAllData, isPending: isDeleting } =
-    api.data.deleteAllDataBattleAction.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) {
-          // Invalidate the bloodline balance statistics query to refresh the data
-          await utils.data.getBloodlineBalanceStatistics.invalidate();
-        }
-      },
-    });
 
   const utils = api.useUtils();
 
@@ -226,37 +169,18 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   const canDelete = canChangeContent(userData?.role ?? "USER");
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
-  // Create mapping from bloodline names to IDs
-  const bloodlineNameToId = useMemo(() => {
-    if (!bloodlineNames) return new Map<string, string>();
-    return new Map(bloodlineNames.map((bloodline) => [bloodline.name, bloodline.id]));
-  }, [bloodlineNames]);
-
   // Process data for table
   const tableData = data
     ?.map((entry) => {
-      const bloodlineId = bloodlineNameToId.get(entry.name);
-
       return {
         name: entry.name,
         links: (
-          <div className="flex items-center gap-2">
-            <Link href={`/manual/bloodline/statistics/${bloodlineId}`}>
-              <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-            </Link>
-            {canEdit && (
-              <Link href={`/manual/bloodline/edit/${bloodlineId}`}>
-                <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
-            )}
-            <InfoIcon
-              className="h-4 w-4 text-muted-foreground hover:text-primary"
-              onClick={() => {
-                setSelectedBloodlineId(bloodlineId ?? "");
-                setIsModalOpen(true);
-              }}
-            />
-          </div>
+          <ContentLinksCell
+            type="bloodline"
+            id={entry.bloodlineId}
+            canEdit={canEdit}
+            onInfo={() => details.open(entry.bloodlineId)}
+          />
         ),
         userCount: entry.userCount,
         totalUsage: entry.totalUsage,
@@ -299,30 +223,11 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
           {props.navTabs}
           <BloodlineBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm
-              title="Clear All Bloodline Battle Data"
-              button={
-                <Button size="icon">
-                  <Trash2 className="h-5 w-5 cursor-pointer" />
-                </Button>
-              }
-              proceed_label="Clear Data"
-              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onAccept={(e) => {
-                e.preventDefault();
-                deleteAllData({ type: "bloodline" });
-              }}
-            >
-              {isDeleting ? (
-                <Loader explanation="Deleting data" />
-              ) : (
-                <>
-                  Are you sure you want to clear all bloodline battle action data? This
-                  action cannot be undone and will reset all bloodline usage statistics.
-                  This action will be logged for future audit and review.
-                </>
-              )}
-            </Confirm>
+            <ClearBattleDataButton
+              type="bloodline"
+              label="bloodline"
+              onCleared={() => utils.data.getBloodlineBalanceStatistics.invalidate()}
+            />
           )}
         </div>
       }
@@ -335,21 +240,7 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
       {isPending && <Loader explanation="Loading data" />}
       {!isPending && tableData && <Table data={tableData} columns={columns} />}
 
-      {/* Bloodline Details Modal */}
-      <Modal
-        title="Bloodline Details"
-        isOpen={isModalOpen}
-        setIsOpen={setIsModalOpen}
-        proceed_label={null}
-      >
-        {isBloodlineDetailsPending ? (
-          <Loader explanation="Loading bloodline details" />
-        ) : (
-          bloodlineDetails && (
-            <ItemWithEffects item={bloodlineDetails} showStatistic="bloodline" />
-          )
-        )}
-      </Modal>
+      <ContentDetailsModal type="bloodline" {...details} />
     </ContentBox>
   );
 };

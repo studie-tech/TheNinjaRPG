@@ -1,9 +1,7 @@
 import { Chart as ChartJS } from "chart.js/auto";
-import { Trash2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import Confirm from "@/layout/Confirm";
+import { ClearDataConfirm } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -83,22 +81,9 @@ export const GroupedBarHistogram = <Row,>(props: GroupedBarHistogramProps<Row>) 
         <div className="flex items-center gap-2">
           {props.filter}
           {canClear && (
-            <Confirm
-              title={props.clearTitle}
-              button={
-                <Button size="icon">
-                  <Trash2 className="h-5 w-5 cursor-pointer" />
-                </Button>
-              }
-              proceed_label="Clear Data"
-              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onAccept={(e) => {
-                e.preventDefault();
-                props.onClear();
-              }}
-            >
+            <ClearDataConfirm title={props.clearTitle} onConfirm={props.onClear}>
               {props.clearText}
-            </Confirm>
+            </ClearDataConfirm>
           )}
         </div>
       }
