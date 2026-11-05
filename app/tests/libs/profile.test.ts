@@ -26,7 +26,7 @@ import {
   getPvpWinRate,
 } from "@/libs/profile";
 
-test("Confirm that level<->experience calculations are consistent", () => {
+test("calcLevel lags stored level: the experience that leaves level L still derives L", () => {
   for (const level of [
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
   ]) {

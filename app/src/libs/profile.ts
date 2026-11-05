@@ -57,9 +57,10 @@ import type { AssignableUserStats } from "@/validators/combat";
 import { assignableMasteryNames } from "@/validators/user";
 
 /**
- * Calculate the experience requirements for a given level
- * @param level - the level to calculate the requirements for
- * @returns the experience requirements for the given level
+ * Total experience needed to leave a level: `levelUpBlock` lets a user at level L level up
+ * once they hold `calcLevelRequirements(L)`.
+ * @param level - the level being left
+ * @returns the cumulative experience required to advance past `level`
  */
 export function calcLevelRequirements(level: number): number {
   const prevLvl = level - 1;
@@ -137,7 +138,11 @@ export const calcLevel = (experience: number) => {
   return Math.min(level, MAX_EXPERIENCE_LEVEL);
 };
 
-/** Elite Jonin levels come from milestones; XP still prevents level holding for other ranks. */
+/**
+ * Elite Jonin levels come from milestones; XP still prevents level holding for other ranks.
+ * Effective level lags stored level by design: `calcLevelRequirements(L)` experience allows
+ * a level-up to L + 1 and still derives level L.
+ */
 export const getEffectiveLevel = (user: {
   level: number;
   experience: number;
