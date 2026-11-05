@@ -90,15 +90,20 @@ describe("Mission Hall tiles", () => {
     expect(tile("C-rank")?.hasAttribute("disabled")).toBe(true);
   });
 
-  it("keeps the A-rank picker on type plus quests no other tile can start", () => {
+  it("keeps the A-rank picker on type plus village-locked quests of the other classifier", () => {
     render(<MissionHall userData={user()} />);
-    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime-village", "a-errand", "a-mission", "a-mission-syndicate"].sort());
-    expect(pickers["A-rank"]?.count).toBe(4);
+    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime-village", "a-mission", "a-mission-syndicate"].sort());
+    expect(pickers["A-rank"]?.count).toBe(3);
+  });
+
+  it("leaves unstartable A-rank errands off every picker", () => {
+    render(<MissionHall userData={user()} />);
+    expect(Object.values(pickers).flatMap((picker) => picker.ids)).not.toContain("a-errand");
   });
 
   it("uses crime as the type for outlaws", () => {
     render(<MissionHall userData={user({ isOutlaw: true })} />);
-    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime", "a-crime-village", "a-errand", "a-mission-syndicate"].sort());
+    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime", "a-crime-village", "a-mission-syndicate"].sort());
   });
 
   it("gives medical and PvP quests moved off the A-rank picker a home on their own tiles", () => {
