@@ -73,7 +73,7 @@ vi.mock("@radix-ui/react-use-size", () => ({
   useSize: () => ({ width: 0, height: 0 }),
 }));
 
-const { MassEffectEditor, EffectFormWrapper, ObjectiveFormWrapper } = await import("@/layout/EditContent");
+const { MassEffectEditor, EffectFormWrapper, ObjectiveFormWrapper, RewardFormWrapper } = await import("@/layout/EditContent");
 const { useItemEditForm } = await import("@/hooks/item");
 const { useQuestEditForm } = await import("@/hooks/quest");
 
@@ -857,8 +857,30 @@ describe("companion reward editing", () => {
   });
 });
 
+/** Hold rewards the way the wrapper's owners do, so its draft sync settles. */
+const VillageRewardForm = () => {
+  const [rewards, setRewards] = useState([ObjectiveReward.parse({})]);
+  return <>
+    <RewardFormWrapper idx={0} reward={rewards[0]!} rewards={rewards} setRewards={setRewards} />
+    <output data-testid="village">{rewards[0]!.reward_village_membership}</output>
+  </>;
+};
+
+describe("village membership reward", () => {
+  it("offers the starter villages as a selector and keeps the chosen key", async () => {
+    const view = render(<VillageRewardForm />);
+    const field = view.getByText("Village Membership").closest<HTMLElement>('[data-slot="form-item"]');
+    if (!field) throw new Error("Missing village membership field");
+    expect(field.querySelector("input[type=text]")).toBeNull();
+    fireEvent.click(within(field).getByRole("combobox"));
+    expect(await view.findByRole("option", { name: "SHIROHANA" })).toBeDefined();
+    fireEvent.click(view.getByRole("option", { name: "HYORIN" }));
+    await waitFor(() => expect(view.getByTestId("village").textContent).toBe("HYORIN"));
+  });
+});
+
 /** Exercise the effect form's nullable database choice through real form controls. */
-const VariantTokenDraftForm = ({ variantId }: { variantId: string | null }) => {
+const VariantTokenDraftForm =({ variantId }: { variantId: string | null }) => {
   const [effects, setEffects] = useState<ZodAllTags[]>([UnlockItemVariantTag.parse({ variantId })]);
   return <>
     <EffectFormWrapper type="item" idx={0} tag={effects[0]!} effects={effects} setEffects={setEffects} availableTags={["unlockitemvariant"]} />
