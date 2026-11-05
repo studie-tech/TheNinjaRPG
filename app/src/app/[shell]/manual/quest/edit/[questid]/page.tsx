@@ -10,6 +10,7 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   isPetTaskQuestType,
+  VILLAGE_MISSION_ONLY_TASKS,
   VILLAGE_MISSION_RANK_POINTS,
   VILLAGE_MISSION_TASKS,
 } from "@/drizzle/constants";
@@ -202,7 +203,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
               : [...allObjectiveTasks]
                   .filter(
                     (task) =>
-                      task !== "siege_operation" && task !== "combined_mission_effort",
+                      !(VILLAGE_MISSION_ONLY_TASKS as readonly string[]).includes(task),
                   )
                   .sort()
           }

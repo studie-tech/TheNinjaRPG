@@ -1,9 +1,6 @@
 "use client";
 
-import { UserRoundX } from "lucide-react";
 import { useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -16,7 +13,7 @@ import { useTaverns } from "@/hooks/useTaverns";
 import BanInfo from "@/layout/BanInfo";
 import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
 import NavTabs from "@/layout/NavTabs";
-import UserBlacklistControl from "@/layout/UserBlacklistControl";
+import { UserBlacklistPopover } from "@/layout/UserBlacklistControl";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Tavern() {
@@ -102,16 +99,7 @@ export default function Tavern() {
       topRightContent={
         <div className="flex flex-row gap-1">
           {tavernSelector}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button id="filter-bloodline">
-                <UserRoundX className="h-6 w-6 hover:text-orange-500" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] overflow-hidden p-0">
-              <UserBlacklistControl />
-            </PopoverContent>
-          </Popover>
+          <UserBlacklistPopover />
         </div>
       }
     />
