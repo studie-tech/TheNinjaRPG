@@ -123,6 +123,10 @@ export const StaffPetPotential = ({
                 maxLength={500}
                 disabled={mutation.isPending}
                 onChange={(event) => setReason(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter adds a reason line without invoking the modal confirmation.
+                  if (event.key === "Enter") event.stopPropagation();
+                }}
               />
             </>
           )}

@@ -56,18 +56,26 @@ export const usePetSpeciesEditForm = (
     resetOptions: { keepDirtyValues: true },
     resolver: zodResolver(PetSpeciesValidator),
   });
-  const [isActive, effects, aiRules, includeDefaultRules, defaultJutsuIds, rarity] =
-    useWatch({
-      control: form.control,
-      name: [
-        "isActive",
-        "effects",
-        "aiRules",
-        "includeDefaultRules",
-        "defaultJutsuIds",
-        "rarity",
-      ],
-    });
+  const [
+    isActive,
+    effects,
+    aiRules,
+    includeDefaultRules,
+    defaultJutsuIds,
+    rarity,
+    potentialMode,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "isActive",
+      "effects",
+      "aiRules",
+      "includeDefaultRules",
+      "defaultJutsuIds",
+      "rarity",
+      "potentialMode",
+    ],
+  });
   const aiProfile = useMemo(
     // Database rows and the controlled AI editor supply normalized rules, including defaults.
     () => ({
@@ -124,14 +132,26 @@ export const usePetSpeciesEditForm = (
       type: "str_array",
       values: PetPotentialModes,
     },
-    { id: "potentialValue", label: "Fixed potential (1–5)", type: "number" },
-    { id: "potentialMin", label: "Random minimum (1–5)", type: "number" },
-    { id: "potentialMax", label: "Random maximum (1–5)", type: "number" },
-    ...PET_POTENTIAL_TIERS.map((tier, index) => ({
-      id: `potentialWeights.${index}` as keyof ZodPetSpeciesType,
-      label: `${tier.title} roll weight (normalized within range)`,
-      type: "number" as const,
-    })),
+    // Invalid inactive drafts stay visible so validation never blocks a hidden field.
+    ...(potentialMode === "FIXED" || form.formState.errors.potentialValue
+      ? ([
+          { id: "potentialValue", label: "Fixed potential (1–5)", type: "number" },
+        ] as FormEntry<keyof ZodPetSpeciesType>[])
+      : []),
+    ...(potentialMode === "RANDOM" ||
+    form.formState.errors.potentialMin ||
+    form.formState.errors.potentialMax ||
+    form.formState.errors.potentialWeights
+      ? ([
+          { id: "potentialMin", label: "Random minimum (1–5)", type: "number" },
+          { id: "potentialMax", label: "Random maximum (1–5)", type: "number" },
+          ...PET_POTENTIAL_TIERS.map((tier, index) => ({
+            id: `potentialWeights.${index}` as keyof ZodPetSpeciesType,
+            label: `${tier.title} roll weight (normalized within range)`,
+            type: "number" as const,
+          })),
+        ] as FormEntry<keyof ZodPetSpeciesType>[])
+      : []),
     { id: "rarity", label: "Rarity", type: "str_array", values: PetRarities },
     { id: "role", label: "Role", type: "str_array", values: PetRoles },
     {

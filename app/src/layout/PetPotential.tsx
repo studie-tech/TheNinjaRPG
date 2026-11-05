@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,24 @@ export const PetPotential = ({
   );
   const remaining = (pet.potentialValue ?? 0) - spent;
   const isDisabled = disabled || isPending;
+  const allocationSummaryRef = useRef<HTMLElement>(null);
+  const previousAllocation = useRef({ petId: pet.id, remaining });
+  useEffect(() => {
+    const summary = allocationSummaryRef.current;
+    // Keep keyboard navigation beside training when the final allocation collapses.
+    if (
+      previousAllocation.current.petId === pet.id &&
+      previousAllocation.current.remaining > 0 &&
+      remaining === 0 &&
+      summary &&
+      !summary.closest("[hidden]") &&
+      (document.activeElement === document.body ||
+        summary.parentElement?.contains(document.activeElement))
+    ) {
+      summary.focus();
+    }
+    previousAllocation.current = { petId: pet.id, remaining };
+  }, [pet.id, remaining]);
   return (
     <ContentBox
       title="Companion potential"
@@ -53,7 +71,7 @@ export const PetPotential = ({
       <div className="space-y-4">
         <p>
           {tier
-            ? `${tier.title} · ${tier.value} PV · ${tier.hpCap.toLocaleString()} maximum battle HP · ${remaining} unallocated points`
+            ? `${tier.title} · ${tier.value} PV · ${tier.hpCap.toLocaleString()} maximum battle HP`
             : "Potential unrevealed. Your companion can still train, evolve and battle."}
         </p>
         {!tier && (
@@ -90,127 +108,150 @@ export const PetPotential = ({
             </Confirm>
           </>
         )}
-        <p className="text-muted-foreground text-sm">
-          Each point adds {PET_POTENTIAL_STAT_BONUS.toLocaleString()} to one stat cap.
-          Multiple points can go into the same stat. Allocations are permanent.
-        </p>
         {tier && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {CombatStatNames.map((stat) => (
-              <Confirm
-                key={stat}
-                title={`Increase ${stat} cap`}
-                disabled={isDisabled || remaining <= 0}
-                button={
-                  <Button
-                    variant="outline"
-                    className="w-full capitalize"
+          <details open={remaining > 0}>
+            <summary
+              ref={allocationSummaryRef}
+              className="cursor-pointer font-semibold"
+            >
+              {remaining > 0
+                ? `${remaining} potential ${remaining === 1 ? "point" : "points"} to allocate`
+                : `Potential allocations · ${spent} / ${tier.value} PV assigned`}
+            </summary>
+            <div className="mt-3 space-y-3">
+              <p className="text-muted-foreground text-sm">
+                Each point adds {PET_POTENTIAL_STAT_BONUS.toLocaleString()} to one stat
+                cap. Multiple points can go into the same stat. Allocations are
+                permanent.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {CombatStatNames.map((stat) => (
+                  <Confirm
+                    key={stat}
+                    title={`Increase ${stat} cap`}
                     disabled={isDisabled || remaining <= 0}
+                    button={
+                      <Button
+                        variant="outline"
+                        className="w-full capitalize"
+                        disabled={isDisabled || remaining <= 0}
+                      >
+                        {stat} · {pet.potentialAllocations[stat] ?? 0} PV
+                      </Button>
+                    }
+                    onAccept={() => allocate.mutate({ petId: pet.id, stat })}
                   >
-                    {stat} · {pet.potentialAllocations[stat] ?? 0} PV
-                  </Button>
-                }
-                onAccept={() => allocate.mutate({ petId: pet.id, stat })}
-              >
-                <p>
-                  Permanently spend one point on {pet.name}&apos;s {stat} cap (+
-                  {PET_POTENTIAL_STAT_BONUS.toLocaleString()}). This does not grant
-                  trained stats.
-                </p>
-              </Confirm>
-            ))}
-          </div>
-        )}
-        <div className="space-y-2 border-t pt-4">
-          <h3 className="font-semibold">Transfer assigned experience</h3>
-          <p className="text-muted-foreground text-sm">
-            Move up to {PET_EXPERIENCE_TRANSFER_MAX_PERCENT}% of {pet.name}&apos;s
-            assigned XP to another companion of the same species for{" "}
-            {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()} ryo. Source stats decrease
-            proportionally; its evolution and artwork stay. The destination receives
-            unused XP to train within its own caps. Both companions are kept.
-          </p>
-          {!destinations.length ? (
-            <p className="text-sm">
-              Adopt another companion of this species to transfer experience.
-            </p>
-          ) : (
-            <>
-              <Label htmlFor={`pet-transfer-destination-${pet.id}`}>
-                Destination companion
-              </Label>
-              <select
-                className="bg-background w-full rounded border p-2"
-                id={`pet-transfer-destination-${pet.id}`}
-                value={destinationId}
-                disabled={isDisabled}
-                onChange={(event) => setDestinationId(event.target.value)}
-              >
-                <option value="">Choose destination</option>
-                {destinations.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.name} ·{" "}
-                    {entry.potentialValue === null
-                      ? "Unrevealed"
-                      : getPetPotentialTier(entry.potentialValue).title}
-                  </option>
-                ))}
-              </select>
-              <Label htmlFor={`pet-transfer-amount-${pet.id}`}>
-                Assigned XP to move (maximum {maxTransfer.toLocaleString()})
-              </Label>
-              <NumberInput
-                id={`pet-transfer-amount-${pet.id}`}
-                min={1}
-                max={maxTransfer}
-                step={1}
-                value={amountText}
-                disabled={isDisabled}
-                onTextChange={setAmountText}
-              />
-              {destination &&
-                Number.isSafeInteger(amount) &&
-                amount > 0 &&
-                amount <= maxTransfer && (
-                  <>
-                    <p className="text-sm">
-                      {pet.name}: {pet.experience.toLocaleString()} →{" "}
-                      {(pet.experience - amount).toLocaleString()} assigned XP.{" "}
-                      {destination.name}: +{amount.toLocaleString()} unused XP. XP lost:
-                      0. Cost: {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()} ryo.
+                    <p>
+                      Permanently spend one point on {pet.name}&apos;s {stat} cap (+
+                      {PET_POTENTIAL_STAT_BONUS.toLocaleString()}). This does not grant
+                      trained stats.
                     </p>
-                    <Confirm
-                      title={`Transfer from ${pet.name} to ${destination.name}`}
-                      disabled={isDisabled}
-                      button={
-                        <Button disabled={isDisabled}>
-                          {transfer.isPending
-                            ? "Transferring..."
-                            : "Transfer experience"}
-                        </Button>
-                      }
-                      onAccept={() =>
-                        transfer.mutate({
-                          petId: pet.id,
-                          destinationPetId: destination.id,
-                          amount,
-                        })
-                      }
-                    >
-                      <p>
-                        Move {amount.toLocaleString()} assigned XP from {pet.name} to{" "}
-                        {destination.name}&apos;s unused XP bank and pay{" "}
-                        {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()} ryo. {pet.name}
-                        &apos;s trained stats will decrease proportionally. This
-                        transfer can only be reversed by paying for another eligible
-                        transfer.
+                  </Confirm>
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
+        <details className="border-t pt-3">
+          <summary className="cursor-pointer font-semibold">
+            Transfer assigned experience
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-muted-foreground text-sm">
+              Move up to {PET_EXPERIENCE_TRANSFER_MAX_PERCENT}% of {pet.name}&apos;s
+              assigned XP to another companion of the same species for{" "}
+              {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()} ryo. Source stats decrease
+              proportionally; its evolution and artwork stay. The destination receives
+              unused XP to train within its own caps. Both companions are kept.
+            </p>
+            {!destinations.length ? (
+              <p className="text-sm">
+                Adopt another companion of this species to transfer experience.
+              </p>
+            ) : maxTransfer < 1 ? (
+              <p className="text-sm">
+                Assign experience to this companion before transferring it.
+              </p>
+            ) : (
+              <>
+                <Label htmlFor={`pet-transfer-destination-${pet.id}`}>
+                  Destination companion
+                </Label>
+                <select
+                  className="bg-background w-full rounded border p-2"
+                  id={`pet-transfer-destination-${pet.id}`}
+                  value={destinationId}
+                  disabled={isDisabled}
+                  onChange={(event) => setDestinationId(event.target.value)}
+                >
+                  <option value="">Choose destination</option>
+                  {destinations.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name} ·{" "}
+                      {entry.potentialValue === null
+                        ? "Unrevealed"
+                        : getPetPotentialTier(entry.potentialValue).title}
+                    </option>
+                  ))}
+                </select>
+                <Label htmlFor={`pet-transfer-amount-${pet.id}`}>
+                  Assigned XP to move (maximum {maxTransfer.toLocaleString()})
+                </Label>
+                <NumberInput
+                  id={`pet-transfer-amount-${pet.id}`}
+                  min={1}
+                  max={maxTransfer}
+                  step={1}
+                  value={amountText}
+                  disabled={isDisabled}
+                  onTextChange={setAmountText}
+                />
+                {destination &&
+                  Number.isSafeInteger(amount) &&
+                  amount > 0 &&
+                  amount <= maxTransfer && (
+                    <>
+                      <p className="text-sm">
+                        {pet.name}: {pet.experience.toLocaleString()} →{" "}
+                        {(pet.experience - amount).toLocaleString()} assigned XP.{" "}
+                        {destination.name}: +{amount.toLocaleString()} unused XP. XP
+                        lost: 0. Cost: {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()}{" "}
+                        ryo.
                       </p>
-                    </Confirm>
-                  </>
-                )}
-            </>
-          )}
-        </div>
+                      <Confirm
+                        title={`Transfer from ${pet.name} to ${destination.name}`}
+                        disabled={isDisabled}
+                        button={
+                          <Button disabled={isDisabled}>
+                            {transfer.isPending
+                              ? "Transferring..."
+                              : "Transfer experience"}
+                          </Button>
+                        }
+                        onAccept={() =>
+                          transfer.mutate({
+                            petId: pet.id,
+                            destinationPetId: destination.id,
+                            amount,
+                          })
+                        }
+                      >
+                        <p>
+                          Move {amount.toLocaleString()} assigned XP from {pet.name} to{" "}
+                          {destination.name}&apos;s unused XP bank and pay{" "}
+                          {PET_EXPERIENCE_TRANSFER_COST.toLocaleString()} ryo.{" "}
+                          {pet.name}
+                          &apos;s trained stats will decrease proportionally. This
+                          transfer can only be reversed by paying for another eligible
+                          transfer.
+                        </p>
+                      </Confirm>
+                    </>
+                  )}
+              </>
+            )}
+          </div>
+        </details>
         {allocate.isPending && (
           <p role="status" className="text-sm">
             Allocating potential point...
