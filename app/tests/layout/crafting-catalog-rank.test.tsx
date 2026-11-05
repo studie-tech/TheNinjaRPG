@@ -223,4 +223,34 @@ describe("CraftingCatalog crafting rank gate", () => {
         .disabled,
     ).toBe(false);
   });
+
+  it("keeps a rarity-framed material icon inside its own row", () => {
+    const material = {
+      id: "material",
+      name: "Sun Petal",
+      rarity: "RARE",
+      image: "https://example.com/sun-petal.png",
+    };
+    const item = makeItem("COMMON");
+    item.craftingRequirements = [
+      { quantity: 1, requirementItemId: material.id, requirementItem: material },
+    ] as unknown as CraftableItem["craftingRequirements"];
+    const view = render(
+      <CraftingCatalog
+        craftableItems={[item]}
+        userItems={userItems}
+        userData={apprentice}
+        isBusy={false}
+        isQueueFull={false}
+      />,
+    );
+    fireEvent.click(view.getByText("Weapons"));
+    fireEvent.click(view.getByRole("button", { name: item.name }));
+
+    // ContentImage positions its art absolutely over the rarity frame.
+    const art = view.getAllByAltText("Sun Petal").at(-1);
+    const positionedArt = art?.closest(".absolute");
+    expect(positionedArt?.parentElement?.className).toContain("relative");
+    expect(positionedArt?.parentElement?.className).toContain("h-8 w-8");
+  });
 });
