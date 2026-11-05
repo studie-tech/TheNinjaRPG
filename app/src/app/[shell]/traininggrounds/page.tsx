@@ -975,10 +975,7 @@ const StatsTraining: React.FC<
                         const block = !canAttemptAwakeAction(userData)
                           ? actionStatusMessage(userData.status)
                           : session.stat
-                            ? (queuedMasteryStartBlockMessage(
-                                actionPrerequisiteUser(userData),
-                                entry,
-                              ) ??
+                            ? (queuedMasteryStartBlockMessage(userData, entry) ??
                               (masteryEntries.length >= getQueueWaitingSlots(userData)
                                 ? `${kind === "ELEMENT" ? "Elemental" : "Mastery"} queue is full`
                                 : null))
