@@ -108,6 +108,13 @@ describe("shopItemPrices", () => {
     ]);
   });
 
+  it("prices a stack the way the purchase charges it", () => {
+    expect(shopItemPrices({ cost: 45, repsCost: 2, seichiSilverCost: 0 }, 0.9, 3)).toEqual([
+      { currency: "ryo", amount: 122 },
+      { currency: "rep", amount: 6 },
+    ]);
+  });
+
   it("rounds discounted ryo up, as the purchase does", () => {
     expect(shopItemPrices({ cost: 45, repsCost: 0, seichiSilverCost: 0 }, 0.9)).toEqual([
       { currency: "ryo", amount: 41 },
@@ -121,15 +128,14 @@ describe("missingForPrices", () => {
     expect(missingForPrices([{ currency: "rep", amount: 5 }], wallet)).toEqual([]);
   });
 
-  it("says how much of each currency is missing for the quantity", () => {
+  it("says how much of each currency is missing", () => {
     expect(
       missingForPrices(
         [
-          { currency: "ryo", amount: 600 },
-          { currency: "rep", amount: 5 },
+          { currency: "ryo", amount: 1_800 },
+          { currency: "rep", amount: 15 },
         ],
         wallet,
-        3,
       ),
     ).toEqual([
       { currency: "ryo", amount: 800 },
