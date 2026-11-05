@@ -1,11 +1,12 @@
 import { Container, Matrix, Sprite, Texture } from "pixi.js";
+import { textureGroundContact } from "@/libs/rendering/assets";
 import {
   type BakedShadowAtlas,
   bakedShadowBounds,
   bakedShadowKey,
   bakedShadowTransform,
   hasBakedShadow,
-  placeBakedShadowPair,
+  placeBakedShadow,
 } from "@/libs/rendering/bakedShadowAtlas";
 import {
   createCharacterShadowPoses,
@@ -64,8 +65,10 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   base.container.addChildAt(localGround, 1);
   const poses = createCharacterShadowPoses();
   const buildings = new Set<Building>();
+  const buildingBySource = new WeakMap<Sprite, Building>();
   const scenery = new Set<{
     source: Sprite;
+    contact: { x: number; y: number };
     shadows: Sprite[];
     selected: WeightedLight[];
     atlas: BakedShadowAtlas | null;
@@ -114,24 +117,24 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
     cache.set(node, matrix);
     return matrix;
   };
-  const pair = (target = ground) =>
-    Array.from({ length: 2 }, () => {
-      const sprite = new Sprite(Texture.EMPTY);
-      sprite.tint = 0x14202a;
-      sprite.visible = false;
-      target.addChild(sprite);
-      return sprite;
-    });
+  /** Each active light owns one ground-layer silhouette. */
+  const shadowSprite = (target = ground) => {
+    const sprite = new Sprite(Texture.EMPTY);
+    sprite.tint = 0x14202a;
+    sprite.visible = false;
+    target.addChild(sprite);
+    return sprite;
+  };
   const place = (
     building: Building,
-    sprites: Sprite[],
+    sprite: Sprite,
     x: number,
     y: number,
     opacity: number,
   ) => {
     const atlas = building.atlas;
     if (!atlas) return;
-    placeBakedShadowPair(sprites, atlas, building.shadowPose, x, y, opacity);
+    placeBakedShadow(sprite, atlas, building.shadowPose, x, y, opacity);
   };
   const removeLighting = (source: Sprite) => {
     overlays.get(source)?.destroy();
@@ -179,6 +182,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       const root = character ?? source;
       let record = characters.get(root);
       if (!record) {
+        const contact = character ? null : textureGroundContact(source.texture);
         // A sun silhouette and two lamp silhouettes overlap through twilight.
         const shadows = Array.from({ length: 3 }, () => {
           const sprite = new Sprite(Texture.EMPTY);
@@ -196,8 +200,10 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
           selected: [],
           key: "",
           foot: {
-            x: 0,
-            y: character ? 28 / 64 : source.texture.orig.height * (1 - source.anchor.y),
+            x: contact ? contact.x - source.anchor.x * source.texture.orig.width : 0,
+            y: contact
+              ? contact.y - source.anchor.y * source.texture.orig.height
+              : 28 / 64,
           },
         };
         characters.set(root, record);
@@ -217,16 +223,26 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         { ready: Promise.resolve() },
       );
     }
+    const baked = hasBakedShadow(source.texture, description);
     let fallback = base.register(source, description, textures, character, owner);
     if (
       owner &&
       description.shadowCaster &&
       !description.small &&
-      (!hasBakedShadow(source.texture, description) ||
-        description.shadowCaster !== "building")
+      (!baked || description.shadowCaster !== "building")
     ) {
       const record = {
         source,
+        contact:
+          !baked &&
+          (description.shadowCaster === "canopy" ||
+            description.shadowCaster === "conifer" ||
+            description.shadowCaster === "column")
+            ? textureGroundContact(source.texture)
+            : {
+                x: source.anchor.x * source.texture.orig.width,
+                y: source.texture.orig.height,
+              },
         shadows: [] as Sprite[],
         selected: [] as WeightedLight[],
         atlas: null as BakedShadowAtlas | null,
@@ -239,7 +255,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       };
       scenery.add(record);
       dirty = true;
-      const sceneryAtlas = hasBakedShadow(source.texture, description)
+      const sceneryAtlas = baked
         ? base.acquireAtlas(bakedShadowKey(source.texture, description))
         : null;
       if (sceneryAtlas)
@@ -251,7 +267,19 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
             dirty = true;
             game.invalidate();
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!scenery.has(record) || disposed) return;
+            if (
+              description.shadowCaster === "canopy" ||
+              description.shadowCaster === "conifer" ||
+              description.shadowCaster === "column"
+            )
+              record.contact = textureGroundContact(source.texture);
+            for (const shadow of record.shadows) shadow.destroy();
+            record.shadows = [];
+            dirty = true;
+            game.invalidate();
+          });
       const baseRelease = fallback;
       const release = () => {
         scenery.delete(record);
@@ -284,7 +312,7 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       !(description.worldMaterial || worldAssetSource(description.image))
     )
       return fallback;
-    if (!hasBakedShadow(source.texture, description))
+    if (!baked)
       return Object.assign(
         () => {
           fixtures.delete(source);
@@ -300,13 +328,15 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       shadowPose: new Matrix(),
       height: 0,
       atlas: null,
-      sun: pair(),
-      lamps: [pair(localGround), pair(localGround)],
+      pending: true,
+      sun: shadowSprite(),
+      lamps: [shadowSprite(localGround), shadowSprite(localGround)],
       selected: [],
       active: true,
       fallback,
     };
     buildings.add(building);
+    buildingBySource.set(source, building);
     const key = bakedShadowKey(source.texture, description);
     const atlasLease = base.acquireAtlas(key);
     const resource = settleAtlas(atlasLease.resource);
@@ -314,12 +344,15 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       .then((atlas) => {
         if (!building.active || disposed) return;
         building.atlas = atlas;
+        building.pending = false;
         fallback();
         installLighting(source, description, atlas);
         dirty = true;
         game.invalidate();
       })
       .catch((error) => {
+        building.pending = false;
+        if (!disposed) game.invalidate();
         if (!disposed && error?.name !== "AbortError")
           console.warn(
             "Baked building lighting unavailable; retaining projected shadows",
@@ -330,10 +363,10 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       () => {
         building.active = false;
         buildings.delete(building);
+        if (buildingBySource.get(source) === building) buildingBySource.delete(source);
         fallback();
         atlasLease.release();
-        for (const sprite of [...building.sun, ...building.lamps.flat()])
-          sprite.destroy();
+        for (const sprite of [building.sun, ...building.lamps]) sprite.destroy();
         removeLighting(source);
         dirty = true;
         fixtures.delete(source);
@@ -360,6 +393,29 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
   return {
     ...base,
     kind: "baked" as const,
+    /**
+     * Reports whether lighting supplies a replacement for the ambient contact ellipse.
+     * Pending keeps it until the bake settles; failed or unsupported replacements preserve it.
+     */
+    contactShadowReplacement: (
+      source: Sprite | undefined,
+      description: WorldSpriteDescription,
+      owner?: Container,
+    ) => {
+      if (
+        !description.shadowCaster ||
+        description.shadowCaster === "character" ||
+        description.small ||
+        description.mask ||
+        description.unlit
+      )
+        return "preserve";
+      if (description.shadowCaster === "building") {
+        const building = source ? buildingBySource.get(source) : undefined;
+        return building?.atlas ? "replace" : building?.pending ? "pending" : "preserve";
+      }
+      return owner ? "replace" : "preserve";
+    },
     /** Load a matching pool ahead of scenery; unknown or failed bakes leave fixture fallback available. */
     preloadField: (sceneKey: string, position: { x: number; y: number }) => {
       const key = `${sceneKey}:${position.x}:${position.y}`;
@@ -532,8 +588,12 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
         for (const record of scenery) {
           const m = origin(record.source, matrices);
           const foot = m.apply({
-            x: 0,
-            y: record.source.texture.orig.height * (1 - record.source.anchor.y),
+            x:
+              record.contact.x -
+              record.source.anchor.x * record.source.texture.orig.width,
+            y:
+              record.contact.y -
+              record.source.anchor.y * record.source.texture.orig.height,
           });
           record.selected = strongestShadowLights(
             lights.filter((l) => l.owner !== record.source),
@@ -700,17 +760,15 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               texture = record.source.texture,
               height = record.height,
               foot = record.foot;
-            if (
-              record.shadows.length !== (record.atlas ? 4 : 2) &&
-              record.selected.length
-            ) {
+            if (record.shadows.length !== 2 && record.selected.length) {
               for (const shadow of record.shadows) shadow.destroy();
-              record.shadows = record.atlas
-                ? [...pair(localGround), ...pair(localGround)]
-                : pair(localGround);
+              record.shadows = [shadowSprite(localGround), shadowSprite(localGround)];
               for (const shadow of record.shadows) {
                 shadow.texture = texture;
-                shadow.anchor.set(record.source.anchor.x, 1);
+                shadow.anchor.set(
+                  record.contact.x / record.source.texture.orig.width,
+                  record.contact.y / record.source.texture.orig.height,
+                );
                 shadow.label = "baked-scenery-local-shadow";
               }
             }
@@ -718,8 +776,8 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
               const pose = bakedShadowTransform(record.atlas, record.source, m);
               for (let i = 0; i < 2; i++) {
                 const selected = record.selected[i];
-                placeBakedShadowPair(
-                  record.shadows.slice(i * 2, i * 2 + 2),
+                placeBakedShadow(
+                  record.shadows[i],
                   record.atlas,
                   pose,
                   (selected?.light.x ?? foot.x) - foot.x,
@@ -882,8 +940,9 @@ type Building = {
   shadowPose: Matrix;
   height: number;
   atlas: BakedShadowAtlas | null;
-  sun: Sprite[];
-  lamps: Sprite[][];
+  pending: boolean;
+  sun: Sprite;
+  lamps: Sprite[];
   selected: WeightedLight[];
   active: boolean;
   fallback: () => void;

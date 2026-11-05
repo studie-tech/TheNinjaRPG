@@ -211,7 +211,8 @@ export const resolveWorldDecoration = (
     woodlandByKey.get(stockDecorationArt[asset.key] ?? "");
   if (
     !replacement ||
-    asset.filepath !== DECORATION_ASSETS_BY_KEY.get(asset.key)?.filepath
+    decorationSourceKey(asset.filepath) !==
+      decorationSourceKey(DECORATION_ASSETS_BY_KEY.get(asset.key)?.filepath ?? "")
   )
     return asset;
   return {
@@ -223,6 +224,14 @@ export const resolveWorldDecoration = (
     windAffected: replacement.windAffected ?? asset.key.startsWith("tree."),
     randomRotation: false,
   };
+};
+
+/** Stock file keys identify the same upload across CDN aliases, renditions and optional image suffixes. */
+const decorationSourceKey = (image: string) => {
+  const source = transformImageUrl(image).split(/[?#]/)[0] ?? image;
+  return isBunnyCdnUrl(source)
+    ? source.replace(/(\/f\/[a-zA-Z0-9_-]+)\.(?:webp|png|jpe?g)$/i, "$1")
+    : source;
 };
 
 const DECORATION_HEIGHTS: Record<string, number> = {

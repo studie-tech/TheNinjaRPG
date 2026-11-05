@@ -224,6 +224,27 @@ describe("travel actor artwork loading", () => {
     expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
     expect(figure.width / figure.height).toBeCloseTo(0.5);
   });
+  it("sorts a loaded NPC by its visible feet after transparent padding and sector offsets", async () => {
+    const pixels = new Uint8Array(4 * 8 * 4);
+    for (let y = 1; y < 6; y++) for (let x = 1; x < 3; x++) pixels[(y * 4 + x) * 4 + 3] = 255;
+    const texture = new Texture({source:new BufferImageSource({resource:pixels,width:4,height:8})});
+    vi.spyOn(Assets,"load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const {actors, snapshot, stage, depth} = fixture();
+    actors.sync(snapshot([player(0,{isNpc:true,spriteAppearance:undefined,avatar:"padded-depth-npc.png"})]));
+    await settle();
+    const root = actors.container.children[0]!;
+    const figure = root.getChildByLabel("avatar",true) as Sprite;
+    const foot = figure.y + figure.scale.y * figure.texture.orig.height * (1 - figure.anchor.y);
+    // A depth crossing makes retained ordering publish the loaded avatar's ground contact.
+    const obstacle = new Container();obstacle.zIndex = (root.zIndex - root.y - foot) / 2;
+    stage.addChild(obstacle);depth.attach(obstacle);depth.sortRenderLayerChildren();
+    for (const offset of [0, 500, -200]) {
+      actors.container.y = offset;actors.animate(frame);
+      expect(root.zIndex).toBeCloseTo(-(root.y + foot + offset));
+    }
+  });
+
   it("reaches a multi-tile presence update in one still frame without replaying its path", async () => {
     const { actors, grid, snapshot } = fixture();
     const user = player(0, { longitude: 4, latitude: 4 });

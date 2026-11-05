@@ -9,7 +9,9 @@ import {
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import {
   createSceneAssets,
+  readTexturePixels,
   stabilizeNearestTexture,
+  textureGroundContact,
   textureOpaqueFrame,
 } from "@/libs/rendering/assets";
 import { worldLighting } from "@/libs/rendering/color";
@@ -64,6 +66,28 @@ export const createWorldSprites = async (
 ) => {
   const simpleLighting =
     worldShadows?.kind === "projected" || worldShadows?.kind === "baked";
+  /** Only fixed, non-character scenery can share a retained lighting owner. */
+  const sceneryOwner = (description: WorldSpriteDescription) =>
+    staticScenery && !description.motion && description.shadowCaster !== "character"
+      ? container
+      : undefined;
+  /** Lighting owns replacement state; asynchronous bakes retain grounding while pending or failed. */
+  const contactReplacement = (description: WorldSpriteDescription, source?: Sprite) =>
+    worldShadows?.kind === "baked"
+      ? worldShadows.contactShadowReplacement(
+          source,
+          description,
+          sceneryOwner(description),
+        )
+      : "preserve";
+  /** Keep ambient grounding unless the lighting provider supplies its replacement footprint. */
+  const needsContactShadow = (description: WorldSpriteDescription, source?: Sprite) =>
+    description.shadow &&
+    !(
+      description.shadowCaster &&
+      (worldShadows?.kind === "physical" ||
+        contactReplacement(description, source) === "replace")
+    );
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const views: Texture[] = [];
@@ -78,10 +102,12 @@ export const createWorldSprites = async (
     light?: Sprite;
     description: WorldSpriteDescription;
     bounds: WorldBounds;
+    groundY: number;
     motion: Awaited<ReturnType<typeof createClipTextures>> | null;
     idleTexture: Texture;
     motionFrame: number;
   }[] = [];
+  const pendingContacts = new Set<(typeof entries)[number]>();
   let disposed = false;
   let lastBrightness = Number.NaN;
   let lastDayNight: boolean | undefined;
@@ -91,6 +117,7 @@ export const createWorldSprites = async (
     disposed = true;
     for (const release of materials) release();
     materials.length = 0;
+    pendingContacts.clear();
     if (!container.destroyed)
       container.destroy({ children: true, texture: false, textureSource: false });
     for (const view of views) view.destroy(false);
@@ -165,11 +192,7 @@ export const createWorldSprites = async (
   if (
     !disposed &&
     !game.signal.aborted &&
-    descriptions.some(
-      (description) =>
-        description.shadow &&
-        !(worldShadows?.kind === "physical" && description.shadowCaster),
-    )
+    descriptions.some((description) => needsContactShadow(description))
   ) {
     shadowLease = acquireSoftShadowTexture();
     try {
@@ -186,6 +209,23 @@ export const createWorldSprites = async (
   let missing = 0;
   let shadows: Container | null = null,
     lights: Container | null = null;
+  const sourcePixels = new Map<Texture["source"], Uint8Array>();
+  /** Decode each shared sheet once per scenery load; only occupied metadata survives this batch. */
+  const readSourcePixels = (texture: Texture) => {
+    let pixels = sourcePixels.get(texture.source);
+    if (!pixels) {
+      pixels = readTexturePixels(
+        texture,
+        texture.source.pixelWidth,
+        texture.source.pixelHeight,
+      );
+      sourcePixels.set(texture.source, pixels);
+    }
+    return pixels;
+  };
+  /** Resolve occupied source-pixel bounds with the shared batch readback. */
+  const opaqueFrame = (texture: Texture) =>
+    textureOpaqueFrame(texture, () => readSourcePixels(texture));
   for (const result of settled) {
     if (result.status === "fulfilled" && result.value) {
       const { description } = result.value;
@@ -243,7 +283,7 @@ export const createWorldSprites = async (
         !description.mask &&
         !description.motion;
       if (isCharacterCutout && texture) {
-        const frame = textureOpaqueFrame(texture);
+        const frame = opaqueFrame(texture);
         const scale = sprite.scale.clone();
         // A view removes transparent margins; the adjusted anchor preserves every pixel and its mirrored pose.
         sprite.anchor.set(
@@ -264,11 +304,15 @@ export const createWorldSprites = async (
         sprite.scale.copyFrom(scale);
       }
       sprite.updateLocalTransform();
-      const characterFoot =
+      const characterContact =
         description.shadowCaster === "character" && sprite instanceof Sprite
+          ? textureGroundContact(sprite.texture, () => readSourcePixels(sprite.texture))
+          : undefined;
+      const characterFoot =
+        characterContact && sprite instanceof Sprite
           ? sprite.localTransform.apply({
-              x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
-              y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+              x: characterContact.x - sprite.anchor.x * sprite.texture.orig.width,
+              y: characterContact.y - sprite.anchor.y * sprite.texture.orig.height,
             })
           : undefined;
       const footY = character
@@ -276,6 +320,25 @@ export const createWorldSprites = async (
         : (characterFoot?.y ??
           description.entrance?.y ??
           description.y - description.size * (1 - (description.anchorY ?? 0.5)));
+      let groundY = character ? footY : (characterFoot?.y ?? description.groundY);
+      if (
+        sprite instanceof Sprite &&
+        !description.small &&
+        !description.mask &&
+        !description.unlit &&
+        !description.entrance &&
+        (description.kind === "decoration" || description.kind === "garden")
+      ) {
+        const contact = textureGroundContact(sprite.texture, () =>
+          readSourcePixels(sprite.texture),
+        );
+        // Transparent padding belongs to the artwork, not to its painter-order ground contact.
+        const foot = sprite.localTransform.apply({
+          x: contact.x - sprite.anchor.x * sprite.texture.orig.width,
+          y: contact.y - sprite.anchor.y * sprite.texture.orig.height,
+        });
+        groundY = foot.y;
+      }
       let shadow: Sprite | undefined;
       if (worldShadows && character) {
         for (const [index, layer] of character.layers.entries())
@@ -304,17 +367,16 @@ export const createWorldSprites = async (
             result.value.motion ? description : { ...description, motion: undefined },
             result.value.motion?.views,
             undefined,
-            staticScenery &&
-              !description.motion &&
-              description.shadowCaster !== "character"
-              ? container
-              : undefined,
+            sceneryOwner(description),
           ),
         );
       if (
+        needsContactShadow(
+          description,
+          sprite instanceof Sprite ? sprite : undefined,
+        ) &&
         description.shadow &&
-        shadowTexture &&
-        !(worldShadows?.kind === "physical" && description.shadowCaster)
+        shadowTexture
       ) {
         if (!shadows) {
           shadows = new Container({
@@ -363,12 +425,13 @@ export const createWorldSprites = async (
         light.blendMode = "add";
         lights.addChild(light);
       }
-      entries.push({
+      const entry: (typeof entries)[number] = {
         sprite,
         character,
         shadow,
         light,
         description,
+        groundY,
         motion: result.value.motion,
         idleTexture: texture ?? Texture.EMPTY,
         motionFrame: -1,
@@ -387,13 +450,23 @@ export const createWorldSprites = async (
           rotation: sprite.rotation,
           shearY: description.shearY,
         }),
-      });
+      };
+      entries.push(entry);
+      if (
+        shadow &&
+        contactReplacement(
+          description,
+          sprite instanceof Sprite ? sprite : undefined,
+        ) === "pending"
+      )
+        pendingContacts.add(entry);
       container.addChild(sprite);
     } else if (result.status === "rejected") {
       missing++;
       console.warn("Map scenery unavailable", result.reason);
     }
   }
+  sourcePixels.clear();
   await Promise.all(materials.map((material) => material.ready));
   if (disposed || game.signal.aborted) {
     dispose();
@@ -496,14 +569,26 @@ export const createWorldSprites = async (
           if (entry.shadow) layers.ground?.attach(entry.shadow);
           if (entry.light) layers.ground?.attach(entry.light);
         }
-        entry.sprite.zIndex = -(entry.description.groundY + offsetY);
-        if (flatGround && entry.sprite.parent === flatGround) {
-          if (layers.ground) {
-            layers.ground.attach(flatGround);
-            continue;
-          }
-          container.addChild(entry.sprite);
+        entry.sprite.zIndex = -(entry.groundY + offsetY);
+        // Ground cover stays below actors at every zoom; screen size controls only its fade.
+        if (
+          entry.description.small &&
+          layers.ground &&
+          !entry.description.mask &&
+          !entry.description.unlit
+        ) {
+          flatGround ??= new Container({
+            isRenderGroup: container.renderable,
+            label: "flat-ground",
+          });
+          if (!flatGround.parent) container.addChild(flatGround);
+          flatGround.zIndex = -offsetY;
+          if (entry.sprite.parent !== flatGround) flatGround.addChild(entry.sprite);
+          layers.ground.attach(flatGround);
+          continue;
         }
+        if (flatGround && entry.sprite.parent === flatGround)
+          container.addChild(entry.sprite);
         (entry.description.mask || entry.description.unlit
           ? layers.ui
           : layers.world
@@ -614,6 +699,26 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
+      if (disposed) return;
+      // Bakes settle after art is visible; retire replacement contacts once without frame-time decoding.
+      if (pendingContacts.size) {
+        for (const entry of pendingContacts) {
+          const replacement = contactReplacement(
+            entry.description,
+            entry.sprite instanceof Sprite ? entry.sprite : undefined,
+          );
+          if (replacement === "pending") continue;
+          pendingContacts.delete(entry);
+          if (replacement === "replace") {
+            entry.shadow?.destroy();
+            entry.shadow = undefined;
+          }
+        }
+        if (shadows && !shadows.children.length) {
+          shadows.destroy();
+          shadows = null;
+        }
+      }
       if (staticScenery && simpleLighting) {
         // Fixed scenery owns retained effect groups; viewport culling already mirrors each child's renderability.
         if (shadows) shadows.visible = game.visualEffects?.shadows !== false;
@@ -637,28 +742,6 @@ export const createWorldSprites = async (
         const [hidden, visible] = WORLD_DETAIL.groundFadePixels;
         for (const entry of groundDetails) {
           const pixels = Math.abs(entry.sprite.height) * zoom;
-          if (attached && !entry.description.mask && !entry.description.unlit) {
-            if (
-              attached.ground &&
-              pixels <=
-                (simpleLighting
-                  ? WORLD_DETAIL.projectedGroundPixels
-                  : WORLD_DETAIL.groundLightingPixels[0])
-            ) {
-              // Retained ground instructions keep actor motion from repacking flat cover.
-              flatGround ??= new Container({
-                isRenderGroup: container.renderable,
-                label: "flat-ground",
-              });
-              if (!flatGround.parent) container.addChild(flatGround);
-              flatGround.zIndex = -attached.offsetY;
-              if (entry.sprite.parent !== flatGround) flatGround.addChild(entry.sprite);
-              attached.ground.attach(flatGround);
-            } else {
-              if (entry.sprite.parent === flatGround) container.addChild(entry.sprite);
-              attached.world.attach(entry.sprite);
-            }
-          }
           const fade =
             visible > hidden
               ? Math.max(0, Math.min(1, (pixels - hidden) / (visible - hidden)))

@@ -10,17 +10,10 @@ export const SHADOW_DIRECTIONS = 8;
 const DIRECTION_STEP = (Math.PI * 2) / SHADOW_DIRECTIONS;
 const sources = published as unknown as Readonly<Record<string, BakedSource>>;
 
-/** Adjacent compass samples share unit weight, including across the last/first seam. */
-export const shadowDirectionBlend = (x: number, y: number) => {
-  const angle = (Math.atan2(y, x) + Math.PI * 2) % (Math.PI * 2);
-  const sample = angle / DIRECTION_STEP;
-  const first = Math.floor(sample) % SHADOW_DIRECTIONS;
-  return {
-    first,
-    second: (first + 1) % SHADOW_DIRECTIONS,
-    mix: sample - Math.floor(sample),
-  };
-};
+/** One complete compass mask keeps each light's silhouette joined to its authored footprint. */
+export const shadowDirectionIndex = (x: number, y: number) =>
+  (Math.round(Math.atan2(y, x) / DIRECTION_STEP) + SHADOW_DIRECTIONS) %
+  SHADOW_DIRECTIONS;
 
 /** Immutable albedo/material URLs and atlas frames invalidate stale authored bakes together. */
 export const bakedShadowKey = (
@@ -162,20 +155,24 @@ export const bakedShadowTransform = (
   const x = (atlas.width * height) / atlas.cellWidth;
   const y = (atlas.height * height) / atlas.cellHeight;
   const basis = atlas.basis;
-  const residual = pose.clone().append(new Matrix(...basis).invert());
-  const anchor = pose.apply({
-    x: -source.anchor.x * source.texture.orig.width,
-    y: -source.anchor.y * height,
-  });
+  // Remove the immutable bake basis with scalars; moving owners do not allocate inverse matrices or points.
+  const [ba, bb, bc, bd] = basis;
+  const determinant = ba * bd - bb * bc;
+  const a = (pose.a * bd - pose.c * bb) / determinant,
+    b = (pose.b * bd - pose.d * bb) / determinant,
+    c = (pose.c * ba - pose.a * bc) / determinant,
+    d = (pose.d * ba - pose.b * bc) / determinant;
+  const ax = -source.anchor.x * source.texture.orig.width,
+    ay = -source.anchor.y * height;
   const px = atlas.minX * height,
     py = -atlas.minY * height;
   return new Matrix(
-    residual.a * x,
-    residual.b * x,
-    -residual.c * y,
-    -residual.d * y,
-    anchor.x + residual.a * px + residual.c * py,
-    anchor.y + residual.b * px + residual.d * py,
+    a * x,
+    b * x,
+    -c * y,
+    -d * y,
+    pose.tx + pose.a * ax + pose.c * ay + a * px + c * py,
+    pose.ty + pose.b * ax + pose.d * ay + b * px + d * py,
   );
 };
 
@@ -184,41 +181,34 @@ export const bakedShadowBounds = (
   atlas: BakedShadowAtlas,
   pose: Matrix,
 ): WorldBounds => {
-  const frame = { width: atlas.cellWidth, height: atlas.cellHeight };
-  const corners = [
-    pose.apply({ x: 0, y: 0 }),
-    pose.apply({ x: frame.width, y: 0 }),
-    pose.apply({ x: 0, y: frame.height }),
-    pose.apply({ x: frame.width, y: frame.height }),
-  ];
+  const x = pose.a * atlas.cellWidth,
+    y = pose.b * atlas.cellWidth,
+    u = pose.c * atlas.cellHeight,
+    v = pose.d * atlas.cellHeight;
   return {
-    minX: Math.min(...corners.map((p) => p.x)),
-    maxX: Math.max(...corners.map((p) => p.x)),
-    minY: Math.min(...corners.map((p) => p.y)),
-    maxY: Math.max(...corners.map((p) => p.y)),
+    minX: pose.tx + Math.min(0, x) + Math.min(0, u),
+    maxX: pose.tx + Math.max(0, x) + Math.max(0, u),
+    minY: pose.ty + Math.min(0, y) + Math.min(0, v),
+    maxY: pose.ty + Math.max(0, y) + Math.max(0, v),
   };
 };
 
-/** Adjacent cached volume masks blend in a fixed ground frame without live geometry or texture rendering. */
-export const placeBakedShadowPair = (
-  sprites: readonly Sprite[],
+/** Select one cached volume in its fixed ground frame without blending separate cast directions. */
+export const placeBakedShadow = (
+  sprite: Sprite | undefined,
   atlas: BakedShadowAtlas,
   pose: Matrix,
   x: number,
   y: number,
   opacity: number,
 ) => {
-  const sample = shadowDirectionBlend(x, y);
-  for (const [i, sprite] of sprites.entries()) {
-    const weight = i === 0 ? 1 - sample.mix : sample.mix;
-    sprite.visible = opacity * weight > 0.0001;
-    if (!sprite.visible) continue;
-    sprite.texture =
-      atlas.views[i === 0 ? sample.first : sample.second] ?? Texture.EMPTY;
-    sprite.anchor.set(0);
-    sprite.setFromMatrix(pose);
-    sprite.alpha = opacity * weight;
-  }
+  if (!sprite) return;
+  sprite.visible = opacity > 0.0001;
+  if (!sprite.visible) return;
+  sprite.texture = atlas.views[shadowDirectionIndex(x, y)] ?? Texture.EMPTY;
+  sprite.anchor.set(0);
+  sprite.setFromMatrix(pose);
+  sprite.alpha = opacity;
 };
 
 /** Published atlas frames use pixel units; footprints and emitters are normalized by artwork height. */

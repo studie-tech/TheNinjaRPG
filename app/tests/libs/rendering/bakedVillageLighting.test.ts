@@ -1,24 +1,26 @@
+import published from "@/libs/rendering/bakedWorldSources.json";
 import { describe, expect, it, vi } from "bun:test";
-import { BufferImageSource, Container, Sprite, Texture } from "pixi.js";
+import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import * as fields from "@/libs/rendering/villageLightField";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import { shadowDirectionBlend } from "@/libs/rendering/bakedShadowAtlas";
+import { shadowDirectionIndex } from "@/libs/rendering/bakedShadowAtlas";
 import { createBakedVillageLighting, strongestShadowLights, type VillageLight } from "@/libs/rendering/bakedVillageLighting";
 
 describe("baked village shadow selection", () => {
   it.each(Array.from({ length: 8 }, (_, direction) => direction))("samples compass direction %i without requesting another texture", direction => {
     const angle = direction * Math.PI / 4;
-    const blend = shadowDirectionBlend(Math.cos(angle), Math.sin(angle));
-    expect(blend.first + blend.mix).toBeCloseTo(direction, 9);
-    expect(blend.second).toBe((blend.first + 1) % 8);
+    expect(shadowDirectionIndex(Math.cos(angle), Math.sin(angle))).toBe(direction);
   });
 
-  it("crossfades equally halfway between compass samples and wraps through east", () => {
-    const half = shadowDirectionBlend(Math.cos(Math.PI / 8), Math.sin(Math.PI / 8));
-    expect(half.first).toBe(0); expect(half.second).toBe(1); expect(half.mix).toBeCloseTo(0.5);
-    const seam = shadowDirectionBlend(1, -0.00001);
-    expect(seam.first).toBe(7); expect(seam.second).toBe(0); expect(seam.mix).toBeGreaterThan(0.999);
+  it("selects one complete silhouette between samples and wraps through east", () => {
+    for (let direction = 0; direction < 8; direction++) {
+      for (const offset of [-0.49, 0, 0.49]) {
+        const angle = (direction + offset) * Math.PI / 4;
+        expect(shadowDirectionIndex(Math.cos(angle), Math.sin(angle))).toBe(direction);
+      }
+    }
+    expect(shadowDirectionIndex(1, -0.00001)).toBe(0);
   });
 
   it("gives two equal nearby lights half the shadow opacity each", () => {
@@ -41,6 +43,34 @@ describe("baked village shadow selection", () => {
     expect(result).toHaveLength(1); expect(result[0]!.weight).toBeGreaterThan(0); expect(result[0]!.weight).toBeLessThan(0.1);
     expect(strongestShadowLights(lights, -1000, 0)).toHaveLength(0);
   });
+});
+
+it.each([false,true])("preserves building contact until its matching bake settles (failure: %s)", async failed => {
+  const cleanups:(()=>void)[]=[],world=new Container();
+  const page=new Texture({source:new BufferImageSource({resource:new Uint8Array(1024*1024*4),width:1024,height:1024})});
+  const game={renderer:{resolution:1},signal:new AbortController().signal,visualEffects:{...DEFAULT_VISUAL_EFFECTS},own:(fn:()=>void)=>cleanups.push(fn),isDisposed:()=>false,invalidate:vi.fn(),assets:{acquireTexture:()=>({resource:failed?Promise.reject(new Error("atlas unavailable")):Promise.resolve(page),release(){}})}} as unknown as GameRenderer;
+  const [image,frame,,material]=JSON.parse(Object.keys(published)[0]!);
+  const original=new Texture({source:new BufferImageSource({resource:new Uint8Array(Math.ceil(frame.x+frame.width)*Math.ceil(frame.y+frame.height)*4),width:Math.ceil(frame.x+frame.width),height:Math.ceil(frame.y+frame.height)})});
+  const view=new Texture({source:original.source,frame:new Rectangle(frame.x,frame.y,frame.width,frame.height)});
+  const source=new Sprite(view);world.addChild(source);
+  const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+  try {
+    const lighting=createBakedVillageLighting(game,world);
+    const tree={id:"tree",kind:"decoration",image:"custom-tree.png",size:40,x:0,y:0,groundY:0,shadowCaster:"canopy"} as const;
+    expect(lighting.contactShadowReplacement(source,tree,world)).toBe("replace");
+    expect(lighting.contactShadowReplacement(source,tree)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,small:true},world)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,unlit:true},world)).toBe("preserve");
+    expect(lighting.contactShadowReplacement(source,{...tree,shadowCaster:"building"},world)).toBe("preserve");
+    const building={...tree,image,worldMaterial:material,size:frame.height,preserveAspect:true,shadowCaster:"building"} as const;
+    expect(lighting.contactShadowReplacement(undefined,building,world)).toBe("preserve");
+    const release=lighting.register(source,building);
+    expect(lighting.contactShadowReplacement(source,building)).toBe("pending");
+    await new Promise(resolve=>setTimeout(resolve,0));
+    expect(lighting.contactShadowReplacement(source,building)).toBe(failed?"preserve":"replace");
+    release();expect(lighting.contactShadowReplacement(source,building)).toBe("preserve");
+    view.frame.x+=1;const unmatched=lighting.register(source,building);expect(lighting.contactShadowReplacement(source,building,world)).toBe("preserve");unmatched();
+  } finally {for(const fn of cleanups)fn();world.destroy({children:true});view.destroy(false);original.destroy(true);page.destroy(true);warning.mockRestore();}
 });
 
 describe("baked character shadow transitions", () => {
@@ -108,6 +138,28 @@ it("adds artwork-shaped local scenery shadows lazily and releases emissive fixtu
   } finally { world.destroy({ children: true }); for (const fn of cleanups) fn(); canvas.mockRestore(); }
 });
 
+
+it("anchors both local fallback shadows to an asymmetric opaque foot", () => {
+  const pixels = new Uint8Array(16*16*4);
+  for(let y=2;y<9;y++)for(let x=3;x<13;x++)pixels[(y*16+x)*4+3]=255;
+  pixels[(9*16+11)*4+3]=255;
+  const texture = new Texture({source:new BufferImageSource({resource:pixels,width:16,height:16})});
+  const cleanups:(()=>void)[]=[],world=new Container(),owner=new Container();world.addChild(owner);
+  const game={renderer:{resolution:1},signal:new AbortController().signal,visualEffects:{...DEFAULT_VISUAL_EFFECTS},own:(fn:()=>void)=>cleanups.push(fn),isDisposed:()=>false,invalidate:vi.fn()} as unknown as GameRenderer;
+  const canvas=vi.spyOn(HTMLCanvasElement.prototype,"getContext").mockReturnValue(null);
+  try {
+    const lighting=createBakedVillageLighting(game,world);world.addChild(lighting.container);
+    const tree=new Sprite(texture);tree.anchor.set(.5);tree.scale.set(2,-2);owner.addChild(tree);
+    lighting.register(tree,{id:"padded-tree",kind:"decoration",image:"padded-local-unknown.png",size:32,x:0,y:0,groundY:-16,shadowCaster:"canopy"},[],undefined,owner);
+    for(const x of [-20,20]){const lamp=new Sprite(Texture.WHITE);lamp.anchor.set(.5);lamp.width=20;lamp.height=40;lamp.scale.y*=-1;lamp.position.set(x,20);world.addChild(lamp);lighting.register(lamp,{id:`lamp:${x}`,kind:"structure",image:"custom-lamp",size:40,x,y:20,groundY:0,light:1,shadowCaster:"column"});}
+    lighting.update({x:0,y:1,z:1,day:0},{minX:-200,maxX:200,minY:-200,maxY:200});
+    const shadows=lighting.container.getChildByLabel("baked-village-local-ground")!.children.filter(child=>child.label==="baked-scenery-local-shadow") as Sprite[];
+    expect(shadows).toHaveLength(2);
+    const read=vi.spyOn(HTMLCanvasElement.prototype,"getContext");
+    for(const shadow of shadows){expect(shadow.visible).toBe(true);shadow.updateLocalTransform();const root=shadow.localTransform.apply({x:11.5-shadow.anchor.x*16,y:10-shadow.anchor.y*16});expect(root.x).toBeCloseTo(7,6);expect(root.y).toBeCloseTo(-4,6);}
+    lighting.invalidate();lighting.update({x:1,y:0,z:1,day:0},{minX:-200,maxX:200,minY:-200,maxY:200});expect(read).not.toHaveBeenCalled();read.mockRestore();
+  } finally {world.destroy({children:true});for(const fn of cleanups)fn();texture.destroy(true);canvas.mockRestore();}
+});
 
 it("retains a matching pool through cold artwork, replaces it at runtime, and clears an unknown layout", async () => {
   const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);

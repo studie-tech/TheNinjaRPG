@@ -108,34 +108,97 @@ export const readTexturePixels = (texture: Texture, width: number, height: numbe
   return new Uint8Array(context.getImageData(0, 0, width, height).data);
 };
 
-const opaqueFrames = new WeakMap<Texture, Rectangle>();
+const occupiedFrames = new WeakMap<Texture["source"], Map<string, OccupiedFrame>>();
 
-/** Character cutouts use their visible bounds as ground, without retaining a second pixel buffer. */
-export const textureOpaqueFrame = (texture: Texture) => {
-  const cached = opaqueFrames.get(texture);
-  if (cached) return cached;
+/** Occupied source-pixel bounds are shared by atlas views; readPixels supplies full-source RGBA bytes. */
+export const textureOpaqueFrame = (texture: Texture, readPixels?: () => Uint8Array) =>
+  occupiedFrame(texture, readPixels).bounds;
+
+/**
+ * Returns the weighted center of the lowest solid row in untrimmed pixels, before sprite transforms.
+ * Empty or unreadable art uses its frame's bottom center; readPixels supplies full-source RGBA bytes.
+ */
+export const textureGroundContact = (
+  texture: Texture,
+  readPixels?: () => Uint8Array,
+) => {
+  const { contact } = occupiedFrame(texture, readPixels);
+  return {
+    x: contact.x - texture.frame.x + (texture.trim?.x ?? 0),
+    y: contact.y - texture.frame.y + (texture.trim?.y ?? 0),
+  };
+};
+
+/** Cache bounds and solid-foot metadata by source/frame, without retaining decoded RGBA buffers. */
+const occupiedFrame = (
+  texture: Texture,
+  readPixels?: () => Uint8Array,
+): OccupiedFrame => {
   const frame = texture.frame;
-  let result = frame;
+  const key = `${frame.x}:${frame.y}:${frame.width}:${frame.height}`;
+  let frames = occupiedFrames.get(texture.source);
+  const cached = frames?.get(key);
+  if (cached) return cached;
+  let bounds = frame.clone();
+  let contact = { x: frame.x + frame.width / 2, y: frame.bottom };
   try {
     const width = texture.source.pixelWidth,
-      pixels = readTexturePixels(texture, width, texture.source.pixelHeight);
+      pixels =
+        readPixels?.() ?? readTexturePixels(texture, width, texture.source.pixelHeight);
     let minX = frame.right,
       minY = frame.bottom,
       maxX = -1,
       maxY = -1;
-    for (let y = frame.y; y < frame.bottom; y++)
-      for (let x = frame.x; x < frame.right; x++)
-        if ((pixels[(y * width + x) * 4 + 3] ?? 0) > 0) {
+    let footY = -1,
+      footX = 0,
+      footWeight = 0;
+    // Atlas cuts can start between texels; sample integer pixels and clip the bounds to the view.
+    for (let y = Math.floor(frame.y); y < Math.ceil(frame.bottom); y++)
+      for (let x = Math.floor(frame.x); x < Math.ceil(frame.right); x++) {
+        const alpha = pixels[(y * width + x) * 4 + 3] ?? 0;
+        if (alpha > 0) {
           minX = Math.min(minX, x);
           minY = Math.min(minY, y);
           maxX = Math.max(maxX, x);
           maxY = Math.max(maxY, y);
         }
-    if (maxX >= minX && maxY >= minY)
-      result = new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        // Physical coverage uses the same half-alpha cutoff as the material/shadow passes.
+        if (alpha >= 128) {
+          if (y !== footY) {
+            footY = y;
+            footX = 0;
+            footWeight = 0;
+          }
+          footX += (x + 0.5) * alpha;
+          footWeight += alpha;
+        }
+      }
+    if (maxX >= minX && maxY >= minY) {
+      const x = Math.max(frame.x, minX),
+        y = Math.max(frame.y, minY);
+      bounds = new Rectangle(
+        x,
+        y,
+        Math.min(frame.right, maxX + 1) - x,
+        Math.min(frame.bottom, maxY + 1) - y,
+      );
+      contact = { x: bounds.x + bounds.width / 2, y: bounds.bottom };
+    }
+    if (footWeight > 0)
+      contact = {
+        x: Math.max(frame.x, Math.min(frame.right, footX / footWeight)),
+        y: Math.min(frame.bottom, footY + 1),
+      };
   } catch {
-    // Unreadable artwork remains visible with its full-frame contact point.
+    // Unreadable artwork remains visible with its declared frame contact point.
   }
-  opaqueFrames.set(texture, result);
+  const result = { bounds, contact };
+  if (!frames) {
+    frames = new Map();
+    occupiedFrames.set(texture.source, frames);
+  }
+  frames.set(key, result);
   return result;
 };
+
+type OccupiedFrame = { bounds: Rectangle; contact: { x: number; y: number } };
