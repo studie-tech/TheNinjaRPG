@@ -13,7 +13,7 @@ import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/locals
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { LEGAL_LINKS } from "@/libs/legalLinks";
+import { LEGAL_LINKS, STORE_SUBSCRIPTION_URLS } from "@/libs/legalLinks";
 import { appEvents, platform, purchases } from "@/libs/native";
 import {
   fetchFreshStoreObservation,
@@ -1133,8 +1133,8 @@ export default function NativeStore() {
             <NativeExternalLink
               href={
                 storePlatform === "ios"
-                  ? "https://apps.apple.com/account/subscriptions"
-                  : "https://play.google.com/store/account/subscriptions"
+                  ? STORE_SUBSCRIPTION_URLS.ios
+                  : STORE_SUBSCRIPTION_URLS.android
               }
             >
               Manage subscriptions

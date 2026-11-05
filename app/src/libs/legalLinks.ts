@@ -4,6 +4,12 @@ export interface LegalLink {
   target?: "_blank";
 }
 
+/** Where each store lets a player manage or cancel its subscriptions. */
+export const STORE_SUBSCRIPTION_URLS = {
+  ios: "https://apps.apple.com/account/subscriptions",
+  android: "https://play.google.com/store/account/subscriptions",
+};
+
 export const LEGAL_LINKS: LegalLink[] = [
   {
     href: "https://app.termly.io/document/terms-of-service/71d95c2f-d6eb-4e3c-b480-9f0b9bb87830",
