@@ -120,7 +120,7 @@ describe("ShrineHall reserve boost locks", () => {
   it("does not count retired defenders against the assignment cap", () => {
     const retired = ["retired-a", "retired-b", "retired-c"];
     const view = defenders(retired, [...retired, "live-a"]);
-    expect(view.getByRole<HTMLButtonElement>("button", { name: "Assign" }).disabled).toBe(
+    expect(view.getByRole("button", { name: "Assign" }).hasAttribute("disabled")).toBe(
       false,
     );
     expect(view.queryByText(/Maximum defenders assigned/)).toBeNull();
@@ -130,7 +130,7 @@ describe("ShrineHall reserve boost locks", () => {
   it("disables assignment once live defenders fill the cap", () => {
     const live = ["live-a", "live-b", "live-c"];
     const view = defenders(live, [...live, "live-d"]);
-    expect(view.getByRole<HTMLButtonElement>("button", { name: "Assign" }).disabled).toBe(
+    expect(view.getByRole("button", { name: "Assign" }).hasAttribute("disabled")).toBe(
       true,
     );
     expect(view.getByText(/Maximum defenders assigned/)).toBeTruthy();
