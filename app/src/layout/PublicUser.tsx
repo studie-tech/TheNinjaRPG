@@ -82,6 +82,7 @@ import {
   type UserStatus,
 } from "@/drizzle/constants";
 import type { Badge, UserBadge, UserRank } from "@/drizzle/schema";
+import { useLazyChart } from "@/hooks/useLazyChart";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import ActionLogs from "@/layout/ActionLog";
 import ActionLogFiltering, {
@@ -110,7 +111,12 @@ import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
+import {
+  canAttackBracket,
+  formatPvpWinRate,
+  getExpBracket,
+  showUserRank,
+} from "@/libs/profile";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
@@ -1444,13 +1450,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   <p>PvP Wins: {profile.pvpWins}</p>
                   <p>PvP Losses: {profile.pvpLosses}</p>
                   <p>
-                    PvP Win Rate:{" "}
-                    {profile.pvpWins + profile.pvpLosses > 0
-                      ? (
-                          (profile.pvpWins / (profile.pvpWins + profile.pvpLosses)) *
-                          100
-                        ).toFixed(1)
-                      : "0"}
+                    PvP Win Rate: {formatPvpWinRate(profile.pvpWins, profile.pvpLosses)}
                     %
                   </p>
                 </>
@@ -2172,8 +2172,6 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   // State
   const chartRef = useRef<HTMLCanvasElement>(null);
   const activeLayout = useActiveLayout();
-  /** A deferred chunk can 404 after a deploy, and an empty box explains nothing. */
-  const [chartFailed, setChartFailed] = useState(false);
 
   // Query
   const { data: logEntries } = api.train.getTrainingLog.useQuery(
@@ -2212,33 +2210,14 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
     });
   }, [logEntries]);
 
-  // Create chart
-  useEffect(() => {
-    const ctx = chartRef?.current?.getContext("2d");
-    if (ctx && datasets) {
-      // chart.js/auto registers every controller so nothing tree-shakes it, and this is one
-      // tab among several on a page most visitors land on. Fetched when the log is actually
-      // drawn instead of with the page.
-      // Only destroy() is ever called on it, and chart.js's own generics do not accept the
-      // custom {x, y, entries} points this dataset uses
-      let chart: { destroy: () => void } | undefined;
-      let cancelled = false;
-      void (async () => {
-        let Chart: typeof import("chart.js/auto").Chart;
-        try {
-          Chart = (await import("chart.js/auto")).Chart;
-        } catch (error) {
-          console.error("Could not load the charting library", error);
-          if (!cancelled) setChartFailed(true);
-          return;
-        }
-        // The tab can close, or the theme change, while the import is in flight
-        if (cancelled) return;
-        // Update stats chart
-        const chartTextColor = getEffectiveThemeTextColor(activeLayout);
-        Chart.defaults.color = chartTextColor;
-        try {
-          chart = new Chart(ctx, {
+  const chartFailed = useLazyChart(
+    chartRef,
+    datasets
+      ? (Chart, canvas) => {
+          // Update stats chart
+          const chartTextColor = getEffectiveThemeTextColor(activeLayout);
+          Chart.defaults.color = chartTextColor;
+          return new Chart(canvas, {
             type: "bar",
             options: {
               maintainAspectRatio: false,
@@ -2297,19 +2276,10 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
               datasets: datasets,
             },
           });
-        } catch (error) {
-          console.error("Could not draw the training chart", error);
-          if (!cancelled) setChartFailed(true);
         }
-      })();
-
-      // Remove on unmount
-      return () => {
-        cancelled = true;
-        chart?.destroy();
-      };
-    }
-  }, [activeLayout, datasets]);
+      : null,
+    [activeLayout, datasets],
+  );
 
   return (
     <ContentBox
