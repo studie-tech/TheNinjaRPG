@@ -61,7 +61,8 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       level: userData?.level ?? 0,
       questType: props.questType,
     },
-    { enabled: !!userData },
+    // Owned counts gate the button, and inventory changes elsewhere leave this list cached.
+    { enabled: !!userData, refetchOnMount: "always" },
   );
 
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {

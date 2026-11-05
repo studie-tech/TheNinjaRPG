@@ -34,7 +34,8 @@ export function PyramidMode() {
 
   const { data: towers } = api.quests.specificQuests.useQuery(
     { level: userData?.level ?? 0, questType: "battlepyramid" },
-    { enabled: !!userData },
+    // Owned counts gate the button, and inventory changes elsewhere leave this list cached.
+    { enabled: !!userData, refetchOnMount: "always" },
   );
   const { data: upcoming } = api.quests.upcomingQuests.useQuery(
     { questType: "battlepyramid" },
