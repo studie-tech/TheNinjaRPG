@@ -40,7 +40,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
+import {
+  type ContentType,
+  type IMG_ORIENTATION,
+  STARTER_VILLAGES,
+} from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
@@ -3016,6 +3020,10 @@ const rewardCatalogFormEntry = <K extends string | number | symbol>(
   }
   if (catalog) {
     return { id: field, values: catalog, multiple: true, label, type: "db_values" };
+  }
+  // Stored as a starter-village key rather than an id, so the schema's enum is the catalog.
+  if (id === "reward_village_membership") {
+    return { id: field, values: STARTER_VILLAGES, label, type: "str_array" };
   }
   return undefined;
 };
