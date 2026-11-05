@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as contentImage from "@/layout/ContentImage";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -13,7 +13,7 @@ beforeEach(() => {
   for (const key of browserGlobals)
     Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   vi.spyOn(userContext, "useUserData").mockReturnValue({ data: undefined } as never);
-  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
+  vi.spyOn(contentImage, "default").mockImplementation(({ alt, onClick }) => <img alt={`${alt} art`} onClick={onClick} />);
 });
 
 afterEach(() => {
@@ -37,19 +37,23 @@ const fireball = {
   actionCostPerc: 60,
 };
 
-const renderActions = (combatMode: boolean, small = true) => {
+const renderActions = (combatMode: boolean, small = true, item = fireball, userActionPoints?: number) => {
   const layout = battleActionGrid({ focus: true, small });
-  return render(
+  const onClick = vi.fn();
+  const view = render(
     <ActionSelector
-      items={[fireball] as never}
+      items={[item] as never}
       showBgColor={false}
       showLabels={layout.labels}
       gridClassNameOverwrite={layout.grid}
       aspectRatioClass={layout.aspect}
       combatMode={combatMode}
-      onClick={vi.fn()}
+      currentRound={2}
+      userActionPoints={userActionPoints}
+      onClick={onClick}
     />,
   );
+  return { ...view, onClick };
 };
 
 it.each([false, true])("shows battle focus names unless small icons are enabled (%s)", (small) => {
@@ -58,14 +62,43 @@ it.each([false, true])("shows battle focus names unless small icons are enabled 
   expect(screen.queryByRole("tooltip")).toBeNull();
 });
 
-it("names a battle action, its target, range and cost on hover", async () => {
+it("focuses a native battle action and describes its target, range and cost", async () => {
   renderActions(true);
-  fireEvent.focus(screen.getByText("Fireball art").closest("[data-state]")!);
+  const action = screen.getByRole("button", { name: "Fireball" });
+  expect(action.tagName).toBe("BUTTON");
+  expect(action.getAttribute("type")).toBe("button");
+  expect(action.tabIndex).toBe(0);
+  act(() => action.focus());
+  expect(document.activeElement).toBe(action);
   const card = await screen.findByRole("tooltip");
   expect(card.textContent).toBe("FireballTarget: other user · Range 4 · 60 AP");
 });
 
+it("selects once when the artwork or native battle control is activated", () => {
+  const { onClick } = renderActions(true);
+  fireEvent.click(screen.getByRole("img", { name: "Fireball art" }));
+  expect(onClick).toHaveBeenCalledTimes(1);
+  expect(onClick).toHaveBeenLastCalledWith("fireball");
+  fireEvent.click(screen.getByRole("button", { name: "Fireball" }));
+  expect(onClick).toHaveBeenCalledTimes(2);
+});
+
+it.each(["AP", "cooldown"])("keeps an action unavailable for %s focusable without selecting it", async (reason) => {
+  const item = reason === "cooldown" ? { ...fireball, cooldown: 3, lastUsedRound: 1 } : fireball;
+  const { onClick } = renderActions(true, true, item, reason === "AP" ? 0 : 100);
+  const action = screen.getByRole("button", { name: "Fireball" });
+  expect(action.getAttribute("aria-disabled")).toBe("true");
+  act(() => action.focus());
+  expect(document.activeElement).toBe(action);
+  expect((await screen.findByRole("tooltip")).textContent).toContain("Target: other user");
+  fireEvent.click(action);
+  expect(onClick).not.toHaveBeenCalled();
+});
+
 it("keeps loadout pickers outside battle free of hover cards", () => {
-  renderActions(false);
-  expect(screen.getByText("Fireball art").closest("[data-state]")).toBeNull();
+  const { onClick } = renderActions(false);
+  const art = screen.getByRole("img", { name: "Fireball art" });
+  expect(art.closest("[data-state]")).toBeNull();
+  fireEvent.click(art);
+  expect(onClick).toHaveBeenCalledTimes(1);
 });

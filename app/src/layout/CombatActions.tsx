@@ -303,9 +303,9 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
     effectiveActionCost !== undefined &&
     settings.userActionPoints < effectiveActionCost;
 
-  // Handler that prevents selection when AP is insufficient
+  // Keep unavailable actions unselectable for both pointer and keyboard activation.
   const handleClick = () => {
-    if (insufficientAP) return;
+    if (insufficientAP || (settings.combatMode && cooldownPerc > 0)) return;
     settings.onClick(item.id);
   };
 
@@ -320,7 +320,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
       frames={frames}
       speed={speed}
       eager={settings.eagerImages}
-      onClick={handleClick}
+      onClick={settings.combatMode ? undefined : handleClick}
     />
   );
 
@@ -352,11 +352,19 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </div>
           </div>
         ) : settings.combatMode ? (
-          // In battle, hovering names the action and its use; the help icon keeps the full details.
+          // Hover and keyboard focus describe the action; the help icon keeps the full details.
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div>{art}</div>
+                <button
+                  type="button"
+                  className="block w-full rounded-xl focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={name}
+                  aria-disabled={insufficientAP || cooldownPerc > 0}
+                  onClick={handleClick}
+                >
+                  {art}
+                </button>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-60 text-left">
                 <p className="font-bold">{name}</p>
