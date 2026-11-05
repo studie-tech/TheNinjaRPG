@@ -10,6 +10,27 @@ describeWithDatabase("crystal imbuing rank requirement", () => {
     await resetTables(userItemImbuement, userItem, item, userData);
   });
 
+  it.each(["PVP", "BOTH"] as const)("rejects PvE-only crystals on %s items", async (battleUsageType) => {
+    await insertUsers([
+      { userId: "imbuer", username: "Imbuer", status: "AWAKE", occupation: "CRAFTING" },
+    ]);
+    await insertItems([
+      { id: "armor", itemType: "ARMOR", slot: "CHEST", canBeImbued: true, battleUsageType },
+      { id: "crystal", itemType: "CRYSTAL", battleUsageType: "PVE" },
+    ]);
+    await insertUserItems([
+      { id: "armor-item", userId: "imbuer", itemId: "armor" },
+      { id: "crystal-item", userId: "imbuer", itemId: "crystal" },
+    ]);
+    const caller = await callerFor(occupationRouter, "imbuer");
+    expect(
+      await caller.imbueItem({ userItemId: "armor-item", userCrystalItemId: "crystal-item" }),
+    ).toMatchObject({
+      success: false,
+      message: "PvE-only crystals can only be imbued on PvE-only items",
+    });
+  });
+
   it.each([
     ["APPRENTICE", "EPIC", "Master"],
     ["APPRENTICE", "LEGENDARY", "Forgemaster"],

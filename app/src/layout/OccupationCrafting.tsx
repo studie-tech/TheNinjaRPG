@@ -647,6 +647,12 @@ export default function OccupationCrafting() {
                             .filter((userItem) => {
                               const crystal = userItem.item;
                               if (!crystal) return false;
+                              if (
+                                crystal.battleUsageType === "PVE" &&
+                                selectedImbuableItem.item?.battleUsageType !== "PVE"
+                              ) {
+                                return false;
+                              }
 
                               const alreadyOnItem =
                                 selectedImbuableItem.imbuements?.some(

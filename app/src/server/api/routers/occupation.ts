@@ -733,6 +733,12 @@ export const occupationRouter = createTRPCRouter({
       if (!targetUserItem.item.canBeImbued) {
         return errorResponse("This item cannot be imbued");
       }
+      if (
+        crystalItem.battleUsageType === "PVE" &&
+        targetUserItem.item.battleUsageType !== "PVE"
+      ) {
+        return errorResponse("PvE-only crystals can only be imbued on PvE-only items");
+      }
       if (targetUserItem.equipped !== "NONE") {
         return errorResponse("You cannot imbue an equipped item");
       }
