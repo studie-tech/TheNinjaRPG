@@ -138,7 +138,6 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
 };
 
 /**
-/**
  * Base component on which other comment components are built
  * @param props
  * @returns
@@ -157,7 +156,7 @@ interface BaseCommentProps extends PostProps {
   setQuoteId?: (id: string) => void;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
-  // State// Reference for emoji element
+  // Reference for emoji element
   const { data: userData } = useUserData();
   const emojiRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
