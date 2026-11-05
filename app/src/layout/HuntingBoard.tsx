@@ -19,6 +19,7 @@ import {
   huntingEligibility,
   huntingSessionStage,
 } from "@/libs/hunting/contracts";
+import { pushToCombat } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
 import type { UserDeltaResponse } from "@/validators/userCache";
@@ -97,7 +98,7 @@ export function HuntingBoard({
           utils.hunting.getSession.invalidate(),
           utils.combat.getBattle.invalidate(),
         ]);
-        if (!onStarted) router.push("/combat");
+        if (!onStarted) pushToCombat(router, result.battleId);
       } else {
         if (result.userRecovery) await updateUser(result, { revision, refetch: false });
         await board.refetch();
