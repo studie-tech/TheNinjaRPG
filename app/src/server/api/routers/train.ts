@@ -105,8 +105,9 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
-        set: { ...readiness.set, activeTrainedElement: input.element },
-        where: [...elementalSnapshotConditions(initialUser), readiness.where],
+        readiness,
+        set: { activeTrainedElement: input.element },
+        where: elementalSnapshotConditions(initialUser),
       });
       return actionReadinessResponse(
         result.success
@@ -326,8 +327,8 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: {
-          ...readiness.set,
           curEnergy: readiness.notice
             ? user.curEnergy - spent
             : sql`${userData.curEnergy} - ${spent}`,
@@ -337,7 +338,6 @@ export const trainRouter = createTRPCRouter({
           questData: filterQuestTrackersForDbPersist(trackers, user),
         },
         where: [
-          readiness.where,
           readiness.notice
             ? eq(userData.curEnergy, initialUser.curEnergy)
             : gte(userData.curEnergy, spent),
@@ -434,11 +434,11 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
-        set: { ...readiness.set, ...data },
+        readiness,
+        set: data,
         where: [
           ...elementalSnapshotConditions(user),
           isNull(userData[fields.stat]),
-          readiness.where,
           sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
         ],
       });
@@ -557,8 +557,8 @@ export const trainRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: {
-          ...readiness.set,
           ...sessionUpdate,
           ...(gained > 0
             ? {
@@ -580,7 +580,6 @@ export const trainRouter = createTRPCRouter({
           sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,
           eq(userData[fields.stat], trained),
           eq(userData[fields.startedAt], startedAt),
-          readiness.where,
         ],
       });
       if (!result.success) {

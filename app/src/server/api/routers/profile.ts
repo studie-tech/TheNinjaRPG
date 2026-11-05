@@ -1852,9 +1852,7 @@ export const profileRouter = createTRPCRouter({
           earnedExperience: sql`${userData.earnedExperience} - ${spent}`,
         },
         where: [
-          ...(hasElementAllocation
-            ? [...elementalSnapshotConditions(initialUser), readiness?.where]
-            : []),
+          ...(hasElementAllocation ? elementalSnapshotConditions(initialUser) : []),
           eq(userData.rank, user.rank),
           sql`${userData.masteryRanks} = CAST(${JSON.stringify(initialUser.masteryRanks)} AS JSON)`,
           ...[...CombatStatNames, ...MasteryNames].map((stat) =>

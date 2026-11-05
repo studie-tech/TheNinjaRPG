@@ -1209,7 +1209,15 @@ export const updateUserDataForCreateBattle = (
           : []),
         ...(info.kageMatch
           ? [
-              eq(userData.status, "AWAKE"),
+              or(
+                eq(userData.status, "AWAKE"),
+                info.actionReadiness?.notice
+                  ? and(
+                      eq(userData.userId, info.actionReadiness.initial.userId),
+                      info.actionReadiness.where,
+                    )
+                  : undefined,
+              ),
               eq(userData.villageId, info.kageMatch.villageId),
               ...users
                 .filter((u) => userIds.includes(u.userId))

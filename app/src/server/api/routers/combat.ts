@@ -2226,7 +2226,7 @@ export const initiateBattle = async (
   // Recovery is explicit to the requesting actor; opponents and scheduled participants retain strict status checks.
   const actionActorId = info.actionUserId ?? info.actionReadiness?.initial.userId;
   const actionActor =
-    actionActorId && userIds.includes(actionActorId)
+    actionActorId && [...userIds, ...targetIds].includes(actionActorId)
       ? fetchedUsers.find((user) => user.userId === actionActorId && !user.isAi)
       : undefined;
   const actionReadiness =

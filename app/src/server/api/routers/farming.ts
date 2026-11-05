@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getHarvestedFarmPlots, getWateredFarmPlots } from "@/deltas/farming";
@@ -180,7 +180,6 @@ export const farmingRouter = createTRPCRouter({
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         readiness,
-        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not plant — please try again");
@@ -376,7 +375,6 @@ export const farmingRouter = createTRPCRouter({
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         readiness,
-        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success)
         return errorResponse("Could not apply fertilizer — please try again");
@@ -584,7 +582,6 @@ export const farmingRouter = createTRPCRouter({
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         readiness,
-        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success)
         return errorResponse("Could not plant all — please try again");
@@ -769,7 +766,6 @@ export const farmingRouter = createTRPCRouter({
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         readiness,
-        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not fertilize all — please try again");
@@ -1224,7 +1220,6 @@ export const farmingRouter = createTRPCRouter({
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         readiness,
-        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not start extraction — please try again");
