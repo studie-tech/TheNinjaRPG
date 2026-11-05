@@ -42,16 +42,12 @@ import {
 } from "@/components/ui/select";
 import type { UserRank } from "@/drizzle/constants";
 import {
-  ANBU_ESPIONAGE_BASE_CHANCE_PERC,
-  ANBU_ESPIONAGE_CHANGE_PER_LEVEL,
   ANBU_ESPIONAGE_POINTS_COST,
   ANBU_ESPIONAGE_PRESTIGE_COST,
   ANBU_ESPIONAGE_UPGRADE_COST,
   ANBU_MAX_ESPIONAGE_LEVEL,
   ANBU_MAX_STEALTH_LEVEL,
   ANBU_MEMBER_RANK_REQUIREMENT,
-  ANBU_STEALTH_BASE_CHANCE_PERC,
-  ANBU_STEALTH_CHANGE_PER_LEVEL,
   ANBU_STEALTH_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
@@ -67,6 +63,7 @@ import QuestPicker from "@/layout/QuestPicker";
 import RichInput from "@/layout/RichInput";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserRequestSystem from "@/layout/UserRequestSystem";
+import { anbuEspionageChance, anbuStealthChance } from "@/libs/anbu";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import type { AnbuRouter } from "@/routers/anbu";
@@ -524,88 +521,28 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     Current Squad Points: {squad.points}
                   </div>
 
-                  {/* Espionage Upgrade */}
-                  <div className="rounded-lg border p-4">
-                    <h3 className="mb-2 font-semibold">Espionage Level</h3>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Improves intelligence gathering capabilities against enemy
-                      villages during wars.
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Current Level: {squad.espionageLevel} / {ANBU_MAX_ESPIONAGE_LEVEL}
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Success Rate:{" "}
-                      {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                        squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                      %
-                      {squad.espionageLevel < ANBU_MAX_ESPIONAGE_LEVEL && (
-                        <span className="text-green-600">
-                          {" "}
-                          →{" "}
-                          {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                            (squad.espionageLevel + 1) *
-                              ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                          %
-                        </span>
-                      )}
-                    </p>
-                    <p className="mb-4 text-muted-foreground text-sm">
-                      Upgrade Cost: {ANBU_ESPIONAGE_UPGRADE_COST} points
-                    </p>
-                    <Button
-                      onClick={() => upgradeEspionage({ squadId })}
-                      disabled={
-                        isUpgradingEspionage ||
-                        squad.espionageLevel >= ANBU_MAX_ESPIONAGE_LEVEL ||
-                        squad.points < ANBU_ESPIONAGE_UPGRADE_COST
-                      }
-                      className="w-full"
-                    >
-                      {isUpgradingEspionage ? "Upgrading" : "Upgrade Espionage"}
-                    </Button>
-                  </div>
-
-                  {/* Stealth Upgrade */}
-                  <div className="rounded-lg border p-4">
-                    <h3 className="mb-2 font-semibold">Stealth Level</h3>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Reduces the chance of being detected by guards when infiltrating
-                      enemy villages.
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Current Level: {squad.stealthLevel} / {ANBU_MAX_STEALTH_LEVEL}
-                    </p>
-                    <p className="mb-2 text-muted-foreground text-sm">
-                      Success Rate:{" "}
-                      {ANBU_STEALTH_BASE_CHANCE_PERC +
-                        squad.stealthLevel * ANBU_STEALTH_CHANGE_PER_LEVEL}
-                      %
-                      {squad.stealthLevel < ANBU_MAX_STEALTH_LEVEL && (
-                        <span className="text-green-600">
-                          {" "}
-                          →{" "}
-                          {ANBU_STEALTH_BASE_CHANCE_PERC +
-                            (squad.stealthLevel + 1) * ANBU_STEALTH_CHANGE_PER_LEVEL}
-                          %
-                        </span>
-                      )}
-                    </p>
-                    <p className="mb-4 text-muted-foreground text-sm">
-                      Upgrade Cost: {ANBU_STEALTH_UPGRADE_COST} points
-                    </p>
-                    <Button
-                      onClick={() => upgradeStealth({ squadId })}
-                      disabled={
-                        isUpgradingStealth ||
-                        squad.stealthLevel >= ANBU_MAX_STEALTH_LEVEL ||
-                        squad.points < ANBU_STEALTH_UPGRADE_COST
-                      }
-                      className="w-full"
-                    >
-                      {isUpgradingStealth ? "Upgrading" : "Upgrade Stealth"}
-                    </Button>
-                  </div>
+                  <SquadUpgradeCard
+                    name="Espionage"
+                    description="Improves intelligence gathering capabilities against enemy villages during wars."
+                    level={squad.espionageLevel}
+                    maxLevel={ANBU_MAX_ESPIONAGE_LEVEL}
+                    chance={anbuEspionageChance}
+                    cost={ANBU_ESPIONAGE_UPGRADE_COST}
+                    points={squad.points}
+                    isUpgrading={isUpgradingEspionage}
+                    onUpgrade={() => upgradeEspionage({ squadId })}
+                  />
+                  <SquadUpgradeCard
+                    name="Stealth"
+                    description="Reduces the chance of being detected by guards when infiltrating enemy villages."
+                    level={squad.stealthLevel}
+                    maxLevel={ANBU_MAX_STEALTH_LEVEL}
+                    chance={anbuStealthChance}
+                    cost={ANBU_STEALTH_UPGRADE_COST}
+                    points={squad.points}
+                    isUpgrading={isUpgradingStealth}
+                    onUpgrade={() => upgradeStealth({ squadId })}
+                  />
                 </div>
               </DialogContent>
             </Dialog>
@@ -627,10 +564,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                   </div>
 
                   <div className="text-muted-foreground text-sm">
-                    Success Rate:{" "}
-                    {ANBU_ESPIONAGE_BASE_CHANCE_PERC +
-                      squad.espionageLevel * ANBU_ESPIONAGE_CHANGE_PER_LEVEL}
-                    %
+                    Success Rate: {anbuEspionageChance(squad.espionageLevel)}%
                   </div>
 
                   {/* Cost Requirements */}
@@ -1016,3 +950,42 @@ const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
     </ContentBox>
   );
 };
+
+/** A purchasable squad stat: its level, the chance it yields and the upgrade button. */
+const SquadUpgradeCard: React.FC<{
+  name: string;
+  description: string;
+  level: number;
+  maxLevel: number;
+  chance: (level: number) => number;
+  cost: number;
+  points: number;
+  isUpgrading: boolean;
+  onUpgrade: () => void;
+}> = (props) => (
+  <div className="rounded-lg border p-4">
+    <h3 className="mb-2 font-semibold">{props.name} Level</h3>
+    <p className="mb-2 text-muted-foreground text-sm">{props.description}</p>
+    <p className="mb-2 text-muted-foreground text-sm">
+      Current Level: {props.level} / {props.maxLevel}
+    </p>
+    <p className="mb-2 text-muted-foreground text-sm">
+      Success Rate: {props.chance(props.level)}%
+      {props.level < props.maxLevel && (
+        <span className="text-green-600"> → {props.chance(props.level + 1)}%</span>
+      )}
+    </p>
+    <p className="mb-4 text-muted-foreground text-sm">
+      Upgrade Cost: {props.cost} points
+    </p>
+    <Button
+      onClick={props.onUpgrade}
+      disabled={
+        props.isUpgrading || props.level >= props.maxLevel || props.points < props.cost
+      }
+      className="w-full"
+    >
+      {props.isUpgrading ? "Upgrading" : `Upgrade ${props.name}`}
+    </Button>
+  </div>
+);
