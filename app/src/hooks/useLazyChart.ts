@@ -11,20 +11,21 @@ import { useEffect, useState } from "react";
  * keep them stable, because each change destroys the chart and starts a fresh import.
  * A superseded or unmounted run never draws, and the chart is destroyed on cleanup.
  *
- * @returns Whether the import or the draw failed, so the caller can show a fallback. A chunk
- * can 404 after a deploy. The next run clears the flag.
+ * @returns Whether the import or the draw failed for the current `deps`, so the caller can
+ * show a fallback. A chunk can 404 after a deploy. The flag belongs to the failed deps, so a
+ * fallback that replaces the canvas gives it back in the render that starts the next run.
  */
 export const useLazyChart = (
   canvasRef: RefObject<HTMLCanvasElement | null>,
   draw: ((ChartJS: typeof Chart, canvas: HTMLCanvasElement) => ChartHandle) | null,
   deps: DependencyList,
 ) => {
-  const [failed, setFailed] = useState(false);
+  const [failedDeps, setFailedDeps] = useState<DependencyList | null>(null);
   useEffect(() => {
     if (!draw) return;
     let cancelled = false;
     let chart: ChartHandle | undefined;
-    setFailed(false);
+    setFailedDeps(null);
     void (async () => {
       try {
         const { Chart: ChartJS } = await import("chart.js/auto");
@@ -32,7 +33,7 @@ export const useLazyChart = (
         chart = draw(ChartJS, canvasRef.current);
       } catch (error) {
         console.error("Could not draw the chart", error);
-        if (!cancelled) setFailed(true);
+        if (!cancelled) setFailedDeps(deps);
       }
     })();
     return () => {
@@ -40,8 +41,11 @@ export const useLazyChart = (
       chart?.destroy();
     };
   }, deps);
-  return failed;
+  return !!failedDeps && isSameDeps(failedDeps, deps);
 };
+
+const isSameDeps = (a: DependencyList, b: DependencyList) =>
+  a.length === b.length && a.every((dep, index) => Object.is(dep, b[index]));
 
 /** Only destroy() is called on a drawn chart, and its generics vary per dataset shape. */
 type ChartHandle = { destroy: () => void };
