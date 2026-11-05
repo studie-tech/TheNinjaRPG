@@ -1955,7 +1955,7 @@ export const itemRouter = createTRPCRouter({
         listUserItemsForSellUserItems(ctx.drizzle, ctx, input.userItemIds),
         selectVillageStructureForSellUserItem(ctx.drizzle, ctx),
       ]);
-      // Guard: the same rules as a single sale, per stack
+      // Guard each stack: a single sale's rules, limited to the backpack's unequipped stacks
       const refused: { userItemId: string; name: string; reason: string }[] = [];
       const sellable: typeof useritems = [];
       for (const userItemId of input.userItemIds) {

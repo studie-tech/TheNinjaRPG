@@ -54,7 +54,7 @@ export function BulkSellDialog({
           <DialogTitle>
             {isRareStep
               ? "These are Rare or better"
-              : `Sell or drop ${items.length} item${items.length === 1 ? "" : "s"}`}
+              : `Sell or drop ${ticked.length} item${ticked.length === 1 ? "" : "s"}`}
           </DialogTitle>
           <DialogDescription className={cn(isRareStep && "text-destructive")}>
             {isRareStep ? (

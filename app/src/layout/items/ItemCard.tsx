@@ -23,13 +23,15 @@ export function ItemCard({
   const look = applyActiveVariant(userItem as UserItemWithVariants);
   const wears = item.maxDurability > 0;
   const detail = itemDetail(userItem);
+  // A ticked stack that can no longer be sold can still be unticked.
+  const isBlocked = !!blockReason && !isTicked;
   return (
     <button
       type="button"
       data-item-name={item.name}
       aria-current={isSelected ? "true" : undefined}
       aria-pressed={isTicked}
-      disabled={!!blockReason}
+      disabled={isBlocked}
       title={blockReason ? `${item.name} ${blockReason}` : undefined}
       draggable={!!onDragStart}
       onDragStart={
@@ -47,7 +49,7 @@ export function ItemCard({
         "flex w-full min-w-0 items-center gap-2 rounded-lg border bg-card p-1.5 text-left hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-primary",
         isSelected && "border-primary ring-2 ring-primary/40",
         isTicked && "border-destructive bg-destructive/10 ring-2 ring-destructive/40",
-        blockReason && "cursor-not-allowed opacity-50",
+        isBlocked && "cursor-not-allowed opacity-50",
       )}
     >
       <span className="relative h-11 w-11 shrink-0">

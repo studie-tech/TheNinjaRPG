@@ -173,6 +173,7 @@ it("lists art, name and quantity in the review window, where unticking updates t
   act(() => fireEvent.click(within(row).getByRole("checkbox", { name: "Keep selling Chakra Pill" })));
   expect(within(review).getByRole("listitem", { name: "Chakra Pill" })).toBeDefined();
   expect(review.textContent).toContain("Sell for 20 ryo");
+  expect(screen.getByRole("dialog", { name: "Sell or drop 1 item" })).toBe(review);
   act(() => fireEvent.keyDown(review, { key: "Escape" }));
   expect(card("Chakra Pill").getAttribute("aria-pressed")).toBe("false");
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
@@ -235,6 +236,17 @@ it("keeps refused items selected after a partial result", () => {
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
   expect(bar().textContent).toContain("1 selected");
+});
+
+it("lets a ticked stack that can no longer be sold be unticked", () => {
+  const { rerender } = renderWorkspace();
+  startSelecting();
+  act(() => fireEvent.click(card("Old Scroll")));
+  rerender([pill, { ...scroll, isInAuction: true }, token, blade]);
+  expect((card("Old Scroll") as HTMLButtonElement).disabled).toBe(false);
+  act(() => fireEvent.click(card("Old Scroll")));
+  expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("false");
+  expect((card("Old Scroll") as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("holds a selection larger than one request until it is trimmed", () => {
