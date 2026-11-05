@@ -1,3 +1,5 @@
+import type { UserData } from "@/drizzle/schema";
+
 /**
  * Shared `userData` projections for relational queries, keeping the fields behind avatars
  * and user links identical across features.
@@ -29,3 +31,6 @@ export const userCardColumns = {
   role: true,
   federalStatus: true,
 } as const;
+
+/** A user selected through `userCardColumns`, for code rendering or masking such a card. */
+export type UserCard = Pick<UserData, keyof typeof userCardColumns>;
