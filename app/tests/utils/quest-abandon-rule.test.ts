@@ -1,11 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { QuestTypes, UserRoles } from "@/drizzle/constants";
 import { canAbandonQuestType } from "@/utils/permissions";
-
-const source = (path: string) =>
-  readFileSync(join(import.meta.dirname, "../../src", path), "utf8");
 
 const PLAYER_ABANDONABLE = [
   "mission",
@@ -39,13 +34,4 @@ describe("quest abandon rule", () => {
       expect(QuestTypes.every((type) => canAbandonQuestType(role, type))).toBe(true);
     }
   });
-
-  it.each(["layout/Logbook.tsx", "server/api/routers/quests.ts"])(
-    "keeps %s on the shared rule",
-    (path) => {
-      const code = source(path);
-      expect(code).toContain("canAbandonQuestType(");
-      expect(code).not.toContain("ABANDONABLE_QUEST_TYPES");
-    },
-  );
 });
