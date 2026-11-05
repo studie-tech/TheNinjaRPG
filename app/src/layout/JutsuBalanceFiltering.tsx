@@ -1,10 +1,9 @@
-import { api } from "@/app/_trpc/client";
-import { BattleTypes } from "@/drizzle/constants";
 import {
+  battleTypesField,
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
-  toOptions,
+  minCountField,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { tagTypes } from "@/validators/combat";
@@ -13,23 +12,11 @@ interface JutsuBalanceFilteringProps {
   state: JutsuBalanceFilteringState;
 }
 
-const makeSchema = (bloodlines: { id: string; name: string }[]) =>
+const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "battleTypes",
-        label: "Battle Types",
-        type: "multi-select",
-        defaultValue: ["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"],
-        options: toOptions(BattleTypes),
-      },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
+      minCountField,
       {
         id: "jutsuEffects",
         label: "Jutsu Effects",
@@ -42,18 +29,15 @@ const makeSchema = (bloodlines: { id: string; name: string }[]) =>
         label: "Bloodlines",
         type: "multi-select",
         defaultValue: [],
-        options: bloodlines.map((b) => ({ value: b.id, label: b.name })),
+        dataSource: "bloodlines",
       },
     ] as const,
   });
 
 const JutsuBalanceFiltering: React.FC<JutsuBalanceFilteringProps> = (props) => {
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const bl = bloodlines ?? [];
-  const schema = makeSchema(bl);
   return (
     <ContentFiltering
-      schema={schema}
+      schema={makeSchema()}
       state={props.state.cf}
       triggerButtonId="filter-jutsu-balance"
     />
@@ -63,12 +47,10 @@ const JutsuBalanceFiltering: React.FC<JutsuBalanceFilteringProps> = (props) => {
 export default JutsuBalanceFiltering;
 
 export const getFilter = (state: JutsuBalanceFilteringState) =>
-  buildFilter(state.cf, makeSchema([]));
+  buildFilter(state.cf, makeSchema());
 
 export const useFiltering = () => {
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const bl = bloodlines ?? [];
-  const cf = useContentFiltering(makeSchema(bl));
+  const cf = useContentFiltering(makeSchema());
   return {
     ...cf.values,
     cf,

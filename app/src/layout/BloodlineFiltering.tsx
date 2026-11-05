@@ -4,11 +4,11 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { statFilters } from "@/libs/train";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
 // Inline schema
@@ -68,19 +68,7 @@ const makeBloodlineFilteringSchema = (
         defaultValue: [],
         options: statFilters.map((s) => ({ value: s, label: s })),
       },
-      {
-        id: "hidden",
-        label: "Visibility",
-        type: "tri-state",
-        defaultValue: undefined,
-        visibleIf: (ctx) =>
-          Boolean((ctx as { canEdit?: boolean } | undefined)?.canEdit),
-        triStateLabels: {
-          labelActive: "Hidden",
-          labelInactive: "Visible",
-          labelAll: "All Visibility",
-        },
-      },
+      hiddenVisibilityField(),
     ] as const,
   });
 
@@ -91,10 +79,9 @@ interface BloodFilteringProps {
 }
 
 const BloodFiltering: React.FC<BloodFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
   const limitRanks = props.limitRanks ? props.limitRanks : [...LetterRanks];
   const schema = makeBloodlineFilteringSchema(limitRanks);
-  const context = { canEdit: Boolean(userData && canChangeContent(userData.role)) };
+  const context = useContentEditContext();
 
   return (
     <ContentFiltering

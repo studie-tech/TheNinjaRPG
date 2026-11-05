@@ -2,8 +2,11 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { StrictMode } from "react";
 import {
+  battleTypesField,
   buildFilter,
   defineFilteringSchema,
+  hiddenVisibilityField,
+  minCountField,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 
@@ -133,4 +136,35 @@ describe("content filter timing", () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+describe("shared filter fields", () => {
+  it("sends no minimum count below 1", () => {
+    expect(minCountField.normalizeForFilter(undefined)).toBeUndefined();
+    expect(minCountField.normalizeForFilter(0)).toBeUndefined();
+    expect(minCountField.normalizeForFilter(1)).toBe(1);
+  });
+
+  it("starts battle types from the given selection", () => {
+    const { result } = renderHook(() =>
+      useContentFiltering(stableBattleSchema),
+    );
+    expect(result.current.values.battleTypes).toEqual(["COMBAT"]);
+    expect(buildFilter(result.current, stableBattleSchema)).toEqual({
+      battleTypes: ["COMBAT"],
+    });
+  });
+
+  it("shows the visibility toggle to content editors only", () => {
+    const field = hiddenVisibilityField(false);
+    expect(field.defaultValue).toBe(false);
+    expect(hiddenVisibilityField().defaultValue).toBeUndefined();
+    expect(field.visibleIf({ canEdit: true })).toBe(true);
+    expect(field.visibleIf({ canEdit: false })).toBe(false);
+    expect(field.visibleIf()).toBe(false);
+  });
+});
+
+const stableBattleSchema = defineFilteringSchema({
+  fields: [battleTypesField(["COMBAT"])] as const,
 });

@@ -13,6 +13,8 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import NavTabs from "@/layout/NavTabs";
@@ -23,9 +25,7 @@ import {
   rarities,
   statFilters,
 } from "@/libs/train";
-import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
 // Single-source schema
@@ -143,19 +143,7 @@ const makeJutsuFilteringSchema = (defaultRank: UserRank[] = []) =>
         type: "number",
         defaultValue: undefined,
       },
-      {
-        id: "hidden",
-        label: "Visibility",
-        type: "tri-state",
-        defaultValue: undefined,
-        visibleIf: (ctx) =>
-          Boolean((ctx as { canEdit?: boolean } | undefined)?.canEdit),
-        triStateLabels: {
-          labelActive: "Hidden",
-          labelInactive: "Visible",
-          labelAll: "All Visibility",
-        },
-      },
+      hiddenVisibilityField(),
       {
         id: "villageId",
         label: "Village",
@@ -209,10 +197,9 @@ export const useFiltering = (defaultRank?: UserRank[]) => {
 };
 
 const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
   const context = {
+    ...useContentEditContext(),
     fixedBloodline: props.fixedBloodline ?? undefined,
-    canEdit: Boolean(userData && canChangeContent(userData.role)),
   };
   return (
     <ContentFiltering
