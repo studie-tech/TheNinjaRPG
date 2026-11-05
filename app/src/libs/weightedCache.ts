@@ -1,6 +1,10 @@
 import { CACHE_PROBABILITY_TOTAL } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/validators/combat";
-import { type WeightedCache, weightedCacheSchema } from "@/validators/weightedCache";
+import {
+  type WeightedCache,
+  weightedCacheDraftSchema,
+  weightedCacheSchema,
+} from "@/validators/weightedCache";
 
 type WeightedCacheEffect = Extract<ZodAllTags, { type: "noncombatconsumereward" }> & {
   rewardMode: "weightedCache";
@@ -122,3 +126,39 @@ export const isRestrictedCacheReward = (source: {
         ((effect.reward_reputation ?? 0) !== 0 ||
           (effect.reward_bloodlines?.length ?? 0) > 0)),
   );
+
+export type CacheIssue = { path: PropertyKey[]; message: string };
+
+/**
+ * Save blockers of a cache draft: the schema (the draft one while the cache is inactive),
+ * plus, once the item catalog is ready, rewards that are missing or restricted.
+ */
+export const getWeightedCacheIssues = (
+  cache: WeightedCache,
+  items: { id: string; isRestrictedCacheReward?: boolean }[],
+  { isActive, catalogReady }: { isActive: boolean; catalogReady: boolean },
+) => {
+  const validation = (
+    isActive ? weightedCacheSchema : weightedCacheDraftSchema
+  ).safeParse(cache);
+  const issues: CacheIssue[] = [...(validation.error?.issues ?? [])];
+  const isSchemaValid = validation.success;
+  if (!catalogReady) return { issues, isSchemaValid };
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  cache.tiers.forEach((tier, tierIndex) => {
+    tier.entries.forEach((entry, entryIndex) => {
+      entry.items.forEach((reward, itemIndex) => {
+        const path = ["tiers", tierIndex, "entries", entryIndex, "items", itemIndex];
+        const rewardItem = itemById.get(reward.itemId);
+        if (!rewardItem)
+          issues.push({
+            path,
+            message: `Remove or replace missing item: ${reward.itemId}`,
+          });
+        else if (rewardItem.isRestrictedCacheReward)
+          issues.push({ path, message: CACHE_RESTRICTED_REWARD_MESSAGE });
+      });
+    });
+  });
+  return { issues, isSchemaValid };
+};

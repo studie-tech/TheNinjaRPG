@@ -65,7 +65,7 @@ import {
 } from "@/libs/overworldAi";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { cacheItemIds, defaultWeightedCache } from "@/libs/weightedCache";
+import { defaultWeightedCache, getWeightedCacheIssues } from "@/libs/weightedCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { isRetryableTrpcError } from "@/utils/error";
 import { canAwardReputation } from "@/utils/permissions";
@@ -103,7 +103,6 @@ import {
 } from "@/validators/objectives";
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
-import { weightedCacheDraftSchema } from "@/validators/weightedCache";
 
 export type FormDbValue = { id: string; name: string };
 
@@ -1799,6 +1798,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   }
 
   // Create the form data dynamically based on the tag type
+  const rewardCatalogs = {
+    items: itemData,
+    jutsus: jutsuData,
+    bloodlines: bloodlines,
+    sageModes: sageModes,
+    titles: titleData,
+    badges: badgeData?.data,
+  };
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !ignore.includes(value))
     .filter((value) => !props.editableFields || props.editableFields.includes(value))
@@ -1857,6 +1864,8 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       );
     })
     .map((value) => {
+      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
+      if (rewardCatalogEntry) return rewardCatalogEntry;
       const innerType = unwrapFieldSchema(tagSchema.shape[value]);
       if (String(value) === "aggroMode") {
         return {
@@ -1942,14 +1951,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values",
         };
-      } else if ((value as string) === "reward_items" && itemData) {
-        return {
-          id: value,
-          values: itemData,
-          doubleWidth: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number",
-        };
       } else if ((value as string) === "reward_pets") {
         return {
           id: value,
@@ -1958,46 +1959,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: true,
           // Daily-offer availability does not restrict authored companion rewards.
           values: (petSpecies ?? []).map(({ id, name }) => ({ id, name })),
-        };
-      } else if ((value as string) === "reward_jutsus" && jutsuData) {
-        return {
-          id: value,
-          values: jutsuData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if ((value as string) === "reward_bloodlines" && bloodlines) {
-        return {
-          id: value,
-          values: bloodlines,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if ((value as string) === "reward_sage_modes" && sageModes) {
-        return {
-          id: value,
-          values: sageModes,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if ((value as string) === "reward_titles" && titleData) {
-        return {
-          id: value,
-          values: titleData,
-          multiple: true,
-          label: "Give Title",
-          type: "db_values",
-        };
-      } else if ((value as string) === "reward_badges" && badgeData?.data) {
-        return {
-          id: value,
-          values: badgeData?.data,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
         };
       } else if ((value as string) === "coordinateTargeting") {
         return {
@@ -2154,14 +2115,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     watchType === "noncombatconsumereward" &&
     watchAll.rewardMode !== "weightedCache" &&
     watchAll.weightedCache &&
-    (!weightedCacheDraftSchema.safeParse(watchAll.weightedCache).success ||
-      (!isItemCatalogLoading &&
-        !isItemCatalogError &&
-        itemData &&
-        cacheItemIds(watchAll.weightedCache).some(
-          (id) =>
-            !itemData.some((item) => item.id === id && !item.isRestrictedCacheReward),
-        )));
+    getWeightedCacheIssues(watchAll.weightedCache, itemData ?? [], {
+      isActive: false,
+      catalogReady: !isItemCatalogLoading && !isItemCatalogError && !!itemData,
+    }).issues.length > 0;
   const cacheEditor = (
     <WeightedCacheEditor
       cache={watchAll.weightedCache ?? defaultWeightedCache()}
@@ -2477,6 +2434,14 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   const locationType = "locationType" in watchAll ? watchAll.locationType : undefined;
 
   // Parse how to present the tag form
+  const rewardCatalogs = {
+    items: itemData,
+    jutsus: jutsuData,
+    bloodlines: bloodlines,
+    sageModes: sageModes,
+    titles: titleData,
+    badges: badgeData?.data,
+  };
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => value !== "reward_packages")
     .filter(
@@ -2586,6 +2551,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     })
     .map((value) => {
       const innerType = unwrapFieldSchema(objectiveSchema.shape[value]);
+      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
+      if (rewardCatalogEntry) return rewardCatalogEntry;
       if (value === "structureAssetId")
         return {
           id: value,
@@ -2622,54 +2589,6 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
           doubleWidth: true,
           label: FORM_LABEL_MAP[value] ?? value,
           type: "db_values_with_number",
-        };
-      } else if (value === "reward_items" && itemData) {
-        return {
-          id: value,
-          values: itemData,
-          doubleWidth: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number",
-        };
-      } else if (value === "reward_jutsus" && jutsuData) {
-        return {
-          id: value,
-          values: jutsuData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (value === "reward_bloodlines" && bloodlines) {
-        return {
-          id: value,
-          values: bloodlines,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (value === "reward_sage_modes" && sageModes) {
-        return {
-          id: value,
-          values: sageModes,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (value === "reward_titles" && titleData) {
-        return {
-          id: value,
-          values: titleData,
-          multiple: true,
-          label: "Give Title",
-          type: "db_values" as const,
-        };
-      } else if (value === "reward_badges" && badgeData?.data) {
-        return {
-          id: value,
-          values: badgeData?.data,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
         };
       } else if (
         [
@@ -2979,61 +2898,23 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
 
   // Generate form data dynamically
+  const rewardCatalogs = {
+    items: itemData,
+    jutsus: jutsuData,
+    bloodlines: bloodlineData,
+    sageModes: sageModeData,
+    titles: titleData,
+    badges: badgeData?.data,
+  };
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !hideFields.includes(value))
     .map((value) => {
       const innerType = unwrapFieldSchema(ObjectiveReward.shape[value]);
+      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
+      if (rewardCatalogEntry) return rewardCatalogEntry;
 
       // Special handling for db-backed array fields
-      if (value === "reward_items" && itemData) {
-        return {
-          id: value,
-          values: itemData,
-          doubleWidth: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number" as const,
-        };
-      } else if (value === "reward_jutsus" && jutsuData) {
-        return {
-          id: value,
-          values: jutsuData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (value === "reward_bloodlines" && bloodlineData) {
-        return {
-          id: value,
-          values: bloodlineData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (value === "reward_sage_modes" && sageModeData) {
-        return {
-          id: value,
-          values: sageModeData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (value === "reward_titles" && titleData) {
-        return {
-          id: value,
-          values: titleData,
-          multiple: true,
-          label: "Give Title",
-          type: "db_values" as const,
-        };
-      } else if (value === "reward_badges" && badgeData?.data) {
-        return {
-          id: value,
-          values: badgeData.data,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (
+      if (
         (value === "reward_hunter_items_ids" ||
           value === "reward_gathering_items_ids") &&
         itemData
@@ -3094,6 +2975,49 @@ export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
       showSubmit={false}
     />
   );
+};
+
+interface RewardCatalogs {
+  items: FormDbValue[] | undefined;
+  jutsus: FormDbValue[] | undefined;
+  bloodlines: FormDbValue[] | undefined;
+  sageModes: FormDbValue[] | undefined;
+  titles: FormDbValue[] | undefined;
+  badges: FormDbValue[] | undefined;
+}
+
+/**
+ * Entry of a catalog-backed reward field, or undefined for any other field and until
+ * its catalog has loaded, so the caller falls through to its schema-based handling.
+ */
+const rewardCatalogFormEntry = <K extends string | number | symbol>(
+  field: K,
+  catalogs: RewardCatalogs,
+): FormEntry<K> | undefined => {
+  const id = String(field);
+  const label = FORM_LABEL_MAP[id] ?? id;
+  const catalog = (
+    {
+      reward_jutsus: catalogs.jutsus,
+      reward_bloodlines: catalogs.bloodlines,
+      reward_sage_modes: catalogs.sageModes,
+      reward_titles: catalogs.titles,
+      reward_badges: catalogs.badges,
+    } as Record<string, FormDbValue[] | undefined>
+  )[id];
+  if (id === "reward_items" && catalogs.items) {
+    return {
+      id: field,
+      values: catalogs.items,
+      doubleWidth: true,
+      label,
+      type: "db_values_with_number",
+    };
+  }
+  if (catalog) {
+    return { id: field, values: catalog, multiple: true, label, type: "db_values" };
+  }
+  return undefined;
 };
 
 // Form labels for different tag names

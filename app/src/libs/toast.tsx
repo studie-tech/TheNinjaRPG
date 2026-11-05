@@ -8,6 +8,7 @@ import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { getAudioPreference } from "@/libs/audioPreferences";
+import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { haptics } from "@/libs/native";
 import {
   CONFETTI_OVERLAY_ID,
@@ -352,6 +353,11 @@ export const showRewardToast = (
               <b>Gathering experience:</b> {rewards.reward_gathering_experience}
             </span>
           )}
+          {masteryRewardLabels(rewards).map((label) => (
+            <span key={label} className="whitespace-nowrap">
+              {label}
+            </span>
+          ))}
           {rewards.reward_jutsus.length > 0 && (
             <span className="break-words">
               <b>Jutsus: </b> {rewards.reward_jutsus.join(", ")}

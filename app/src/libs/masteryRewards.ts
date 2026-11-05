@@ -10,7 +10,16 @@ import {
  * Sage discipline XP is separate from reward_sage_mastery_experience (sage-mode XP),
  * which remains rendered by the existing sage-mode reward presentation.
  */
-export const masteryRewardLabels = (reward: Partial<ObjectiveRewardType>): string[] => [
+export const masteryRewardLabels = (
+  reward: Partial<
+    Pick<
+      ObjectiveRewardType,
+      | (typeof MASTERY_EXPERIENCE_FIELDS)[number]
+      | "reward_mastery_stat"
+      | "reward_mastery_rank"
+    >
+  >,
+): string[] => [
   ...MASTERY_EXPERIENCE_FIELDS.flatMap((field, index) =>
     (reward[field] ?? 0) > 0
       ? [`${reward[field]?.toLocaleString()} ${MasteryTypes[index]} Mastery XP`]

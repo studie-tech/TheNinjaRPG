@@ -1,7 +1,6 @@
 /** Shared staff content controls: editor load failures, effect lists, clones and row links. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { ConfirmedCloneControl } from "@/layout/ConfirmedCloneControl";
 import * as ContentBox from "@/layout/ContentBox";
 import { ContentLinksCell } from "@/layout/ContentLinksCell";
@@ -21,8 +20,9 @@ const feedback = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.spyOn(ContentBox, "default").mockImplementation(
-    ({ title, children, topRightContent }: { title: string; children: ReactNode; topRightContent?: ReactNode }) => (
+    ({ title, children, topRightContent }) => (
       <section>
         <h2>{title}</h2>
         {topRightContent}
