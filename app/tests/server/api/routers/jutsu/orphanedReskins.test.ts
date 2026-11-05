@@ -11,6 +11,7 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
+import { DamageTag, JutsuValidator } from "@/validators/combat";
 import { insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
@@ -91,9 +92,42 @@ describeWithDatabase("orphaned jutsu reskins against a real MySQL", () => {
       ]);
       const result = await (await caller(STAFF)).delete({ id: "jutsu-a" });
       expect(result.success).toBe(false);
-      expect(result.message).toContain("Player reskin: Reskin reskin-a (Owner)");
+      expect(result.message).toBe(
+        "Jutsu is being used by: Player reskin: Reskin reskin-a (Owner). So you cannot delete it.",
+      );
       const rows = await database.select().from(jutsu).where(eq(jutsu.id, "jutsu-a"));
       expect(rows.length).toBe(1);
+    });
+
+    it("refuses to disable injection while another jutsu injects it", async () => {
+      const database = await getTestDatabase();
+      await database
+        .update(jutsu)
+        .set({
+          effects: [{ type: "injectjutsus", jutsuIds: ["jutsu-a"] }] as never,
+        })
+        .where(eq(jutsu.id, "jutsu-b"));
+      await database
+        .update(jutsu)
+        .set({ injectableInBattle: true })
+        .where(eq(jutsu.id, "jutsu-a"));
+      const [injected] = await database
+        .select()
+        .from(jutsu)
+        .where(eq(jutsu.id, "jutsu-a"));
+      const result = await (await caller(STAFF)).update({
+        id: "jutsu-a",
+        data: JutsuValidator.parse({
+          ...injected,
+          effects: [DamageTag.parse({})],
+          injectableInBattle: false,
+        }),
+      });
+      expect(result).toMatchObject({
+        success: false,
+        message:
+          "Jutsu is being injected by: Jutsu: Jutsu jutsu-b. So you cannot disable it.",
+      });
     });
 
     it("deletes the jutsu once its player reskins are re-pointed", async () => {
