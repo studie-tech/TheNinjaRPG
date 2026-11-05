@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/string";
 
 interface ClearDataConfirmProps {
   title: string;
@@ -58,7 +57,7 @@ export const ClearBattleDataButton: React.FC<ClearBattleDataButtonProps> = (prop
 
   return (
     <ClearDataConfirm
-      title={`Clear All ${capitalizeFirstLetter(label)} Battle Data`}
+      title={`Clear All ${label.charAt(0).toUpperCase()}${label.slice(1)} Battle Data`}
       onConfirm={() => deleteAllData({ type })}
     >
       {isDeleting ? (

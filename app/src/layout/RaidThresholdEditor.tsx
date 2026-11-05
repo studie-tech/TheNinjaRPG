@@ -32,7 +32,7 @@ import {
   type ThresholdFormDataInput,
   thresholdFormSchema,
 } from "@/validators/raids";
-import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
+import type { ObjectiveRewardType } from "@/validators/rewards";
 
 interface RaidThresholdEditorProps {
   questId: string;
