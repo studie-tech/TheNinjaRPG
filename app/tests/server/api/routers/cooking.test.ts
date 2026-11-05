@@ -22,7 +22,7 @@ import { makeCompleteBattle } from "../../../libs/combat/helpers/battleScenario"
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements, failStatements } from "../../../setup/statements";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const userId = "cook";
 const past = () => new Date(Date.now() - 60000);
@@ -52,6 +52,29 @@ describeWithDatabase("Cooking production and consumption", () => {
     await insertUserItems([{ id: "rice-stack", userId, itemId: "rice", quantity: 20 }]);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([20, 2])("rejects a direct craft when its %d-unit material stack is listed mid-request", async (quantity) => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ quantity }).where(eq(userItem.id, "rice-stack"));
+    const listing = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property !== "transaction") return Reflect.get(target, property, receiver);
+        return async (...args: Parameters<typeof target.transaction>) => {
+          await target.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "rice-stack"));
+          return target.transaction(...args);
+        };
+      },
+    });
+    const before = await readUser();
+
+    const result = await callerForDatabase(occupationRouter, userId, listing).craftItem({ itemId: "meal", quantity: 1 });
+
+    expect(result).toMatchObject({ success: false, message: "Could not start crafting — materials changed, please try again" });
+    expect(await materials()).toMatchObject([{ id: "rice-stack", quantity, isInAuction: true }]);
+    expect(await db.query.userItem.findMany({ where: eq(userItem.itemId, "meal") })).toEqual([]);
+    expect(await db.query.userCookingJob.findMany()).toEqual([]);
+    expect((await readUser())?.updatedAt).toEqual(before?.updatedAt);
+  });
 
   it("returns active cooking receipts and queued rows without a getUser refetch", async () => {
     const db = await getTestDatabase();

@@ -99,7 +99,6 @@ import {
   getNextUserSnapshotAt,
   getSecondPrecisionDate,
 } from "@/utils/time";
-import type { QueryCondition } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { cookItemInputSchema } from "@/validators/cooking";
 import {
@@ -422,9 +421,7 @@ export const occupationRouter = createTRPCRouter({
         }
         const taken = await Promise.all(
           allConsumptions.map((consumption) =>
-            takeCraftMaterial(ctx.drizzle, ctx.userId, consumption, [
-              eq(userItem.isInAuction, false),
-            ]),
+            takeCraftMaterial(ctx.drizzle, ctx.userId, consumption),
           ),
         );
         if (taken.some((ok) => !ok)) {
@@ -964,12 +961,11 @@ export const occupationRouter = createTRPCRouter({
     }),
 });
 
-/** Debit one material stack, failing when it no longer holds the planned quantity. */
+/** Debit one material stack, failing when it changed or was listed at auction. */
 const takeCraftMaterial = (
   client: Pick<DrizzleClient, "update" | "delete">,
   userId: string,
   consumption: { userItemId: string; consumeQuantity: number; newQuantity: number },
-  where?: QueryCondition[],
 ) =>
   updateUserItemQuantityAtomically({
     client,
@@ -977,5 +973,5 @@ const takeCraftMaterial = (
     userItemId: consumption.userItemId,
     expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
     nextQuantity: consumption.newQuantity,
-    where,
+    where: [eq(userItem.isInAuction, false)],
   });
