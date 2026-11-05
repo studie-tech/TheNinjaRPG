@@ -217,7 +217,7 @@ export function ItemInspector({
         </div>
       </div>
       {look.description && (
-        <div data-reading-text className="line-clamp-3 text-muted-foreground text-sm">
+        <div data-reading-text className="text-muted-foreground text-sm">
           {parseHtml(look.description)}
         </div>
       )}

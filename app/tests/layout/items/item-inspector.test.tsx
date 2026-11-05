@@ -192,7 +192,7 @@ it("puts the actions before the long effects card", () => {
   renderInspector();
   const equipButton = screen.getByRole("button", { name: /^Equip$/ });
   const effects = screen.getByText("Item effects");
-  // The effects card repeats the name and art, so the panel leads with what can be done.
+  // Keep the available actions ahead of the detailed stats.
   expect(equipButton.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // The header art sits in a positioned box so it cannot cover the controls above it.
   expect(screen.getByText("Twin Fang Blade art").parentElement?.className).toContain("relative");
@@ -205,9 +205,9 @@ it("shows the full stats straight away without repeating the header", () => {
   expect(within(details).getByText("Item effects")).toBeDefined();
   expect(screen.getByText("Item effects").closest("details")).toBeNull();
   expect(screen.queryByText("All details")).toBeNull();
-  expect(spy.mock.calls.at(-1)?.[0]).toMatchObject({ hideTitle: true, hideImage: true, hideDates: true });
-  // The header already shows the description, so the details start with the stats.
-  expect(spy.mock.calls.at(-1)?.[0].item.description).toBe("");
+  expect(spy.mock.calls.at(-1)?.[0]).toMatchObject({
+    hideTitle: true, hideImage: true, hideDates: true, item: { description: "" },
+  });
 });
 
 it("shows durability with its repair actions when the item wears", () => {
