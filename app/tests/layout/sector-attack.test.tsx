@@ -80,7 +80,6 @@ describe("sector attack controls", () => {
               hex={{ col: 5, row: 5 } as TerrainHex}
               allyAttack={false}
               storedBracket={-1}
-              timeDiff={0}
               setIsOpen={vi.fn()}
               setAllyAttack={vi.fn()}
               setStoredBracket={vi.fn()}
@@ -115,7 +114,6 @@ it("closes scouting during travel and restores it after arrival", () => {
     hex: { col: 13, row: 13 } as TerrainHex,
     allyAttack: false,
     storedBracket: -1,
-    timeDiff: 0,
     setIsOpen: vi.fn(),
     setAllyAttack: vi.fn(),
     setStoredBracket: vi.fn(),

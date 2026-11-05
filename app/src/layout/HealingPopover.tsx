@@ -2,16 +2,16 @@
 
 import type React from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IMG_ICON_HEAL } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import {
+  currentHealCapacity,
+  HealPercentageButtons,
+} from "@/layout/HealPercentageButtons";
 import Image from "@/layout/Image";
-import { calcCurrent } from "@/layout/StatusBar";
-import { calcChakraToPools } from "@/libs/hospital";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { showMutationToast } from "@/libs/toast";
-import type { UserWithRelations } from "@/routers/profile";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -22,8 +22,6 @@ import { useUserData } from "@/utils/UserContext";
  * // Controlled mode (external state)
  * <HealingPopover
  *   targetUser={user}
- *   userData={userData}
- *   timeDiff={timeDiff}
  *   open={isOpen}
  *   onOpenChange={setIsOpen}
  *   side="top"
@@ -33,8 +31,6 @@ import { useUserData } from "@/utils/UserContext";
  * // Uncontrolled mode (internal state with trigger)
  * <HealingPopover
  *   targetUser={user}
- *   userData={userData}
- *   timeDiff={timeDiff}
  *   side="top"
  *   onHealComplete={() => console.log('Healing completed!')}
  * />
@@ -43,10 +39,6 @@ import { useUserData } from "@/utils/UserContext";
 interface HealingPopoverProps {
   /** The user to be healed */
   targetUser: SectorUser;
-  /** The current user's data */
-  userData: NonNullable<UserWithRelations>;
-  /** Time difference for regeneration calculations */
-  timeDiff: number;
   /** Custom trigger element. If not provided, uses default heal icon */
   trigger?: React.ReactNode;
   /** Side where the popover should appear relative to the trigger */
@@ -63,8 +55,6 @@ interface HealingPopoverProps {
 
 const HealingPopover: React.FC<HealingPopoverProps> = ({
   targetUser,
-  userData,
-  timeDiff,
   trigger,
   side = "top",
   className = "",
@@ -73,7 +63,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   onOpenChange,
 }) => {
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { data: userData, timeDiff, prepareUserUpdate, updateUser } = useUserData();
 
   // Mutations
   const { mutate: userHeal, isPending: isHealing } = api.hospital.userHeal.useMutation({
@@ -90,23 +80,10 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
     },
   });
 
-  // Helper function to calculate healing capacity
-  const calcHealCapacity = (user: SectorUser) => {
-    const currentChakra = calcCurrent(
-      userData.curChakra,
-      userData.maxChakra,
-      userData.status,
-      userData.regeneration,
-      userData.regenAt,
-      timeDiff,
-    ).current;
+  if (!userData) return null;
 
-    const maxHeal = calcChakraToPools(userData, currentChakra);
-    const missingHealth = user.maxHealth - user.curHealth;
-    return { maxHeal, missingHealth };
-  };
-
-  const { maxHeal, missingHealth } = calcHealCapacity(targetUser);
+  const maxHeal = currentHealCapacity(userData, timeDiff);
+  const missingHealth = targetUser.maxHealth - targetUser.curHealth;
 
   const defaultTrigger = (
     <Image
@@ -139,58 +116,17 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              disabled={
-                targetUser.maxHealth * 0.25 > maxHeal || isHealing || missingHealth <= 0
-              }
-              onClick={() =>
-                userHeal({ userId: targetUser.userId, healPercentage: 25 })
-              }
-              className="w-full"
-            >
-              25%
-            </Button>
-            <Button
-              disabled={
-                targetUser.maxHealth * 0.5 > maxHeal ||
-                missingHealth <= 0.25 * targetUser.maxHealth ||
-                isHealing
-              }
-              onClick={() =>
-                userHeal({ userId: targetUser.userId, healPercentage: 50 })
-              }
-              className="w-full"
-            >
-              50%
-            </Button>
-            <Button
-              disabled={
-                targetUser.maxHealth * 0.75 > maxHeal ||
-                missingHealth <= 0.5 * targetUser.maxHealth ||
-                isHealing
-              }
-              onClick={() =>
-                userHeal({ userId: targetUser.userId, healPercentage: 75 })
-              }
-              className="w-full"
-            >
-              75%
-            </Button>
-            <Button
-              disabled={
-                targetUser.maxHealth * 1.0 > maxHeal ||
-                missingHealth <= 0.75 * targetUser.maxHealth ||
-                isHealing
-              }
-              onClick={() =>
-                userHeal({ userId: targetUser.userId, healPercentage: 100 })
-              }
-              className="w-full"
-            >
-              100%
-            </Button>
-          </div>
+          <HealPercentageButtons
+            className="gap-2"
+            buttonProps={{ className: "w-full" }}
+            maxHealth={targetUser.maxHealth}
+            missingHealth={missingHealth}
+            maxHeal={maxHeal}
+            disabled={isHealing || missingHealth <= 0}
+            onHeal={(healPercentage) =>
+              userHeal({ userId: targetUser.userId, healPercentage })
+            }
+          />
 
           {isHealing && (
             <div className="text-center">
