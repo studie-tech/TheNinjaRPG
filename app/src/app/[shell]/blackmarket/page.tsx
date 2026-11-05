@@ -42,7 +42,7 @@ import NavTabs from "@/layout/NavTabs";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { filterRollableBloodlines } from "@/libs/bloodline";
+import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -206,8 +206,7 @@ const PityBloodlineRoll: React.FC<{
 
   // Process data for table
   const itemRolls = prevRolls?.map((entry) => {
-    const unusedRolls = entry.used - PITY_BLOODLINE_ROLLS * entry.pityRolls;
-    const pityRolls = Math.floor(unusedRolls / PITY_BLOODLINE_ROLLS);
+    const pityRolls = getPityRolls(entry);
     const bloodlinePool = filterRollableBloodlines({
       bloodlines: bloodlines.data,
       user: userData,
