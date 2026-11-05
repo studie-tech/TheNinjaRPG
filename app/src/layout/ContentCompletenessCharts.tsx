@@ -5,44 +5,18 @@ import { useEffect, useRef } from "react";
 
 export function CountsChart(props: CountsChartProps) {
   const classChartRef = useRef<HTMLCanvasElement>(null);
-  const data = Object.entries(props.data || {}).map(([text, value]) => ({
-    text,
-    value,
-  }));
-  const values = data.map((d) => d.value);
-  const labels = data.map((d) => d.text);
   useEffect(() => {
     const classCtx = classChartRef?.current?.getContext("2d");
     if (classCtx) {
+      const data = Object.entries(props.data || {});
       const myClassChart = new ChartJS(classCtx, {
         type: "bar",
-        options: {
-          maintainAspectRatio: false,
-          responsive: true,
-          aspectRatio: 1.1,
-          scales: {
-            x: {
-              ticks: {
-                maxRotation: 90,
-                minRotation: 90,
-                autoSkip: false,
-              },
-            },
-            y: {
-              beginAtZero: true,
-            },
-          },
-          plugins: {
-            legend: {
-              display: false,
-            },
-          },
-        },
+        options: rotatedBarOptions(false),
         data: {
-          labels: labels,
+          labels: data.map(([text]) => text),
           datasets: [
             {
-              data: values,
+              data: data.map(([, value]) => value),
               borderWidth: 1,
             },
           ],
@@ -53,7 +27,7 @@ export function CountsChart(props: CountsChartProps) {
         myClassChart.destroy();
       };
     }
-  }, [labels, values]);
+  }, [props.data]);
 
   return (
     <div className="relative w-[99%] p-3">
@@ -95,30 +69,7 @@ export function StackedCountsChart(props: StackedCountsChartProps) {
 
       const myStackedChart = new ChartJS(stackedCtx, {
         type: "bar",
-        options: {
-          maintainAspectRatio: false,
-          responsive: true,
-          aspectRatio: 1.1,
-          scales: {
-            x: {
-              ticks: {
-                maxRotation: 90,
-                minRotation: 90,
-                autoSkip: false,
-              },
-              stacked: true,
-            },
-            y: {
-              beginAtZero: true,
-              stacked: true,
-            },
-          },
-          plugins: {
-            legend: {
-              display: true,
-            },
-          },
-        },
+        options: rotatedBarOptions(true),
         data: {
           labels: effectTypes,
           datasets: datasets,
@@ -138,6 +89,32 @@ export function StackedCountsChart(props: StackedCountsChartProps) {
     </div>
   );
 }
+
+/** Bars with vertical labels; a stacked chart also needs its legend to read the series. */
+const rotatedBarOptions = (stacked: boolean) => ({
+  maintainAspectRatio: false,
+  responsive: true,
+  aspectRatio: 1.1,
+  scales: {
+    x: {
+      ticks: {
+        maxRotation: 90,
+        minRotation: 90,
+        autoSkip: false,
+      },
+      stacked,
+    },
+    y: {
+      beginAtZero: true,
+      stacked,
+    },
+  },
+  plugins: {
+    legend: {
+      display: stacked,
+    },
+  },
+});
 
 interface CountsChartProps {
   data: Record<string, number> | undefined;
