@@ -8,6 +8,7 @@ import Confirm from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import Modal from "@/layout/Modal";
 import { calcItemRepairCost } from "@/libs/item";
+import type { RepairKit } from "@/libs/repair";
 import type { UserWithRelations } from "@/routers/profile";
 
 /** Lets players choose a repair kit with a durability preview and pending-state guard. */
@@ -15,7 +16,7 @@ export function RepairItemSelectionModal({
   isOpen,
   setIsOpen,
   targetItem,
-  repairItems,
+  repairKits,
   onSelectRepairItem,
   isPending = false,
 }: RepairItemModalProps) {
@@ -37,17 +38,13 @@ export function RepairItemSelectionModal({
             Durability: {targetItem.durability} / {targetItem.item.maxDurability}
           </p>
         </div>
-        {repairItems.length === 0 ? (
+        {repairKits.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             You don&apos;t have any repair items in your inventory.
           </p>
         ) : (
           <div className="space-y-3">
-            {repairItems.map((repairItem) => {
-              const repairEffect = repairItem.item.effects.find(
-                (e) => e.type === "repair",
-              );
-              const repairAmount = Math.floor(repairEffect?.power || 0);
+            {repairKits.map(({ userItem: repairItem, repairAmount }) => {
               const newDurability = Math.min(
                 targetItem.durability + repairAmount,
                 targetItem.item.maxDurability,
@@ -177,7 +174,7 @@ interface RepairItemModalProps {
   isOpen: boolean;
   setIsOpen: SetIsOpenType;
   targetItem: UserItemWithRelations;
-  repairItems: UserItemWithRelations[];
+  repairKits: RepairKit[];
   onSelectRepairItem: (repairItemId: string, targetItemId: string) => void;
   isPending?: boolean;
 }

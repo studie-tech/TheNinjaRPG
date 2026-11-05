@@ -120,9 +120,7 @@ export function ItemInspector({
   const canEatMeal =
     !isLoading && canAttemptAwakeAction(userData) && !userData.battleId;
   const sellPrice = calcItemSellingPrice(userData, useritem, structures);
-  const repairItems = getRepairKits(allUserItems, userData).map(
-    ({ userItem }) => userItem,
-  );
+  const repairKits = getRepairKits(allUserItems, userData);
   const equippedIn = useritem.equipped === "NONE" ? null : useritem.equipped;
   // Battle keys fire only for equipped items.
   const canSetHotkey =
@@ -330,7 +328,7 @@ export function ItemInspector({
                 <ItemDurabilityRepairActions
                   useritem={useritem}
                   userData={userData}
-                  repairItemsCount={repairItems.length}
+                  repairItemsCount={repairKits.length}
                   onOpenRepairModal={() => setIsRepairModalOpen(true)}
                   onRepairWithRyo={(userItemId) => mutateRepairWithRyo({ userItemId })}
                   isRepairingWithRyo={isRepairingWithRyo}
@@ -615,7 +613,7 @@ export function ItemInspector({
       {/* Repair Item Selection Modal */}
       <RepairItemSelectionModal
         targetItem={useritem}
-        repairItems={repairItems}
+        repairKits={repairKits}
         isOpen={isRepairModalOpen}
         setIsOpen={setIsRepairModalOpen}
         onSelectRepairItem={(repairItemId, targetItemId) => {
