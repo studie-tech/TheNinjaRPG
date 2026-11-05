@@ -49,6 +49,7 @@ import { getRandomElement } from "@/utils/array";
 import { createSerialQueue } from "@/utils/async";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
+import { clamp } from "@/utils/math";
 
 /** Audio and preference fields consumed by settings and playback. */
 export type GameSettingsUser = Pick<
@@ -574,7 +575,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     } else {
       percent = nextValue;
     }
-    const safePercent = Math.min(100, Math.max(0, percent));
+    const safePercent = clamp(percent, 0, 100);
     const newVolume = safePercent / 100;
     setSfxVolume(newVolume);
     safeLocalStorageSetItem("sfxVolume", JSON.stringify(newVolume));

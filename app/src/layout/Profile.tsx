@@ -53,7 +53,7 @@ import { QuestTeams } from "@/layout/QuestTeams";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
 import { calcMedninRank } from "@/libs/hospital";
-import { experienceToNextLevel, showUserRank } from "@/libs/profile";
+import { experienceToNextLevel, formatPvpWinRate, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { isTutorialActive } from "@/libs/tutorial";
@@ -319,13 +319,7 @@ function CharacterProfile() {
                 <p>PvP Wins: {userData.pvpWins}</p>
                 <p>PvP Losses: {userData.pvpLosses}</p>
                 <p>
-                  PvP Win Rate:{" "}
-                  {userData.pvpWins + userData.pvpLosses > 0
-                    ? (
-                        (userData.pvpWins / (userData.pvpWins + userData.pvpLosses)) *
-                        100
-                      ).toFixed(1)
-                    : "0"}
+                  PvP Win Rate: {formatPvpWinRate(userData.pvpWins, userData.pvpLosses)}
                   %
                 </p>
               </>

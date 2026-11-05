@@ -12,6 +12,7 @@ import { CharacterPreview } from "@/layout/CharacterPreview";
 import { previewSpriteDesign, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import { chunkArray } from "@/utils/array";
+import { downloadBlob } from "@/utils/dom";
 import { textureImageUrl } from "@/utils/image";
 import { UploadButton } from "@/utils/uploadthing";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
@@ -758,12 +759,10 @@ async function downloadLpcDesign(name: string, config: LpcConfig) {
     );
   zip.file("design.json", JSON.stringify(config));
   zip.file("files.json", JSON.stringify(files, null, 2));
-  const url = URL.createObjectURL(await zip.generateAsync({ type: "blob" })),
-    anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${name.replace(/[^a-zA-Z0-9_-]/g, "-") || "lpc-design"}.zip`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(
+    await zip.generateAsync({ type: "blob" }),
+    `${name.replace(/[^a-zA-Z0-9_-]/g, "-") || "lpc-design"}.zip`,
+  );
 }
 
 const emptyConfig: LpcConfig = {

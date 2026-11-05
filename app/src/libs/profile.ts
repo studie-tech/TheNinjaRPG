@@ -104,6 +104,14 @@ type LevelUpBlockKind = "cap" | "milestone" | "experience" | "village";
 export const levelUpBlockMessage = (user: Parameters<typeof levelUpBlock>[0]) =>
   levelUpBlock(user)?.message ?? null;
 
+/** PvP wins as a percentage of PvP fights; 0 before the first fight. */
+export const getPvpWinRate = (wins: number, losses: number) =>
+  wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+
+/** The win rate as shown on profiles: one decimal, or "0" before the first fight. */
+export const formatPvpWinRate = (wins: number, losses: number) =>
+  wins + losses > 0 ? getPvpWinRate(wins, losses).toFixed(1) : "0";
+
 /** Experience still missing for the next level. */
 export const experienceToNextLevel = (user: Pick<UserData, "level" | "experience">) =>
   Math.max(calcLevelRequirements(user.level) - user.experience, 0);

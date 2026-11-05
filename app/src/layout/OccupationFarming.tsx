@@ -14,6 +14,7 @@ import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmOverview } from "@/layout/FarmOverview";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
 import Loader from "@/layout/Loader";
+import { getScrollBehavior } from "@/utils/dom";
 import type { FarmVisualState } from "@/validators/farming";
 
 /**
@@ -288,10 +289,7 @@ const revealElement = (id: string, block: "start" | "nearest") => {
     if (top >= 0 && bottom <= viewHeight) return;
     if (top >= 0) delta = Math.min(delta, bottom - viewHeight + REVEAL_MARGIN_PX);
   }
-  const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? "auto"
-    : "smooth";
-  (scroller ?? window).scrollBy({ top: delta, behavior });
+  (scroller ?? window).scrollBy({ top: delta, behavior: getScrollBehavior() });
 };
 
 type FarmTab = "market" | "crops" | "extraction" | "upgrades";

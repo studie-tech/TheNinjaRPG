@@ -22,6 +22,8 @@ import {
   passesBracketFilter,
   scaleUserStats,
   unassignedExperienceTowardLevel,
+  formatPvpWinRate,
+  getPvpWinRate,
 } from "@/libs/profile";
 
 test("Confirm that level<->experience calculations are consistent", () => {
@@ -598,5 +600,19 @@ describe("unassignedExperienceTowardLevel", () => {
       unassignedExperienceTowardLevel({ ...user, village: { name: "Horizon" } }),
     ).toBe(0);
     expect(unassignedExperienceTowardLevel({ ...user, rank: "ELITE JONIN" })).toBe(0);
+  });
+});
+
+describe("PvP win rate", () => {
+  it("is a percentage of fights, or 0 before the first fight", () => {
+    expect(getPvpWinRate(3, 1)).toBe(75);
+    expect(getPvpWinRate(0, 0)).toBe(0);
+  });
+
+  it("shows one decimal, or a bare 0 before the first fight", () => {
+    expect(formatPvpWinRate(1, 2)).toBe("33.3");
+    expect(formatPvpWinRate(3, 1)).toBe("75.0");
+    expect(formatPvpWinRate(0, 0)).toBe("0");
+    expect(formatPvpWinRate(0, 5)).toBe("0.0");
   });
 });

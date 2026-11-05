@@ -4,6 +4,7 @@ import { usePageActive } from "@/hooks/usePageActive";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { calcApReduction } from "@/libs/combat/util";
+import { clamp } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import Loader from "./Loader";
 
@@ -42,8 +43,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   const cost = action?.actionCostPerc ?? 0;
   const actionNow = user.actionPoints - stunReduction;
   const actionAfter = actionNow - cost;
-  const clampedActionNow = Math.max(0, Math.min(100, actionNow));
-  const clampedActionAfter = Math.max(0, Math.min(100, actionAfter));
+  const clampedActionNow = clamp(actionNow, 0, 100);
+  const clampedActionAfter = clamp(actionAfter, 0, 100);
   const isProjectedNegative = actionAfter < 0;
   const spentStart = Math.max(0, Math.min(clampedActionAfter, clampedActionNow));
   const spentWidth = Math.max(0, clampedActionNow - Math.max(0, clampedActionAfter));
