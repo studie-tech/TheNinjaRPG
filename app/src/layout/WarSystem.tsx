@@ -114,8 +114,6 @@ export const WarRoom: React.FC<{
   navTabs?: React.ReactNode;
   initialBreak?: boolean;
 }> = ({ user, navTabs, initialBreak }) => {
-  // tRPC utility
-  const utils = api.useUtils();
   const { timeDiff } = useUserInfo();
 
   // State
@@ -141,40 +139,7 @@ export const WarRoom: React.FC<{
   });
 
   // Mutations
-  const { mutate: acceptAllyOffer, isPending: isHiring } =
-    api.war.acceptAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.war.getActiveWars.invalidate(),
-            utils.war.getRaidOptions.invalidate(),
-            utils.war.getEndedWars.invalidate(),
-            utils.war.getAllyOffers.invalidate(),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: rejectAllyOffer, isPending: isRejectingOffer } =
-    api.war.rejectAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
-
-  const { mutate: cancelAllyOffer, isPending: isCancelling } =
-    api.war.cancelAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
+  const allyOffers = useAllyOfferActions();
 
   // Derived
   const isLeader = user.userId === user.village?.kageId;
@@ -268,12 +233,12 @@ export const WarRoom: React.FC<{
         >
           {requests && requests.length > 0 && (
             <UserRequestSystem
-              isLoading={isHiring || isRejectingOffer || isCancelling}
+              isLoading={allyOffers.isPending}
               requests={requests}
               userId={user.userId}
-              onAccept={({ id }) => acceptAllyOffer({ offerId: id })}
-              onReject={({ id }) => rejectAllyOffer({ id })}
-              onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
+              onAccept={allyOffers.onAccept}
+              onReject={allyOffers.onReject}
+              onCancel={allyOffers.onCancel}
             />
           )}
           {requests && requests.length === 0 && (
@@ -705,9 +670,8 @@ export const SectorWar: React.FC<{
   // tRPC utility
   const utils = api.useUtils();
 
-  const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
-
   // Mutations
+  const adminEnd = useAdminEndWar(war.id);
   const { mutate: buildShrine, isPending: isBuilding } =
     api.war.buildShrine.useMutation({
       onSuccess: async (data) => {
@@ -720,20 +684,6 @@ export const SectorWar: React.FC<{
             utils.travel.getAllSectors.invalidate(),
           ]);
         }
-      },
-    });
-
-  const { mutate: adminEndWar, isPending: isEndingWar } =
-    api.war.adminEndWar.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (!data.success) return;
-        setShowAdminEndDialog(false);
-        await Promise.all([
-          utils.war.getActiveWars.invalidate(),
-          utils.war.getRaidOptions.invalidate(),
-          utils.war.getEndedWars.invalidate(),
-        ]);
       },
     });
 
@@ -761,10 +711,10 @@ export const SectorWar: React.FC<{
                 variant="destructive"
                 size="icon"
                 aria-label={`End sector war ${war.id}`}
-                disabled={isBuilding || isEndingWar}
-                onClick={() => setShowAdminEndDialog(true)}
+                disabled={isBuilding || adminEnd.isPending}
+                onClick={() => adminEnd.setShowDialog(true)}
               >
-                {isEndingWar ? (
+                {adminEnd.isPending ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <Trash2 className="h-5 w-5" />
@@ -824,12 +774,12 @@ export const SectorWar: React.FC<{
             {canBuildShrine && (
               <Confirm
                 title="Build Shrine"
-                disabled={isEndingWar}
+                disabled={adminEnd.isPending}
                 button={
                   <Button
                     className="w-full"
                     loading={isBuilding}
-                    disabled={isEndingWar}
+                    disabled={adminEnd.isPending}
                   >
                     <LandPlot className="mr-2 h-5 w-5" />
                     Build Shrine ({WAR_PURCHASE_SHRINE_TOKEN_COST.toLocaleString()}{" "}
@@ -854,14 +804,14 @@ export const SectorWar: React.FC<{
       <Modal
         id="sector-admin-end-war"
         title="End Sector War"
-        isOpen={showAdminEndDialog}
-        setIsOpen={setShowAdminEndDialog}
+        isOpen={adminEnd.showDialog}
+        setIsOpen={adminEnd.setShowDialog}
         proceed_label="End sector war"
         proceed_loading_label="Ending"
         confirmClassName="bg-amber-600 text-white hover:bg-amber-700"
-        isLoading={isEndingWar}
+        isLoading={adminEnd.isPending}
         keepOpenOnAccept={true}
-        onAccept={() => adminEndWar({ warId: war.id })}
+        onAccept={adminEnd.endWar}
       >
         <div className="space-y-3">
           <p>
@@ -1373,7 +1323,6 @@ export const VillageWar: React.FC<{
           : surrenderAlly?.supportVillageId === war.defenderVillageId
             ? "ALLY_DEFENDER"
             : undefined;
-  const [showAdminEndDialog, setShowAdminEndDialog] = useState(false);
 
   // Form for token offer
   const offerSchema = createAllianceOfferSchema(userVillage?.tokens ?? 0);
@@ -1405,39 +1354,8 @@ export const VillageWar: React.FC<{
   );
 
   // Mutations
-  const { mutate: acceptAllyOffer, isPending: isHiring } =
-    api.war.acceptAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            utils.war.getActiveWars.invalidate(),
-            utils.war.getRaidOptions.invalidate(),
-            utils.war.getAllyOffers.invalidate(),
-          ]);
-        }
-      },
-    });
-
-  const { mutate: rejectAllyOffer, isPending: isRejectingOffer } =
-    api.war.rejectAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
-
-  const { mutate: cancelAllyOffer, isPending: isCancelling } =
-    api.war.cancelAllyOffer.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.war.getAllyOffers.invalidate();
-        }
-      },
-    });
+  const allyOffers = useAllyOfferActions();
+  const adminEnd = useAdminEndWar(war.id);
 
   const { mutate: createAllyOffer, isPending: isCreatingOffer } =
     api.war.createAllyOffer.useMutation({
@@ -1465,23 +1383,9 @@ export const VillageWar: React.FC<{
       },
     });
 
-  const { mutate: adminEndWar, isPending: isAdminEnding } =
-    api.war.adminEndWar.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (!data.success) return;
-        setShowAdminEndDialog(false);
-        await Promise.all([
-          utils.war.getActiveWars.invalidate(),
-          utils.war.getRaidOptions.invalidate(),
-          utils.war.getEndedWars.invalidate(),
-          utils.war.getAllyOffers.invalidate(),
-        ]);
-      },
-    });
-
+  const isAdminEnding = adminEnd.isPending;
   const competingVillageWarMutation =
-    isHiring || isRejectingOffer || isCancelling || isCreatingOffer || isAdminEnding;
+    allyOffers.isPending || isCreatingOffer || isAdminEnding;
 
   const supportedVillageName =
     surrenderAlly?.supportVillageId === war.attackerVillageId
@@ -1577,7 +1481,7 @@ export const VillageWar: React.FC<{
               className="bg-amber-700 hover:bg-amber-800"
               aria-label={`Administratively end ${war.type === "WAR_RAID" ? "war raid" : "village war"} ${war.id}`}
               disabled={isSurrendering || competingVillageWarMutation}
-              onClick={() => setShowAdminEndDialog(true)}
+              onClick={() => adminEnd.setShowDialog(true)}
             >
               {isAdminEnding ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -1645,14 +1549,14 @@ export const VillageWar: React.FC<{
       <Modal
         id="village-admin-end-war"
         title={war.type === "WAR_RAID" ? "End War Raid" : "End Village War"}
-        isOpen={showAdminEndDialog && war.status === "ACTIVE"}
-        setIsOpen={setShowAdminEndDialog}
+        isOpen={adminEnd.showDialog && war.status === "ACTIVE"}
+        setIsOpen={adminEnd.setShowDialog}
         proceed_label={war.type === "WAR_RAID" ? "End war raid" : "End village war"}
         proceed_loading_label="Ending"
         confirmClassName="bg-amber-700 text-white hover:bg-amber-800 focus-visible:ring-amber-500"
         isLoading={isAdminEnding}
         keepOpenOnAccept={true}
-        onAccept={() => adminEndWar({ warId: war.id })}
+        onAccept={adminEnd.endWar}
         className="max-w-xl border-amber-900/60"
       >
         <div className="space-y-4">
@@ -2000,23 +1904,68 @@ export const VillageWar: React.FC<{
             padding={false}
           >
             <UserRequestSystem
-              isLoading={
-                isHiring ||
-                isRejectingOffer ||
-                isCancelling ||
-                isCreatingOffer ||
-                isSurrendering ||
-                isAdminEnding
-              }
+              isLoading={competingVillageWarMutation || isSurrendering}
               requests={warRequests}
               userId={user.userId}
-              onAccept={({ id }) => acceptAllyOffer({ offerId: id })}
-              onReject={({ id }) => rejectAllyOffer({ id })}
-              onCancel={({ id }) => cancelAllyOffer({ offerId: id })}
+              onAccept={allyOffers.onAccept}
+              onReject={allyOffers.onReject}
+              onCancel={allyOffers.onCancel}
             />
           </ContentBox>
         )}
       {/* Shrine HP Status for Village Wars and Raids */}
     </div>
   );
+};
+
+/** Ally-offer handlers for `UserRequestSystem`, sharing one pending flag. */
+const useAllyOfferActions = () => {
+  const utils = api.useUtils();
+  const onOfferClosed = async (data: { success: boolean; message: string }) => {
+    showMutationToast(data);
+    if (data.success) {
+      await utils.war.getAllyOffers.invalidate();
+    }
+  };
+  const accept = api.war.acceptAllyOffer.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) {
+        await Promise.all([
+          utils.war.getActiveWars.invalidate(),
+          utils.war.getRaidOptions.invalidate(),
+          utils.war.getEndedWars.invalidate(),
+          utils.war.getAllyOffers.invalidate(),
+        ]);
+      }
+    },
+  });
+  const reject = api.war.rejectAllyOffer.useMutation({ onSuccess: onOfferClosed });
+  const cancel = api.war.cancelAllyOffer.useMutation({ onSuccess: onOfferClosed });
+  return {
+    isPending: accept.isPending || reject.isPending || cancel.isPending,
+    onAccept: ({ id }: { id: string }) => accept.mutate({ offerId: id }),
+    onReject: ({ id }: { id: string }) => reject.mutate({ id }),
+    onCancel: ({ id }: { id: string }) => cancel.mutate({ offerId: id }),
+  };
+};
+
+/** Administrative war removal; its confirmation dialog stays open if the server refuses. */
+const useAdminEndWar = (warId: string) => {
+  const utils = api.useUtils();
+  const [showDialog, setShowDialog] = useState(false);
+  const { mutate, isPending } = api.war.adminEndWar.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (!data.success) return;
+      setShowDialog(false);
+      await Promise.all([
+        utils.war.getActiveWars.invalidate(),
+        utils.war.getRaidOptions.invalidate(),
+        utils.war.getEndedWars.invalidate(),
+        utils.war.getAllyOffers.invalidate(),
+      ]);
+    },
+  });
+  return { isPending, showDialog, setShowDialog, endWar: () => mutate({ warId }) };
 };
