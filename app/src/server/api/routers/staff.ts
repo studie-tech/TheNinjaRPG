@@ -23,9 +23,7 @@ import {
   userQuestAttempt,
   userSkill,
 } from "@/drizzle/schema";
-
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
-
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isBattleClaimId } from "@/libs/raids";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
@@ -48,6 +46,7 @@ import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchase
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
 import { deleteUserSkills, fetchMasterySources } from "@/queries/skillTree";
+import { deleteAiSpriteAnimationBindings } from "@/queries/spriteAnimation";
 import {
   applyDevelopmentBackup,
   clearDevelopmentBackupTarget,
@@ -1114,6 +1113,7 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
       deleteRowsForUser(client, table, userId),
     ),
+    deleteAiSpriteAnimationBindings(client, userId),
     deleteUserItems(client, userId),
     deleteFarmPlotForDeleteUserInternal(client, userId),
     deleteFarmExtractionForDeleteUserInternal(client, userId),

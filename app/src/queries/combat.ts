@@ -568,6 +568,7 @@ export const listUserDataForQueryBattleUsers = (
       ),
     }),
     with: {
+      spriteAnimationBindings: { with: { animation: true } },
       raidBuffs: true,
       titles: true,
       attributes: true,
@@ -1552,6 +1553,7 @@ export const listUserDataForProcessUsersForBattle = (
 ) =>
   client.query.userData.findMany({
     with: {
+      spriteAnimationBindings: { with: { animation: true } },
       bloodline: { with: { bloodrightTiers: true } },
       sageMode: true,
       village: true,

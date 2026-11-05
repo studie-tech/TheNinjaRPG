@@ -257,6 +257,10 @@ import {
   fetchBloodlineCollectionRolls,
   fetchQuestDiscoverySummaryCandidates,
 } from "@/queries/quests";
+import {
+  copyAiSpriteAnimationBindings,
+  listAiSpriteAnimationBindings,
+} from "@/queries/spriteAnimation";
 import { fetchEventNoticeState } from "@/queries/tournamentEvents";
 import { fetchJutsuQueueSummary } from "@/queries/train";
 import { fetchVillage, fetchVillages } from "@/queries/village";
@@ -1222,13 +1226,15 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, aiData, jutsuData, itemData, nindoData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        findUserById(ctx.drizzle, input.id),
-        listUserJutsuByUserId(ctx.drizzle, input.id),
-        listUserItemsByUserId(ctx.drizzle, input.id),
-        findUserNindoByUserId(ctx.drizzle, input.id),
-      ]);
+      const [user, aiData, jutsuData, itemData, nindoData, animationBindings] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          findUserById(ctx.drizzle, input.id),
+          listUserJutsuByUserId(ctx.drizzle, input.id),
+          listUserItemsByUserId(ctx.drizzle, input.id),
+          findUserNindoByUserId(ctx.drizzle, input.id),
+          listAiSpriteAnimationBindings(ctx.drizzle, input.id),
+        ]);
       // Guard
       if (!aiData) return errorResponse("AI not found");
       if (!aiData.isAi) return errorResponse("Not an AI");
@@ -1242,6 +1248,18 @@ export const profileRouter = createTRPCRouter({
       // Run all inserts at once
       await Promise.all([
         insertUserDataForCloneAi(ctx.drizzle, aiData),
+        // Clone the bindings, retaining the same immutable sheets in the shared library.
+        ...(animationBindings.length
+          ? [
+              copyAiSpriteAnimationBindings(
+                ctx.drizzle,
+                animationBindings.map((binding) => ({
+                  ...binding,
+                  userId: aiData.userId,
+                })),
+              ),
+            ]
+          : []),
         ...(jutsuData.length > 0
           ? [insertUserJutsuForCloneAi(ctx.drizzle, jutsuData, aiData)]
           : []),

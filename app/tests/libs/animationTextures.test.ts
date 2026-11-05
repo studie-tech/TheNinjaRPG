@@ -1,0 +1,76 @@
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { Assets, Sprite, Texture, TextureSource } from "pixi.js";
+import { acquireAnimationTexture, animationTextureUrl, clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
+import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
+import variants from "@/libs/rendering/animationTextureVariants.json";
+import type { CharacterAnimation } from "@/libs/spriteAnimations";
+const idle: CharacterAnimation={id:"idle",name:"Idle",url:"https://uploadthing.b-cdn.net/f/idle.webp",columns:2,rows:2,frameCount:4,fps:4,facing:"left"};
+const atlas=()=>new Texture({source:new TextureSource({width:256,height:256})});
+const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
+afterEach(async()=>{clearUnusedAnimationTextures();await flush();vi.restoreAllMocks();});
+describe("Pixi AI atlases",()=>{
+ it("deduplicates pending loads and keeps leases alive until release",async()=>{
+  const texture=atlas(); const load=vi.spyOn(Assets,"load").mockImplementation(async()=>texture);const unload=vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const a=acquireAnimationTexture(idle)!; const b=acquireAnimationTexture(idle)!;
+  expect(await a.resource).toBe(texture);expect(await b.resource).toBe(texture);expect(load).toHaveBeenCalledTimes(1);
+  a.release();clearUnusedAnimationTextures();expect(unload).not.toHaveBeenCalled();
+  b.release();clearUnusedAnimationTextures();await flush();expect(unload).toHaveBeenCalledTimes(1);
+ });
+ it("keeps a shared source alive across compatible grid leases",async()=>{
+  const texture=new Texture({source:new TextureSource({width:1024,height:1024})});
+  vi.spyOn(Assets,"load").mockImplementation(async()=>texture);
+  const unload=vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const a=acquireAnimationTexture({...idle,columns:8,rows:8,frameCount:64,fps:8},128)!;
+  const b=acquireAnimationTexture({...idle,columns:4,rows:4,frameCount:16,fps:8},256)!;
+  await Promise.all([a.resource,b.resource]);
+  a.release();clearUnusedAnimationTextures();await flush();expect(unload).not.toHaveBeenCalled();
+  b.release();clearUnusedAnimationTextures();await flush();expect(unload).toHaveBeenCalledTimes(1);
+ });
+ it("reserves pending and active images within the 32 MiB budget",async()=>{
+  let resolve!: (texture: Texture) => void;
+  const pending=new Promise<Texture>(done=>{resolve=done;});
+  vi.spyOn(Assets,"load").mockImplementation(()=>pending);
+  vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const big={...idle,columns:8,rows:8,frameCount:64,fps:8};
+  const leases=Array.from({length:8},(_,i)=>acquireAnimationTexture({...big,id:String(i),url:`https://example.com/${i}.webp`},128));
+  expect(leases.every(Boolean)).toBe(true);
+  expect(acquireAnimationTexture({...big,url:"https://example.com/overflow.webp"},128)).toBeUndefined();
+  for(const lease of leases)lease?.release();
+  clearUnusedAnimationTextures();
+  expect(acquireAnimationTexture({...big,url:"https://example.com/still-pending.webp"},128)).toBeUndefined();
+  resolve(new Texture({source:new TextureSource({width:1024,height:1024})}));
+  await Promise.all(leases.map(lease=>lease!.resource));
+  await flush();
+ });
+ it("retains failed requests and rejects malformed grid dimensions",async()=>{
+  vi.spyOn(Assets,"load").mockImplementation(async()=>new Texture({source:new TextureSource({width:255,height:256})}));vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const a=acquireAnimationTexture(idle)!;await expect(a.resource).rejects.toThrow("dimensions");
+  const b=acquireAnimationTexture(idle)!;expect(a.resource).toBe(b.resource);a.release();b.release();
+ });
+ it("uses prepared sizes directly and bounds long existing clips",()=>{
+  const [key, files]=Object.entries(variants)[0]!;
+  expect(animationTextureUrl({...idle,url:`https://uploadthing.b-cdn.net/f/${key}`},128)).toBe(`https://uploadthing.b-cdn.net/f/${files[0]}`);
+  expect(animationTextureUrl({...idle,url:`https://uploadthing.b-cdn.net/f/${key}`},256)).toBe(`https://uploadthing.b-cdn.net/f/${files[1]}`);
+  const long={...idle,columns:9,rows:18,frameCount:160,fps:12.5};
+  expect(acquireAnimationTexture(long,256)).toBeUndefined();
+  expect(acquireAnimationTexture(long,128,1024)).toBeUndefined();
+ });
+ it("uses a stable bounded WebP rendition",()=>{
+  const url=new URL(animationTextureUrl(idle,128));expect(url.searchParams.get("width")).toBe("256");expect(url.searchParams.get("height")).toBe("256");expect(url.searchParams.get("format")).toBe("webp");
+ });
+ it("plays movement before queued actions, preserves facing, and restores static art when disabled",async()=>{
+  vi.spyOn(Assets,"load").mockImplementation(async()=>atlas());vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const original=new Texture({source:new TextureSource({width:128,height:128})});const sprite=new Sprite(original);
+  const move={...idle,id:"move",url:"https://example.com/move.webp"};const attack={...idle,id:"attack",url:"https://example.com/attack.webp"};
+  const player=createCharacterAnimation(sprite,100,{idle,move,"jutsu:fire":attack});
+  const render=(now:number,moving=false,event?:{id:string;actionKey:string},enabled=true)=>player.render({now,moving,event,enabled,facing:"right",sourceFacing:"left",reducedMotion:false});
+  render(0);await flush();render(0);const first=sprite.texture;
+  render(250);expect(sprite.texture).not.toBe(first);expect(sprite.scale.x).toBeLessThan(0);
+  render(350,false,{id:"unassigned",actionKey:"jutsu:missing"});
+  const event={id:"cast",actionKey:"jutsu:fire"};render(500,true,event);await flush();render(1500,true,event);
+  render(2000,false,event);await flush();render(2000,false,event);const attackFirst=sprite.texture;
+  render(2250,false,event);expect(sprite.texture).not.toBe(attackFirst);
+  render(3100,false,event);await flush();render(3100,false,event);expect(sprite.texture).not.toBe(attackFirst);
+  render(4000,false,event,false);expect(sprite.texture).toBe(original);player.dispose();sprite.destroy();
+ });
+});
