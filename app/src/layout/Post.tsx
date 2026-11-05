@@ -6,6 +6,7 @@ import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { resolveTavernColorClasses } from "@/libs/tavernColors";
 import type { UserCard } from "@/queries/userColumns";
+import { contrastingTextColor } from "@/utils/color";
 import { capitalizeFirstLetter } from "@/utils/string";
 
 export interface PostProps {
@@ -95,8 +96,11 @@ const Post: React.FC<PostProps> = (props) => {
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className={`m-1 rounded-md p-1 ${["hyorin", "shirohana", "akasumi"].includes(props.user.villageName.toLowerCase()) ? "text-black" : "text-white"}`}
-            style={{ backgroundColor: props.user.villageHexColor }}
+            className="m-1 rounded-md p-1"
+            style={{
+              backgroundColor: props.user.villageHexColor,
+              color: contrastingTextColor(props.user.villageHexColor),
+            }}
           >
             {props.user.villageName}
           </span>
