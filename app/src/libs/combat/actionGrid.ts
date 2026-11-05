@@ -11,7 +11,9 @@ export const battleActionGrid = ({
 }) => {
   if (focus) {
     return {
-      grid: `grid grid-cols-[repeat(auto-fill,minmax(${small ? "52px" : "76px"},1fr))] gap-1`,
+      grid: small
+        ? "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1"
+        : "grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-1",
       aspect: "aspect-square",
       labels: false,
     };
