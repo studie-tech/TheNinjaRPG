@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { UserQuest } from "@/drizzle/schema";
-import { getIsolatedPyramid, getQuestEntryRequirements, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure } from "@/libs/questRun";
+import { findConsecutiveQuestId, getIsolatedPyramid, getQuestEntryRequirements, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure, isQuestAttemptPaused } from "@/libs/questRun";
 import { getTagSchema } from "@/validators/combat";
 import { DefeatOpponents, InstantStartBattleObjective, questEntryItemsSchema } from "@/validators/objectives";
 
@@ -63,4 +63,36 @@ it("cannot advance a ticketed floor by defeating its enemy in an unrelated battl
   expect(getNewTrackers(user, task).trackers[0]?.goals[0]?.done).toBe(false);
   expect(getNewTrackers(user, task, { inWarTornSector: false, isWarParticipant: false, questBattleSource: { questId: "pyramid", objectiveId: "another-floor" } }).trackers[0]?.goals[0]?.done).toBe(false);
   expect(getNewTrackers(user, task, { inWarTornSector: false, isWarParticipant: false, questBattleSource: { questId: "pyramid", objectiveId: "floor" } }).trackers[0]?.goals[0]?.done).toBe(true);
+});
+
+describe("isQuestAttemptPaused", () => {
+  const attempt = (hidden: boolean, questVersion: Date | null) =>
+    ({ questType: "battlepyramid", isolated: false, questVersion, quest: { hidden, updatedAt: new Date(1000) } }) as never;
+
+  it("pauses edited attempts for every role", () => {
+    expect(isQuestAttemptPaused(attempt(false, new Date(500)), "USER")).toBe(true);
+    expect(isQuestAttemptPaused(attempt(false, new Date(500)), "CONTENT")).toBe(true);
+  });
+
+  it("pauses hidden attempts only for roles that cannot play them", () => {
+    expect(isQuestAttemptPaused(attempt(true, new Date(1000)), "USER")).toBe(true);
+    expect(isQuestAttemptPaused(attempt(true, new Date(1000)), "CONTENT")).toBe(false);
+    expect(isQuestAttemptPaused(attempt(false, new Date(1000)), "USER")).toBe(false);
+  });
+});
+
+describe("findConsecutiveQuestId", () => {
+  const entry = (questId: string, consecutiveObjectives: boolean) =>
+    ({ questId, quest: { consecutiveObjectives } }) as never;
+
+  it("picks the last updated quest with consecutive objectives", () => {
+    const userQuests = [entry("a", true), entry("b", false), entry("c", true)];
+    expect(findConsecutiveQuestId(userQuests, ["a", "b", "c"])).toBe("c");
+    expect(findConsecutiveQuestId(userQuests, ["a", "b"])).toBe("a");
+  });
+
+  it("finds nothing for unknown or plain quests", () => {
+    expect(findConsecutiveQuestId([entry("b", false)], ["b", "z"])).toBeUndefined();
+    expect(findConsecutiveQuestId(undefined, ["a"])).toBeUndefined();
+  });
 });

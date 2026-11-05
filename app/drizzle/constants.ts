@@ -1088,6 +1088,22 @@ export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
   "war",
 ];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+/** Quest types a regular player may abandon. */
+export const ABANDONABLE_QUEST_TYPES = [
+  "mission",
+  "crime",
+  "event",
+  "errand",
+  "story",
+  "hunting",
+  "gathering",
+  "medical",
+  "battlepyramid",
+  "pvp",
+  "overworld",
+  "mastery",
+  "special",
+] as const satisfies readonly QuestType[];
 /** Types started only through a dedicated acquisition flow, never from public listings. */
 export const RESTRICTED_QUEST_TYPES = [
   ...NPC_ONLY_QUEST_TYPES,

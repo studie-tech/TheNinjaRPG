@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
+  ABANDONABLE_QUEST_TYPES,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
-  TERMINAL_DIALOG_PREFIX,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -28,6 +28,7 @@ import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
+  dialogChoiceContentId,
   getActiveObjective,
   isQuestComplete,
   isQuestObjectiveAvailable,
@@ -39,13 +40,13 @@ import {
   hasQuestContentChanged,
   isBetweenPyramidBattles,
   isManagedQuestRun,
+  isQuestAttemptPaused,
 } from "@/libs/questRun";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
@@ -439,8 +440,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const allDone = isQuestComplete(quest, tracker);
   const isPaused =
     quest.questType === "battlepyramid" &&
-    ((quest.hidden && !canPlayHiddenQuests(userData?.role ?? "USER")) ||
-      hasQuestContentChanged(userQuest));
+    isQuestAttemptPaused(userQuest, userData?.role ?? "USER");
   const canProgress =
     !isPaused &&
     (canAttemptAwakeAction(userData) ||
@@ -629,24 +629,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             {!isAbandoned &&
               !props.compact &&
               !!questStartedAt &&
-              quest.questType !== "starter" &&
-              [
-                "mission",
-                "crime",
-                "event",
-                "errand",
-                "story",
-                "medical",
-                "hunting",
-                "gathering",
-                "battlepyramid",
-                "pvp",
-                "starter",
-                "anbu",
-                "overworld",
-                "mastery",
-                "special",
-              ].includes(quest.questType) && (
+              [...ABANDONABLE_QUEST_TYPES, "anbu"].includes(quest.questType) && (
                 <Button
                   type="button"
                   size="icon"
@@ -782,12 +765,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                       onClick={() =>
                         checkRewards({
                           questId: quest.id,
-                          // A terminal branch has no follow-up objective; send an objective-scoped
-                          // sentinel so the server completes this dialog objective instead of
-                          // re-opening the same dialog.
-                          nextObjectiveId:
-                            entry.nextObjectiveId ??
-                            `${TERMINAL_DIALOG_PREFIX}${activeObjective.id}`,
+                          nextObjectiveId: dialogChoiceContentId(
+                            entry.nextObjectiveId,
+                            activeObjective.id,
+                          ),
                         })
                       }
                     >
@@ -808,29 +789,12 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               showScene ? "px-3 pb-3" : "",
             )}
           >
-            {quest.content.objectives.map((objective, i) => {
-              // Clean up the shown objectives a bit to hide dialog
-              const status = tracker?.goals.find((g) => g.id === objective.id);
-              const hideIfNoRewards =
-                objective.task === "dialog" ||
-                (activeObjective && objective.id !== activeObjective?.id) ||
-                (allDone && !status?.done);
-              return (
-                <Objective
-                  objective={objective}
-                  tracker={tracker}
-                  checkRewards={() => checkRewards({ questId: quest.id })}
-                  key={objective.id}
-                  titlePrefix={
-                    quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `
-                  }
-                  grayedOut={
-                    !canProgress || !isQuestObjectiveAvailable(quest, tracker, i)
-                  }
-                  hideIfNoRewards={hideIfNoRewards}
-                />
-              );
-            })}
+            <QuestObjectives
+              quest={quest}
+              tracker={tracker}
+              checkRewards={() => checkRewards({ questId: quest.id })}
+              locked={!canProgress}
+            />
           </div>
         )}
 
@@ -848,6 +812,63 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         )}
       </div>
     </Post>
+  );
+};
+
+/** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
+export const QuestObjectives: React.FC<{
+  quest: UserQuest["quest"];
+  tracker: QuestTrackerType;
+  checkRewards: () => void;
+  /** Gray out every objective, for a player who cannot progress right now. */
+  locked?: boolean;
+}> = ({ quest, tracker, checkRewards, locked }) => {
+  const allDone = isQuestComplete(quest, tracker);
+  const activeObjective = getActiveObjective(quest, tracker);
+  return quest.content.objectives.map((objective, i) => {
+    const status = tracker.goals.find((g) => g.id === objective.id);
+    return (
+      <Objective
+        objective={objective}
+        tracker={tracker}
+        checkRewards={checkRewards}
+        key={objective.id}
+        titlePrefix={quest.consecutiveObjectives ? "Objective: " : `${i + 1}. `}
+        grayedOut={locked || !isQuestObjectiveAvailable(quest, tracker, i)}
+        hideIfNoRewards={
+          objective.task === "dialog" ||
+          (activeObjective && objective.id !== activeObjective.id) ||
+          (allDone && !status?.done)
+        }
+      />
+    );
+  });
+};
+
+/** The "Quest Update" dialog for a quest whose objective just changed on the map or in battle. */
+export const QuestUpdateModal: React.FC<{
+  questId: string;
+  onClose: () => void;
+}> = ({ questId, onClose }) => {
+  const { data: userData } = useRequiredUserData();
+  const userQuest = userData?.userQuests?.find((q) => q.questId === questId);
+  const tracker = userData?.questData?.find((q) => q.id === questId);
+  if (!userQuest || !tracker) return null;
+  return (
+    <Modal
+      isOpen
+      setIsOpen={(open) => {
+        if (!open) onClose();
+      }}
+      title="Quest Update"
+    >
+      <LogbookEntry
+        userQuest={userQuest}
+        tracker={tracker}
+        showScene={true}
+        hideTitle={false}
+      />
+    </Modal>
   );
 };
 
