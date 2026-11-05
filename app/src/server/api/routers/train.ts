@@ -139,7 +139,7 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!initialUser) return errorResponse("User not found");
-      // Pure removals retain the current activity without preparing recovery or settlement.
+      // Pure removals preserve the current activity without preparing an action recovery.
       const readiness = shouldPrepareAction("train.updateEnergyTrainingQueue", input)
         ? prepareActionReadiness(initialUser, settings)
         : undefined;
@@ -200,7 +200,7 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!initialUser) return errorResponse("User not found");
-      // Pure removals retain the current activity without preparing recovery or settlement.
+      // Pure removals preserve the current activity without preparing an action recovery.
       const readiness = shouldPrepareAction("train.updateMasteryTrainingQueue", input)
         ? prepareActionReadiness(initialUser, settings)
         : undefined;

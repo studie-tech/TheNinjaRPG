@@ -46,6 +46,8 @@ export type ActionReadiness<T extends UserData = UserData> = ActionReadinessWrit
  * Validate an already-loaded actor and project recovery without database access.
  * Endpoints merge set/where into their account claim, with their final activity status taking precedence.
  * Hydrated profiles retain their accrued regeneration rate; loaded settings settle regeneration and queued training.
+ * Use the complete action/profile snapshot: equipment and active skills affect Energy,
+ * and queued training needs quest relations. Missing relations are not fetched here.
  */
 export const prepareActionReadiness = <T extends UserData>(
   initial: T,
@@ -256,6 +258,8 @@ export const prepareActionReadiness = <T extends UserData>(
 /**
  * Attach confirmed recovery to the endpoint outcome and optionally defer its history/activity publication.
  * Call only after the account write succeeds; deferred work adds no database phase to the mutation response.
+ * Supply the client for a full committed plan to publish training logs and end hospital activity.
+ * Notice-only wrappers omit it when the inner action already publishes recovery.
  */
 export const actionReadinessResponse = <T extends { message?: string }>(
   response: T,

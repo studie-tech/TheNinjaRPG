@@ -24,7 +24,11 @@ export const updateUserForActionReadiness = (
         .where(and(eq(userData.userId, readiness.initial.userId), readiness.where))
     : Promise.resolve({ rowsAffected: 1 });
 
-/** Recovery assignments for guarded joined updates; the action owns its final status and overlapping pool fields. */
+/**
+ * Emit recovery assignments for a guarded joined update, omitting status by default.
+ * Callers omit any other activity or pool fields they own. Each assignment ends with
+ * a comma so the endpoint's remaining SET assignments can follow the fragment.
+ */
 export const actionReadinessSqlSet = (
   readiness?: ActionReadinessWrite,
   omit: readonly string[] = ["status"],
