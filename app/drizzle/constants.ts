@@ -547,6 +547,8 @@ export type AutomoderationCategory = (typeof AutomoderationCategories)[number];
 
 // Forum pagination
 export const FORUM_BOARD_THREADS_PER_PAGE = 20;
+/** Threads per page in game-destination forums; the first page is server-rendered. */
+export const FANCY_FORUM_THREADS_PER_PAGE = 10;
 /** Posts per page in a forum thread. The thread route server-renders this many. */
 export const FORUM_THREAD_POSTS_PER_PAGE = 10;
 
@@ -2456,6 +2458,8 @@ export const CONVERSATION_PAUSE_HIDDEN_MINS = 5;
 /** Conversations a player can mute individually in the chat panel. */
 export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
+/** Recipients a player can add when starting a conversation. */
+export const CONVERSATION_MAX_USERS = 5;
 export const FORUM_MIN_LEVEL = 3;
 export const AUCTION_HOUSE_MIN_LEVEL = 15;
 export const REP_TRADE_MIN_LEVEL = 15;

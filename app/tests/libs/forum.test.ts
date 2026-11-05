@@ -41,6 +41,13 @@ describeWithDatabase("forum page snapshots", () => {
     expect((await fetchForumPageData(client, "News", "unregistered")).userData).toBeNull();
   });
 
+  it("seeds the first page in the board's pinned order", async () => {
+    const client = await getTestDatabase();
+    await client.update(forumThread).set({ isPinned: true }).where(eq(forumThread.id, "old"));
+    const seeded = await fetchForumPageData(client, "News", "author");
+    expect(seeded.initialThreads.threads.map(({ id }) => id)).toEqual(["old", "new"]);
+  });
+
   it("seeds member boards with the current reader's access and read positions", async () => {
     const client = await getTestDatabase();
     await insertUsers([{ userId: "member", username: "Member", level: 50 }]);
