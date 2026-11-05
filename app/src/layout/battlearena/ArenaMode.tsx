@@ -172,7 +172,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     <fieldset
       disabled={isAttacking}
       aria-busy={isAttacking}
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-3"
     >
       <section
         aria-label="Choose your opponent"
