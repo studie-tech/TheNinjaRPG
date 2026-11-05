@@ -17,6 +17,7 @@ import { TimedQueue } from "@/layout/TimedQueue";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import {
   describeMealEffect,
+  getCookingExperience,
   getCookingLevel,
   getCookingRankProgress,
   getCookingSeconds,
@@ -270,10 +271,10 @@ export default function Kitchen({ image }: { image?: string }) {
                     ),
                   )}{" "}
                   ·{" "}
-                  {Math.floor(
-                    recipe.cookingExperience *
-                      recipe.cookingOutputQuantity *
-                      (1 + territoryWarBoost),
+                  {getCookingExperience(
+                    recipe.cookingExperience,
+                    recipe.cookingOutputQuantity,
+                    territoryWarBoost,
                   )}{" "}
                   XP (current bonuses)
                 </p>
@@ -362,11 +363,10 @@ export default function Kitchen({ image }: { image?: string }) {
                   ),
                 )}{" "}
                 ·{" "}
-                {Math.floor(
-                  batches *
-                    selected.cookingOutputQuantity *
-                    selected.cookingExperience *
-                    (1 + territoryWarBoost),
+                {getCookingExperience(
+                  selected.cookingExperience,
+                  batches * selected.cookingOutputQuantity,
+                  territoryWarBoost,
                 )}{" "}
                 XP on completion (current bonuses).
                 {(active || waiting.length > 0) &&

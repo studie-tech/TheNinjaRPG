@@ -14,7 +14,11 @@ import {
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
-import { getCookingLevel, getCookingSeconds } from "@/libs/cooking";
+import {
+  getCookingExperience,
+  getCookingLevel,
+  getCookingSeconds,
+} from "@/libs/cooking";
 import {
   calculateItemConsumption,
   craftingStartBlockMessage,
@@ -366,10 +370,10 @@ export const occupationRouter = createTRPCRouter({
         ? 0
         : (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const cookingExpGain = isMeal
-        ? Math.floor(
-            itemWithRequirements.cookingExperience *
-              outputQuantity *
-              (1 + getTerritoryWarBoost(user)),
+        ? getCookingExperience(
+            itemWithRequirements.cookingExperience,
+            outputQuantity,
+            getTerritoryWarBoost(user),
           )
         : 0;
       const expGain = getCraftingExperienceGain(
