@@ -447,7 +447,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(result.success).toBe(true);
     const saved = await readUser();
     expect(getEnergyQueue(result.userPatch as never)).toEqual(entries);
-    expect(result.userPatch).toMatchObject({ curEnergy: saved.curEnergy, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, regenAt: saved.regenAt, updatedAt: saved.updatedAt });
+    expect(result.userPatch).toEqual(expect.objectContaining({ curEnergy: saved.curEnergy, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, regenAt: saved.regenAt, updatedAt: saved.updatedAt }));
     expect(profileReads).toBe(1);
   });
 
@@ -458,7 +458,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(result.success).toBe(true);
     const saved = await readUser();
     expect(getEnergyQueue(result.userPatch as never)).toEqual([]);
-    expect(result.userPatch).toMatchObject({ curEnergy: 50, energyQueueHead: 1, offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt });
+    expect(result.userPatch).toEqual(expect.objectContaining({ curEnergy: 50, energyQueueHead: 1, offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt }));
     expect(result.userPatch?.defence).toBeCloseTo(before.defence + 3.4);
     expect(result.userPatch?.experience).toBeCloseTo(before.experience + 4);
     expect(await readLogs()).toHaveLength(2);

@@ -87,7 +87,7 @@ describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", (
     expect(result.success).toBe(true);
     const user = await readUser();
     expect(user).toMatchObject({ offence: 1010, ninjutsuMastery: 30, elementalMastery: { Wind: 40, Earth: 60 }, earnedExperience: 0, experience: 5010 });
-    expect(result.userPatch).toMatchObject({ offence: 1010, ninjutsuMastery: 30, elementalMastery: user.elementalMastery, earnedExperience: 0, experience: 5010, updatedAt: user.updatedAt });
+    expect(result.userPatch).toEqual(expect.objectContaining({ offence: 1010, ninjutsuMastery: 30, elementalMastery: expect.objectContaining(user.elementalMastery), earnedExperience: 0, experience: 5010, updatedAt: user.updatedAt }));
   });
 
   it("clamps each element to its own cap independently of discipline capacity", async () => {

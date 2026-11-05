@@ -423,7 +423,7 @@ describeWithDatabase("Cooking production and consumption", () => {
     const snapshot = await mealSnapshot();
     const client = beforeStatements(db, userData, [async () => db.update(userItem).set(change).where(eq(userItem.id, "edible"))]);
     expect((await consumeMeal({ ...snapshot, client })).success).toBe(false);
-    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "edible") })).toMatchObject({ quantity: 1, ...change });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "edible") })).toEqual(expect.objectContaining({ quantity: 1, ...change }));
     const placeholder = (await db.query.userRaidBuff.findMany())[0]!;
     expect(placeholder.effects).toEqual([]);
     expect(placeholder.itemId).toBeNull();
@@ -443,7 +443,7 @@ describeWithDatabase("Cooking production and consumption", () => {
     expect((await consumeMeal({ ...snapshot, client })).success).toBe(false);
     expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "edible") })).toMatchObject({ quantity: 1 });
     expect((await db.query.userRaidBuff.findMany())[0]?.effects).toEqual([]);
-    expect(await readUser()).toMatchObject(change);
+    expect(await readUser()).toEqual(expect.objectContaining(change));
   });
 
   it("rejects a meal buff owned by another account without altering it", async () => {

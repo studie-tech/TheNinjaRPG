@@ -110,14 +110,14 @@ describeWithDatabase(
         for (const [elapsed, rate, earned] of [[149999, 17, 34], [151001, 10, 34], [240000, 10, 54]] as const) {
           setSystemTime(new Date(from.getTime() + elapsed));
           const { user } = await fetchUpdatedUser({ client: db, userId: USER_ID });
-          expect(user).toMatchObject({ status, curEnergy: 0, regenAt: from, regeneration: rate, regenerationWithoutTimedBuffs: 10 });
+          expect(user).toEqual(expect.objectContaining({ status, curEnergy: 0, regenAt: from, regeneration: rate, regenerationWithoutTimedBuffs: 10 }));
           expect(calcCurrent(user!.curEnergy, user!.maxEnergy, "AWAKE", user!.regenerationWithoutTimedBuffs, user!.regenAt, 0, undefined, user!.raidBuffs).current).toBe(earned);
           if (status === "TRAVEL") {
             for (const pool of ["Health", "Chakra", "Stamina"] as const)
               expect(calcCurrent(user![`cur${pool}`], user![`max${pool}`], status, user!.regenerationWithoutTimedBuffs, user!.regenAt, 0, undefined, user!.raidBuffs).current).toBe(earned);
           }
         }
-        expect(await readUser()).toMatchObject({ status, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regenAt: from });
+        expect(await readUser()).toEqual(expect.objectContaining({ status, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regenAt: from }));
         expect(await readEnergyQueue(USER_ID)).toMatchObject([{ stat: "offence", energy: 1000 }]);
       },
     );

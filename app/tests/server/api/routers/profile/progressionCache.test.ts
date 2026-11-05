@@ -34,7 +34,7 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
     const result = await (await callerFor(profileRouter, USER_ID)).levelUp();
     expect(result.success).toBe(true);
     const saved = await read();
-    expect(result.userPatch).toMatchObject({ level: 31, maxHealth: calcHP(31), maxChakra: calcCP(31), maxStamina: calcSP(31), maxEnergy: calcEnergy(31), skillPoints: Math.min(skillPoints + 1, MAX_SKILL_POINTS), updatedAt: saved.updatedAt, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, curEnergy: saved.curEnergy });
+    expect(result.userPatch).toEqual(expect.objectContaining({ level: 31, maxHealth: calcHP(31), maxChakra: calcCP(31), maxStamina: calcSP(31), maxEnergy: calcEnergy(31), skillPoints: Math.min(skillPoints + 1, MAX_SKILL_POINTS), updatedAt: saved.updatedAt, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, curEnergy: saved.curEnergy }));
     expect(saved.skillPoints).toBe<number | undefined>(result.userPatch?.skillPoints);
     expect(result.userPatch).toMatchObject({ pvpExperience: 1234.5, pvpStreak: 4 });
     expect(result.userPatch).not.toHaveProperty("pvpActivity");

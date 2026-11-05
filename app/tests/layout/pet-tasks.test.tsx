@@ -145,7 +145,7 @@ it("merges a cancelled receipt without deleting a restarted cached attempt", asy
   const dialog = await view.findByRole("dialog");
   fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
   await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
-  expect(queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(key)?.userData).toMatchObject({ petTask: null, userQuests: [successor, unrelated] });
+  expect(queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(key)?.userData).toEqual(expect.objectContaining({ petTask: null, userQuests: [expect.objectContaining(successor), expect.objectContaining(unrelated)] }));
   expect(updateUser.mock.calls[0]![1].revision).toBe(1);
 });
 

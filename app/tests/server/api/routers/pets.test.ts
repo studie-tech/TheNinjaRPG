@@ -821,7 +821,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
       await mealStack();
       const caller = callerForDatabase(petsRouter, userId, database);
       const input = { petId, userItemId: "meal-stack", expectedQuantity: 2 };
-      expect(await caller.getPet()).toMatchObject({ canFeed: false, feedAvailableAt: availableAt });
+      expect(await caller.getPet()).toEqual(expect.objectContaining({ canFeed: false, feedAvailableAt: availableAt }));
       const original = await readPet(database);
       expect(await caller.feedPet(input)).toMatchObject({ success: false,
         message: `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.` });

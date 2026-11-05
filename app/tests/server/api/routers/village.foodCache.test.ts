@@ -34,7 +34,7 @@ describeWithDatabase("confirmed ramen cache updates", () => {
       await updateUserCache(client, key, response.userPatch, { revision, delta: response.userDelta, achievementProgress: response.achievementProgress });
       const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
       const cached = client.getQueryData<{ userData: typeof before & { cookingJobs: typeof receipt[] } }>(key)!.userData;
-      expect(cached).toMatchObject({ money: saved.money, curHealth: saved.curHealth, curStamina: saved.curStamina, curChakra: saved.curChakra, regenAt: saved.regenAt, curEnergy: saved.curEnergy });
+      expect(cached).toEqual(expect.objectContaining({ money: saved.money, curHealth: saved.curHealth, curStamina: saved.curStamina, curChakra: saved.curChakra, regenAt: saved.regenAt, curEnergy: saved.curEnergy }));
       expect(saved.cookingExperience).toBe(23);
       expect(cached.cookingExperience).toBe(saved.cookingExperience);
       expect(cached.cookingJobs).toEqual(await db.query.userCookingJob.findMany());
