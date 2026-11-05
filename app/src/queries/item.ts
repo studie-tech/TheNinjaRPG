@@ -1267,6 +1267,30 @@ export const deleteUserItemForSellUserItem = (
       ),
     );
 
+/** Load the owned positive-quantity rows a bulk sell names, with their items. */
+export const listUserItemsForSellUserItems = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+  userItemIds: string[],
+) =>
+  client.query.userItem.findMany({
+    where: and(
+      inArray(userItem.id, userItemIds),
+      eq(userItem.userId, ctx.userId),
+      gt(userItem.quantity, 0),
+    ),
+    with: { item: true },
+  });
+
+/** Build the `userItemImbuement` deletion for every stack a bulk sell removed. */
+export const deleteUserItemImbuementsForSellUserItems = (
+  client: Pick<DrizzleClient, "delete">,
+  userItemIds: string[],
+) =>
+  client
+    .delete(userItemImbuement)
+    .where(inArray(userItemImbuement.userItemId, userItemIds));
+
 /** Build the `userItemImbuement` deletion for `sellUserItem`, using predicates on `userItemId`. */
 export const deleteUserItemImbuementForSellUserItem = (
   client: Pick<DrizzleClient, "delete">,

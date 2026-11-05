@@ -279,3 +279,23 @@ export const bulkSellTotals = (
 /** Stacks rare enough that a bulk sell names them again before they go. */
 export const warnedItems = (items: UserItemWithRelations[]) =>
   items.filter((ui) => BULK_SELL_WARN_RARITIES.includes(ui.item.rarity));
+
+/** One line for a bulk sell's result: what sold for how much, what dropped, what stayed. */
+export const bulkSellMessage = (
+  prices: number[],
+  refused: { name: string; reason: string }[],
+) => {
+  const plural = (count: number) => `${count} item${count === 1 ? "" : "s"}`;
+  const sold = prices.filter((price) => price > 0);
+  const dropped = prices.length - sold.length;
+  const ryo = sold.reduce((sum, price) => sum + price, 0);
+  const done =
+    sold.length > 0
+      ? `Sold ${plural(sold.length)} for ${ryo.toLocaleString()} ryo${dropped > 0 ? ` and dropped ${dropped}` : ""}.`
+      : dropped > 0
+        ? `Dropped ${plural(dropped)}.`
+        : "Nothing was sold.";
+  if (refused.length === 0) return done;
+  const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
+  return `${done} ${refused.length} stayed: ${stayed}.`;
+};

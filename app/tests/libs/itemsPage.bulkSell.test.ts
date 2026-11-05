@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import {
   bulkSellBlockReason,
+  bulkSellMessage,
   bulkSellTotals,
   toggleRarityPick,
   warnedItems,
@@ -90,5 +91,21 @@ describe("warnedItems", () => {
       row(rarity, {}, { rarity: rarity as never }),
     );
     expect(warnedItems(items).map((item) => item.id)).toEqual(["RARE", "EPIC", "LEGENDARY"]);
+  });
+});
+
+describe("bulkSellMessage", () => {
+  it("says what sold, what dropped and what stayed", () => {
+    expect(bulkSellMessage([60, 200, 0], [])).toBe("Sold 2 items for 260 ryo and dropped 1.");
+    expect(bulkSellMessage([0], [])).toBe("Dropped 1 item.");
+    expect(bulkSellMessage([60], [{ name: "Blade", reason: "is equipped" }])).toBe(
+      "Sold 1 item for 60 ryo. 1 stayed: Blade is equipped.",
+    );
+    expect(
+      bulkSellMessage([], [
+        { name: "Blade", reason: "is in auction" },
+        { name: "Seed", reason: "needs 50 farm coins to buy back" },
+      ]),
+    ).toBe("Nothing was sold. 2 stayed: Blade is in auction; Seed needs 50 farm coins to buy back.");
   });
 });
