@@ -73,6 +73,8 @@ import {
 import type { UserNindo, UserRank } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { usePendingIds } from "@/hooks/usePendingIds";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import ActionLogs from "@/layout/ActionLog";
 import { getFilter, useFiltering } from "@/layout/ActionLogFiltering";
 import AvatarImage from "@/layout/Avatar";
@@ -80,10 +82,10 @@ import ClanSearchSelect from "@/layout/ClanSearchSelect";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { GroupOrders } from "@/layout/GroupOrders";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import RichInput from "@/layout/RichInput";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import Tournament from "@/layout/Tournament";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -94,7 +96,6 @@ import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import type { ClanRouter } from "@/routers/clan";
 import type { BaseServerResponse } from "@/server/api/trpc";
-import { parseHtml } from "@/utils/parse";
 import { canEditClans } from "@/utils/permissions";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -117,8 +118,6 @@ import {
   factionEditSchema,
   getClanSearchSchema,
 } from "@/validators/clan";
-import type { MutateContentSchema } from "@/validators/comments";
-import { mutateContentSchema } from "@/validators/comments";
 import { ObjectiveReward } from "@/validators/rewards";
 
 export const ClansOverview: React.FC = () => {
@@ -213,8 +212,6 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
   const { clanId, order, canPost } = props;
   const { data: userData } = useRequiredUserData();
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
-  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const orderSubmissionInFlight = useRef(false);
 
   // utils
   const utils = api.useUtils();
@@ -224,93 +221,38 @@ export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
     api.clan.upsertNotice.useMutation({
       onSuccess: (data) => {
         showMutationToast(data);
+        if (data.success) void utils.clan.get.invalidate();
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
       },
     });
 
-  // Content
-  const content = order?.content ?? `No current ${groupLabel} orders`;
-
-  // Order form
-  const {
-    handleSubmit,
-    control,
-    reset,
-    formState: { errors },
-  } = useForm<MutateContentSchema>({
-    defaultValues: { content },
-    resolver: zodResolver(mutateContentSchema),
-  });
-  const onUpdateOrder = handleSubmit(async (data) => {
-    if (orderSubmissionInFlight.current) return;
-
-    orderSubmissionInFlight.current = true;
-    try {
-      const result = await notice({ ...data, clanId });
-      if (!result.success) return;
-
-      reset(data);
-      setIsOrderModalOpen(false);
-      void utils.clan.get.invalidate();
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-    } finally {
-      orderSubmissionInFlight.current = false;
-    }
-  });
-
   return (
-    <ContentBox
+    <GroupOrders
       title="Orders"
       subtitle={`From ${groupLabel} leader`}
-      initialBreak={true}
-      topRightContent={
-        <div>
-          {canPost && (
-            <div className="flex flex-row items-center gap-1">
-              <Button
-                id="create"
-                disabled={isUpdatingOrders}
-                aria-busy={isUpdatingOrders}
-                aria-label={isUpdatingOrders ? "Updating" : "Update orders"}
-                onClick={() => setIsOrderModalOpen(true)}
-              >
-                {isUpdatingOrders ? (
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                ) : (
-                  <FilePenLine className="h-5 w-5" aria-hidden />
-                )}
-              </Button>
-              <Modal
-                id="update-clan-orders"
-                title="Update Orders"
-                isOpen={isOrderModalOpen}
-                setIsOpen={setIsOrderModalOpen}
-                proceed_label="Submit"
-                proceed_loading_label="Updating"
-                isLoading={isUpdatingOrders}
-                keepOpenOnAccept
-                onAccept={() => void onUpdateOrder()}
-              >
-                <RichInput
-                  id="content"
-                  label="Contents of your orders"
-                  height="300"
-                  placeholder={content}
-                  control={control}
-                  error={errors.content?.message}
-                  disabled={isUpdatingOrders}
-                />
-              </Modal>
-            </div>
+      content={order?.content ?? `No current ${groupLabel} orders`}
+      canPost={canPost}
+      dialogId="update-clan-orders"
+      isPending={isUpdatingOrders}
+      onSubmit={(data) => notice({ ...data, clanId })}
+      renderTrigger={(open) => (
+        <Button
+          id="create"
+          disabled={isUpdatingOrders}
+          aria-busy={isUpdatingOrders}
+          aria-label={isUpdatingOrders ? "Updating" : "Update orders"}
+          onClick={open}
+        >
+          {isUpdatingOrders ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+          ) : (
+            <FilePenLine className="h-5 w-5" aria-hidden />
           )}
-        </div>
-      }
-    >
-      {parseHtml(content)}
-    </ContentBox>
+        </Button>
+      )}
+    />
   );
 };
 
@@ -343,16 +285,13 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const [deletedBattleIds, setDeletedBattleIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const deleteSubmissionInFlight = useRef(false);
-  const [joiningSlotKey, setJoiningSlotKey] = useState<string | null>(null);
+  const deleteFlight = useSingleFlight();
+  const joinFlight = useSingleFlight<string>();
+  const joiningSlotKey = joinFlight.pending;
   const [joinedBattleId, setJoinedBattleId] = useState<string | null>(null);
-  const [leavingBattleIds, setLeavingBattleIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const leavingBattles = usePendingIds();
   const [leftBattleIds, setLeftBattleIds] = useState<Set<string>>(() => new Set());
-  const [kickingTargetKeys, setKickingTargetKeys] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const kickingTargets = usePendingIds();
   const [kickedTargetKeys, setKickedTargetKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -362,10 +301,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const [confirmingKickTargetKeys, setConfirmingKickTargetKeys] = useState<Set<string>>(
     () => new Set(),
   );
-  const challengeSubmissionInFlight = useRef(false);
-  const joinSubmissionInFlight = useRef(false);
-  const leaveSubmissionsInFlight = useRef(new Set<string>());
-  const kickSubmissionsInFlight = useRef(new Set<string>());
+  const challengeFlight = useSingleFlight();
   const kickedTargets = useRef(new Set<string>());
 
   // utils
@@ -391,33 +327,32 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     });
   /** Keep rejection feedback in the dialog and refresh combat/profile after deletion. */
   const onDeleteBattle = async () => {
-    if (!deletingBattleId || deleteSubmissionInFlight.current) return;
-    deleteSubmissionInFlight.current = true;
-    setDeleteError("");
-    try {
-      const result = await removeBattle({
-        clanBattleId: deletingBattleId,
-        originSocketId: pusher?.connection.socket_id,
-      });
-      showMutationToast(result);
-      if (!result.success) {
-        setDeleteError(result.message);
-        return;
+    if (!deletingBattleId) return;
+    await deleteFlight.run(true, async () => {
+      setDeleteError("");
+      try {
+        const result = await removeBattle({
+          clanBattleId: deletingBattleId,
+          originSocketId: pusher?.connection.socket_id,
+        });
+        showMutationToast(result);
+        if (!result.success) {
+          setDeleteError(result.message);
+          return;
+        }
+        setDeletedBattleIds((current) => new Set(current).add(deletingBattleId));
+        setDeletingBattleId(null);
+        if (joinedBattleId === deletingBattleId) setJoinedBattleId(null);
+        await Promise.all([
+          utils.clan.getClanBattles.invalidate(),
+          utils.combat.getBattle.invalidate(),
+        ]);
+      } catch (error) {
+        setDeleteError(
+          error instanceof Error ? error.message : "Could not delete battle",
+        );
       }
-      setDeletedBattleIds((current) => new Set(current).add(deletingBattleId));
-      setDeletingBattleId(null);
-      if (joinedBattleId === deletingBattleId) setJoinedBattleId(null);
-      await Promise.all([
-        utils.clan.getClanBattles.invalidate(),
-        utils.combat.getBattle.invalidate(),
-      ]);
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Could not delete battle",
-      );
-    } finally {
-      deleteSubmissionInFlight.current = false;
-    }
+    });
   };
 
   // Mutations
@@ -443,29 +378,24 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   });
 
   const onJoin = async (clanBattleId: string, slotKey: string) => {
-    if (joinSubmissionInFlight.current || joinedBattleId) return;
+    if (joinedBattleId) return;
 
-    joinSubmissionInFlight.current = true;
-    setJoiningSlotKey(slotKey);
-    try {
-      const result = await join({ clanBattleId });
-      if (!result.success) return;
+    await joinFlight
+      .run(slotKey, async () => {
+        const result = await join({ clanBattleId });
+        if (!result.success) return;
 
-      // Joining one battle prevents joining another. Record that intent before
-      // refreshing so stale caches cannot briefly expose a second join path.
-      setJoinedBattleId(clanBattleId);
-      setLeftBattleIds((current) => {
-        const next = new Set(current);
-        next.delete(clanBattleId);
-        return next;
-      });
-      void utils.clan.getClanBattles.invalidate();
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-    } finally {
-      joinSubmissionInFlight.current = false;
-      setJoiningSlotKey(null);
-    }
+        // Joining one battle prevents joining another. Record that intent before
+        // refreshing so stale caches cannot briefly expose a second join path.
+        setJoinedBattleId(clanBattleId);
+        setLeftBattleIds((current) => {
+          const next = new Set(current);
+          next.delete(clanBattleId);
+          return next;
+        });
+        void utils.clan.getClanBattles.invalidate();
+      })
+      .catch(ignoreToastedError);
   };
 
   const { mutateAsync: leave } = api.clan.leaveClanBattle.useMutation({
@@ -480,10 +410,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   });
 
   const onLeave = async (clanBattleId: string) => {
-    if (leaveSubmissionsInFlight.current.has(clanBattleId)) return;
-
-    leaveSubmissionsInFlight.current.add(clanBattleId);
-    setLeavingBattleIds((current) => new Set(current).add(clanBattleId));
+    if (!leavingBattles.begin(clanBattleId)) return;
     try {
       const result = await leave({ clanBattleId });
       if (!result.success) return;
@@ -496,12 +423,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
-      leaveSubmissionsInFlight.current.delete(clanBattleId);
-      setLeavingBattleIds((current) => {
-        const next = new Set(current);
-        next.delete(clanBattleId);
-        return next;
-      });
+      leavingBattles.end(clanBattleId);
     }
   };
 
@@ -522,15 +444,9 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     targetClanId: string,
   ) => {
     const targetKey = `${clanBattleId}:${targetId}`;
-    if (
-      kickSubmissionsInFlight.current.has(targetKey) ||
-      kickedTargets.current.has(targetKey)
-    ) {
+    if (kickedTargets.current.has(targetKey) || !kickingTargets.begin(targetKey)) {
       return;
     }
-
-    kickSubmissionsInFlight.current.add(targetKey);
-    setKickingTargetKeys((current) => new Set(current).add(targetKey));
     try {
       const result = await kick({
         clanBattleId,
@@ -556,17 +472,12 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
-      kickSubmissionsInFlight.current.delete(targetKey);
-      setKickingTargetKeys((current) => {
-        const next = new Set(current);
-        next.delete(targetKey);
-        return next;
-      });
+      kickingTargets.end(targetKey);
     }
   };
 
   const setKickTargetOpen = (targetKey: string, open: boolean) => {
-    if (!open && kickSubmissionsInFlight.current.has(targetKey)) return;
+    if (!open && kickingTargets.has(targetKey)) return;
 
     setOpenKickTargetKeys((current) => {
       const next = new Set(current);
@@ -640,7 +551,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         <div className="grid grid-cols-3">
           {queue.map((q) => {
             const targetKey = `${battleId}:${q.userId}`;
-            const isKickingTarget = kickingTargetKeys.has(targetKey);
+            const isKickingTarget = kickingTargets.ids.has(targetKey);
             const isConfirmingKick = confirmingKickTargetKeys.has(targetKey);
             return (
               <div
@@ -821,26 +732,23 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   })?.[0];
 
   const onChallenge = async () => {
-    if (!targetClan || challengeSubmissionInFlight.current) return;
+    if (!targetClan) return;
 
-    challengeSubmissionInFlight.current = true;
-    try {
-      const result = await challenge({
-        challengerClanId: clanId,
-        targetClanId: targetClan.id,
-      });
-      if (!result.success) return;
+    await challengeFlight
+      .run(true, async () => {
+        const result = await challenge({
+          challengerClanId: clanId,
+          targetClanId: targetClan.id,
+        });
+        if (!result.success) return;
 
-      // The challenge is committed, so close immediately and remove the stale
-      // repeat path independently of the authoritative list refresh.
-      setIsChallengeModalOpen(false);
-      clanSearchMethods.reset({ name: "", clans: [] });
-      void utils.clan.getClanBattles.invalidate();
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-    } finally {
-      challengeSubmissionInFlight.current = false;
-    }
+        // The challenge is committed, so close immediately and remove the stale
+        // repeat path independently of the authoritative list refresh.
+        setIsChallengeModalOpen(false);
+        clanSearchMethods.reset({ name: "", clans: [] });
+        void utils.clan.getClanBattles.invalidate();
+      })
+      .catch(ignoreToastedError);
   };
 
   // Loaders
@@ -865,7 +773,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       const winnerId = battle.winnerId;
       const hasStarted = !!battle.battleId;
       const hasConcluded = !!battle.winnerId;
-      const isLeavingBattle = leavingBattleIds.has(battle.id);
+      const isLeavingBattle = leavingBattles.ids.has(battle.id);
       return {
         ...battle,
         clan1name: battle.attackerClan
@@ -892,7 +800,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                     className="w-full"
                     disabled={isLeavingBattle}
                     onClick={() => {
-                      if (leaveSubmissionsInFlight.current.has(battle.id)) return;
+                      if (leavingBattles.has(battle.id)) return;
                       initiate({ clanBattleId: battle.id });
                     }}
                   >
@@ -1180,7 +1088,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
   const [isStrongholdUpgradeModalOpen, setIsStrongholdUpgradeModalOpen] =
     useState(false);
-  const [isDonationSubmitting, setIsDonationSubmitting] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isResignModalOpen, setIsResignModalOpen] = useState(false);
   const [isInstantJoinModalOpen, setIsInstantJoinModalOpen] = useState(false);
@@ -1189,16 +1096,16 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   const [hasInstantlyTakenLeadership, setHasInstantlyTakenLeadership] = useState(false);
   const [hasClearedLeadership, setHasClearedLeadership] = useState(false);
   const [hasUpgradedToStronghold, setHasUpgradedToStronghold] = useState(false);
-  const [isUploadingClanImage, setIsUploadingClanImage] = useState(false);
-  const colorSubmissionInFlight = useRef(false);
-  const editSubmissionInFlight = useRef(false);
-  const donationSubmissionInFlight = useRef(false);
-  const strongholdUpgradeSubmissionInFlight = useRef(false);
-  const leaveSubmissionInFlight = useRef(false);
-  const resignSubmissionInFlight = useRef(false);
-  const instantJoinSubmissionInFlight = useRef(false);
-  const clearLeadershipSubmissionInFlight = useRef(false);
-  const clanImageUploadInFlight = useRef(false);
+  const colorFlight = useSingleFlight();
+  const editFlight = useSingleFlight();
+  const donationFlight = useSingleFlight();
+  const strongholdUpgradeFlight = useSingleFlight();
+  const leaveFlight = useSingleFlight();
+  const resignFlight = useSingleFlight();
+  const instantJoinFlight = useSingleFlight();
+  const clearLeadershipFlight = useSingleFlight();
+  const imageUploadFlight = useSingleFlight();
+  const isUploadingClanImage = imageUploadFlight.isPending;
 
   // Get router
   const router = useRouter();
@@ -1254,29 +1161,25 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const onLeaveClan = async () => {
-    if (leaveSubmissionInFlight.current || hasLeftGroup) return;
+    if (hasLeftGroup) return;
 
-    leaveSubmissionInFlight.current = true;
-    try {
-      const data = await leave({ clanId });
-      if (!data.success) return;
+    await leaveFlight
+      .run(true, async () => {
+        const data = await leave({ clanId });
+        if (!data.success) return;
 
-      // Membership has been committed. Remove the stale retry path and leave
-      // this profile immediately; cache refreshes must not keep the destructive
-      // action open or make navigation depend on the network.
-      setHasLeftGroup(true);
-      setIsLeaveModalOpen(false);
-      router.push("/clanhall");
-      void Promise.all([
-        utils.clan.get.invalidate(),
-        utils.clan.getRequests.invalidate(),
-      ]);
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-      // Keep the confirmation open so the user can retry with full context.
-    } finally {
-      leaveSubmissionInFlight.current = false;
-    }
+        // Membership has been committed. Remove the stale retry path and leave
+        // this profile immediately; cache refreshes must not keep the destructive
+        // action open or make navigation depend on the network.
+        setHasLeftGroup(true);
+        setIsLeaveModalOpen(false);
+        router.push("/clanhall");
+        void Promise.all([
+          utils.clan.get.invalidate(),
+          utils.clan.getRequests.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   };
 
   const { mutateAsync: demote, isPending: isResigningLeadership } =
@@ -1292,30 +1195,24 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const onResignLeadership = async () => {
-    if (resignSubmissionInFlight.current || hasResignedLeadership || !userData) {
-      return;
-    }
+    if (hasResignedLeadership || !userData) return;
 
-    resignSubmissionInFlight.current = true;
-    try {
-      const data = await demote({ clanId, memberId: userData.userId });
-      if (!data.success) return;
+    await resignFlight
+      .run(true, async () => {
+        const data = await demote({ clanId, memberId: userData.userId });
+        if (!data.success) return;
 
-      // A successful response proves this user was removed from every delegated
-      // leadership slot. Hide the stale retry immediately and keep the local guard
-      // if an authoritative refresh fails.
-      setHasResignedLeadership(true);
-      setIsResignModalOpen(false);
-      void Promise.all([
-        utils.clan.get.invalidate({ clanId }),
-        utils.clan.getRequests.invalidate(),
-      ]);
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-      // Keep the confirmation and its context open for a safe retry.
-    } finally {
-      resignSubmissionInFlight.current = false;
-    }
+        // A successful response proves this user was removed from every delegated
+        // leadership slot. Hide the stale retry immediately and keep the local guard
+        // if an authoritative refresh fails.
+        setHasResignedLeadership(true);
+        setIsResignModalOpen(false);
+        void Promise.all([
+          utils.clan.get.invalidate({ clanId }),
+          utils.clan.getRequests.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   };
 
   const { mutate: purchaseBoost, isPending: isPurchasingBoost } =
@@ -1342,32 +1239,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const onDonateReputation = async () => {
     const reputationPoints = Number(donateReps);
-    if (
-      donationSubmissionInFlight.current ||
-      !Number.isSafeInteger(reputationPoints) ||
-      reputationPoints <= 0
-    ) {
+    if (!Number.isSafeInteger(reputationPoints) || reputationPoints <= 0) {
       return;
     }
 
-    donationSubmissionInFlight.current = true;
-    setIsDonationSubmitting(true);
-    try {
-      const data = await clanDonate({ clanId, reputationPoints });
-      if (!data.success) return;
+    await donationFlight
+      .run(true, async () => {
+        const data = await clanDonate({ clanId, reputationPoints });
+        if (!data.success) return;
 
-      // The debit and treasury credit have committed. Close the stale repeat path
-      // immediately; a cache failure must never recreate a costly action.
-      setDonateReps("");
-      setIsDonateModalOpen(false);
-      void utils.clan.get.invalidate();
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-      // Keep the exact draft and confirmation open so the user can safely retry.
-    } finally {
-      donationSubmissionInFlight.current = false;
-      setIsDonationSubmitting(false);
-    }
+        // The debit and treasury credit have committed. Close the stale repeat path
+        // immediately; a cache failure must never recreate a costly action.
+        setDonateReps("");
+        setIsDonateModalOpen(false);
+        void utils.clan.get.invalidate();
+      })
+      .catch(ignoreToastedError);
   };
 
   const {
@@ -1385,27 +1272,23 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   });
 
   const onUpgradeHideoutToStronghold = async () => {
-    if (strongholdUpgradeSubmissionInFlight.current || hasUpgradedToStronghold) return;
+    if (hasUpgradedToStronghold) return;
 
-    strongholdUpgradeSubmissionInFlight.current = true;
-    try {
-      const data = await upgradeHideoutToStronghold({ clanId });
-      if (!data.success) return;
+    await strongholdUpgradeFlight
+      .run(true, async () => {
+        const data = await upgradeHideoutToStronghold({ clanId });
+        if (!data.success) return;
 
-      // The one-time upgrade and its costs are committed. Remove the stale action
-      // immediately; dependent authoritative refreshes must not recreate it.
-      setHasUpgradedToStronghold(true);
-      setIsStrongholdUpgradeModalOpen(false);
-      void Promise.all([
-        utils.clan.get.invalidate(),
-        utils.village.getSectorOwnerships.invalidate(),
-      ]);
-    } catch {
-      // The mutation callback provides the user-facing error. Keep the complete
-      // confirmation open so a failed request can be safely retried.
-    } finally {
-      strongholdUpgradeSubmissionInFlight.current = false;
-    }
+        // The one-time upgrade and its costs are committed. Remove the stale action
+        // immediately; dependent authoritative refreshes must not recreate it.
+        setHasUpgradedToStronghold(true);
+        setIsStrongholdUpgradeModalOpen(false);
+        void Promise.all([
+          utils.clan.get.invalidate(),
+          utils.village.getSectorOwnerships.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   };
 
   const { mutate: nominateElder, isPending: isNominating } =
@@ -1447,7 +1330,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const onInstantJoinAndLead = async () => {
     if (
-      instantJoinSubmissionInFlight.current ||
       hasInstantlyTakenLeadership ||
       !userData ||
       (userData.clanId !== null && userData.clanId !== clanId)
@@ -1455,26 +1337,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       return;
     }
 
-    instantJoinSubmissionInFlight.current = true;
-    try {
-      const data = await instantJoinAndLead({ clanId });
-      if (!data.success) return;
+    await instantJoinFlight
+      .run(true, async () => {
+        const data = await instantJoinAndLead({ clanId });
+        if (!data.success) return;
 
-      // Membership and leadership are committed. Remove the privileged retry path
-      // before navigation; authoritative refreshes must never recreate the action.
-      setHasInstantlyTakenLeadership(true);
-      setIsInstantJoinModalOpen(false);
-      router.push("/clanhall");
-      void Promise.all([
-        utils.clan.get.invalidate(),
-        utils.clan.getRequests.invalidate(),
-      ]);
-    } catch {
-      // The mutation's onError callback provides the user-facing error. Keep the
-      // complete consequence summary open so the privileged action can be retried.
-    } finally {
-      instantJoinSubmissionInFlight.current = false;
-    }
+        // Membership and leadership are committed. Remove the privileged retry path
+        // before navigation; authoritative refreshes must never recreate the action.
+        setHasInstantlyTakenLeadership(true);
+        setIsInstantJoinModalOpen(false);
+        router.push("/clanhall");
+        void Promise.all([
+          utils.clan.get.invalidate(),
+          utils.clan.getRequests.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   };
 
   const { mutateAsync: clearLeadership, isPending: isClearingLeadership } =
@@ -1488,28 +1366,24 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const onClearLeadership = async (close: () => void) => {
-    if (clearLeadershipSubmissionInFlight.current || hasClearedLeadership) return;
+    if (hasClearedLeadership) return;
 
-    clearLeadershipSubmissionInFlight.current = true;
-    try {
-      const data = await clearLeadership({ clanId });
-      if (!data.success) return;
+    await clearLeadershipFlight
+      .run(true, async () => {
+        const data = await clearLeadership({ clanId });
+        if (!data.success) return;
 
-      // The successful response proves every delegated leadership slot was cleared.
-      // Remove the stale destructive retry path immediately; cache refresh failures
-      // must not allow the committed bulk action to be repeated.
-      setHasClearedLeadership(true);
-      close();
-      void Promise.all([
-        utils.clan.get.invalidate({ clanId }),
-        utils.clan.getRequests.invalidate(),
-      ]);
-    } catch {
-      // The mutation's onError callback provides the user-facing error. Keep the
-      // complete confirmation open so the user can retry without losing context.
-    } finally {
-      clearLeadershipSubmissionInFlight.current = false;
-    }
+        // The successful response proves every delegated leadership slot was cleared.
+        // Remove the stale destructive retry path immediately; cache refresh failures
+        // must not allow the committed bulk action to be repeated.
+        setHasClearedLeadership(true);
+        close();
+        void Promise.all([
+          utils.clan.get.invalidate({ clanId }),
+          utils.clan.getRequests.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   };
 
   // Rename Form
@@ -1519,23 +1393,20 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   });
   const isEditBusy = isEditingClan || isUploadingClanImage;
   const onEdit = editForm.handleSubmit(async (data) => {
-    if (editSubmissionInFlight.current || clanImageUploadInFlight.current) return;
+    if (imageUploadFlight.current()) return;
 
-    editSubmissionInFlight.current = true;
-    try {
-      const result = await edit(data);
-      if (!result.success) return;
+    await editFlight
+      .run(true, async () => {
+        const result = await edit(data);
+        if (!result.success) return;
 
-      // Once committed, close the retry path immediately. Refreshing the
-      // authoritative clan data is best-effort and cannot resubmit the edit.
-      editForm.reset(data);
-      setIsEditModalOpen(false);
-      void utils.clan.get.invalidate();
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-    } finally {
-      editSubmissionInFlight.current = false;
-    }
+        // Once committed, close the retry path immediately. Refreshing the
+        // authoritative clan data is best-effort and cannot resubmit the edit.
+        editForm.reset(data);
+        setIsEditModalOpen(false);
+        void utils.clan.get.invalidate();
+      })
+      .catch(ignoreToastedError);
   });
   const currentImage = useWatch({ control: editForm.control, name: "image" });
 
@@ -1545,27 +1416,21 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     defaultValues: { color: userData?.village?.hexColor ?? "#000000", clanId },
   });
   const onColorEdit = colorForm.handleSubmit(async (data) => {
-    if (colorSubmissionInFlight.current) return;
+    await colorFlight
+      .run(true, async () => {
+        const result = await editColor(data);
+        if (!result.success) return;
 
-    colorSubmissionInFlight.current = true;
-    try {
-      const result = await editColor(data);
-      if (!result.success) return;
-
-      // The reputation charge and color update are committed. Remove the costly
-      // retry path before refreshing any dependent authoritative views.
-      colorForm.reset(data);
-      setIsColorModalOpen(false);
-      void Promise.all([
-        utils.clan.get.invalidate(),
-        utils.village.getSectorOwnerships.invalidate(),
-      ]);
-    } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
-      // Keep the selected color intact so the user can retry safely.
-    } finally {
-      colorSubmissionInFlight.current = false;
-    }
+        // The reputation charge and color update are committed. Remove the costly
+        // retry path before refreshing any dependent authoritative views.
+        colorForm.reset(data);
+        setIsColorModalOpen(false);
+        void Promise.all([
+          utils.clan.get.invalidate(),
+          utils.village.getSectorOwnerships.invalidate(),
+        ]);
+      })
+      .catch(ignoreToastedError);
   });
 
   // Loader
@@ -1602,7 +1467,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     ),
   );
   const donationAmount = Number(donateReps);
-  const isDonationBusy = isDonatingReputation || isDonationSubmitting;
   const isDonationAmountValid =
     donateReps.trim() !== "" &&
     Number.isSafeInteger(donationAmount) &&
@@ -1718,17 +1582,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         <UploadButton
                           endpoint="clanUploader"
                           onBeforeUploadBegin={(files) => {
-                            clanImageUploadInFlight.current = true;
-                            setIsUploadingClanImage(true);
+                            imageUploadFlight.claim();
                             return files;
                           }}
                           onUploadAborted={() => {
-                            clanImageUploadInFlight.current = false;
-                            setIsUploadingClanImage(false);
+                            imageUploadFlight.release();
                           }}
                           onClientUploadComplete={(res) => {
-                            clanImageUploadInFlight.current = false;
-                            setIsUploadingClanImage(false);
+                            imageUploadFlight.release();
                             const url = readUploadResult(res)?.fileUrl;
                             if (url) {
                               editForm.setValue("image", url, {
@@ -1737,8 +1598,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                             }
                           }}
                           onUploadError={(error: Error) => {
-                            clanImageUploadInFlight.current = false;
-                            setIsUploadingClanImage(false);
+                            imageUploadFlight.release();
                             showUploadError(error);
                           }}
                         />
@@ -1973,14 +1833,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         size="icon"
                         className="ml-1 h-8 w-8"
                         hoverText="Donate reputation points"
-                        disabled={isDonationBusy || donationCapacity === 0}
-                        aria-busy={isDonationBusy}
+                        disabled={isDonatingReputation || donationCapacity === 0}
+                        aria-busy={isDonatingReputation}
                         aria-label={
-                          isDonationBusy ? "Donating" : "Donate reputation points"
+                          isDonatingReputation ? "Donating" : "Donate reputation points"
                         }
                         onClick={() => setIsDonateModalOpen(true)}
                       >
-                        {isDonationBusy ? (
+                        {isDonatingReputation ? (
                           <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                         ) : (
                           <Star className="h-5 w-5" aria-hidden />
@@ -1993,7 +1853,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         proceed_loading_label="Donating"
                         isOpen={isDonateModalOpen}
                         setIsOpen={setIsDonateModalOpen}
-                        isLoading={isDonationBusy}
+                        isLoading={isDonatingReputation}
                         proceedDisabled={!isDonationAmountValid}
                         keepOpenOnAccept
                         onAccept={() => void onDonateReputation()}
@@ -2023,7 +1883,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                           className="mt-2"
                           placeholder="Reputation points to donate"
                           value={donateReps}
-                          disabled={isDonationBusy}
+                          disabled={isDonatingReputation}
                           aria-describedby="reputation-donation-balance"
                           onTextChange={setDonateReps}
                         />
@@ -2405,16 +2265,13 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
 
   // State
   const [kickTargetId, setKickTargetId] = useState<string | null>(null);
-  const [pendingKickMemberId, setPendingKickMemberId] = useState<string | null>(null);
+  const kickingMembers = usePendingIds();
   const [successfulKick, setSuccessfulKick] = useState<{
     memberId: string;
     dataUpdatedAt: number;
   } | null>(null);
-  const kickSubmissionsInFlight = useRef(new Set<string>());
   const [promoteTargetId, setPromoteTargetId] = useState<string | null>(null);
-  const [pendingPromoteMemberId, setPendingPromoteMemberId] = useState<string | null>(
-    null,
-  );
+  const promotingMembers = usePendingIds();
   const [successfulPromotions, setSuccessfulPromotions] = useState<
     Array<{
       memberId: string;
@@ -2422,11 +2279,8 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       dataUpdatedAt: number;
     }>
   >([]);
-  const promoteSubmissionsInFlight = useRef(new Set<string>());
   const [demoteTargetId, setDemoteTargetId] = useState<string | null>(null);
-  const [pendingDemoteMemberId, setPendingDemoteMemberId] = useState<string | null>(
-    null,
-  );
+  const demotingMembers = usePendingIds();
   const [successfulDemotions, setSuccessfulDemotions] = useState<
     Array<{
       memberId: string;
@@ -2435,7 +2289,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       dataUpdatedAt: number;
     }>
   >([]);
-  const demoteSubmissionsInFlight = useRef(new Set<string>());
 
   // Get react query utility
   const utils = api.useUtils();
@@ -2608,11 +2461,10 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   };
 
   const onKick = async () => {
-    if (!kickTarget || kickSubmissionsInFlight.current.has(kickTarget.userId)) return;
+    if (!kickTarget) return;
 
     const memberId = kickTarget.userId;
-    kickSubmissionsInFlight.current.add(memberId);
-    setPendingKickMemberId(memberId);
+    if (!kickingMembers.begin(memberId)) return;
     try {
       const data = await kick({ clanId, memberId });
       if (!data.success) return;
@@ -2631,24 +2483,16 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       // The mutation's onError callback supplies the toast. Preserve the target
       // confirmation and consequence summary so the user can retry safely.
     } finally {
-      kickSubmissionsInFlight.current.delete(memberId);
-      setPendingKickMemberId((current) => (current === memberId ? null : current));
+      kickingMembers.end(memberId);
     }
   };
 
   const onPromote = async () => {
-    if (
-      !promoteTarget ||
-      promoteTargetIsLeader ||
-      promoteSubmissionsInFlight.current.has(promoteTarget.userId)
-    ) {
-      return;
-    }
+    if (!promoteTarget || promoteTargetIsLeader) return;
 
     const memberId = promoteTarget.userId;
     const expectedRole = getExpectedPromotionRole(promoteTarget);
-    promoteSubmissionsInFlight.current.add(memberId);
-    setPendingPromoteMemberId(memberId);
+    if (!promotingMembers.begin(memberId)) return;
     try {
       const data = await promote({ clanId, memberId });
       showMutationToast(data);
@@ -2670,25 +2514,17 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       // The mutation's onError callback supplies the toast. Keep the target and
       // its exact consequence visible so the same dialog can be retried.
     } finally {
-      promoteSubmissionsInFlight.current.delete(memberId);
-      setPendingPromoteMemberId((current) => (current === memberId ? null : current));
+      promotingMembers.end(memberId);
     }
   };
 
   const onDemote = async () => {
-    if (
-      !demoteTarget ||
-      demoteTargetIsLeader ||
-      demoteSubmissionsInFlight.current.has(demoteTarget.userId)
-    ) {
-      return;
-    }
+    if (!demoteTarget || demoteTargetIsLeader) return;
 
     const memberId = demoteTarget.userId;
     const clearedColeaderRole = demoteTargetIsColeader;
     const clearedAssassinRole = demoteTargetIsAssassin;
-    demoteSubmissionsInFlight.current.add(memberId);
-    setPendingDemoteMemberId(memberId);
+    if (!demotingMembers.begin(memberId)) return;
     try {
       const data = await demote({ clanId, memberId });
       showMutationToast(data);
@@ -2715,8 +2551,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       // The mutation's onError callback supplies the toast. Preserve the target
       // and exact role consequences in the dialog so the user can retry.
     } finally {
-      demoteSubmissionsInFlight.current.delete(memberId);
-      setPendingDemoteMemberId((current) => (current === memberId ? null : current));
+      demotingMembers.end(memberId);
     }
   };
 
@@ -2731,9 +2566,9 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
         canEdit || // canEdit role can kick anyone
         (isLeader && !memberIsLeader) || // Leader can kick anyone except other leaders
         (isColeader && !memberIsLeader && !memberIsColeader); // Co-leaders can kick normal members only
-      const isThisMemberBeingKicked = pendingKickMemberId === member.userId;
-      const isThisMemberBeingPromoted = pendingPromoteMemberId === member.userId;
-      const isThisMemberBeingDemoted = pendingDemoteMemberId === member.userId;
+      const isThisMemberBeingKicked = kickingMembers.ids.has(member.userId);
+      const isThisMemberBeingPromoted = promotingMembers.ids.has(member.userId);
+      const isThisMemberBeingDemoted = demotingMembers.ids.has(member.userId);
       const isThisMemberBusy =
         isThisMemberBeingKicked ||
         isThisMemberBeingPromoted ||
@@ -2918,7 +2753,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
           if (!shouldOpen) setDemoteTargetId(null);
         }}
         isLoading={
-          demoteTarget !== undefined && pendingDemoteMemberId === demoteTarget.userId
+          demoteTarget !== undefined && demotingMembers.ids.has(demoteTarget.userId)
         }
         keepOpenOnAccept
         proceedDisabled={demoteTargetIsLeader}
@@ -2992,7 +2827,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
           if (!shouldOpen) setPromoteTargetId(null);
         }}
         isLoading={
-          promoteTarget !== undefined && pendingPromoteMemberId === promoteTarget.userId
+          promoteTarget !== undefined && promotingMembers.ids.has(promoteTarget.userId)
         }
         keepOpenOnAccept
         proceedDisabled={promoteTargetIsLeader}
@@ -3086,7 +2921,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
           if (!shouldOpen) setKickTargetId(null);
         }}
         isLoading={
-          kickTarget !== undefined && pendingKickMemberId === kickTarget.userId
+          kickTarget !== undefined && kickingMembers.ids.has(kickTarget.userId)
         }
         keepOpenOnAccept
         onAccept={() => void onKick()}
@@ -3304,7 +3139,7 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   const [amount, setAmount] = useState(1);
   const [error, setError] = useState("");
   // Modal callbacks can repeat before React renders the mutation's pending state.
-  const submitting = useRef(false);
+  const submission = useSingleFlight();
   const utils = api.useUtils();
   const { mutateAsync: convert, isPending } = api.clan.convertPointsToRyo.useMutation({
     onMutate: prepareUserUpdate,
@@ -3314,25 +3149,24 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
   });
   const isValid = Number.isSafeInteger(amount) && amount > 0 && amount <= points;
   const onConvert = async () => {
-    if (!isValid || submitting.current) return;
-    submitting.current = true;
-    setError("");
-    try {
-      const result = await convert({ clanId, points: amount });
-      showMutationToast(result);
-      if (!result.success) {
-        setError(result.message);
-        return;
+    if (!isValid) return;
+    await submission.run(true, async () => {
+      setError("");
+      try {
+        const result = await convert({ clanId, points: amount });
+        showMutationToast(result);
+        if (!result.success) {
+          setError(result.message);
+          return;
+        }
+        setIsOpen(false);
+        setAmount(1);
+        // Profile data also embeds clan balances used outside the clan hall.
+        await utils.clan.get.invalidate();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not convert points");
       }
-      setIsOpen(false);
-      setAmount(1);
-      // Profile data also embeds clan balances used outside the clan hall.
-      await utils.clan.get.invalidate();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not convert points");
-    } finally {
-      submitting.current = false;
-    }
+    });
   };
   return (
     <>
@@ -3386,3 +3220,9 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
     </>
   );
 }
+
+/**
+ * Ends a guarded submission whose failure the mutation's `onError` already toasted. Its
+ * confirmation stays open with the same context, so the player can retry.
+ */
+const ignoreToastedError = () => undefined;

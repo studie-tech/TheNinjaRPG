@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Bot,
   BrickWall,
@@ -11,7 +10,6 @@ import {
   ReceiptJapaneseYen,
   Users,
 } from "lucide-react";
-import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,16 +29,13 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import Building, { StructureRewardEntries } from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { GroupOrders } from "@/layout/GroupOrders";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import RichInput from "@/layout/RichInput";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { parseHtml } from "@/utils/parse";
 import { prettyNumber } from "@/utils/string";
 import { useRequireInVillage } from "@/utils/UserContext";
-import type { MutateContentSchema } from "@/validators/comments";
-import { mutateContentSchema } from "@/validators/comments";
 
 export default function VillageOverview() {
   // State
@@ -82,7 +77,7 @@ export default function VillageOverview() {
   const protectors = villageData?.structures.find((s) => s.name === "Protectors");
 
   // Mutations
-  const { mutate: upsertNotice, isPending: isUpdating } =
+  const { mutateAsync: upsertNotice, isPending: isUpdating } =
     api.kage.upsertNotice.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
@@ -99,24 +94,6 @@ export default function VillageOverview() {
         if (data.success) await utils.profile.getUser.invalidate();
       },
     });
-
-  // Form control
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { errors },
-  } = useForm<MutateContentSchema>({
-    values: { content: villageData?.notice?.content ?? "" },
-    resolver: zodResolver(mutateContentSchema),
-    resetOptions: { keepDirtyValues: true },
-  });
-
-  // Handling submit
-  const onSubmit = handleSubmit((data) => {
-    upsertNotice(data);
-    reset();
-  });
 
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -270,39 +247,26 @@ export default function VillageOverview() {
       </ContentBox>
 
       {["OUTLAW", "VILLAGE"].includes(sectorVillage?.type || "unknown") && (
-        <ContentBox
+        <GroupOrders
           title="Notice Board"
           subtitle={`Information from ${sectorVillage?.type === "OUTLAW" ? "Leader" : "Kage"}`}
-          initialBreak={true}
-          topRightContent={
-            isKage && (
-              <Confirm
-                title="Update Notice"
-                proceed_label="Submit"
-                button={
-                  <Button id="create">
-                    <Pencil className="h-6 w-6" />
-                  </Button>
-                }
-                onAccept={onSubmit}
-              >
-                <RichInput
-                  id="content"
-                  label="Contents of your thread"
-                  height="300"
-                  placeholder={notice}
-                  control={control}
-                  error={errors.content?.message}
-                />
-              </Confirm>
-            )
-          }
+          content={notice}
+          draft={villageData.notice?.content ?? ""}
+          canPost={isKage}
+          dialogTitle="Update Notice"
+          inputLabel="Contents of your thread"
+          isPending={isUpdating}
+          onSubmit={upsertNotice}
+          renderTrigger={(open) => (
+            <Button id="create" onClick={open}>
+              <Pencil className="h-6 w-6" />
+            </Button>
+          )}
         >
-          {parseHtml(notice)}
           {(isFetchingVillage || isUpdating) && (
             <Loader explanation="Loading Village Information" />
           )}
-        </ContentBox>
+        </GroupOrders>
       )}
     </>
   );
