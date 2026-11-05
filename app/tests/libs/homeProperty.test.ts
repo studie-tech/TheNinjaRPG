@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { HOME_FURNITURE_MAX_PLACEMENTS, HomeTypes } from "@/drizzle/constants";
 import { clampHomeFurniturePlacement, getHomeFurnitureGeometry, homeLayoutPlacementError, recoverHomeLayout, type HomeFurniture } from "@/libs/home";
-import { boundHomeCamera, getHomeOverviewCamera, getHomeRoomCamera, getHomeRooms, homeRoomLayoutError, zoomHomeCamera } from "@/libs/homeProperty";
+import { boundHomeCamera, getHomeOverviewCamera, getHomeRoomCamera, getHomeRooms, HOME_CAMERA_MAX_SCALE, homeRoomLayoutError, zoomHomeCamera, zoomHomeCameraTo } from "@/libs/homeProperty";
 import { HOME_ART_PLANS } from "@/libs/homeRoomGeometry";
 import { homeFurnitureSaveInputSchema } from "@/validators/home";
 
@@ -417,3 +417,27 @@ const containsArtPoint = (polygon: readonly (readonly [number, number])[], x: nu
   }
   return inside;
 };
+
+describe("zoomHomeCameraTo", () => {
+  const center = { x: 50, y: 50 };
+  const overview = getHomeOverviewCamera("TOWN_HOUSE");
+
+  it("clamps the scale before anchoring the zoom", () => {
+    const camera = { x: -20, y: -20, scale: 1.5 };
+    expect(zoomHomeCameraTo(camera, 9, "TOWN_HOUSE", center)).toEqual(
+      boundHomeCamera(zoomHomeCamera(camera, HOME_CAMERA_MAX_SCALE, center), "TOWN_HOUSE"),
+    );
+  });
+
+  it("stops at the overview when zooming out", () => {
+    expect(zoomHomeCameraTo(overview, overview.scale / 2, "TOWN_HOUSE", center).scale).toBe(overview.scale);
+  });
+
+  it("moves the anchor when a pinch midpoint travels", () => {
+    const camera = { x: -20, y: -20, scale: 1 };
+    const moved = { x: 55, y: 50 };
+    expect(zoomHomeCameraTo(camera, 1.2, "TOWN_HOUSE", center, moved)).toEqual(
+      boundHomeCamera(zoomHomeCamera(camera, 1.2, center, moved), "TOWN_HOUSE"),
+    );
+  });
+});
