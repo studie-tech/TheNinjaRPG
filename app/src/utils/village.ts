@@ -143,11 +143,14 @@ export const getShrineBoost = (
   const expiry = shrineBoost ? new Date(shrineBoost) : now;
   if (expiry < now) return 0;
   if (!shrineBoost || sectors <= 0) return 0;
-  // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
-  const boostPercentage =
-    SHRINE_BOOST_BASE_PERC + (sectors - 1) * SHRINE_BOOST_PER_SHRINE_PERC;
-  return boostPercentage / 100;
+  return getShrineBoostPercentage(sectors) / 100;
 };
+
+/** Boost percentage from boosting shrines: base with 1+, then a step per additional shrine. */
+export const getShrineBoostPercentage = (shrineCount: number) =>
+  shrineCount > 0
+    ? SHRINE_BOOST_BASE_PERC + (shrineCount - 1) * SHRINE_BOOST_PER_SHRINE_PERC
+    : 0;
 
 /**
  * Calculates the bank interest rate based on the boost value. Boost value is
@@ -188,10 +191,7 @@ export const calcStructureUpgrade = (
 ) => {
   // Base cost (uses base level, not effective level - upgrades are based on permanent level)
   const isVillageStructure =
-    village.type === "VILLAGE" &&
-    (VILLAGE_MAINTAINED_STRUCTURE_ROUTES as readonly string[]).includes(
-      structure.route,
-    );
+    village.type === "VILLAGE" && isMaintainedStructure(structure.route);
   const cost = isVillageStructure
     ? VILLAGE_STRUCTURE_UPGRADE_BASE_COST +
       VILLAGE_STRUCTURE_UPGRADE_PER_LEVEL_COST * structure.level
@@ -211,6 +211,18 @@ export const calcStructureUpgrade = (
   // Return result & infor on calculation
   return { cost, tax, discount, total: subTotal - discount };
 };
+
+/** Whether a structure at this route is village-funded and billed monthly upkeep. */
+export const isMaintainedStructure = (route: string) =>
+  (VILLAGE_MAINTAINED_STRUCTURE_ROUTES as readonly string[]).includes(route);
+
+/** Built structures a village is billed monthly upkeep for. */
+export const countMaintainedStructures = (
+  structures: Pick<VillageStructure, "level" | "route">[],
+) =>
+  structures.filter(
+    (structure) => structure.level > 0 && isMaintainedStructure(structure.route),
+  ).length;
 
 /** Raid bonuses multiply each benefit supplied by the matching structure. */
 export const getRaidStructureMultiplier = (

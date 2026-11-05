@@ -1,12 +1,17 @@
 import { z } from "zod";
-import { SHRINE_BOOST_TYPES } from "@/drizzle/constants";
+import { SHRINE_BOOST_SLOTS_PER_DAY, SHRINE_BOOST_TYPES } from "@/drizzle/constants";
 
-const MAX_BOOST_TEMPLATE_ENTRIES = 7 * 12 * SHRINE_BOOST_TYPES.length;
+const MAX_BOOST_TEMPLATE_ENTRIES =
+  7 * SHRINE_BOOST_SLOTS_PER_DAY * SHRINE_BOOST_TYPES.length;
 
 export const boostTemplateEntrySchema = z.object({
   boostType: z.enum(SHRINE_BOOST_TYPES),
   dayOfWeek: z.number().int().min(0).max(6), // 0 = Sunday (UTC)
-  slotIndex: z.number().int().min(0).max(11), // 0 = 00:00 UTC
+  slotIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(SHRINE_BOOST_SLOTS_PER_DAY - 1), // 0 = 00:00 UTC
 });
 
 export type BoostTemplateEntry = z.infer<typeof boostTemplateEntrySchema>;
