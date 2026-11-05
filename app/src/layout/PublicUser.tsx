@@ -93,6 +93,7 @@ import AvatarImage from "@/layout/Avatar";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
+import { ConfirmedCloneControl } from "@/layout/ConfirmedCloneControl";
 import ContentBox from "@/layout/ContentBox";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import GraphCombatLog from "@/layout/GraphCombatLog";
@@ -217,94 +218,52 @@ type DebugCloneSource = {
   username: string;
 };
 
-/**
- * Keep the confirmation and in-flight request bound to the exact profile that opened it. A
- * profile-route refresh can reuse PublicUser's surrounding layout, but it must never retarget an
- * already-open destructive confirmation to the newly rendered profile.
- */
 const DebugUserCloneControl: React.FC<{
   source: DebugCloneSource;
   cloneUserId: string;
 }> = ({ source, cloneUserId }) => {
   const router = useRouter();
   const utils = api.useUtils();
-  const [confirmedSource, setConfirmedSource] = useState<DebugCloneSource | null>(null);
-  const sourceInFlight = useRef<string | null>(null);
   const { mutateAsync: cloneUser, isPending } =
     api.staff.cloneUserForDebug.useMutation();
 
-  const cloneConfirmedSource = async (target: DebugCloneSource) => {
-    // Mutation state reaches React on the next render. Claim this source synchronously so a
-    // click/Enter race cannot submit the same destructive replacement twice.
-    if (sourceInFlight.current !== null) return;
-    sourceInFlight.current = target.userId;
-
-    try {
-      const result = await cloneUser({
-        userId: target.userId,
-      });
-      if (result.success) {
-        showMutationToast(result);
-
-        // The copy is committed. Close the stale destructive action before best-effort cache
-        // refresh/navigation so another copy always requires a new explicit confirmation.
-        setConfirmedSource(null);
+  return (
+    <ConfirmedCloneControl
+      source={{ id: source.userId, name: source.username }}
+      label="user"
+      isPending={isPending}
+      clone={(userId) => cloneUser({ userId })}
+      onCloned={() => {
         void Promise.allSettled([
           // Cloning replaces character state and generated relation IDs; reload its complete projection.
           utils.profile.getUser.invalidate(),
           utils.profile.getPublicUser.invalidate({ userId: cloneUserId }),
         ]);
         router.push("/profile");
-      } else {
-        showMutationToast(result);
-      }
-    } catch {
-      // The shared tRPC handler owns transport-error reporting. Keep the exact source snapshot
-      // open so the staff member can deliberately retry without silently changing targets.
-    } finally {
-      if (sourceInFlight.current === target.userId) sourceInFlight.current = null;
-    }
-  };
-
-  return (
-    <>
-      <TooltipProvider delayDuration={50}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={`Clone ${source.username} into your debug account`}
-              className="inline-flex items-center disabled:cursor-wait disabled:opacity-50"
-              disabled={isPending}
-              onClick={() => setConfirmedSource({ ...source })}
-            >
-              <CopyCheck className="h-6 w-6 hover:text-orange-500" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Clone User</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      {confirmedSource && (
-        <Modal
-          id={`clone-user-${confirmedSource.userId}`}
-          title={`Clone user: ${confirmedSource.username}`}
-          isOpen
-          setIsOpen={(isOpen) => {
-            if (!isOpen) setConfirmedSource(null);
-          }}
-          proceed_label="Clone user"
-          proceed_loading_label="Cloning"
-          isLoading={isPending}
-          keepOpenOnAccept
-          onAccept={(event) => {
-            event.preventDefault();
-            void cloneConfirmedSource(confirmedSource);
-          }}
-        >
+      }}
+      renderTrigger={(open, isTriggerPending) => (
+        <TooltipProvider delayDuration={50}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Clone ${source.username} into your debug account`}
+                className="inline-flex items-center disabled:cursor-wait disabled:opacity-50"
+                disabled={isTriggerPending}
+                onClick={open}
+              >
+                <CopyCheck className="h-6 w-6 hover:text-orange-500" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Clone User</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      body={({ id, name }) => (
+        <>
           <p>
-            This copies <b>{confirmedSource.username}</b>&apos;s current gameplay state
-            into your separate staff/debug account. The source user will not be changed.
+            This copies <b>{name}</b>&apos;s current gameplay state into your separate
+            staff/debug account. The source user will not be changed.
           </p>
           <p>
             Your debug account&apos;s stats, location, inventory, jutsu, quest history,
@@ -313,12 +272,12 @@ const DebugUserCloneControl: React.FC<{
             other private account data stay unchanged.
           </p>
           <p>
-            Source ID: <code>{confirmedSource.userId}</code>. After cloning, you will be
-            taken to your updated profile.
+            Source ID: <code>{id}</code>. After cloning, you will be taken to your
+            updated profile.
           </p>
-        </Modal>
+        </>
       )}
-    </>
+    />
   );
 };
 
