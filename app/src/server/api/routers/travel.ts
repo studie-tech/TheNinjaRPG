@@ -48,6 +48,11 @@ import {
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
+  beyondSectorMapEdge,
+  isOnSectorMapEdge,
+  type SectorMapEdge,
+} from "@/libs/sector-map/crossing";
+import {
   chebyshevDistance,
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -1226,7 +1231,7 @@ const resolveAdjacentCrossing = (
   current: { x: number; y: number },
   target: { x: number; y: number },
 ):
-  | { valid: true; direction: "north" | "east" | "south" | "west" }
+  | { valid: true; direction: SectorMapEdge }
   | { valid: false; error: string }
   | null => {
   const outWest = target.x === -1;
@@ -1242,18 +1247,16 @@ const resolveAdjacentCrossing = (
   if (outCount !== 1 || (!inX && !inY)) {
     return { valid: false, error: "Only adjacent sectors can be reached by walking" };
   }
-  if (outNorth || outSouth) {
-    const atEdge = outNorth ? current.y === map.height - 1 : current.y === 0;
-    if (!atEdge || target.x !== current.x) {
-      return { valid: false, error: "You must be at the matching edge to cross over" };
-    }
-    return { valid: true, direction: outNorth ? "north" : "south" };
-  }
-  const atEdge = outWest ? current.x === 0 : current.x === map.width - 1;
-  if (!atEdge || target.y !== current.y) {
+  const direction = outNorth ? "north" : outSouth ? "south" : outWest ? "west" : "east";
+  const beyond = beyondSectorMapEdge(map, direction, current);
+  if (
+    !isOnSectorMapEdge(map, direction, current) ||
+    target.x !== beyond.x ||
+    target.y !== beyond.y
+  ) {
     return { valid: false, error: "You must be at the matching edge to cross over" };
   }
-  return { valid: true, direction: outWest ? "west" : "east" };
+  return { valid: true, direction };
 };
 
 /** Complete travel and consume its recovery ticks without training queued stats. */

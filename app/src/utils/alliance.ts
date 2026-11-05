@@ -1,5 +1,7 @@
 import {
   type AllianceState,
+  RANKS_RESTRICTED_FROM_PVP,
+  type UserRank,
   VILLAGE_SYNDICATE_ID,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
@@ -91,6 +93,15 @@ export const isMapUserAlly = (
       (target.villageId === viewer?.villageId || relationship?.status === "ALLY"))
   );
 };
+
+/** Whether map controls offer an attack: a PvP-eligible rank, and no ally unless opted in. */
+export const canShowMapAttack = (
+  viewer: Parameters<typeof isMapUserAlly>[0],
+  target: Parameters<typeof isMapUserAlly>[1] & { rank: UserRank },
+  allyAttack: boolean,
+) =>
+  !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
+  (allyAttack || !isMapUserAlly(viewer, target));
 
 /**
  * Finds the relationship status between two villages.

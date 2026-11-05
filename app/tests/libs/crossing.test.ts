@@ -7,6 +7,7 @@ import {
   MAP_WORLD_ROWS,
 } from "@/drizzle/constants";
 import {
+  beyondSectorMapEdge,
   EDGE_EAST,
   EDGE_NORTH,
   EDGE_SOUTH,
@@ -14,9 +15,13 @@ import {
   edgeCell,
   edgeLength,
   edgeParam,
+  findNearestWalkableEdgeTile,
+  isOnSectorMapEdge,
   mapParam,
   resolveSectorMapEdgeCrossing,
+  sectorMapEdgeCell,
   sectorMapEdgeForGlobeEdge,
+  sectorMapEdgeOffset,
   type EdgeIndex,
 } from "@/libs/sector-map/crossing";
 import {
@@ -307,5 +312,54 @@ describe("game crossing wrapper", () => {
     expect(() =>
       resolveSectorCrossing(sectorIdAt(0, 0), "north", 13, H - 1, W, H, W, H),
     ).toThrow(/polar boundary/);
+  });
+});
+
+describe("rendered sector-map edges", () => {
+  const map = { width: 26, height: 12 };
+
+  it("places north at the largest y", () => {
+    expect(sectorMapEdgeCell(map, "north", 4)).toEqual({ x: 4, y: 11 });
+    expect(sectorMapEdgeCell(map, "south", 4)).toEqual({ x: 4, y: 0 });
+    expect(sectorMapEdgeCell(map, "west", 4)).toEqual({ x: 0, y: 4 });
+    expect(sectorMapEdgeCell(map, "east", 4)).toEqual({ x: 25, y: 4 });
+  });
+
+  it("recognizes only tiles on the named border", () => {
+    expect(isOnSectorMapEdge(map, "north", { x: 3, y: 11 })).toBe(true);
+    expect(isOnSectorMapEdge(map, "south", { x: 3, y: 11 })).toBe(false);
+    expect(isOnSectorMapEdge(map, "west", { x: 0, y: 5 })).toBe(true);
+    expect(isOnSectorMapEdge(map, "east", { x: 24, y: 5 })).toBe(false);
+  });
+
+  it("steps one tile past a border along the same row or column", () => {
+    expect(beyondSectorMapEdge(map, "north", { x: 3, y: 11 })).toEqual({ x: 3, y: 12 });
+    expect(beyondSectorMapEdge(map, "south", { x: 3, y: 0 })).toEqual({ x: 3, y: -1 });
+    expect(beyondSectorMapEdge(map, "west", { x: 0, y: 5 })).toEqual({ x: -1, y: 5 });
+    expect(beyondSectorMapEdge(map, "east", { x: 25, y: 5 })).toEqual({ x: 26, y: 5 });
+  });
+
+  it("offsets windows with north as positive dy", () => {
+    expect(sectorMapEdgeOffset("north")).toEqual({ dx: 0, dy: 1 });
+    expect(sectorMapEdgeOffset("south")).toEqual({ dx: 0, dy: -1 });
+    expect(sectorMapEdgeOffset("east")).toEqual({ dx: 1, dy: 0 });
+    expect(sectorMapEdgeOffset("west")).toEqual({ dx: -1, dy: 0 });
+  });
+
+  it("picks the closest existing tile on the border", () => {
+    const tiles = [
+      { x: 2, y: 11 },
+      { x: 9, y: 11 },
+      { x: 5, y: 0 },
+    ];
+    const near = findNearestWalkableEdgeTile(
+      { ...map, tiles } as never,
+      "north",
+      { x: 7, y: 11 },
+    );
+    expect(near).toEqual({ x: 9, y: 11 });
+    expect(
+      findNearestWalkableEdgeTile({ ...map, tiles: [] } as never, "north", { x: 7, y: 11 }),
+    ).toBeNull();
   });
 });

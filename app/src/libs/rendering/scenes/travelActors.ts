@@ -37,7 +37,7 @@ import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { isMapUserAlly } from "@/utils/alliance";
+import { canShowMapAttack } from "@/utils/alliance";
 import type { LpcDirection } from "@/validators/lpc";
 
 /** Actor identity and art stay stable across position and presence updates. */
@@ -820,13 +820,9 @@ export const travelActionAvailability = (
   target: SectorUser,
   friendlyAttack: boolean,
 ) => {
-  const isAlly = isMapUserAlly(viewer, target);
   const other = target.userId !== viewer.userId && !target.isNpc;
   return {
-    attack:
-      !!other &&
-      !RANKS_RESTRICTED_FROM_PVP.includes(target.rank) &&
-      (friendlyAttack || !isAlly),
+    attack: !!other && canShowMapAttack(viewer, target, friendlyAttack),
     heal:
       !!other &&
       target.curHealth < target.maxHealth &&

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { VillageAlliance } from "@/drizzle/schema";
-import { getAlliedVillageIds, isMapUserAlly } from "@/utils/alliance";
+import { canShowMapAttack, getAlliedVillageIds, isMapUserAlly } from "@/utils/alliance";
 
 const relation = (
   villageIdA: string,
@@ -44,5 +44,21 @@ describe("isMapUserAlly", () => {
 
   it("treats a missing viewer as unrelated", () => {
     expect(isMapUserAlly(undefined, { villageId: "a" })).toBe(false);
+  });
+});
+
+describe("canShowMapAttack", () => {
+  const viewer = { villageId: "a" };
+
+  it("hides allies until ally attacks are enabled", () => {
+    const ally = { villageId: "a", rank: "CHUNIN" } as const;
+    expect(canShowMapAttack(viewer, ally, false)).toBe(false);
+    expect(canShowMapAttack(viewer, ally, true)).toBe(true);
+  });
+
+  it("never offers an attack on a PvP-restricted rank", () => {
+    const student = { villageId: "b", rank: "STUDENT" } as const;
+    expect(canShowMapAttack(viewer, student, true)).toBe(false);
+    expect(canShowMapAttack(viewer, { ...student, rank: "CHUNIN" }, false)).toBe(true);
   });
 });
