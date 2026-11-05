@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
 import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/page";
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
+import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
+import * as Modal from "@/layout/Modal";
 import OccupationCrafting from "@/layout/OccupationCrafting";
 import * as UserContext from "@/utils/UserContext";
 
@@ -40,11 +43,11 @@ const browserDescriptors = browserGlobals.map((key) =>
   Object.getOwnPropertyDescriptor(globalThis, key),
 );
 /** Install the tRPC stub with the auction procedures a surface reads. */
-const stubApi = (auction: object = {}) =>
+const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation: object = {}) =>
   Object.assign(vi.spyOn(client, "api" as never), {
-    item: router({ getUserItems: { useQuery: () => ({ data: [imbuedRow], isPending: false }) } }),
+    item: router({ getUserItems: { useQuery: () => ({ data: rows, isPending: false }) } }),
     auction: router(auction),
-    occupation: router(),
+    occupation: router(occupation),
     profile: router(),
     useUtils: () => router(),
   });
@@ -84,6 +87,13 @@ afterEach(() => {
     else Reflect.deleteProperty(globalThis, key);
   });
 });
+
+const renderCrafting = () =>
+  render(
+    <AppRouterContext.Provider value={{} as never}>
+      <OccupationCrafting />
+    </AppRouterContext.Provider>,
+  );
 
 const expectOnlyFinishedCrystal = () =>
   expect(screen.getAllByTestId("imbuements")[0]?.textContent).toBe("Finished Crystal");
@@ -146,12 +156,99 @@ it("shows only finished imbuements on an offered item", () => {
 
 it("shows only finished imbuements on an item awaiting repair", () => {
   stubApi();
-  render(
-    <AppRouterContext.Provider value={{} as never}>
-      <OccupationCrafting />
-    </AppRouterContext.Provider>,
-  );
+  renderCrafting();
   expect(screen.getByText("Repair Items")).toBeTruthy();
   const repairDetails = screen.getAllByTestId("imbuements").at(-1);
   expect(repairDetails?.textContent).toBe("Finished Crystal");
+});
+
+/** The details rendered inside the card with this heading. */
+const cardDetails = (heading: string) =>
+  within(screen.getByText(heading).closest(".rounded-xl") as HTMLElement).getAllByTestId("imbuements");
+
+/** Render modals inline, with a proceed button, so a test can read and accept them. */
+const stubModals = () =>
+  vi.spyOn(Modal, "default").mockImplementation((({ isOpen, title, proceed_label, onAccept, children }: {
+    isOpen: boolean;
+    title: string;
+    proceed_label?: string;
+    onAccept?: () => void;
+    children: ReactNode;
+  }) =>
+    isOpen ? (
+      <section aria-label={title}>
+        {children}
+        <button type="button" onClick={() => onAccept?.()}>{`Confirm ${proceed_label}`}</button>
+      </section>
+    ) : null) as never);
+
+/** A row with two finished imbuements and no craft running, so the imbue card is available. */
+const settledRow = {
+  ...imbuedRow,
+  item: { ...imbuedRow.item, canBeImbued: true, maxImbueNumber: 3 },
+  imbuements: [
+    { id: "done", imbuementItemId: "a", craftingFinishedAt: null, item: { name: "Finished Crystal" } },
+    { id: "second", imbuementItemId: "b", craftingFinishedAt: null, item: { name: "Second Crystal" } },
+  ],
+};
+
+it("leaves an unfinished imbuement off the manage imbuements card", () => {
+  stubApi();
+  renderCrafting();
+  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Finished Crystal");
+  expect(cardDetails("Currently Imbuing")[0]?.textContent).toBe("Finished Crystal,Unfinished Crystal");
+});
+
+it("drops a removed imbuement from the card before the inventory refreshes", async () => {
+  const mutateAsync = vi.fn(async () => ({ success: true, message: "Removed" }));
+  stubApi({}, [settledRow], { removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) } });
+  stubModals();
+  renderCrafting();
+  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Finished Crystal,Second Crystal");
+  fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm Remove" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ userItemImbuementId: "done" }));
+  await waitFor(() =>
+    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Second Crystal"),
+  );
+});
+
+it("leaves a removed imbuement off the imbue confirmation of an item selected earlier", async () => {
+  const mutateAsync = vi.fn(async () => ({ success: true, message: "Removed" }));
+  const crystal = {
+    id: "crystal-row",
+    itemId: "crystal",
+    quantity: 1,
+    isInAuction: false,
+    equipped: "NONE",
+    imbuements: [],
+    item: { id: "crystal", name: "Fresh Crystal", image: "/crystal.webp", itemType: "CRYSTAL" },
+  };
+  stubApi({}, [settledRow, crystal], { removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) } });
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { userId: "viewer", occupation: "CRAFTING", level: 1, bank: 0, reputationPoints: 0, money: 0, role: "USER", craftingExperience: 1e9 },
+    prepareUserUpdate: vi.fn(),
+    updateUser: vi.fn(),
+    timeDiff: 0,
+  } as never);
+  vi.spyOn(CombatActions, "ActionSelector").mockImplementation((({ items, onClick }: {
+    items?: { id: string; name: string }[];
+    onClick: (id: string) => void;
+  }) =>
+    items?.map((item) => (
+      <button key={item.id} type="button" onClick={() => onClick(item.id)}>
+        {item.name}
+      </button>
+    ))) as never);
+  stubModals();
+  renderCrafting();
+  fireEvent.click(screen.getByRole("button", { name: "Sword (2/3 crystals)" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm Remove" }));
+  await waitFor(() =>
+    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Second Crystal"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Fresh Crystal" }));
+  const dialog = within(screen.getByRole("region", { name: "Imbue Item" }));
+  expect(dialog.getAllByTestId("imbuements")[0]?.textContent).toBe("Second Crystal");
 });

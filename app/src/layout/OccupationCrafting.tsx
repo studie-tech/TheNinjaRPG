@@ -195,6 +195,16 @@ export default function OccupationCrafting() {
     (userItem) => userItem.item?.canBeImbued && userItem.quantity > 0,
   );
 
+  /** Imbuements in effect: finished, and not removed by this session's mutations. */
+  const shownImbuements = <
+    T extends { id: string; craftingFinishedAt: Date | null },
+  >(userItem: {
+    imbuements: T[];
+  }) =>
+    finishedImbuements(userItem).filter(
+      (imbuement) => !removedImbuementIds.has(imbuement.id),
+    );
+
   // Calculate max crystals per item based on crafting rank
   const userCraftingRank = craftingStatus?.craftingRank || "NOVICE";
   const maxCrystalsPerItem = CRAFTING_MAX_IMBUED_ITEMS[userCraftingRank];
@@ -694,9 +704,9 @@ export default function OccupationCrafting() {
                                 <ItemWithEffects
                                   item={{
                                     ...selectedImbuableItem.item,
-                                    imbuements: selectedImbuableItem.imbuements.map(
-                                      (i) => i.item,
-                                    ),
+                                    imbuements: shownImbuements(
+                                      selectedImbuableItem,
+                                    ).map((i) => i.item),
                                   }}
                                 />
                               )}
@@ -748,10 +758,8 @@ export default function OccupationCrafting() {
 
         {/* Manage Existing Imbuements */}
         {(() => {
-          const itemsWithImbuements = (userItems || []).filter((userItem) =>
-            finishedImbuements(userItem).some(
-              (imbuement) => !removedImbuementIds.has(imbuement.id),
-            ),
+          const itemsWithImbuements = (userItems || []).filter(
+            (userItem) => shownImbuements(userItem).length > 0,
           );
 
           return itemsWithImbuements.length > 0 ? (
@@ -779,9 +787,7 @@ export default function OccupationCrafting() {
                         <div>
                           <h4 className="font-semibold">{userItem.item?.name}</h4>
                           {(() => {
-                            const done = finishedImbuements(userItem).filter(
-                              (i) => !removedImbuementIds.has(i.id),
-                            ).length;
+                            const done = shownImbuements(userItem).length;
                             return (
                               <p className="text-muted-foreground text-sm">
                                 {done} imbuement{done !== 1 ? "s" : ""}
@@ -793,10 +799,7 @@ export default function OccupationCrafting() {
                       <ItemWithEffects
                         item={{
                           ...userItem.item,
-                          imbuements:
-                            userItem.imbuements
-                              ?.filter((i) => !removedImbuementIds.has(i.id))
-                              .map((i) => i.item) || [],
+                          imbuements: shownImbuements(userItem).map((i) => i.item),
                         }}
                       />
                       {/* Imbuements with remove buttons */}
@@ -806,46 +809,42 @@ export default function OccupationCrafting() {
                             Imbuements
                           </h4>
                           <div className="space-y-2">
-                            {finishedImbuements(userItem)
-                              .filter(
-                                (imbuement) => !removedImbuementIds.has(imbuement.id),
-                              )
-                              .map((imbuement) => (
-                                <div
-                                  key={imbuement.id}
-                                  className="flex items-center justify-between rounded bg-white p-2"
-                                >
-                                  <div className="flex items-center space-x-2">
-                                    <ContentImage
-                                      image={imbuement.item.image}
-                                      alt={imbuement.item.name}
-                                      className="h-8 w-8"
-                                    />
-                                    <span className="font-medium">
-                                      {imbuement.item.name}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={
-                                      pendingRemoveImbuement?.userItemImbuementId ===
-                                      imbuement.id
-                                    }
-                                    onClick={() => {
-                                      setRemoveImbuementTarget({
-                                        userItemId: userItem.id,
-                                        userItemImbuementId: imbuement.id,
-                                        targetName: userItem.item?.name || "item",
-                                        crystalName: imbuement.item.name,
-                                        returnsCrystal: !userItem.item?.canBeImbued,
-                                      });
-                                    }}
-                                  >
-                                    Remove
-                                  </Button>
+                            {shownImbuements(userItem).map((imbuement) => (
+                              <div
+                                key={imbuement.id}
+                                className="flex items-center justify-between rounded bg-white p-2"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <ContentImage
+                                    image={imbuement.item.image}
+                                    alt={imbuement.item.name}
+                                    className="h-8 w-8"
+                                  />
+                                  <span className="font-medium">
+                                    {imbuement.item.name}
+                                  </span>
                                 </div>
-                              ))}
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={
+                                    pendingRemoveImbuement?.userItemImbuementId ===
+                                    imbuement.id
+                                  }
+                                  onClick={() => {
+                                    setRemoveImbuementTarget({
+                                      userItemId: userItem.id,
+                                      userItemImbuementId: imbuement.id,
+                                      targetName: userItem.item?.name || "item",
+                                      crystalName: imbuement.item.name,
+                                      returnsCrystal: !userItem.item?.canBeImbued,
+                                    });
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
