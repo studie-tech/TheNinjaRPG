@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ItemSlot } from "@/drizzle/constants";
+import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useBulkSellItems } from "@/hooks/useBulkSellItems";
 import { useItemActions } from "@/hooks/useItemActions";
@@ -105,6 +106,8 @@ export function ItemsWorkspace({
   // Stacks sold elsewhere or in another bag leave the selection.
   const selectedItems = bagItems.filter((ui) => tickedIds.includes(ui.id));
   const selectedIds = selectedItems.map((ui) => ui.id);
+  // One request takes a limited number of stacks; a larger selection is trimmed first.
+  const isOverLimit = selectedItems.length > MAX_BULK_SELL_ITEMS;
   const toggleTicked = (userItemId: string) =>
     setTickedIds((ids) =>
       ids.includes(userItemId)
@@ -378,6 +381,11 @@ export function ItemsWorkspace({
             >
               <p className="min-w-0 flex-1 text-sm">
                 <b>{selectedItems.length} selected</b>
+                {isOverLimit && (
+                  <span className="block font-semibold text-destructive text-xs">
+                    Select up to {MAX_BULK_SELL_ITEMS} at a time
+                  </span>
+                )}
                 {selectedItems.length > 0 && (
                   <span className="block text-muted-foreground text-xs">
                     {bulkSellSummary(
@@ -396,7 +404,7 @@ export function ItemsWorkspace({
               <Button
                 variant="destructive"
                 size="sm"
-                disabled={selectedItems.length === 0}
+                disabled={selectedItems.length === 0 || isOverLimit}
                 onClick={() => setReviewIds(selectedIds)}
               >
                 Sell / drop…

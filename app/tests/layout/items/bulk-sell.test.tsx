@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as itemActions from "@/hooks/useItemActions";
@@ -234,4 +235,15 @@ it("keeps refused items selected after a partial result", () => {
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("true");
   expect(bar().textContent).toContain("1 selected");
+});
+
+it("holds a selection larger than one request until it is trimmed", () => {
+  const many = Array.from({ length: MAX_BULK_SELL_ITEMS + 1 }, (_, index) => stack(`Pebble ${index}`, "COMMON"));
+  renderWorkspace(many);
+  startSelecting();
+  act(() => fireEvent.click(screen.getByRole("button", { name: "All Common" })));
+  expect(bar().textContent).toContain(`Select up to ${MAX_BULK_SELL_ITEMS} at a time`);
+  expect((within(bar()).getByRole("button", { name: "Sell / drop…" }) as HTMLButtonElement).disabled).toBe(true);
+  act(() => fireEvent.click(card("Pebble 0 ")));
+  expect((within(bar()).getByRole("button", { name: "Sell / drop…" }) as HTMLButtonElement).disabled).toBe(false);
 });
