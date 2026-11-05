@@ -328,6 +328,13 @@ export const formatHoursMinutes = (totalSeconds: number): string => {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
+/** Clock-style time left: "MM:SS", or "HH:MM:SS" from one hour up. Whole days are dropped. */
+export const formatClockTime = (ms: number): string => {
+  const [, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
+  const clock = [minutes, seconds].map((part) => part.toString().padStart(2, "0"));
+  return (hours > 0 ? [hours.toString().padStart(2, "0"), ...clock] : clock).join(":");
+};
+
 /**
  * Length of a sound clip, e.g. "2.5 s". Epidemic Sound reports whole seconds, so a clip
  * shorter than one second arrives as 0.
