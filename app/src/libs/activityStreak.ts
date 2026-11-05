@@ -236,3 +236,23 @@ export const nextStreakRefreshAt = (
     .filter((timestamp) => timestamp > now.getTime());
   return new Date(Math.min(nextUtcDayAt(now).getTime(), ...deadlines));
 };
+
+/**
+ * Event pass price as text, listing only the currencies it charges. Each surface picks
+ * its own wording; a pass without a price reads as `free`.
+ */
+export const formatEventPassCost = (
+  cost: { ryoCost: number; repsCost: number; seichiSilverCost: number },
+  {
+    separator,
+    repsLabel = "reputation",
+    silverLabel = "silver",
+    free = "Free",
+  }: { separator: string; repsLabel?: string; silverLabel?: string; free?: string },
+) => {
+  const parts: string[] = [];
+  if (cost.ryoCost > 0) parts.push(`${cost.ryoCost} ryo`);
+  if (cost.repsCost > 0) parts.push(`${cost.repsCost} ${repsLabel}`);
+  if (cost.seichiSilverCost > 0) parts.push(`${cost.seichiSilverCost} ${silverLabel}`);
+  return parts.length > 0 ? parts.join(separator) : free;
+};

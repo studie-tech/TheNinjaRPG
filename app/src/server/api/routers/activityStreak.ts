@@ -10,6 +10,7 @@ import {
 import { ActivityStreakTypes, COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
+  formatEventPassCost,
   getEventPassCompletionDate,
   getStreakClaimState,
   isEventPassCompletion,
@@ -320,13 +321,11 @@ export const activityStreakRouter = createTRPCRouter({
       }
 
       // Build cost message
-      const costs: string[] = [];
-      if (config.ryoCost > 0) costs.push(`${config.ryoCost} ryo`);
-      if (config.repsCost > 0) costs.push(`${config.repsCost} reputation`);
-      if (config.seichiSilverCost > 0)
-        costs.push(`${config.seichiSilverCost} seichi silver`);
-
-      const costText = costs.length > 0 ? costs.join(", ") : "free";
+      const costText = formatEventPassCost(config, {
+        separator: ", ",
+        silverLabel: "seichi silver",
+        free: "free",
+      });
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,

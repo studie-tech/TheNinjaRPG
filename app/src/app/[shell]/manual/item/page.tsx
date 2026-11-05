@@ -1,10 +1,10 @@
 "use client";
 
 import { ChartCandlestick, ChartPie, FilePlus, ListChecks } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
 import ContentBox from "@/layout/ContentBox";
 import ItemFiltering, { getFilter, useFiltering } from "@/layout/ItemFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -20,8 +20,6 @@ export default function ManualItems() {
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
-  // Router for forwarding
-  const router = useRouter();
   const utils = api.useUtils();
 
   //Two-Way Filtering
@@ -47,15 +45,11 @@ export default function ManualItems() {
   const allItems = items?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
+  const { onCreated } = useContentListActions(refetch, "/manual/item/edit");
+
   // Mutations
   const { mutate: create, isPending: load1 } = api.item.create.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await refetch();
-        router.push(`/manual/item/edit/${data.message}`);
-      }
-    },
+    onSuccess: onCreated,
   });
 
   const { mutate: remove, isPending: load2 } = api.item.delete.useMutation({

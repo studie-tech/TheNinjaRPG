@@ -7,17 +7,16 @@ import {
   ListChecks,
   Palette,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useContentListActions } from "@/hooks/useContentListActions";
 import BloodFiltering, { getFilter, useFiltering } from "@/layout/BloodlineFiltering";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -28,9 +27,6 @@ export default function ManualBloodlines() {
 
   // Two-level filtering
   const state = useFiltering();
-
-  // Router for forwarding
-  const router = useRouter();
 
   // Data
   const {
@@ -50,22 +46,18 @@ export default function ManualBloodlines() {
   const allBloodlines = bloodlines?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
+  const { onCreated, onDeleted } = useContentListActions(
+    refetch,
+    "/manual/bloodline/edit",
+  );
+
   // Mutations
   const { mutate: create, isPending: load1 } = api.bloodline.create.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await refetch();
-        router.push(`/manual/bloodline/edit/${data.message}`);
-      }
-    },
+    onSuccess: onCreated,
   });
 
   const { mutate: remove, isPending: load2 } = api.bloodline.delete.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      await refetch();
-    },
+    onSuccess: onDeleted,
   });
 
   // Derived

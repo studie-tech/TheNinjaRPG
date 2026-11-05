@@ -30,6 +30,7 @@ import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
+import { formatEventPassCost } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -397,12 +398,7 @@ export function ActivityStreakPanel() {
           </CardHeader>
           <CardContent className="space-y-4">
             {availablePasses.map((pass) => {
-              const costParts: string[] = [];
-              if (pass.ryoCost > 0) costParts.push(`${pass.ryoCost} ryo`);
-              if (pass.repsCost > 0) costParts.push(`${pass.repsCost} reputation`);
-              if (pass.seichiSilverCost > 0)
-                costParts.push(`${pass.seichiSilverCost} silver`);
-              const costText = costParts.length > 0 ? costParts.join(" + ") : "Free";
+              const costText = formatEventPassCost(pass, { separator: " + " });
 
               return (
                 <div

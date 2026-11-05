@@ -24,10 +24,13 @@ import { NumberInput } from "@/components/ui/number-input";
 import { GeneralTypes, StatTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
-import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
+import {
+  DmgConfigDialog,
+  DmgConfigFields,
+  useDmgConfigForm,
+} from "@/layout/DmgConfigDialog";
 import Loader from "@/layout/Loader";
 import { battleCalcText } from "@/layout/seoTexts";
-import { dmgConfig } from "@/libs/combat/constants";
 import { damageUser } from "@/libs/combat/tags";
 import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
 import { calcHP, calcLevel } from "@/libs/profile";
@@ -36,7 +39,7 @@ import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
   actSchema,
-  confSchema,
+  type confSchema,
   type DamageSimulationState,
   type LoadedProgress,
   statSchema,
@@ -47,7 +50,6 @@ type StatSchemaInput = z.input<typeof statSchema>;
 type StatSchemaOutput = z.infer<typeof statSchema>;
 type ActSchemaInput = z.input<typeof actSchema>;
 type ActSchemaOutput = z.infer<typeof actSchema>;
-type ConfigSchemaInput = z.input<typeof confSchema>;
 type ConfigSchemaOutput = z.infer<typeof confSchema>;
 const defaultsStats = statSchema.parse({});
 const statNames = Object.keys(defaultsStats) as (keyof typeof defaultsStats)[];
@@ -111,19 +113,9 @@ export default function Simulator(props: {
     ...conf2,
     resolver: zodResolver(actSchema),
   });
-  const configForm = useForm<ConfigSchemaInput, unknown, ConfigSchemaOutput>({
-    defaultValues: confSchema.parse(dmgConfig),
-    mode: "all" as const,
-    resolver: zodResolver(confSchema),
-  });
 
-  // Fetch live DMG config from DB and reset the form to use it as defaults
-  const { data: liveDmgConfig } = api.misc.getDmgConfig.useQuery();
-  useEffect(() => {
-    if (liveDmgConfig) {
-      configForm.reset(confSchema.parse(liveDmgConfig));
-    }
-  }, [liveDmgConfig, configForm]);
+  // Live DMG config from DB as the form defaults
+  const configForm = useDmgConfigForm({ enabled: true });
 
   // Watch all the forms simultaneously
   const attValues = useWatch({ control: attForm.control }) as StatSchemaOutput;
@@ -465,150 +457,7 @@ export default function Simulator(props: {
           <hr />
           <div className="grid grid-cols-2 gap-4 px-3">
             <Form {...configForm}>
-              <FormField
-                control={configForm.control}
-                name="stats_scaling"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>stats_scaling</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="base_hits"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>base_hits</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="curve"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>curve</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="amplitude"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>amplitude</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="ep_normalization"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ep_normalization</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="gen_weight"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>gen_weight</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="advantage_min"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>advantage_min</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={configForm.control}
-                name="advantage_max"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>advantage_max</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        step="any"
-                        {...field}
-                        value={field.value as number}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DmgConfigFields form={configForm} />
             </Form>
           </div>
         </div>

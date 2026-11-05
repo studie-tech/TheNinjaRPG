@@ -10,6 +10,7 @@ import {
   resolveStreakClaim,
   shouldFetchActivityStreaksForPopup,
   type ActivityStreakPopupState,
+  formatEventPassCost,
 } from "@/libs/activityStreak";
 
 describe("event pass completion history", () => {
@@ -385,5 +386,30 @@ describe("streak claim resolution", () => {
     expect(resolveStreakClaim(3, { ...onTrack, isBehind: true }, reset)).toEqual(
       restart,
     );
+  });
+});
+
+describe("formatEventPassCost", () => {
+  const cost = { ryoCost: 100, repsCost: 5, seichiSilverCost: 2 };
+
+  it("lists charged currencies in order with the surface's wording", () => {
+    expect(formatEventPassCost(cost, { separator: " + " })).toBe(
+      "100 ryo + 5 reputation + 2 silver",
+    );
+    expect(formatEventPassCost(cost, { separator: " / ", repsLabel: "reps" })).toBe(
+      "100 ryo / 5 reps / 2 silver",
+    );
+    expect(
+      formatEventPassCost(
+        { ...cost, ryoCost: 0 },
+        { separator: ", ", silverLabel: "seichi silver" },
+      ),
+    ).toBe("5 reputation, 2 seichi silver");
+  });
+
+  it("names a pass without a price", () => {
+    const free = { ryoCost: 0, repsCost: 0, seichiSilverCost: 0 };
+    expect(formatEventPassCost(free, { separator: " " })).toBe("Free");
+    expect(formatEventPassCost(free, { separator: ", ", free: "free" })).toBe("free");
   });
 });
