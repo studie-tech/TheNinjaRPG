@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { usePendingIds } from "@/hooks/usePendingIds";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
@@ -25,8 +26,7 @@ export default function MapTilesets() {
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const createInFlightRef = useRef(false);
-  const [deletingAssetIds, setDeletingAssetIds] = useState<string[]>([]);
-  const deletingAssetIdsRef = useRef(new Set<string>());
+  const assetDeletions = usePendingIds();
 
   const { data: assets, refetch, isPending } = api.mapAsset.getAll.useQuery();
 
@@ -62,21 +62,12 @@ export default function MapTilesets() {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: (_data, _error, variables) => {
-      deletingAssetIdsRef.current.delete(variables.id);
-      setDeletingAssetIds((current) =>
-        current.filter((assetId) => assetId !== variables.id),
-      );
-    },
+    onSettled: (_data, _error, variables) => assetDeletions.end(variables.id),
   });
 
   const handleDelete = (id: string) => {
-    // React state updates after this handler, so retain a synchronous per-asset
-    // guard as well. Other asset cards remain independent and usable.
-    if (deletingAssetIdsRef.current.has(id)) return;
-    deletingAssetIdsRef.current.add(id);
-    setDeletingAssetIds((current) => [...current, id]);
-    remove({ id });
+    // Other asset cards remain independent and usable.
+    if (assetDeletions.begin(id)) remove({ id });
   };
 
   const categories = useMemo(() => {
@@ -147,7 +138,7 @@ export default function MapTilesets() {
         )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {shownAssets.map((asset) => {
-            const isDeleting = deletingAssetIds.includes(asset.id);
+            const isDeleting = assetDeletions.ids.has(asset.id);
             return (
               <div
                 key={asset.id}
@@ -266,8 +257,7 @@ export default function MapTilesets() {
 const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const router = useRouter();
   const createInFlightRef = useRef(false);
-  const [deletingTerrainIds, setDeletingTerrainIds] = useState<string[]>([]);
-  const deletingTerrainIdsRef = useRef(new Set<string>());
+  const terrainDeletions = usePendingIds();
   const { data: terrains, refetch, isPending } = api.mapTerrain.getAll.useQuery();
 
   const { mutate: create, isPending: isCreating } = api.mapTerrain.create.useMutation({
@@ -301,21 +291,12 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
-    onSettled: (_data, _error, variables) => {
-      deletingTerrainIdsRef.current.delete(variables.id);
-      setDeletingTerrainIds((current) =>
-        current.filter((terrainId) => terrainId !== variables.id),
-      );
-    },
+    onSettled: (_data, _error, variables) => terrainDeletions.end(variables.id),
   });
 
   const handleDelete = (id: string) => {
-    // State updates after this handler, so also guard same-tick confirmation
-    // submissions synchronously. Deletes for other terrain cards stay independent.
-    if (deletingTerrainIdsRef.current.has(id)) return;
-    deletingTerrainIdsRef.current.add(id);
-    setDeletingTerrainIds((current) => [...current, id]);
-    remove({ id });
+    // Deletes for other terrain cards stay independent.
+    if (terrainDeletions.begin(id)) remove({ id });
   };
 
   return (
@@ -348,7 +329,7 @@ const MapTerrainSection: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       {isPending && <Loader explanation="Loading terrains" />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {(terrains ?? []).map((terrain) => {
-          const isDeleting = deletingTerrainIds.includes(terrain.id);
+          const isDeleting = terrainDeletions.ids.has(terrain.id);
           return (
             <div
               key={terrain.id}
