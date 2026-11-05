@@ -82,7 +82,7 @@ import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { regenerationBuffs } from "@/libs/titles";
 import { masteryTrainingEndsAt } from "@/libs/train";
-import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
+import { formatClockTime, getGameTime } from "@/utils/time";
 import {
   selectUserWithoutPosition,
   userBattleAtom,
@@ -122,19 +122,12 @@ const MenuBoxProfile: React.FC = () => {
   // Get location of user
   const { location } = useGameMenu();
 
-  const immunityData = useExpiryAnchor(userData?.immunityUntil, now);
-  const immunitySecsLeft = immunityData.secsLeft;
-
-  // Bracket-immunity and war-participant countdown anchors (see useExpiryAnchor below): each gives a
-  // memoized (createdAt, totalSeconds) pair plus a fresh secsLeft for the > 0 visibility guard.
-  const bracketImmunityAnchor = useExpiryAnchor(
+  const immunitySecsLeft = useSecondsUntil(userData?.immunityUntil, now);
+  const bracketImmunitySecsLeft = useSecondsUntil(
     userData?.bracketImmunityLiftedUntil,
     now,
   );
-  const bracketImmunitySecsLeft = bracketImmunityAnchor.secsLeft;
-
-  const warParticipantAnchor = useExpiryAnchor(userData?.warParticipantUntil, now);
-  const warParticipantSecsLeft = warParticipantAnchor.secsLeft;
+  const warParticipantSecsLeft = useSecondsUntil(userData?.warParticipantUntil, now);
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -407,10 +400,9 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center">
                     <ShieldCheck className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={immunityData.createdAt}
-                      totalSeconds={immunityData.totalSeconds}
-                      initialSecondsLeft={immunityData.totalSeconds}
+                    <Countdown
+                      targetDate={userData.immunityUntil}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
                     />
                   </div>
@@ -425,12 +417,10 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center text-orange-500">
                     <ShieldAlert className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={bracketImmunityAnchor.createdAt}
-                      totalSeconds={bracketImmunityAnchor.totalSeconds}
-                      initialSecondsLeft={bracketImmunityAnchor.totalSeconds}
+                    <Countdown
+                      targetDate={userData.bracketImmunityLiftedUntil}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
-                      hideWhenDone
                     />
                   </div>
                 </TooltipTrigger>
@@ -444,12 +434,10 @@ const MenuBoxProfile: React.FC = () => {
                 <TooltipTrigger className="w-full">
                   <div className="flex flex-row items-center text-red-500">
                     <Swords className="mr-2 h-6 w-6" />
-                    <Cooldown
-                      createdAt={warParticipantAnchor.createdAt}
-                      totalSeconds={warParticipantAnchor.totalSeconds}
-                      initialSecondsLeft={warParticipantAnchor.totalSeconds}
+                    <Countdown
+                      targetDate={userData.warParticipantUntil}
+                      format={formatBracketedClock}
                       onFinish={refreshTime}
-                      hideWhenDone
                     />
                   </div>
                 </TooltipTrigger>
@@ -707,111 +695,20 @@ const GameClock: React.FC = () => {
 };
 
 /**
- * Anchors an expiry countdown for a `Cooldown`. Returns a memoized (createdAt, totalSeconds) pair
- * sampled from a single Date.now() reading — Cooldown derives its deadline as
- * createdAt + totalSeconds*1000, so the two must come from the same instant — plus a fresh
- * `secsLeft` derived from the parent clock state. Cooldown advances that clock on expiry, so
- * visibility guards remain reactive when React Compiler memoizes this hook.
+ * Seconds left until `until` on the parent clock, which the row's Countdown advances on
+ * expiry. A new snapshot may already have expired since that clock last moved, so a change
+ * of `until` also reads the current time.
  */
-const useExpiryAnchor = (until: Date | null | undefined, now: number) => {
+const useSecondsUntil = (until: Date | null | undefined, now: number) => {
   const untilMs = until?.getTime() ?? 0;
-  const anchor = useMemo(() => {
-    const sampledAt = Date.now();
-    return {
-      createdAt: sampledAt,
-      totalSeconds: Math.max(0, (untilMs - sampledAt) / 1000),
-    };
-  }, [untilMs]);
-  // A new snapshot may already have expired since the parent clock last advanced.
-  const secsLeft = Math.min(anchor.totalSeconds, Math.max(0, (untilMs - now) / 1000));
-  return { ...anchor, secsLeft };
-};
-
-/**
- * Returns a formatted time string based on the number of seconds left.
- * If the number of seconds is greater than 0, the time string will be in the format "HH:MM:SS" or "MM:SS" if the number of hours is 0.
- * If the number of seconds is 0 or less, the time string will be "Done".
- *
- * @param secondsLeft The number of seconds left.
- * @returns The formatted time string.
- */
-const getTimeStr = (secondsLeft: number) => {
-  const [, hours, minutes, seconds] = getDaysHoursMinutesSeconds(secondsLeft);
-  if (secondsLeft > 0) {
-    const hoursStr = hours.toString().padStart(2, "0");
-    const minutesStr = minutes.toString().padStart(2, "0");
-    const secondsStr = seconds.toString().padStart(2, "0");
-    if (hours > 0) {
-      return `${hoursStr}:${minutesStr}:${secondsStr}`;
-    } else {
-      return `${minutesStr}:${secondsStr}`;
-    }
-  } else {
-    return `Done`;
-  }
-};
-
-interface CooldownProps {
-  initialSecondsLeft: number;
-  totalSeconds: number;
-  createdAt: number;
-  onFinish: () => void;
-  hideWhenDone?: boolean;
-}
-
-/**
- * A component that displays a countdown timer.
- *
- * @param props - The component props.
- * @returns The rendered `Cooldown` component.
- */
-const Cooldown: React.FC<CooldownProps> = (props) => {
-  const { createdAt, totalSeconds, initialSecondsLeft, onFinish, hideWhenDone } = props;
-  const [counter, setCounter] = useState<string>(() =>
-    getTimeStr(initialSecondsLeft * 1000),
+  const secsAtSnapshot = useMemo(
+    () => Math.max(0, (untilMs - Date.now()) / 1000),
+    [untilMs],
   );
-  // Track if we've already notified parent that countdown finished
-  const hasNotifiedRef = React.useRef(false);
-
-  useEffect(() => {
-    // Only reset notification flag when countdown actually restarts (has time remaining)
-    const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-    if (secondsLeft > 0) {
-      hasNotifiedRef.current = false;
-    }
-  }, [createdAt, totalSeconds]);
-
-  useEffect(() => {
-    if (totalSeconds) {
-      const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-      if (secondsLeft > 0) {
-        const interval = setInterval(() => {
-          const secondsLeft = createdAt + totalSeconds * 1000 - Date.now();
-          if (secondsLeft > 0) {
-            setCounter(getTimeStr(secondsLeft));
-          } else {
-            clearInterval(interval);
-            if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
-              hasNotifiedRef.current = true;
-              onFinish();
-            }
-            setCounter(hideWhenDone ? "" : "Done");
-          }
-        }, 1000);
-        return () => clearInterval(interval);
-      } else {
-        // Only notify parent once to prevent infinite loop
-        if (initialSecondsLeft > 0 && !hasNotifiedRef.current) {
-          hasNotifiedRef.current = true;
-          onFinish();
-        }
-        setCounter(hideWhenDone ? "" : "Done");
-      }
-    }
-  }, [totalSeconds, createdAt, initialSecondsLeft, onFinish, hideWhenDone]);
-
-  return counter ? <>[{counter}]</> : null;
+  return Math.min(secsAtSnapshot, Math.max(0, (untilMs - now) / 1000));
 };
+
+const formatBracketedClock = (msLeft: number) => `[${formatClockTime(msLeft)}]`;
 
 type EffectCategory =
   | GeneralType

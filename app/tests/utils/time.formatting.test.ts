@@ -1,8 +1,23 @@
 import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
-import { formatHoursMinutes, getLocalDateStringMonthsAgo } from "@/utils/time";
+import {
+  formatClockTime,
+  formatHoursMinutes,
+  getLocalDateStringMonthsAgo,
+} from "@/utils/time";
 
 afterEach(() => {
   setSystemTime();
+});
+
+describe("formatClockTime", () => {
+  it.each([
+    [59_000, "00:59"],
+    [65_000, "01:05"],
+    [3_725_000, "01:02:05"],
+    [90_000_000, "01:00:00"],
+  ])("formats %d ms as %s", (ms, expected) => {
+    expect(formatClockTime(ms)).toBe(expected);
+  });
 });
 
 describe("formatHoursMinutes", () => {

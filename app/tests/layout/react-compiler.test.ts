@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const { c } = require("react/compiler-runtime") as { c: (size: number) => unknown[] };
 
 const targets = [
-  ["layout/MenuBoxProfile.tsx", ["MenuBoxProfile", "useExpiryAnchor", "Cooldown"]],
+  ["layout/MenuBoxProfile.tsx", ["MenuBoxProfile", "useSecondsUntil"]],
   ["layout/Countdown.tsx", ["Countdown"]],
   ["layout/LowerRightHelpBtn.tsx", ["LowerRightHelpBtn"]],
   ["layout/GameSettings.tsx", ["GameSettingsContent", "GameSettingsPanel", "GameSettingsPopover"]],

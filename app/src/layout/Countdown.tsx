@@ -8,10 +8,12 @@ interface CountdownProps {
   timeDiff?: number; // Only used if the targetDate is from the server, and has not been adjusted for timeDiff already
   onFinish?: () => void;
   onEndShow?: React.ReactNode | string;
+  /** Replaces the default "X hours, Y mins" text with the given rendering of the ms left. */
+  format?: (msLeft: number) => string;
 }
 
 const Countdown: React.FC<CountdownProps> = (props) => {
-  const { targetDate, timeDiff, onFinish, onEndShow, className } = props;
+  const { targetDate, timeDiff, onFinish, onEndShow, className, format } = props;
 
   // Calculate target time once per prop change
   const targetTime = targetDate.getTime() + (timeDiff ?? 0);
@@ -36,6 +38,7 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     if (msLeft <= 0) {
       return "Done";
     }
+    if (format) return format(msLeft);
     const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(msLeft);
     return getTimeLeftStr(days, hours, minutes, seconds);
   };
