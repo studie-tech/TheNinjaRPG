@@ -142,12 +142,14 @@ export const GlobalAudioProvider: React.FC<{
   const isRemotePaused = useRef(false);
   const isMusicTurnedOff = useRef(false);
   const pauseVersion = useRef(0);
+  // Runs inside a queued task; enqueueing from there would land behind later activations.
+  const deactivateAudioSession = async (preserveControls = false) => {
+    await audioSession.deactivate(preserveControls);
+    hasActiveAudioSession.current = false;
+  };
   // Release focus when playback is already stopped; transport Pause keeps Play available.
   const releaseAudioSession = (preserveControls = false) => {
-    void enqueueAudioSession.current(async () => {
-      await audioSession.deactivate(preserveControls);
-      hasActiveAudioSession.current = false;
-    });
+    void enqueueAudioSession.current(() => deactivateAudioSession(preserveControls));
   };
   useEffect(() => {
     setIsClient(true);
@@ -199,6 +201,17 @@ export const GlobalAudioProvider: React.FC<{
     autoPlay: isClient,
   });
 
+  // A preference change, not a transport pause.
+  const applyMusicPreference = (enabled: boolean) => {
+    isRemotePaused.current = false;
+    isMusicTurnedOff.current = !enabled;
+    if (!enabled) {
+      pauseVersion.current += 1;
+      if (!audioEnabled && !isPlaying) releaseAudioSession();
+    }
+    return setAudioEnabled(enabled, true);
+  };
+
   const savedMusicOn = userData?.musicOn;
   const savedButtonSfxOn = userData?.buttonSfxOn;
 
@@ -207,14 +220,7 @@ export const GlobalAudioProvider: React.FC<{
   // the local play/pause state they selected.
   useEffect(() => {
     if (!isClient) return;
-    const shouldPlay = getInitialMusicState();
-    isRemotePaused.current = false;
-    isMusicTurnedOff.current = !shouldPlay;
-    if (!shouldPlay) {
-      pauseVersion.current += 1;
-      if (!audioEnabled && !isPlaying) releaseAudioSession();
-    }
-    void setAudioEnabled(shouldPlay, true);
+    void applyMusicPreference(getInitialMusicState());
   }, [isClient, savedMusicOn]);
 
   useEffect(() => {
@@ -235,15 +241,11 @@ export const GlobalAudioProvider: React.FC<{
           !isMusicTurnedOff.current &&
           (isRemotePaused.current || document.hidden);
         if (preserveControls && isPlaying) return;
-        await audioSession.deactivate(preserveControls);
-        hasActiveAudioSession.current = false;
+        await deactivateAudioSession(preserveControls);
         return;
       }
       if (!isPlaying && platform() !== "ios") {
-        if (hasActiveAudioSession.current) {
-          await audioSession.deactivate();
-          hasActiveAudioSession.current = false;
-        }
+        if (hasActiveAudioSession.current) await deactivateAudioSession();
         return;
       }
       if (!isPlaying) return;
@@ -260,12 +262,9 @@ export const GlobalAudioProvider: React.FC<{
 
   useEffect(
     () => () => {
-      void enqueueAudioSession.current(async () => {
-        await audioSession.deactivate(
-          platform() === "ios" && isRemotePaused.current && !isMusicTurnedOff.current,
-        );
-        hasActiveAudioSession.current = false;
-      });
+      releaseAudioSession(
+        platform() === "ios" && isRemotePaused.current && !isMusicTurnedOff.current,
+      );
     },
     [],
   );
@@ -303,10 +302,9 @@ export const GlobalAudioProvider: React.FC<{
             pauseVersion.current !== requestedPauseVersion ||
             isMusicTurnedOff.current
           ) {
-            await audioSession.deactivate(
+            await deactivateAudioSession(
               isRemotePaused.current && !isMusicTurnedOff.current,
             );
-            hasActiveAudioSession.current = false;
             return;
           }
           hasActiveAudioSession.current = true;
@@ -337,14 +335,7 @@ export const GlobalAudioProvider: React.FC<{
 
   const setMusicEnabled = (enabled: boolean) => {
     setLocalAudioPreference("musicOn", enabled);
-    // The in-game switch is a preference change, not a transport pause.
-    isRemotePaused.current = false;
-    isMusicTurnedOff.current = !enabled;
-    if (!enabled) {
-      pauseVersion.current += 1;
-      if (!audioEnabled && !isPlaying) releaseAudioSession();
-    }
-    return setAudioEnabled(enabled, true);
+    return applyMusicPreference(enabled);
   };
 
   const contextValue: AudioContextValue = {
@@ -519,15 +510,11 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
 
   // Track initial lightLayout value to detect changes
   const [initialLightLayout] = useState<boolean>(lightLayout);
-  const [lightLayoutChanged, setLightLayoutChanged] = useState(false);
   // Decorative chrome controls follow the rendered shell, including for signed-out visitors.
   const activeLayout = useActiveLayout();
   const isClassicLayout = activeLayout === "default";
 
-  // Update tracking when lightLayout changes
-  useEffect(() => {
-    setLightLayoutChanged(isClassicLayout && lightLayout !== initialLightLayout);
-  }, [lightLayout, initialLightLayout, isClassicLayout]);
+  const lightLayoutChanged = isClassicLayout && lightLayout !== initialLightLayout;
 
   const handleRefreshPage = () => {
     window.location.reload();
