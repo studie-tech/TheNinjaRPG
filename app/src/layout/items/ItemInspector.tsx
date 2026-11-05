@@ -518,6 +518,7 @@ export function ItemInspector({
             showEvolutions
             hideTitle
             hideImage
+            hideDates
           />
         </div>
       </section>
