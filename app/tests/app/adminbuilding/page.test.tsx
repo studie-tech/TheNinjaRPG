@@ -13,6 +13,7 @@ import * as UserContext from "@/utils/UserContext";
 
 const startQuest = vi.fn();
 const namesQuery = vi.fn();
+const hallQuery = vi.fn();
 
 const event = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
@@ -20,14 +21,18 @@ const event = (id: string, overrides: Record<string, unknown> = {}) => ({
   questType: "event",
   teamEnabled: false,
   content: { objectives: [], reward: {} },
+  entryRequirements: [] as { itemId: string; name: string; quantity: number; owned: number }[],
   ...overrides,
 });
 
-const paidEvent = event("Paid Event", {
-  content: { objectives: [], reward: {}, entryItems: [{ ids: ["ticket"], number: 2 }] },
-});
+const paidEvent = (owned: number) =>
+  event("Paid Event", {
+    content: { objectives: [], reward: {}, entryItems: [{ ids: ["ticket"], number: 2 }] },
+    entryRequirements: [{ itemId: "ticket", name: "ticket", quantity: 2, owned }],
+  });
 
 const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = []) => {
+  hallQuery.mockReturnValue({ data: hallData });
   namesQuery.mockImplementation((_input: unknown, options: { enabled: boolean }) => ({
     data: options.enabled ? [{ id: "ticket", name: "Event Ticket" }] : undefined,
   }));
@@ -35,7 +40,7 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
     useUtils: () => ({ quests: { allianceBuilding: { invalidate: vi.fn() } } }),
     item: { getAllNames: { useQuery: namesQuery } },
     quests: {
-      allianceBuilding: { useQuery: () => ({ data: hallData }) },
+      allianceBuilding: { useQuery: hallQuery },
       startQuest: { useMutation: () => ({ mutate: startQuest, isPending: false }) },
     },
   });
@@ -81,7 +86,7 @@ const open = (name: string) => fireEvent.click(screen.getByRole("button", { name
 
 describe("Administration Building", () => {
   it("confirms the entry cost before starting an event with entry items", () => {
-    setup([paidEvent]);
+    setup([paidEvent(2)]);
     open("Paid Event");
     fireEvent.click(screen.getAllByRole("button", { name: "Take Quest" }).at(-1) as HTMLElement);
     expect(startQuest).not.toHaveBeenCalled();
@@ -93,6 +98,22 @@ describe("Administration Building", () => {
       userSector: 3,
       supportsAnnouncements: true,
     });
+  });
+
+  it("shows the carried count and blocks an entry the player cannot pay for", () => {
+    setup([paidEvent(1)]);
+    open("Paid Event");
+    expect(screen.getByText("Event Ticket: 1 / 2 owned. Consumed on entry.")).toBeTruthy();
+    const take = screen.getAllByRole("button", { name: "Take Quest" }).at(-1) as HTMLButtonElement;
+    expect(take.disabled).toBe(true);
+    fireEvent.click(take);
+    expect(startQuest).not.toHaveBeenCalled();
+    expect(screen.queryByText("Start Paid Event?")).toBeNull();
+  });
+
+  it("rereads owned counts each visit, since other pages change the inventory", () => {
+    setup([paidEvent(1)]);
+    expect(hallQuery.mock.lastCall?.[1]).toMatchObject({ refetchOnMount: "always" });
   });
 
   it("starts free events directly without loading item names", () => {

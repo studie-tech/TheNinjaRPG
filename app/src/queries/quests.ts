@@ -407,10 +407,10 @@ export const findUserDataForGet = (
   });
 
 /**
- * Build the `userItem` listing for `specificQuests`, selecting row fields `itemId` and
- * `quantity`, including predicates on `userId`, `storedAtHome`, `isInAuction`.
+ * Build the carried `userItem` listing behind quest entry stock, selecting row fields `itemId`
+ * and `quantity`, including predicates on `userId`, `storedAtHome`, `isInAuction`.
  */
-export const listUserItemForSpecificQuests = (
+export const listCarriedItemsForQuestEntry = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
 ) =>

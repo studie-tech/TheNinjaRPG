@@ -18,6 +18,16 @@ interface TakeQuestButtonProps {
   onStart: () => void;
 }
 
+/** The carried count of each item a quest consumes on entry. */
+export const QuestEntryStock: React.FC<{
+  stock: readonly { itemId: string; name: string; owned: number; quantity: number }[];
+}> = ({ stock }) =>
+  stock.map((required) => (
+    <p key={required.itemId} className="text-sm">
+      {required.name}: {required.owned} / {required.quantity} owned. Consumed on entry.
+    </p>
+  ));
+
 /** Start a quest, confirming entry items and isolated runs before anything is spent. */
 export const TakeQuestButton: React.FC<TakeQuestButtonProps> = ({
   quest,

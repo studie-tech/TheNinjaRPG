@@ -118,6 +118,30 @@ export const getQuestEntryRequirements = (
   return [...quantities].map(([itemId, quantity]) => ({ itemId, quantity }));
 };
 
+/** Entry items with the carried count of each; a missing item shows its id until named. */
+export const getQuestEntryStock = (
+  content: Pick<QuestContentType, "entryItems">,
+  carried: readonly { itemId: string; quantity: number; item: { name: string } }[],
+) =>
+  getQuestEntryRequirements(content).map((required) => {
+    const rows = carried.filter((row) => row.itemId === required.itemId);
+    return {
+      ...required,
+      name: rows[0]?.item.name ?? required.itemId,
+      owned: rows.reduce((sum, row) => sum + row.quantity, 0),
+    };
+  });
+
+/** Name entry items from the catalogue, which also knows items the player does not carry. */
+export const nameQuestEntryStock = <T extends { itemId: string; name: string }>(
+  stock: readonly T[],
+  itemNames: readonly { id: string; name: string }[] | undefined,
+) =>
+  stock.map((required) => ({
+    ...required,
+    name: itemNames?.find((item) => item.id === required.itemId)?.name ?? required.name,
+  }));
+
 /** "2× Pyramid Ticket, 1× Key" — the entry cost as players read it. */
 export const formatQuestEntryCost = (
   requirements: readonly { quantity: number; name: string }[],

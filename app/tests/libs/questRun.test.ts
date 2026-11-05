@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { UserQuest } from "@/drizzle/schema";
-import { findConsecutiveQuestId, getIsolatedPyramid, getQuestEntryRequirements, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure, isQuestAttemptPaused } from "@/libs/questRun";
+import { findConsecutiveQuestId, getIsolatedPyramid, getQuestEntryRequirements, getQuestEntryStock, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure, isQuestAttemptPaused, nameQuestEntryStock } from "@/libs/questRun";
 import { getTagSchema } from "@/validators/combat";
 import { DefeatOpponents, InstantStartBattleObjective, questEntryItemsSchema } from "@/validators/objectives";
 
@@ -27,6 +27,19 @@ describe("quest run configuration", () => {
   it("adds duplicate item quantities without accepting fractional quantities", () => {
     expect(getQuestEntryRequirements({ entryItems: [{ ids: ["a", "b"], number: 2 }, { ids: ["a"], number: 1 }] })).toEqual([{ itemId: "a", quantity: 3 }, { itemId: "b", quantity: 2 }]);
     expect(questEntryItemsSchema.safeParse([{ ids: ["a"], number: 1.5 }]).success).toBe(false);
+  });
+  it("sums carried stacks per entry item and names items from the catalogue", () => {
+    const carried = [
+      { itemId: "a", quantity: 1, item: { name: "Key" } },
+      { itemId: "a", quantity: 2, item: { name: "Key" } },
+    ];
+    const stock = getQuestEntryStock({ entryItems: [{ ids: ["a", "b"], number: 1 }] }, carried);
+    expect(stock).toEqual([
+      { itemId: "a", quantity: 1, name: "Key", owned: 3 },
+      { itemId: "b", quantity: 1, name: "b", owned: 0 },
+    ]);
+    expect(nameQuestEntryStock(stock, [{ id: "b", name: "Ticket" }]).map((entry) => entry.name)).toEqual(["Key", "Ticket"]);
+    expect(nameQuestEntryStock(stock, undefined).map((entry) => entry.name)).toEqual(["Key", "b"]);
   });
   it("keeps hidden/edited runs isolated until they end", () => {
     const entry = { isolated: true, completed: 0, endAt: null, questType: "battlepyramid", questVersion: new Date(0), quest: { hidden: true, updatedAt: new Date(1000) } } as UserQuest;

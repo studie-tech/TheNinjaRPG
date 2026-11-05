@@ -11,8 +11,8 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import { QuestTeams } from "@/layout/QuestTeams";
-import { TakeQuestButton } from "@/layout/TakeQuestButton";
-import { getQuestEntryRequirements } from "@/libs/questRun";
+import { QuestEntryStock, TakeQuestButton } from "@/layout/TakeQuestButton";
+import { nameQuestEntryStock } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { useRequireInVillage } from "@/utils/UserContext";
@@ -33,11 +33,12 @@ export default function AdministrationBuilding() {
       level: userData?.level,
       rank: userData?.rank ? availableQuestLetterRanks(userData.rank) : [],
     },
-    { enabled: !!userData },
+    // Owned counts gate the button, and inventory changes elsewhere leave this list cached.
+    { enabled: !!userData, refetchOnMount: "always" },
   );
 
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
-    enabled: hallData?.some((quest) => !!quest.content.entryItems?.length) ?? false,
+    enabled: hallData?.some((quest) => quest.entryRequirements.length > 0) ?? false,
   });
 
   // Mutations
@@ -105,6 +106,7 @@ export default function AdministrationBuilding() {
             );
             const currentTracker = userData?.questData?.find((q) => q.id === quest.id);
             const active = currentQuest && currentTracker;
+            const entryStock = nameQuestEntryStock(quest.entryRequirements, itemNames);
 
             return (
               <div key={`${quest.id}-${i}`}>
@@ -133,15 +135,12 @@ export default function AdministrationBuilding() {
                             questId={quest.id}
                             teamEnabled={quest.teamEnabled}
                           />
+                          <QuestEntryStock stock={entryStock} />
                           <TakeQuestButton
                             quest={quest}
-                            entryCost={getQuestEntryRequirements(quest.content).map(
-                              (required) => ({
-                                quantity: required.quantity,
-                                name:
-                                  itemNames?.find((item) => item.id === required.itemId)
-                                    ?.name ?? "unknown item",
-                              }),
+                            entryCost={entryStock}
+                            disabled={entryStock.some(
+                              (required) => required.owned < required.quantity,
                             )}
                             onStart={() =>
                               startQuest({

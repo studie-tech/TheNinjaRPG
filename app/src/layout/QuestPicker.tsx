@@ -16,9 +16,10 @@ import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import { PetTaskDispatch } from "@/layout/PetTasks";
 import { QuestTeams } from "@/layout/QuestTeams";
-import { TakeQuestButton } from "@/layout/TakeQuestButton";
+import { QuestEntryStock, TakeQuestButton } from "@/layout/TakeQuestButton";
 import { isPetTaskContract } from "@/libs/pets/tasks";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";
+import { nameQuestEntryStock } from "@/libs/questRun";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialHighlightedQuestId } from "@/libs/tutorial";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -225,6 +226,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
             );
             const currentTracker = userData?.questData?.find((q) => q.id === quest.id);
             const active = currentQuest && currentTracker;
+            const entryStock = nameQuestEntryStock(quest.entryRequirements, itemNames);
 
             return (
               <div
@@ -276,14 +278,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                             questId={quest.id}
                             teamEnabled={quest.teamEnabled}
                           />
-                          {quest.entryRequirements.map((required) => (
-                            <p key={required.itemId} className="text-sm">
-                              {itemNames?.find((item) => item.id === required.itemId)
-                                ?.name ?? required.name}
-                              : {required.owned} / {required.quantity} owned. Consumed
-                              on entry.
-                            </p>
-                          ))}
+                          <QuestEntryStock stock={entryStock} />
                           {quest.content.isolated && (
                             <p className="text-sm">
                               Isolated run: outside activities are blocked until
@@ -292,13 +287,8 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                           )}
                           <TakeQuestButton
                             quest={quest}
-                            entryCost={quest.entryRequirements.map((required) => ({
-                              quantity: required.quantity,
-                              name:
-                                itemNames?.find((item) => item.id === required.itemId)
-                                  ?.name ?? required.name,
-                            }))}
-                            disabled={quest.entryRequirements.some(
+                            entryCost={entryStock}
+                            disabled={entryStock.some(
                               (required) => required.owned < required.quantity,
                             )}
                             onStart={() =>
