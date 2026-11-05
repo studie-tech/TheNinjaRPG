@@ -62,6 +62,7 @@ import {
 } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { remainingXpToLevel } from "@/libs/train";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
@@ -786,7 +787,7 @@ function Residence() {
                       <SelectItem value="ALL">All Types</SelectItem>
                       {ItemTypes.map((itemType) => (
                         <SelectItem key={itemType} value={itemType}>
-                          {itemType.charAt(0) + itemType.slice(1).toLowerCase()}
+                          {capitalizeFirstLetter(itemType)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -802,7 +803,7 @@ function Residence() {
                       <SelectItem value="ALL">All Rarities</SelectItem>
                       {ItemRarities.map((rarity) => (
                         <SelectItem key={rarity} value={rarity}>
-                          {rarity.charAt(0) + rarity.slice(1).toLowerCase()}
+                          {capitalizeFirstLetter(rarity)}
                         </SelectItem>
                       ))}
                     </SelectContent>

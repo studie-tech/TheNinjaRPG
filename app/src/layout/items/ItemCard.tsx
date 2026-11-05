@@ -7,6 +7,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 /** One backpack item: art, name, rarity and where it goes, with stack size or wear. */
 export function ItemCard({
@@ -101,7 +102,7 @@ export const rarityTextClass: Record<ItemRarity, string> = {
 export const slotLabel = (userItem: UserItemWithRelations) => {
   const value =
     userItem.item.slot === "NONE" ? userItem.item.itemType : userItem.item.slot;
-  return value.charAt(0) + value.slice(1).toLowerCase();
+  return capitalizeFirstLetter(value);
 };
 
 /** Stack size for stacks, remaining wear for gear that wears. */

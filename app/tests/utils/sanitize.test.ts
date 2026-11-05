@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { htmlToPlainText, stripBlockquotes } from "@/utils/sanitize";
+import { buildQuoteBlock, htmlToPlainText, stripBlockquotes } from "@/utils/sanitize";
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
@@ -66,4 +66,20 @@ test("htmlToPlainText discards script and style contents", () => {
       "<script>alert('x')</script><style>.hidden{display:none}</style><p>Visible</p>",
     ),
   ).toBe("Visible");
+});
+
+test("buildQuoteBlock stores the author and date without nested quotes", () => {
+  expect(
+    buildQuoteBlock({
+      username: "Terriator",
+      createdAt: new Date(2026, 0, 31),
+      content: "<blockquote>Old</blockquote><p>New</p>",
+    }),
+  ).toBe('<blockquote author="Terriator" date="01/31/2026"><p>New</p></blockquote>');
+});
+
+test("buildQuoteBlock names a deleted author Unknown", () => {
+  expect(
+    buildQuoteBlock({ username: null, createdAt: new Date(2026, 0, 31), content: "x" }),
+  ).toContain('author="Unknown"');
 });

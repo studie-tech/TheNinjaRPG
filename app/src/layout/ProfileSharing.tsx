@@ -46,6 +46,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
 import { canReviewLinkPromotions } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -802,7 +803,7 @@ const MilestoneRulesHeader: React.FC<{ label: string }> = ({ label }) => (
 const formatRank = (rank: string) =>
   rank
     .split(" ")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .map((word) => capitalizeFirstLetter(word))
     .join(" ");
 
 const milestoneState = (
