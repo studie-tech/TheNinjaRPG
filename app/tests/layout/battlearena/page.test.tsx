@@ -11,7 +11,9 @@ import * as pyramidMode from "@/layout/battlearena/PyramidMode";
 import * as rankedMode from "@/layout/battlearena/RankedMode";
 import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
+import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
+import { actualContentBox } from "../../setup/preload";
 
 // Local storage sync dispatches DOM events through the global constructors.
 const browserGlobals = ["Event", "CustomEvent"] as const;
@@ -27,6 +29,8 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/battlearena");
   tutorialStep = undefined;
   arenaProps = {};
+  // Bun retains module mocks from other suites; navigation requires the real title.
+  vi.spyOn(contentBox, "default").mockImplementation(actualContentBox);
   vi.spyOn(userContext, "useRequireInVillage").mockReturnValue({
     userData: { userId: "me", isBanned: false },
     access: true,

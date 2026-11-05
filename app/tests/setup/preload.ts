@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";
 import RichInput from "@/layout/RichInput";
 import ContentImageSelector from "@/layout/ContentImageSelector";
+import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
@@ -28,6 +29,7 @@ export const actualLink = Link;
 export const actualRichInput = RichInput;
 export const actualItemWithEffects = ItemWithEffects;
 export const actualContentImageSelector = ContentImageSelector;
+export const actualContentBox = ContentBox;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
 
