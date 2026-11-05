@@ -124,6 +124,7 @@ export const normalizeEditable = (
   return editable;
 };
 
+/** Select the fields present in a content entity snapshot for the requested keys. */
 export const pick = (source: Record<string, unknown>, keys: readonly string[]) =>
   Object.fromEntries(
     keys.filter((key) => key in source).map((key) => [key, source[key]]),

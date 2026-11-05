@@ -32,6 +32,7 @@ import {
   OPENAI_MODERATION_MODEL,
   OPENAI_REPORT_EMBEDDING_MODEL,
 } from "@/drizzle/constants";
+import type { ReportAction } from "@/drizzle/schema";
 import {
   accountDeletion,
   actionLog,
@@ -717,7 +718,7 @@ export const insertUserReportDecisionComment = (
   entry: {
     reportId: string;
     comment: string;
-    decision: import("@/drizzle/schema").ReportAction;
+    decision: ReportAction;
   },
 ) =>
   client.insert(userReportComment).values({

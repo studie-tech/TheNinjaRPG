@@ -17,15 +17,15 @@ export const someErrorInChain = (
   return false;
 };
 
-/**
- * MySQL / Vitess duplicate-key detection for catch blocks around INSERTs guarded by UNIQUE.
- * Driver and layer (Drizzle, mysql2, vttablet) vary in error shape; this covers common ones.
- */
 const hasDuplicateKeyText = (text: string) =>
   text.includes("Duplicate entry") ||
   text.includes("ER_DUP_ENTRY") ||
   text.includes("UNIQUE constraint");
 
+/**
+ * MySQL / Vitess duplicate-key detection for catch blocks around INSERTs guarded by UNIQUE.
+ * Driver and layer (Drizzle, mysql2, vttablet) vary in error shape; this covers common ones.
+ */
 export const isMysqlDuplicateKeyError = (error: unknown): boolean =>
   someErrorInChain(error, (current) => {
     const { code, errno, sqlMessage } = current as {

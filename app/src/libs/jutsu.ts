@@ -23,11 +23,6 @@ export const filterFreeJutsuTransfers = <T extends { changes: unknown }>(logs: T
     (log.changes as string[]).some((c) => c.includes(JUTSU_FREE_TRANSFER_MARKER)),
   );
 
-/**
- * Get the number of free jutsu level transfers based on the federal status
- * @param federalStatus
- * @returns
- */
 /** Sort comparator for jutsu by their loadout position, with unlisted jutsu last. */
 export const compareByLoadoutOrder =
   (jutsuIds: string[] = []) =>
@@ -40,6 +35,7 @@ export const compareByLoadoutOrder =
     return aIndex - bIndex;
   };
 
+/** Number of free jutsu level transfers available for the federal status. */
 export const getFreeTransfers = (federalStatus: FederalStatus) => {
   switch (federalStatus) {
     case "GOLD":

@@ -46,6 +46,7 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { WEEK_S } from "@/utils/time";
+import type { QueryCondition } from "@/utils/typeutils";
 
 /** Table alias for completion joins, keeping its columns distinct from other participants. */
 const completion = alias(abEvent, "completion");
@@ -461,7 +462,7 @@ export const selectUserDataForGetRecruitmentLevelDistribution4 = (
 export const recruitmentUserConditions = (input: {
   startDate?: undefined | string;
   endDate?: undefined | string;
-}): import("@/utils/typeutils").QueryCondition[] => [
+}): QueryCondition[] => [
   eq(userData.isAi, false),
   ...(input.startDate ? [gte(userData.createdAt, new Date(input.startDate))] : []),
   ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
