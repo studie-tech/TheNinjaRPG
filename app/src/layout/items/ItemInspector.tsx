@@ -98,7 +98,6 @@ export function ItemInspector({
     isUsingRepairItem,
     isRepairingWithRyo,
   } = useItemActions({
-    userData,
     useritem,
     onDone: () => {
       setIsSplitDialogOpen(false);

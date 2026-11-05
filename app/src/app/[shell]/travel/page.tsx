@@ -60,7 +60,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
+import { useConsumeItem } from "@/hooks/useItemActions";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
@@ -83,11 +83,7 @@ import { WarFieldActions } from "@/layout/WarFieldActions";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
-import {
-  finishItemConsumeRequest,
-  getItemConsumeErrorMessage,
-  getItemConsumeInput,
-} from "@/libs/itemConsumption";
+import { getItemConsumeInput } from "@/libs/itemConsumption";
 import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -680,54 +676,9 @@ function Travel() {
       },
     });
 
-  const { prepareConsumptionUpdate, updateConsumption } =
-    useItemConsumptionCacheUpdate();
-  const { mutate: consume, isPending: isConsuming } = api.item.consume.useMutation({
-    onMutate: () => ({
-      userRevision: prepareUserUpdate(),
-      consumption: prepareConsumptionUpdate(),
-    }),
-    onSuccess: async (data, variables, context) => {
-      finishItemConsumeRequest(userData?.userId ?? "", variables.userItemId);
-      if (data.success && "rewards" in data && data.rewards) {
-        showRewardToast(
-          data.notifications ?? [],
-          data.rewards,
-          data.message,
-          false,
-          undefined,
-          undefined,
-          data.cacheRewards,
-          data.petRewards,
-        );
-      } else {
-        showMutationToast(data);
-      }
-      if (data.success) {
-        // The action is complete; keep reconciliation off the dialog's pending path.
-        void Promise.allSettled([
-          updateUser(data, { revision: context.userRevision }).then((profileApplied) =>
-            updateConsumption(data, context.consumption, profileApplied),
-          ),
-        ]);
-      } else if (useritem?.item.itemType === "MEAL") {
-        // A rejected snapshot must refresh the next modal's quantity and account state.
-        await Promise.all([
-          utils.profile.getUser.invalidate(),
-          utils.item.getUserItems.invalidate(),
-        ]);
-      }
-    },
-    onError: async (error, _input, context) => {
-      const message = getItemConsumeErrorMessage(error, useritem?.item);
-      if (message) showMutationToast({ success: false, message });
-      await updateUser(undefined);
-      await updateConsumption(
-        undefined,
-        context?.consumption ?? prepareConsumptionUpdate(),
-        false,
-      );
-    },
+  const { consume, isConsuming } = useConsumeItem({
+    useritem,
+    inventoryQuery: "getUserItems",
     onSettled: () => {
       setIsOpen(false);
       setUserItem(undefined);
