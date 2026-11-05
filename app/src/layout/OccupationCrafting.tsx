@@ -31,7 +31,7 @@ import {
   getImbuementRankCapMessage,
 } from "@/libs/crafting";
 import { calcItemRepairCost } from "@/libs/item";
-import { needsInventoryRepair } from "@/libs/repair";
+import { calcRepairAllCost } from "@/libs/repair";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
@@ -933,7 +933,8 @@ export default function OccupationCrafting() {
 
         {/* Repair Items */}
         {(() => {
-          const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
+          const { itemsNeedingRepair, totalCost: totalRepairCost } =
+            calcRepairAllCost(userItems);
 
           return itemsNeedingRepair.length > 0 ? (
             <Card>
@@ -951,10 +952,6 @@ export default function OccupationCrafting() {
                 <div className="space-y-4">
                   {/* Repair All Button */}
                   {(() => {
-                    const totalRepairCost = itemsNeedingRepair.reduce(
-                      (total, userItem) => total + calcItemRepairCost(userItem),
-                      0,
-                    );
                     const canAfford = (userData?.money || 0) >= totalRepairCost;
                     return (
                       <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/50 p-4">
