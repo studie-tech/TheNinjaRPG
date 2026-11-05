@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { item, petSpecies, quest, questHistory, userData, userItem, userPet } from "@/drizzle/schema";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
 import { getNewTrackers } from "@/libs/quest";
+import { appRouter } from "@/server/api/root";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
@@ -123,6 +126,34 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     expect(await readHistory(database)).toMatchObject({ completed: 1, previousCompletes: 1, periodCompletes: 1 });
     expect((await caller.collectPetTask(task)).success).toBe(false);
     expect((await readOwner(database))?.money).toBe(1050);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("offers recovery without a query-side write and collects once from %s", async (status) => {
+    const database = await getTestDatabase();
+    const task = await dueTask(database);
+    await database.update(userData).set({ status, autoWakeUp: status === "ASLEEP", curHealth: 1, regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 1) * 1000) }).where(eq(userData.userId, ownerId));
+    const caller = callerForDatabase(appRouter, ownerId, database).quests;
+    expect((await caller.getPetTask({ petId })).blockMessage).toBeNull();
+    expect(await readOwner(database)).toMatchObject({ status, money: 1000, petTask: task });
+    expect(await caller.collectPetTask(task)).toMatchObject({ success: true, actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
+    expect(await readOwner(database)).toMatchObject({ status: "AWAKE", money: 1050, petTask: null });
+    expect((await caller.collectPetTask(task)).success).toBe(false);
+    expect((await readOwner(database))?.money).toBe(1050);
+  });
+
+  it("preserves sleep opt-out and unpaid hospital recovery when results are ready", async () => {
+    const database = await getTestDatabase();
+    const task = await dueTask(database);
+    const caller = callerForDatabase(appRouter, ownerId, database).quests;
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: false }).where(eq(userData.userId, ownerId));
+    expect((await caller.getPetTask({ petId })).blockMessage).toContain("Wake up");
+    expect(await caller.collectPetTask(task)).toMatchObject({ success: false, message: expect.stringContaining("asleep") });
+    expect(await readOwner(database)).toMatchObject({ status: "ASLEEP", money: 1000, petTask: task });
+    await database.update(userData).set({ status: "HOSPITALIZED", curHealth: 1, regenAt: new Date() }).where(eq(userData.userId, ownerId));
+    expect((await caller.getPetTask({ petId })).blockMessage).toBeNull();
+    expect(await caller.collectPetTask(task)).toMatchObject({ success: false, message: expect.stringContaining("in the hospital") });
+    expect(await readOwner(database)).toMatchObject({ status: "HOSPITALIZED", money: 1000, petTask: task });
+    expect((await readHistory(database))?.completed).toBe(0);
   });
 
   it("projects a confirmed integer-only task payout without a cache confirmation query", async () => {

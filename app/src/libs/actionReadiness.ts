@@ -83,6 +83,7 @@ export const AWAKE_ACTIONS = new Set([
   "coop.quest.startEncounter",
   "quests.startRandom",
   "quests.startPetTask",
+  "quests.collectPetTask",
   "quests.checkRewards",
   "quests.retryBattle",
   "pvpRank.queueForRankedPvp",

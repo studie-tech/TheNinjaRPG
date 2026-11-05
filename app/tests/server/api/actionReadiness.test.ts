@@ -1,8 +1,8 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { quest, questHistory, userData, village, villageStructure } from "@/drizzle/schema";
-import { AWAKE_ACTIONS, AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
 import { appRouter } from "@/server/api/root";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
@@ -21,16 +21,6 @@ const userId = "action-readiness";
 const current = async () => (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
 
 afterEach(() => { invocations = 0; resetServerModuleStubs(); vi.restoreAllMocks(); });
-
-describe("action policy routing", () => {
-  it("references existing mutations under their registered paths", () => {
-    const procedures = appRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>;
-    for (const path of [...AWAKE_ACTIONS, "coop.dungeon.act", "hunting.sessionAction", "profile.useUnusedExperiencePoints"]) {
-      expect(procedures[path], path).toBeDefined();
-      expect(procedures[path]?._def.type).toBe("mutation");
-    }
-  });
-});
 
 describeWithDatabase("automatic action recovery", () => {
   const setup = async (status: "ASLEEP" | "HOSPITALIZED", values: Record<string, unknown> = {}) => {

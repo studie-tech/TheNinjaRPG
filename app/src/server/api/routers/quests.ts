@@ -50,6 +50,7 @@ import {
   userData,
   userPet,
 } from "@/drizzle/schema";
+import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   deletedReason,
   editedReason,
@@ -1240,7 +1241,10 @@ export const questsRouter = createTRPCRouter({
         return { success: false, message: `Not allowed to delete quest` };
       }
     }),
-  /** Return the accepted task even when its content disappeared, so cancellation stays available. */
+  /**
+   * Return the accepted task and recovery-capable availability without changing activity.
+   * Missing content still leaves cancellation available.
+   */
   getPetTask: protectedProcedure
     .input(petSelectionSchema.optional())
     .query(async ({ ctx, input }) => {
@@ -1259,7 +1263,13 @@ export const questsRouter = createTRPCRouter({
         petName: pet?.name ?? "Companion",
         questName: contract?.name ?? "Unavailable contract",
         blockMessage: task
-          ? petTaskReturnBlockMessage(owner, task, contract, history, pet)
+          ? petTaskReturnBlockMessage(
+              actionPrerequisiteUser(owner),
+              task,
+              contract,
+              history,
+              pet,
+            )
           : null,
         dispatchBlockMessage: petTaskDispatchBlockMessage(
           owner,
