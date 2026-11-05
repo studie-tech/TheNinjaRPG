@@ -19,3 +19,9 @@ export const downloadBlob = (blob: Blob, filename: string) => {
  */
 export const getScrollBehavior = (): ScrollBehavior =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+
+/** Save rows as a CSV file. Browser only. */
+export const downloadCsv = (rows: readonly (string | number)[][], filename: string) => {
+  const csv = rows.map((row) => row.join(",")).join("\r\n");
+  downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename);
+};

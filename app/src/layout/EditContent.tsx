@@ -2580,7 +2580,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
       ) {
         return {
           id: value,
-          values: aiData
+          values: [...aiData]
             .sort((a, b) => a.level - b.level)
             .map((ai) => ({
               id: ai.userId,
