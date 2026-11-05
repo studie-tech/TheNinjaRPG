@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
+import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
@@ -255,5 +256,13 @@ describe("Modal", () => {
     localStorage.removeItem("autoAttackMinLevel");
     localStorage.removeItem("autoAttackDelay");
     globalThis.CustomEvent = originalCustomEvent;
+  });
+
+  it("reads saved auto-attack settings and falls back to their defaults", () => {
+    localStorage.removeItem("autoAttackDelay");
+    expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(5);
+    localStorage.setItem("autoAttackDelay", "12");
+    expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(12);
+    localStorage.removeItem("autoAttackDelay");
   });
 });

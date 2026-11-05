@@ -9,8 +9,6 @@ import {
   SendHorizontal,
   Trash2,
   TrendingUp,
-  Zap,
-  ZapOff,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
@@ -51,9 +49,8 @@ import {
   ANBU_STEALTH_UPGRADE_COST,
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
-import { useLocalStorage } from "@/hooks/localstorage";
 import { usePendingIds } from "@/hooks/usePendingIds";
-import AutoAttackModal from "@/layout/AutoAttackModal";
+import { AutoAttackToggle } from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
@@ -199,13 +196,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   // State for espionage
   const [selectedVillage, setSelectedVillage] = useState<string>("");
-
-  // Auto attack state
-  const [autoAttackMode, setAutoAttackMode] = useLocalStorage<boolean>(
-    "autoAttackMode",
-    false,
-  );
-  const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
 
   // Kicks and promotions are scoped to one member so other rows remain usable.
   const kicks = usePendingIds();
@@ -411,32 +401,7 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
       padding={false}
       topRightContent={
         <div className="flex flex-row items-center gap-1">
-          {userData?.anbuId &&
-            (autoAttackMode ? (
-              <Button
-                className="text-red-500"
-                aria-label="Disable auto attack"
-                hoverText="Auto Attack"
-                onClick={() => setAutoAttackMode(false)}
-              >
-                <Zap className="h-5 w-5" />
-              </Button>
-            ) : (
-              <Button
-                className="hover:text-red-500"
-                aria-label="Configure auto attack"
-                hoverText="Auto Attack"
-                onClick={() => setShowAutoAttackModal(true)}
-              >
-                <ZapOff className="h-5 w-5" />
-              </Button>
-            ))}
-          {/* Auto Attack Configuration Modal */}
-          <AutoAttackModal
-            isOpen={showAutoAttackModal}
-            setIsOpen={setShowAutoAttackModal}
-            onEnable={() => setAutoAttackMode(true)}
-          />
+          {userData?.anbuId && <AutoAttackToggle iconClassName="h-5 w-5" />}
           {isLeader && (
             <Confirm
               title="Rename Squad"
