@@ -108,7 +108,7 @@ describe("editing a message that quotes another", () => {
   const quote = '<blockquote author="twix" date="11/04/2026"><p>only cuz someone asked</p></blockquote>';
   const quoted = { ...comment, content: `${quote}\n\n<p>add them to the blocklist</p>` };
 
-  it("edits only the author's own text and keeps the quote attached", async () => {
+  it("edits only the author's own text and names the quote it keeps", async () => {
     const view = render(<CommentOnConversation comment={quoted} user={user}>{quoted.content}</CommentOnConversation>);
     toggleEdit(view);
     const box = view.getByRole("textbox", { name: "Edit message" }) as HTMLTextAreaElement;
@@ -117,7 +117,8 @@ describe("editing a message that quotes another", () => {
     fireEvent.change(box, { target: { value: "<p>blocklist them</p>" } });
     fireEvent.click(view.getByRole("button", { name: "Save message" }));
     await waitFor(() => expect(edit).toHaveBeenCalledTimes(1));
-    expect(edit.mock.calls[0]?.[0]).toMatchObject({ comment: `${quote}<p>blocklist them</p>` });
+    // The server puts the stored quote back in front.
+    expect(edit.mock.calls[0]?.[0]).toMatchObject({ comment: "<p>blocklist them</p>" });
   });
 
   it("does the same in the compact tavern view", async () => {
@@ -128,7 +129,7 @@ describe("editing a message that quotes another", () => {
     expect(view.getByText("Quoting twix")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Save message" }));
     await waitFor(() => expect(editComment).toHaveBeenCalledTimes(1));
-    expect(editComment.mock.calls[0]?.[0]).toMatchObject({ comment: `${quote}<p>add them to the blocklist</p>` });
+    expect(editComment.mock.calls[0]?.[0]).toMatchObject({ comment: "<p>add them to the blocklist</p>" });
   });
 });
 

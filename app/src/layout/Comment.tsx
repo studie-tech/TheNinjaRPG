@@ -161,7 +161,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   const emojiRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
 
-  // Handle submit: an edit changes only the author's own text and keeps attached quotes
+  // Handle submit: an edit sends only the author's own text; the server keeps attached quotes
   const quoted = splitQuotedReply(props.comment.content);
   const {
     handleSubmit,
@@ -178,8 +178,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   });
 
   const onSubmit = handleSubmit((data) => {
-    if (props.editComment && !props.isEditPending)
-      props.editComment({ ...data, comment: `${quoted.quotes}${data.comment}` });
+    if (props.editComment && !props.isEditPending) props.editComment(data);
   });
 
   // Derived

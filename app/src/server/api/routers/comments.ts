@@ -95,6 +95,7 @@ import {
   RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
+import { splitQuotedReply } from "@/utils/richText";
 import sanitize, { stripBlockquotes } from "@/utils/sanitize";
 import {
   createConversationSchema,
@@ -793,7 +794,9 @@ export const commentsRouter = createTRPCRouter({
       if (!moderated.success) return moderated;
       // Mutate
       const commentId = input.object_id;
-      const sanitized = moderated.sanitized;
+      // An edit replaces only the author's own text; the quotes attached when the message was
+      // sent stay as stored, so they neither count toward the reply limit nor change.
+      const sanitized = `${splitQuotedReply(comment.content).quotes}${splitQuotedReply(moderated.sanitized).reply}`;
       await updateConversationCommentForEditConversationComment(
         ctx.drizzle,
         sanitized,

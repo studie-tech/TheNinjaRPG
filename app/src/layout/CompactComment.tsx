@@ -453,7 +453,7 @@ function CompactEditor({
   onSubmit: (data: MutateCommentSchema) => void;
   isPending?: boolean;
 }) {
-  // An edit changes only the author's own text and keeps attached quotes
+  // An edit sends only the author's own text; the server keeps attached quotes
   const quoted = splitQuotedReply(comment.content);
   const {
     handleSubmit,
@@ -469,7 +469,7 @@ function CompactEditor({
     resolver: zodResolver(mutateCommentSchema),
   });
   const submit = handleSubmit((data) => {
-    if (!isPending) onSubmit({ ...data, comment: `${quoted.quotes}${data.comment}` });
+    if (!isPending) onSubmit(data);
   });
   return (
     <form onSubmit={submit} className="mt-[4px]">
