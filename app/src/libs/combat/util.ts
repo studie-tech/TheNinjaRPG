@@ -578,6 +578,18 @@ export const isPvpEnergyRewardBattle = (
 };
 
 /**
+ * Whether a finished battle hospitalizes a user at this health. Isolated pyramid runs stay in
+ * their run, which callers check against the user.
+ */
+export const sendsToHospital = (
+  battle: { battleType: BattleType; forceKeepPools: boolean },
+  curHealth: number,
+) =>
+  !battle.forceKeepPools &&
+  curHealth <= 0 &&
+  !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(battle.battleType);
+
+/**
  * Resolve a Kage challenge from shared battle state. CombatResult is scoped to
  * whichever user finalized the battle, so a caller-relative didWin flips meaning
  * depending on which client reaches combat cleanup first; this predicate reads

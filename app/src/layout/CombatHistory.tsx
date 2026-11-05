@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import ElementImage from "@/layout/ElementImage";
+import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, CombatResult } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
 import { groupBy } from "@/utils/grouping";
@@ -166,24 +167,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                     )}
                     {effects?.map((effect, effectIdx) => {
                       const effectKey = `${entry.battleVersion}-${effectIdx}`;
-                      const color =
-                        effect.color === "red"
-                          ? "text-red-500"
-                          : effect.color === "blue"
-                            ? "text-blue-500"
-                            : effect.color === "green"
-                              ? "text-green-500"
-                              : effect.color === "yellow"
-                                ? "text-yellow-500"
-                                : effect.color === "purple"
-                                  ? "text-purple-500"
-                                  : effect.color === "orange"
-                                    ? "text-orange-500"
-                                    : effect.color === "pink"
-                                      ? "text-pink-500"
-                                      : effect.color === "gray"
-                                        ? "text-gray-500"
-                                        : "text-black";
+                      const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-black";
                       const text = insertComponentsIntoText(effect.txt, {
                         Highest: (
                           <span key={`${effectKey}-H`} className="text-stone-500">
