@@ -15,11 +15,17 @@ import {
   CONTENT_PROPOSAL_RETENTION_DAYS,
   ContentProposalCategories,
   ContentProposalEntityTypes,
+  ContentProposalSources,
 } from "@/drizzle/constants";
 import { useLazyChart } from "@/hooks/useLazyChart";
 import Loader from "@/layout/Loader";
-import { CATEGORY_LABELS, ENTITY_LABELS } from "@/libs/contentReview/labels";
-import { downloadBlob } from "@/utils/dom";
+import {
+  CATEGORY_LABELS,
+  ENTITY_LABELS,
+  SOURCE_LABELS,
+} from "@/libs/contentReview/labels";
+import { downloadCsv } from "@/utils/dom";
+import { formatPercent } from "@/utils/string";
 import type { ReviewStatsInput } from "@/validators/contentReview";
 
 export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) => {
@@ -154,8 +160,9 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
             }
             options={[
               ["ALL", "All sources"],
-              ["AGENT", "Content audit"],
-              ["STAFF", "Staff"],
+              ...ContentProposalSources.map(
+                (entry) => [entry, SOURCE_LABELS[entry]] as [string, string],
+              ),
             ]}
           />
           <StatsSelect
@@ -207,11 +214,11 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
               <Metric
                 label="Reviewed"
                 value={summary.reviewed.toLocaleString()}
-                detail={`${percent(summary.reviewCoverage)} of submissions`}
+                detail={`${formatPercent(summary.reviewCoverage)} of submissions`}
               />
               <Metric
                 label="Acceptance rate"
-                value={percent(summary.acceptanceRate)}
+                value={formatPercent(summary.acceptanceRate)}
                 detail={`${summary.accepted} accepted / ${summary.reviewed} reviewed`}
               />
               <Metric
@@ -250,7 +257,7 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                             <td className="p-2">{row.total}</td>
                             <td className="p-2">{row.accepted}</td>
                             <td className="p-2">{row.REJECTED}</td>
-                            <td className="p-2">{percent(row.acceptanceRate)}</td>
+                            <td className="p-2">{formatPercent(row.acceptanceRate)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -296,8 +303,8 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                         >
                           <td className="p-3 text-left font-medium">
                             {row.source === "STAFF"
-                              ? "Staff"
-                              : row.agentName || "Content audit"}
+                              ? SOURCE_LABELS.STAFF
+                              : row.agentName || SOURCE_LABELS.AGENT}
                           </td>
                           <td className="p-3 text-left">
                             {CATEGORY_LABELS[row.category]}
@@ -309,7 +316,7 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
                           <td className="p-3">{row.OUTDATED}</td>
                           <td className="p-3">{row.REVERTED}</td>
                           <td className="p-3 font-semibold">
-                            {percent(row.acceptanceRate)}
+                            {formatPercent(row.acceptanceRate)}
                           </td>
                         </tr>
                       ))}
@@ -393,7 +400,7 @@ const AcceptanceChart = ({ trend }: { trend: Stats["trend"] }) => {
                 afterTitle: (items) =>
                   `${trend[items[0]?.dataIndex ?? 0]?.total ?? 0} suggestions submitted`,
                 label: (item) =>
-                  `${item.dataset.label}: ${item.dataset.yAxisID === "rate" ? percent(item.parsed.y) : item.parsed.y}`,
+                  `${item.dataset.label}: ${item.dataset.yAxisID === "rate" ? formatPercent(item.parsed.y) : item.parsed.y}`,
               },
             },
           },
@@ -484,8 +491,6 @@ const Metric = ({
     <p className="text-muted-foreground text-xs">{detail}</p>
   </div>
 );
-const percent = (value: number | null) =>
-  value == null ? "—" : `${value.toFixed(1)}%`;
 const formatDate = (date: string) =>
   new Date(date).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -494,32 +499,29 @@ const formatDate = (date: string) =>
     timeZone: "UTC",
   });
 const downloadStats = (data: Stats) => {
-  const csv = [
+  downloadCsv(
     [
-      "Period starts (UTC)",
-      "Submitted",
-      "Accepted",
-      "Rejected",
-      "Pending",
-      "Outdated",
-      "Reverted",
-      "Acceptance %",
+      [
+        "Period starts (UTC)",
+        "Submitted",
+        "Accepted",
+        "Rejected",
+        "Pending",
+        "Outdated",
+        "Reverted",
+        "Acceptance %",
+      ],
+      ...data.trend.map((row) => [
+        row.date,
+        row.total,
+        row.accepted,
+        row.REJECTED,
+        row.PENDING,
+        row.OUTDATED,
+        row.REVERTED,
+        row.acceptanceRate?.toFixed(2) ?? "",
+      ]),
     ],
-    ...data.trend.map((row) => [
-      row.date,
-      row.total,
-      row.accepted,
-      row.REJECTED,
-      row.PENDING,
-      row.OUTDATED,
-      row.REVERTED,
-      row.acceptanceRate?.toFixed(2) ?? "",
-    ]),
-  ]
-    .map((row) => row.join(","))
-    .join("\r\n");
-  downloadBlob(
-    new Blob([csv], { type: "text/csv;charset=utf-8" }),
     `content-review-${data.start.slice(0, 10)}-${data.end.slice(0, 10)}.csv`,
   );
 };

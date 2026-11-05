@@ -195,3 +195,10 @@ export const summarizeBattleOutcomes = (
   const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
   return { wins, flees, losses, totalUsage, winRate: `${winRate.toFixed(1)}%` };
 };
+
+/** Beta density sampled over [0,1], clamped off the endpoints where it can diverge. */
+export const betaCurve = (a: number, b: number) => {
+  const x = Array.from({ length: 200 }, (_, i) => i / 199);
+  const pdf = x.map((xi) => betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, xi)), a, b));
+  return { x, pdf };
+};

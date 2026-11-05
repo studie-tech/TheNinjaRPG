@@ -103,26 +103,6 @@ export default function ManualRecruitment() {
       { enabled: allowed && canSeeRevenue },
     );
 
-  const goals = {
-    signupRate: RECRUITMENT_GOALS.SIGNUP_RATE_PERCENT,
-    rankRate: RECRUITMENT_GOALS.RANK_RATE_PERCENT,
-    pvpRate: RECRUITMENT_GOALS.PVP_RATE_PERCENT,
-    tutorialRate: RECRUITMENT_GOALS.TUTORIAL_RATE_PERCENT,
-  } as const;
-
-  const getColorClass = (valuePct: number, goalPct: number) => {
-    if (valuePct >= goalPct) return "text-green-600";
-    if (valuePct >= goalPct * 0.9) return "text-orange-500";
-    return "text-red-600";
-  };
-
-  const getClickValueColor = (valueUsd: number) => {
-    const goal = RECRUITMENT_GOALS.SIGNUP_VALUE_USD;
-    if (valueUsd >= goal) return "text-green-600";
-    if (valueUsd >= goal * 0.9) return "text-orange-500";
-    return "text-red-600";
-  };
-
   return (
     <>
       <ContentBox
@@ -141,252 +121,78 @@ export default function ManualRecruitment() {
 
         {allowed && (
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">Signup Rate</CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading signup rate" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signupRate ?? 0) * 100, goals.signupRate)}`}
-                    >
-                      {((mainMetrics?.signupRate ?? 0) * 100).toFixed(1)}%
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.signupRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <div className="text-foreground-muted text-xs">
-                    {mainMetrics.signups} / {mainMetrics.visitors}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">
-                  Character Creation Rate
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading character creation rate" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.characterCreationRate ?? 0) * 100, goals.signupRate)}`}
-                    >
-                      {((mainMetrics?.characterCreationRate ?? 0) * 100).toFixed(1)}%
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.signupRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <>
-                    <div className="text-foreground-muted text-xs">
-                      {mainMetrics.characterCreations} / {mainMetrics.visitors}
-                    </div>
-                    {mainMetrics.characterCreationsByDevice &&
-                      mainMetrics.visitorsByDevice && (
-                        <div className="mt-1 text-foreground-muted text-xs">
-                          📱{" "}
-                          {mainMetrics.visitorsByDevice.mobile > 0
-                            ? (
-                                (mainMetrics.characterCreationsByDevice.mobile /
-                                  mainMetrics.visitorsByDevice.mobile) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.characterCreationsByDevice.mobile}) | 💻{" "}
-                          {mainMetrics.visitorsByDevice.desktop > 0
-                            ? (
-                                (mainMetrics.characterCreationsByDevice.desktop /
-                                  mainMetrics.visitorsByDevice.desktop) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.characterCreationsByDevice.desktop}) | ❓{" "}
-                          {mainMetrics.visitorsByDevice.unknown > 0
-                            ? (
-                                (mainMetrics.characterCreationsByDevice.unknown /
-                                  mainMetrics.visitorsByDevice.unknown) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.characterCreationsByDevice.unknown})
-                        </div>
-                      )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">Finished Tutorial</CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading tutorial completion" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.tutorialFinishedSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.tutorialRate)}`}
-                    >
-                      {((mainMetrics?.signups ?? 0) > 0
-                        ? ((mainMetrics?.tutorialFinishedSignups ?? 0) /
-                            (mainMetrics?.signups ?? 1)) *
-                          100
-                        : 0
-                      ).toFixed(1)}
-                      %
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.tutorialRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <>
-                    <div className="text-foreground-muted text-xs">
-                      {mainMetrics.tutorialFinishedSignups} / {mainMetrics.signups}
-                    </div>
-                    {mainMetrics.tutorialFinishedByDevice &&
-                      mainMetrics.signupsByDevice && (
-                        <div className="mt-1 text-foreground-muted text-xs">
-                          📱{" "}
-                          {mainMetrics.signupsByDevice.mobile > 0
-                            ? (
-                                (mainMetrics.tutorialFinishedByDevice.mobile /
-                                  mainMetrics.signupsByDevice.mobile) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.tutorialFinishedByDevice.mobile}) | 💻{" "}
-                          {mainMetrics.signupsByDevice.desktop > 0
-                            ? (
-                                (mainMetrics.tutorialFinishedByDevice.desktop /
-                                  mainMetrics.signupsByDevice.desktop) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.tutorialFinishedByDevice.desktop}) | ❓{" "}
-                          {mainMetrics.signupsByDevice.unknown > 0
-                            ? (
-                                (mainMetrics.tutorialFinishedByDevice.unknown /
-                                  mainMetrics.signupsByDevice.unknown) *
-                                100
-                              ).toFixed(1)
-                            : "0.0"}
-                          % ({mainMetrics.tutorialFinishedByDevice.unknown})
-                        </div>
-                      )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">Did PvP Fight</CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading PvP signups" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.pvpSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.pvpRate)}`}
-                    >
-                      {((mainMetrics?.signups ?? 0) > 0
-                        ? ((mainMetrics?.pvpSignups ?? 0) /
-                            (mainMetrics?.signups ?? 1)) *
-                          100
-                        : 0
-                      ).toFixed(1)}
-                      %
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.pvpRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <div className="text-foreground-muted text-xs">
-                    {mainMetrics.pvpSignups} / {mainMetrics.signups}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">Student+</CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading student progress" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.nonStudentSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.rankRate)}`}
-                    >
-                      {((mainMetrics?.signups ?? 0) > 0
-                        ? ((mainMetrics?.nonStudentSignups ?? 0) /
-                            (mainMetrics?.signups ?? 1)) *
-                          100
-                        : 0
-                      ).toFixed(1)}
-                      %
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.rankRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <div className="text-foreground-muted text-xs">
-                    {mainMetrics.nonStudentSignups} / {mainMetrics.signups} signups
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pt-2 pb-0">
-                <CardTitle className="font-medium text-sm">Genin+</CardTitle>
-              </CardHeader>
-              <CardContent className="py-1">
-                {isFetchingMain ? (
-                  <Loader explanation="Loading rank progress" />
-                ) : (
-                  <>
-                    <div
-                      className={`font-bold text-xl ${getColorClass((mainMetrics?.signups ?? 0) > 0 ? ((mainMetrics?.nonStudentGeninSignups ?? 0) / (mainMetrics?.signups ?? 1)) * 100 : 0, goals.rankRate)}`}
-                    >
-                      {((mainMetrics?.signups ?? 0) > 0
-                        ? ((mainMetrics?.nonStudentGeninSignups ?? 0) /
-                            (mainMetrics?.signups ?? 1)) *
-                          100
-                        : 0
-                      ).toFixed(1)}
-                      %
-                    </div>
-                    <div className="text-foreground-muted text-xs">
-                      Goal: {goals.rankRate}%
-                    </div>
-                  </>
-                )}
-                {!isFetchingMain && mainMetrics && (
-                  <div className="text-foreground-muted text-xs">
-                    {mainMetrics.nonStudentGeninSignups} / {mainMetrics.signups} signups
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <RateCard
+              title="Signup Rate"
+              explanation="Loading signup rate"
+              isFetching={isFetchingMain}
+              ratePct={(mainMetrics?.signupRate ?? 0) * 100}
+              goalPct={RECRUITMENT_GOALS.SIGNUP_RATE_PERCENT}
+              counts={mainMetrics && `${mainMetrics.signups} / ${mainMetrics.visitors}`}
+            />
+            <RateCard
+              title="Character Creation Rate"
+              explanation="Loading character creation rate"
+              isFetching={isFetchingMain}
+              ratePct={(mainMetrics?.characterCreationRate ?? 0) * 100}
+              goalPct={RECRUITMENT_GOALS.SIGNUP_RATE_PERCENT}
+              counts={
+                mainMetrics &&
+                `${mainMetrics.characterCreations} / ${mainMetrics.visitors}`
+              }
+              numeratorsByDevice={mainMetrics?.characterCreationsByDevice}
+              denominatorsByDevice={mainMetrics?.visitorsByDevice}
+            />
+            <RateCard
+              title="Finished Tutorial"
+              explanation="Loading tutorial completion"
+              isFetching={isFetchingMain}
+              ratePct={percentOf(
+                mainMetrics?.tutorialFinishedSignups,
+                mainMetrics?.signups,
+              )}
+              goalPct={RECRUITMENT_GOALS.TUTORIAL_RATE_PERCENT}
+              counts={
+                mainMetrics &&
+                `${mainMetrics.tutorialFinishedSignups} / ${mainMetrics.signups}`
+              }
+              numeratorsByDevice={mainMetrics?.tutorialFinishedByDevice}
+              denominatorsByDevice={mainMetrics?.signupsByDevice}
+            />
+            <RateCard
+              title="Did PvP Fight"
+              explanation="Loading PvP signups"
+              isFetching={isFetchingMain}
+              ratePct={percentOf(mainMetrics?.pvpSignups, mainMetrics?.signups)}
+              goalPct={RECRUITMENT_GOALS.PVP_RATE_PERCENT}
+              counts={
+                mainMetrics && `${mainMetrics.pvpSignups} / ${mainMetrics.signups}`
+              }
+            />
+            <RateCard
+              title="Student+"
+              explanation="Loading student progress"
+              isFetching={isFetchingMain}
+              ratePct={percentOf(mainMetrics?.nonStudentSignups, mainMetrics?.signups)}
+              goalPct={RECRUITMENT_GOALS.RANK_RATE_PERCENT}
+              counts={
+                mainMetrics &&
+                `${mainMetrics.nonStudentSignups} / ${mainMetrics.signups} signups`
+              }
+            />
+            <RateCard
+              title="Genin+"
+              explanation="Loading rank progress"
+              isFetching={isFetchingMain}
+              ratePct={percentOf(
+                mainMetrics?.nonStudentGeninSignups,
+                mainMetrics?.signups,
+              )}
+              goalPct={RECRUITMENT_GOALS.RANK_RATE_PERCENT}
+              counts={
+                mainMetrics &&
+                `${mainMetrics.nonStudentGeninSignups} / ${mainMetrics.signups} signups`
+              }
+            />
 
             <Card>
               <CardHeader className="pt-2 pb-0">
@@ -399,7 +205,7 @@ export default function ManualRecruitment() {
                   <Loader explanation="Loading click value" />
                 ) : (
                   <div
-                    className={`font-bold text-xl ${getClickValueColor(Number(mainMetrics?.signupValueUsd ?? 0))}`}
+                    className={`font-bold text-xl ${getColorClass(Number(mainMetrics?.signupValueUsd ?? 0), RECRUITMENT_GOALS.SIGNUP_VALUE_USD)}`}
                   >
                     ${mainMetrics?.signupValueUsd?.toFixed(2) ?? "0.00"}
                   </div>
@@ -603,3 +409,70 @@ export default function ManualRecruitment() {
     </>
   );
 }
+
+type DeviceCounts = { mobile: number; desktop: number; unknown: number };
+
+interface RateCardProps {
+  title: string;
+  /** Loader text while the metrics load. */
+  explanation: string;
+  isFetching: boolean;
+  ratePct: number;
+  goalPct: number;
+  counts?: string;
+  numeratorsByDevice?: DeviceCounts | null;
+  denominatorsByDevice?: DeviceCounts | null;
+}
+
+/** One funnel rate against its goal, with its raw counts once loaded. */
+const RateCard: React.FC<RateCardProps> = (props) => {
+  const { title, explanation, isFetching, ratePct, goalPct, counts } = props;
+  const { numeratorsByDevice: numerators, denominatorsByDevice: denominators } = props;
+  return (
+    <Card>
+      <CardHeader className="pt-2 pb-0">
+        <CardTitle className="font-medium text-sm">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="py-1">
+        {isFetching ? (
+          <Loader explanation={explanation} />
+        ) : (
+          <>
+            <div className={`font-bold text-xl ${getColorClass(ratePct, goalPct)}`}>
+              {ratePct.toFixed(1)}%
+            </div>
+            <div className="text-foreground-muted text-xs">Goal: {goalPct}%</div>
+          </>
+        )}
+        {!isFetching && counts && (
+          <>
+            <div className="text-foreground-muted text-xs">{counts}</div>
+            {numerators && denominators && (
+              <div className="mt-1 text-foreground-muted text-xs">
+                {DEVICE_ICONS.map(
+                  ([icon, device]) =>
+                    `${icon} ${percentOf(numerators[device], denominators[device]).toFixed(1)}% (${numerators[device]})`,
+                ).join(" | ")}
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const DEVICE_ICONS = [
+  ["📱", "mobile"],
+  ["💻", "desktop"],
+  ["❓", "unknown"],
+] as const;
+
+const percentOf = (numerator = 0, denominator = 0) =>
+  denominator > 0 ? (numerator / denominator) * 100 : 0;
+
+const getColorClass = (value: number, goal: number) => {
+  if (value >= goal) return "text-green-600";
+  if (value >= goal * 0.9) return "text-orange-500";
+  return "text-red-600";
+};

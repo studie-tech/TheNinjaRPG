@@ -13,7 +13,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
-import { canDeleteStaffApplication } from "@/utils/permissions";
+import { canDeleteStaffApplication, isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
 type ApplicationRow = {
@@ -29,7 +29,7 @@ type ApplicationRow = {
 
 export default function ApplicationsPage() {
   const { data: me } = useUserData();
-  const isStaff = me?.role && me.role !== "USER";
+  const isStaff = me?.role ? isStaffRole(me.role) : false;
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const filterState = useApplicationsFiltering();
   const {
@@ -40,7 +40,7 @@ export default function ApplicationsPage() {
   } = api.applications.list.useInfiniteQuery(
     { ...getApplicationsFilter(filterState), limit: 30 },
     {
-      enabled: Boolean(isStaff),
+      enabled: isStaff,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
       staleTime: 1000 * 60 * 5,

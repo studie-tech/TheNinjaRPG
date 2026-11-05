@@ -5,13 +5,18 @@ import { useParams } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { StaffApprovalGroup } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
-import { canApproveApplications, getApprovalGroup } from "@/utils/permissions";
+import {
+  canApproveApplications,
+  getApprovalGroup,
+  isStaffRole,
+} from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
 export default function ApplicationDetailPage() {
@@ -21,7 +26,7 @@ export default function ApplicationDetailPage() {
   const { data: me } = useUserData();
 
   // Derived
-  const isStaff = me?.role && me.role !== "USER";
+  const isStaff = me?.role ? isStaffRole(me.role) : false;
   const canApprove = me?.role ? canApproveApplications(me.role) : false;
 
   // Query for application
@@ -121,7 +126,7 @@ type ApplicationForBadge = { approvals?: AppApproval[] };
 
 const ApprovalBadge: React.FC<{
   app: ApplicationForBadge;
-  group: "EVENT-ADMIN" | "CODING-ADMIN" | "MODERATOR-ADMIN" | "CONTENT-ADMIN";
+  group: StaffApprovalGroup;
   label: string;
 }> = ({ app, group, label }) => {
   const decision = app?.approvals?.find((a) => a.group === group)?.state;
