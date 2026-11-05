@@ -35,6 +35,7 @@ import {
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
+import { isWithinDateRange } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import SeasonForm from "./SeasonForm";
 
@@ -70,10 +71,7 @@ export function SeasonManager() {
     if (!seasons || seasons.length === 0) return;
     if (selectedSeasonId) return;
 
-    const now = new Date();
-    const activeSeason = seasons.find(
-      (s) => new Date(s.startDate) <= now && now <= new Date(s.endDate),
-    );
+    const activeSeason = seasons.find((s) => isWithinDateRange(s.startDate, s.endDate));
     if (activeSeason) {
       setSelectedSeasonId(activeSeason.id);
     }
@@ -143,11 +141,8 @@ export function SeasonManager() {
     }
   };
 
-  const now = new Date();
-
   const isSeasonActive = selectedSeason
-    ? new Date(selectedSeason.startDate) <= now &&
-      now <= new Date(selectedSeason.endDate)
+    ? isWithinDateRange(selectedSeason.startDate, selectedSeason.endDate)
     : false;
 
   return (
@@ -454,10 +449,6 @@ interface SeasonStatusBadgeProps {
 }
 
 const SeasonStatusBadge: React.FC<SeasonStatusBadgeProps> = ({ season }) => {
-  const now = new Date();
-  const start = new Date(season.startDate);
-  const end = new Date(season.endDate);
-
   if (season.paused) {
     return (
       <Badge className="shrink-0" variant="destructive">
@@ -466,7 +457,7 @@ const SeasonStatusBadge: React.FC<SeasonStatusBadgeProps> = ({ season }) => {
     );
   }
 
-  if (start <= now && now <= end) {
+  if (isWithinDateRange(season.startDate, season.endDate)) {
     return (
       <Badge className="shrink-0" variant="default">
         Active
@@ -474,7 +465,7 @@ const SeasonStatusBadge: React.FC<SeasonStatusBadgeProps> = ({ season }) => {
     );
   }
 
-  if (end < now) {
+  if (season.endDate < new Date()) {
     return (
       <Badge className="shrink-0" variant="secondary">
         Completed
