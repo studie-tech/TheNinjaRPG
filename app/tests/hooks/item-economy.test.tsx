@@ -444,7 +444,7 @@ describe("staff item selector refreshes", () => {
     });
     vi.spyOn(editContent, "EditContent").mockImplementation(() => <></>);
     vi.spyOn(ContentImageSelector, "default").mockImplementation(({ onUploadComplete }) => <button type="button" onClick={() => onUploadComplete("https://example.com/new.webp")}>Choose variant image</button>);
-    vi.spyOn(Confirm, "default").mockImplementation(({ onAccept }) => <button type="button" onClick={onAccept}>Confirm variant deletion</button>);
+    vi.spyOn(Confirm, "default").mockImplementation(({ onAccept }) => <button type="button" onClick={(event) => onAccept?.(event, { close: () => undefined })}>Confirm variant deletion</button>);
     const params = Promise.resolve({ itemid: data.id });
     let view!: ReturnType<typeof render>;
     await act(async () => { view = render(<Suspense fallback={null}><ItemEdit params={params} /></Suspense>, { wrapper }); });
