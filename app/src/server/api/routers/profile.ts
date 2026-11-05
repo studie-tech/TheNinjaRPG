@@ -824,9 +824,15 @@ export const profileRouter = createTRPCRouter({
       const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
       const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
       // Ship achievement progress on its own; the definitions come from the catalogue query
-      const achievementProgress = user
-        ? splitAchievementProgress(user, new Set(updatedUser.publishedAchievementIds))
-        : [];
+      let achievementProgress: AchievementProgress[] = [];
+      if (user) {
+        const split = splitAchievementProgress(
+          user.userQuests,
+          new Set(updatedUser.publishedAchievementIds),
+        );
+        user.userQuests = split.userQuests;
+        achievementProgress = split.achievementProgress;
+      }
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {

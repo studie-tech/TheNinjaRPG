@@ -172,32 +172,27 @@ const USER_DELTA_CAPS = {
 };
 
 /**
- * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
- *
- * Achievements are global static content: every player is handed the same definitions, and
- * `mockAchievementHistoryEntries` attaches the whole `Quest` row - every objective with its
- * description, scene assets and reward spec - to a progress row that is otherwise a handful of
- * counters. Sending that from `profile.getUser` re-serialised, re-transferred and re-parsed tens
- * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
- * progress against `quests.getAchievementCatalogue`, which it holds for the session.
- *
- * A row moves exactly when `publishedIds` names its definition, which makes the two halves a
- * partition by construction: nothing is sent twice, and nothing is stranded as a progress row the
- * client cannot resolve. Everything else - a hidden achievement, one the overworld still needs,
- * an orphaned row whose quest was deleted - stays on the user object untouched.
+ * Partition loaded quest rows by catalogue membership without changing the supplied rows.
+ * Published progress omits static definitions supplied by `quests.getAchievementCatalogue`;
+ * unpublished rows retain their definitions for active quests and overworld objectives.
  */
-export const splitAchievementProgress = (
-  user: { userQuests: (AchievementProgress & { quest?: unknown })[] },
+export const splitAchievementProgress = <
+  T extends AchievementProgress & { quest?: unknown },
+>(
+  rows: readonly T[],
   publishedIds: ReadonlySet<string>,
 ) => {
-  const progress: AchievementProgress[] = [];
-  user.userQuests = user.userQuests.filter((userQuest) => {
-    if (!publishedIds.has(userQuest.questId)) return true;
-    const { quest: _definition, ...rest } = userQuest;
-    progress.push(rest);
-    return false;
-  });
-  return progress;
+  const userQuests: T[] = [];
+  const achievementProgress: AchievementProgress[] = [];
+  for (const userQuest of rows) {
+    if (publishedIds.has(userQuest.questId)) {
+      const { quest: _definition, ...progress } = userQuest;
+      achievementProgress.push(progress);
+    } else {
+      userQuests.push(userQuest);
+    }
+  }
+  return { userQuests, achievementProgress };
 };
 
 /** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
@@ -206,8 +201,8 @@ export const getUserProgressionUpdate = (
   publishedAchievementIds: readonly string[],
 ) => {
   const publicUser = getPublicQuestUser(user);
-  const achievementProgress = splitAchievementProgress(
-    publicUser,
+  const { userQuests, achievementProgress } = splitAchievementProgress(
+    publicUser.userQuests,
     new Set(publishedAchievementIds),
   );
   return {
@@ -290,7 +285,7 @@ export const getUserProgressionUpdate = (
       sageMastery: user.sageMastery,
 
       questData: publicUser.questData,
-      userQuests: publicUser.userQuests,
+      userQuests,
       completedQuests: publicUser.completedQuests,
       effectiveMasteries: effectiveMasteries(user),
       maxEnergy: calcMaxEnergy(user),

@@ -1,16 +1,52 @@
 /**
  * Database access for jutsu; authorization and transaction scopes stay in callers.
  */
-import { and, asc, desc, eq, getTableColumns, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
+import { alias } from "drizzle-orm/mysql-core";
+import { nanoid } from "nanoid";
 import type { z } from "zod";
-import { jutsu, jutsuLoadout, jutsuReskin, userData } from "@/drizzle/schema";
-import type { JutsuEquipCap } from "@/libs/jutsu";
-
+import {
+  COST_RESKIN_JUTSU,
+  IMG_AVATAR_DEFAULT,
+  JUTSU_TRANSFER_DAYS,
+  JUTSU_TRANSFER_MAX_LEVEL,
+} from "@/drizzle/constants";
+import {
+  actionLog,
+  bloodline,
+  bloodlineReskin,
+  item,
+  jutsu,
+  jutsuLoadout,
+  jutsuReskin,
+  petSpecies,
+  quest,
+  skillTree,
+  userData,
+  userJutsu,
+} from "@/drizzle/schema";
+import type { JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import { JUTSU_FREE_TRANSFER_MARKER } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
-import { getNextUserSnapshotAt } from "@/utils/time";
+import { calculateContentDiff } from "@/utils/diff";
+import { DAY_S, getNextUserSnapshotAt, secondsFromDate } from "@/utils/time";
 import type { jutsuReskinBaseSchema } from "@/validators/jutsu";
 
 /** Fetch the stable slot order used for both display and allowance checks. */
@@ -111,30 +147,6 @@ export const fetchActiveLoadoutJutsuIds = async (
     .limit(1);
   return active?.jutsuIds ?? null;
 };
-
-import { gte, isNotNull, isNull, ne, or, type SQL, sql } from "drizzle-orm";
-import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
-import { alias } from "drizzle-orm/mysql-core";
-import { nanoid } from "nanoid";
-import {
-  COST_RESKIN_JUTSU,
-  IMG_AVATAR_DEFAULT,
-  JUTSU_TRANSFER_DAYS,
-  JUTSU_TRANSFER_MAX_LEVEL,
-} from "@/drizzle/constants";
-import {
-  actionLog,
-  bloodline,
-  bloodlineReskin,
-  item,
-  petSpecies,
-  quest,
-  skillTree,
-  userJutsu,
-} from "@/drizzle/schema";
-import type { JutsuCapFlags } from "@/libs/jutsu";
-import { calculateContentDiff } from "@/utils/diff";
-import { DAY_S, secondsFromDate } from "@/utils/time";
 
 /** Table alias for linked reskin alias joins, keeping its columns distinct from other participants. */
 const linkedReskinAlias = alias(jutsu, "linkedReskinName");

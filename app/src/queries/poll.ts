@@ -2,10 +2,12 @@
  * Database access for poll; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq } from "drizzle-orm";
-import { poll, userPollVote } from "@/drizzle/schema";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { actionLog, poll, pollOption, userPollVote } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
+import type { PollOptionSchema } from "@/validators/poll";
 
 /**
  * Fetch a poll by ID
@@ -39,11 +41,6 @@ export const fetchUserVote = async (
   });
   return vote || null;
 };
-
-import { count, desc, inArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { actionLog, pollOption } from "@/drizzle/schema";
-import type { PollOptionSchema } from "@/validators/poll";
 
 /** Build the `poll` insert for `createPoll`. */
 export const insertPollForCreatePoll = (

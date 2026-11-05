@@ -2,7 +2,27 @@
  * Database access for comments; authorization and transaction scopes stay in callers.
  */
 
+import type { SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
+import { nanoid } from "nanoid";
 import type { SupportTicketStatus, UserRole } from "@/drizzle/constants";
+import {
+  conversation,
+  conversationComment,
+  supportTicket,
+  supportTicketActivity,
+  user2conversation,
+  userBlackList,
+  userData,
+  userReportComment,
+  village,
+} from "@/drizzle/schema";
+import { userCardColumns } from "@/queries/userColumns";
+import type { DrizzleClient } from "@/server/db";
+import { displayTitleSql } from "@/server/utils/titleDisplay";
+import { canModerateRoles, canSeeSecretData } from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
 
 /**
  * Fetches comments from the database.
@@ -80,27 +100,6 @@ export const listNotificationUserCandidates = (
       },
     },
   });
-
-import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
-import { nanoid } from "nanoid";
-import {
-  conversation,
-  conversationComment,
-  supportTicket,
-  supportTicketActivity,
-  user2conversation,
-  userBlackList,
-  userData,
-  userReportComment,
-  village,
-} from "@/drizzle/schema";
-import { userCardColumns } from "@/queries/userColumns";
-import type { DrizzleClient } from "@/server/db";
-import { displayTitleSql } from "@/server/utils/titleDisplay";
-import { canModerateRoles, canSeeSecretData } from "@/utils/permissions";
-import sanitize from "@/utils/sanitize";
 
 /** Table alias for reader blacklist joins, keeping its columns distinct from other participants. */
 const readerBlacklist = alias(userBlackList, "readerBlacklist");

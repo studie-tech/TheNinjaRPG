@@ -66,15 +66,27 @@ const dailyQuest = asQuest("daily-1", "daily", [
 const published = new Set(["ach-counter"]);
 
 describe("splitAchievementProgress", () => {
-  it("moves the rows the catalogue publishes and drops their definition", () => {
+  it("partitions published rows without changing the input and drops their definition", () => {
     const user = asUser([asUserQuest(counterAchievement), asUserQuest(dailyQuest)]);
+    const original = structuredClone(user);
+    Object.freeze(user);
+    Object.freeze(user.userQuests);
+    for (const row of user.userQuests) {
+      Object.freeze(row);
+      Object.freeze(row.quest);
+    }
 
-    const progress = splitAchievementProgress(user, published);
+    const { userQuests, achievementProgress: progress } = splitAchievementProgress(
+      user.userQuests,
+      published,
+    );
 
-    expect(user.userQuests.map((uq) => uq.questId)).toEqual(["daily-1"]);
+    expect(userQuests.map((uq) => uq.questId)).toEqual(["daily-1"]);
     expect(progress).toHaveLength(1);
     expect(progress[0]?.questId).toBe("ach-counter");
     expect(progress[0]).not.toHaveProperty("quest");
+    expect(userQuests[0]).toBe(user.userQuests[1]!);
+    expect(user).toEqual(original);
   });
 
   it("carries the progress counters the logbook renders", () => {
@@ -87,7 +99,10 @@ describe("splitAchievementProgress", () => {
       }),
     ]);
 
-    const progress = splitAchievementProgress(user, published);
+    const { achievementProgress: progress } = splitAchievementProgress(
+      user.userQuests,
+      published,
+    );
 
     expect(progress[0]).toMatchObject({
       id: "real-history-row",
@@ -110,17 +125,23 @@ describe("splitAchievementProgress", () => {
       asUserQuest(hidden),
       asUserQuest(overworld),
       { ...asUserQuest(counterAchievement), questId: "orphan", quest: null },
+      { ...asUserQuest(counterAchievement), questId: "missing", quest: undefined },
       asUserQuest(counterAchievement),
     ]);
 
-    const progress = splitAchievementProgress(user, published);
+    const { userQuests, achievementProgress: progress } = splitAchievementProgress(
+      user.userQuests,
+      published,
+    );
 
-    expect(user.userQuests.map((uq) => uq.questId)).toEqual([
+    expect(userQuests.map((uq) => uq.questId)).toEqual([
       "ach-hidden",
       "ach-placed",
       "orphan",
+      "missing",
     ]);
     expect(progress.map((p) => p.questId)).toEqual(["ach-counter"]);
+    expect(userQuests).toEqual(user.userQuests.slice(0, 4));
   });
 
   it("decides on the published ids, not on the quest object it was handed", () => {
@@ -130,17 +151,31 @@ describe("splitAchievementProgress", () => {
     const rewritten = asQuest("ach-counter", "achievement", [
       asObjective({ sector: 7, longitude: 3, latitude: 4 }),
     ]);
-    const user = asUser([asUserQuest(rewritten)]);
-
-    expect(splitAchievementProgress(user, published).map((p) => p.questId)).toEqual([
-      "ach-counter",
+    const user = asUser([
+      asUserQuest(rewritten),
+      asUserQuest(counterAchievement, { id: "duplicate-id", quest: null }),
+      asUserQuest(counterAchievement, { id: "missing-definition", quest: undefined }),
     ]);
-    expect(user.userQuests).toHaveLength(0);
+
+    const { userQuests, achievementProgress } = splitAchievementProgress(
+      user.userQuests,
+      published,
+    );
+    expect(achievementProgress.map((p) => p.id)).toEqual([
+      "ach-counter",
+      "duplicate-id",
+      "missing-definition",
+    ]);
+    expect(achievementProgress.every((entry) => !("quest" in entry))).toBe(true);
+    expect(userQuests).toHaveLength(0);
   });
 
   it("leaves a user with no published achievements untouched", () => {
     const user = asUser([asUserQuest(dailyQuest)]);
-    expect(splitAchievementProgress(user, published)).toEqual([]);
+    expect(splitAchievementProgress(user.userQuests, published)).toEqual({
+      userQuests: user.userQuests,
+      achievementProgress: [],
+    });
     expect(user.userQuests).toHaveLength(1);
   });
 });
