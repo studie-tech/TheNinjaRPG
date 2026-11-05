@@ -130,3 +130,13 @@ it("opens the ranked loadout editor", () => {
   });
   expect(screen.getByText("Ranked loadout picker")).toBeDefined();
 });
+
+it("keeps the loadout editor at panel width on wide screens", () => {
+  render(<RankedMode />);
+  act(() => {
+    fireEvent.click(screen.getByRole("button", { name: "Edit loadout" }));
+  });
+  const sheet = screen.getByRole("dialog", { name: "Ranked loadout" });
+  expect(sheet.className).toContain("max-w-3xl");
+  expect(sheet.className).toContain("mx-auto");
+});

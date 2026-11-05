@@ -287,7 +287,8 @@ export function RankedMode() {
       <Sheet open={isLoadoutOpen} onOpenChange={setIsLoadoutOpen}>
         <SheetContent
           side="bottom"
-          className="max-h-[90dvh] overflow-y-auto rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+          // Panel width: a full-width grid on a desktop screen stretches every tile.
+          className="mx-auto max-h-[90dvh] max-w-3xl overflow-y-auto rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
           style={{ contain: "layout paint" }}
         >
           <SheetTitle className="sr-only">Ranked loadout</SheetTitle>
