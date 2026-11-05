@@ -30,7 +30,12 @@ import {
   getImbueBlockedMessage,
   getImbuementRankCapMessage,
 } from "@/libs/crafting";
-import { calcItemRepairCost, finishedImbuements, isImbuing } from "@/libs/item";
+import {
+  calcItemRepairCost,
+  finishedImbuementItems,
+  finishedImbuements,
+  isImbuing,
+} from "@/libs/item";
 import { calcRepairAllCost } from "@/libs/repair";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
@@ -985,7 +990,7 @@ export default function OccupationCrafting() {
                         <ItemWithEffects
                           item={{
                             ...userItem.item,
-                            imbuements: userItem.imbuements?.map((i) => i.item) || [],
+                            imbuements: finishedImbuementItems(userItem),
                             curDurability: userItem.durability,
                           }}
                         />

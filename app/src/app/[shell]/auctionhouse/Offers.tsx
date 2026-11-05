@@ -468,13 +468,7 @@ function OfferCard({
   const selected = available.find((row) => row.id === suppliedId);
   const isOwner = offer.ownerId === user?.userId;
   const offered = offer.offeredUserItem;
-  const offeredItem = offered && {
-    ...offered.item,
-    level: offered.level,
-    experience: offered.experience,
-    curDurability: offered.durability,
-    imbuements: offered.imbuements.map((entry) => entry.item),
-  };
+  const offeredItem = offered && userItemDisplay(offered);
   return (
     <Card>
       <CardHeader className="space-y-2">
