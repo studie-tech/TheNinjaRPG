@@ -47,8 +47,7 @@ export function ItemCard({
           image={look.image}
           alt={look.name}
           rarity={item.rarity}
-          // Sized by the box, so the art stays inside the frame's border.
-          className="h-full w-full"
+          className="h-11 w-11"
         />
         {wears && (
           <DurabilityBar

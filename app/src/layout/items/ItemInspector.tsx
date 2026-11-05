@@ -189,8 +189,7 @@ export function ItemInspector({
             image={look.image}
             alt={look.name}
             rarity={useritem.item.rarity}
-            // Sized by the box, so the art stays inside the frame's border.
-            className="h-full w-full"
+            className="h-16 w-16"
           />
           {showsItemLevelBadge(useritem.item) && (
             <span className="absolute -bottom-1 -left-1 rounded-md border-2 border-red-600 bg-background px-1 font-bold text-[10px] text-foreground">
