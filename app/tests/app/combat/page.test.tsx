@@ -11,7 +11,7 @@ import * as preferences from "@/hooks/combat";
 import * as tutorial from "@/hooks/tutorial";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
-import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle, makeEffect, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
 import * as mediaQuery from "@/hooks/useMediaQuery";
@@ -497,4 +497,36 @@ it("preserves the selected action while settings controls handle battle keys", a
   }
   fireEvent.keyDown(document, { key: "a" });
   expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
+});
+
+it("uses stun-adjusted AP for action feedback, deselection and keyboard selection", async () => {
+  const battle = makeCompleteBattle({
+    id: "stunned-actions",
+    usersState: [makeUser({ userId: "player", actionPoints: 100 })],
+  });
+  const { view, queryClient } = mount(battle.id, async () => ({ battle, result: null }) as unknown as Response, { layoutOrder: ["battlefield", "actions"] });
+  const heal = await view.findByRole("button", { name: "Basic Heal" });
+  const store = getDefaultStore();
+  expect(heal.getAttribute("aria-disabled")).toBe("false");
+  fireEvent.keyDown(document, { key: "h" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicHeal");
+  const stun = makeEffect("stun", { apReduction: 50, rounds: 3 }, { targetId: "player", isNew: false, castThisRound: false });
+  await act(async () => queryClient.setQueryData(["combat", battle.id], {
+    battle: { ...battle, version: battle.version + 1, usersEffects: [stun] }, result: null,
+  }));
+  await waitFor(() => expect(heal.getAttribute("aria-disabled")).toBe("true"));
+  expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
+  act(() => heal.focus());
+  const summary = (await view.findByRole("tooltip")).textContent;
+  expect(summary).toContain("60 AP");
+  expect(summary).toContain("Not enough AP");
+  fireEvent.click(heal);
+  fireEvent.keyDown(document, { key: "h" });
+  expect(store.get(userContext.combatActionIdAtom)).toBeUndefined();
+  await act(async () => queryClient.setQueryData(["combat", battle.id], {
+    battle: { ...battle, version: battle.version + 2 }, result: null,
+  }));
+  await waitFor(() => expect(heal.getAttribute("aria-disabled")).toBe("false"));
+  fireEvent.keyDown(document, { key: "h" });
+  expect(store.get(userContext.combatActionIdAtom)).toBe("basicHeal");
 });

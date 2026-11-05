@@ -129,14 +129,16 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 checked={config.showGridNumbers}
                 onCheckedChange={config.toggleGridNumbers}
               />
-              {!battleFocus && (
-                <SettingsToggle
-                  label="Small action icons"
-                  description="Hide labels and fit more per row"
-                  checked={config.useSmallActions}
-                  onCheckedChange={config.toggleSmallActions}
-                />
-              )}
+              <SettingsToggle
+                label="Small action icons"
+                description={
+                  battleFocus
+                    ? "Fit more icons per row"
+                    : "Hide labels and fit more per row"
+                }
+                checked={config.useSmallActions}
+                onCheckedChange={config.toggleSmallActions}
+              />
               <SettingsToggle
                 label="Aggro meters"
                 description="Team aggro against NPCs; tap for details"

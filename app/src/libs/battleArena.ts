@@ -132,6 +132,21 @@ export const towerState = (
   return missing > 0 ? { kind: "missingItems", missing } : { kind: "open" };
 };
 
+/**
+ * Towers in the order the Pyramid lists them: the one being climbed, then towers the player can
+ * enter, then towers still missing entry items. The catalogue order holds within each group.
+ */
+export const orderTowers = <
+  T extends { id: string; entryRequirements: { quantity: number; owned: number }[] },
+>(
+  towers: T[],
+  activeTower: { id: string; name: string } | null,
+): T[] => {
+  const rank = (tower: T) =>
+    tower.id === activeTower?.id ? 0 : towerState(tower, null).kind === "open" ? 1 : 2;
+  return [...towers].sort((a, b) => rank(a) - rank(b));
+};
+
 /** The selected loadout's name as the loadout pickers show it, or null when unknown. */
 export const selectedLoadoutName = (
   loadouts: { id: string; name?: string | null }[] | undefined,

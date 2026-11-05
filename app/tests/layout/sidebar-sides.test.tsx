@@ -314,6 +314,8 @@ describe("game settings categories", () => {
     fireEvent.click(liveView.getByRole("button", { name: "Open combat settings" }));
     const liveDialog = within(liveView.getByRole("dialog", { name: "Combat settings" }));
     expect(liveDialog.getByRole("switch", { name: "Battle focus" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.mouseDown(liveDialog.getByRole("tab", { name: "Battle" }), { button: 0, ctrlKey: false });
+    expect(liveDialog.getByRole("switch", { name: "Small action icons" })).toBeTruthy();
     expect(liveDialog.queryByText("Panel order")).toBeNull();
   });
 });

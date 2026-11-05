@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
@@ -108,4 +108,16 @@ it("asks to wake up when asleep", () => {
   expect(screen.queryByRole("button", { name: "Fight Yama" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /Wake up/ }));
   expect(toggleSleep).toHaveBeenCalled();
+});
+
+it("scrolls opponents in one row and gives the battle setup its own row below", () => {
+  render(<ArenaMode aiId="ai-1" setAiId={vi.fn()} />);
+  const picker = screen.getByRole("region", { name: "Choose your opponent" });
+  const strip = within(picker).getByRole("list", { name: "Opponents" });
+  expect(strip.className).toContain("overflow-x-auto");
+  expect(within(strip).getAllByRole("listitem")).toHaveLength(2);
+  const setup = screen.getByRole("complementary", { name: "Battle setup" });
+  expect(picker.compareDocumentPosition(setup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(setup.className).not.toContain("w-60");
+  expect(within(setup).getByRole("button", { name: "Fight Yama" })).toBeDefined();
 });

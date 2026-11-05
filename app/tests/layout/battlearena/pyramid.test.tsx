@@ -132,11 +132,20 @@ it("lists the tower being climbed first", () => {
   expect(other.hasAttribute("disabled")).toBe(true);
 });
 
+it("lists towers open to the player before towers missing entry items", () => {
+  towers = [...towers].reverse();
+  render(<PyramidMode />);
+  const names = within(screen.getByRole("list", { name: "Towers" }))
+    .getAllByRole("article")
+    .map((article) => article.getAttribute("aria-label"));
+  expect(names).toEqual(["Test Arena", "Tower of Echoes"]);
+});
+
 it("shows entry items and blocks the climb when short", () => {
   render(<PyramidMode />);
   const echoes = card("Tower of Echoes");
   expect(within(echoes).getByText(/Uses 2× Echo Shard/).closest("p")?.textContent).toContain("you have 1");
-  const button = within(echoes).getByRole("button", { name: "Needs 1 more" });
+  const button = within(echoes).getByRole("button", { name: "Missing 1 item" });
   expect(button.hasAttribute("disabled")).toBe(true);
 });
 

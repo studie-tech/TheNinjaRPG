@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import AvatarImage from "@/layout/Avatar";
+import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import StatusBar from "@/layout/StatusBar";
 import type { BattleState, ReturnedUserState } from "@/libs/combat/types";
@@ -148,8 +149,20 @@ export function BattleFocusView({
   );
 
   const fieldBox = (
-    // Size the battlefield to whichever runs out first: width or height.
-    <div className="@container/field [container-type:size] flex min-h-0 flex-1 items-start justify-center">
+    // Size the battlefield to whichever runs out first: width or height. The box itself is as
+    // tall as the field at full width and shrinks on short screens, so the actions follow the
+    // field directly instead of after a band of spare height.
+    <div
+      className={cn(
+        "@container/field [container-type:size] flex min-h-0 items-start justify-center",
+        fieldRatio === undefined ? "flex-1" : "shrink grow-0",
+      )}
+      style={
+        fieldRatio === undefined
+          ? undefined
+          : { flexBasis: `calc(100cqw * ${fieldRatio})` }
+      }
+    >
       <div
         className={cn("w-full", fieldRatio === undefined && "h-full overflow-y-auto")}
         style={
@@ -179,7 +192,10 @@ export function BattleFocusView({
         ))}
         {autoControl}
       </aside>
-      <main aria-label="Battle" className="flex min-h-0 min-w-0 flex-col gap-[8px]">
+      <main
+        aria-label="Battle"
+        className="@container/battle [container-type:inline-size] flex min-h-0 min-w-0 flex-col gap-[8px]"
+      >
         <div className="shrink-0">{renderTimer(exitButton)}</div>
         {fieldBox}
         <section
@@ -401,6 +417,14 @@ function FighterCard({
           )}
         </div>
       </div>
+      {battle && (
+        <BattleUserTraits
+          battle={battle}
+          battleUser={user}
+          className="mt-[4px] text-[11px]"
+          iconClassName="mr-[4px] h-[14px] w-[14px]"
+        />
+      )}
       <div className="mt-[4px] text-[11px] [&_p]:text-[11px]">
         {bars
           .filter((bar) => !compact || bar.key !== "sp")

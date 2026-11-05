@@ -251,6 +251,39 @@ describe("BattleFocusView", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
+  it("names each fighter's bloodline and keystone, on desktop and on phones", () => {
+    const withTraits = {
+      ...battle,
+      usersState: battle!.usersState.map((user) =>
+        user.userId === "foe"
+          ? { ...user, bloodlineId: "bl", keystoneItemId: "ks", keystoneName: "Jade Keystone" }
+          : user,
+      ),
+      extraState: {
+        bloodlines: { bl: { id: "bl", name: "Musashi Ken", effects: [] } },
+        keystoneItems: { ks: { id: "ks", name: "Jade Keystone", effects: [] } },
+      },
+    } as unknown as BattleState["battle"];
+    for (const desktop of [true, false]) {
+      isDesktop = desktop;
+      renderView(vi.fn(), { battle: withTraits });
+      const foe = screen.getByRole("region", { name: "foe" });
+      expect(within(foe).getByText("Musashi Ken")).toBeTruthy();
+      expect(within(foe).getByText("Jade Keystone")).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("sizes the desktop field box to the field so the actions sit right under it", () => {
+    isDesktop = true;
+    renderView();
+    const fieldBox = screen.getByText("Field").parentElement!.parentElement!;
+    // 100cqw × the 0.6 field ratio
+    expect(fieldBox.style.flexBasis).toBe("calc(60cqw)");
+    expect(fieldBox.className).not.toContain("flex-1");
+    expect(fieldBox.parentElement!.className).toContain("[container-type:inline-size]");
+  });
+
   it("hands the screen back to the layout", () => {
     isDesktop = true;
     const onShowLayout = vi.fn();

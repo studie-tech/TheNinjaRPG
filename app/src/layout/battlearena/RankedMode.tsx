@@ -1,10 +1,15 @@
 "use client";
 
 import { Pencil, Trophy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   MAX_PLAYER_LEVEL,
   RANKED_DIVISIONS,
@@ -28,7 +33,6 @@ export function RankedMode() {
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const { refreshRankedQueueCount } = useRankedQueueCountCache();
-  const [isLoadoutOpen, setIsLoadoutOpen] = useState(false);
 
   const { data: queueData } = api.pvpRank.getRankedPvpQueue.useQuery(undefined, {
     enabled: !!userData,
@@ -260,40 +264,37 @@ export function RankedMode() {
       )}
 
       {/* Ranked-rule spars use these loadouts even when no season is running. */}
-      <section
-        aria-label="Ranked loadout"
-        className="bg-card flex flex-wrap items-center gap-3 rounded-xl border p-3"
-      >
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-bold">Ranked loadout</h2>
-          <p className="text-muted-foreground text-sm">
-            Jutsu {rankedLoadout?.loadout.jutsuIds.length ?? 0} /{" "}
-            {RANKED_LOADOUT_MAX_JUTSUS} · Weapons{" "}
-            {rankedLoadout?.loadout.weaponIds.length ?? 0} /{" "}
-            {RANKED_LOADOUT_MAX_WEAPONS} · Consumables{" "}
-            {rankedLoadout?.loadout.consumableIds.length ?? 0} /{" "}
-            {RANKED_LOADOUT_MAX_CONSUMABLES}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          className="h-11"
-          onClick={() => setIsLoadoutOpen(true)}
+      <Dialog>
+        <section
+          aria-label="Ranked loadout"
+          className="bg-card flex flex-wrap items-center gap-3 rounded-xl border p-3"
         >
-          <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit loadout
-        </Button>
-      </section>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-bold">Ranked loadout</h2>
+            <p className="text-muted-foreground text-sm">
+              Jutsu {rankedLoadout?.loadout.jutsuIds.length ?? 0} /{" "}
+              {RANKED_LOADOUT_MAX_JUTSUS} · Weapons{" "}
+              {rankedLoadout?.loadout.weaponIds.length ?? 0} /{" "}
+              {RANKED_LOADOUT_MAX_WEAPONS} · Consumables{" "}
+              {rankedLoadout?.loadout.consumableIds.length ?? 0} /{" "}
+              {RANKED_LOADOUT_MAX_CONSUMABLES}
+            </p>
+          </div>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="h-11">
+              <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit loadout
+            </Button>
+          </DialogTrigger>
+        </section>
 
-      <Sheet open={isLoadoutOpen} onOpenChange={setIsLoadoutOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[90dvh] overflow-y-auto rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
-          style={{ contain: "layout paint" }}
+        <DialogContent
+          // Bound the centered editor so long catalogs scroll inside the viewport.
+          className="max-h-[90dvh] overflow-y-auto rounded-xl p-4 md:max-w-3xl"
         >
-          <SheetTitle className="sr-only">Ranked loadout</SheetTitle>
+          <DialogTitle className="sr-only">Ranked loadout</DialogTitle>
           <RankedLoadoutSelector />
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

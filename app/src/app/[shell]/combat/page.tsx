@@ -35,7 +35,12 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { availableUserActions, getActionPointCost } from "@/libs/combat/actions";
+import { battleActionGrid } from "@/libs/combat/actionGrid";
+import {
+  actionPointsAfterAction,
+  availableUserActions,
+  getActionPointCost,
+} from "@/libs/combat/actions";
 import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
 import { resolveControlledActorId } from "@/libs/combat/util";
@@ -144,6 +149,9 @@ export default function CombatPage() {
   // on the summon's turn (control is sequential -> exactly one).
   const controlledActorId = resolveControlledActorId(battle, userId);
   const user = battle?.usersState.find((u) => u.userId === controlledActorId);
+  const availableActionPoints = user
+    ? actionPointsAfterAction(user, battle).availableActionPoints
+    : undefined;
   // The session user's own battle entry (auto combat is a property of the
   // player, not of whichever actor is currently controlled)
   const sessionBattleUser = battle?.usersState.find((u) => u.userId === userId);
@@ -185,11 +193,6 @@ export default function CombatPage() {
     !sessionBattleUser.fledBattle &&
     !sessionBattleUser.leftBattle;
   const isTutorialRunning = isTutorialActive(userData);
-  const actionGridClass = config.useSmallActions
-    ? "grid grid-cols-7 md:grid-cols-9 gap-1"
-    : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
-  const actionAspect = config.useSmallActions ? "aspect-square" : undefined;
-  const showActionLabels = !config.useSmallActions;
   // Keep a finished battle's actions and settings dimmed and inert until the player leaves.
   const isInBattle = userData?.status === "BATTLE" || !!results;
   // After "Go Again" the finished battle is held in state until the next one's data is
@@ -495,9 +498,9 @@ export default function CombatPage() {
         ? getActionPointCost(controlledActorId, battle, action)
         : action.actionCostPerc;
       const tooExpensive =
-        user?.actionPoints !== undefined &&
+        availableActionPoints !== undefined &&
         cost !== undefined &&
-        user.actionPoints < cost;
+        availableActionPoints < cost;
       if (actionId !== boundId && (onCooldown || tooExpensive)) return;
       event.preventDefault();
       setActionId(actionId === boundId ? undefined : boundId);
@@ -515,7 +518,7 @@ export default function CombatPage() {
     hotkeys.byKey,
     results,
     setActionId,
-    user?.actionPoints,
+    availableActionPoints,
   ]);
 
   // Action click handler
@@ -665,10 +668,11 @@ export default function CombatPage() {
     toggleAutoCombat,
   ]);
 
-  /** Focus uses compact icons while retaining action selection and editable hotkeys. */
+  /** Both layouts share action selection, editable hotkeys and the small-icon setting. */
   const renderActions = useCallback(
     (focus = false) => {
       if (!isInBattle || !battle || isAutoCombatActive) return null;
+      const layout = battleActionGrid({ focus, small: config.useSmallActions });
       return (
         <div
           className={cn("flex flex-col gap-1", results && "opacity-50")}
@@ -682,14 +686,14 @@ export default function CombatPage() {
             className="p-1"
             showBgColor={true}
             eagerImages={true}
-            showLabels={!focus && showActionLabels}
+            showLabels={layout.labels}
             selectedId={actionId}
             combatMode={true}
-            userActionPoints={user?.actionPoints}
+            userActionPoints={availableActionPoints}
             battle={battle}
             userId={controlledActorId}
-            gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
-            aspectRatioClass={focus ? "aspect-square" : actionAspect}
+            gridClassNameOverwrite={layout.grid}
+            aspectRatioClass={layout.aspect}
             onClick={handleActionClick}
             hotkeys={hotkeys.byAction}
             onAssignHotkey={(item) =>
@@ -710,12 +714,10 @@ export default function CombatPage() {
       isAutoCombatActive,
       results,
       actions,
-      showActionLabels,
+      config.useSmallActions,
       actionId,
-      user?.actionPoints,
+      availableActionPoints,
       controlledActorId,
-      actionGridClass,
-      actionAspect,
       handleActionClick,
       hotkeys.byAction,
     ],
@@ -960,6 +962,3 @@ export default function CombatPage() {
     </div>
   );
 }
-
-/** Battle focus packs every action into one grid of icons that wraps as needed. */
-const FOCUS_ACTION_GRID = "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1";

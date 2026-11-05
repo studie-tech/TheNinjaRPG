@@ -238,6 +238,25 @@ describe("coordinate pattern resolution", () => {
     expect(resolve(action()).green.size).toBe(1);
     expect(resolve(action({ effects: [HealTag.parse({})] })).green.size).toBe(0);
   });
+  it.each([
+    "SINGLE",
+    "AOE_LINE_SHOOT",
+    "AOE_WALL_SHOOT",
+    "AOE_LARGE_WALL_SHOOT",
+    "AOE_CIRCLE_SHOOT",
+    "AOE_SPIRAL_SHOOT",
+    "AOE_CIRCLE_SPAWN",
+  ] as const)("constrains CHARACTER target selection by range for %s", (method) => {
+    const { grid, origin } = scenario();
+    const ability = action({ target: "CHARACTER", method, range: 0 });
+    const targets = getPossibleActionTiles(ability, origin, grid);
+    expect(targets?.size).toBe(1);
+    expect(targets?.getHex(origin)).toBe(origin);
+  });
+  it("permits the full grid for CHARACTER actions with the ALL method", () => {
+    const { grid, origin } = scenario();
+    expect(getPossibleActionTiles(action({ target: "CHARACTER", method: "ALL", range: 0 }), origin, grid)).toBe(grid);
+  });
   it("restricts clicked target anchors but permits global and caster patterns", () => {
     const { grid, origin, clicked, battle } = scenario();
     for (const originType of ["BATTLEFIELD", "CASTER", "TARGET"] as const) {
