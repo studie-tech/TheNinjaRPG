@@ -62,7 +62,7 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
-import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
+import { getEffectMagnitude } from "@/libs/combat/power";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
   getPreventTypeName,
@@ -833,8 +833,6 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         const woundPower = getEffectMagnitude(val);
         const od = val.timeTracker.originalDamage || 0;
         value = -Math.floor(od * (woundPower / 100));
-      } else if (val.type === "parry" || val.type === "curse") {
-        value = Math.abs(getEffectPower(val));
       } else {
         // Standard processing for all other effects
         value = getEffectMagnitude(val) * sign;
