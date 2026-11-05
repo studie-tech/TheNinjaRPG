@@ -296,14 +296,12 @@ export function ShopInspector({
           )}
         </Confirm>
       </div>
-      <details className="group bg-card rounded-lg border">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-semibold">
-          All details
-        </summary>
+      <section aria-label="Details" className="bg-card rounded-lg border">
+        <h3 className="px-3 pt-2 text-sm font-semibold">Details</h3>
         <div className="p-2">
           <ItemWithEffects item={item} key={item.id} hideTitle hideImage hideDates />
         </div>
-      </details>
+      </section>
     </section>
   );
 }

@@ -201,6 +201,14 @@ describe("shop catalog", () => {
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the picked item's full details straight away", () => {
+    const view = renderShop({ defaultType: "CONSUMABLE" });
+    fireEvent.click(view.getByRole("button", { name: /Pill/ }));
+    const inspector = view.getByRole("region", { name: "Pill" });
+    expect(within(inspector).getByRole("region", { name: "Details" })).toBeDefined();
+    expect(within(inspector).queryByText("All details")).toBeNull();
+  });
+
   it("keeps a cleared quantity editable without breaking the price or stepper", () => {
     const view = renderShop({ defaultType: "CONSUMABLE" });
     fireEvent.click(view.getByRole("button", { name: /Pill/ }));
