@@ -481,6 +481,16 @@ export const isDynamicSignup = (client: Pick<DrizzleClient, "select">) =>
   );
 
 /**
+ * A referral source series is the channel's own signups; a recruit counts under Recruited
+ * alone. Every source when none is named.
+ */
+export const isReferralChannelSignup = (realSources?: string[]) =>
+  and(
+    isNull(userData.recruiterId),
+    realSources?.length ? inArray(referralSource.source, realSources) : undefined,
+  );
+
+/**
  * Build the `userData` selection for `getRecruitmentDailyLevelStats`, including
  * predicates on `isAi`, `createdAt`, `source`.
  */
@@ -508,13 +518,17 @@ export const selectUserDataForGetRecruitmentDailyLevelStats = (
             ...recruitmentUserConditions(input),
             or(
               ...(realSources && realSources.length > 0
-                ? [inArray(referralSource.source, realSources)]
+                ? [isReferralChannelSignup(realSources)]
                 : []),
               ...(wantsDynamic ? [isDynamicSignup(client)] : []),
               ...(wantsRecruited ? [isNotNull(userData.recruiterId)] : []),
             ),
           )
-        : and(...recruitmentUserConditions(input), isNotNull(referralSource.userId)),
+        : and(
+            ...recruitmentUserConditions(input),
+            isNotNull(referralSource.userId),
+            isReferralChannelSignup(),
+          ),
     )
     .groupBy(dayExpr)
     .orderBy(asc(dayExpr));

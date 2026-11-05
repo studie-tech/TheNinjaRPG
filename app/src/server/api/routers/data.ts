@@ -29,7 +29,6 @@ import {
   logRankedPicks,
   paypalTransaction,
   quest,
-  referralSource,
   skillTree,
   userData,
   visitorLog,
@@ -50,6 +49,7 @@ import {
   insertActionLogForDeleteAllDataBattleAction,
   insertActionLogForDeleteSingleDataBattleAction,
   isDynamicSignup,
+  isReferralChannelSignup,
   listBloodlineForGetBloodlineEffectsBalanceStatistics,
   listItemForGetItemEffectsBalanceStatistics,
   listJutsuForGetJutsuEffectsBalanceStatistics,
@@ -525,11 +525,11 @@ export const dataRouter = createTRPCRouter({
       // Base where clauses shared by all branches
       const baseUserWhere = recruitmentUserConditions(input);
 
-      // Referrals-specific where; every referral source when none is named
-      const realWhere: QueryCondition[] = [...baseUserWhere];
-      if (realSources?.length) {
-        realWhere.push(inArray(referralSource.source, realSources));
-      }
+      // Referrals-specific where
+      const realWhere: QueryCondition[] = [
+        ...baseUserWhere,
+        isReferralChannelSignup(realSources),
+      ];
       // Dynamic and Recruited specifics
       const dynamicWhere: QueryCondition[] = [
         ...baseUserWhere,
@@ -716,10 +716,10 @@ export const dataRouter = createTRPCRouter({
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
       // Referred series
-      const realWhere = recruitmentUserConditions(input);
-      if (realSources?.length) {
-        realWhere.push(inArray(referralSource.source, realSources));
-      }
+      const realWhere = [
+        ...recruitmentUserConditions(input),
+        isReferralChannelSignup(realSources),
+      ];
 
       const realPromise = wantReal
         ? selectUserDataForGetRecruitmentDailyCountsBySource(
