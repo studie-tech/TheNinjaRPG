@@ -11,6 +11,7 @@ import {
   WAR_MERCENARY_RYO_PER_TOKEN,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { FeedbackAlert, type MutationFeedback } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useUserPicker } from "@/utils/search";
@@ -133,14 +134,7 @@ export const WarMercenaries = ({ warId }: { warId: string }) => {
           </Button>
         </div>
       )}
-      {feedback && (
-        <Alert
-          variant={feedback.success ? "default" : "destructive"}
-          role={feedback.success ? "status" : "alert"}
-        >
-          <AlertDescription>{feedback.message}</AlertDescription>
-        </Alert>
-      )}
+      {feedback && <FeedbackAlert feedback={feedback} />}
     </details>
   );
 };
@@ -223,14 +217,7 @@ export const MercenaryOffers = () => {
               </div>
             </div>
           ))}
-          {feedback && (
-            <Alert
-              variant={feedback.success ? "default" : "destructive"}
-              role={feedback.success ? "status" : "alert"}
-            >
-              <AlertDescription>{feedback.message}</AlertDescription>
-            </Alert>
-          )}
+          {feedback && <FeedbackAlert feedback={feedback} />}
         </div>
       </ContentBox>
     </div>
@@ -239,10 +226,7 @@ export const MercenaryOffers = () => {
 
 /** Show local mutation feedback and refresh dependent contracts, allegiance and activity. */
 const useMercenaryFeedback = () => {
-  const [feedback, setFeedback] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const utils = api.useUtils();
   const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const refresh = async (

@@ -14,6 +14,7 @@ import {
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import Countdown from "@/layout/Countdown";
+import { FeedbackAlert, type MutationFeedback } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
@@ -43,10 +44,7 @@ export const ObjectiveWarPanel = ({
   /** Close the field dialog only when a link performs client-side navigation. */
   onNavigate?: () => void;
 }) => {
-  const [feedback, setFeedback] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const {
     data: user,
     pusher,
@@ -224,29 +222,21 @@ export const ObjectiveWarPanel = ({
         </Alert>
       )}
       {feedback && (
-        <Alert
-          variant={feedback.success ? "default" : "destructive"}
-          role={feedback.success ? "status" : "alert"}
-        >
-          <AlertDescription>
-            <p className="text-foreground">
-              {feedback.message}
-              {!feedback.success &&
-                feedback.message === actionStatusMessage("HOSPITALIZED") && (
-                  <>
-                    {" "}
-                    <Link
-                      href="/hospital"
-                      onNavigate={onNavigate}
-                      className="font-medium underline underline-offset-4"
-                    >
-                      Go to hospital
-                    </Link>
-                  </>
-                )}
-            </p>
-          </AlertDescription>
-        </Alert>
+        <FeedbackAlert feedback={feedback} foreground>
+          {!feedback.success &&
+            feedback.message === actionStatusMessage("HOSPITALIZED") && (
+              <>
+                {" "}
+                <Link
+                  href="/hospital"
+                  onNavigate={onNavigate}
+                  className="font-medium underline underline-offset-4"
+                >
+                  Go to hospital
+                </Link>
+              </>
+            )}
+        </FeedbackAlert>
       )}
       {attempt && (
         <div className="space-y-3 rounded-lg border bg-popover p-3">
