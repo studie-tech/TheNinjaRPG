@@ -8,7 +8,7 @@ import { WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 import type { UserWithRelations } from "@/routers/profile";
 import { bunnyImageUrl } from "@/utils/image";
 import { useWallpaperVariant } from "@/utils/LayoutContext";
-import { getImageSet, getPixelWallpaper, type LayoutVariant } from "./layoutVariants";
+import { getImageSet, type LayoutVariant } from "./layoutVariants";
 
 interface LayoutBackgroundProps {
   variant: LayoutVariant;
@@ -116,8 +116,7 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
   const [loadedWallpaper, setLoadedWallpaper] = useState<string | null>(null);
   const wallpaperVariant = useWallpaperVariant();
   const imageset = getImageSet(userData?.village?.wallpaperOverwrite);
-  const pixelWallpaper = getPixelWallpaper(userData);
-  const isUserWallpaperLoaded = loadedWallpaper === pixelWallpaper;
+  const isUserWallpaperLoaded = loadedWallpaper === imageset.wallpaper;
 
   // All three layers are decorative backdrops rather than content, so they carry an
   // empty alt and are hidden from assistive technology.
@@ -164,10 +163,10 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
             "fixed top-0 left-0 z-[-1] h-full w-full select-none object-cover brightness-[0.82] saturate-125 transition-opacity duration-700 ease-out",
             isUserWallpaperLoaded ? "opacity-100" : "opacity-0",
           )}
-          src={pixelWallpaper}
+          src={imageset.wallpaper}
           alt=""
           ariaHidden
-          onLoad={() => setLoadedWallpaper(pixelWallpaper)}
+          onLoad={() => setLoadedWallpaper(imageset.wallpaper)}
         />
       )}
     </>

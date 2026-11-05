@@ -11,7 +11,6 @@ import {
   IMG_WALLPAPER_WINTER,
 } from "@/drizzle/constants";
 import type { GameLayoutId } from "@/libs/gameLayouts";
-import type { UserWithRelations } from "@/routers/profile";
 import { getCurrentSeason } from "@/utils/time";
 
 export type LayoutVariant = GameLayoutId;
@@ -69,68 +68,24 @@ export const layoutVariantClasses = {
   },
 };
 
-// Note: getCurrentSeason uses UTC to ensure consistent results between server and client.
-export const getImageSet = (
-  wallpaperOverwrite?: string | null,
-  season = getCurrentSeason(),
-) => {
-  const base = {
-    navbar: IMG_LAYOUT_NAVBAR,
-    handsign: IMG_LAYOUT_HANDSIGN,
-    wallpaper: IMG_WALLPAPER_SUMMER,
-  };
+type Season = ReturnType<typeof getCurrentSeason>;
 
-  switch (season) {
-    case "winter":
-      base.wallpaper = IMG_WALLPAPER_WINTER;
-      break;
-    case "spring":
-      base.wallpaper = IMG_WALLPAPER_SPRING;
-      break;
-    case "summer":
-      base.wallpaper = IMG_WALLPAPER_SUMMER;
-      break;
-    case "fall":
-      base.wallpaper = IMG_WALLPAPER_FALL;
-      break;
-    case "halloween":
-      base.wallpaper = IMG_WALLPAPER_FALL;
-      base.navbar = IMG_LAYOUT_NAVBAR_HALLOWEEN;
-      base.handsign = IMG_LAYOUT_HANDSIGN_HALLOWEEN;
-      break;
-  }
-
-  if (wallpaperOverwrite) {
-    base.wallpaper = wallpaperOverwrite;
-  }
-
-  return base;
+const SEASON_WALLPAPERS: Record<Season, string> = {
+  winter: IMG_WALLPAPER_WINTER,
+  spring: IMG_WALLPAPER_SPRING,
+  summer: IMG_WALLPAPER_SUMMER,
+  fall: IMG_WALLPAPER_FALL,
+  halloween: IMG_WALLPAPER_FALL,
 };
 
-export const getPixelWallpaper = (
-  userData?: Pick<NonNullable<UserWithRelations>, "village"> | null,
+export const getImageSet = (
+  wallpaperOverwrite?: string | null,
+  season: Season = getCurrentSeason(),
 ) => {
-  let wallpaper = IMG_WALLPAPER_SUMMER;
-
-  switch (getCurrentSeason()) {
-    case "winter":
-      wallpaper = IMG_WALLPAPER_WINTER;
-      break;
-    case "spring":
-      wallpaper = IMG_WALLPAPER_SPRING;
-      break;
-    case "summer":
-      wallpaper = IMG_WALLPAPER_SUMMER;
-      break;
-    case "fall":
-    case "halloween":
-      wallpaper = IMG_WALLPAPER_FALL;
-      break;
-  }
-
-  if (userData?.village?.wallpaperOverwrite) {
-    wallpaper = userData.village.wallpaperOverwrite;
-  }
-
-  return wallpaper;
+  const isHalloween = season === "halloween";
+  return {
+    navbar: isHalloween ? IMG_LAYOUT_NAVBAR_HALLOWEEN : IMG_LAYOUT_NAVBAR,
+    handsign: isHalloween ? IMG_LAYOUT_HANDSIGN_HALLOWEEN : IMG_LAYOUT_HANDSIGN,
+    wallpaper: wallpaperOverwrite || SEASON_WALLPAPERS[season],
+  };
 };
