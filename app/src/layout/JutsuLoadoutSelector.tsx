@@ -5,21 +5,14 @@ import React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
-import LoadoutSelector from "@/layout/LoadoutSelector";
+import LoadoutSelector, {
+  type LoadoutSelectorDisplayProps,
+} from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-interface JutsuLoadoutSelectorProps {
-  size?: "small" | "large";
-  label?: string;
-  variant?: "sheet" | "dropdown";
-  compact?: boolean;
-  onSelectOverride?: (loadoutId: string, displayName: string) => void;
-  selectedOverrideId?: string | null;
-}
-
-const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
+const JutsuLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
   // State
   const {
     data: availableSlots,
@@ -73,9 +66,9 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
     <LoadoutSelector
       {...props}
       config={{
-        getQuery: () => queryResult,
-        selectMutation: () => mutationResult,
-        renameMutation: () => renameResult,
+        query: queryResult,
+        selectMutation: mutationResult,
+        renameMutation: renameResult,
         maxLoadoutsFn: fedJutsuLoadouts,
         getSelectedId: (userData) => userData.jutsuLoadout,
       }}

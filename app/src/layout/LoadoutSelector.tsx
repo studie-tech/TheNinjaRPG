@@ -22,15 +22,15 @@ interface LoadoutData {
 }
 
 interface LoadoutSelectorConfig<T extends LoadoutData> {
-  getQuery: () => {
+  query: {
     data: T[] | undefined;
     isFetching: boolean;
   };
-  selectMutation: () => {
+  selectMutation: {
     mutate: (variables: { id: string }) => void;
     isPending: boolean;
   };
-  renameMutation?: () => {
+  renameMutation?: {
     mutate: (variables: { id: string; name: string }) => void;
     isPending: boolean;
   };
@@ -38,7 +38,7 @@ interface LoadoutSelectorConfig<T extends LoadoutData> {
   getSelectedId: (userData: UserData) => string | null;
 }
 
-interface LoadoutSelectorProps<T extends LoadoutData> {
+export interface LoadoutSelectorDisplayProps {
   size?: "small" | "large";
   label?: string;
   /** "sheet" lists named loadouts under a chip; "dropdown" uses a compact select */
@@ -49,6 +49,10 @@ interface LoadoutSelectorProps<T extends LoadoutData> {
   renamable?: boolean;
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
+}
+
+interface LoadoutSelectorProps<T extends LoadoutData>
+  extends LoadoutSelectorDisplayProps {
   config: LoadoutSelectorConfig<T>;
 }
 
@@ -60,11 +64,11 @@ const LoadoutSelector = <T extends LoadoutData>(
     maxLoadouts: props.config.maxLoadoutsFn(user),
     selectedId: props.config.getSelectedId(user),
   }));
-  const { data, isFetching } = props.config.getQuery();
-  const { mutate: selectLoadout, isPending } = props.config.selectMutation();
+  const { data, isFetching } = props.config.query;
+  const { mutate: selectLoadout, isPending } = props.config.selectMutation;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const renameMutation = props.config.renameMutation?.();
+  const renameMutation = props.config.renameMutation;
   const variant = props.variant ?? "sheet";
 
   // Derived values (calculated after all hooks)

@@ -22,12 +22,12 @@ const renderDropdown = (props: { renamable?: boolean } = {}) => {
       variant="dropdown"
       {...props}
       config={{
-        getQuery: () => ({
+        query: {
           data: [{ id: "l1", name: "PvE" }, { id: "l2" }],
           isFetching: false,
-        }),
-        selectMutation: () => ({ mutate: vi.fn(), isPending: false }),
-        renameMutation: () => ({ mutate: rename, isPending: false }),
+        },
+        selectMutation: { mutate: vi.fn(), isPending: false },
+        renameMutation: { mutate: rename, isPending: false },
         maxLoadoutsFn: () => 2,
         getSelectedId: (user) => user.itemLoadout,
       }}
