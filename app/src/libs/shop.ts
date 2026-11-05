@@ -52,6 +52,15 @@ export const shopItemDiscountFactor = (discounts: { value: number }[]) =>
     discounts.reduce((remaining, discount) => remaining - discount.value, 100) / 100,
   );
 
+/** Display check for a stack price; the purchase itself is guarded at its balance write. */
+export const canAffordShopPrice = (
+  user: Pick<UserData, "money" | "reputationPoints" | "seichiSilver">,
+  price: ReturnType<typeof getShopStackPrice>,
+) =>
+  user.money >= price.ryoCost &&
+  user.reputationPoints >= price.repsCost &&
+  user.seichiSilver >= price.seichiSilverCost;
+
 /** Whole-stack price per currency; only ryo is discounted. */
 export const getShopStackPrice = (
   item: Pick<Item, "cost" | "repsCost" | "seichiSilverCost"> | null | undefined,

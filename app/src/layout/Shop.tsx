@@ -47,6 +47,7 @@ import { UncontrolledSliderField } from "@/layout/SliderField";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import {
+  canAffordShopPrice,
   getMaxItemShopPurchaseQuantity,
   getShopDiscounts,
   getShopStackPrice,
@@ -157,20 +158,19 @@ function ShopCatalogCard({
   item,
   selected,
   onSelect,
-  previewFactor,
+  ryoPrice,
   canAfford,
   seichiCatalogWord,
 }: {
   item: Item;
   selected: boolean;
   onSelect: () => void;
-  previewFactor: number;
+  ryoPrice: number;
   canAfford: boolean;
   seichiCatalogWord: string;
 }) {
-  const ryo = item.cost > 0 ? Math.ceil(item.cost * previewFactor) : null;
   const lineParts = [
-    ryo !== null ? `${ryo.toLocaleString()} ryo` : null,
+    item.cost > 0 ? `${ryoPrice.toLocaleString()} ryo` : null,
     item.repsCost > 0 ? `${item.repsCost.toLocaleString()} rep` : null,
     item.seichiSilverCost > 0
       ? `${item.seichiSilverCost.toLocaleString()} ${seichiCatalogWord}`
@@ -382,15 +382,9 @@ const Shop: React.FC<ShopProps> = (props) => {
   const selectedItemFactor = item ? shopItemDiscountFactor(discounts) : 1;
   const totalDiscount = discounts.reduce((acc, d) => acc + d.value, 0);
 
-  const { ryoCost, repsCost, seichiSilverCost } = getShopStackPrice(
-    item,
-    stacksize,
-    selectedItemFactor,
-  );
-  const canAfford =
-    userData.money >= ryoCost &&
-    userData.reputationPoints >= repsCost &&
-    userData.seichiSilver >= seichiSilverCost;
+  const selectedPrice = getShopStackPrice(item, stacksize, selectedItemFactor);
+  const { ryoCost, repsCost, seichiSilverCost } = selectedPrice;
+  const canAfford = canAffordShopPrice(userData, selectedPrice);
   const costs = [
     ...(ryoCost > 0 ? [`${ryoCost.toLocaleString()} ryo`] : []),
     ...(repsCost > 0 ? [`${repsCost.toLocaleString()} reputation points`] : []),
@@ -776,13 +770,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 const rowFactor = shopItemDiscountFactor(
                   getShopDiscounts(userData, userData.village?.structures, row),
                 );
-                const ryoDue = row.cost > 0 ? Math.ceil(row.cost * rowFactor) : 0;
-                const repsDue = Math.ceil(row.repsCost ?? 0);
-                const seichiDue = Math.ceil(row.seichiSilverCost ?? 0);
-                const canAffordRow =
-                  userData.money >= ryoDue &&
-                  userData.reputationPoints >= repsDue &&
-                  userData.seichiSilver >= seichiDue;
+                const rowPrice = getShopStackPrice(row, 1, rowFactor);
                 return (
                   <li
                     key={row.id}
@@ -796,8 +784,8 @@ const Shop: React.FC<ShopProps> = (props) => {
                     <ShopCatalogCard
                       item={row}
                       selected={item?.id === row.id}
-                      previewFactor={rowFactor}
-                      canAfford={canAffordRow}
+                      ryoPrice={rowPrice.ryoCost}
+                      canAfford={canAffordShopPrice(userData, rowPrice)}
                       seichiCatalogWord={silverCopy.catalog}
                       onSelect={() => {
                         if (item?.id === row.id) {
