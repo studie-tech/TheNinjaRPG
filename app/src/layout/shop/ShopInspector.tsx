@@ -77,10 +77,17 @@ export function ShopInspector({
     item.canStack ? getMaxItemShopPurchaseQuantity(item.stackSize) : 1,
     allowance.data?.remaining ?? Number.POSITIVE_INFINITY,
   );
-  const quantity = Math.min(requestedQuantity, Math.max(1, maxQuantity));
+  // A cleared or invalid field reads as NaN: prices and the stepper use 1 meanwhile, while
+  // the field keeps the player's draft and Buy stays off until the number is valid.
+  const isQuantityEntered = Number.isFinite(requestedQuantity);
+  const quantity = Math.min(
+    isQuantityEntered ? requestedQuantity : 1,
+    Math.max(1, maxQuantity),
+  );
   const isQuantityValid =
     !!allowance.data &&
     !allowance.isError &&
+    isQuantityEntered &&
     Number.isInteger(quantity) &&
     quantity >= 1 &&
     quantity <= maxQuantity;
@@ -136,7 +143,7 @@ export function ShopInspector({
             image={item.image}
             alt={item.name}
             rarity={item.rarity}
-            className="h-16 w-16"
+            className="h-full w-full"
           />
         </span>
         <div className="min-w-0 flex-1">
@@ -192,7 +199,7 @@ export function ShopInspector({
                 className="h-9 w-16 text-center tabular-nums"
                 min={1}
                 max={maxQuantity}
-                value={quantity}
+                value={isQuantityEntered ? quantity : requestedQuantity}
                 onValueChange={setQuantity}
               />
               <Button

@@ -24,6 +24,7 @@ const catalog = [
 let purchaseOptions: PurchaseOptions;
 let purchaseResult: PurchaseResult;
 let hasNextPage = false;
+let isFetchNextPageError = false;
 let tutorialStep: { id: string; page: string } | null = null;
 const fetchNextPage = vi.fn();
 const completeTutorialAction = vi.fn(async () => {});
@@ -66,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   purchaseResult = { success: true, message: "Purchased" };
   hasNextPage = false;
+  isFetchNextPageError = false;
   tutorialStep = null;
   localStorage.clear();
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -75,7 +77,7 @@ beforeEach(() => {
     }),
     item: {
       get: { useQuery: () => ({ data: tutorialStep ? item({ id: TUTORIAL_ITEM_ID, name: "Shuriken", cost: 45 }) : undefined }) },
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: catalog }] }, isFetching: false, hasNextPage, fetchNextPage }) },
+      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: catalog }] }, isFetching: false, hasNextPage, isFetchNextPageError, fetchNextPage }) },
       getBloodlineRollOdds: { useQuery: () => ({}) },
       getPurchaseAllowance: { useQuery: () => ({ data: { remaining: null, limit: null }, refetch: vi.fn() }) },
       buy: { useMutation: (options: PurchaseOptions) => {
@@ -188,6 +190,29 @@ describe("shop catalog", () => {
     hasNextPage = true;
     renderShop();
     expect(fetchNextPage).toHaveBeenCalled();
+  });
+
+  it("stops loading after a failed page and offers to try again", () => {
+    hasNextPage = true;
+    isFetchNextPageError = true;
+    const view = renderShop();
+    expect(fetchNextPage).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole("button", { name: "Try again" }));
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a cleared quantity editable without breaking the price or stepper", () => {
+    const view = renderShop({ defaultType: "CONSUMABLE" });
+    fireEvent.click(view.getByRole("button", { name: /Pill/ }));
+    const quantity = view.getByRole("spinbutton", { name: "How many to buy" }) as HTMLInputElement;
+    fireEvent.input(quantity, { target: { value: "" } });
+    expect(quantity.value).toBe("");
+    const inspector = view.getByRole("region", { name: "Pill" });
+    expect(inspector.textContent).not.toContain("NaN");
+    expect((view.container.querySelector("#tutorial-itemshop-buy") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(view.getByRole("button", { name: "One more" }));
+    expect(quantity.value).toBe("2");
+    expect(inspector.textContent).toContain("Buy for 40 ryo");
   });
 
   it("leads with the tutorial's item and completes the step once it is bought", async () => {

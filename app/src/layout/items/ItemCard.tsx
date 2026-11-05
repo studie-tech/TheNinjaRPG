@@ -57,7 +57,8 @@ export function ItemCard({
           image={look.image}
           alt={look.name}
           rarity={item.rarity}
-          className="h-11 w-11"
+          // Sized by the box, so the art stays inside the frame's border.
+          className="h-full w-full"
         />
         {isTicked && (
           <span className="absolute -top-1 -left-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white">

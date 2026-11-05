@@ -28,7 +28,7 @@ export function ShopItemCard({
       aria-current={isSelected ? "true" : undefined}
       onClick={onSelect}
       className={cn(
-        "bg-card hover:bg-muted/60 focus-visible:outline-primary flex w-full min-w-0 items-center gap-2 rounded-lg border p-1.5 text-left focus-visible:outline-2",
+        "bg-card hover:bg-muted/60 focus-visible:outline-primary flex h-full w-full min-w-0 items-center gap-2 rounded-lg border p-1.5 text-left focus-visible:outline-2",
         isSelected && "border-primary ring-primary/40 ring-2",
       )}
     >
@@ -37,7 +37,8 @@ export function ShopItemCard({
           image={item.image}
           alt={item.name}
           rarity={item.rarity}
-          className="h-11 w-11"
+          // Sized by the box, so the art stays inside the frame's border.
+          className="h-full w-full"
         />
       </span>
       <span className="min-w-0 flex-1">

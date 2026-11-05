@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import BlackMarket from "@/app/[shell]/blackmarket/page";
@@ -62,7 +62,7 @@ it("opens on Items with the player's balances and a way to get reputation", () =
 
 it("keeps free rolls on Bloodlines, hidden until the player has rolled", () => {
   const view = render(<BlackMarket />);
-  fireEvent.click(view.getByRole("tab", { name: "Bloodlines" }));
+  fireEvent.mouseDown(view.getByRole("tab", { name: "Bloodlines" }), { button: 0, ctrlKey: false });
   expect(view.getByText("Buy a bloodline")).toBeTruthy();
   expect(view.queryByRole("region", { name: "Bloodline Rolls" })).toBeNull();
   cleanup();
@@ -71,4 +71,17 @@ it("keeps free rolls on Bloodlines, hidden until the player has rolled", () => {
   expect(again.getByRole("tab", { name: "Bloodlines" }).getAttribute("aria-selected")).toBe("true");
   expect(again.getByRole("region", { name: "Bloodline Rolls" })).toBeTruthy();
   expect(again.queryByText("Reputation Shop")).toBeNull();
+});
+
+it("moves between sections with the arrow keys and labels each panel", async () => {
+  const view = render(<BlackMarket />);
+  const items = view.getByRole("tab", { name: "Items" });
+  const panel = view.getByRole("tabpanel", { name: "Items" });
+  expect(items.getAttribute("aria-controls")).toBe(panel.id);
+  act(() => items.focus());
+  fireEvent.keyDown(items, { key: "ArrowRight" });
+  await waitFor(() =>
+    expect(view.getByRole("tab", { name: "Bloodlines" }).getAttribute("aria-selected")).toBe("true"),
+  );
+  expect(view.getByText("Buy a bloodline")).toBeTruthy();
 });
