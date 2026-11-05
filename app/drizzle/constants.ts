@@ -2237,6 +2237,8 @@ export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (
 export const SHRINE_BOOST_PER_SHRINE_PERC = 3.33; // Additional boost per shrine (~3.33% per additional shrine for 10-20% range)
 export const SHRINE_UPGRADE_COST = 60_000;
 export const SHRINE_BOOST_DURATION_HOURS = 2;
+/** Each boost template slot lasts one boost. Stored template `slotIndex` values depend on this layout. */
+export const SHRINE_BOOST_SLOTS_PER_DAY = 24 / SHRINE_BOOST_DURATION_HOURS;
 export const SHRINE_AI_UNLOCK_COST = 10_000;
 export const SHRINE_WEEKLY_MAINTENANCE_COST = 5_000;
 export const SHRINE_MAX_AI_ASSIGNMENTS = 3;

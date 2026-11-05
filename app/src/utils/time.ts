@@ -4,6 +4,8 @@ import {
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
+  SHRINE_BOOST_DURATION_HOURS,
+  SHRINE_BOOST_SLOTS_PER_DAY,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
 } from "@/drizzle/constants";
 import { clamp } from "@/utils/math";
@@ -350,7 +352,11 @@ export const getFirstOfNextMonth = (): Date => {
  */
 export const getSlotIndex = (utcHour: number): number => {
   if (!Number.isFinite(utcHour)) return 0;
-  return clamp(Math.floor(utcHour / 2), 0, 11);
+  return clamp(
+    Math.floor(utcHour / SHRINE_BOOST_DURATION_HOURS),
+    0,
+    SHRINE_BOOST_SLOTS_PER_DAY - 1,
+  );
 };
 
 /**
@@ -359,7 +365,13 @@ export const getSlotIndex = (utcHour: number): number => {
  */
 export const getCurrentSlotBoundary = (d: Date = new Date()): Date => {
   const boundary = new Date(d);
-  boundary.setUTCHours(Math.floor(d.getUTCHours() / 2) * 2, 0, 0, 0);
+  boundary.setUTCHours(
+    Math.floor(d.getUTCHours() / SHRINE_BOOST_DURATION_HOURS) *
+      SHRINE_BOOST_DURATION_HOURS,
+    0,
+    0,
+    0,
+  );
   return boundary;
 };
 

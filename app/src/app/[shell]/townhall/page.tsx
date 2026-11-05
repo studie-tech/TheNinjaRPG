@@ -45,7 +45,7 @@ import {
   KAGE_REMOVAL_COOLDOWN_DAYS,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
-import type { VillageAlliance } from "@/drizzle/schema";
+import type { Village, VillageAlliance } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -62,9 +62,11 @@ import PublicUserComponent from "@/layout/PublicUser";
 import { ShrineHall } from "@/layout/ShrineHall";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { VillageMission, VillageStructureMaintenance } from "@/layout/VillageMission";
+import { VillageMission } from "@/layout/VillageMission";
+import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import { WarRoom } from "@/layout/WarSystem";
 import { showMutationToast } from "@/libs/toast";
+import { isFactionVillage } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canTakeKage } from "@/utils/permissions";
@@ -1134,15 +1136,8 @@ const AllianceList: React.FC<{
       if (!matchesSearch) return false;
 
       // Type filter
-      if (typeFilter === "VILLAGE" && !["VILLAGE", "OUTLAW"].includes(entity.type)) {
-        return false;
-      }
-      if (
-        typeFilter === "FACTION" &&
-        !["HIDEOUT", "STRONGHOLD"].includes(entity.type)
-      ) {
-        return false;
-      }
+      if (typeFilter === "VILLAGE" && !isPlayerVillageType(entity)) return false;
+      if (typeFilter === "FACTION" && !isFactionVillage(entity)) return false;
 
       // Status filter
       if (statusFilter === "ALL") return true;
@@ -1152,8 +1147,8 @@ const AllianceList: React.FC<{
     })
     // Sort: villages first, then factions, alphabetically within each group
     .sort((a, b) => {
-      const aIsVillage = ["VILLAGE", "OUTLAW"].includes(a.type);
-      const bIsVillage = ["VILLAGE", "OUTLAW"].includes(b.type);
+      const aIsVillage = isPlayerVillageType(a);
+      const bIsVillage = isPlayerVillageType(b);
       if (aIsVillage && !bIsVillage) return -1;
       if (!aIsVillage && bIsVillage) return 1;
       return a.name.localeCompare(b.name);
@@ -1296,7 +1291,7 @@ const AllianceCard: React.FC<{
   );
 
   // Determine entity type display
-  const isVillage = ["VILLAGE", "OUTLAW"].includes(entity.type);
+  const isVillage = isPlayerVillageType(entity);
   const typeLabel = isVillage ? "Village" : "Faction";
   const typeColors = isVillage
     ? "text-blue-600 bg-blue-100"
@@ -1417,3 +1412,7 @@ const AllianceCard: React.FC<{
     </div>
   );
 };
+
+/** Alliance entities listed as villages; a safezone is neither this nor a faction. */
+const isPlayerVillageType = (entity: Pick<Village, "type">) =>
+  entity.type === "VILLAGE" || entity.type === "OUTLAW";

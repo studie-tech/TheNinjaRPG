@@ -24,12 +24,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   SHRINE_AI_UNLOCK_COST,
-  SHRINE_BOOST_BASE_PERC,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_DISPLAY,
   SHRINE_BOOST_DURATION_HOURS,
-  SHRINE_BOOST_PER_SHRINE_PERC,
   SHRINE_BOOST_REQUIRED_LEVEL,
+  SHRINE_BOOST_SLOTS_PER_DAY,
   type SHRINE_BOOST_TYPE,
   SHRINE_BOOST_TYPES,
   SHRINE_MAX_AI_ASSIGNMENTS,
@@ -58,7 +57,7 @@ import {
   isNewSlotDue,
 } from "@/utils/time";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
-import { countBoostingShrines } from "@/utils/village";
+import { countBoostingShrines, getShrineBoostPercentage } from "@/utils/village";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -383,15 +382,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       return { boostType, msLeft };
     })
     .filter(({ msLeft }) => msLeft > 0);
-  // Base 10% with 1+ shrines, plus ~3.33% per additional shrine (10-20% range)
-  const boostPercentage =
-    level3Shrines > 0
-      ? Math.round(
-          (SHRINE_BOOST_BASE_PERC +
-            (level3Shrines - 1) * SHRINE_BOOST_PER_SHRINE_PERC) *
-            10,
-        ) / 10
-      : 0;
+  const boostPercentage = Math.round(getShrineBoostPercentage(level3Shrines) * 10) / 10;
 
   return (
     <div className="grid grid-cols-1 gap-4 p-3">
@@ -894,20 +885,10 @@ const useInvalidateOnSlotBoundary = (
 /*                         Boost Template Grid                                */
 /* -------------------------------------------------------------------------- */
 
-const SLOT_LABELS = [
-  "00:00",
-  "02:00",
-  "04:00",
-  "06:00",
-  "08:00",
-  "10:00",
-  "12:00",
-  "14:00",
-  "16:00",
-  "18:00",
-  "20:00",
-  "22:00",
-];
+const SLOT_LABELS = Array.from(
+  { length: SHRINE_BOOST_SLOTS_PER_DAY },
+  (_, slot) => `${String(slot * SHRINE_BOOST_DURATION_HOURS).padStart(2, "0")}:00`,
+);
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 interface BoostTemplateGridProps {
@@ -1061,7 +1042,8 @@ const BoostTemplateGrid = ({
       <CardHeader>
         <CardTitle>Weekly Boost Template</CardTitle>
         <CardDescription>
-          Auto-activates at each 2-hour UTC slot boundary · requires tokens
+          Auto-activates at each {SHRINE_BOOST_DURATION_HOURS}-hour UTC slot boundary ·
+          requires tokens
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1214,7 +1196,8 @@ const BoostTemplateGrid = ({
               <div className="mt-3 rounded-lg border border-blue-500/50 bg-muted p-3">
                 <div className="mb-3">
                   <span className="text-sm font-semibold text-blue-400">
-                    {DAY_LABELS[openAllDay]} · All Day (fills all 12 slots)
+                    {DAY_LABELS[openAllDay]} · All Day (fills all {SLOT_LABELS.length}{" "}
+                    slots)
                   </span>
                 </div>
                 <BoostTypeChecklist
