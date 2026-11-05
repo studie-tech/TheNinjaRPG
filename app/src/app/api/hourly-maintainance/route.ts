@@ -3,6 +3,7 @@ import { lockWithHourlyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   deleteBountySignups,
   listBountyForBountyExpire,
+  listBountyForRefundResume,
   updateBountyForBountyExpire,
 } from "@/queries/bounty";
 import {
@@ -56,22 +57,21 @@ export async function GET(request: Request) {
 }
 
 /**
- * Expire bounties that are OPEN and older than 1 week
- * @returns The number of expired bounties
+ * Expire bounties that are OPEN and older than 1 week, and resume refunds that stopped partway
+ * @returns The expired bounties
  */
 const bountyExpire = async () => {
   // Find bounties that are OPEN and older than 1 week
   const oneWeekAgo = new Date(Date.now() - ONE_WEEK_MS);
-  const expiredBounties = await listBountyForBountyExpire(drizzleDB, oneWeekAgo);
-
-  if (expiredBounties.length === 0) {
-    return expiredBounties;
-  }
+  const [expiredBounties, unfinishedRefunds] = await Promise.all([
+    listBountyForBountyExpire(drizzleDB, oneWeekAgo),
+    listBountyForRefundResume(drizzleDB),
+  ]);
 
   // Process all expired bounties in parallel; a bounty claimed or retracted since the
   // listing loses the OPEN compare-and-swap and is left to that flow
-  await Promise.all(
-    expiredBounties.map(async (expiredBounty) => {
+  await Promise.all([
+    ...expiredBounties.map(async (expiredBounty) => {
       const result = await updateBountyForBountyExpire(drizzleDB, expiredBounty);
       if (result.rowsAffected === 0) return;
       await Promise.all([
@@ -79,7 +79,8 @@ const bountyExpire = async () => {
         refundBountyContributions(drizzleDB, expiredBounty.id),
       ]);
     }),
-  );
+    ...unfinishedRefunds.map(({ id }) => refundBountyContributions(drizzleDB, id)),
+  ]);
   return expiredBounties;
 };
 

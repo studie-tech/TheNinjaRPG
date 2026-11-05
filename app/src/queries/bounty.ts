@@ -1,9 +1,15 @@
 /**
  * Database access for bounty; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { actionLog, bounty, bountyContribution, bountySignup } from "@/drizzle/schema";
+import {
+  actionLog,
+  bounty,
+  bountyContribution,
+  bountySignup,
+  userData,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `bounty` listing for `board`, using predicates on `status` and `collectedAt`. */
@@ -251,6 +257,26 @@ export const updateBountyForRetract = (
       ),
     );
 
+/**
+ * Execute one contribution's refund: credit the contributor and zero the row in one
+ * statement, so a failure afterwards loses nothing and a rerun pays nothing. It credits the
+ * amount the caller read and guards on it because a multi-table UPDATE does not order its
+ * assignments. A contributor deleted since has nobody to pay, so their row still drains.
+ */
+export const refundBountyContribution = (
+  client: Pick<DrizzleClient, "execute">,
+  contribution: { id: string; amountRyo: number },
+) =>
+  client.execute(sql`
+      UPDATE ${bountyContribution}
+      LEFT JOIN ${userData} ON ${userData.userId} = ${bountyContribution.contributorUserId}
+      SET ${userData.money} = ${userData.money} + ${contribution.amountRyo},
+          ${bountyContribution.amountRyo} = 0
+      WHERE ${bountyContribution.id} = ${contribution.id}
+        AND ${bountyContribution.amountRyo} = ${contribution.amountRyo}
+        AND ${bountyContribution.amountRyo} > 0
+    `);
+
 /** Build deletion of one bounty contribution by ID. */
 export const deleteBountyContribution = (
   client: Pick<DrizzleClient, "delete">,
@@ -338,6 +364,19 @@ export const listBountyForBountyExpire = (
       hunters: true,
     },
   });
+
+/**
+ * Build the listing of closed bounties whose refund stopped partway. CLAIMED bounties are
+ * excluded: their contributions funded the payout and keep their rows.
+ */
+export const listBountyForRefundResume = (
+  client: Pick<DrizzleClient, "selectDistinct">,
+) =>
+  client
+    .selectDistinct({ id: bounty.id })
+    .from(bounty)
+    .innerJoin(bountyContribution, eq(bountyContribution.bountyId, bounty.id))
+    .where(inArray(bounty.status, ["EXPIRED", "CANCELLED"]));
 
 /** Build the `bounty` update for `bountyExpire`, setting `status`, guarded on the bounty still being OPEN. */
 export const updateBountyForBountyExpire = (

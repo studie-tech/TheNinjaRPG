@@ -1,14 +1,16 @@
 import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import { eq } from "drizzle-orm";
 import { GET } from "@/app/api/hourly-maintainance/route";
 import { bounty, bountyContribution, bountySignup, gameSetting, userData } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
-import { bountyRouter } from "@/server/api/routers/bounty";
+import { refundBountyContribution } from "@/queries/bounty";
+import { bountyRouter, refundBountyContributions } from "@/server/api/routers/bounty";
 import { addBountyMoneySchema } from "@/validators/bounty";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const moneyOf = async (userId: string) =>
@@ -16,6 +18,12 @@ const moneyOf = async (userId: string) =>
 
 const amountOf = async () =>
   (await (await getTestDatabase()).query.bounty.findFirst({ where: eq(bounty.id, "bounty") }))?.amountRyo;
+
+const contributions = async () =>
+  (await getTestDatabase()).query.bountyContribution.findMany({ columns: { id: true, amountRyo: true } });
+
+const stale = () => new Date(Date.now() - 8 * 86400_000);
+const cronRequest = () => new Request("https://example.com/api/hourly-maintainance");
 
 /** Seed an OPEN bounty funded by its creator, plus a hunter and a backer. */
 const seedBounty = async (overrides: Partial<typeof bounty.$inferInsert> = {}) => {
@@ -103,9 +111,14 @@ describeWithDatabase("Bounty expiry", () => {
   beforeEach(async () => {
     await resetTables(bounty, bountyContribution, bountySignup, gameSetting, userData);
     stubCronAuth(() => null);
-    spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({
-      ...timerClaimFixture(), isNewHour: true, response: Response.json(null),
-    } as never));
+    spies.push(
+      vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({
+        ...timerClaimFixture(), isNewHour: true, response: Response.json(null),
+      } as never),
+      vi.spyOn(console, "error").mockImplementation(() => {}),
+      vi.spyOn(Sentry, "captureException").mockReturnValue("test-event"),
+      vi.spyOn(Sentry, "flush").mockResolvedValue(true),
+    );
   });
   afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore();
@@ -129,5 +142,112 @@ describeWithDatabase("Bounty expiry", () => {
     expect(response.status).toBe(200);
     expect(await moneyOf("creator")).toBe(500);
     expect((await db.query.bounty.findFirst())?.status).toBe("EXPIRED");
+    expect(await db.query.bountyContribution.findMany()).toEqual([]);
+  });
+
+  it("loses nothing when a refund fails after its credit, and the next run pays no more", async () => {
+    const db = await seedBounty({ createdAt: stale() });
+    const failDelete = async () => {
+      throw new Error("Delete failed on purpose");
+    };
+    stubDatabase(beforeStatements(db, bountyContribution, [async () => {}, failDelete]));
+    expect((await GET(cronRequest())).status).toBe(500);
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([{ id: "creator-contribution", amountRyo: 0 }]);
+
+    stubDatabase(db);
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("resumes an EXPIRED bounty whose refund failed before its credit", async () => {
+    const db = await seedBounty({ createdAt: stale() });
+    stubDatabase(failStatements(db, bountyContribution));
+    expect((await GET(cronRequest())).status).toBe(500);
+    expect(await moneyOf("creator")).toBe(0);
+    expect((await db.query.bounty.findFirst())?.status).toBe("EXPIRED");
+
+    stubDatabase(db);
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("resumes a CANCELLED bounty left with contributions", async () => {
+    await seedBounty({ status: "CANCELLED" });
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("never refunds the contributions of a CLAIMED bounty", async () => {
+    await seedBounty({ status: "CLAIMED", claimedByUserId: "hunter" });
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await moneyOf("creator")).toBe(0);
+    expect(await contributions()).toEqual([{ id: "creator-contribution", amountRyo: 500 }]);
+  });
+
+  it("deletes a row left at 0 without paying it again", async () => {
+    const db = await seedBounty({ status: "EXPIRED" });
+    await db.update(bountyContribution).set({ amountRyo: 0 });
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await moneyOf("creator")).toBe(0);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("drains the contribution of a deleted contributor", async () => {
+    const db = await seedBounty({ status: "EXPIRED" });
+    await db.delete(userData).where(eq(userData.userId, "creator"));
+    expect((await GET(cronRequest())).status).toBe(200);
+    expect(await contributions()).toEqual([]);
+  });
+});
+
+describeWithDatabase("Bounty refund passes", () => {
+  beforeEach(async () => resetTables(bounty, bountyContribution, bountySignup, userData));
+
+  it("pays once when a second pass interleaves before the credit", async () => {
+    const db = await seedBounty({ status: "EXPIRED" });
+    const raced = beforeStatements(db, bountyContribution, [
+      () => refundBountyContributions(db, "bounty"),
+    ]);
+    await refundBountyContributions(raced, "bounty");
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("pays once when two passes run at the same time", async () => {
+    const db = await seedBounty({ status: "EXPIRED" });
+    await Promise.all([
+      refundBountyContributions(db, "bounty"),
+      refundBountyContributions(db, "bounty"),
+    ]);
+    expect(await moneyOf("creator")).toBe(500);
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("credits each contributor their own amount", async () => {
+    const db = await seedBounty({ status: "EXPIRED" });
+    await db.insert(bountyContribution).values({
+      id: "backer-contribution", bountyId: "bounty", contributorUserId: "backer", amountRyo: 40,
+    });
+    await refundBountyContributions(db, "bounty");
+    expect({ creator: await moneyOf("creator"), backer: await moneyOf("backer") })
+      .toEqual({ creator: 500, backer: 140 });
+    expect(await contributions()).toEqual([]);
+  });
+
+  it("does not pay a contribution again when a pass stopped before its delete", async () => {
+    const db = await seedBounty();
+    const raced = beforeStatements(db, bounty, [async () => {
+      await db.update(bounty).set({ status: "CANCELLED" });
+      for (const contribution of await db.query.bountyContribution.findMany()) {
+        await refundBountyContribution(db, contribution);
+      }
+    }]);
+    const result = await callerForDatabase(bountyRouter, "backer", raced).addMoney({ bountyId: "bounty", amountRyo: 100 });
+    expect(result.success).toBe(false);
+    expect({ backer: await moneyOf("backer"), creator: await moneyOf("creator") }).toEqual({ backer: 100, creator: 500 });
   });
 });
