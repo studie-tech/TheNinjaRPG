@@ -12,7 +12,11 @@ import { FARM_CARD_GRID, FarmItemCard } from "@/layout/FarmItemCard";
 import { FarmItemCount } from "@/layout/FarmItemCount";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
 import Image from "@/layout/Image";
-import { getExtractorCropCapacity, getFarmQuantityPrice } from "@/libs/farming";
+import {
+  getExtractorCropCapacity,
+  getFarmQuantityPrice,
+  isValidFarmQuantity,
+} from "@/libs/farming";
 import type { FarmStateResponse } from "@/validators/farming";
 
 type SellableCrop = FarmStateResponse["sellableCrops"][number];
@@ -116,8 +120,7 @@ export function FarmInventory({
             const pending = sellingAll || pendingKeys.has(key);
             const max = Math.min(FARM_MAX_CROP_SELL_QUANTITY, crop.quantity);
             const quantity = Math.min(quantities[key] ?? 1, max);
-            const validQuantity =
-              Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
+            const validQuantity = isValidFarmQuantity(quantity);
             return (
               <FarmItemCard
                 key={key}
@@ -236,8 +239,7 @@ export function FarmInventory({
                 const pending = pendingKeys.has(key);
                 const max = Math.max(1, Math.min(capacity, crop.quantity));
                 const quantity = Math.min(quantities[crop.userItemId] ?? 1, max);
-                const validQuantity =
-                  Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
+                const validQuantity = isValidFarmQuantity(quantity);
                 return (
                   <FarmItemCard
                     key={crop.userItemId}

@@ -3,10 +3,10 @@
 import { Coins } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FARM_MAX_PLOTS } from "@/drizzle/constants";
+import { FARM_MAX_PLOTS, FARM_MAX_SHOP_PURCHASE_QUANTITY } from "@/drizzle/constants";
 import { FARM_CARD_GRID, FarmItemCard } from "@/layout/FarmItemCard";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
-import { getFarmQuantityPrice } from "@/libs/farming";
+import { getFarmQuantityPrice, isValidFarmQuantity } from "@/libs/farming";
 import { formatHoursMinutes } from "@/utils/time";
 import type { FarmShopEntryState, FarmStateResponse } from "@/validators/farming";
 
@@ -66,11 +66,16 @@ export function FarmMarket({
     const pending = pendingKeys.has(`buy:${key}`);
     const consumable = entry.type === "SEED" || entry.type === "FERTILIZER";
     const max = consumable
-      ? Math.max(1, Math.min(99, Math.floor(farmState.farmCurrency / entry.cost)))
+      ? Math.max(
+          1,
+          Math.min(
+            FARM_MAX_SHOP_PURCHASE_QUANTITY,
+            Math.floor(farmState.farmCurrency / entry.cost),
+          ),
+        )
       : 1;
     const quantity = Math.min(quantities[key] ?? 1, max);
-    const validQuantity =
-      Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
+    const validQuantity = isValidFarmQuantity(quantity);
     const total = getFarmQuantityPrice(entry.cost, validQuantity ? quantity : 1);
     return (
       <FarmItemCard
@@ -116,9 +121,7 @@ export function FarmMarket({
               size="sm"
               className="flex-1"
               disabled={!entry.canPurchase || pending || !validQuantity}
-              onClick={() => {
-                if (validQuantity) void onBuy(entry, quantity);
-              }}
+              onClick={() => void onBuy(entry, quantity)}
             >
               {pending
                 ? "Buying…"

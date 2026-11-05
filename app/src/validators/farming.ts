@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { FARM_SHOP_ENTRY_TYPES } from "@/drizzle/constants";
+import {
+  FARM_MAX_SHOP_PURCHASE_QUANTITY,
+  FARM_SHOP_ENTRY_TYPES,
+} from "@/drizzle/constants";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 
 export const dayNightCycleStateSchema = z.object({
@@ -68,7 +71,7 @@ export const farmShopPurchaseInputSchema = z
   .object({
     type: z.enum(FARM_SHOP_ENTRY_TYPES),
     itemId: z.string().optional(),
-    quantity: z.int().min(1).max(99).prefault(1),
+    quantity: z.int().min(1).max(FARM_MAX_SHOP_PURCHASE_QUANTITY).prefault(1),
   })
   .refine(
     (input) => !["PLOT", "EXTRACTOR"].includes(input.type) || input.quantity === 1,

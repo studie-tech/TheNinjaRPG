@@ -280,8 +280,12 @@ export const getFarmPrimaryAction = (
   return "water";
 };
 
+/** A cleared quantity stepper reports NaN, which is not a valid quantity. */
+export const isValidFarmQuantity = (quantity: number) =>
+  Number.isInteger(quantity) && quantity >= 1;
+
 export const getFarmQuantityPrice = (unitPrice: number, quantity: number) => {
-  if (!Number.isInteger(quantity) || quantity < 1) return 0;
+  if (!isValidFarmQuantity(quantity)) return 0;
   return unitPrice * quantity;
 };
 
@@ -322,15 +326,30 @@ export type FarmPlotWithSeed = FarmPlot & {
   yieldItem?: Item | null;
 };
 
+/** The plot fields that change with the clock alone, between two server responses. */
+export const getLivePlotTiming = (
+  plot: Pick<FarmPlot, "seedItemId" | "plantedAt" | "finishAt" | "lastWateredAt">,
+  now = new Date(),
+) => {
+  const { plantedAt, finishAt, lastWateredAt } = plot;
+  const isActive = !!plot.seedItemId && !!plantedAt && !!finishAt;
+  const isReady = isActive && isPlotReady(finishAt, now);
+  const canWater = isActive && !isReady && canWaterPlot(lastWateredAt, now);
+  return {
+    isReady,
+    canWater,
+    nextWateringAt: canWater ? null : getNextWateringAt(lastWateredAt, now),
+    growthProgress: isActive ? getPlotGrowthProgress(plantedAt, finishAt, now) : 0,
+    growthStage: isActive ? getPlotGrowthStage(plantedAt, finishAt, now) : 0,
+  };
+};
+
 export const mapPlotToState = (
   plot: FarmPlotWithSeed,
   now = new Date(),
 ): FarmPlotState => {
   const finishAt = plot.finishAt ?? null;
   const plantedAt = plot.plantedAt ?? null;
-  const isActive = !!plot.seedItemId && !!plantedAt && !!finishAt;
-  const canWater =
-    isActive && !isPlotReady(finishAt, now) && canWaterPlot(plot.lastWateredAt, now);
   return {
     id: plot.id,
     slotIndex: plot.slotIndex,
@@ -342,11 +361,7 @@ export const mapPlotToState = (
     finishAt,
     lastWateredAt: plot.lastWateredAt ?? null,
     fertilizerApplied: plot.fertilizerApplied,
-    isReady: isActive && isPlotReady(finishAt, now),
-    canWater,
-    nextWateringAt: canWater ? null : getNextWateringAt(plot.lastWateredAt, now),
-    growthProgress: isActive ? getPlotGrowthProgress(plantedAt, finishAt, now) : 0,
-    growthStage: isActive ? getPlotGrowthStage(plantedAt, finishAt, now) : 0,
+    ...getLivePlotTiming(plot, now),
     // The saved timeline includes planting bonuses and later water/fertilizer reductions.
     // Those reductions may finish at a fractional second; the response requires whole seconds.
     growTimeSeconds:
