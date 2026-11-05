@@ -23,7 +23,7 @@ import { EventTimer, Objective, Reward } from "@/layout/Objective";
 import { QuestTeams } from "@/layout/QuestTeams";
 import { PendingRewardChoices, useOpenRewardChoice } from "@/layout/RewardChoice";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { actionPrerequisiteUser, canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   getActiveObjective,
@@ -483,9 +483,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     (allDone && !userQuest.completed && quest.questType !== "achievement");
   const progressBlockedMessage =
     !canProgress && !isPaused && awaitsPlayerAction
-      ? questProgressBlockedMessage(
-          userData ? actionPrerequisiteUser(userData).status : undefined,
-        )
+      ? questProgressBlockedMessage(userData?.status)
       : null;
   const assetIds: string[] = [];
   let shownText = quest.description;
