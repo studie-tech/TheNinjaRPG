@@ -1002,10 +1002,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
                   <ClanSearchSelect
                     useFormMethods={clanSearchMethods}
                     label={`Search for ${groupLabel.toLowerCase()}`}
-                    inline={true}
-                    showOwn={false}
                     userClanId={clanId}
-                    maxClans={1}
                   />
                 </fieldset>
               </Modal>
