@@ -54,7 +54,9 @@ export const linkPromotionRouter = createTRPCRouter({
       const result = await findLinkPromotionForSubmitLinkPromotion(ctx.drizzle, input);
       // Guard
       if (result) return errorResponse("URL already submitted");
-      if (input.url.includes("https://www.theninja-rpg.com")) {
+      // A trailing DNS root dot still names the same own-site host.
+      const hostname = new URL(input.url).hostname.replace(/\.$/, "");
+      if (hostname === "theninja-rpg.com" || hostname.endsWith(".theninja-rpg.com")) {
         return errorResponse("Cannot submit link to TNR");
       }
       // Mutate
