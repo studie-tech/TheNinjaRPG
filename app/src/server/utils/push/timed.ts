@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Redis } from "@upstash/redis";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
-import { calcHealFinish } from "@/libs/hospital";
+import { calcUserHealFinish } from "@/libs/hospital";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
 import { masteryTrainingEndsAt } from "@/libs/train";
 import {
@@ -10,7 +10,6 @@ import {
 } from "@/queries/push";
 import type { DrizzleClient } from "@/server/db";
 import { isPushEnabled, sendPushToUsers } from "@/server/utils/push";
-import { getStrucBoost } from "@/utils/village";
 import { mapWithConcurrency } from "./batch";
 import { timerElapsed } from "./messages";
 import type { PushSendSummary } from "./types";
@@ -110,14 +109,7 @@ export const dueTimedPushEvents = (user: TimerUser, now: Date): TimedPushEvent[]
     }
   };
   if (user.status === "HOSPITALIZED")
-    add(
-      "hospital",
-      "hospital",
-      calcHealFinish({
-        user,
-        boost: getStrucBoost("hospitalSpeedupPerLvl", user.village?.structures),
-      }),
-    );
+    add("hospital", "hospital", calcUserHealFinish(user));
   add("mastery", "mastery", masteryTrainingEndsAt(user));
   add("element", "element", masteryTrainingEndsAt(user, "ELEMENT"));
   if (user.covertTrainingType)
