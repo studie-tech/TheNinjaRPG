@@ -19,7 +19,13 @@ beforeEach(() => {
     { id: "akikaze", title: "Akikaze" },
   ]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
+  getDefaultStore().set(chatMentionsAtom, {});
+  getDefaultStore().set(chatTavernActivityAtom, {});
+  vi.restoreAllMocks();
+});
 
 it("reconciles cleared inbox news when the phone chat list loads", () => {
   const updateNotifications = vi.fn();

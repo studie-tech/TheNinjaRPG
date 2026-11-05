@@ -63,9 +63,11 @@ export const useTavernActivity = (
         if (store.get(chatViewedConversationsAtom)[conversationId]) return;
         void utils.profile.getBlacklist
           .fetch(undefined, { staleTime: Infinity })
-          .catch(() => [])
+          .catch(() => undefined)
           .then((blocked) => {
-            if (!isFollowing) return;
+            if (!isFollowing || !blocked) return;
+            // Opening the tavern during the lookup must keep its count clear.
+            if (store.get(chatViewedConversationsAtom)[conversationId]) return;
             if (blocked.some((entry) => entry.targetUserId === senderId)) return;
             store.set(chatTavernActivityAtom, (current) =>
               addConversationMention(current, conversationId),

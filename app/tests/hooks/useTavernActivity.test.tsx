@@ -1,4 +1,4 @@
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import type Pusher from "pusher-js";
@@ -64,6 +64,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  store.set(chatTavernActivityAtom, {});
+  store.set(chatViewedConversationsAtom, {});
   vi.restoreAllMocks();
 });
 
@@ -116,5 +118,30 @@ it("starts fresh for another account and drops messages still being checked", as
   expect(activity()).toEqual({});
   release();
   await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(activity()).toEqual({});
+});
+
+it("keeps the count clear when the tavern opens during a blacklist lookup", async () => {
+  let release!: () => void;
+  const pending = new Promise<{ targetUserId: string }[]>((resolve) => {
+    release = () => resolve([]);
+  });
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ profile: { getBlacklist: { fetch: () => pending } } }),
+  });
+  renderHook(() => useTavernActivity(pusher, player()));
+  handlers.global?.({ message: "new", fromId: "sora" });
+  store.set(chatViewedConversationsAtom, { global: 1 });
+  await act(async () => release());
+  expect(activity()).toEqual({});
+});
+
+it("skips the message when the blacklist lookup fails", async () => {
+  const fetchBlacklist = vi.fn().mockRejectedValue(new Error("Blacklist unavailable"));
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ profile: { getBlacklist: { fetch: fetchBlacklist } } }),
+  });
+  renderHook(() => useTavernActivity(pusher, player()));
+  await act(async () => handlers.global?.({ message: "new", fromId: "troll" }));
   expect(activity()).toEqual({});
 });
