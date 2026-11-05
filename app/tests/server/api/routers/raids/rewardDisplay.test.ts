@@ -9,6 +9,8 @@ import {
   quest,
   raidDamageThreshold,
   raidParticipation,
+  sageMode,
+  sageModeRolls,
   userBadge,
   userData,
   userItem,
@@ -39,6 +41,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       userJutsu,
       userBadge,
       bloodlineRolls,
+      sageModeRolls,
       raidParticipation,
       raidDamageThreshold,
       userVote,
@@ -48,6 +51,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       jutsu,
       badge,
       bloodline,
+      sageMode,
     );
     await insertUsers([
       {
@@ -130,6 +134,38 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
     });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([false, true])(
+    "names only the sage mode the payout granted (equipped=%s)",
+    async (equipped) => {
+      const database = await getTestDatabase();
+      await database.insert(sageMode).values({
+        id: "reward-sage",
+        name: "Reward Sage",
+        description: "Test",
+        image: "/test.png",
+      });
+      await database
+        .update(raidDamageThreshold)
+        .set({ rewards: ObjectiveReward.parse({ reward_sage_modes: ["reward-sage"] }) })
+        .where(eq(raidDamageThreshold.id, "reward-threshold"));
+      if (equipped) {
+        await database
+          .update(userData)
+          .set({ sageModeId: "worn-sage" })
+          .where(eq(userData.userId, "raid-reward-user"));
+      }
+      const api = await callerFor(raidsRouter, "raid-reward-user");
+      const result = await api.claimDamageReward({
+        questId: "reward-raid",
+        thresholdId: "reward-threshold",
+      });
+      expect(result).toMatchObject({
+        success: true,
+        rewards: { reward_sage_modes: equipped ? [] : ["Reward Sage"] },
+      });
+    },
+  );
 
   it.each([false, true])(
     "reuses granted names, preserves item order and quantity, and skips owned content (owned=%s)",
