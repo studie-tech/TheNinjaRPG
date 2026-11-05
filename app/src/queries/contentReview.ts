@@ -580,6 +580,7 @@ export const listUserDataForLoad = (
       eq(userData.isAi, true),
     ),
     with: {
+      spriteAnimationBindings: { with: { animation: true } },
       jutsus: { with: { jutsu: { columns: { id: true } } } },
       items: { with: { item: { columns: { id: true } } } },
     },

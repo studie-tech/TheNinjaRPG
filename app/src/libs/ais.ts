@@ -66,6 +66,7 @@ export const useAiEditForm = (
         await Promise.all([
           utils.profile.getAi.invalidate(),
           utils.profile.getAllAiNames.invalidate(),
+          utils.spriteAnimation.getAiConfig.invalidate({ userId: user.userId }),
         ]);
       }
     },

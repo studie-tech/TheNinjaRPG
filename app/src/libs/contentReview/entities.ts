@@ -89,7 +89,17 @@ export const draftName = (fields: Record<string, unknown>) => {
 const toEntity = (type: ContentProposalEntityType, loaded: Loaded): ContentEntity => {
   const payload = normalizeEditable(type, loaded.payload);
   const editable = pick(payload, ENTITY_CONFIG[type].editableKeys);
-  return { ...loaded, payload, type, editable, version: contentVersion(editable) };
+  // Animation assignments are edited separately but still invalidate AI proposals.
+  // Empty bindings retain the editable-only version; clearing overrides restores it.
+  const assignments = loaded.payload.spriteAnimationAssignments;
+  const versioned =
+    type === "AI" && Array.isArray(assignments) && assignments.length > 0
+      ? {
+          ...editable,
+          spriteAnimationAssignments: assignments,
+        }
+      : editable;
+  return { ...loaded, payload, type, editable, version: contentVersion(versioned) };
 };
 
 /**
@@ -337,14 +347,21 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     load: async (client, ids) => {
       const rows = await listUserDataForLoad(client, ids);
       // Same projection as useAiEditForm, minus relations whose content was deleted.
-      return rows.map(({ jutsus, items, ...row }) => ({
+      return rows.map(({ jutsus, items, spriteAnimationBindings, ...row }) => ({
         id: row.userId,
         name: row.username,
         image: row.avatar,
         isHidden: false,
         payload: {
           ...row,
-          jutsus: jutsus.filter((entry) => entry.jutsu).map((entry) => entry.jutsuId),
+          // Database row order must not change an otherwise identical review version.
+          spriteAnimationAssignments: spriteAnimationBindings
+            .map(({ actionKey, animationId }) => ({ actionKey, animationId }))
+            .sort((a, b) => a.actionKey.localeCompare(b.actionKey)),
+          jutsus: jutsus
+            .filter((entry) => entry.jutsu)
+            .map((entry) => entry.jutsuId)
+            .sort(),
           items: items
             .filter((entry) => entry.item)
             .map((entry) => ({

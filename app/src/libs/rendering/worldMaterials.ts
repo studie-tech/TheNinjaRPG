@@ -1,5 +1,9 @@
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
-import { createSceneAssets, readTexturePixels } from "@/libs/rendering/assets";
+import {
+  createSceneAssets,
+  readTextureFramePixels,
+  readTexturePixels,
+} from "@/libs/rendering/assets";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import {
   type WorldAssetSource,
@@ -123,6 +127,96 @@ export const acquireWorldMaterial = (
   return materials.acquire(
     JSON.stringify({ image, shape: source ? "column" : shape, rendition, source }),
   );
+};
+
+const characterSources = new Map<string, Texture>();
+const characterMaterials = new Map<string, WorldMaterial>();
+const characterMaterialCache = createLeaseCache<WorldMaterial>({
+  load: async (key) => {
+    const source = characterSources.get(key)!;
+    characterSources.delete(key);
+    // Physical shadows need silhouette coverage, not the full albedo resolution.
+    // A 64px cell keeps sub-gameplay detail while bounding dynamic geometry and readback.
+    const scale = Math.min(1, 64 / Math.max(source.frame.width, source.frame.height));
+    const width = Math.max(1, Math.round(source.frame.width * scale)),
+      height = Math.max(1, Math.round(source.frame.height * scale));
+    const pixels = readTextureFramePixels(source, 64);
+    const normal = encodeWorldNormal(0, -1, 0);
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 4;
+        pixels[offset] = (Math.round(normal[0] * 31) << 3) | 1;
+        pixels[offset + 1] = Math.round(normal[1] * 255);
+        pixels[offset + 2] = Math.round((1 - (y + 0.5) / height) * 255);
+      }
+    const material: WorldMaterial = {
+      texture: new Texture({
+        source: new BufferImageSource({
+          resource: pixels,
+          width,
+          height,
+          format: "rgba8unorm",
+          alphaMode: "no-premultiply-alpha",
+          scaleMode: "nearest",
+        }),
+      }),
+      pixels,
+      width,
+      height,
+      shape: "character",
+      isBillboard: true,
+      frames: new Map(),
+    };
+    characterMaterials.set(key, material);
+    return material;
+  },
+  unload: async (key) => {
+    characterMaterials.get(key)?.texture.destroy(true);
+    characterMaterials.delete(key);
+  },
+  bytes: ({ width, height }) => width * height * 8,
+  idleBudget: 8 * 1024 * 1024,
+  idleLimit: 64,
+});
+
+/** Live atlas cells cast their own silhouette without another image request or atlas-sized material. */
+export const acquireCharacterFrameMaterial = (texture: Texture) => {
+  const frame = texture.frame;
+  const key = `${texture.source.uid}:${frame.x}:${frame.y}:${frame.width}:${frame.height}`;
+  if (!characterMaterials.has(key)) characterSources.set(key, texture);
+  return {
+    ...characterMaterialCache.acquire(key),
+    material: characterMaterials.get(key),
+  };
+};
+
+/** Keep a fighter's GPU material binding stable as its cached cell coverage changes. */
+export const updateCharacterFrameMaterial = (
+  source: WorldMaterial,
+  current?: WorldMaterial,
+) => {
+  if (current && current.width === source.width && current.height === source.height) {
+    current.pixels.set(source.pixels);
+    current.frames.clear();
+    current.texture.source.update();
+    return current;
+  }
+  const pixels = source.pixels.slice();
+  return {
+    ...source,
+    pixels,
+    frames: new Map<string, MaterialFrame>(),
+    texture: new Texture({
+      source: new BufferImageSource({
+        resource: pixels,
+        width: source.width,
+        height: source.height,
+        format: "rgba8unorm",
+        alphaMode: "no-premultiply-alpha",
+        scaleMode: "nearest",
+      }),
+    }),
+  };
 };
 
 /** Shared frame samples retain source UVs and authored heights across animation and mirrored poses. */

@@ -619,6 +619,9 @@ export type FederalStatus = (typeof FederalStatuses)[number];
 export const AvatarFacings = ["left", "right"] as const;
 export type AvatarFacing = (typeof AvatarFacings)[number];
 
+/** Bound character atlas downloads, decoded memory and loop duration. */
+export const SPRITE_ANIMATION_LIMITS = { frames: 192, cells: 192, seconds: 16 } as const;
+
 export const UserRanks = [
   "STUDENT",
   "GENIN",

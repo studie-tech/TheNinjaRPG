@@ -417,7 +417,7 @@ export const createCombatScene = async (options: {
             !user.fledBattle,
         )?.userId;
       if (options.staticActors) actors.snap();
-      const moving = actors.animate(frame, snapshot.userId, hoverUser);
+      const moving = actors.animate(frame, snapshot.userId, hoverUser, scale());
       effects.animate(clock, frame.reducedMotion, moving, effect?.id ?? null);
       const user = snapshot.battle.usersState.find(
         (user) => user.userId === snapshot.userId,

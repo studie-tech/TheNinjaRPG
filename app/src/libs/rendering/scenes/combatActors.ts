@@ -21,6 +21,8 @@ import {
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
+import { spriteGroundContact } from "@/libs/rendering/assets";
+import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -181,6 +183,7 @@ export const createCombatActors = (
           root,
           artRoot,
           art: null,
+          spriteAnimation: undefined,
           signature,
           user,
           tile: previous?.tile ?? tile,
@@ -214,6 +217,26 @@ export const createCombatActors = (
           (art) => {
             if (!scope.isDisposed()) {
               current.art = art;
+              const avatar = art.entries.find(
+                (entry) => entry.description.kind === "aiAvatar",
+              );
+              if (
+                avatar?.sprite instanceof Sprite &&
+                Object.keys(current.user.spriteAnimations ?? {}).length
+              ) {
+                current.spriteAnimation = createCharacterAnimation(
+                  avatar.sprite,
+                  avatar.description.size,
+                  current.user.spriteAnimations!,
+                  {
+                    initialEventId: user.spriteAnimationEvent?.id,
+                    maxTextureSize: game.renderer.gl.getParameter(
+                      game.renderer.gl.MAX_TEXTURE_SIZE,
+                    ),
+                  },
+                );
+                scope.own(current.spriteAnimation.dispose);
+              }
               art.setLighting(brightness);
               artRoot.addChild(art.container);
               // Ground effects share actor ownership without widening the artwork's HUD-clearance bounds.
@@ -317,9 +340,10 @@ export const createCombatActors = (
           const sprite = entry.sprite;
           sprite.updateLocalTransform();
           // Contacts and physical shadows share the visible footer, including mirrored asymmetric cutouts.
+          const contact = spriteGroundContact(sprite);
           const foot = sprite.localTransform.apply({
-            x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
-            y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+            x: contact.x - sprite.texture.orig.width * sprite.anchor.x,
+            y: contact.y - sprite.texture.orig.height * sprite.anchor.y,
           });
           for (const marker of [record.shadow, record.selection, record.hover])
             marker.position.copyFrom(foot);
@@ -344,6 +368,7 @@ export const createCombatActors = (
     frame: GameFrame,
     selectedId: string,
     hoveredId: string | undefined,
+    pixelsPerWorld = 1,
   ) => {
     if (!snapshot) return false;
     const now = Date.now();
@@ -406,6 +431,26 @@ export const createCombatActors = (
         record.deathAt = frame.now;
       if (record.alive) record.deathAt = undefined;
       for (const entry of record.art?.entries ?? []) {
+        if (entry.description.kind === "aiAvatar" && entry.sprite instanceof Sprite) {
+          record.spriteAnimation?.render({
+            now: frame.now,
+            moving: distance > 0.01,
+            facing: getFacingDirection(
+              user,
+              snapshot.battle.usersState,
+              user.avatarFacing ?? "left",
+            ),
+            sourceFacing: user.avatarFacing ?? "left",
+            event: user.spriteAnimationEvent,
+            enabled:
+              game.visualEffects.spriteAnimations && record.alive && root.visible,
+            reducedMotion: frame.reducedMotion,
+            cellSize:
+              entry.description.size * pixelsPerWorld * game.renderer.resolution > 192
+                ? 256
+                : 128,
+          });
+        }
         if (!entry.character) continue;
         const falling =
           record.deathAt !== undefined &&
@@ -646,6 +691,7 @@ type Fighter = {
   root: Container;
   artRoot: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
+  spriteAnimation?: ReturnType<typeof createCharacterAnimation>;
   signature: string;
   user: ReturnedUserState;
   tile: TerrainHex;

@@ -1,5 +1,5 @@
 import { Container, Matrix, Sprite, Texture } from "pixi.js";
-import { textureGroundContact } from "@/libs/rendering/assets";
+import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import {
   type BakedShadowAtlas,
   bakedShadowBounds,
@@ -816,6 +816,13 @@ export const createBakedVillageLighting = (game: GameRenderer, world: Container)
       const now = performance.now();
       for (const record of characters.values()) {
         if (record.root.destroyed || !record.root.parent) continue;
+        if (record.root instanceof Sprite) {
+          const contact = spriteGroundContact(record.root);
+          record.foot = {
+            x: contact.x - record.root.anchor.x * record.root.texture.orig.width,
+            y: contact.y - record.root.anchor.y * record.root.texture.orig.height,
+          };
+        }
         const m = origin(record.root, matrices),
           height = Math.hypot(m.c, m.d);
         const foot = m.apply(record.foot);

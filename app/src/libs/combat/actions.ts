@@ -84,6 +84,7 @@ import { withSpriteEquipment } from "@/libs/lpc/appearance";
 import { hasMasteryRequirements, hasUsableDurability } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import { spriteActionKey } from "@/libs/spriteAnimations";
 import {
   CleanseTag,
   ClearTag,
@@ -1439,6 +1440,18 @@ export const performBattleAction = (props: {
       longitude,
       latitude,
     };
+  // Effects replace participant objects; attach the event to the returned state,
+  // using a fresh ID so repeated casts of the same action can restart playback.
+  const animatedActor = newBattle.usersState.find((actor) => actor.userId === actorId);
+  if (
+    animatedActor?.spriteAnimations &&
+    Object.keys(animatedActor.spriteAnimations).length > 0
+  ) {
+    animatedActor.spriteAnimationEvent = {
+      id: nanoid(),
+      actionKey: spriteActionKey(action),
+    };
+  }
 
   return { newBattle, actionEffects };
 };

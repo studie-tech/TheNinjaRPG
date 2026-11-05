@@ -831,6 +831,32 @@ describe("physical world lighting", () => {
     f.dispose();
   });
 
+  it("uses live combat cells with stable GPU bindings instead of the registered portrait silhouette", async () => {
+    const f=fixture(), source=materialSourceFixture();
+    const pixels=new Uint8Array(8*4*4);
+    for(let y=0;y<3;y++)pixels[(y*8+1)*4+3]=255;
+    for(let y=0;y<2;y++)pixels[(y*8+6)*4+3]=255;
+    const atlas=new Texture({source:new BufferImageSource({resource:pixels,width:8,height:4})});
+    const frames=[0,4].map(x=>new Texture({source:atlas.source,frame:new Rectangle(x,0,4,4)}));
+    const sprite=new Sprite(source.texture);sprite.position.set(40,40);sprite.scale.set(5,-5);f.parent.addChild(sprite);
+    const registration=f.shadows.register(sprite,{id:"combat-sheet",kind:"character",image:"combat-sheet-portrait",size:20,x:40,y:40,groundY:20,shadowCaster:"character"});
+    const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
+    try {
+      await registration.ready;
+      sprite.texture=frames[0]!;f.shadows.update(worldSunlight(),viewport);await flush();f.shadows.update(worldSunlight(),viewport);
+      const layer=f.render.mock.calls.find(([call])=>call.container.children.some((child:Mesh)=>!!child.shader?.resources.uMaterial0))![0].container;
+      const mesh=layer.children[0] as Mesh<Geometry, Shader>;
+      const shader=mesh.shader;
+      if(!shader)throw new Error("Expected a receiver shader");
+      const material=shader.resources.uMaterial0 as BufferImageSource;
+      expect(material.pixelWidth).toBe(4);expect((material.resource as Uint8Array)[(2*4+1)*4+3]).toBe(255);
+      sprite.texture=frames[1]!;f.shadows.update(worldSunlight(),viewport);await flush();f.shadows.update(worldSunlight(),viewport);
+      expect(layer.children[0]).toBe(mesh);expect(mesh.shader).toBe(shader);expect(shader.resources.uMaterial0).toBe(material);
+      expect((material.resource as Uint8Array)[(2*4+1)*4+3]).toBe(0);
+      expect((material.resource as Uint8Array)[(1*4+2)*4+3]).toBe(255);
+    } finally {registration();f.dispose();for(const frame of frames)frame.destroy(false);atlas.destroy(true);source.dispose();}
+  });
+
   it("refreshes receiver and occlusion data when same-sized animation images change", async () => {
     const f = fixture();
     const a = new Uint8Array([128,128,128,255,128,128,128,255,128,128,128,255,128,128,128,255]);

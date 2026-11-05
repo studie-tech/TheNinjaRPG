@@ -182,6 +182,7 @@ import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questPart
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
 import { rollStealthKeep } from "@/libs/stealth";
 import { getTerritoryCompetitor } from "@/libs/territoryWar";
 import {
@@ -630,22 +631,6 @@ export const combatRouter = createTRPCRouter({
         // Create the grid for the battle
         const grid = getBattleGrid(1, battle);
 
-        // For kage battles, only allow one move per action. Same whenever any
-        // still-fighting human is on auto combat — they are watching, so every
-        // driving client (not just their own) must deliver one animated action
-        // per poll instead of a whole exchange. Dead/fled/left players no
-        // longer watch a live fight, so they stop capping the batch.
-        const anyHumanOnAutoCombat = battle.usersState.some(
-          (u) =>
-            !u.isAi &&
-            !u.isSummon &&
-            u.isAutoCombat &&
-            !u.leftBattle &&
-            stillInBattle(u),
-        );
-        const maxActions =
-          AutoBattleTypes.includes(battle.battleType) || anyHumanOnAutoCombat ? 1 : 5;
-
         // Instantiate new state variables
         const history: {
           battleRound: number;
@@ -824,9 +809,23 @@ export const combatRouter = createTRPCRouter({
           // piloted summon is never auto-driven here for the same reason it is
           // not authorized as an AI turn at the top of the block.
           const { isAITurn: newIsAITurn } = getTurnControl(newActor, suid);
+          // Recheck after actions: a hidden animated summon template may now be
+          // alive. Each actor's latest event must reach the client before another
+          // action overwrites it; departed participants no longer cap the batch.
+          const needsActionPlayback = newBattle.usersState.some(
+            (u) =>
+              ((!u.isAi && !u.isSummon && u.isAutoCombat) ||
+                Object.keys(u.spriteAnimations ?? {}).length > 0) &&
+              !u.leftBattle &&
+              stillInBattle(u),
+          );
+          const maxActions =
+            AutoBattleTypes.includes(newBattle.battleType) || needsActionPlayback
+              ? 1
+              : 5;
           if (
             newIsAITurn && // Continue new loop if the next actor acts autonomously
-            nActions < maxActions && // and we haven't performed 5 actions yet
+            nActions < maxActions && // and we haven't reached the playback cap
             !result && // and the battle is not over for the user
             (newActor.userId !== actor.userId || description) // and new actor, or successful attack
           ) {
@@ -3638,6 +3637,8 @@ const assertAcyclicSummons = (dependencies: Map<string, Set<string>>) => {
  * Companion species summons join initiation's preload so their effect dispatch needs no reads.
  * Ranked players normalize to endgame levels; other Elite players retain earned milestone levels.
  * Recursive summon loads reject cycles; references satisfied by the same batch remain valid.
+ * Animation relations become rendering-only snapshots; reprocessed combatants keep
+ * their existing snapshots so live assignment edits cannot change an ongoing battle.
  *
  * @param client - Database client for participant processing that requires persisted state.
  * @param info - Preloaded users, combat relations, team boundary and battlefield dimensions.
@@ -3736,6 +3737,9 @@ export const processUsersForBattle = async (
       ...inputUser,
       // Freeze the choice before bloodline processing and later profile edits, including ranked battles.
       preferredDamageElement: getPreferredDamageElement(inputUser),
+      spriteAnimations: inputUser.spriteAnimationBindings
+        ? snapshotSpriteAnimations(inputUser.spriteAnimationBindings)
+        : (inputUser.spriteAnimations ?? {}),
       // Set controllerID and mark this user as the original
       controllerId: inputUser.userId,
       enemySkillIds: [],
@@ -4590,6 +4594,7 @@ export const processUsersForBattle = async (
       bountySignups: _bountySignups,
       activeReskin: _activeReskin,
       cookingJobs: _cookingJobs,
+      spriteAnimationBindings: _spriteAnimationBindings,
       ...rest
     } = user;
 

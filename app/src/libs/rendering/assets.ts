@@ -1,4 +1,4 @@
-import { Assets, Rectangle, type Texture } from "pixi.js";
+import { Assets, Rectangle, type Sprite, type Texture } from "pixi.js";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
@@ -109,6 +109,64 @@ export const readTexturePixels = (texture: Texture, width: number, height: numbe
 };
 
 const occupiedFrames = new WeakMap<Texture["source"], Map<string, OccupiedFrame>>();
+const spriteContacts = new WeakMap<Sprite, { x: number; y: number }>();
+
+/** Animated cells share one authored rest contact, so jumps keep their vertical motion. */
+export const setSpriteGroundContact = (
+  sprite: Sprite,
+  contact?: { x: number; y: number },
+) => {
+  if (contact) spriteContacts.set(sprite, contact);
+  else spriteContacts.delete(sprite);
+};
+
+export const spriteGroundContact = (sprite: Sprite) =>
+  spriteContacts.get(sprite) ?? textureGroundContact(sprite.texture);
+
+/** Read only the current cell; shadow preparation never decodes a full atlas per frame. */
+export const readTextureFramePixels = (
+  texture: Texture,
+  maxSize = Number.POSITIVE_INFINITY,
+) => {
+  const { frame, source } = texture;
+  const scale = Math.min(1, maxSize / Math.max(frame.width, frame.height));
+  const width = Math.max(1, Math.round(frame.width * scale)),
+    height = Math.max(1, Math.round(frame.height * scale));
+  const resource: unknown = source.resource;
+  if (resource instanceof Uint8Array) {
+    const pixels = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      const row = frame.y + Math.floor(((y + 0.5) * frame.height) / height);
+      for (let x = 0; x < width; x++) {
+        const offset =
+          (row * source.pixelWidth +
+            frame.x +
+            Math.floor(((x + 0.5) * frame.width) / width)) *
+          4;
+        pixels.set(resource.subarray(offset, offset + 4), (y * width + x) * 4);
+      }
+    }
+    return pixels;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Cannot read character frame data");
+  context.imageSmoothingEnabled = false;
+  context.drawImage(
+    resource as CanvasImageSource,
+    frame.x,
+    frame.y,
+    frame.width,
+    frame.height,
+    0,
+    0,
+    width,
+    height,
+  );
+  return new Uint8Array(context.getImageData(0, 0, width, height).data);
+};
 
 /** Occupied source-pixel bounds are shared by atlas views; readPixels supplies full-source RGBA bytes. */
 export const textureOpaqueFrame = (texture: Texture, readPixels?: () => Uint8Array) =>
