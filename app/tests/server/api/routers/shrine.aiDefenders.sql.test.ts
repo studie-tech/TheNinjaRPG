@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { SHRINE_AI_UNLOCK_COST, SHRINE_BATTLE_LOBBY_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile,
@@ -15,6 +15,7 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { insertUsers } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -209,6 +210,87 @@ describeWithDatabase("shrine AI defenders", () => {
     expect((await kage.toggleVillageAiDefender({ aiId: "plain-ai" })).success).toBe(true);
     expect(await homeVillage()).toMatchObject({
       shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
+  });
+
+  const racingCaller = async (rival: () => Promise<unknown>) =>
+    callerForDatabase(
+      shrineRouter,
+      "kage",
+      beforeStatements(await getTestDatabase(), village, [rival]),
+    );
+
+  it("charges only the winner of concurrent unlocks and keeps its unlock", async () => {
+    await storeSettings([], ["shrine-a"]);
+    const rival = await shrineCaller("kage");
+    const kage = await racingCaller(() => rival.unlockAiDefender({ aiId: "shrine-b" }));
+    const result = await kage.unlockAiDefender({ aiId: "shrine-c" });
+    expect(result.success).toBe(false);
+    expect(await homeVillage()).toMatchObject({
+      tokens: 1000000 - SHRINE_AI_UNLOCK_COST,
+      shrineSettings: { unlockedAiIds: ["shrine-a", "shrine-b"] },
+    });
+  });
+
+  it("refuses a toggle built from a stale assignment list", async () => {
+    await storeSettings([], ["shrine-a", "shrine-b"]);
+    const rival = await shrineCaller("kage");
+    const kage = await racingCaller(() =>
+      rival.toggleVillageAiDefender({ aiId: "shrine-a" }),
+    );
+    const result = await kage.toggleVillageAiDefender({ aiId: "shrine-b" });
+    expect(result.success).toBe(false);
+    expect(await homeVillage()).toMatchObject({
+      shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
+  });
+
+  it("refuses an unlock and a toggle once the caller stopped being Kage", async () => {
+    await storeSettings([], ["shrine-a"]);
+    const db = await getTestDatabase();
+    const demote = () =>
+      db.update(village).set({ kageId: "ally" }).where(eq(village.id, "a"));
+    const unlock = await racingCaller(demote);
+    expect((await unlock.unlockAiDefender({ aiId: "shrine-b" })).success).toBe(false);
+    await db.update(village).set({ kageId: "kage" }).where(eq(village.id, "a"));
+    const toggle = await racingCaller(demote);
+    expect((await toggle.toggleVillageAiDefender({ aiId: "shrine-a" })).success).toBe(
+      false,
+    );
+    expect(await homeVillage()).toMatchObject({
+      tokens: 1000000,
+      shrineSettings: { unlockedAiIds: ["shrine-a"], activeAiIds: [] },
+    });
+  });
+
+  it("matches the stored snapshot whatever the key order or id order", async () => {
+    const db = await getTestDatabase();
+    await db.execute(
+      sql`UPDATE ${village} SET ${village.shrineSettings} = CAST(${'{"unlockedAiIds":["shrine-c","shrine-a"],"activeBoosts":{},"activeAiIds":["shrine-c","shrine-a"]}'} AS JSON) WHERE ${village.id} = 'a'`,
+    );
+    const kage = await shrineCaller("kage");
+    expect((await kage.unlockAiDefender({ aiId: "shrine-b" })).success).toBe(true);
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-b" })).success).toBe(true);
+    expect(await homeVillage()).toMatchObject({
+      tokens: 1000000 - SHRINE_AI_UNLOCK_COST,
+      shrineSettings: {
+        unlockedAiIds: ["shrine-c", "shrine-a", "shrine-b"],
+        activeAiIds: ["shrine-c", "shrine-a", "shrine-b"],
+      },
+    });
+  });
+
+  it("treats a missing list key as an empty snapshot", async () => {
+    const db = await getTestDatabase();
+    await db.execute(
+      sql`UPDATE ${village} SET ${village.shrineSettings} = CAST(${'{"activeBoosts":{}}'} AS JSON) WHERE ${village.id} = 'a'`,
+    );
+    const kage = await shrineCaller("kage");
+    expect((await kage.unlockAiDefender({ aiId: "shrine-a" })).success).toBe(true);
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-a" })).success).toBe(true);
+    expect(await homeVillage()).toMatchObject({
+      tokens: 1000000 - SHRINE_AI_UNLOCK_COST,
+      shrineSettings: { unlockedAiIds: ["shrine-a"], activeAiIds: ["shrine-a"] },
     });
   });
 });

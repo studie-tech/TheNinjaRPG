@@ -323,12 +323,15 @@ export const shrineRouter = createTRPCRouter({
 
       const updateRes = await updateVillageForUnlockAiDefender(
         ctx.drizzle,
+        currentUnlocks,
         updatedUnlocks,
-        { villageId: user.villageId },
+        { villageId: user.villageId, userId: user.userId },
       );
 
       if (updateRes.rowsAffected === 0) {
-        return errorResponse("Not enough village tokens to unlock AI defender");
+        return errorResponse(
+          "Could not unlock AI defender: the village changed, please try again",
+        );
       }
 
       return {
@@ -390,9 +393,18 @@ export const shrineRouter = createTRPCRouter({
         message = `AI defender ${ai.username} added to active defenders`;
       }
 
-      await updateVillageForToggleVillageAiDefender(ctx.drizzle, newAssigns, {
-        villageId: user.villageId,
-      });
+      const updateRes = await updateVillageForToggleVillageAiDefender(
+        ctx.drizzle,
+        currentAssigns,
+        newAssigns,
+        { villageId: user.villageId, userId: user.userId },
+      );
+
+      if (updateRes.rowsAffected === 0) {
+        return errorResponse(
+          "Could not update AI defenders: the village changed, please try again",
+        );
+      }
 
       return {
         success: true,

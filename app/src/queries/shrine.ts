@@ -39,6 +39,7 @@ import {
   boostInactivePredicate,
   setActiveBoostExpression,
   setShrineSettingsKeyExpression,
+  shrineSettingsKeyUnchangedPredicate,
   upsertActiveBoostsExpression,
 } from "@/server/utils/shrine";
 
@@ -334,12 +335,14 @@ export const updateVillageForActivateBoost = (
 
 /**
  * Build the `village` update for `unlockAiDefender`, setting `tokens` and
- * `shrineSettings`, using predicates on `id` and `tokens`.
+ * `shrineSettings`, using predicates on `id`, `kageId`, `tokens` and the unlock list the
+ * write was built from.
  */
 export const updateVillageForUnlockAiDefender = (
   client: Pick<DrizzleClient, "update">,
+  currentUnlocks: string[],
   updatedUnlocks: string[],
-  user: { villageId: string },
+  user: { villageId: string; userId: string },
 ) =>
   client
     .update(village)
@@ -348,21 +351,36 @@ export const updateVillageForUnlockAiDefender = (
       shrineSettings: setShrineSettingsKeyExpression("unlockedAiIds", updatedUnlocks),
     })
     .where(
-      and(eq(village.id, user.villageId), gte(village.tokens, SHRINE_AI_UNLOCK_COST)),
+      and(
+        eq(village.id, user.villageId),
+        eq(village.kageId, user.userId),
+        gte(village.tokens, SHRINE_AI_UNLOCK_COST),
+        shrineSettingsKeyUnchangedPredicate("unlockedAiIds", currentUnlocks),
+      ),
     );
 
-/** Build the `village` update for `toggleVillageAiDefender`, setting `shrineSettings`, using predicates on `id`. */
+/**
+ * Build the `village` update for `toggleVillageAiDefender`, setting `shrineSettings`,
+ * using predicates on `id`, `kageId` and the stored assignment list.
+ */
 export const updateVillageForToggleVillageAiDefender = (
   client: Pick<DrizzleClient, "update">,
+  currentAssigns: string[],
   newAssigns: string[],
-  user: { villageId: string },
+  user: { villageId: string; userId: string },
 ) =>
   client
     .update(village)
     .set({
       shrineSettings: setShrineSettingsKeyExpression("activeAiIds", newAssigns),
     })
-    .where(eq(village.id, user.villageId));
+    .where(
+      and(
+        eq(village.id, user.villageId),
+        eq(village.kageId, user.userId),
+        shrineSettingsKeyUnchangedPredicate("activeAiIds", currentAssigns),
+      ),
+    );
 
 /** Build the `sector` lookup for `payWeeklyMaintenance`, using predicates on `id`. */
 export const findSectorForPayWeeklyMaintenance = (
