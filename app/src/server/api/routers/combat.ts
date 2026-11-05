@@ -878,15 +878,7 @@ export const combatRouter = createTRPCRouter({
             const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
-              ...settlementWrites(
-                db,
-                pusher,
-                newBattle,
-                result,
-                suid,
-                battleOver,
-                true,
-              ),
+              ...settlementWrites(db, pusher, newBattle, result, suid, battleOver),
               finishBattle(),
             ]);
             const newMaskedBattle = maskBattle(newBattle, suid);

@@ -208,7 +208,7 @@ describe("syncPoolAdjustments", () => {
 describe("settlementWrites", () => {
   const writes = (
     extraState: Record<string, unknown>,
-    options: { battleOver?: boolean; fromAction?: boolean } = {},
+    options: { battleOver?: boolean } = {},
   ) =>
     settlementWrites(
       {} as DrizzleClient,
@@ -220,26 +220,21 @@ describe("settlementWrites", () => {
       null,
       "attacker",
       options.battleOver ?? false,
-      options.fromAction,
     );
-  const updateUserAndPollWrites = 5;
+  const allWrites = 7;
 
-  it("runs the shared writers on a poll, with quest updates first", async () => {
+  it("runs every writer, with quest updates first", async () => {
     const list = writes({});
-    expect(list).toHaveLength(updateUserAndPollWrites);
+    expect(list).toHaveLength(allWrites);
     expect(await list[0]).toEqual({ updatedQuestIds: [] });
   });
 
-  it("adds usage statistics and clan leadership for an action", () => {
-    expect(writes({}, { fromAction: true })).toHaveLength(updateUserAndPollWrites + 2);
-  });
-
   it.each(["dungeon", "hunting"])("leaves only updateUser for %s", (key) => {
-    expect(writes({ [key]: {} }, { fromAction: true })).toHaveLength(1);
+    expect(writes({ [key]: {} })).toHaveLength(1);
   });
 
   it("skips the tournament write once the claim committed the outcome", () => {
     const list = writes({ tournamentGameId: "game" }, { battleOver: true });
-    expect(list).toHaveLength(updateUserAndPollWrites - 1);
+    expect(list).toHaveLength(allWrites - 1);
   });
 });
