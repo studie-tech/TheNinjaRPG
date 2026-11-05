@@ -167,11 +167,19 @@ export const isPayPalCleanupError = (err: unknown): boolean => {
 };
 
 /**
- * A stack line whose script came from a host the CSP lets serve PayPal scripts, as V8
+ * A stack line whose script came from a domain or its subdomains, as V8
  * ("at fn (url:1:2)", "at url:1:2") or Firefox and Safari ("fn@url:1:2") print it.
  */
-const PAYPAL_STACK_LINE =
-  /(?:^\s*at (?:[^():\n]*\()?|^[^@:\n]*@)https?:\/\/(?:[a-z0-9-]+\.)*paypal(?:objects)?\.com(?::\d+)?[/?#]/im;
+const stackLineFromDomain = (domain: string) =>
+  new RegExp(
+    `(?:^\\s*at (?:[^():\\n]*\\()?|^[^@:\\n]*@)https?://(?:[a-z0-9-]+\\.)*${domain}(?::\\d+)?[/?#]`,
+    "im",
+  );
+
+/** The hosts the CSP lets serve PayPal scripts. */
+const PAYPAL_STACK_LINE = stackLineFromDomain("paypal(?:objects)?\\.com");
+const COOKIEBOT_STACK_LINE = stackLineFromDomain("cookiebot\\.com");
+const GOOGLE_TAG_STACK_LINE = stackLineFromDomain("googletagmanager\\.com");
 
 /**
  * True when a raw `Error.stack` ran through PayPal's own hosts. Takes the raw stack because
@@ -179,6 +187,28 @@ const PAYPAL_STACK_LINE =
  */
 export const isPayPalSdkStack = (stack: string | undefined): boolean =>
   !!stack && PAYPAL_STACK_LINE.test(stack);
+
+/** True when a raw `Error.stack` ran through Cookiebot's hosts, as for PayPal above. */
+export const isCookiebotStack = (stack: string | undefined): boolean =>
+  !!stack && COOKIEBOT_STACK_LINE.test(stack);
+
+/** True when a raw `Error.stack` ran through Google's tag hosts, as for PayPal above. */
+export const isGoogleTagStack = (stack: string | undefined): boolean =>
+  !!stack && GOOGLE_TAG_STACK_LINE.test(stack);
+
+/** A script a browser or in-app webview injects; it has no host of its own to validate. */
+const INJECTED_CONTENT_PATH = /(^|\/)inject_content\.js([?#]|$)/;
+
+/** True for a frame path whose file is exactly that injected script. */
+export const isInjectedContentPath = (path: string | undefined): boolean =>
+  !!path && INJECTED_CONTENT_PATH.test(path);
+
+/** A script in-app browsers inject around media; it has no host of its own to validate. */
+const MEDIA_FILTER_PATH = /(^|\/)mediafilter(\.js)?([?#]|$)/;
+
+/** True for a frame path whose file is exactly that injected script. */
+export const isMediaFilterPath = (path: string | undefined): boolean =>
+  !!path && MEDIA_FILTER_PATH.test(path);
 
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",

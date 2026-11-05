@@ -18,8 +18,12 @@ import {
   isProxyError as isProxyErrorPattern,
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
+  isCookiebotStack,
   isExtensionExecutorEvent,
+  isGoogleTagStack,
+  isInjectedContentPath,
   isInjectedWalletRejection,
+  isMediaFilterPath,
   isPayPalCleanupError,
   isPayPalSdkStack,
   PAYPAL_CLEANUP_PATTERNS,
@@ -127,7 +131,7 @@ Sentry.init({
     if (isClerkStorageError(event)) {
       return null; // Drop Clerk storage access errors
     }
-    if (isThirdPartyInjectedError(event)) {
+    if (isThirdPartyInjectedError(event, hint)) {
       return null; // Drop errors from injected scripts (e.g. Facebook/Cookiebot)
     }
     if (isExtensionExecutorError(event)) {
@@ -139,7 +143,7 @@ Sentry.init({
     if (isEffectInterruptError(event)) {
       return null; // Drop Effect-TS fiber interruption errors (SpacetimeDB SDK)
     }
-    if (isDataCloneError(event)) {
+    if (isDataCloneError(event, hint)) {
       return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
     }
     if (isReplicateApiError(event)) {
@@ -466,33 +470,36 @@ const isExtensionExecutorError = (event: Sentry.ErrorEvent): boolean =>
 /**
  * Check if an error is from an injected third-party script like Facebook or Cookiebot.
  * These often cause "Illegal invocation" errors in document.createEvent or similar.
+ *
+ * UX: no game screen or loading state waits on these scripts. A failed inject_content.js
+ * stays inside its own callback, and without a Cookiebot answer the consent readers in
+ * `libs/cookieConsent.ts` treat optional categories as declined, so tracking stays off and
+ * embeds show their click-to-load placeholder.
  */
-const isThirdPartyInjectedError = (event: Sentry.ErrorEvent): boolean => {
+const isThirdPartyInjectedError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
-  const isInjectedScript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("inject_content.js") ||
-      frame.filename?.includes("uc.js") ||
-      frame.filename?.includes("cc.js") ||
-      frame.abs_path?.includes("inject_content.js") ||
-      frame.abs_path?.includes("uc.js") ||
-      frame.abs_path?.includes("cc.js"),
+  const isCookiebotScript = isCookiebotStack(
+    (hint.originalException as Error | null | undefined)?.stack,
   );
+  const isInjectedScript =
+    isCookiebotScript ||
+    stackFrames.some(
+      (frame) =>
+        isInjectedContentPath(frame.filename) || isInjectedContentPath(frame.abs_path),
+    );
 
   // Filter Illegal invocation errors from any injected script
   if (isInjectedScript && message.includes("Illegal invocation")) {
     return true;
   }
 
-  // Filter Cookiebot-specific errors (cc.js) when manipulating DOM elements
+  // Filter Cookiebot-specific errors when manipulating DOM elements
   // sortBannerButtons tries to set innerHTML on null element
-  const isCookiebotScript = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("cc.js") || frame.abs_path?.includes("cc.js"),
-  );
-
   if (isCookiebotScript && message.includes("Cannot set properties of null")) {
     return true;
   }
@@ -519,8 +526,14 @@ const isEffectInterruptError = (event: Sentry.ErrorEvent): boolean => {
  * These occur when scripts like Google Analytics (gtag) or mediafilter inject
  * code that tries to postMessage with DOM elements that cannot be cloned.
  * Common in Facebook's in-app browser.
+ *
+ * UX: only that script's message is lost. The game never reads it, so no screen, loading
+ * state or player action depends on it.
  */
-const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
+const isDataCloneError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
@@ -531,12 +544,12 @@ const isDataCloneError = (event: Sentry.ErrorEvent): boolean => {
   if (!isDataCloneMessage) return false;
 
   // Check if the error originates from third-party scripts
-  return stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("gtag/js") ||
-      frame.filename?.includes("mediafilter") ||
-      frame.abs_path?.includes("gtag/js") ||
-      frame.abs_path?.includes("mediafilter"),
+  return (
+    isGoogleTagStack((hint.originalException as Error | null | undefined)?.stack) ||
+    stackFrames.some(
+      (frame) =>
+        isMediaFilterPath(frame.filename) || isMediaFilterPath(frame.abs_path),
+    )
   );
 };
 
