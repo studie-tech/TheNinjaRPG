@@ -16,7 +16,9 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { QueryError } from "@/layout/QueryError";
+import { freeResetNote } from "@/libs/skillReset";
 import { showMutationToast } from "@/libs/toast";
+import { isStaffMember } from "@/utils/permissions";
 import { useRequiredUserData, useUserData } from "@/utils/UserContext";
 import type { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -58,6 +60,21 @@ export const Bloodright = () => {
   if (!data?.tiers.length && !data?.purchased.length)
     return <p>No Bloodright Path for this Bloodline</p>;
   const purchasedIds = data?.purchased.map((entry) => entry.skillId) ?? [];
+  const isTierModalOpen = isOpen && data?.tiers.some((tier) => tier.id === selectedId);
+  const mutationErrors = (
+    <>
+      {purchase.data && !purchase.data.success && (
+        <p role="alert" className="text-destructive">
+          {purchase.data.message}
+        </p>
+      )}
+      {refund.data && !refund.data.success && (
+        <p role="alert" className="text-destructive">
+          {refund.data.message}
+        </p>
+      )}
+    </>
+  );
   return (
     <div className="space-y-4">
       <p>
@@ -142,16 +159,7 @@ export const Bloodright = () => {
                   {!hasPrerequisites ? "Prerequisites required" : "Unlock tier"}
                 </Button>
               )}
-              {purchase.data && !purchase.data.success && (
-                <p role="alert" className="text-destructive">
-                  {purchase.data.message}
-                </p>
-              )}
-              {refund.data && !refund.data.success && (
-                <p role="alert" className="text-destructive">
-                  {refund.data.message}
-                </p>
-              )}
+              {mutationErrors}
             </Modal>
           );
         })}
@@ -173,23 +181,14 @@ export const Bloodright = () => {
             Refund this tier and all dependents?
           </Confirm>
         ))}
-      {purchase.data && !purchase.data.success && (
-        <p role="alert" className="text-destructive">
-          {purchase.data.message}
-        </p>
-      )}
-      {refund.data && !refund.data.success && (
-        <p role="alert" className="text-destructive">
-          {refund.data.message}
-        </p>
-      )}
+      {!isTierModalOpen && mutationErrors}
     </div>
   );
 };
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useUserData();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
     onMutate: prepareUserUpdate,
@@ -226,9 +225,10 @@ export const ResetBloodright = () => {
         button={
           <Button disabled={!info || reset.isPending}>
             {info?.isFree
-              ? info.freeResetsRemaining > 0
-                ? `Reset Bloodright (${info.freeResetsRemaining} free resets remaining)`
-                : "Reset Bloodright (Free for staff)"
+              ? `Reset Bloodright (${freeResetNote(
+                  !!user && isStaffMember(user),
+                  info.freeResetsRemaining,
+                )})`
               : `Reset Bloodright for ${COST_SKILL_RESET} Reps`}
           </Button>
         }
