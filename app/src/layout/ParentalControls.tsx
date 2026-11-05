@@ -197,49 +197,29 @@ function ParentalSettingsForm({
         )}
         {(settings.hasPin || enabled) && (
           <div className="space-y-3 border-t pt-4">
-            <div className="space-y-1">
-              <Label htmlFor="parental-pin">
-                {settings.hasPin ? "Parent PIN" : "Create a parent PIN"}
-              </Label>
-              <Input
-                id="parental-pin"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Six digits"
-              />
-            </div>
+            <PinField
+              id="parental-pin"
+              label={settings.hasPin ? "Parent PIN" : "Create a parent PIN"}
+              value={pin}
+              onChange={setPin}
+              placeholder="Six digits"
+            />
             {settings.hasPin && enabled && (
-              <div className="space-y-1">
-                <Label htmlFor="parental-new-pin">New PIN (optional)</Label>
-                <Input
-                  id="parental-new-pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={6}
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
-                  placeholder="Leave empty to keep your PIN"
-                />
-              </div>
+              <PinField
+                id="parental-new-pin"
+                label="New PIN (optional)"
+                value={newPin}
+                onChange={setNewPin}
+                placeholder="Leave empty to keep your PIN"
+              />
             )}
             {(creatingPin || changingPin) && (
-              <div className="space-y-1">
-                <Label htmlFor="parental-confirm-pin">Confirm PIN</Label>
-                <Input
-                  id="parental-confirm-pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={6}
-                  value={confirmPin}
-                  onChange={(e) => setConfirmPin(e.target.value)}
-                />
-              </div>
+              <PinField
+                id="parental-confirm-pin"
+                label="Confirm PIN"
+                value={confirmPin}
+                onChange={setConfirmPin}
+              />
             )}
             <p className="text-muted-foreground text-xs">
               Five PIN attempts are allowed every 15 minutes. Forgot the PIN?{" "}
@@ -280,3 +260,25 @@ function ParentalSettingsForm({
     </form>
   );
 }
+
+const PinField: React.FC<{
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}> = ({ id, label, value, onChange, placeholder }) => (
+  <div className="space-y-1">
+    <Label htmlFor={id}>{label}</Label>
+    <Input
+      id={id}
+      type="password"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={6}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  </div>
+);
