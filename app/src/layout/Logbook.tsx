@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
-  ABANDONABLE_QUEST_TYPES,
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_SCENE_BACKGROUND,
 } from "@/drizzle/constants";
@@ -47,6 +46,7 @@ import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
+import { canAbandonQuestType } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
@@ -629,7 +629,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             {!isAbandoned &&
               !props.compact &&
               !!questStartedAt &&
-              [...ABANDONABLE_QUEST_TYPES, "anbu"].includes(quest.questType) && (
+              canAbandonQuestType(userData?.role ?? "USER", quest.questType) && (
                 <Button
                   type="button"
                   size="icon"

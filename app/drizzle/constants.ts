@@ -1103,6 +1103,7 @@ export const ABANDONABLE_QUEST_TYPES = [
   "overworld",
   "mastery",
   "special",
+  "war",
 ] as const satisfies readonly QuestType[];
 /** Types started only through a dedicated acquisition flow, never from public listings. */
 export const RESTRICTED_QUEST_TYPES = [
