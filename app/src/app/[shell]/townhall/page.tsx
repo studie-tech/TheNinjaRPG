@@ -42,6 +42,7 @@ import {
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   KAGE_ELDER_REMOVAL_LOCK_SECS,
+  KAGE_MAX_ELDERS,
   KAGE_REMOVAL_COOLDOWN_DAYS,
   WAR_FUNDS_COST,
 } from "@/drizzle/constants";
@@ -328,8 +329,8 @@ const ElderHall: React.FC<{
       >
         <p className="pb-2">
           The Elder Council is composed of representatives from the village&apos;s most
-          active clans. Each month, elders are automatically selected from the top 3
-          clans by activity points. Clan rankings are locked on the{" "}
+          active clans. Each month, elders are automatically selected from the top{" "}
+          {KAGE_MAX_ELDERS} clans by activity points. Clan rankings are locked on the{" "}
           {ELDER_NOMINATION_CUTOFF_DAY}th of each month, and clan leaders can nominate a
           member to become elder between the {ELDER_NOMINATION_CUTOFF_DAY}th and{" "}
           {ELDER_NOMINATION_DEADLINE_DAY}th if their clan qualifies.
@@ -384,7 +385,7 @@ const ElderHall: React.FC<{
       <ContentBox
         title="Clan Activity Rankings"
         initialBreak={true}
-        subtitle="Top 3 clans will have their nominees become elders next month"
+        subtitle={`Top ${KAGE_MAX_ELDERS} clans will have their nominees become elders next month`}
       >
         {isClansLoading ? (
           <Loader explanation="Loading clan rankings" />

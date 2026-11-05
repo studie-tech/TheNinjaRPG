@@ -67,6 +67,7 @@ import {
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
   FACTION_REPUTATION_TREASURY_LIMIT,
   HIDEOUT_COST,
+  KAGE_MAX_ELDERS,
   STRONGHOLD_MEMBER_GRACE_HOURS,
   STRONGHOLD_MONTHLY_MAINTENANCE,
   STRONGHOLD_REESTABLISH_COST,
@@ -1944,10 +1945,11 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   </div>
                   <p className="mb-2 text-muted-foreground text-sm">
                     Nominations are open from the {ELDER_NOMINATION_CUTOFF_DAY}th to the{" "}
-                    {ELDER_NOMINATION_DEADLINE_DAY}th of each month. Top 3 clans by
-                    activity points (determined on the {ELDER_NOMINATION_CUTOFF_DAY}th)
-                    can nominate a member to become elder. Nominees must be at least
-                    Jonin rank and cannot be ANBU members.
+                    {ELDER_NOMINATION_DEADLINE_DAY}th of each month. Top{" "}
+                    {KAGE_MAX_ELDERS} clans by activity points (determined on the{" "}
+                    {ELDER_NOMINATION_CUTOFF_DAY}th) can nominate a member to become
+                    elder. Nominees must be at least Jonin rank and cannot be ANBU
+                    members.
                   </p>
                   {!isWithinWindow && (
                     <p className="mb-2 text-amber-600 text-sm">
@@ -1958,7 +1960,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   {isWithinWindow && !isEligible && (
                     <p className="mb-2 text-red-600 text-sm">
                       Your clan is not eligible for elder nomination this month (not in
-                      top 3 by activity points on the {ELDER_NOMINATION_CUTOFF_DAY}th).
+                      top {KAGE_MAX_ELDERS} by activity points on the{" "}
+                      {ELDER_NOMINATION_CUTOFF_DAY}th).
                     </p>
                   )}
                   {isWithinWindow && isEligible && clanData.elderCutoffRank && (
