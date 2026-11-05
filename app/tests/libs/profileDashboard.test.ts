@@ -5,6 +5,8 @@ import { describe, expect, it } from "bun:test";
 import {
   MAP_WAKE_ISLAND_SECTOR,
   MAX_DAILY_TRAININGS,
+  MAX_EXPERIENCE_LEVEL,
+  MAX_PLAYER_LEVEL,
   CombatStatNames,
   UserStatNames,
   WAR_MISSIONS_PER_DAY,
@@ -16,6 +18,7 @@ import {
   dashboardContentHref,
   buildDashboardCatalogue,
   dashboardTrainingAction,
+  dashboardLevelPercent,
   dashboardLevelProgress,
   dashboardRaidAction,
   describeOccupationLine,
@@ -26,6 +29,7 @@ import {
 } from "@/libs/profileDashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/libs/profileDashboard";
+import { calcLevelRequirements } from "@/libs/profile";
 import { huntingContract } from "../setup/hunting";
 
 const availableDailyCounts = {
@@ -647,6 +651,21 @@ describe("dashboard training access", () => {
 
 
 describe("dashboard level guidance", () => {
+  it("fills the bar with experience earned within the level", () => {
+    const start = calcLevelRequirements(9);
+    const span = calcLevelRequirements(10) - start;
+    const percent = (experience: number) => dashboardLevelPercent({ rank: "GENIN", level: 10, experience });
+    expect(percent(start)).toBe(0);
+    expect(percent(start + span / 2)).toBe(50);
+    expect(percent(start + span)).toBe(100);
+    expect(percent(start - 1)).toBe(0);
+    expect(percent(start + span * 3)).toBe(100);
+  });
+  it("keeps Elite Jonin on the milestone scale regardless of experience", () => {
+    const level = MAX_EXPERIENCE_LEVEL + (MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL) / 2;
+    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 0 })).toBe(50);
+    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 1e9 })).toBe(50);
+  });
   it("explains rank caps even when XP is still missing", () => {
     expect(dashboardLevelProgress({ rank: "STUDENT", level: getUserCaps("STUDENT").lvl_cap, experience: 0 })).toMatchObject({ label: "Rank level cap reached", reason: expect.any(String) });
   });

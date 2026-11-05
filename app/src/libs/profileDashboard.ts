@@ -1,6 +1,10 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
-import type { Quest } from "@/drizzle/schema";
+import {
+  MAP_WAKE_ISLAND_SECTOR,
+  MAX_EXPERIENCE_LEVEL,
+  MAX_PLAYER_LEVEL,
+} from "@/drizzle/constants";
+import type { Quest, UserData } from "@/drizzle/schema";
 import { actionPrerequisiteUser, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { craftingStartBlockMessage } from "@/libs/crafting";
 import { huntingSessionStage } from "@/libs/hunting/contracts";
@@ -9,7 +13,11 @@ import {
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
-import { experienceToNextLevel, levelUpBlock } from "@/libs/profile";
+import {
+  experienceToNextLevel,
+  levelExperienceProgress,
+  levelUpBlock,
+} from "@/libs/profile";
 import {
   isAvailableUserQuests,
   isQuestRankAllowed,
@@ -23,6 +31,7 @@ import {
 import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { calculatePercent } from "@/utils/math";
 import { stripHtmlPreview } from "@/utils/string";
 import {
   canAccessStructure,
@@ -54,6 +63,17 @@ export const dashboardLevelProgress = (user: Parameters<typeof levelUpBlock>[0])
       return { label: "Progression required", reason: block.message };
   }
 };
+
+/** The level bar's fill: Elite Jonin milestones, otherwise experience within the level. */
+export const dashboardLevelPercent = (
+  user: Pick<UserData, "rank" | "level" | "experience">,
+) =>
+  user.rank === "ELITE JONIN"
+    ? calculatePercent(
+        user.level - MAX_EXPERIENCE_LEVEL,
+        MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL,
+      )
+    : levelExperienceProgress(user).percent;
 
 /** Match the training page's access gate before offering a link to it. */
 export const dashboardTrainingAction = (

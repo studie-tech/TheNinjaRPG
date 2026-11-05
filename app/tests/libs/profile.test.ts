@@ -15,9 +15,11 @@ import {
   canAssignExperience,
   canAttackBracket,
   capUserStats,
+  experienceToNextLevel,
   getAssignedCombatStatTotal,
   getExpBracket,
   getScoutingUsers,
+  levelExperienceProgress,
   manuallyAssignUserStats,
   passesBracketFilter,
   scaleUserStats,
@@ -547,6 +549,30 @@ test("canAssignExperience stays true while any assignable mastery is below its c
       speed: gens_cap - 1,
     }),
   ).toBe(true);
+});
+
+describe("levelExperienceProgress", () => {
+  const start = calcLevelRequirements(4);
+  const span = calcLevelRequirements(5) - start;
+
+  it("measures from the start of the level", () => {
+    expect(levelExperienceProgress({ level: 5, experience: start + span / 2 })).toEqual({ earned: span / 2, required: span, percent: 50 });
+  });
+
+  it("starts level 1 at zero experience", () => {
+    expect(levelExperienceProgress({ level: 1, experience: 0 })).toEqual({ earned: 0, required: calcLevelRequirements(1), percent: 0 });
+  });
+
+  it("stays inside the level when stored level and experience disagree", () => {
+    expect(levelExperienceProgress({ level: 5, experience: start - 1 }).percent).toBe(0);
+    expect(levelExperienceProgress({ level: 5, experience: start + span * 2 })).toEqual({ earned: span, required: span, percent: 100 });
+  });
+
+  it("leaves the same experience to go as the level-up rule", () => {
+    const user = { level: 5, experience: start + 10 };
+    const { earned, required } = levelExperienceProgress(user);
+    expect(required - earned).toBe(experienceToNextLevel(user));
+  });
 });
 
 describe("unassignedExperienceTowardLevel", () => {

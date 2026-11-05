@@ -72,8 +72,8 @@ import {
 } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import {
-  calcLevelRequirements,
   getExpBracket,
+  levelExperienceProgress,
   levelUpBlockMessage,
   unassignedExperienceTowardLevel,
 } from "@/libs/profile";
@@ -188,12 +188,7 @@ const MenuBoxProfile: React.FC = () => {
     }
   };
 
-  const expRequired = userData && calcLevelRequirements(userData.level - 1);
-  const expForNextLevel = userData && calcLevelRequirements(userData.level);
-  const expTowardsNextLevel =
-    userData && Math.max(0, userData.experience - (expRequired ?? 0));
-  const expNeededForNextLevel =
-    userData && Math.max(1, (expForNextLevel ?? 0) - (expRequired ?? 0));
+  const levelExperience = userData && levelExperienceProgress(userData);
   const canLevelUp = !!userData && !levelUpBlockMessage(userData);
   const unassignedExperience = userData ? unassignedExperienceTowardLevel(userData) : 0;
 
@@ -268,11 +263,8 @@ const MenuBoxProfile: React.FC = () => {
                   lastRegenAt={userData?.regenAt}
                   regen={0}
                   status={userData?.status}
-                  current={Math.min(
-                    expTowardsNextLevel ?? 0,
-                    expNeededForNextLevel ?? 1,
-                  )}
-                  total={expNeededForNextLevel}
+                  current={levelExperience?.earned ?? 0}
+                  total={levelExperience?.required}
                   timeDiff={timeDiff}
                 />
                 {unassignedExperience > 0 && (

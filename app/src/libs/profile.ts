@@ -117,6 +117,16 @@ export const formatPvpWinRate = (wins: number, losses: number) =>
 export const experienceToNextLevel = (user: Pick<UserData, "level" | "experience">) =>
   Math.max(calcLevelRequirements(user.level) - user.experience, 0);
 
+/** Experience within the current level, for progress bars; bounded by the level's span. */
+export const levelExperienceProgress = (
+  user: Pick<UserData, "level" | "experience">,
+) => {
+  const levelStart = calcLevelRequirements(user.level - 1);
+  const required = Math.max(1, calcLevelRequirements(user.level) - levelStart);
+  const earned = Math.min(Math.max(0, user.experience - levelStart), required);
+  return { earned, required, percent: (earned / required) * 100 };
+};
+
 /**
  * Calculate the level for a given experience
  * @param experience - the experience to calculate the level for

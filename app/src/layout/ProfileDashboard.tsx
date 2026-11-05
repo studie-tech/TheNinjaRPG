@@ -36,8 +36,6 @@ import {
 import {
   COST_STREAK_CATCHUP_DAY,
   MASTERY_QUEUE_KIND_LABELS,
-  MAX_EXPERIENCE_LEVEL,
-  MAX_PLAYER_LEVEL,
   MasteryQueueKinds,
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
@@ -57,13 +55,13 @@ import { PendingRewardChoices } from "@/layout/RewardChoice";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements } from "@/libs/profile";
 import {
   buildDashboardCatalogue,
   type DashboardCatalogueEntry,
   dashboardContentActionLabel,
   dashboardContentGroupLabels,
   dashboardContentHref,
+  dashboardLevelPercent,
   dashboardLevelProgress,
   dashboardRaidAction,
   dashboardTrainingAction,
@@ -270,16 +268,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   const visibleCraftTimers = craftingTimers.filter(
     (timer) => !(timer.kind === "crafting" && occupationLine.craftTimer),
   );
-  const levelRequirement = calcLevelRequirements(userData.level);
   const isMilestoneProgression = userData.rank === "ELITE JONIN";
-  const levelProgress = isMilestoneProgression
-    ? calculatePercent(
-        userData.level - MAX_EXPERIENCE_LEVEL,
-        MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL,
-      )
-    : levelRequirement > 0
-      ? Math.min(100, (userData.experience / levelRequirement) * 100)
-      : 100;
+  const levelProgress = dashboardLevelPercent(userData);
   const claimsLoading = streaks.isLoading || interest.isLoading || dashboard.isLoading;
   const claimsFailed = streaks.isError || interest.isError || dashboard.isError;
   const streakNeedsAttention = Boolean(
