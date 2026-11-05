@@ -49,11 +49,22 @@ describeWithDatabase("recruitment cohorts", () => {
     expect(totals(picked)).toEqual({ Dynamic: 1 });
   });
 
-  it("counts every user without a referral row as Dynamic in the level distribution", async () => {
+  it("counts only players with neither a referral nor a recruiter as Dynamic in every chart", async () => {
     const api = await callerFor(dataRouter, "analyst");
-    const rows = await api.getRecruitmentLevelDistribution({ sources: ["Dynamic"] });
-    expect(rows.map((row) => row.source)).toEqual(["Dynamic"]);
-    const counts = rows[0]?.levelDistribution.map((entry) => entry.count);
-    expect(counts?.reduce((sum, count) => sum + count, 0)).toBe(2);
+    const sources = ["Dynamic"];
+    const daily = await api.getRecruitmentDailyCountsBySource({ sources });
+    const stats = await api.getRecruitmentDailyLevelStats({ sources });
+    const levels = await api.getRecruitmentLevelDistribution({ sources });
+    const quests = await api.getRecruitmentLevelDistribution({
+      sources,
+      metric: "completedQuests",
+    });
+    expect(totals(daily)).toEqual({ Dynamic: 1 });
+    expect(stats.reduce((sum, entry) => sum + entry.count, 0)).toBe(1);
+    for (const rows of [levels, quests]) {
+      expect(rows.map((row) => row.source)).toEqual(["Dynamic"]);
+      const counts = rows[0]?.levelDistribution.map((entry) => entry.count);
+      expect(counts?.reduce((sum, count) => sum + count, 0)).toBe(1);
+    }
   });
 });
