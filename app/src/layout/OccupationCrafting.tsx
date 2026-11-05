@@ -30,7 +30,7 @@ import {
   getImbueBlockedMessage,
   getImbuementRankCapMessage,
 } from "@/libs/crafting";
-import { calcItemRepairCost } from "@/libs/item";
+import { calcItemRepairCost, finishedImbuements, isImbuing } from "@/libs/item";
 import { calcRepairAllCost } from "@/libs/repair";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
@@ -64,20 +64,9 @@ export default function OccupationCrafting() {
     });
 
   // Get currently imbuing items
-  const activeImbuingItem = (userItems || []).find(
-    (userItem) =>
-      userItem.imbuements &&
-      userItem.imbuements.length > 0 &&
-      userItem.imbuements.some(
-        (imbuement) =>
-          imbuement.craftingFinishedAt &&
-          new Date(imbuement.craftingFinishedAt) > new Date(),
-      ),
-  );
-  const activeImbuement = activeImbuingItem?.imbuements?.find(
-    (imbuement) =>
-      imbuement.craftingFinishedAt &&
-      new Date(imbuement.craftingFinishedAt) > new Date(),
+  const activeImbuingItem = (userItems || []).find((userItem) => isImbuing(userItem));
+  const activeImbuement = activeImbuingItem?.imbuements.find(
+    (imbuement) => imbuement.craftingFinishedAt > new Date(),
   );
 
   const imbueItemMutation = api.occupation.imbueItem.useMutation({
@@ -186,6 +175,7 @@ export default function OccupationCrafting() {
   const craftingStatus = userData
     ? getCurrentCraftingStatus(userData, userItems || [])
     : null;
+  const currentCraftingUserItemId = craftingStatus?.currentCraftingUserItemId;
 
   // Derive crystals and imbuable items from user inventory
   const crystals = (userItems || []).filter(
@@ -209,12 +199,7 @@ export default function OccupationCrafting() {
       userCraftingRank,
       itemMaxImbuements,
     );
-    const currentCrystals =
-      userItem.imbuements?.filter(
-        (imbuement) =>
-          imbuement.craftingFinishedAt &&
-          new Date(imbuement.craftingFinishedAt) <= new Date(),
-      ).length || 0;
+    const currentCrystals = finishedImbuements(userItem).length;
     return {
       userItem,
       effectiveMaxImbuements,
@@ -477,33 +462,24 @@ export default function OccupationCrafting() {
                   new Date(craftingStatus.craftingFinishedAt) <= new Date() && (
                     <div className="font-medium text-green-600 text-sm">Finished!</div>
                   )}
-                {/* Find the currently crafting userItem to get its ID */}
-                {userItems &&
-                  (() => {
-                    const currentlyCraftingUserItem = userItems.find(
-                      (ui) =>
-                        ui.craftingFinishedAt &&
-                        new Date(ui.craftingFinishedAt) > new Date(),
-                    );
-                    return currentlyCraftingUserItem &&
-                      canChangeContent(userData?.role || "USER") ? (
-                      <Button
-                        onClick={() =>
-                          finishCraftingImmediatelyMutation.mutate({
-                            userItemId: currentlyCraftingUserItem.id,
-                          })
-                        }
-                        disabled={finishCraftingImmediatelyMutation.isPending}
-                        loading={finishCraftingImmediatelyMutation.isPending}
-                        variant="outline"
-                        size="sm"
-                        className="w-fit"
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        Instant Finish (Staff)
-                      </Button>
-                    ) : null;
-                  })()}
+                {currentCraftingUserItemId &&
+                  canChangeContent(userData?.role || "USER") && (
+                    <Button
+                      onClick={() =>
+                        finishCraftingImmediatelyMutation.mutate({
+                          userItemId: currentCraftingUserItemId,
+                        })
+                      }
+                      disabled={finishCraftingImmediatelyMutation.isPending}
+                      loading={finishCraftingImmediatelyMutation.isPending}
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                    >
+                      <Zap className="mr-2 h-4 w-4" />
+                      Instant Finish (Staff)
+                    </Button>
+                  )}
               </div>
             </CardContent>
           </Card>
@@ -762,16 +738,10 @@ export default function OccupationCrafting() {
 
         {/* Manage Existing Imbuements */}
         {(() => {
-          const itemsWithImbuements = (userItems || []).filter(
-            (userItem) =>
-              userItem.imbuements &&
-              userItem.imbuements.length > 0 &&
-              userItem.imbuements.some(
-                (imbuement) =>
-                  !removedImbuementIds.has(imbuement.id) &&
-                  (!imbuement.craftingFinishedAt ||
-                    new Date(imbuement.craftingFinishedAt) <= new Date()),
-              ),
+          const itemsWithImbuements = (userItems || []).filter((userItem) =>
+            finishedImbuements(userItem).some(
+              (imbuement) => !removedImbuementIds.has(imbuement.id),
+            ),
           );
 
           return itemsWithImbuements.length > 0 ? (
@@ -799,11 +769,8 @@ export default function OccupationCrafting() {
                         <div>
                           <h4 className="font-semibold">{userItem.item?.name}</h4>
                           {(() => {
-                            const done = (userItem.imbuements || []).filter(
-                              (i) =>
-                                !removedImbuementIds.has(i.id) &&
-                                (!i.craftingFinishedAt ||
-                                  new Date(i.craftingFinishedAt) <= new Date()),
+                            const done = finishedImbuements(userItem).filter(
+                              (i) => !removedImbuementIds.has(i.id),
                             ).length;
                             return (
                               <p className="text-muted-foreground text-sm">
@@ -823,19 +790,15 @@ export default function OccupationCrafting() {
                         }}
                       />
                       {/* Imbuements with remove buttons */}
-                      {userItem.imbuements && userItem.imbuements.length > 0 && (
+                      {userItem.imbuements.length > 0 && (
                         <div className="mt-3 rounded-lg bg-purple-100 p-3">
                           <h4 className="mb-2 font-semibold text-purple-800">
                             Imbuements
                           </h4>
                           <div className="space-y-2">
-                            {userItem.imbuements
+                            {finishedImbuements(userItem)
                               .filter(
-                                (imbuement) =>
-                                  !removedImbuementIds.has(imbuement.id) &&
-                                  (!imbuement.craftingFinishedAt ||
-                                    new Date(imbuement.craftingFinishedAt) <=
-                                      new Date()),
+                                (imbuement) => !removedImbuementIds.has(imbuement.id),
                               )
                               .map((imbuement) => (
                                 <div

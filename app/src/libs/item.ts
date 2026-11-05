@@ -382,6 +382,13 @@ export const isImbuing = (
 ): boolean =>
   ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
 
+/** A user item's imbuements that are no longer being crafted at `now`. */
+export const finishedImbuements = <T extends { craftingFinishedAt: Date | null }>(
+  ui: { imbuements: T[] },
+  now: Date = new Date(),
+): T[] =>
+  ui.imbuements.filter((im) => !im.craftingFinishedAt || im.craftingFinishedAt <= now);
+
 /**
  * Items of a user item's finished imbuements, in the shape item detail views pass
  * to ItemWithEffects. Imbuements still being crafted at `now` are left out.
@@ -389,10 +396,7 @@ export const isImbuing = (
 export const finishedImbuementItems = <T>(
   ui: { imbuements: { craftingFinishedAt: Date | null; item: T }[] },
   now: Date = new Date(),
-): T[] =>
-  ui.imbuements
-    .filter((im) => !im.craftingFinishedAt || im.craftingFinishedAt <= now)
-    .map((im) => im.item);
+): T[] => finishedImbuements(ui, now).map((im) => im.item);
 
 /**
  * ItemWithEffects payload for an owned item: its current durability, level and experience
