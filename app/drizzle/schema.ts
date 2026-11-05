@@ -3044,6 +3044,13 @@ export const petSpecies = mysqlTable(
     rarity: mysqlEnum("rarity", consts.PetRarities).default("COMMON").notNull(),
     role: mysqlEnum("role", consts.PetRoles).default("ASSAULT").notNull(),
     preferredDamageElement: mysqlEnum("preferredDamageElement", consts.BasicElementName),
+    /** Acquisition settings affect new companions; owned rolls and odds stay saved. */
+    potentialMode: mysqlEnum("potentialMode", consts.PetPotentialModes).default("FIXED").notNull(),
+    potentialValue: tinyint("potentialValue", { unsigned: true }).default(1).notNull(),
+    potentialMin: tinyint("potentialMin", { unsigned: true }).default(1).notNull(),
+    potentialMax: tinyint("potentialMax", { unsigned: true }).default(5).notNull(),
+    /** Relative weights indexed by potential value minus one, within the enabled range. */
+    potentialWeights: json("potentialWeights").$type<number[]>().default([70, 50, 20, 10, 2]).notNull(),
     defaultJutsuIds: json("defaultJutsuIds").$type<string[]>().default([]).notNull(),
     aiRules: json("aiRules").$type<AiRuleType[]>().default([]).notNull(),
     includeDefaultRules: boolean("includeDefaultRules").default(true).notNull(),
@@ -3077,6 +3084,14 @@ export const userPet = mysqlTable(
     rank: tinyint("rank", { unsigned: true }).default(1).notNull(),
     experience: double("experience").default(0).notNull(),
     storedExperience: double("storedExperience").default(0).notNull(),
+    /** Resolved once at acquisition; species edits cannot reroll an owned companion. */
+    potentialValue: tinyint("potentialValue", { unsigned: true }).default(1).notNull(),
+    /** Controls owner visibility; random acquisition resolves the value before reveal. */
+    potentialRevealed: boolean("potentialRevealed").default(true).notNull(),
+    /** Acquisition-time probability snapshot, unaffected by later species edits. */
+    potentialChances: json("potentialChances").$type<number[]>().default([]).notNull(),
+    /** Permanent points assigned per combat stat to raise its lifetime cap. */
+    potentialAllocations: json("potentialAllocations").$type<Partial<Record<consts.CombatStatName, number>>>().default({}).notNull(),
     lastFedAt: datetime("lastFedAt", { mode: "date", fsp: 3 }),
     jutsuIds: json("jutsuIds").$type<string[]>().default([]).notNull(),
     skillIds: json("skillIds").$type<string[]>().default([]).notNull(),

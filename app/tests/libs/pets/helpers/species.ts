@@ -79,7 +79,7 @@ export const initialPetSpecies: (PetSpeciesOption & Pick<PetSpecies, "artDirecti
     name,
     description,
     rarity,
-    isActive: true,
+    isActive: true, potentialMode: "FIXED", potentialValue: 1, potentialMin: 1, potentialMax: 5, potentialWeights: [70, 50, 20, 10, 2],
     artDirection: null,
     rankConcepts: [],
   }),

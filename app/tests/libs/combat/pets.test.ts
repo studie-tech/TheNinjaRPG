@@ -22,7 +22,7 @@ import { petSpeciesFixture } from "../pets/helpers/species";
 type BattlePet = Parameters<typeof addPetsToBattle>[0]["pets"][number];
 const petFixture = (patch: Partial<BattlePet> = {}): BattlePet => ({
   id: "pet-1", userId: "owner", name: "Nami", rank: 1, experience: 1000,
-  storedExperience: 0, lastFedAt: null, species: petSpeciesFixture(), jutsuIds: [], skillIds: [],
+  storedExperience: 0, potentialValue: 1, potentialRevealed: true, potentialChances: [], potentialAllocations: {}, lastFedAt: null, species: petSpeciesFixture(), jutsuIds: [], skillIds: [],
   speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0, gender: null,
   offence: 50, defence: 40, strength: 30, intelligence: 20, willpower: 10, speed: 25,
   avatar: "https://example.com/pet.png", avatarFacing: "left",
@@ -63,6 +63,20 @@ describe("owned pets in combat", () => {
   });
   afterEach(() => {
     PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
+  });
+
+  it("freezes potential HP and individual caps during initiation, including unrevealed pets", () => {
+    const battle = scenario();
+    add(battle, [petFixture({ rank: 10, artRank: 10, experience: 2_000_000, potentialValue: 1, potentialRevealed: false, potentialAllocations: { offence: 1 }, offence: 800_000, strength: 800_000 })]);
+    // The actual character rank, rather than normalized battle rank, enables rank ten.
+    const actor = battle.usersState.find((entry) => entry.petId);
+    expect(actor).toBeUndefined();
+    addPetsToBattle({ ...battle, pets: [petFixture({ rank: 10, artRank: 10, experience: 2_000_000, potentialValue: 1, potentialRevealed: false, potentialAllocations: { offence: 1 }, offence: 800_000, strength: 800_000 })], ownerRanks: { owner: "ELITE JONIN" } });
+    const spawned = battle.usersState.find((entry) => entry.petId);
+    expect(spawned?.maxHealth).toBe(4000);
+    expect(spawned?.curHealth).toBe(4000);
+    expect(spawned?.offence).toBe(300_000);
+    expect(spawned?.strength).toBe(150_000);
   });
 
   it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {

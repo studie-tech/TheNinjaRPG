@@ -1,6 +1,7 @@
 "use client";
 
 import { NumberInput } from "@/components/ui/number-input";
+import { StaffPetPotential } from "@/layout/StaffPetPotential";
 
 /**
  * WARNING: This page is loaded very frequently, so it is important to keep it as light as possible.
@@ -122,6 +123,7 @@ import {
   canClearUserNindo,
   canCloneUser,
   canDeleteReferral,
+  canEditPetPotential,
   canEditSeichiSilver,
   canModifyUserBadges,
   canRemoveBloodlineFromPool,
@@ -1006,7 +1008,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     <Link
                       href={`/home/visit/${encodeURIComponent(profile.userId)}`}
                       aria-label="View home"
-                      className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none"
                     >
                       <House className="h-6 w-6" aria-hidden="true" />
                     </Link>
@@ -1133,7 +1135,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       Reason: {watchedAwardReason?.trim() || "No reason entered"}
                     </p>
                     {awardNeedsRetry && (
-                      <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-amber-100 text-sm">
+                      <p className="rounded-md border border-amber-500/60 bg-amber-950/30 p-2 text-sm text-amber-100">
                         The previous response was not confirmed. Refresh the profile and
                         verify the action log before attempting another award.
                       </p>
@@ -1222,6 +1224,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               <AdjustSeichiSilver userId={profile.userId} username={profile.username} />
             )}
 
+            {userData && canEditPetPotential(userData.role) && !profile.isAi && (
+              <StaffPetPotential
+                key={`potential:${profile.userId}`}
+                userId={profile.userId}
+                username={profile.username}
+              />
+            )}
+
             {userData && canResetPetImageGeneration(userData.role) && !profile.isAi && (
               <ResetPetImageGeneration
                 key={profile.userId}
@@ -1245,7 +1255,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                        className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50"
                         aria-label={`Award experience to ${profile.username}`}
                         disabled={experienceAwardPending}
                         onClick={openExperienceAward}
@@ -1283,7 +1293,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       their stats later; this does not directly change their level,
                       rank, or allocated stats.
                     </p>
-                    <p className="break-all text-muted-foreground text-sm">
+                    <p className="text-muted-foreground text-sm break-all">
                       Target ID: <code>{experienceAwardSource.userId}</code>
                     </p>
                     {experienceAwardNeedsRetry && experienceAwardTarget && (
@@ -1375,7 +1385,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                          className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-wait disabled:opacity-50"
                           aria-label={`Force ${profile.username} awake`}
                           disabled={forceAwakePending}
                           onClick={() => {
@@ -2411,7 +2421,7 @@ const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
     >
       <div className="relative w-[99%] p-3">
         {chartFailed ? (
-          <p className="py-4 text-center text-muted-foreground text-sm">
+          <p className="text-muted-foreground py-4 text-center text-sm">
             The training chart could not be loaded.
           </p>
         ) : (
@@ -2490,10 +2500,10 @@ const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => 
           {historicalIps.map((ip) => (
             <div
               key={ip.ip}
-              className="flex items-center justify-between rounded-lg border-2 border-border bg-card p-3"
+              className="border-border bg-card flex items-center justify-between rounded-lg border-2 p-3"
             >
               <div>
-                <h4 className="font-semibold text-foreground">
+                <h4 className="text-foreground font-semibold">
                   <Link
                     href={`/users/ipsearch/${ip.ip}`}
                     className="hover:cursor-pointer hover:text-orange-500"
@@ -2532,9 +2542,9 @@ const ActivityEventsTab: React.FC<TabComponentProps> = ({ userId, isActive }) =>
           {activityEvents.map((event) => (
             <div
               key={event.id}
-              className="rounded-lg border-2 border-border bg-card p-3"
+              className="border-border bg-card rounded-lg border-2 p-3"
             >
-              <h4 className="font-semibold text-foreground">
+              <h4 className="text-foreground font-semibold">
                 Activity Event #{event.id}
               </h4>
               <p className="text-muted-foreground text-sm">Streak: {event.streak}</p>
@@ -3075,7 +3085,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
       >
         {assignment && (
           <div className="space-y-4" aria-busy={assignmentPending}>
-            <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3">
+            <div className="bg-muted/40 flex items-center gap-3 rounded-md border p-3">
               <Image
                 src={assignment.badgeImage}
                 alt={assignment.badgeName}
@@ -3125,7 +3135,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
       >
         {removal && (
           <div className="space-y-4" aria-busy={removalPending}>
-            <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3">
+            <div className="bg-muted/40 flex items-center gap-3 rounded-md border p-3">
               <Image
                 src={removal.badgeImage}
                 alt={removal.badgeName}
@@ -3481,14 +3491,14 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
 
   if (viewerIsPvpRestricted) {
     return (
-      <p className="font-medium text-red-500 text-sm">
+      <p className="text-sm font-medium text-red-500">
         ✗ Cannot attack (Academy students &amp; Genin cannot do PvP)
       </p>
     );
   }
   if (targetIsPvpRestricted) {
     return (
-      <p className="font-medium text-red-500 text-sm">
+      <p className="text-sm font-medium text-red-500">
         ✗ Protected (Academy students &amp; Genin cannot be attacked)
       </p>
     );
@@ -3496,7 +3506,7 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
 
   if (canAttackBracket(attackerBracket, targetBracket)) {
     return (
-      <p className="font-medium text-green-600 text-sm">
+      <p className="text-sm font-medium text-green-600">
         ✓ Bracket-eligible (they are in your bracket, one below, or higher — server-side
         checks still apply)
       </p>
@@ -3504,7 +3514,7 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   }
   if (viewerRank === "ELITE JONIN" || targetRank === "ELITE JONIN") {
     return (
-      <p className="font-medium text-red-500 text-sm">
+      <p className="text-sm font-medium text-red-500">
         ✗ Protected (Elite Jonin can only fight brackets {ELITE_JONIN_BRACKET - 1} and{" "}
         {ELITE_JONIN_BRACKET})
       </p>
@@ -3512,21 +3522,21 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   }
   if (immunityLifted) {
     return (
-      <p className="font-medium text-orange-500 text-sm">
+      <p className="text-sm font-medium text-orange-500">
         ✓ Bracket-eligible (their immunity is lifted — server-side checks still apply)
       </p>
     );
   }
   if (bothWarParticipants) {
     return (
-      <p className="font-medium text-sm text-yellow-600">
+      <p className="text-sm font-medium text-yellow-600">
         ~ May be attackable (both war participants — requires active village war, server
         decides)
       </p>
     );
   }
   return (
-    <p className="font-medium text-red-500 text-sm">
+    <p className="text-sm font-medium text-red-500">
       ✗ Protected (lower bracket — {targetBracket} vs your {attackerBracket})
     </p>
   );
@@ -3587,7 +3597,7 @@ export const ResetPetImageGeneration = ({
             <button
               ref={buttonRef}
               type="button"
-              className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="focus-visible:ring-ring rounded-sm hover:text-orange-500 focus-visible:ring-2 focus-visible:outline-none"
               aria-label={`Reset companion image attempts for ${username}`}
               onClick={() => {
                 setError("");

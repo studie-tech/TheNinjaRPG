@@ -7,12 +7,14 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import { StaffPetPotential } from "@/layout/StaffPetPotential";
 import { ResetPetImageGeneration } from "@/layout/PublicUser";
 import * as toast from "@/libs/toast";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
 let reset: ReturnType<typeof vi.fn>;
+let setPotential: ReturnType<typeof vi.fn>;
 let scrollDescriptor: PropertyDescriptor | undefined;
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
@@ -26,6 +28,7 @@ beforeEach(() => {
     ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
   });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  setPotential = vi.fn(() => ({ success: false, message: "Please retry this override." }));
   reset = vi.fn((_input: RouterInputs["profile"]["resetPetImageGeneration"]) => ({ success: false, message: "Generation is still running." }));
 });
 
@@ -43,7 +46,7 @@ afterEach(() => {
 });
 
 /** Render the real staff dialog with a scoped tRPC link and controllable server outcomes. */
-const mount = () => {
+const mount = (potential = false) => {
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
     pets: testApi.pets,
@@ -55,6 +58,8 @@ const mount = () => {
         { id: "first-pet", name: "Miso", generationAttempts: 2, generationStatus: "FAILED" },
         { id: "second-pet", name: "Tama", generationAttempts: 1, generationStatus: "FAILED" },
       ];
+      if (op.path === "pets.getPotentialsForStaff") return [{ id: "first-pet", name: "Miso", potentialValue: 3, potentialRevealed: true }];
+      if (op.path === "pets.setPotentialForStaff") return setPotential(op.input);
       if (op.path === "profile.resetPetImageGeneration") return reset(op.input);
       throw new Error(`Unexpected procedure ${op.path}`);
     };
@@ -64,7 +69,7 @@ const mount = () => {
   return render(
     <testApi.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <ResetPetImageGeneration userId="player" username="Player" />
+        {potential ? <StaffPetPotential userId="player" username="Player" /> : <ResetPetImageGeneration userId="player" username="Player" />}
       </QueryClientProvider>
     </testApi.Provider>,
   );
@@ -136,4 +141,68 @@ it("shows a failed request in the staff dialog and preserves the inputs for retr
   fireEvent.click(within(dialog).getByRole("button", { name: "Reset attempts" }));
   await waitFor(() => expect(view.queryByRole("dialog", { name: "Reset companion image attempts" })).toBeNull());
   expect(reset).toHaveBeenCalledWith({ userId: "player", petId: "first-pet", reason: "Image creation failed repeatedly" });
+});
+
+
+it.each(["Companion", "Potential"])("keeps native %s Enter from submitting an override", async (label) => {
+  const view = mount(true);
+  fireEvent.click(view.getByRole("button", { name: "Edit companion potential" }));
+  const dialog = await view.findByRole("dialog", { name: "Companion potential · Player" });
+  const companion = await within(dialog).findByRole("combobox", { name: "Companion" });
+  fireEvent.change(companion, { target: { value: "first-pet" } });
+  fireEvent.change(within(dialog).getByRole("combobox", { name: "Potential" }), { target: { value: "4" } });
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Investigated companion caps" } });
+  const select = within(dialog).getByRole("combobox", { name: label });
+  act(() => select.focus());
+  expect(select.tagName).toBe("SELECT");
+  expect(fireEvent.keyDown(select, { key: "Enter" })).toBe(true);
+  await act(async () => undefined);
+  expect(setPotential).not.toHaveBeenCalled();
+  expect(view.getByRole("dialog") === dialog).toBe(true);
+  expect(within(dialog).getByRole("combobox", { name: "Potential" })).toHaveProperty("value", "4");
+});
+
+it("keeps Enter in an override reason from saving and preserves multiline reasons for explicit Save", async () => {
+  const view = mount(true);
+  fireEvent.click(view.getByRole("button", { name: "Edit companion potential" }));
+  const dialog = await view.findByRole("dialog", { name: "Companion potential · Player" });
+  const companion = await within(dialog).findByRole("combobox", { name: "Companion" });
+  fireEvent.change(companion, { target: { value: "first-pet" } });
+  fireEvent.change(within(dialog).getByRole("combobox", { name: "Potential" }), { target: { value: "4" } });
+  const reason = within(dialog).getByRole("textbox", { name: "Reason (at least 10 characters)" });
+  fireEvent.change(reason, { target: { value: "Investigated companion caps" } });
+  act(() => reason.focus());
+  expect(fireEvent.keyDown(reason, { key: "Enter" })).toBe(true);
+  expect(setPotential).not.toHaveBeenCalled();
+  expect(view.getByRole("dialog") === dialog).toBe(true);
+  fireEvent.change(reason, { target: { value: "Investigated companion caps\nApproved correction" } });
+  const save = within(dialog).getByRole("button", { name: "Save potential" });
+  act(() => save.focus());
+  expect(fireEvent.keyDown(save, { key: "Enter" })).toBe(true);
+  expect(setPotential).not.toHaveBeenCalled();
+  // Happy DOM does not synthesize the native button click produced by Enter.
+  fireEvent.click(save, { detail: 0 });
+  await waitFor(() => expect(setPotential).toHaveBeenCalledTimes(1));
+  expect(setPotential).toHaveBeenCalledWith({ userId: "player", petId: "first-pet", value: 4, reason: "Investigated companion caps\nApproved correction" });
+  expect(await within(dialog).findByRole("alert")).toHaveProperty("textContent", "Please retry this override.");
+  expect(reason).toHaveProperty("value", "Investigated companion caps\nApproved correction");
+});
+
+it.each([0, 1])("keeps Close button %s keyboard activation separate from saving an override", async (index) => {
+  const view = mount(true);
+  const opener = view.getByRole("button", { name: "Edit companion potential" });
+  fireEvent.click(opener);
+  const dialog = await view.findByRole("dialog", { name: "Companion potential · Player" });
+  const companion = await within(dialog).findByRole("combobox", { name: "Companion" });
+  fireEvent.change(companion, { target: { value: "first-pet" } });
+  fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "Investigated companion caps" } });
+  const close = within(dialog).getAllByRole("button", { name: "Close" })[index]!;
+  act(() => close.focus());
+  expect(fireEvent.keyDown(close, { key: "Enter" })).toBe(true);
+  expect(setPotential).not.toHaveBeenCalled();
+  // Happy DOM does not synthesize the native button click produced by Enter.
+  fireEvent.click(close, { detail: 0 });
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(document.activeElement === opener).toBe(true));
+  expect(setPotential).not.toHaveBeenCalled();
 });

@@ -2287,7 +2287,8 @@ const roundStat = (stat: number) => {
 
 /**
  * Create a stats schema. Used for validating user stats, either starting stats,
- * stat changes, or stat differences
+ * stat changes, or stat differences. Optional absolute caps override rank caps
+ * per stat; current stats are subtracted to return nonnegative remaining room.
  * @returns - zod schema and max values for each stat
  */
 export const createStatSchema = (
@@ -2300,17 +2301,26 @@ export const createStatSchema = (
         "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
       >
     >,
+  caps?: Partial<
+    Record<
+      "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower",
+      number
+    >
+  >,
 ) => {
   const { gens_cap, stats_cap } = getUserCaps(user?.rank);
 
   // Calculate max values for each stat
   const maxValues = {
-    offence: stats_cap - Math.min(user?.offence || 0, stats_cap),
-    defence: stats_cap - Math.min(user?.defence || 0, stats_cap),
-    strength: gens_cap - Math.min(user?.strength || 0, gens_cap),
-    speed: gens_cap - Math.min(user?.speed || 0, gens_cap),
-    intelligence: gens_cap - Math.min(user?.intelligence || 0, gens_cap),
-    willpower: gens_cap - Math.min(user?.willpower || 0, gens_cap),
+    offence: Math.max(0, (caps?.offence ?? stats_cap) - (user?.offence ?? 0)),
+    defence: Math.max(0, (caps?.defence ?? stats_cap) - (user?.defence ?? 0)),
+    strength: Math.max(0, (caps?.strength ?? gens_cap) - (user?.strength ?? 0)),
+    speed: Math.max(0, (caps?.speed ?? gens_cap) - (user?.speed ?? 0)),
+    intelligence: Math.max(
+      0,
+      (caps?.intelligence ?? gens_cap) - (user?.intelligence ?? 0),
+    ),
+    willpower: Math.max(0, (caps?.willpower ?? gens_cap) - (user?.willpower ?? 0)),
   };
 
   const schema = z.object({

@@ -89,7 +89,7 @@ beforeEach(() => {
   };
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const pet = {
-    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0, revision: 0,
+    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0, revision: 0, potentialValue: 1, potentialRevealed: true, potentialChances: [], potentialAllocations: {},
     speciesId: "pet-species-0", species: petSpeciesFixture({ rarity: "UNCOMMON" }), paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
     generationStatus: "READY", avatar: "/miso.webp", artRank: 7, battleEnabled: true,
     spawnPosition: "BEHIND", jutsuIds: [], skillIds: [],
@@ -171,6 +171,11 @@ const mount = (strictMode = false) => {
       if (op.path === "pets.updateAiConfig") return saveAi(op.input);
       if (op.path === "pets.generateAppearance") return generate(op.input);
       if (op.path === "pets.assignExperience") return assign(op.input);
+      if (op.path === "pets.allocatePotential") {
+        const input = op.input as RouterInputs["pets"]["allocatePotential"];
+        data = { ...data, pet: { ...data.pet!, potentialAllocations: { ...data.pet!.potentialAllocations, [input.stat]: (data.pet!.potentialAllocations[input.stat] ?? 0) + 1 } } };
+        return { success: true, message: "Potential point allocated permanently." };
+      }
       if (op.path === "pets.rankUp") return evolve(op.input);
       throw new Error(`Unexpected procedure ${op.path}`);
     };
@@ -1154,4 +1159,47 @@ it.each([true, false])("reconciles confirmed XP and the collection without a pet
   expect(getPet).toHaveBeenCalledTimes(1);
   expect(getUser).not.toHaveBeenCalled();
   expect(queryClient.getQueryData<RouterOutputs["pets"]["getCollection"]>(collectionKey)?.pets[0]).toMatchObject({ offence: 11, experience: 1, revision: 1, storedExperience: isActive ? 0 : 99 });
+});
+
+
+it.each([false, true])("keeps unspent potential visible and completed allocations compact (spent %s)", async (spent) => {
+  data.pet = { ...data.pet!, potentialValue: 4, potentialAllocations: spent ? { offence: 3, defence: 1 } : { offence: 3 } };
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  const summary = view.getByText(spent ? "Potential allocations · 4 / 4 PV assigned" : "1 potential point to allocate");
+  expect(summary.closest("details")?.open).toBe(!spent);
+  const transfer = view.getByText("Transfer assigned experience").closest("details");
+  expect(transfer?.open).toBe(false);
+  fireEvent.click(transfer!.querySelector("summary")!);
+  expect(transfer?.open).toBe(true);
+  expect(view.getByText("Adopt another companion of this species to transfer experience.")).toBeTruthy();
+  expect(view.getByRole("button", { name: "Assign experience" }).hasAttribute("disabled")).toBe(false);
+});
+
+it("explains zero assigned XP without exposing an unusable transfer draft", async () => {
+  data.pets.push({ ...data.pets[0]!, id: "second-pet", name: "Tama" });
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  fireEvent.click(view.getByText("Transfer assigned experience"));
+  expect(view.getByText("Assign experience to this companion before transferring it.")).toBeTruthy();
+  expect(view.queryByLabelText("Destination companion")).toBeNull();
+});
+
+
+it("focuses the allocation summary when spending the last potential point collapses its controls", async () => {
+  data.pet = { ...data.pet!, potentialValue: 1, potentialAllocations: {} };
+  const view = mount();
+  await view.findByRole("tab", { name: "Training" });
+  selectTab(view, "Training");
+  fireEvent.click(view.getAllByRole("button", { name: "offence · 0 PV" }).find((entry) => entry.tagName === "BUTTON")!);
+  const dialog = await view.findByRole("dialog", { name: "Increase offence cap" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  const summary = await view.findByText("Potential allocations · 1 / 1 PV assigned");
+  await waitFor(() => expect(document.activeElement).toBe(summary));
+  expect(summary.closest("details")?.open).toBe(false);
+  fireEvent.click(summary);
+  expect(summary.closest("details")?.open).toBe(true);
+  expect(view.getByRole("button", { name: "Assign experience" }).hasAttribute("disabled")).toBe(false);
 });

@@ -3,14 +3,17 @@ import { z } from "zod";
 import {
   AI_PROFILE_MAX_RULES,
   AvatarFacings,
+  type CombatStatName,
+  CombatStatNames,
   PET_MAX_ABILITY_SLOTS,
+  PET_POTENTIAL_BASE_CAP,
+  PET_POTENTIAL_STAT_BONUS,
   PetGenders,
   PetPaymentCurrencies,
   PetSpawnPositions,
 } from "@/drizzle/constants";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
 import { AiRule } from "@/validators/ai";
-import { createStatSchema } from "@/validators/combat";
 
 /** Address a saved companion; authorization is resolved from the authenticated owner. */
 export const petSelectionSchema = z.object({ petId: z.string().min(1).max(191) });
@@ -89,10 +92,20 @@ export const updatePetSchema = z
   })
   .refine((input) => Object.keys(input).length > 1, "Choose a setting to update.");
 
-/** Reuse the player form's six combat stats; the router checks the pet's live caps and XP bank. */
-export const assignPetExperienceSchema = createStatSchema(0, 0).schema.extend(
-  petSelectionSchema.shape,
-);
+/** Accept potential-sized stat gains; the router checks each live cap and XP bank. */
+export const assignPetExperienceSchema = z.object({
+  ...(Object.fromEntries(
+    CombatStatNames.map((stat) => [
+      stat,
+      z
+        .number()
+        .min(0)
+        .max(PET_POTENTIAL_BASE_CAP + 5 * PET_POTENTIAL_STAT_BONUS)
+        .default(0),
+    ]),
+  ) as Record<CombatStatName, z.ZodDefault<z.ZodNumber>>),
+  ...petSelectionSchema.shape,
+});
 
 /** Visual quality is separate from content safety; domain acceptance requires every check to pass. */
 export const petAppearanceQualitySchema = z.object({
