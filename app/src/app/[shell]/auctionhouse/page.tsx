@@ -106,6 +106,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { isImbuing } from "@/libs/item";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
@@ -1539,7 +1540,8 @@ export const NewAuctionListingDialog: React.FC<{
         item.item?.canBeTraded &&
         item.equipped === "NONE" &&
         (!item.craftingFinishedAt || new Date(item.craftingFinishedAt) < new Date()) &&
-        !item.isInAuction
+        !item.isInAuction &&
+        !isImbuing(item)
       );
     }) || [];
 
