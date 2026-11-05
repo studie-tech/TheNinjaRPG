@@ -700,4 +700,76 @@ describe("objective war townhall health", () => {
     render(<VillageWar war={{ ...war, status: "DRAW", endedAt: new Date() }} user={user} isKage={false} />);
     expect(pollInterval({ state: {} })).toBe(false);
   });
+
+  describe("war room offers", () => {
+    const person = { username: "Kage", level: 100, rank: "ELDER", village: null };
+    const offer = (id: string, relatedId: string, senderId: string) => ({
+      id, relatedId, senderId, receiverId: senderId === "kage" ? "other" : "kage",
+      status: "PENDING", type: "WAR_ALLY", value: 10, createdAt: new Date(),
+      sender: person, receiver: person,
+    });
+    const mountRoom = (requests: ReturnType<typeof offer>[], overrides: Partial<NonNullable<UserWithRelations>> = {}) => {
+      vi.spyOn(ContentBox, "default").mockImplementation(({ title, children }) => (
+        <><h1>{title}</h1>{children}</>
+      ));
+      const kage = {
+        userId: "kage", villageId: "attacker", isOutlaw: false,
+        village: { id: "attacker", kageId: "kage" }, ...overrides,
+      } as NonNullable<UserWithRelations>;
+      const offers = { useQuery: () => ({ data: requests }) };
+      Object.assign(client.api, {
+        useUtils: () => ({ war: { getAllyOffers: { invalidate: vi.fn() } } }),
+        travel: { getAllSectors: { useQuery: () => ({ data: [] }) } },
+        village: {
+          getAlliances: { useQuery: () => ({ data: { villages: [], relationships: [] } }) },
+          getVillageStructures: { useQuery: () => ({ data: [] }) },
+          releaseSector, leaveAlliance, declareEnemy,
+        },
+      });
+      Object.assign(client.api.war, {
+        getActiveWars: { useQuery: () => ({ data: [war] }) },
+        getEndedWars: { useQuery: () => ({ data: undefined }) },
+        getAllyOffers: offers,
+        getRules: { useQuery: () => ({ data: undefined }) },
+        getRaidOptions: { useQuery: () => ({ data: [], isFetching: false }) },
+        declareSectorWar: sectorWar,
+        declareVillageWarOrRaid: declarations,
+        buildShrine,
+      });
+      return render(
+        <AppRouterContext.Provider value={{
+          back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push: vi.fn(),
+          replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "war-offers",
+        }}>
+          <WarRoom user={kage} />
+        </AppRouterContext.Provider>,
+      );
+    };
+
+    it("lists an offer once, on its war's card", () => {
+      const view = mountRoom([offer("sent", war.id, "kage")]);
+      expect(view.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+      expect(view.getByRole("heading", { name: "War Ally Offers" })).toBeDefined();
+      expect(view.queryByRole("heading", { name: "War Contract Offers" })).toBeNull();
+    });
+
+    it("keeps offers for other wars on the board", () => {
+      const view = mountRoom([offer("sent", war.id, "kage"), offer("received", "other-war", "other")]);
+      expect(view.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+      expect(view.getAllByRole("button", { name: "Accept" })).toHaveLength(1);
+      expect(view.getByRole("heading", { name: "War Contract Offers" })).toBeDefined();
+    });
+
+    it("keeps every offer on the board for factions, whose cards list none", () => {
+      const view = mountRoom([offer("sent", war.id, "kage")], { isOutlaw: true });
+      expect(view.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+      expect(view.queryByRole("heading", { name: "War Ally Offers" })).toBeNull();
+      expect(view.getByRole("heading", { name: "War Contract Offers" })).toBeDefined();
+    });
+
+    it("explains an empty board", () => {
+      const view = mountRoom([]);
+      expect(view.getByText("No pending war participation requests")).toBeDefined();
+    });
+  });
 });
