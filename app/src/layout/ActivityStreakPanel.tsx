@@ -11,7 +11,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import Image from "next/image";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,298 +93,17 @@ export function ActivityStreakPanel() {
   return (
     <div className="space-y-4">
       {/* Active Recurring Streak - Show full calendar even before first claim */}
-      {hasRecurringToEnroll && userStreaks?.activeRecurringConfig && (
-        <Card className="relative overflow-hidden">
-          <ConfigBanner
-            image={userStreaks.activeRecurringConfig.image}
-            name={userStreaks.activeRecurringConfig.name}
-          />
-          <CardHeader
-            className={cn("pb-2", userStreaks.activeRecurringConfig.image && "pt-20")}
-          >
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Gift className="h-5 w-5" />
-                {userStreaks.activeRecurringConfig.name}
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge variant="default">Daily</Badge>
-                <span className="font-normal text-muted-foreground text-sm">
-                  Day 0/{userStreaks.activeRecurringConfig.totalDays}
-                </span>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Claim button for day 1 */}
-            <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/10 p-3">
-              <div>
-                <p className="font-medium">Day 1 rewards available!</p>
-                <p className="text-muted-foreground text-sm">
-                  {getRewardPreview(
-                    userStreaks.activeRecurringConfig.rewards.find(
-                      (r) => r.dayNumber === 1,
-                    )?.rewards ?? null,
-                  ) || "Claim your daily reward"}
-                </p>
-              </div>
-              <Button
-                onClick={() => {
-                  if (userStreaks.activeRecurringConfig?.id) {
-                    claimStreak.mutate({
-                      configId: userStreaks.activeRecurringConfig.id,
-                    });
-                  }
-                }}
-                disabled={
-                  claimStreak.isPending || !userStreaks.activeRecurringConfig?.id
-                }
-              >
-                {claimStreak.isPending ? "Claiming..." : "Claim"}
-              </Button>
-            </div>
-
-            {/* Progress grid */}
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from(
-                { length: userStreaks.activeRecurringConfig.totalDays },
-                (_, i) => i + 1,
-              ).map((day, i) => {
-                const isNext = day === 1;
-                const isFuture = day > 1;
-                const reward = userStreaks.activeRecurringConfig?.rewards.find(
-                  (r) => r.dayNumber === day,
-                );
-                const rewardPreview = getRewardPreview(reward?.rewards ?? null);
-
-                return (
-                  <DayCell
-                    key={`${day}-${i}`}
-                    day={day}
-                    isClaimed={false}
-                    isNext={isNext}
-                    isFuture={isFuture}
-                    rewardImage={reward?.image}
-                    rewardPreview={rewardPreview}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-green-500 bg-green-500/20" />
-                <span>Claimed</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-primary bg-primary/20" />
-                <span>Available</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-muted-foreground/20 bg-muted/50" />
-                <span>Upcoming</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {userStreaks?.activeRecurringConfig && (
+        <StreakCard
+          streak={toEnrollStreak(userStreaks.activeRecurringConfig)}
+          claimStreak={claimStreak}
+          claimPanelClassName="mt-3"
+        />
       )}
 
       {/* User's Active Streaks */}
       {userStreaks?.streaks.map((streak) => (
-        <Card key={streak.configId} className="relative overflow-hidden">
-          <ConfigBanner image={streak.configImage} name={streak.configName} />
-          <CardHeader className={cn("pb-2", streak.configImage && "pt-20")}>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Gift className="h-5 w-5" />
-                {streak.configName}
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={streak.streakType === "RECURRING" ? "default" : "secondary"}
-                >
-                  {streak.streakType === "RECURRING" ? "Daily" : "Event"}
-                </Badge>
-                <span className="font-normal text-muted-foreground text-sm">
-                  Day {streak.currentDay}/{streak.totalDays}
-                </span>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Catchup panel - shown when user is behind and needs to catch up */}
-            {streak.needsCatchUp && (
-              <div className="mt-2 space-y-3 rounded-lg bg-orange-500/10 p-4">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
-                  <div className="flex-1">
-                    <p className="font-medium text-orange-700 dark:text-orange-400">
-                      {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""}{" "}
-                      behind!
-                    </p>
-                    <p className="mt-1 text-orange-600 text-sm dark:text-orange-500">
-                      Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset
-                      your streak.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Catchup progress info */}
-                <div className="flex items-center justify-between rounded bg-background/50 p-2 text-sm">
-                  <span>
-                    Current: Day {streak.currentDay} → Target: Day{" "}
-                    {streak.theoreticalMaxDay ?? streak.totalDays}
-                  </span>
-                  <span className="font-medium">
-                    {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""} to
-                    catch up
-                  </span>
-                </div>
-
-                {/* Next reward preview */}
-                <div className="text-muted-foreground text-sm">
-                  <span className="font-medium">
-                    Day {streak.nextDayNumber} rewards:{" "}
-                  </span>
-                  {getRewardPreview(streak.nextRewards) || "Daily reward"}
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2">
-                  <Confirm
-                    title="Reset Streak"
-                    button={
-                      <Button
-                        variant="outline"
-                        disabled={claimStreak.isPending}
-                        className="flex-1"
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Reset to Day 1
-                      </Button>
-                    }
-                    onAccept={(e) => {
-                      e.preventDefault();
-                      claimStreak.mutate({ configId: streak.configId, reset: true });
-                    }}
-                  >
-                    <div className="space-y-2">
-                      <p>
-                        Your streak will <strong>reset to day 1</strong>.
-                      </p>
-                      <p>
-                        Your current progress (day {streak.currentDay}) will be lost.
-                      </p>
-                    </div>
-                  </Confirm>
-                  <Button
-                    variant="default"
-                    disabled={claimStreak.isPending}
-                    className="flex-1"
-                    onClick={() =>
-                      claimStreak.mutate({
-                        configId: streak.configId,
-                        payCatchUp: true,
-                      })
-                    }
-                  >
-                    <ArrowRight className="mr-2 h-4 w-4" />
-                    {claimStreak.isPending
-                      ? "Claiming..."
-                      : `Claim Day ${streak.nextDayNumber} (${COST_STREAK_CATCHUP_DAY} rep)`}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Normal claim button (when streak is not broken) */}
-            {streak.canClaimToday && !streak.needsCatchUp && (
-              <div className="flex items-center justify-between rounded-lg bg-primary/10 p-3">
-                <div>
-                  <p className="font-medium">
-                    Day {streak.nextDayNumber} rewards available!
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    {getRewardPreview(streak.nextRewards) || "Claim your daily reward"}
-                  </p>
-                </div>
-                <Button
-                  onClick={() => claimStreak.mutate({ configId: streak.configId })}
-                  disabled={claimStreak.isPending}
-                >
-                  {claimStreak.isPending ? "Claiming..." : "Claim"}
-                </Button>
-              </div>
-            )}
-
-            {/* Show "all caught up" only when user is caught up and has claimed today */}
-            {streak.alreadyClaimedToday && !streak.needsCatchUp && (
-              <div className="rounded-lg bg-green-500/10 p-3">
-                <p className="font-medium text-green-700 dark:text-green-400">
-                  Today&apos;s streak claimed! Come back tomorrow.
-                </p>
-              </div>
-            )}
-
-            {/* Progress grid */}
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: streak.totalDays }, (_, i) => i + 1).map(
-                (day, i) => {
-                  const isClaimed = day <= streak.currentDay;
-                  const isNext =
-                    day === streak.nextDayNumber &&
-                    (streak.canClaimToday || streak.needsCatchUp);
-                  // A day is "to catch up" if it's between currentDay and theoreticalMaxDay
-                  const isMissed =
-                    streak.needsCatchUp &&
-                    streak.theoreticalMaxDay !== undefined &&
-                    day > streak.currentDay &&
-                    day <= streak.theoreticalMaxDay;
-                  const isFuture =
-                    day > (streak.theoreticalMaxDay ?? streak.nextDayNumber);
-                  const reward = streak.allRewards.find((r) => r.dayNumber === day);
-                  const rewardPreview = getRewardPreview(reward?.rewards ?? null);
-
-                  return (
-                    <DayCell
-                      key={`${day}-${i}`}
-                      day={day}
-                      isClaimed={isClaimed}
-                      isNext={isNext}
-                      isMissed={isMissed && !isNext}
-                      isFuture={isFuture && !isMissed}
-                      rewardImage={reward?.image}
-                      rewardPreview={rewardPreview}
-                    />
-                  );
-                },
-              )}
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-green-500 bg-green-500/20" />
-                <span>Claimed</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-primary bg-primary/20" />
-                <span>Available</span>
-              </div>
-              {streak.needsCatchUp && (
-                <div className="flex items-center gap-1">
-                  <div className="h-3 w-3 rounded border border-orange-500 bg-orange-500/20" />
-                  <span>To Catch Up</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded border border-muted-foreground/20 bg-muted/50" />
-                <span>Upcoming</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StreakCard key={streak.configId} streak={streak} claimStreak={claimStreak} />
       ))}
 
       {/* Available Event Passes for Purchase */}
@@ -504,6 +223,204 @@ export function ActivityStreakPanel() {
 
 export default ActivityStreakPanel;
 
+/** One streak's claim state and day calendar. */
+const StreakCard: React.FC<{
+  streak: StreakCardData;
+  claimStreak: ReturnType<typeof useClaimStreakDay>;
+  claimPanelClassName?: string;
+}> = ({ streak, claimStreak, claimPanelClassName }) => (
+  <Card className="relative overflow-hidden">
+    <ConfigBanner image={streak.configImage} name={streak.configName} />
+    <CardHeader className={cn("pb-2", streak.configImage && "pt-20")}>
+      <CardTitle className="flex items-center justify-between">
+        <span className="flex items-center gap-2">
+          <Gift className="h-5 w-5" />
+          {streak.configName}
+        </span>
+        <div className="flex items-center gap-2">
+          <Badge variant={streak.streakType === "RECURRING" ? "default" : "secondary"}>
+            {streak.streakType === "RECURRING" ? "Daily" : "Event"}
+          </Badge>
+          <span className="font-normal text-muted-foreground text-sm">
+            Day {streak.currentDay}/{streak.totalDays}
+          </span>
+        </div>
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      {/* Catchup panel - shown when user is behind and needs to catch up */}
+      {streak.needsCatchUp && (
+        <div className="mt-2 space-y-3 rounded-lg bg-orange-500/10 p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+            <div className="flex-1">
+              <p className="font-medium text-orange-700 dark:text-orange-400">
+                {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""}{" "}
+                behind!
+              </p>
+              <p className="mt-1 text-orange-600 text-sm dark:text-orange-500">
+                Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset your
+                streak.
+              </p>
+            </div>
+          </div>
+
+          {/* Catchup progress info */}
+          <div className="flex items-center justify-between rounded bg-background/50 p-2 text-sm">
+            <span>
+              Current: Day {streak.currentDay} → Target: Day{" "}
+              {streak.theoreticalMaxDay ?? streak.totalDays}
+            </span>
+            <span className="font-medium">
+              {streak.daysToGo ?? 1} day{(streak.daysToGo ?? 1) > 1 ? "s" : ""} to catch
+              up
+            </span>
+          </div>
+
+          {/* Next reward preview */}
+          <div className="text-muted-foreground text-sm">
+            <span className="font-medium">Day {streak.nextDayNumber} rewards: </span>
+            {getRewardPreview(streak.nextRewards) || "Daily reward"}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <Confirm
+              title="Reset Streak"
+              button={
+                <Button
+                  variant="outline"
+                  disabled={claimStreak.isPending}
+                  className="flex-1"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset to Day 1
+                </Button>
+              }
+              onAccept={(e) => {
+                e.preventDefault();
+                claimStreak.mutate({ configId: streak.configId, reset: true });
+              }}
+            >
+              <div className="space-y-2">
+                <p>
+                  Your streak will <strong>reset to day 1</strong>.
+                </p>
+                <p>Your current progress (day {streak.currentDay}) will be lost.</p>
+              </div>
+            </Confirm>
+            <Button
+              variant="default"
+              disabled={claimStreak.isPending}
+              className="flex-1"
+              onClick={() =>
+                claimStreak.mutate({
+                  configId: streak.configId,
+                  payCatchUp: true,
+                })
+              }
+            >
+              <ArrowRight className="mr-2 h-4 w-4" />
+              {claimStreak.isPending
+                ? "Claiming..."
+                : `Claim Day ${streak.nextDayNumber} (${COST_STREAK_CATCHUP_DAY} rep)`}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Normal claim button (when streak is not broken) */}
+      {streak.canClaimToday && !streak.needsCatchUp && (
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-lg bg-primary/10 p-3",
+            claimPanelClassName,
+          )}
+        >
+          <div>
+            <p className="font-medium">Day {streak.nextDayNumber} rewards available!</p>
+            <p className="text-muted-foreground text-sm">
+              {getRewardPreview(streak.nextRewards) || "Claim your daily reward"}
+            </p>
+          </div>
+          <Button
+            onClick={() => claimStreak.mutate({ configId: streak.configId })}
+            disabled={claimStreak.isPending}
+          >
+            {claimStreak.isPending ? "Claiming..." : "Claim"}
+          </Button>
+        </div>
+      )}
+
+      {/* Show "all caught up" only when user is caught up and has claimed today */}
+      {streak.alreadyClaimedToday && !streak.needsCatchUp && (
+        <div className="rounded-lg bg-green-500/10 p-3">
+          <p className="font-medium text-green-700 dark:text-green-400">
+            Today&apos;s streak claimed! Come back tomorrow.
+          </p>
+        </div>
+      )}
+
+      {/* Progress grid */}
+      <div className="grid grid-cols-7 gap-2">
+        {Array.from({ length: streak.totalDays }, (_, i) => i + 1).map((day, i) => {
+          const isClaimed = day <= streak.currentDay;
+          const isNext =
+            day === streak.nextDayNumber &&
+            (streak.canClaimToday || streak.needsCatchUp);
+          // A day is "to catch up" if it's between currentDay and theoreticalMaxDay
+          const isMissed =
+            streak.needsCatchUp &&
+            streak.theoreticalMaxDay !== undefined &&
+            day > streak.currentDay &&
+            day <= streak.theoreticalMaxDay;
+          const isFuture = day > (streak.theoreticalMaxDay ?? streak.nextDayNumber);
+          const reward = streak.allRewards.find((r) => r.dayNumber === day);
+          const rewardPreview = getRewardPreview(reward?.rewards ?? null);
+
+          return (
+            <DayCell
+              key={`${day}-${i}`}
+              day={day}
+              isClaimed={isClaimed}
+              isNext={isNext}
+              isMissed={isMissed && !isNext}
+              isFuture={isFuture && !isMissed}
+              rewardImage={reward?.image}
+              rewardPreview={rewardPreview}
+            />
+          );
+        })}
+      </div>
+
+      <StreakLegend showCatchUp={streak.needsCatchUp} />
+    </CardContent>
+  </Card>
+);
+
+const StreakLegend: React.FC<{ showCatchUp: boolean }> = ({ showCatchUp }) => (
+  <div className="flex flex-wrap gap-4 text-muted-foreground text-xs">
+    <div className="flex items-center gap-1">
+      <div className="h-3 w-3 rounded border border-green-500 bg-green-500/20" />
+      <span>Claimed</span>
+    </div>
+    <div className="flex items-center gap-1">
+      <div className="h-3 w-3 rounded border border-primary bg-primary/20" />
+      <span>Available</span>
+    </div>
+    {showCatchUp && (
+      <div className="flex items-center gap-1">
+        <div className="h-3 w-3 rounded border border-orange-500 bg-orange-500/20" />
+        <span>To Catch Up</span>
+      </div>
+    )}
+    <div className="flex items-center gap-1">
+      <div className="h-3 w-3 rounded border border-muted-foreground/20 bg-muted/50" />
+      <span>Upcoming</span>
+    </div>
+  </div>
+);
+
 /** Renders a config banner image if available */
 const ConfigBanner: React.FC<{ image: string | null; name: string }> = ({
   image,
@@ -617,3 +534,39 @@ const DayCell: React.FC<{
     </div>
   );
 };
+
+/** A recurring config before its first claim, as a streak with day 1 open. */
+const toEnrollStreak = (config: EnrollConfig): StreakCardData => ({
+  configId: config.id,
+  configName: config.name,
+  configImage: config.image,
+  streakType: "RECURRING",
+  totalDays: config.totalDays,
+  currentDay: 0,
+  nextDayNumber: 1,
+  canClaimToday: true,
+  alreadyClaimedToday: false,
+  needsCatchUp: false,
+  nextRewards: config.rewards.find((r) => r.dayNumber === 1)?.rewards ?? null,
+  allRewards: config.rewards,
+});
+
+type UserStreaks = RouterOutputs["activityStreak"]["getUserStreaks"];
+type EnrollConfig = NonNullable<UserStreaks["activeRecurringConfig"]>;
+type UserStreak = UserStreaks["streaks"][number];
+type StreakCardData = Pick<
+  UserStreak,
+  | "configId"
+  | "configName"
+  | "configImage"
+  | "streakType"
+  | "totalDays"
+  | "currentDay"
+  | "nextDayNumber"
+  | "canClaimToday"
+  | "alreadyClaimedToday"
+  | "needsCatchUp"
+  | "nextRewards"
+  | "allRewards"
+> &
+  Partial<Pick<UserStreak, "theoreticalMaxDay" | "daysToGo">>;
