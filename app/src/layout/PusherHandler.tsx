@@ -196,6 +196,7 @@ export const usePusherHandler = (
           // Drop cached chat history in every open tab when a parent changes access.
           void utils.parentalControls.get.invalidate();
           void utils.comments.getUserConversations.invalidate();
+          void utils.comments.getTavernIds.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
           void utils.comments.getUserConversations.invalidate();
