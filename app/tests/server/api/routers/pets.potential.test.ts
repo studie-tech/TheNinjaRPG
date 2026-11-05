@@ -77,12 +77,15 @@ describeWithDatabase("companion potential and transfers", () => {
   });
   it("restricts and audits staff overrides", async () => {
     const db = await getTestDatabase(); const caller = callerForDatabase(petsRouter, ownerId, db);
-    const input = { userId: ownerId, petId: sourceId, value: 5, reason: "Approved companion support adjustment" };
+    const input = { userId: ownerId, petId: sourceId, value: 5, reason: "Approved companion support adjustment. ".repeat(10) };
     expect((await caller.setPotentialForStaff(input)).success).toBe(false);
     expect(await caller.getPotentialsForStaff({ userId: ownerId })).toEqual([]);
     await db.update(userData).set({ role: "HEAD_CONTENT" }).where(eq(userData.userId, ownerId));
     expect((await caller.setPotentialForStaff(input)).success).toBe(true);
     expect((await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) }))).toMatchObject({ potentialValue: 5, potentialRevealed: true, potentialAllocations: {} });
-    expect((await db.query.actionLog.findMany())).toHaveLength(1);
+    const logs = await db.query.actionLog.findMany();
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.relatedMsg?.length).toBeLessThanOrEqual(191);
+    expect(logs[0]?.changes).toContain(`Reason: ${input.reason}`);
   });
 });

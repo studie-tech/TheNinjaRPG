@@ -211,6 +211,11 @@ export const PetPotential = ({
             </>
           )}
         </div>
+        {allocate.isPending && (
+          <p role="status" className="text-sm">
+            Allocating potential point...
+          </p>
+        )}
         {message && (
           <p role="status" className="text-sm">
             {message}

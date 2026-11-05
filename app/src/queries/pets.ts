@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import type { CombatStatName } from "@/drizzle/constants";
 import { jutsu, userData, userPet, userSkill } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { clampActionLogText } from "@/utils/actionLog";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Load independent owner and collection snapshots in parallel. */
@@ -487,9 +488,10 @@ export const logPetPotentialOverride = (
     userId: actorId,
     tableName: "user",
     relatedId: pet.userId,
-    relatedMsg: reason,
+    relatedMsg: clampActionLogText(reason),
     relatedImage: pet.avatar,
     changes: [
       `Set companion ${pet.name} (${pet.id}) potential from ${pet.potentialValue} to ${value}; cleared potential allocations.`,
+      `Reason: ${reason}`,
     ],
   });
