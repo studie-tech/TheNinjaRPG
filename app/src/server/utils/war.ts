@@ -54,7 +54,6 @@ import {
   insertSectorForStartSectorWar,
   insertWarForStartDeclaredWar,
   insertWarForStartSectorWar,
-  listGameSettingForFinishWarSettlement,
   listSectorForStartDeclaredWar,
   listWarForHandleWarEnd,
   listWarForResumePendingWarSettlements,
@@ -373,13 +372,10 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         ),
   );
   try {
-    if (!receipt.boostsDelivered) {
-      const existing = await listGameSettingForFinishWarSettlement(client, boostNames);
-      const missing = boostNames.filter(
-        (name) => !existing.some((row) => row.name === name),
+    if (!receipt.boostsDelivered && boostNames.length > 0) {
+      await retryOnDeadlock(() =>
+        insertGameSettingForFinishWarSettlement(client, boostNames),
       );
-      if (missing.length)
-        await insertGameSettingForFinishWarSettlement(client, missing);
     }
     await Promise.all([
       updateWarMercenaryForFinishWarSettlement(client, endedAt, endedWar),

@@ -524,25 +524,35 @@ export const listWarForResumePendingWarSettlements = (
     where: eq(war.settlementPending, true),
   });
 
-/** Build the `gameSetting` listing for `finishWarSettlement`, selecting only `name`, using predicates on `name`. */
-export const listGameSettingForFinishWarSettlement = (
-  client: Pick<DrizzleClient, "query">,
-  names: string[],
-) =>
-  client.query.gameSetting.findMany({
-    where: inArray(gameSetting.name, names),
-    columns: { name: true },
-  });
-
-/** Build the `gameSetting` insert for `finishWarSettlement`. */
+/** Seed absent boost names in one statement, preserving values and expiry on existing rows. */
 export const insertGameSettingForFinishWarSettlement = (
-  client: Pick<DrizzleClient, "insert">,
-  missing: string[],
-) =>
-  client
+  client: Pick<DrizzleClient, "insert" | "select">,
+  names: string[],
+) => {
+  // Settings can have generated IDs; names are indexed but are not unique.
+  const existing = alias(gameSetting, "existingBoost");
+  const name = sql<string>`candidate.name`;
+  return client
     .insert(gameSetting)
     .ignore()
-    .values(missing.map((name) => ({ id: name, name, value: 0, time: new Date(0) })));
+    .select(
+      client
+        .select({
+          id: name.as("id"),
+          name: name.as("name"),
+          time: sql<Date>`${sql.param(new Date(0), gameSetting.time)}`.as("time"),
+          value: sql<number>`0`.as("value"),
+        })
+        .from(
+          sql`(${sql.join(
+            names.map((name) => sql`SELECT ${name} AS name`),
+            sql` UNION ALL `,
+          )}) candidate`,
+        )
+        .leftJoin(existing, eq(existing.name, name))
+        .where(isNull(existing.id)),
+    );
+};
 
 /**
  * Build the `warMercenary` update for `finishWarSettlement` and `adminEndWar`, setting
