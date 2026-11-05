@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
@@ -96,7 +95,7 @@ import {
 } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import { splitQuotedReply } from "@/utils/richText";
-import sanitize, { stripBlockquotes } from "@/utils/sanitize";
+import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
 import {
   createConversationSchema,
   deleteCommentSchema,
@@ -566,10 +565,7 @@ export const commentsRouter = createTRPCRouter({
       let content = input.comment;
       if (quotes.length > 0) {
         const quoteContent = quotes
-          .map(
-            (q) =>
-              `<blockquote author="${q.user?.username || "Unknown"}" date="${format(q.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(q.content)}</blockquote>`,
-          )
+          .map((q) => buildQuoteBlock({ ...q, username: q.user?.username }))
           .join("");
         content = `${quoteContent}\n\n${content}`;
       }

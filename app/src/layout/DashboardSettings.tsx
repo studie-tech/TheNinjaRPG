@@ -10,6 +10,7 @@ import {
   getDashboardContentPriority,
 } from "@/libs/profileDashboard";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { moveItem } from "@/utils/array";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export function DashboardSettings({
@@ -44,11 +45,8 @@ export function DashboardSettings({
     remember !== userData.rememberProfileTab ||
     priority.some((group, index) => group !== savedPriority[index]);
   const move = (index: number, direction: -1 | 1) => {
-    const next = [...priority];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    const [group] = next.splice(index, 1);
-    if (group) next.splice(target, 0, group);
+    const next = moveItem(priority, index, direction);
+    if (next === priority) return;
     setPriority(next);
     setMessage(null);
   };

@@ -23,6 +23,7 @@ import {
 import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { stripHtmlPreview } from "@/utils/string";
 import {
   canAccessStructure,
   getOwnSectorVillage,
@@ -543,11 +544,7 @@ const objectiveProgress = (
 
 /** Prefer the quest's own wording, then the specific item, then the shared title. */
 const objectiveLabel = (objective: AllObjectivesType) => {
-  const plain = objective.description
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const plain = stripHtmlPreview(objective.description);
   if (plain) return plain.length > 90 ? `${plain.slice(0, 89).trimEnd()}...` : plain;
   if ("item_name" in objective && objective.item_name) {
     return objective.task === "deliver_item"

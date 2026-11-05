@@ -21,6 +21,7 @@ import {
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 /** Supported backpack sort choices and their player-facing labels. */
 export const BACKPACK_SORTS: { value: BackpackSort; label: string }[] = [
@@ -166,7 +167,7 @@ export const dropTargetsFor = <T extends UserItemWithRelations>(
 /** "Hand 2", "Item 3", "Head": a slot as players read it. */
 export const slotName = (slot: ItemSlot) => {
   const [kind = slot, index] = slot.split("_");
-  const name = kind.charAt(0) + kind.slice(1).toLowerCase();
+  const name = capitalizeFirstLetter(kind);
   return index ? `${name} ${index}` : name;
 };
 

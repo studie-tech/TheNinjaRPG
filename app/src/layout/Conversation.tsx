@@ -33,7 +33,7 @@ import {
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
   RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
-import { stripBlockquotes } from "@/utils/sanitize";
+import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
@@ -499,9 +499,7 @@ export const useConversation = (props: ConversationLogicProps) => {
       quoteIds
         ?.map((id) => {
           const quote = cachedComments?.find((c) => c.id === id);
-          return quote
-            ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`
-            : "";
+          return quote ? buildQuoteBlock(quote) : "";
         })
         .join("") || "";
 

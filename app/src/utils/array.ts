@@ -32,6 +32,18 @@ export const shuffle = <T>(
 };
 
 /**
+ * New list with the entry at `index` moved one step in `direction`, or the same list when
+ * there is no such entry or it is already at that end.
+ */
+export const moveItem = <T>(list: T[], index: number, direction: -1 | 1): T[] => {
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= list.length) return list;
+  const next = [...list];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return next;
+};
+
+/**
  * Splits an array into bounded batches without mutating the input.
  */
 export const chunkArray = <T>(values: readonly T[], batchSize: number): T[][] => {

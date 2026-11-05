@@ -61,6 +61,7 @@ import {
   buildDashboardCatalogue,
   type DashboardCatalogueEntry,
   dashboardContentActionLabel,
+  dashboardContentGroupLabels,
   dashboardContentHref,
   dashboardLevelProgress,
   dashboardRaidAction,
@@ -71,21 +72,14 @@ import {
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
+import { moveItem } from "@/utils/array";
 import { calculatePercent } from "@/utils/math";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, stripHtmlPreview } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 const dashboardSections = ["now", "catalogue", "progress"] as const;
 type DashboardSectionId = (typeof dashboardSections)[number];
-
-const categoryLabels = {
-  events: "Events",
-  missions: "Missions & crimes",
-  story: "Story",
-  battlePyramids: "Battle pyramids",
-  raids: "Raids",
-} as const;
 
 /** Summarize actionable progress, rewards and the current occupation in reorderable sections. */
 export default function ProfileDashboard({ settings }: { settings?: React.ReactNode }) {
@@ -114,12 +108,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
     }
   }, []);
   const moveSection = (id: DashboardSectionId, direction: -1 | 1) => {
-    const index = sectionOrder.indexOf(id);
-    const target = index + direction;
-    if (target < 0 || target >= sectionOrder.length) return;
-    const next = [...sectionOrder];
-    next.splice(index, 1);
-    next.splice(target, 0, id);
+    const next = moveItem(sectionOrder, sectionOrder.indexOf(id), direction);
+    if (next === sectionOrder) return;
     setSectionOrder(next);
     safeLocalStorageSetItem("profileDashboardOrder", JSON.stringify(next));
   };
@@ -1160,7 +1150,7 @@ function ElapsedMeter({
   const adjustedStart = startedAt.getTime() + timeDiff;
   const adjustedEnd = endsAt.getTime() + timeDiff;
   const duration = Math.max(adjustedEnd - adjustedStart, 1);
-  const progress = Math.min(100, Math.max(0, ((now - adjustedStart) / duration) * 100));
+  const progress = calculatePercent(now - adjustedStart, duration);
 
   useEffect(() => {
     hasFinishedRef.current = false;
@@ -1207,7 +1197,7 @@ function ContentCard({
       </div>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{categoryLabels[entry.category]}</Badge>
+          <Badge variant="outline">{dashboardContentGroupLabels[entry.category]}</Badge>
           {entry.availability !== "travel" && (
             <Badge
               variant="outline"
@@ -1223,7 +1213,7 @@ function ContentCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
         <p className="line-clamp-3 text-muted-foreground">
-          {plainText(entry.description) || "No description has been published."}
+          {stripHtmlPreview(entry.description) || "No description has been published."}
         </p>
         <p className="flex items-center gap-1 text-xs">
           <MapPin className="h-3.5 w-3.5" /> {entry.location}
@@ -1249,9 +1239,3 @@ function ContentCard({
     </Card>
   );
 }
-
-const plainText = (value: string | null) =>
-  value
-    ?.replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim() ?? "";
