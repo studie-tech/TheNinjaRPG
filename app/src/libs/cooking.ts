@@ -63,6 +63,13 @@ export const getCookingSeconds = (
     cookingReductionPercent,
   );
 
+/** Cooking XP for a job of `meals` output meals; Territory War boost is a fraction. */
+export const getCookingExperience = (
+  cookingExperience: number,
+  meals: number,
+  territoryBoost = 0,
+) => Math.floor(cookingExperience * meals * (1 + territoryBoost));
+
 /** Human-readable recipe bonus and duration. */
 export const describeMealEffect = (
   meal: Pick<Item, "effects" | "mealDurationSeconds">,
