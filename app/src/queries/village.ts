@@ -450,8 +450,8 @@ export const updateUserDataForJoinVillage = (
       ),
     );
 
-/** Build the `userData` update for `joinVillage`, setting `senseiId`, using predicates on `senseiId` and `rank`. */
-export const updateUserDataForJoinVillage2 = (
+/** Build the `userData` update releasing a member's genin students when the member changes village. */
+export const updateUserDataForDetachFromVillageRelations = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
 ) =>
