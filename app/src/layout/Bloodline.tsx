@@ -15,8 +15,8 @@ import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -128,34 +128,17 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       )}
       {isFetching && <Loader explanation="Loading bloodlines" />}
       {isOpen && userData && bloodline && (
-        <Modal
-          title="Confirm Purchase"
-          proceed_label={
-            isPurchasing
-              ? undefined
-              : canAfford
-                ? `Buy for ${cost} reps`
-                : `Need ${cost - userData.reputationPoints} reps`
-          }
+        <RepPurchaseConfirmModal
+          item={bloodline}
+          cost={cost}
+          reputationPoints={userData.reputationPoints}
+          verb="Buy"
+          isPending={isPurchasing}
+          pendingLabel={`Purchasing ${bloodline.name}`}
           isOpen={isOpen}
           setIsOpen={setIsOpen}
-          isValid={false}
-          onAccept={() => {
-            if (canAfford) {
-              purchase({ bloodlineId: bloodline.id });
-            } else {
-              setIsOpen(false);
-            }
-          }}
-          confirmClassName={
-            canAfford
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-red-600 text-white hover:bg-red-700"
-          }
-        >
-          {!isPurchasing && <ItemWithEffects item={bloodline} key={bloodline.id} />}
-          {isPurchasing && <Loader explanation={`Purchasing ${bloodline.name}`} />}
-        </Modal>
+          onBuy={(item) => purchase({ bloodlineId: item.id })}
+        />
       )}
     </ContentBox>
   );

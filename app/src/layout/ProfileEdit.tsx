@@ -106,7 +106,6 @@ import { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import { DiscordLinkSettings } from "@/layout/DiscordLinkSettings";
 import { ElementalMastery } from "@/layout/ElementalMastery";
 import { GameSettingsPanel } from "@/layout/GameSettings";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -117,6 +116,7 @@ import {
   ProfileSettingsNavigation,
 } from "@/layout/ProfileSettingsNavigation";
 import { ReadingSettings } from "@/layout/ReadingSettings";
+import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
 import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { Titles } from "@/layout/Titles";
@@ -140,6 +140,7 @@ import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
+import { freeResetNote } from "@/libs/skillReset";
 import {
   getTavernTitleClass,
   getTavernUsernameClass,
@@ -163,7 +164,7 @@ import {
 } from "@/utils/permissions";
 import { useUserPicker, useUserSearch } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+import { DAY_S, getFirstOfNextMonth, secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
@@ -1512,9 +1513,6 @@ const SwapVillage: React.FC = () => {
     return <Loader explanation="Loading profile page..." />;
   }
 
-  // Derived data
-  const canAfford = userData && userData.reputationPoints >= COST_SWAP_VILLAGE;
-
   // Show component
   return (
     <div className="mt-2">
@@ -1535,34 +1533,16 @@ const SwapVillage: React.FC = () => {
         />
       )}
       {isFetching && <Loader explanation="Loading villages" />}
-      <Modal
-        title="Confirm Purchase"
-        proceed_label={
-          isSwapping
-            ? undefined
-            : canAfford
-              ? `Swap for ${COST_SWAP_VILLAGE} reps`
-              : `Need ${COST_SWAP_VILLAGE - userData.reputationPoints} reps`
-        }
-        isOpen={isOpen && !!village}
+      <RepPurchaseConfirmModal
+        item={village}
+        cost={COST_SWAP_VILLAGE}
+        reputationPoints={userData.reputationPoints}
+        verb="Swap"
+        isPending={isSwapping}
+        isOpen={isOpen}
         setIsOpen={setIsOpen}
-        isValid={false}
-        onAccept={() => {
-          if (canAfford && village) {
-            swap({ villageId: village.id });
-          } else {
-            setIsOpen(false);
-          }
-        }}
-        confirmClassName={
-          canAfford
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "bg-red-600 text-white hover:bg-red-700"
-        }
-      >
-        {village && !isSwapping && <ItemWithEffects item={village} key={village.id} />}
-        {isSwapping && village && <Loader explanation="Purchasing" />}
-      </Modal>
+        onBuy={(item) => swap({ villageId: item.id })}
+      />
     </div>
   );
 };
@@ -1631,8 +1611,6 @@ const SwapBloodline: React.FC = () => {
   const hasAvailableSwaps = bloodlines && bloodlines.length > 0;
   const isDisabled = !hasAvailableSwaps;
   const isFreeSwap = hasFreeSwapAvailable;
-  const canAfford =
-    isFreeSwap || (userData && userData.reputationPoints >= COST_SWAP_BLOODLINE);
 
   // Show component
   return (
@@ -1679,38 +1657,17 @@ const SwapBloodline: React.FC = () => {
           build your history.
         </div>
       )}
-      <Modal
-        title="Confirm Purchase"
-        proceed_label={
-          isSwapping
-            ? undefined
-            : isFreeSwap
-              ? "Swap for free"
-              : canAfford
-                ? `Swap for ${COST_SWAP_BLOODLINE} reps`
-                : `Need ${COST_SWAP_BLOODLINE - userData.reputationPoints} reps`
-        }
-        isOpen={isOpen && !!bloodline}
+      <RepPurchaseConfirmModal
+        item={bloodline}
+        cost={COST_SWAP_BLOODLINE}
+        reputationPoints={userData.reputationPoints}
+        verb="Swap"
+        isFree={isFreeSwap}
+        isPending={isSwapping}
+        isOpen={isOpen}
         setIsOpen={setIsOpen}
-        isValid={false}
-        onAccept={() => {
-          if (canAfford && bloodline) {
-            swap({ bloodlineId: bloodline.id });
-          } else {
-            setIsOpen(false);
-          }
-        }}
-        confirmClassName={
-          canAfford
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "bg-red-600 text-white hover:bg-red-700"
-        }
-      >
-        {bloodline && !isSwapping && (
-          <ItemWithEffects item={bloodline} key={bloodline.id} />
-        )}
-        {isSwapping && bloodline && <Loader explanation="Purchasing" />}
-      </Modal>
+        onBuy={(item) => swap({ bloodlineId: item.id })}
+      />
     </div>
   );
 };
@@ -3035,15 +2992,8 @@ const ResetSkills: React.FC = () => {
   const canAffordPaid = userData.reputationPoints >= COST_SKILL_RESET;
   const canAfford = Boolean(isFree) || canAffordPaid;
 
-  // Calculate when skill resets reset (monthly - 1st of next month)
-  const now = new Date();
-  const nextMonth = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
-  );
-  const secondsUntilNextMonth = Math.floor(
-    (nextMonth.getTime() - now.getTime()) / 1000,
-  );
-  const skillResetResetTime = secondsFromNow(secondsUntilNextMonth);
+  // Skill resets renew monthly
+  const skillResetResetTime = getFirstOfNextMonth();
 
   return (
     <div className="space-y-4 p-4">
@@ -3085,11 +3035,11 @@ const ResetSkills: React.FC = () => {
             {isPending ? (
               <Loader size={5} />
             ) : isFree ? (
-              isStaffMember(userData) ? (
-                "Reset Skills (Free for staff)"
-              ) : (
-                `Reset Skills (${resetInfo?.freeResetsRemaining} free shared resets remaining)`
-              )
+              `Reset Skills (${freeResetNote(
+                isStaffMember(userData),
+                resetInfo?.freeResetsRemaining ?? 0,
+                "free shared resets",
+              )})`
             ) : canAffordPaid ? (
               `Reset Skills for ${COST_SKILL_RESET} Reps`
             ) : (
