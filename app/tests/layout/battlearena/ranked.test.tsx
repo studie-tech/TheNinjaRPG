@@ -114,10 +114,13 @@ it("says when the season is paused", () => {
   expect(screen.queryByRole("button", { name: "Find ranked match" })).toBeNull();
 });
 
-it("says when no season is running", () => {
+it("keeps ranked loadout editing available when no season is running", () => {
   season = null;
   render(<RankedMode />);
   expect(screen.getByText("No ranked season is running right now.")).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Find ranked match" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Edit loadout" }));
+  expect(screen.getByText("Ranked loadout picker")).toBeDefined();
 });
 
 it("opens the ranked loadout editor", () => {

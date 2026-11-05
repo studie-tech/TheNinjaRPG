@@ -22,11 +22,6 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-interface ArenaModeProps {
-  aiId: string | undefined;
-  setAiId: (newValue: string | undefined) => void;
-}
-
 /** The arena: fight an AI opponent picked for your level. */
 export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
   const { data: userData, updateUser } = useRequiredUserData();
@@ -189,6 +184,21 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
             Closest to your level first
           </span>
         </div>
+        {selected && (
+          <div className="bg-muted/60 flex items-center gap-3 rounded-lg p-2">
+            <Image
+              alt=""
+              src={selected.avatar ?? IMG_AVATAR_DEFAULT}
+              width={56}
+              height={56}
+              className="h-14 w-14 shrink-0 rounded-md object-cover"
+            />
+            <p className="min-w-0 flex-1 text-sm">
+              <b>{selected.username}</b> · Level {selected.level}
+            </p>
+            <OpponentDetails aiId={selected.userId} />
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2 @min-[480px]:grid-cols-4">
           {opponents?.map((opponent) => {
             const isSelected = opponent.userId === aiId;
@@ -225,21 +235,6 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
           })}
           {!opponents && <Loader explanation="Loading opponents" />}
         </div>
-        {selected && (
-          <div className="bg-muted/60 flex items-center gap-3 rounded-lg p-2">
-            <Image
-              alt=""
-              src={selected.avatar ?? IMG_AVATAR_DEFAULT}
-              width={56}
-              height={56}
-              className="h-14 w-14 shrink-0 rounded-md object-cover"
-            />
-            <p className="min-w-0 flex-1 text-sm">
-              <b>{selected.username}</b> · Level {selected.level}
-            </p>
-            <OpponentDetails aiId={selected.userId} />
-          </div>
-        )}
       </section>
       <BattleSetupPanel autoCombat={!isTutorialFight} action={action}>
         {isTutorialFight && (
@@ -294,4 +289,9 @@ function OpponentDetails({ aiId }: { aiId: string }) {
       </PopoverContent>
     </Popover>
   );
+}
+
+interface ArenaModeProps {
+  aiId: string | undefined;
+  setAiId: (newValue: string | undefined) => void;
 }

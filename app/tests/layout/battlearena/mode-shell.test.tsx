@@ -73,9 +73,9 @@ it("marks the open tab and switches", () => {
   const tabs = screen.getAllByRole("tab");
   expect(tabs.map((tab) => tab.textContent)).toEqual(["Arena", "Sparring1", "Training", "Ranked", "Pyramid"]);
   expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
-  fireEvent.click(screen.getByRole("tab", { name: /Ranked/ }));
+  fireEvent.mouseDown(screen.getByRole("tab", { name: /Ranked/ }));
   expect(onSelect).toHaveBeenCalledWith("PVP Rank");
-  expect(screen.getByText("Mode body")).toBeDefined();
+  expect(screen.getByRole("tabpanel", { name: "Arena" }).textContent).toBe("Mode body");
 });
 
 it("shows the exam strip outside sparring", () => {

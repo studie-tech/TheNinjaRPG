@@ -3,21 +3,14 @@
 import { Swords, Target, Triangle, Trophy, Users } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ARENA_MODE_LABELS,
   ARENA_MODES,
   type ArenaMode,
   sparExamProgress,
 } from "@/libs/battleArena";
-import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
-
-interface ArenaModeShellProps {
-  mode: ArenaMode;
-  onSelect: (mode: ArenaMode) => void;
-  onOverview: () => void;
-  children: React.ReactNode;
-}
 
 /**
  * The frame around every arena mode: a way back to the overview, tabs for all five modes and
@@ -39,9 +32,15 @@ export function ArenaModeShell({
       (c) => c.receiverId === userData?.userId && c.status === "PENDING",
     ).length ?? 0;
   const exam = userData ? sparExamProgress(userData) : null;
+  // Radix includes the tab value in its generated element ids.
+  const tabValue = encodeURIComponent(mode);
 
   return (
-    <div className="@container flex flex-col gap-3 p-3">
+    <Tabs
+      value={tabValue}
+      onValueChange={(value) => onSelect(decodeURIComponent(value) as ArenaMode)}
+      className="@container flex flex-col gap-3 p-3"
+    >
       <button
         type="button"
         onClick={onOverview}
@@ -49,28 +48,17 @@ export function ArenaModeShell({
       >
         ← Overview
       </button>
-      <div
-        role="tablist"
+      <TabsList
         aria-label="Arena modes"
-        className="bg-muted grid grid-cols-5 gap-0.5 rounded-lg p-0.5 @min-[600px]:flex"
+        className="grid grid-cols-5 justify-start gap-0.5 p-0.5 @min-[600px]:flex"
       >
         {ARENA_MODES.map((option) => {
           const Icon = MODE_ICONS[option];
-          const selected = option === mode;
           return (
-            <button
+            <TabsTrigger
               key={option}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => onSelect(option)}
-              className={cn(
-                "relative flex min-w-0 items-center justify-center gap-1.5 rounded-md text-sm font-semibold",
-                "h-14 flex-col text-[11px] @min-[600px]:h-10 @min-[600px]:flex-row @min-[600px]:px-3.5 @min-[600px]:text-sm",
-                selected
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              value={encodeURIComponent(option)}
+              className="hover:text-foreground relative flex h-14 min-w-0 flex-col gap-1.5 px-0 text-[11px] font-semibold @min-[600px]:h-10 @min-[600px]:flex-row @min-[600px]:px-3.5 @min-[600px]:text-sm"
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
               {ARENA_MODE_LABELS[option]}
@@ -79,10 +67,10 @@ export function ArenaModeShell({
                   {waiting}
                 </span>
               )}
-            </button>
+            </TabsTrigger>
           );
         })}
-      </div>
+      </TabsList>
       {exam && mode !== "Sparring" && (
         <button
           type="button"
@@ -98,8 +86,10 @@ export function ArenaModeShell({
           <span className="text-primary font-semibold">Find opponents →</span>
         </button>
       )}
-      {children}
-    </div>
+      <TabsContent value={tabValue} className="mt-0">
+        {children}
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -110,3 +100,10 @@ const MODE_ICONS: Record<ArenaMode, typeof Swords> = {
   "PVP Rank": Trophy,
   "Battle Pyramid": Triangle,
 };
+
+interface ArenaModeShellProps {
+  mode: ArenaMode;
+  onSelect: (mode: ArenaMode) => void;
+  onOverview: () => void;
+  children: React.ReactNode;
+}
