@@ -62,7 +62,7 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
-import { getEffectPower } from "@/libs/combat/power";
+import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
   getPreventTypeName,
@@ -933,14 +933,14 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
       if (val.type === "wound" && val.timeTracker?.originalDamage !== undefined) {
         // Convert wound percentage to actual damage amount
-        const woundPower = Math.abs(val.power + val.level * val.powerPerLevel);
+        const woundPower = getEffectMagnitude(val);
         const od = val.timeTracker.originalDamage || 0;
         value = -Math.floor(od * (woundPower / 100));
       } else if (val.type === "parry" || val.type === "curse") {
         value = Math.abs(getEffectPower(val));
       } else {
         // Standard processing for all other effects
-        value = Math.abs(val.power + val.level * val.powerPerLevel) * sign;
+        value = getEffectMagnitude(val) * sign;
         if (val.type === "diffuse") value = Math.min(DIFFUSE_MAX_PERCENTAGE, value);
       }
       cats.forEach((cat) => {
@@ -1076,13 +1076,13 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
 
     // Apply all decrease effects multiplicatively
     decreaseHealEffects.forEach((e) => {
-      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      const power = getEffectMagnitude(e);
       netFactor *= 1 - power / 100; // decrease = 1 - percentage
     });
 
     // Apply all increase effects multiplicatively
     increaseHealEffects.forEach((e) => {
-      const power = Math.abs(e.power + e.level * e.powerPerLevel);
+      const power = getEffectMagnitude(e);
       netFactor *= 1 + power / 100; // increase = 1 + percentage
     });
 
@@ -1423,7 +1423,7 @@ export const VisualizeGroundEffects: React.FC<VisualizeGroundEffectsProps> = ({
     <EffectRow
       key={`${effect.id}-${index}`}
       type={effect.type}
-      power={Math.abs(effect.power + effect.level * effect.powerPerLevel)}
+      power={getEffectMagnitude(effect)}
       calculation={effect.calculation}
       roundsLeft={effect.rounds ?? 0}
       isPositive={isPositive}
