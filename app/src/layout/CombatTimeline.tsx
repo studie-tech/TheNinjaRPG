@@ -30,6 +30,7 @@ import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects, { type GenericObject } from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { availableUserActions } from "@/libs/combat/actions";
+import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getItem, getJutsu } from "@/libs/combat/util";
 import { cn } from "@/libs/shadui";
@@ -46,15 +47,15 @@ type CombatTimelineProps = {
 
 const TIMELINE_PAGE_SIZE = 5;
 
-const effectColors: Record<ActionEffect["color"], string> = {
-  red: "bg-red-100 text-red-500",
-  green: "bg-green-100 text-green-500",
-  blue: "bg-blue-100 text-blue-500",
-  yellow: "bg-yellow-100 text-yellow-500",
-  purple: "bg-purple-100 text-purple-500",
-  orange: "bg-orange-100 text-orange-500",
-  pink: "bg-pink-100 text-pink-500",
-  gray: "bg-gray-100 text-gray-500",
+const effectBackgrounds: Record<ActionEffect["color"], string> = {
+  red: "bg-red-100",
+  green: "bg-green-100",
+  blue: "bg-blue-100",
+  yellow: "bg-yellow-100",
+  purple: "bg-purple-100",
+  orange: "bg-orange-100",
+  pink: "bg-pink-100",
+  gray: "bg-gray-100",
 };
 
 const placeholderObj: GenericObject = {
@@ -415,7 +416,8 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                               key={`${effect.txt}-${i}`}
                               className={cn(
                                 "rounded-full px-2 py-1 font-medium text-[11px]",
-                                effectColors[effect.color],
+                                effectBackgrounds[effect.color],
+                                EFFECT_TEXT_COLORS[effect.color],
                               )}
                             >
                               {effect.txt}

@@ -1,5 +1,9 @@
 import type { Grid } from "honeycomb-grid";
-import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
+import {
+  actionPointsAfterAction,
+  calcActiveUser,
+  getRemainingCooldown,
+} from "@/libs/combat/actions";
 import type {
   CombatAction,
   ReturnedBattle,
@@ -50,11 +54,7 @@ export const validateActionTarget = (info: {
   if (!canAct) return { isValid: false };
 
   // Check action cooldown
-  const isAvailable =
-    !action.cooldown ||
-    !action.lastUsedRound ||
-    battle.round - action.lastUsedRound >= action.cooldown;
-  if (!isAvailable) return { isValid: false };
+  if (getRemainingCooldown(action, battle.round) > 0) return { isValid: false };
 
   // Get possible tiles for the action
   const possibleTiles = getPossibleActionTiles(action, origin, grid);

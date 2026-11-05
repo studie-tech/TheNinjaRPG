@@ -53,6 +53,7 @@ import {
   getTurnControl,
   isPvpEnergyRewardBattle,
   resolveControlledActorId,
+  sendsToHospital,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
@@ -1045,10 +1046,9 @@ const Combat: React.FC<CombatProps> = (props) => {
     (u) => u.userId === battleRef.current?.activeUserId,
   );
   const toHospital =
-    battleType &&
-    result &&
-    result.curHealth <= 0 &&
-    !["SPARRING", "RANKED_PVP"].includes(battleType);
+    !!battleRef.current &&
+    !!result &&
+    sendsToHospital(battleRef.current, result.curHealth);
 
   const handleTutorialBattleReturn = async (
     event: React.MouseEvent<HTMLAnchorElement>,

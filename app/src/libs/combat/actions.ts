@@ -1617,6 +1617,15 @@ const getTemporalApDelta = (
   return effects.some(appliesByElements) ? TEMPORAL_AP_DELTA : 0;
 };
 
+/** Rounds until an action can be used again; a falsy lastUsedRound means it never was. */
+export const getRemainingCooldown = (
+  action: { cooldown?: number; lastUsedRound?: number },
+  round: number | undefined,
+) => {
+  if (!action.cooldown || !action.lastUsedRound || round === undefined) return 0;
+  return Math.max(action.cooldown - (round - action.lastUsedRound), 0);
+};
+
 export const getActionPointCost = (
   userId?: string | null,
   battle?: ReturnedBattle | null,

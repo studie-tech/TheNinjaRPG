@@ -94,7 +94,7 @@ import {
 import { matchBloodrightSnapshot } from "@/libs/bloodright";
 import { petsAllowedInBattle } from "@/libs/combat/pets";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
-import { getVillage } from "@/libs/combat/util";
+import { getVillage, sendsToHospital } from "@/libs/combat/util";
 import type { DungeonBattleState } from "@/libs/dungeon";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { withMercenaryParticipation } from "@/libs/objectiveWar";
@@ -2414,9 +2414,7 @@ export const updateUserDataForUpdateUser2 = (
           }
         : {}),
       ...(!getIsolatedPyramid(hydratedUser) &&
-      !curBattle.forceKeepPools &&
-      result.curHealth <= 0 &&
-      !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(curBattle.battleType)
+      sendsToHospital(curBattle, result.curHealth)
         ? {
             ...hospitalPlacement(curBattle, user),
             immunityUntil:

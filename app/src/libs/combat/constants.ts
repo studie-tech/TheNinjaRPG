@@ -10,7 +10,20 @@ import {
   ElementNames,
   RANKED_BLOODLINE_EFFECT_MULT,
 } from "@/drizzle/constants";
+import type { ActionEffect } from "@/libs/combat/types";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
+
+/** Text color of each applied-effect color, for battle logs and the timeline. */
+export const EFFECT_TEXT_COLORS: Record<ActionEffect["color"], string> = {
+  red: "text-red-500",
+  green: "text-green-500",
+  blue: "text-blue-500",
+  yellow: "text-yellow-500",
+  purple: "text-purple-500",
+  orange: "text-orange-500",
+  pink: "text-pink-500",
+  gray: "text-gray-500",
+};
 
 /** Ranked bloodlines boost every damage element, including attacks outside Highest. */
 export const RANKED_BLOODLINE_DAMAGE_TAG = IncreaseDamageGivenTag.parse({
