@@ -29,7 +29,7 @@ import { groupBy } from "@/utils/grouping";
 import { pushToCombat } from "@/utils/routing";
 import { secondsFromDate } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import {
   type TournamentCreateSchema,
@@ -183,24 +183,14 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                     <UploadButton
                       endpoint="tournamentUploader"
                       onClientUploadComplete={(res) => {
-                        const serverData = res?.[0]?.serverData;
-                        if (serverData?.error) {
-                          showMutationToast({
-                            success: false,
-                            message: serverData.error,
-                          });
-                          return;
-                        }
-                        const url = serverData?.fileUrl;
+                        const url = readUploadResult(res)?.fileUrl;
                         if (url) {
                           createForm.setValue("image", url, {
                             shouldDirty: true,
                           });
                         }
                       }}
-                      onUploadError={(error: Error) => {
-                        showMutationToast({ success: false, message: error.message });
-                      }}
+                      onUploadError={showUploadError}
                     />
                   </div>
                   <div className="flex flex-col gap-2">

@@ -102,7 +102,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
   type MoneyTransferSchema,
@@ -1737,15 +1737,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                           onClientUploadComplete={(res) => {
                             clanImageUploadInFlight.current = false;
                             setIsUploadingClanImage(false);
-                            const serverData = res?.[0]?.serverData;
-                            if (serverData?.error) {
-                              showMutationToast({
-                                success: false,
-                                message: serverData.error,
-                              });
-                              return;
-                            }
-                            const url = serverData?.fileUrl;
+                            const url = readUploadResult(res)?.fileUrl;
                             if (url) {
                               editForm.setValue("image", url, {
                                 shouldDirty: true,
@@ -1755,10 +1747,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                           onUploadError={(error: Error) => {
                             clanImageUploadInFlight.current = false;
                             setIsUploadingClanImage(false);
-                            showMutationToast({
-                              success: false,
-                              message: error.message,
-                            });
+                            showUploadError(error);
                           }}
                         />
                       </fieldset>

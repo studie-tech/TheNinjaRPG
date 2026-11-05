@@ -165,7 +165,7 @@ import { useUserPicker, useUserSearch } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
   ActionMoveTowardsOpponent,
   AiRule,
@@ -1833,11 +1833,7 @@ const AvatarChange: React.FC = () => {
             uploadRevision.current = prepareUserUpdate();
           }}
           onClientUploadComplete={(res) => {
-            const serverData = res?.[0]?.serverData;
-            if (serverData?.error) {
-              showMutationToast({ success: false, message: serverData.error });
-              return;
-            }
+            const serverData = readUploadResult(res);
             if (serverData?.fileUrl) {
               if ("userPatch" in serverData && serverData.userPatch)
                 void updateUser(serverData.userPatch, {
@@ -1846,9 +1842,7 @@ const AvatarChange: React.FC = () => {
               else void updateUser(undefined, { revision: uploadRevision.current });
             }
           }}
-          onUploadError={(error: Error) => {
-            showMutationToast({ success: false, message: error.message });
-          }}
+          onUploadError={showUploadError}
         />
       </div>
     );

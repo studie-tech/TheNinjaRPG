@@ -22,7 +22,7 @@ import { HistoricalAiAvatar } from "@/layout/ProfileEdit";
 import RichInput from "@/layout/RichInput";
 import { getPrePrompts, REMOVE_BG_TYPES } from "@/libs/imagePrompts";
 import { showMutationToast } from "@/libs/toast";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
   type ContentImageProvider,
   type PromptFormSchema,
@@ -274,15 +274,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                       ) {
                         return;
                       }
-                      const serverData = res?.[0]?.serverData;
-                      if (serverData?.error) {
-                        showMutationToast({
-                          success: false,
-                          message: serverData.error,
-                        });
-                        return;
-                      }
-                      const url = serverData?.fileUrl;
+                      const url = readUploadResult(res)?.fileUrl;
                       if (url) {
                         setLocalImage({
                           url,
@@ -292,9 +284,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                         setIsModalOpen(false);
                       }
                     }}
-                    onUploadError={(error: Error) => {
-                      showMutationToast({ success: false, message: error.message });
-                    }}
+                    onUploadError={showUploadError}
                   />
                 </div>
               </div>
