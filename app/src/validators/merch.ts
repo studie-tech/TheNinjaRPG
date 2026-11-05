@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/** Most units of one line the store sells in a single add. */
+export const MERCH_MAX_QUANTITY = 10;
+/** Most lines a saved review bag can hold. */
+export const MERCH_REVIEW_BAG_LIMIT = 50;
+
 export const merchMoneySchema = z.object({
   amount: z.string().regex(/^\d+(?:\.\d+)?$/),
   currencyCode: z.string().regex(/^[A-Z]{3}$/),
@@ -39,10 +44,12 @@ export const merchCartLineSchema = z.object({
   image: merchImageSchema.nullable(),
   price: merchMoneySchema.nullable(),
 });
-export const merchReviewCartSchema = z.array(merchCartLineSchema).max(50);
+export const merchReviewCartSchema = z
+  .array(merchCartLineSchema)
+  .max(MERCH_REVIEW_BAG_LIMIT);
 export const merchAddSchema = z.object({
   variantId: z.string().regex(/^gid:\/\/shopify\/ProductVariant\/\d+$/),
-  quantity: z.number().int().min(1).max(10),
+  quantity: z.number().int().min(1).max(MERCH_MAX_QUANTITY),
 });
 export const merchUpdateSchema = z.object({
   lineId: z.string().regex(/^gid:\/\/shopify\/CartLine\/[A-Za-z0-9?=&_%.-]+$/),
