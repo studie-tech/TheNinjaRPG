@@ -45,11 +45,11 @@ import {
   deleteLogBattleLengthsForClearAllBattleLengths,
   deleteLogQueueLengthsForClearAllQueueLengths,
   findUserDataForGetStatistics,
-  hasNoReferralSource,
   insertActionLogForClearAllBattleLengths,
   insertActionLogForClearAllQueueLengths,
   insertActionLogForDeleteAllDataBattleAction,
   insertActionLogForDeleteSingleDataBattleAction,
+  isDynamicSignup,
   listBloodlineForGetBloodlineEffectsBalanceStatistics,
   listItemForGetItemEffectsBalanceStatistics,
   listJutsuForGetJutsuEffectsBalanceStatistics,
@@ -533,7 +533,7 @@ export const dataRouter = createTRPCRouter({
       // Dynamic and Recruited specifics
       const dynamicWhere: QueryCondition[] = [
         ...baseUserWhere,
-        hasNoReferralSource(ctx.drizzle),
+        isDynamicSignup(ctx.drizzle),
       ];
       const recruitedWhere: QueryCondition[] = [
         ...baseUserWhere,

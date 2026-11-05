@@ -468,13 +468,16 @@ export const recruitmentUserConditions = (input: {
   ...(input.endDate ? [lte(userData.createdAt, new Date(input.endDate))] : []),
 ];
 
-/** Users without a referral row. */
-export const hasNoReferralSource = (client: Pick<DrizzleClient, "select">) =>
-  notExists(
-    client
-      .select({ userId: referralSource.userId })
-      .from(referralSource)
-      .where(eq(referralSource.userId, userData.userId)),
+/** The Dynamic cohort: players with neither a referral row nor a recruiter. */
+export const isDynamicSignup = (client: Pick<DrizzleClient, "select">) =>
+  and(
+    isNull(userData.recruiterId),
+    notExists(
+      client
+        .select({ userId: referralSource.userId })
+        .from(referralSource)
+        .where(eq(referralSource.userId, userData.userId)),
+    ),
   );
 
 /**
@@ -507,7 +510,7 @@ export const selectUserDataForGetRecruitmentDailyLevelStats = (
               ...(realSources && realSources.length > 0
                 ? [inArray(referralSource.source, realSources)]
                 : []),
-              ...(wantsDynamic ? [isNull(referralSource.userId)] : []),
+              ...(wantsDynamic ? [isDynamicSignup(client)] : []),
               ...(wantsRecruited ? [isNotNull(userData.recruiterId)] : []),
             ),
           )
@@ -536,7 +539,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource = (
 
 /**
  * Build the `userData` selection for `getRecruitmentDailyCountsBySource`, including
- * predicates on `isAi`, `recruiterId`, `userId`.
+ * predicates on `isAi` and the Dynamic cohort.
  */
 export const selectUserDataForGetRecruitmentDailyCountsBySource2 = (
   client: Pick<DrizzleClient, "select">,
@@ -549,13 +552,7 @@ export const selectUserDataForGetRecruitmentDailyCountsBySource2 = (
       count: sql`COUNT(${userData.userId})`.mapWith(Number),
     })
     .from(userData)
-    .where(
-      and(
-        ...recruitmentUserConditions(input),
-        isNull(userData.recruiterId),
-        hasNoReferralSource(client),
-      ),
-    )
+    .where(and(...recruitmentUserConditions(input), isDynamicSignup(client)))
     .groupBy(dayExpr)
     .orderBy(asc(dayExpr));
 
