@@ -18,7 +18,6 @@ import {
   getUnchangedClanUserUpdate,
   getUpgradeHideoutToStrongholdUserUpdate,
 } from "@/deltas/clan";
-
 import {
   ASSASSIN_MAX_PER_FACTION,
   CLAN_ASSASSIN_SLOTS,
@@ -42,6 +41,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
 import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
@@ -1029,7 +1029,8 @@ export const clanRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to leave");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.clanId !== fetchedClan.id) return errorResponse(`Wrong ${groupLabel}`);
       if (user.villageId !== fetchedClan.villageId) {
         return errorResponse(`Wrong ${locationLabel}`);
@@ -1331,7 +1332,8 @@ export const clanRouter = createTRPCRouter({
       // Derived
       const leaderLike = checkClanLeadership(ctx.userId, challenger);
       // Guards
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (!challenger) return errorResponse("Challenger not found");
       if (!defender) return errorResponse("Defender not found");
       if (challenger.id === defender.id) return errorResponse("Cannot challenge self");
@@ -1417,7 +1419,8 @@ export const clanRouter = createTRPCRouter({
       if (clanBattleData.battleId)
         return errorResponse(`${groupLabel} battle already started`);
       if (!user.clanId) return errorResponse(`Not in a ${groupLabel}`);
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (queries.length > 0) return errorResponse("Already in queue");
       if (
         clanBattleData.attackerEntityId !== user.clanId &&
@@ -1592,7 +1595,7 @@ export const clanRouter = createTRPCRouter({
         fetchClanBattle(ctx.drizzle, input.clanBattleId),
         listClanForDeleteClanBattle(ctx.drizzle, ctx),
       ]);
-      if (!clanBattleData || clanBattleData.battleType !== "CLAN_BATTLE")
+      if (clanBattleData?.battleType !== "CLAN_BATTLE")
         return errorResponse("Clan battle not found");
       const isParticipantLeader = ledClans.some(
         (c) =>

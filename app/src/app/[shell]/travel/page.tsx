@@ -87,6 +87,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import {
   finishItemConsumeRequest,
@@ -945,7 +946,7 @@ function Travel() {
     if (
       !autoDestination ||
       !userData ||
-      userData.status !== "AWAKE" ||
+      !canAttemptAwakeAction(userData) ||
       userData.sector !== autoDestination.sector ||
       !currentSectorMap ||
       isStartingTravel
@@ -1026,9 +1027,9 @@ function Travel() {
           isOpen={true}
           setIsOpen={() => setLocationRequest(null)}
           proceed_label="Travel"
-          proceedDisabled={userData.status !== "AWAKE" || isStartingTravel}
+          proceedDisabled={!canAttemptAwakeAction(userData) || isStartingTravel}
           onAccept={() => {
-            if (userData.status !== "AWAKE" || isStartingTravel) return;
+            if (!canAttemptAwakeAction(userData) || isStartingTravel) return;
             setAutoDestination(locationRequest);
             if (locationRequest.sector !== userData.sector)
               handleGlobalMove(locationRequest.sector);
@@ -1243,7 +1244,7 @@ function Travel() {
                         size="sm"
                         variant="outline"
                         className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal text-left"
-                        disabled={isStartingTravel || userData.status !== "AWAKE"}
+                        disabled={isStartingTravel || !canAttemptAwakeAction(userData)}
                         onClick={() => setLocationRequest(pin)}
                       >
                         <span>{pin.label}</span>
@@ -1274,7 +1275,7 @@ function Travel() {
                     disabled={
                       !pinLabel.trim() ||
                       pins.length >= MAX_TRAVEL_PINS ||
-                      userData.status !== "AWAKE"
+                      !canAttemptAwakeAction(userData)
                     }
                     onClick={() => {
                       const next = pins.filter(

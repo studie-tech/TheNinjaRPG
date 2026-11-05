@@ -21,6 +21,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import type { PetAppearanceOption, PetSpeciesOption } from "@/libs/pets/catalogue";
 import { getPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
@@ -363,10 +364,10 @@ export function PetAcquisition() {
       {/* Keep artwork recovery available even when the collection is full. */}
       {pet && (!appearanceReady || acquiredPetId) && (
         <div
-          className={`mb-4 flex rounded border bg-muted/30 ${appearanceReady ? "items-start gap-3 p-3" : "flex-col gap-4 p-4 sm:flex-row sm:items-center"}`}
+          className={`bg-muted/30 mb-4 flex rounded border ${appearanceReady ? "items-start gap-3 p-3" : "flex-col gap-4 p-4 sm:flex-row sm:items-center"}`}
         >
           <div
-            className={`flex shrink-0 items-center justify-center rounded border bg-background ${appearanceReady ? "h-16 w-16" : "h-24 w-24"}`}
+            className={`bg-background flex shrink-0 items-center justify-center rounded border ${appearanceReady ? "h-16 w-16" : "h-24 w-24"}`}
           >
             {pet.avatar ? (
               <Image
@@ -427,7 +428,7 @@ export function PetAcquisition() {
                   disabled={
                     isBusy ||
                     data.remainingGenerations <= 0 ||
-                    userData.status !== "AWAKE"
+                    !canAttemptAwakeAction(userData)
                   }
                   onGenerate={retryAppearance}
                 >
@@ -754,7 +755,7 @@ function PetTraitChoices({
           return (
             <label
               key={value}
-              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring ${selected === value ? "border-primary bg-primary/10" : "hover:bg-muted/40"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`has-[:focus-visible]:outline-ring flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors has-[:focus-visible]:outline-2 ${selected === value ? "border-primary bg-primary/10" : "hover:bg-muted/40"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
             >
               <input
                 type="radio"

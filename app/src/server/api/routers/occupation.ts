@@ -13,6 +13,7 @@ import {
   OCCUPATIONS,
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getCookingLevel, getCookingSeconds } from "@/libs/cooking";
 import {
@@ -633,7 +634,7 @@ export const occupationRouter = createTRPCRouter({
       const user = updatedUserResult.user;
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") {
-        return errorResponse("User is not awake");
+        return errorResponse(actionStatusMessage(user.status));
       }
       if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
         return errorResponse("Cannot imbue items on Wake Island");

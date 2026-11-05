@@ -820,3 +820,32 @@ it.each([true, false])(
     expect(capture).not.toHaveBeenCalled();
   },
 );
+
+it("shows recovery feedback for a normally silent arena mutation", async () => {
+  const notice = "This action checked you out of the hospital for free.";
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
+    { result: { data: superjson.serialize({ success: true, actionNotice: notice }) } },
+  ]));
+  const { attack } = mountArenaMutation(session("a"));
+  await act(async () => { await attack(); });
+  expect(toastMessages()).toContain(notice);
+  expect(queryClient.isMutating()).toBe(0);
+});
+
+it("includes waking in the feature toast without duplicating the recovery note", async () => {
+  const notice = "This action woke you up.";
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
+    { result: { data: superjson.serialize({ success: true, message: "Training started", actionNotice: notice }) } },
+  ]));
+  let attack!: () => Promise<unknown>;
+  const Action = () => {
+    const mutation = testApi.combat.startArenaBattle.useMutation({
+      onSuccess: (data) => toast.showMutationToast(data as { success: boolean; message: string }),
+    });
+    attack = () => mutation.mutateAsync({ aiId: "opponent" });
+    return null;
+  };
+  mountProvider(session("a"), <Action />);
+  await act(async () => { await attack(); });
+  expect(toastMessages().filter((message) => typeof message === "string" && message.includes(notice))).toEqual([`Training started ${notice}`]);
+});

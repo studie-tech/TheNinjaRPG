@@ -1046,7 +1046,7 @@ describeWithDatabase("mastery training queue", () => {
     await insertUser({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
     await queueMasteries(USER_ID, current);
     const caller = await callerFor(trainRouter, USER_ID);
-    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "Must be awake to train" });
+    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
     expect(await liveMasteryQueue()).toEqual(current);
     expect(await readUser()).toMatchObject({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery" });
   });

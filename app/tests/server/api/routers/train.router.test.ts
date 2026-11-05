@@ -296,7 +296,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   ] satisfies { name: string; current: EnergyTrainingQueueEntry[]; entries: EnergyTrainingQueueEntry[] }[])("rejects $name while asleep without changing the Energy queue", async ({ current, entries }) => {
     await trainee({ status: "ASLEEP", curEnergy: 0, regeneration: 0, energyQueue: current });
     const before = await readUser();
-    expect(await (await caller()).updateEnergyTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "Must be awake to train" });
+    expect(await (await caller()).updateEnergyTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
     expect(await readEnergyQueue(USER_ID)).toEqual(current);
     expect(await readUser()).toMatchObject({ status: "ASLEEP", energyQueueHead: before.energyQueueHead, energyQueueTail: before.energyQueueTail, curEnergy: 0, offence: before.offence, defence: before.defence, experience: before.experience });
     expect(await readLogs()).toHaveLength(0);

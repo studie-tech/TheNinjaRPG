@@ -15,12 +15,14 @@ import * as userContext from "@/utils/UserContext";
 let mutate: ReturnType<typeof vi.fn>;
 let toggleSleep: ReturnType<typeof vi.fn>;
 let status = "AWAKE";
+let autoWakeUp = true;
 let tutorialStep: unknown;
 
 beforeEach(() => {
   mutate = vi.fn();
   toggleSleep = vi.fn();
   status = "AWAKE";
+  autoWakeUp = true;
   tutorialStep = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: {
@@ -39,7 +41,7 @@ beforeEach(() => {
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
     () =>
       ({
-        data: { userId: "me", level: 22, status, dailyArenaFights: 3 },
+        data: { userId: "me", level: 22, status, autoWakeUp, dailyArenaFights: 3 },
         updateUser: vi.fn(),
       }) as never,
   );
@@ -102,12 +104,24 @@ it("fights by hand during the tutorial", () => {
   expect(mutate).toHaveBeenCalledWith({ aiId: "ai-1", autoCombat: false });
 });
 
-it("asks to wake up when asleep", () => {
+it("asks to wake up when automatic waking is disabled", () => {
   status = "ASLEEP";
+  autoWakeUp = false;
   render(<ArenaMode aiId="ai-1" setAiId={vi.fn()} />);
   expect(screen.queryByRole("button", { name: "Fight Yama" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /Wake up/ }));
   expect(toggleSleep).toHaveBeenCalled();
+});
+
+it("keeps the tutorial fight action available for automatic waking", () => {
+  status = "ASLEEP";
+  tutorialStep = { advanceOn: "arenaStart" };
+  render(<ArenaMode aiId="ai-1" setAiId={vi.fn()} />);
+  const fight = screen.getByRole("button", { name: "Fight Yama" });
+  expect(fight.id).toBe("tutorial-battlearena-challenge-ai-enter");
+  fireEvent.click(fight);
+  expect(mutate).toHaveBeenCalledWith({ aiId: "ai-1", autoCombat: false });
+  expect(toggleSleep).not.toHaveBeenCalled();
 });
 
 it("scrolls opponents in one row and gives the battle setup its own row below", () => {

@@ -11,6 +11,7 @@ import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHuntingRank, getHuntingRankProgress } from "@/libs/hunting";
 import {
   huntingAllowance,
@@ -200,7 +201,7 @@ export function HuntingBoard({
                       disabled={
                         pending ||
                         user?.sector !== session.sector ||
-                        user?.status !== "AWAKE"
+                        !canAttemptAwakeAction(user)
                       }
                       onClick={() =>
                         action.mutate({
@@ -221,7 +222,7 @@ export function HuntingBoard({
                         preparing ||
                         !allowance?.remaining ||
                         allowance.cooling ||
-                        user?.status !== "AWAKE" ||
+                        !canAttemptAwakeAction(user) ||
                         user?.sector !== session.sector ||
                         !huntingEligibility(
                           user?.occupation ?? null,
@@ -425,7 +426,7 @@ export function HuntingBoard({
                                 available.cooling ||
                                 !available.remaining ||
                                 !!session?.battleId ||
-                                user?.status !== "AWAKE" ||
+                                !canAttemptAwakeAction(user) ||
                                 session?.contractId === c.id
                               }
                               onClick={() =>

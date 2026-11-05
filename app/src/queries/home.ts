@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { eq, gt, isNull, lte, or } from "drizzle-orm";
 import type { HomeType } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
@@ -301,3 +302,22 @@ const homeFurnitureWriteGuard = (
     eq(userData.isOutlaw, user.isOutlaw),
     inArray(userData.status, ["AWAKE", "ASLEEP"]),
   );
+
+/** Wake only the regenerated sleeping snapshot while its preference remains enabled. */
+export const wakeUserForAction = (
+  client: Pick<DrizzleClient, "update">,
+  user: { userId: string; updatedAt: Date },
+) =>
+  client
+    .update(userData)
+    .set({ status: "AWAKE", updatedAt: nextSnapshotSql(userData.updatedAt) })
+    .where(
+      and(
+        eq(userData.userId, user.userId),
+        eq(userData.status, "ASLEEP"),
+        isNull(userData.battleId),
+        eq(userData.autoWakeUp, true),
+        eq(userData.isBanned, false),
+        eq(userData.updatedAt, user.updatedAt),
+      ),
+    );

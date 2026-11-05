@@ -48,6 +48,7 @@ import type {
   UserItem,
   UserQuest,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { BloodlineCollectionProgress } from "@/libs/bloodline";
 import { getClanBoost } from "@/libs/clanBoost";
@@ -3067,7 +3068,7 @@ export const missionHallStartBlockedMessage = (
   status: UserStatus,
 ): string | null =>
   MISSION_HALL_QUEST_TYPES.includes(questType) && status !== "AWAKE"
-    ? "You must be awake to accept missions. Wake up first, then try again."
+    ? actionStatusMessage(status)
     : null;
 
 /**

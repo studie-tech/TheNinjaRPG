@@ -31,6 +31,7 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
@@ -835,7 +836,7 @@ export const jutsuRouter = createTRPCRouter({
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to evolve a jutsu");
+        return errorResponse(actionStatusMessage(user.status));
       if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
       if (!evolutionJutsu.parentJutsuId)
         return errorResponse("Target jutsu is not an evolution");
@@ -1341,7 +1342,8 @@ export const jutsuRouter = createTRPCRouter({
         )
       )
         return errorResponse("You have already evolved this jutsu");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
 
       // Levels already queued for this jutsu count toward the one being bought.
       const level =

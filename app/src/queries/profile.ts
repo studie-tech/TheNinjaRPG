@@ -2315,3 +2315,10 @@ export const incrementUserVillagePrestige = (
     .update(userData)
     .set({ villagePrestige: sql`${userData.villagePrestige} + ${amount}` })
     .where(eq(userData.userId, userId));
+
+/** Read authoritative activity and preference alongside the mutation's isolation check. */
+export const fetchActionReadiness = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    columns: { status: true, autoWakeUp: true, isBanned: true, villageId: true },
+    where: eq(userData.userId, userId),
+  });

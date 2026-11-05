@@ -46,6 +46,7 @@ import type {
   UserQueue,
   UserRank,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { elementalGainRoom } from "@/libs/elementalMastery";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
@@ -863,7 +864,7 @@ type StatTrainingUser = UserStatData &
 
 /** Training is available while awake in the player's village. */
 const trainingStartBlockMessage = (user: StatTrainingUser): string | null => {
-  if (user.status !== "AWAKE") return "Must be awake to train";
+  if (user.status !== "AWAKE") return actionStatusMessage(user.status);
   if (!user.isOutlaw && user.sector !== user.village?.sector) return "Wrong sector";
   return null;
 };

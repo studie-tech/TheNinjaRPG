@@ -31,6 +31,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import MissionPicker from "@/layout/MissionPicker";
+import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   fallbackQuestsFilter,
   getMissionHallSettings,
@@ -210,10 +211,10 @@ export default function MissionHall({ userData }: MissionHallProps) {
     !!committedStart &&
     committedStart.context === activeContext &&
     !committedStartIsReflected;
-  // The server rejects starts while not awake; say why before a player taps a tile.
+  // Recovery-capable actions reach the server; other activity blocks mission starts.
   const startBlockedMessage = missionHallStartBlockedMessage(
     "mission",
-    userData.status,
+    actionPrerequisiteUser(userData).status,
   );
   // Mission/crime/medical/PvP/war starts are mutually exclusive on the server. Lock every start
   // entry point while one is pending or committed; leaving siblings active would invite a race.

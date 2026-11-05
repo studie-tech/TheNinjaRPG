@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 import { getBuyFoodUserUpdate } from "@/deltas/village";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
@@ -8,6 +7,7 @@ import {
   VILLAGE_LEAVE_REQUIRED_RANK,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { hasRequiredRank } from "@/libs/train";
 import { fetchUser } from "@/queries/profile";
 import { deleteRequests } from "@/queries/sensei";
@@ -160,7 +160,8 @@ export const villageRouter = createTRPCRouter({
       const healPercentage = getRamenHealPercentage(input.ramen);
       const cost = calcRamenCost(input.ramen, user) * factor;
       // Guard
-      if (user.status !== "AWAKE") return errorResponse("You must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.money < cost) return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
       if (
@@ -228,7 +229,8 @@ export const villageRouter = createTRPCRouter({
       if (user.villageId !== village.id) return errorResponse("Not in village");
       if (user.anbuId) return errorResponse("Leave ANBU squad first");
       if (user.clanId) return errorResponse("Leave Clan first");
-      if (user.status !== "AWAKE") return errorResponse("You must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot leave while banned");
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
         return errorResponse(
@@ -265,7 +267,8 @@ export const villageRouter = createTRPCRouter({
       if (!village.joinable) return errorResponse("Not joinable");
       if (user.villageId === village.id) return errorResponse("Already joined");
       if (user.clanId) return errorResponse("Leave faction first");
-      if (user.status !== "AWAKE") return errorResponse("You must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot join while banned");
       if (village.type !== "VILLAGE") return errorResponse("Can only join villages");
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
@@ -306,7 +309,8 @@ export const villageRouter = createTRPCRouter({
       if (user.villageId === village.id) return errorResponse("Already in village");
       if (user.anbuId) return errorResponse("Leave ANBU squad first");
       if (user.clanId) return errorResponse("Leave Clan or Faction first");
-      if (user.status !== "AWAKE") return errorResponse("You must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot leave while banned");
       if (!canSwapVillage(user.role)) return errorResponse("No permission to do this");
       if (cost > user.reputationPoints) return errorResponse("Need reputation points");

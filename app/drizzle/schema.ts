@@ -2965,6 +2965,7 @@ export const userData = mysqlTable(
     aiCalls: int("openaiCalls").default(0).notNull(),
     tavernMessages: int("tavernMessages").default(0).notNull(),
     dashboardContentPriority: json("dashboardContentPriority").$type<DashboardContentGroup[]>().default([]).notNull(),
+    autoWakeUp: boolean("autoWakeUp").default(true).notNull(),
     rememberProfileTab: boolean("rememberProfileTab").default(false).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
     sfxOn: boolean("sfxOn").default(true).notNull(),

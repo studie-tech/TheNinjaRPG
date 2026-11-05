@@ -7,6 +7,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { isAvailableUserQuests } from "@/libs/quest";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -80,7 +81,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
     });
 
   const canAfford = (userData?.reputationPoints ?? 0) >= REMOVAL_COST;
-  const canRemove = userData?.status === "AWAKE";
+  const canRemove = canAttemptAwakeAction(userData);
   const canProceed = canAfford && canRemove;
   const repsNeeded = Math.max(0, REMOVAL_COST - (userData?.reputationPoints ?? 0));
 

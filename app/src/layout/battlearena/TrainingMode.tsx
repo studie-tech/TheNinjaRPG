@@ -90,7 +90,7 @@ export function TrainingMode({
 
   if (!userData) return <Loader explanation="Loading userdata" />;
 
-  const isAsleep = userData.status === "ASLEEP";
+  const isAsleep = userData.status === "ASLEEP" && userData.autoWakeUp === false;
   const statNames = (Object.keys(maxValues) as (keyof typeof maxValues)[]).filter(
     // The dummy never attacks, so it has no offence to set.
     (stat) => stat !== "offence",

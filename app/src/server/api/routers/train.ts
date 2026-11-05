@@ -15,6 +15,7 @@ import {
   type TimedMasteryName,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
@@ -83,7 +84,7 @@ export const trainRouter = createTRPCRouter({
       const user = await findUserWithBloodline(ctx.drizzle, ctx);
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to change your trained element");
+        return errorResponse(actionStatusMessage(user.status));
       if (
         input.element &&
         !activeTrainedElement({ ...user, activeTrainedElement: input.element })
@@ -184,7 +185,7 @@ export const trainRouter = createTRPCRouter({
         entries: input.entries,
         // Adding or changing an entry needs an active session to queue behind.
         validate: () => {
-          if (user.status !== "AWAKE") return "Must be awake to train";
+          if (user.status !== "AWAKE") return actionStatusMessage(user.status);
           if (!session.stat) return "Start training in this queue before queueing more";
           if (input.entries.length > getQueueWaitingSlots(user))
             return `${label} queue is full`;
@@ -375,7 +376,8 @@ export const trainRouter = createTRPCRouter({
           forceRegen: true,
         });
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       const kind = isInArray(input.stat, BasicElementName) ? "ELEMENT" : "MASTERY";
       const fields = masteryTrainingFields[kind];
       const { stat: trained, startedAt, speed } = getMasteryTrainingState(user, kind);

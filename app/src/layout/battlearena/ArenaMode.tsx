@@ -90,7 +90,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
 
   const fightsUsed = userData.dailyArenaFights;
   const canDoArena = fightsUsed < BATTLE_ARENA_DAILY_LIMIT;
-  const isAsleep = userData.status === "ASLEEP";
+  const isAsleep = userData.status === "ASLEEP" && userData.autoWakeUp === false;
   const bestMatchId = opponents?.[0]?.userId;
   const selected = opponents?.find((opponent) => opponent.userId === aiId);
 

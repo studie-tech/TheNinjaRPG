@@ -150,6 +150,7 @@ export const updateUserPreferencesSchema = z
     preferredDamageElement: z.enum(BasicElementName).nullable().optional(),
     dashboardContentPriority: dashboardContentPrioritySchema.optional(),
     rememberProfileTab: z.boolean().optional(),
+    autoWakeUp: z.boolean().optional(),
     // Audio preferences
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),

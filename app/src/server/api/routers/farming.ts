@@ -13,6 +13,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import { type Item, userData } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getTotalItemQuantity } from "@/libs/crafting";
 import { getWorldCycleState } from "@/libs/dayNight";
@@ -1085,7 +1086,7 @@ type FarmUserItems = Awaited<ReturnType<typeof fetchUserItems>>;
 const guardFarmingMutation = (user: Awaited<ReturnType<typeof fetchUser>>) => {
   if (user.isBanned) return errorResponse("You are banned");
   if (user.status !== "AWAKE") {
-    return errorResponse("You must be awake to farm");
+    return errorResponse(actionStatusMessage(user.status));
   }
   if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
     return errorResponse("Cannot farm on Wake Island");

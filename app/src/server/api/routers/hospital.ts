@@ -10,6 +10,7 @@ import {
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   calcHealCost,
   calcHealFinish,
@@ -127,7 +128,7 @@ export const hospitalRouter = createTRPCRouter({
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");
       if (u.status !== "AWAKE") {
-        return errorResponse("You can't heal while you're not awake");
+        return errorResponse(actionStatusMessage(u.status));
       }
       if (!MEDNIN_HEALABLE_STATES.find((s) => s === t.status)) {
         return errorResponse("Target user must be awake or hospitalized");

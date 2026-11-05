@@ -20,6 +20,7 @@ import {
   VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -167,7 +168,8 @@ export const travelRouter = createTRPCRouter({
 
       // Guard
       if (!user.isOutlaw) return errorResponse("Only outlaws can rob other players");
-      if (user.status !== "AWAKE") return errorResponse("You are not awake");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("You are banned");
       if (target.isBanned) return errorResponse("Target is banned");
       if (target.status !== "AWAKE")

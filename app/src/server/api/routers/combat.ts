@@ -61,6 +61,7 @@ import {
   type VillageAlliance,
   type WarCamp,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
 import {
@@ -932,7 +933,7 @@ export const combatRouter = createTRPCRouter({
         return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
       if (user.status !== "AWAKE")
-        return errorResponse("You must be awake to heal in the Battle Arena");
+        return errorResponse(actionStatusMessage(user.status));
       // Mutate with guard
       const result = await updateUserDataForBattleArenaHeal(ctx.drizzle, user, ctx);
       if (result.rowsAffected === 0) {
@@ -2052,8 +2053,7 @@ export const initiateBattle = async (
           (pet) => pet.id === selected.id && pet.userId === owner.userId,
         );
         return (
-          !pet ||
-          !pet.species ||
+          !pet?.species ||
           pet.generationStatus !== "READY" ||
           owner.petTask?.petId === pet.id ||
           !canUsePet(pet, owner)
@@ -2637,7 +2637,13 @@ export const initiateBattle = async (
                 getIsolatedPyramid(user)?.id === info.questAttempt.id &&
                 info.questBattleSource?.questId === info.questAttempt.questId);
       if (!isOk) {
-        return { success: false, message: `User ${user.username} is not awake` };
+        return {
+          success: false,
+          message: actionStatusMessage(
+            user.status,
+            userIds.includes(user.userId) ? "You" : user.username,
+          ),
+        };
       }
     }
 

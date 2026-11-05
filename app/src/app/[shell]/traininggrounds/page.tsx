@@ -110,6 +110,11 @@ import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import {
+  actionPrerequisiteUser,
+  actionStatusMessage,
+  canAttemptAwakeAction,
+} from "@/libs/actionReadiness";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { providedElements } from "@/libs/elementalMastery";
 import { effectiveMasteries } from "@/libs/mastery";
@@ -801,7 +806,8 @@ const StatsTraining: React.FC<
         >
           {userData.status === "ASLEEP" && (
             <p className="mb-4 text-muted-foreground text-sm">
-              Wake up to add training. Existing queues continue while asleep.
+              Actions can wake you up when automatic waking is enabled. Existing queues
+              continue while asleep.
             </p>
           )}
           {needsCaptcha ? (
@@ -835,7 +841,7 @@ const StatsTraining: React.FC<
                       key={`${stat}-${i}`}
                       onClick={() => {
                         const block =
-                          statTrainingBlockMessage(userData) ??
+                          statTrainingBlockMessage(actionPrerequisiteUser(userData)) ??
                           (overCap ? "Already capped" : null) ??
                           (isQueueingStats
                             ? energyQueueLength >= getQueueTotalCapacity(userData)
@@ -937,7 +943,7 @@ const StatsTraining: React.FC<
             </p>
             <p className="text-muted-foreground text-xs">
               {userData.status === "ASLEEP"
-                ? "Wake up to add training. Existing queues continue while asleep."
+                ? "Actions can wake you up when automatic waking is enabled. Existing queues continue while asleep."
                 : session.stat
                   ? `Choose an interval, then select ${props.section === "Elements" ? "an element" : "a mastery"} image to add a session to the queue.`
                   : `Choose an interval, then select ${props.section === "Elements" ? "an element" : "a mastery"} image to start training.`}
@@ -966,18 +972,23 @@ const StatsTraining: React.FC<
                       key={`${stat}-${i}`}
                       onClick={() => {
                         const entry = { stat, speed: selectedMasterySpeed };
-                        const block =
-                          userData.status !== "AWAKE"
-                            ? "Must be awake to train"
-                            : session.stat
-                              ? (queuedMasteryStartBlockMessage(userData, entry) ??
-                                (masteryEntries.length >= getQueueWaitingSlots(userData)
-                                  ? `${kind === "ELEMENT" ? "Elemental" : "Mastery"} queue is full`
-                                  : null))
-                              : masteryTrainingBlockMessage(userData, {
+                        const block = !canAttemptAwakeAction(userData)
+                          ? actionStatusMessage(userData.status)
+                          : session.stat
+                            ? (queuedMasteryStartBlockMessage(
+                                actionPrerequisiteUser(userData),
+                                entry,
+                              ) ??
+                              (masteryEntries.length >= getQueueWaitingSlots(userData)
+                                ? `${kind === "ELEMENT" ? "Elemental" : "Mastery"} queue is full`
+                                : null))
+                            : masteryTrainingBlockMessage(
+                                actionPrerequisiteUser(userData),
+                                {
                                   ...session,
                                   speed: selectedMasterySpeed,
-                                });
+                                },
+                              );
                         if (block)
                           showMutationToast({ success: false, message: block });
                         else if (overCap)
@@ -1900,7 +1911,7 @@ const TrainingCaptchaGate: React.FC<{
     });
   return (
     <div
-      className={cn("rounded-xl border bg-card p-4 text-center shadow-sm", className)}
+      className={cn("bg-card rounded-xl border p-4 text-center shadow-sm", className)}
     >
       <div className="flex items-center justify-center gap-2">
         <ShieldCheck className="h-5 w-5 text-primary" />

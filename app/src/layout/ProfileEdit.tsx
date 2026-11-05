@@ -91,6 +91,7 @@ import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
+import { ActionSettings } from "@/layout/ActionSettings";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
@@ -169,7 +170,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import { type StatSchemaType } from "@/validators/combat";
+import type { StatSchemaType } from "@/validators/combat";
 import {
   attributes,
   type Color,
@@ -279,10 +280,12 @@ export function ProfileEdit() {
           id: "preferences",
           title: "Combat preferences",
           description: "Battle settings, elemental mastery, and AI behavior",
-          keywords: "automatic auto combat damage generals description",
+          keywords:
+            "automatic auto combat damage generals description sleep awake hospital",
           icon: Swords,
           content: (
             <>
+              <ActionSettings />
               <ElementalMastery />
               <BattleSettingsEdit userId={userData.userId} />
             </>
@@ -597,7 +600,7 @@ function AvatarSettings() {
         <HistoricalAiAvatar contentType="user" />
       </TabsContent>
       <TabsContent value="upload">
-        <p className="text-muted-foreground mb-3 text-sm">
+        <p className="mb-3 text-muted-foreground text-sm">
           Upload a custom avatar. Image size limits depend on your federal support
           status.
         </p>
@@ -1279,7 +1282,7 @@ const NewAiAvatar: React.FC = () => {
 
           {userData && userData.reputationPoints >= COST_GENERATE_AVATAR ? (
             <>
-              <p className="text-muted-foreground mb-3 text-sm">
+              <p className="mb-3 text-muted-foreground text-sm">
                 Costs {COST_GENERATE_AVATAR} reputation point
               </p>
               <Confirm
@@ -2486,8 +2489,8 @@ const TavernColors: React.FC = () => {
                   return (
                     <label
                       key={preset}
-                      className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border/30 p-2 text-left text-sm transition-colors hover:bg-poppopover ${
-                        selected ? "ring-2 ring-primary" : ""
+                      className={`border-border/30 hover:bg-poppopover flex min-h-11 cursor-pointer items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors ${
+                        selected ? "ring-primary ring-2" : ""
                       } ${updateColor.isPending ? "cursor-not-allowed opacity-50" : ""}`}
                     >
                       <input

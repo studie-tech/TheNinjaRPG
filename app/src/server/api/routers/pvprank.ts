@@ -9,6 +9,7 @@ import {
   RANKED_REQUIRED_RANK,
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { collapseRewards, postProcessRewards } from "@/libs/quest";
 import {
   getRankedRadius,
@@ -460,7 +461,8 @@ export const pvpRankRouter = createTRPCRouter({
       if (existingQueue) {
         return errorResponse("Already in queue");
       }
-      if (user.status !== "AWAKE") return errorResponse("Need to be awake to queue");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (!hasRequiredRank(user.rank, RANKED_REQUIRED_RANK)) {
         return errorResponse(
           `You need to be a ${capitalizeFirstLetter(RANKED_REQUIRED_RANK)} to queue`,

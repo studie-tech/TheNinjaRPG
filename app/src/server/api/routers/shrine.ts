@@ -33,6 +33,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   areWarObjectivesRevealed,
   findObjectiveWarForSector,
@@ -683,7 +684,8 @@ export const shrineRouter = createTRPCRouter({
 
       // Guards
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       const attackerSide = userWar
         ? getWarSide(userWar, user.villageId, user.userId)
         : user.villageId;
@@ -826,7 +828,8 @@ export const shrineRouter = createTRPCRouter({
 
       // Guards
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to join");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (!user.villageId && !isWarMercenary(activeWars, ctx.userId))
         return errorResponse("You must be in a village or serving as a mercenary");
       if (!shrineBattle) return errorResponse("Shrine battle not found");

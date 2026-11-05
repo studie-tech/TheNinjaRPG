@@ -53,6 +53,7 @@ import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { expandedWorldAtom } from "@/libs/expandedWorld";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -912,7 +913,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     walkAnimatingRef.current = true;
     const heading = worldMotionHeading(first, last);
     for (const tile of path) {
-      if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      if (!mountedRef.current || !canAttemptAwakeAction(userRef.current)) break;
       const before = animatedPositionRef.current ?? {
         x: userData.longitude,
         y: userData.latitude,
@@ -991,7 +992,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const heading = worldMotionHeading(first, last);
     // Keep the origin for heading, but only animate tiles ahead of the actor.
     for (const unifiedTile of unifiedPath.slice(1)) {
-      if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      if (!mountedRef.current || !canAttemptAwakeAction(userRef.current)) break;
       const before = {
         sector: sectorRef.current,
         ...(animatedPositionRef.current ?? {
@@ -1814,18 +1815,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
     const longitude = userData?.longitude;
     const latitude = userData?.latitude;
-    const status = userData?.status;
     if (longitude === undefined || latitude === undefined) return;
 
-    // Suppression gates first: never stack on an in-flight interaction, an open dialog, or a
-    // blocking global popup (e.g. daily rewards, which auto-opens on login and would otherwise
-    // sit on top of this prompt), and only prompt when the interaction can actually succeed —
-    // interactWithOverworldAi rejects every non-AWAKE status (BATTLE, HOSPITALIZED, ASLEEP,
-    // TRAVEL, QUEUED, …), so gate on `!== "AWAKE"` rather than BATTLE alone to avoid showing a
-    // modal whose CTA would immediately error. The gate runs before `arrivalPromptDecision`
-    // arms `lastPromptedPlacementIdRef`, so a suppressed prompt is not consumed — once the popup
-    // closes, `isBlockingPopupOpen` flips and this effect re-runs to fire the prompt.
-    if (isInteracting || status !== "AWAKE" || npcDialog || isBlockingPopupOpen) return;
+    // Keep arrival prompts behind other dialogs and permit explicit recovery-capable
+    // interactions. Only the player's chosen action wakes or checks out the character.
+    if (
+      isInteracting ||
+      !canAttemptAwakeAction(userRef.current) ||
+      npcDialog ||
+      isBlockingPopupOpen
+    )
+      return;
 
     const decision = arrivalPromptDecision({
       playerLongitude: longitude,
@@ -1976,7 +1976,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const destination = routeTargetRef.current;
     const user = userRef.current;
     if (!destination || !originRef.current || !pathFinderRef.current || !user) return;
-    if (user.status !== "AWAKE") {
+    if (!canAttemptAwakeAction(user)) {
       routeTargetRef.current = null;
       return;
     }
@@ -2290,7 +2290,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     friendlyAttack: allyAttack,
     structureObjectiveIds: structureObjectiveIdsRef.current,
     nav: windowNavRef.current,
-    enabled: !props.showSorrounding && userData?.status === "AWAKE",
+    enabled: !props.showSorrounding && canAttemptAwakeAction(userData),
     brightness: 1,
     lightDate: null,
     decorations: mergedDecorations,
@@ -2374,7 +2374,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady || profile?.status !== "AWAKE") return;
+    if (!travel.isReady || !canAttemptAwakeAction(profile)) return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);

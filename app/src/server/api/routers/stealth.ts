@@ -1,3 +1,4 @@
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import { getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
@@ -68,7 +69,7 @@ export const stealthRouter = createTRPCRouter({
       // Guard
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to activate stealth");
+        return errorResponse(actionStatusMessage(user.status));
 
       // Clean up expired stealth before the "already active" guard
       if (
@@ -161,7 +162,8 @@ export const stealthRouter = createTRPCRouter({
 
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to use sensory");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.sector !== input.sector)
         return errorResponse("You are not in this sector");
       if (!isSensoryReady(user.lastSensoryAt, user.sensory)) {
@@ -251,7 +253,8 @@ export const stealthRouter = createTRPCRouter({
 
       // Guard
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
+      if (user.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(user.status));
       if (user.covertTrainingType) {
         return errorResponse("Already training covert skills");
       }

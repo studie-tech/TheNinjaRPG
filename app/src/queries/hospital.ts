@@ -123,6 +123,7 @@ export const updateUserDataForNpcHeal = (
   energyRecovery: SQL<unknown>,
   healedAt: Date,
   ctx: { userId: string },
+  snapshot?: SQL,
 ) =>
   client
     .update(userData)
@@ -134,7 +135,13 @@ export const updateUserDataForNpcHeal = (
       updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
-    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        eq(userData.status, "HOSPITALIZED"),
+        snapshot,
+      ),
+    );
 
 /** Build the `userData` update for `npcHeal`, using predicates on `userId`, `money`, `status`. */
 export const updateUserDataForNpcHeal2 = (

@@ -10,6 +10,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getClanBoost } from "@/libs/clanBoost";
 import {
   getNextRankExperience,
@@ -74,7 +75,7 @@ export const getCraftingSeconds = (
 export const craftingStartBlockMessage = (
   user: Pick<UserData, "status" | "sector">,
 ) => {
-  if (user.status !== "AWAKE") return "User is not awake";
+  if (user.status !== "AWAKE") return actionStatusMessage(user.status);
   if (user.sector === MAP_WAKE_ISLAND_SECTOR)
     return "Cannot craft items on Wake Island";
   return null;
@@ -195,7 +196,7 @@ export const getCurrentCraftingStatus = (
   userData: UserData,
   userItems: (UserItem & { item: Item })[],
 ) => {
-  if (!userData || userData.occupation !== "CRAFTING") {
+  if (userData?.occupation !== "CRAFTING") {
     return {
       isCurrentlyCrafting: false,
       craftingRank: null,

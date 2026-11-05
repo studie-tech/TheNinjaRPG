@@ -1,8 +1,10 @@
+import { actionStatusMessage, shouldPrepareAction } from "@/libs/actionReadiness";
 import {
   fetchUserDataForEnforceRateLimit,
   insertActionLogForEnforceRateLimit,
   updateUserDataForEnforceRateLimit,
 } from "@/queries/concurrency";
+import { fetchActionReadiness } from "@/queries/profile";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
@@ -427,28 +429,62 @@ const enforceUserIsAuthed = t.middleware(async ({ ctx: context, path, next }) =>
   return next({ ctx: { userId: context.userId } });
 });
 
-/** Enforce persisted isolation even when hidden content or stale client state omits its tracker. */
-const enforcePyramidIsolation = t.middleware(async ({ ctx, path, type, next }) => {
-  if (type === "mutation" && ctx.userId && isPyramidRestrictedProcedure(path)) {
-    const isolated = await fetchIsolatedPyramid(ctx.drizzle, ctx.userId);
-    if (isolated) {
-      // Some activities allow ordinary BATTLE players. Restrict isolated runs to their
-      // own progression and combat controls; the existing response contract permits recovery.
-      return {
-        ok: true,
-        data: errorResponse(ISOLATED_PYRAMID_MESSAGE),
-        marker: middlewareMarker,
-      };
+/** Enforce persisted isolation and recover eligible characters before action handlers run. */
+const enforceCharacterActionReadiness = t.middleware(
+  async ({ ctx, path, type, next, getRawInput }) => {
+    if (type !== "mutation" || !ctx.userId) return next();
+    const needsPreparation = shouldPrepareAction(path, await getRawInput());
+    const [isolated, readiness] = await Promise.all([
+      isPyramidRestrictedProcedure(path)
+        ? fetchIsolatedPyramid(ctx.drizzle, ctx.userId)
+        : null,
+      needsPreparation ? fetchActionReadiness(ctx.drizzle, ctx.userId) : null,
+    ]);
+    const reject = (message: string) => ({
+      ok: true as const,
+      data: errorResponse(message),
+      marker: middlewareMarker,
+    });
+    if (isolated) return reject(ISOLATED_PYRAMID_MESSAGE);
+    let notice: string | undefined;
+    if (
+      readiness &&
+      !readiness.isBanned &&
+      ["ASLEEP", "HOSPITALIZED"].includes(readiness.status)
+    ) {
+      if (readiness.status === "ASLEEP" && !readiness.autoWakeUp)
+        return reject(actionStatusMessage(readiness.status));
+      // Profile hydration imports the router primitives; load it only on a recovery path.
+      const { prepareCharacterForAction } = await import(
+        "@/server/utils/actionReadiness"
+      );
+      const prepared = await prepareCharacterForAction(
+        ctx.drizzle,
+        ctx.userId,
+        readiness,
+      );
+      if (prepared.error) return reject(prepared.error);
+      notice = prepared.notice;
     }
-  }
-  return next();
-});
+    const result = await next();
+    if (notice) {
+      if (result.ok && result.data && typeof result.data === "object") {
+        const data = result.data as Record<string, unknown>;
+        // Output parsing has completed. Keep the transport notice on every result shape,
+        // including silent mutations, without changing their success or cache contracts.
+        return { ...result, data: { ...data, actionNotice: notice } };
+      }
+      if (!result.ok) result.error.message = `${result.error.message} ${notice}`;
+    }
+    return result;
+  },
+);
 
 export const protectedProcedure = t.procedure
   .use(enforceUserIsAuthed)
-  .use(enforcePyramidIsolation)
   .use(botIdMiddleware)
-  .use(sentryMiddleware);
+  .use(sentryMiddleware)
+  .use(enforceCharacterActionReadiness);
 
 /**
  * 4. EXPORTS

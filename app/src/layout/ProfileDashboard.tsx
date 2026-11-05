@@ -52,6 +52,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
 import { PendingRewardChoices } from "@/layout/RewardChoice";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { getRewardPreview } from "@/libs/objectives";
 import { calcLevelRequirements } from "@/libs/profile";
@@ -1084,8 +1085,11 @@ const compactRestrictionLabel = (message: string) => {
   if (message.startsWith("Training more than")) return "Daily training limit";
   if (message.startsWith("All stats are at")) return "Stats at rank cap";
   if (message === "Cannot craft items on Wake Island") return "Leave Wake Island";
-  if (message === "User is not awake" || message.startsWith("Must be awake"))
-    return "Must be awake";
+  if (message === actionStatusMessage("ASLEEP")) return "Asleep";
+  if (message === actionStatusMessage("HOSPITALIZED")) return "In hospital";
+  if (message === actionStatusMessage("TRAVEL")) return "Traveling";
+  if (message === actionStatusMessage("BATTLE")) return "In battle";
+  if (message === actionStatusMessage("QUEUED")) return "Queued for battle";
   if (message === "Cannot access bank while in combat") return "Combat in progress";
   return message;
 };

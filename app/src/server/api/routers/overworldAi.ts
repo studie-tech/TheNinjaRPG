@@ -11,6 +11,7 @@ import {
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import { getQuestRewardProjectionUpdate } from "@/deltas/quests";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 
 import {
   findActionableBoundObjective,
@@ -404,7 +405,8 @@ export const overworldAiRouter = createTRPCRouter({
       // client-supplied position is only a hint, so we compare the actor against the
       // placement's stored tile rather than trusting any client coordinates.
       if (activeUser.isBanned) return errorResponse("You are banned");
-      if (activeUser.status !== "AWAKE") return errorResponse("You must be awake");
+      if (activeUser.status !== "AWAKE")
+        return errorResponse(actionStatusMessage(activeUser.status));
       if (activeUser.travelFinishAt && activeUser.travelFinishAt > new Date()) {
         return errorResponse("You are travelling");
       }

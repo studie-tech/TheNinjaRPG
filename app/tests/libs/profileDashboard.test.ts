@@ -641,7 +641,7 @@ describe("dashboard training access", () => {
 
   it("explains banned and non-awake states without offering to start", () => {
     expect(dashboardTrainingAction(user({ isBanned: true }), false, village)).toMatchObject({ action: "View", reason: "Cannot spend Energy while banned" });
-    expect(dashboardTrainingAction(user({ status: "ASLEEP" }), false, village)).toMatchObject({ action: "View", reason: "Must be awake to train" });
+    expect(dashboardTrainingAction(user({ status: "ASLEEP" }), false, village)).toMatchObject({ action: "View", reason: "You are asleep. Wake up before taking this action." });
   });
 });
 
@@ -663,7 +663,7 @@ describe("dashboard level guidance", () => {
 it("keeps idle crafting viewable while explaining its state and location gates", () => {
   const input = { occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null };
   expect(describeOccupationLine({ ...input, craftingUser: { status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR } })).toMatchObject({ action: "View", detail: "Cannot craft items on Wake Island" });
-  expect(describeOccupationLine({ ...input, craftingUser: { status: "ASLEEP", sector: 1 } })).toMatchObject({ action: "View", detail: "User is not awake" });
+  expect(describeOccupationLine({ ...input, craftingUser: { status: "ASLEEP", sector: 1 } })).toMatchObject({ action: "View", detail: "You are asleep. Wake up before taking this action." });
   expect(describeOccupationLine({ ...input, craftingItemName: "Healing Salve", craftingUser: { status: "ASLEEP", sector: 1 } })).toMatchObject({ action: "View", detail: null, craftTimer: true });
 });
 

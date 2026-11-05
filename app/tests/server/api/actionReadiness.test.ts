@@ -1,0 +1,85 @@
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
+import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
+import { userData, villageStructure } from "@/drizzle/schema";
+import { AWAKE_ACTIONS, AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { Pusher } from "@/libs/pusher";
+import { appRouter } from "@/server/api/root";
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { insertUsers } from "../../setup/factories";
+import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
+import { beforeStatements } from "../../setup/statements";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+
+// The path activates the same gate used by the real training endpoint, with a handler
+// whose invocation makes rejection-before-side-effects observable.
+let invocations = 0;
+const router = createTRPCRouter({ train: createTRPCRouter({ startTraining: protectedProcedure.mutation(() => {
+  invocations++; return { success: true, message: "Trained" };
+}) }) });
+const userId = "action-readiness";
+const current = async () => (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+
+afterEach(() => { invocations = 0; resetServerModuleStubs(); vi.restoreAllMocks(); });
+
+describe("action policy routing", () => {
+  it("references existing mutations under their registered paths", () => {
+    const procedures = appRouter._def.procedures as unknown as Record<string, { _def: { type: string } }>;
+    for (const path of [...AWAKE_ACTIONS, "coop.dungeon.act", "hunting.sessionAction", "profile.useUnusedExperiencePoints"]) {
+      expect(procedures[path], path).toBeDefined();
+      expect(procedures[path]?._def.type).toBe("mutation");
+    }
+  });
+});
+
+describeWithDatabase("automatic action recovery", () => {
+  const setup = async (status: "ASLEEP" | "HOSPITALIZED", values: Record<string, unknown> = {}) => {
+    await resetTables(userData, villageStructure);
+    await insertUsers([{ userId, username: userId, status, villageId: "village", curHealth: 10, maxHealth: 100, money: 1234, ...values }]);
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    // Isolate the transition's SQL, with the shared hydrated snapshot controlled at the
+    // boundary. Profile regeneration itself is exercised by the arena and hospital suites.
+    stubProfile("fetchUpdatedUser", async () => ({ user: await current() }) as never);
+    return callerForDatabase(router, userId, await getTestDatabase());
+  };
+  it("wakes with the default preference before invoking the action", async () => {
+    const caller = await setup("ASLEEP");
+    expect((await current()).autoWakeUp).toBe(true);
+    expect(await caller.train.startTraining()).toMatchObject({ success: true, message: "Trained", actionNotice: AUTO_WAKE_MESSAGE });
+    expect(invocations).toBe(1);
+    expect((await current()).status).toBe("AWAKE");
+  });
+  it("respects an explicit opt-out", async () => {
+    const caller = await setup("ASLEEP", { autoWakeUp: false });
+    expect(await caller.train.startTraining()).toMatchObject({success: false, message: expect.stringContaining("asleep")});
+    expect(invocations).toBe(0);
+    expect((await current()).status).toBe("ASLEEP");
+  });
+  it.each(["deadline", "full health", "village boost"])("checks out for free by %s", async (reason) => {
+    const caller = await setup("HOSPITALIZED", {
+      autoWakeUp: false,
+      regenAt: new Date(Date.now() - (reason === "deadline" ? HOSPITAL_BASE_HEAL_SECONDS + 5 : 1) * 1000),
+      curHealth: reason === "full health" ? 100 : 10,
+    });
+    if (reason === "village boost") await (await getTestDatabase()).insert(villageStructure).values({id: "hospital", name: "Hospital", image: "/hospital.png", villageId: "village", level: 100, hospitalSpeedupPerLvl: 1});
+    expect(await caller.train.startTraining()).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
+    expect(invocations).toBe(1);
+    expect(await current()).toMatchObject({status: "AWAKE", money: 1234, curHealth: 100});
+  });
+  it("offers hospital recovery without charging when checkout is still paid", async () => {
+    const caller = await setup("HOSPITALIZED", { regenAt: new Date() });
+    expect(await caller.train.startTraining()).toMatchObject({ success: false, message: expect.stringContaining("in the hospital") });
+    expect(invocations).toBe(0);
+    expect(await current()).toMatchObject({ status: "HOSPITALIZED", money: 1234, curHealth: 10 });
+  });
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("does not overwrite a concurrent battle from %s", async (status) => {
+    await setup(status, { regenAt: new Date(0) });
+    const database = await getTestDatabase();
+    const client = beforeStatements(database, userData, [async () => {
+      await database.update(userData).set({ status: "BATTLE" }).where(eq(userData.userId, userId));
+    }]);
+    expect(await callerForDatabase(router, userId, client).train.startTraining()).toMatchObject({ success: false });
+    expect(invocations).toBe(0);
+    expect((await current()).status).toBe("BATTLE");
+  });
+});

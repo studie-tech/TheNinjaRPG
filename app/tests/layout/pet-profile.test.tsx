@@ -38,6 +38,7 @@ setDefaultTimeout(20_000);
 const testApi = createTRPCReact<AppRouter>();
 type PetView = RouterOutputs["pets"]["getPet"];
 let owner: {
+  autoWakeUp?: boolean;
   userId: string; role: string; status: string; rank: string; reputationPoints: number; seichiSilver: number;
   sector: number; battleId: string | null; isOutlaw: boolean;
   updatedAt: Date; experience: number; earnedExperience: number; petExperience: number;
@@ -1035,6 +1036,7 @@ it("targets the owner's home village when cooking is elsewhere", async () => {
 
 it.each(["ASLEEP", "BATTLE"])("explains unavailable travel without leaving a working link while %s", async (status) => {
   owner.status = status;
+  owner.autoWakeUp = false;
   owner.sector = 2;
   data = { ...data, feedMeals: [] };
   const view = mount();

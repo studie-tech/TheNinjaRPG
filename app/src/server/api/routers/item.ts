@@ -58,6 +58,7 @@ import {
   userItem,
   userItemImbuement,
 } from "@/drizzle/schema";
+import { actionStatusMessage } from "@/libs/actionReadiness";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
 import { hasAppearAnimation } from "@/libs/combat/util";
@@ -934,7 +935,7 @@ export const itemRouter = createTRPCRouter({
       ]);
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
-        return errorResponse("Must be awake to evolve an item");
+        return errorResponse(actionStatusMessage(user.status));
       if (!evolutionItem) return errorResponse("Evolution item not found");
       const parentItemId = evolutionItem.parentItemId;
       if (!parentItemId) return errorResponse("Target item is not an evolution");

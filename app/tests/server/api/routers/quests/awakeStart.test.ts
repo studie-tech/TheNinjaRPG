@@ -38,7 +38,7 @@ describeWithDatabase("mission hall starts require an awake player", () => {
 
   it("rejects a sleeping player's specific and random medical starts without spending the attempt", async () => {
     const api = await callerFor(questsRouter, "medic");
-    const blocked = { success: false, message: expect.stringContaining("must be awake") };
+    const blocked = { success: false, message: expect.stringContaining("asleep") };
     expect(await api.startQuest({ questId: "bloom", userSector: 0 })).toMatchObject(blocked);
     expect(await api.startRandom({ type: "medical", rank: "D", userLevel: 50, userSector: 0, userVillageId: "home" })).toMatchObject(blocked);
     expect((await readUser())?.dailyMedicalMissions).toBe(0);
