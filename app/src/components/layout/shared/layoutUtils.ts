@@ -10,6 +10,13 @@ export const isClerkElement = (target: EventTarget | null) => {
   );
 };
 
+/** `onInteractOutside` guard: Clerk's popovers portal outside the sheet they open from. */
+export const keepSheetOpenForClerk = (
+  event: Pick<Event, "target" | "preventDefault">,
+) => {
+  if (isClerkElement(event.target)) event.preventDefault();
+};
+
 /**
  * Determines whether a click inside the right sidebar sheet should close it.
  *

@@ -20,7 +20,7 @@ import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { isClerkElement } from "./shared/layoutUtils";
+import { isClerkElement, keepSheetOpenForClerk } from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
 export function PanelGameLayout(props: GameLayoutRenderProps) {
@@ -79,9 +79,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
                 side="left"
                 className="theme-drawer"
                 data-reading-surface
-                onInteractOutside={(event) => {
-                  if (isClerkElement(event.target)) event.preventDefault();
-                }}
+                onInteractOutside={keepSheetOpenForClerk}
               >
                 <SheetHeader className="text-left">
                   <SheetTitle>Player menu</SheetTitle>
