@@ -697,7 +697,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse(
           "You must be in a village or serving as a mercenary for this shrine",
         );
-      if (MAP_RESERVED_SECTORS.includes(input.sectorNumber)) {
+      if (MAP_RESERVED_SECTORS.includes(input.sectorNumber) && !userWar?.rules) {
         return errorResponse("This sector is reserved and cannot be attacked");
       }
       // Home sectors can only be attacked during Village Wars or Raids
