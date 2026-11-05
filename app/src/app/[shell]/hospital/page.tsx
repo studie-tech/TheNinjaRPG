@@ -39,9 +39,6 @@ export default function Hospital() {
     useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
-  // Current interest
-  const utils = api.useUtils();
-
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
     onMutate: prepareUserUpdate,
