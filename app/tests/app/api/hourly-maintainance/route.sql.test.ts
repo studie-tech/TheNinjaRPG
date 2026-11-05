@@ -131,7 +131,7 @@ describeWithDatabase("hourly maintenance claim", () => {
   it("keeps the hour after a successful run", async () => {
     expect((await GET(request())).status).toBe(200);
     expect(await (await GET(request())).json()).toBe(
-      "Wait until an hour has passed before running this again",
+      "Wait until the next hour to run this again",
     );
     expect((await timer())?.value).toBe(2);
   });

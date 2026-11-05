@@ -111,20 +111,22 @@ export const lockWithGameTimer = async (
   return gameTimerWaitResponse(claim.prevTime, deltaTime);
 };
 
-/** Atomically claim one rolling hour. */
+/**
+ * Atomically claim once per UTC calendar hour, so a minute-0 cron that fires slightly early
+ * still gets its tick.
+ */
 export const lockWithHourlyTimer = async (client: DrizzleClient, name: string) => {
   const claim = await claimGameTimer(
     client,
     name,
-    (previous, now) => now.getTime() - previous.getTime() >= 60 * 60 * 1000,
+    (previous, now) =>
+      isDifferentDay(now, previous) || now.getUTCHours() !== previous.getUTCHours(),
   );
   return {
     ...claim,
     isNewHour: claim.isClaimed,
     response: Response.json(
-      claim.isClaimed
-        ? null
-        : "Wait until an hour has passed before running this again",
+      claim.isClaimed ? null : "Wait until the next hour to run this again",
     ),
   };
 };

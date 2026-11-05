@@ -111,7 +111,9 @@ for (const [name, lock] of [
 
 describe("timer cadence", () => {
   it.each([
-    ["hourly", lockWithHourlyTimer, "2026-10-21T09:31:00Z", false],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T10:00:00Z", false],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T09:59:59.999Z", true],
+    ["hourly", lockWithHourlyTimer, "2026-10-21T09:31:00Z", true],
     ["hourly", lockWithHourlyTimer, "2026-10-21T09:30:10Z", true],
     ["hourly", lockWithHourlyTimer, "2026-10-20T10:30:10Z", true],
     ["minute", lockWithMinuteTimer, "2026-10-21T10:30:00Z", false],
@@ -127,6 +129,16 @@ describe("timer cadence", () => {
     const store = timerStore(new Date(previous));
     expect((await lock(store.client, "timer")).isClaimed).toBe(expected);
     expect(store.where).toHaveBeenCalledTimes(expected ? 1 : 0);
+  });
+
+  it("runs a */10 hourly cron once per hour and a minute-0 cron despite an early fire", async () => {
+    const store = timerStore();
+    const claims: boolean[] = [];
+    for (const time of ["09:00:05", "09:10:05", "09:50:05", "10:00:02", "10:10:02"]) {
+      setSystemTime(new Date(`2026-10-21T${time}Z`));
+      claims.push((await lockWithHourlyTimer(store.client, "timer")).isClaimed);
+    }
+    expect(claims).toEqual([true, false, false, true, false]);
   });
 
   it("keeps the generic timer name, duration tolerance and false/Response contract", async () => {
