@@ -1,5 +1,6 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as nextNavigation from "next/navigation";
 import Arena from "@/app/[shell]/battlearena/page";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
@@ -10,8 +11,6 @@ import * as pyramidMode from "@/layout/battlearena/PyramidMode";
 import * as rankedMode from "@/layout/battlearena/RankedMode";
 import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
-import type { ContentBoxProps } from "@/layout/ContentBox";
-import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
 
 // Local storage sync dispatches DOM events through the global constructors.
@@ -33,10 +32,13 @@ beforeEach(() => {
     access: true,
   } as never);
   vi.spyOn(tutorial, "useTutorialStep").mockImplementation(() => ({ currentStep: tutorialStep }) as never);
-  vi.spyOn(contentBox, "default").mockImplementation((({ children, onBack }: ContentBoxProps) => (
-    <div><button type="button" onClick={onBack}>Battle Arena</button>{children}</div>
-  )) as never);
-  vi.spyOn(overview, "ArenaOverview").mockImplementation(() => <p>Overview</p>);
+  vi.spyOn(nextNavigation, "useRouter").mockReturnValue({
+    push: (href: string) => window.history.pushState({}, "", href),
+    back: () => window.history.back(),
+  } as never);
+  vi.spyOn(overview, "ArenaOverview").mockImplementation(({ onOpen }) => (
+    <div><p>Overview</p><button type="button" onClick={() => onOpen("Training")}>Open Training</button></div>
+  ));
   vi.spyOn(modeShell, "ArenaModeShell").mockImplementation(({ mode, children }) => (
     <section aria-label={`${mode} mode`}>{children}</section>
   ));
@@ -80,6 +82,32 @@ it("returns from a deep-linked mode to the overview through the page title", () 
   fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
   expect(screen.getByText("Overview")).toBeDefined();
   expect(window.location.hash).toBe("");
+});
+
+it("leaves for the village after returning from a mode through the page title", async () => {
+  window.history.replaceState({}, "", "/village");
+  window.history.pushState({}, "", "/battlearena");
+  render(<Arena />);
+  fireEvent.click(screen.getByRole("button", { name: "Open Training" }));
+  expect(screen.getByText("Training body")).toBeDefined();
+  expect(window.location.hash).toBe("#Training");
+
+  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
+  expect(screen.getByText("Overview")).toBeDefined();
+  expect(window.location.hash).toBe("");
+
+  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/village"));
+});
+
+it("leaves the forced tutorial mode for the village through the page title", async () => {
+  window.history.replaceState({}, "", "/battlearena#Training");
+  window.history.pushState({}, "", "/battlearena#Sparring");
+  tutorialStep = { advanceOn: "arenaStart" };
+  render(<Arena />);
+  expect(screen.getByRole("region", { name: "Arena mode" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/village"));
 });
 
 it("opens Arena with the Academy Dummy during the tutorial arena step", () => {

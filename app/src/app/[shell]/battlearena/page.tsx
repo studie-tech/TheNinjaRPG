@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useNavigationRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useArenaView } from "@/hooks/useArenaView";
 import BanInfo from "@/layout/BanInfo";
@@ -20,6 +21,7 @@ import type { StatSchemaType } from "@/validators/combat";
 
 /** The battle arena: an overview of its modes, or the mode named in the URL hash. */
 export default function Arena() {
+  const router = useNavigationRouter();
   const { mode, openMode, openOverview } = useArenaView();
   const [aiId, setAiId] = useLocalStorage<string | undefined>(
     "arenaAI4",
@@ -53,7 +55,7 @@ export default function Arena() {
       title="Battle Arena"
       subtitle={view ? MODE_SUBTITLES[view] : "Pick how you want to fight"}
       defaultBackHref="/village"
-      onBack={view && !isTutorialArena ? openOverview : undefined}
+      onBack={view && !isTutorialArena ? openOverview : () => router.push("/village")}
       padding={false}
     >
       {view === null ? (
