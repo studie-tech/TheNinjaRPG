@@ -513,12 +513,14 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                     return (
                       <div key={index} className="flex items-center gap-2">
                         {req.requirementItem?.image && (
-                          <ContentImage
-                            image={req.requirementItem.image}
-                            alt={req.requirementItem.name || "Material"}
-                            className="h-8 w-8 shrink-0"
-                            rarity={req.requirementItem.rarity}
-                          />
+                          <span className="relative h-8 w-8 shrink-0">
+                            <ContentImage
+                              image={req.requirementItem.image}
+                              alt={req.requirementItem.name || "Material"}
+                              className="h-8 w-8"
+                              rarity={req.requirementItem.rarity}
+                            />
+                          </span>
                         )}
                         <span className="flex-1 text-sm">
                           {required}x {req.requirementItem?.name || "Unknown Item"}

@@ -5,6 +5,7 @@ import * as client from "@/app/_trpc/client";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as combatActions from "@/layout/CombatActions";
+import * as contentImage from "@/layout/ContentImage";
 import { CraftingCatalog } from "@/layout/CraftingCatalog";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as modal from "@/layout/Modal";
@@ -222,5 +223,37 @@ describe("CraftingCatalog crafting rank gate", () => {
       (view.getByRole("button", { name: "Start Crafting" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+  });
+
+  it("keeps a rarity-framed material icon inside its own row", () => {
+    vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
+      <span>{alt} art</span>
+    ));
+    const material = {
+      id: "material",
+      name: "Sun Petal",
+      rarity: "RARE",
+      image: "https://example.com/sun-petal.png",
+    };
+    const item = makeItem("COMMON");
+    item.craftingRequirements = [
+      { quantity: 1, requirementItemId: material.id, requirementItem: material },
+    ] as unknown as CraftableItem["craftingRequirements"];
+    const view = render(
+      <CraftingCatalog
+        craftableItems={[item]}
+        userItems={userItems}
+        userData={apprentice}
+        isBusy={false}
+        isQueueFull={false}
+      />,
+    );
+    fireEvent.click(view.getByText("Weapons"));
+    fireEvent.click(view.getByRole("button", { name: item.name }));
+
+    // ContentImage positions its art absolutely over the rarity frame.
+    const wrapper = view.getByText("Sun Petal art").parentElement;
+    expect(wrapper?.className).toContain("relative");
+    expect(wrapper?.className).toContain("h-8 w-8");
   });
 });
