@@ -3,6 +3,7 @@ import { cache } from "react";
 import { absoluteUrl, noindexMetadata, SITE_NAME } from "@/libs/seo";
 import { findIndexableConceptImageMetadata } from "@/queries/conceptart";
 import { drizzleDB } from "@/server/db";
+import { truncateString } from "@/utils/string";
 import ConceptBox_ConceptImage from "./conceptimage";
 
 type Props = { params: Promise<{ imageid: string }> };
@@ -40,11 +41,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   }
   // Prompts run up to 5000 characters, so trim to something that fits a search result.
   const prompt = image.prompt.trim().replace(/\s+/g, " ");
-  const shortPrompt = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt;
+  const shortPrompt = truncateString(prompt, 70);
   const url = absoluteUrl(`/conceptart/${id}`);
-  const description = `AI generated ${SITE_NAME} concept art: ${
-    prompt.length > 140 ? `${prompt.slice(0, 137)}...` : prompt
-  }`;
+  const description = `AI generated ${SITE_NAME} concept art: ${truncateString(prompt, 140)}`;
   return {
     title: `Concept Art: ${shortPrompt}`,
     description,
