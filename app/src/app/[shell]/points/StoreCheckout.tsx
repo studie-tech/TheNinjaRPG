@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { STORE_ORDER_RESERVATION_MINUTES } from "@/drizzle/constants";
+import { useStoreDeliveryRefresh } from "@/hooks/useStoreDeliveryRefresh";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -28,7 +29,7 @@ export function StoreCheckout({
 }) {
   const [{ isResolved, isRejected }] = usePayPalScriptReducer();
   const [message, setMessage] = useState<string>();
-  const utils = api.useUtils();
+  const refreshStoreDelivery = useStoreDeliveryRefresh();
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const prepare = api.paypal.createStoreOrder.useMutation();
   const resolve = api.paypal.captureStoreOrder.useMutation({
@@ -59,11 +60,7 @@ export function StoreCheckout({
       if (result.success)
         await Promise.all([
           updateUser(result, { revision, delta: result.userDelta }),
-          utils.paypal.getRecentRepsCount.invalidate(),
-          utils.paypal.getPaypalTransactions.invalidate(),
-          utils.paypal.getStoreBundles.invalidate(),
-          utils.item.getUserItems.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
+          refreshStoreDelivery(),
         ]);
     },
     onError: (error) =>

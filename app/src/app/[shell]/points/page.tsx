@@ -74,6 +74,7 @@ import {
   WEB_REP_PRESETS,
 } from "@/drizzle/constants";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import { useStoreDeliveryRefresh } from "@/hooks/useStoreDeliveryRefresh";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -92,6 +93,7 @@ import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
+import { isPayPalCleanupError } from "@/utils/error";
 import {
   calcFedUgradeCost,
   dynamicMonthlyRepCap,
@@ -112,22 +114,6 @@ const OPTIONS = {
   clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "",
   currency: CURRENCY,
   intent: "capture",
-};
-
-/**
- * Helper to check if an error is a PayPal cleanup error that should be suppressed.
- * These occur when users navigate away while PayPal buttons are initializing,
- * or when users close the PayPal popup before the transaction completes.
- */
-const isPayPalCleanupError = (err: unknown): boolean => {
-  const errorMessage = err?.toString() ?? "";
-  return (
-    errorMessage.includes("zoid destroyed") ||
-    errorMessage.includes("popup close") ||
-    errorMessage.includes("Window closed") ||
-    errorMessage.includes("Component closed") ||
-    errorMessage.includes("Target window is closed")
-  );
 };
 
 /**
@@ -917,6 +903,7 @@ const SubscriptionsOverview = () => {
 const LookupTransaction = () => {
   // tRPC utility
   const utils = api.useUtils();
+  const refreshStoreDelivery = useStoreDeliveryRefresh();
 
   // Form
   const searchForm = useForm<SearchPaypalTransactionSchema>({
@@ -929,14 +916,7 @@ const LookupTransaction = () => {
     onSuccess: async (data) => {
       showMutationToast(data);
       // A lookup can apply some receipts before another delivery fails.
-      await Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.item.getUserItems.invalidate(),
-        utils.item.getUserItemsWithVariants.invalidate(),
-        utils.paypal.getRecentRepsCount.invalidate(),
-        utils.paypal.getPaypalTransactions.invalidate(),
-        utils.paypal.getStoreBundles.invalidate(),
-      ]);
+      await Promise.all([utils.profile.getUser.invalidate(), refreshStoreDelivery()]);
     },
   });
 

@@ -37,8 +37,8 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[],
   const callbacks = source.slice(call).match(new RegExp(`useMutation\\((\\{[\\s\\S]*?\\n${indent}\\})\\);`))?.[1];
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   // Execute production callbacks so dropping response metadata cannot hide behind a manual merge.
-  const options = new Function("utils", "prepareUserUpdate", "updateUser", "showMutationToast", "setMessage", "setSessionId", "sendGTMEvent", "props", `return (${callbacks});`)(
-    utils, () => prepareUserUpdate(client, key), updateUser, showMutationToast, vi.fn(), vi.fn(), vi.fn(), props,
+  const options = new Function("utils", "prepareUserUpdate", "updateUser", "showMutationToast", "setMessage", "setSessionId", "sendGTMEvent", "props", "refreshStoreDelivery", `return (${callbacks});`)(
+    utils, () => prepareUserUpdate(client, key), updateUser, showMutationToast, vi.fn(), vi.fn(), vi.fn(), props, leaf.invalidate,
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, updateUser, options, profile, showMutationToast,
