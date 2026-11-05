@@ -30,8 +30,8 @@ export const PoolStatusBars: React.FC<PoolStatusBarsProps> = ({
       const total = pools[`max${pool}`];
       return (
         <StatusBar
-          {...barProps}
           key={remountOnChange ? `${title}-${current}-${total}` : title}
+          {...barProps}
           title={title}
           tooltip={pool}
           color={color}
