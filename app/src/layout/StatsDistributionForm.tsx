@@ -21,6 +21,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import {
   BasicElementName,
+  CombatStatNames,
   ELEMENTAL_MASTERY_BOOST,
   ELEMENTAL_MASTERY_CAP,
   IMG_TRAIN_BUKI_OFF,
@@ -689,7 +690,10 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                       ? providedElements(userData).includes(stat)
                         ? "Provided by innate elements or bloodline"
                         : "Fully mastered"
-                      : `- Max for ${capitalizeFirstLetter(userData.rank)}`}
+                      : isInArray(stat, CombatStatNames) &&
+                          statCaps?.[stat] !== undefined
+                        ? "- Max reached"
+                        : `- Max for ${capitalizeFirstLetter(userData.rank)}`}
                   </div>
                 </FormControl>
                 <FormMessage />
