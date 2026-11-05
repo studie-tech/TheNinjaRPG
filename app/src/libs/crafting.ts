@@ -294,3 +294,32 @@ export const getImbuementRankCapMessage = (
     : "";
   return `${currentImbuements}/${itemMaxImbueNumber} imbuements: your crafting rank (${formatCraftingRank(craftingRank)}) allows ${rankLimit}.${reach}`;
 };
+
+/**
+ * Explain why the player has nothing to imbue right now.
+ * @param craftingRank - The user's crafting rank
+ * @param imbuableItemCount - Owned items with the "Can be Imbued" property
+ * @param openItemCount - Those items that can still take a crystal
+ * @param crystalCount - Crystals available to use
+ * @returns A player-facing explanation, or null when an item and a crystal can be picked
+ */
+export const getImbueBlockedMessage = (
+  craftingRank: CRAFTING_RANK,
+  imbuableItemCount: number,
+  openItemCount: number,
+  crystalCount: number,
+): string | null => {
+  if (CRAFTING_MAX_IMBUED_ITEMS[craftingRank] === 0) {
+    return `You need to be at least Apprentice rank to imbue items. Apprentice starts at ${CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString("en-US")} crafting experience.`;
+  }
+  if (imbuableItemCount === 0) {
+    return 'You don\'t own an item that can be imbued. Look for "Can be Imbued" under All details on an item.';
+  }
+  if (openItemCount === 0) {
+    return "Your imbuable items are all at their crystal cap, so none of them can take another crystal.";
+  }
+  if (crystalCount === 0) {
+    return "You have no crystals to imbue with. Obtain crystals to enhance your items.";
+  }
+  return null;
+};

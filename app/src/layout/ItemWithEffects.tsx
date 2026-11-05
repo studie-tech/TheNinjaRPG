@@ -790,8 +790,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 </p>
               )}
               {"canBeImbued" in item && item.canBeImbued && (
-                <p>
-                  <b>Can be Imbued</b>: {item.canBeImbued ? "yes" : "no"}
+                <p className="col-span-2" data-testid="item-imbue-pointer">
+                  <b>Can be Imbued</b>: {item.canBeImbued ? "yes" : "no"}. Imbue it
+                  under Occupation &gt; Crafting, from Apprentice rank, while
+                  unequipped.
                 </p>
               )}
               {"canBeHunted" in item && item.canBeHunted && (
