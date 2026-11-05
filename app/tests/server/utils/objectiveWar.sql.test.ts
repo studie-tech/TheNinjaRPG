@@ -72,7 +72,7 @@ describeWithDatabase("objective war atomic strategic actions", () => {
     await db.update(sector).set({ shrineLevel: 3, nextMaintainanceDueDate: dueDate }).where(eq(sector.sector, 201));
     const w = await readWar();
     await applyObjectiveWarAction(db, w, { id: "partial", userId: "hero", sideVillageId: "a", objectiveIndex: 0, shrineDamage: 100 });
-    expect(await db.query.sector.findFirst({ where: eq(sector.sector, 201) })).toMatchObject({ villageId: "b", shrineLevel: 3, nextMaintainanceDueDate: dueDate });
+    expect(await db.query.sector.findFirst({ where: eq(sector.sector, 201) })).toEqual(expect.objectContaining({ villageId: "b", shrineLevel: 3, nextMaintainanceDueDate: dueDate }));
     expect((await readWar()).objectiveState?.objectives[0]).toMatchObject({ hp: 250, destroyed: false });
     await applyObjectiveWarAction(db, w, { id: "finish", userId: "hero", sideVillageId: "a", objectiveIndex: 0, shrineDamage: 350 });
     expect(await db.query.sector.findFirst({ where: eq(sector.sector, 201) })).toBeUndefined();

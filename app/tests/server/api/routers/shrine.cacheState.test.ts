@@ -99,7 +99,7 @@ describeWithDatabase("committed shrine cache state", () => {
         : caller.payWeeklyMaintenance({ sectorId }));
       expect(result).toMatchObject({ success: false, message: "This shrine has been destroyed" });
       expect((await db.query.village.findFirst({ where: eq(village.id, villageId) }))?.tokens).toBe(initialTokens + concurrentTokens);
-      expect(await db.query.sector.findFirst({ where: eq(sector.id, sectorId) })).toMatchObject({ shrineLevel: 0, nextMaintainanceDueDate: maintenanceAt });
+      expect(await db.query.sector.findFirst({ where: eq(sector.id, sectorId) })).toEqual(expect.objectContaining({ shrineLevel: 0, nextMaintainanceDueDate: maintenanceAt }));
     });
   }
 

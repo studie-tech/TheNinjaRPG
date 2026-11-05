@@ -453,8 +453,8 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeGreaterThan(1790000);
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeLessThan(1810000);
     }
-    expect(await db.query.userData.findFirst({where: eq(userData.userId, "c")})).toMatchObject({bracketImmunityPausedAt: null, bracketImmunityLiftedUntil: unpausedUntil});
-    expect(await db.query.userData.findFirst({where: eq(userData.userId, "outsider")})).toMatchObject({bracketImmunityPausedAt: pausedAt, bracketImmunityLiftedUntil: liftedUntil});
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "c")})).toEqual(expect.objectContaining({bracketImmunityPausedAt: null, bracketImmunityLiftedUntil: unpausedUntil}));
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "outsider")})).toEqual(expect.objectContaining({bracketImmunityPausedAt: pausedAt, bracketImmunityLiftedUntil: liftedUntil}));
   });
   it("compensates competing partial starts without transactions and reopens once", async () => {
     const {db, original} = await interruptedStart();
@@ -524,7 +524,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeGreaterThan(1790000);
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeLessThan(1810000);
     }
-    expect(await db.query.userData.findFirst({where: eq(userData.userId, "b")})).toMatchObject({status: "BATTLE", battleId: "newer", bracketImmunityPausedAt: pausedAt, bracketImmunityLiftedUntil: liftedUntil});
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "b")})).toEqual(expect.objectContaining({status: "BATTLE", battleId: "newer", bracketImmunityPausedAt: pausedAt, bracketImmunityLiftedUntil: liftedUntil}));
   });
 });
 

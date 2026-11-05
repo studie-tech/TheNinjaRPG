@@ -566,11 +566,11 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     ).toBe("AWAKE");
     expect(await db.select().from(mpvpBattleQueue)).toHaveLength(0);
     expect(await db.select().from(mpvpBattleUser)).toHaveLength(0);
-    expect(await db.query.sector.findFirst()).toMatchObject({
+    expect(await db.query.sector.findFirst()).toEqual(expect.objectContaining({
       villageId: "attacker",
       shrineLevel: 1,
       capturedAt: ended.endedAt,
-    });
+    }));
     expect(
       (
         await db.query.villageStructure.findFirst({
@@ -688,11 +688,11 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     expect(await balance(db, "attacker")).toBe(0);
     expect(await fetchActiveWars(db)).toHaveLength(0);
     expect((await db.query.war.findFirst())?.status).toBe("DEFENDER_VICTORY");
-    expect(await db.query.sector.findFirst()).toMatchObject({
+    expect(await db.query.sector.findFirst()).toEqual(expect.objectContaining({
       villageId: "defender",
       shrineLevel: 3,
       capturedAt: new Date(0),
-    });
+    }));
   });
 
   for (const waitForLock of [false, true])
@@ -755,10 +755,10 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         const ended = await handleWarEnd(initial, client, { shrineBuilderId: "attacker-kage" });
         expect(ended.status).toBe("ATTACKER_VICTORY");
         expect((await db.query.sector.findFirst())?.villageId).toBe("attacker");
-        expect(await db.query.war.findFirst({ where: eq(war.id, declaredWarId!) })).toMatchObject({
+        expect(await db.query.war.findFirst({ where: eq(war.id, declaredWarId!) })).toEqual(expect.objectContaining({
           status: "DEFENDER_VICTORY",
           endedAt: ended.endedAt,
-        });
+        }));
         expect(ended.settlement?.warIds).toContain(declaredWarId!);
         expect(ended.settlement?.villageIds).toContain("other");
         expect((await db.query.userData.findFirst({ where: eq(userData.userId, "other-kage") }))?.warParticipantUntil.getTime()).toBe(0);
@@ -1021,10 +1021,10 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       await db.update(userRequest).set({ status: closedStatus });
       await db.update(warAlly).set({ endedAt: new Date(0) });
       expect((await closeOffer(db)).success).toBe(false);
-      expect(await db.query.warAlly.findFirst()).toMatchObject({
+      expect(await db.query.warAlly.findFirst()).toEqual(expect.objectContaining({
         tokensPaid: 100,
         endedAt: new Date(0),
-      });
+      }));
       expect(await balance(db, "ally")).toBe(tokens + 100);
       expect(await balance(db, "attacker")).toBe(tokens - 100);
     });
