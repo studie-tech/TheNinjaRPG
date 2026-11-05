@@ -43,12 +43,11 @@ import {
   getHomeRoomCamera,
   getHomeRooms,
   type HomeRoomId,
-  zoomHomeCamera,
+  zoomHomeCameraTo,
 } from "@/libs/homeProperty";
 import { HOME_ART_PLANS } from "@/libs/homeRoomGeometry";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";
-import { clamp } from "@/utils/math";
 import type { HomePlacement, HomeRoomStyle } from "@/validators/home";
 
 /** A furnished residence with a reversible draft; the page owns persistence and game actions. */
@@ -128,14 +127,14 @@ export const HomeScene = ({
       if (!(rect.width > 0 && rect.height > 0)) return;
       const x = ((event.clientX - rect.left) / rect.width) * 100;
       const y = ((event.clientY - rect.top) / rect.height) * 100;
-      setCamera((current) => {
-        const scale = clamp(
+      setCamera((current) =>
+        zoomHomeCameraTo(
+          current,
           current.scale * (event.deltaY > 0 ? 0.9 : 1.1),
-          getHomeOverviewCamera(homeType).scale,
-          1.8,
-        );
-        return boundHomeCamera(zoomHomeCamera(current, scale, { x, y }), homeType);
-      });
+          homeType,
+          { x, y },
+        ),
+      );
     };
     // A non-passive listener keeps wheel zoom from scrolling the surrounding page.
     scene.addEventListener("wheel", wheel, { passive: false });
@@ -161,9 +160,16 @@ export const HomeScene = ({
       ? "Some furniture is no longer in your inventory. Undo changes to continue."
       : placementError || furnitureError;
   const isMovementDisabled = isSaving || isTierChanged || !canDecorate;
-  const hasPlacementLimit =
-    placements.filter((placement) => getHomePlacementRoom(placement) === activeRoom)
-      .length >= HOME_FURNITURE_MAX_PLACEMENTS;
+  const countRoomPieces = (room: HomeRoomId, excludedId?: string) =>
+    placements.filter(
+      (placement) =>
+        placement.id !== excludedId && getHomePlacementRoom(placement) === room,
+    ).length;
+  const isRoomFull = (room: HomeRoomId, excludedId?: string) =>
+    countRoomPieces(room, excludedId) >= HOME_FURNITURE_MAX_PLACEMENTS;
+  const placementRoomFor = (piece: HomeFurniture) =>
+    piece.action === "farm" ? "yard" : activeRoom;
+  const hasPlacementLimit = isRoomFull(activeRoom);
   const hasImageError = failedHomeType === homeType;
   const sleepLabel = isTogglingSleep
     ? "Please wait…"
@@ -171,16 +177,21 @@ export const HomeScene = ({
       ? "Wake up"
       : "Go to sleep";
 
+  /** Restart the draft from the saved layout with the active room's first piece selected. */
+  const resetDraft = () => {
+    const placements = recoverHomeLayout(layout, furniture, homeType);
+    setDraft({ homeType, revision, placements, styles });
+    setSelectedId(
+      placements.find((placement) => getHomePlacementRoom(placement) === activeRoom)
+        ?.id ?? null,
+    );
+    setPlacementError(null);
+  };
+
   // Capture the revision only when editing begins; subsequent query refreshes must not rebase unsaved edits.
   useEffect(() => {
     if (isDecorating && !draft && !isRefreshingFurniture) {
-      const placements = recoverHomeLayout(layout, furniture, homeType);
-      setDraft({ homeType, revision, placements, styles });
-      setSelectedId(
-        placements.find((placement) => getHomePlacementRoom(placement) === activeRoom)
-          ?.id ?? null,
-      );
-      setPlacementError(null);
+      resetDraft();
     } else if (!isDecorating && draft) {
       dragRef.current = null;
       cameraPointers.current.clear();
@@ -237,13 +248,7 @@ export const HomeScene = ({
     const piece = furnitureById.get(id);
     const placement = placements.find((placement) => placement.id === id);
     if (!piece || !placement || isMovementDisabled) return;
-    if (
-      room &&
-      placements.filter(
-        (placement) => placement.id !== id && getHomePlacementRoom(placement) === room,
-      ).length >= HOME_FURNITURE_MAX_PLACEMENTS
-    )
-      return;
+    if (room && isRoomFull(room, id)) return;
     const fitted = fitHomeFurniturePlacement(
       { ...placement, x, y, ...(room ? { room } : {}) },
       piece,
@@ -321,15 +326,14 @@ export const HomeScene = ({
     const existing = placements.find((placement) => placement.id === id);
     if (existing) focusRoom(getHomePlacementRoom(existing));
     const piece = furnitureById.get(id);
-    const targetRoom = piece?.action === "farm" ? "yard" : activeRoom;
     if (
       !piece ||
       placements.some((placement) => placement.id === id) ||
-      placements.filter((placement) => getHomePlacementRoom(placement) === targetRoom)
-        .length >= HOME_FURNITURE_MAX_PLACEMENTS ||
+      isRoomFull(placementRoomFor(piece)) ||
       isMovementDisabled
     )
       return;
+    const targetRoom = placementRoomFor(piece);
     const placement = fitHomeFurniturePlacement(
       {
         id,
@@ -503,11 +507,6 @@ export const HomeScene = ({
               ? Math.hypot(event.clientX - other.x, event.clientY - other.y)
               : 0;
             if (other && before > 0) {
-              const scale = clamp(
-                (current.scale * after) / before,
-                getHomeOverviewCamera(homeType).scale,
-                1.8,
-              );
               const midpoint = {
                 x: (((previous.x + other.x) / 2 - rect.left) / rect.width) * 100,
                 y: (((previous.y + other.y) / 2 - rect.top) / rect.height) * 100,
@@ -516,9 +515,12 @@ export const HomeScene = ({
                 x: (((event.clientX + other.x) / 2 - rect.left) / rect.width) * 100,
                 y: (((event.clientY + other.y) / 2 - rect.top) / rect.height) * 100,
               };
-              return boundHomeCamera(
-                zoomHomeCamera(current, scale, midpoint, moved),
+              return zoomHomeCameraTo(
+                current,
+                (current.scale * after) / before,
                 homeType,
+                midpoint,
+                moved,
               );
             }
             return boundHomeCamera(
@@ -889,20 +891,10 @@ export const HomeScene = ({
             aria-label="Zoom out"
             onClick={() =>
               setCamera((current) =>
-                boundHomeCamera(
-                  zoomHomeCamera(
-                    current,
-                    Math.max(
-                      getHomeOverviewCamera(homeType).scale,
-                      current.scale / 1.2,
-                    ),
-                    {
-                      x: 50,
-                      y: 50,
-                    },
-                  ),
-                  homeType,
-                ),
+                zoomHomeCameraTo(current, current.scale / 1.2, homeType, {
+                  x: 50,
+                  y: 50,
+                }),
               )
             }
           >
@@ -921,13 +913,10 @@ export const HomeScene = ({
             aria-label="Zoom in"
             onClick={() =>
               setCamera((current) =>
-                boundHomeCamera(
-                  zoomHomeCamera(current, Math.min(1.8, current.scale * 1.2), {
-                    x: 50,
-                    y: 50,
-                  }),
-                  homeType,
-                ),
+                zoomHomeCameraTo(current, current.scale * 1.2, homeType, {
+                  x: 50,
+                  y: 50,
+                }),
               )
             }
           >
@@ -954,12 +943,7 @@ export const HomeScene = ({
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm">
               {rooms.find(({ id }) => id === activeRoom)?.name} ·{" "}
-              {
-                placements.filter(
-                  (placement) => getHomePlacementRoom(placement) === activeRoom,
-                ).length
-              }
-              /{HOME_FURNITURE_MAX_PLACEMENTS} pieces
+              {countRoomPieces(activeRoom)}/{HOME_FURNITURE_MAX_PLACEMENTS} pieces
             </span>
             {activeRoom !== "yard" && (
               <label className="text-sm">
@@ -1023,11 +1007,7 @@ export const HomeScene = ({
                     const room = event.target.value as HomeRoomId;
                     const piece = furnitureById.get(selected.id);
                     if (!piece) return;
-                    if (
-                      placements.filter(
-                        (placement) => getHomePlacementRoom(placement) === room,
-                      ).length >= HOME_FURNITURE_MAX_PLACEMENTS
-                    ) {
+                    if (isRoomFull(room)) {
                       setPlacementError("This room is full");
                       return;
                     }
@@ -1066,12 +1046,7 @@ export const HomeScene = ({
                   aria-pressed={selectedId === piece.id}
                   disabled={
                     isMovementDisabled ||
-                    (!isPlaced &&
-                      placements.filter(
-                        (placement) =>
-                          getHomePlacementRoom(placement) ===
-                          (piece.action === "farm" ? "yard" : activeRoom),
-                      ).length >= HOME_FURNITURE_MAX_PLACEMENTS)
+                    (!isPlaced && isRoomFull(placementRoomFor(piece)))
                   }
                   className={cn(
                     "flex w-24 shrink-0 flex-col rounded-lg border bg-background p-2 text-xs focus-visible:outline-2 focus-visible:outline-primary",
@@ -1128,14 +1103,7 @@ export const HomeScene = ({
               onClick={() => {
                 dragRef.current = null;
                 setStorageTargetId(null);
-                setPlacementError(null);
-                const placements = recoverHomeLayout(layout, furniture, homeType);
-                setDraft({ homeType, revision, placements, styles });
-                setSelectedId(
-                  placements.find(
-                    (placement) => getHomePlacementRoom(placement) === activeRoom,
-                  )?.id ?? null,
-                );
+                resetDraft();
               }}
             >
               <RotateCcw className="h-4 w-4" aria-hidden />

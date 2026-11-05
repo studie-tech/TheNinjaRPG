@@ -31,6 +31,9 @@ export type HomeRoom = {
 /** Translation is measured in viewport percentages and applied after scaling the property. */
 export type HomeCamera = { x: number; y: number; scale: number };
 
+/** Closest zoom on a home painting. */
+export const HOME_CAMERA_MAX_SCALE = 1.8;
+
 /** Fit the complete painting, including the usable gardens, into the viewport. */
 export const getHomeOverviewCamera = (homeType: HomeType): HomeCamera => ({
   x: 0,
@@ -40,7 +43,11 @@ export const getHomeOverviewCamera = (homeType: HomeType): HomeCamera => ({
 
 /** A rectangular painting bounds navigation without snapping between unrelated room centers. */
 export const boundHomeCamera = (camera: HomeCamera, homeType: HomeType): HomeCamera => {
-  const scale = clamp(camera.scale, getHomeOverviewCamera(homeType).scale, 1.8);
+  const scale = clamp(
+    camera.scale,
+    getHomeOverviewCamera(homeType).scale,
+    HOME_CAMERA_MAX_SCALE,
+  );
   const extent = HOME_ART_PLANS[homeType].size * scale;
   return {
     scale,
@@ -74,7 +81,10 @@ export const getHomeRoomCamera = (homeType: HomeType, id: HomeRoomId): HomeCamer
   const right = room.x + (Math.max(...points.map(({ x }) => x)) * room.width) / 100;
   const bottom = room.y + (Math.max(...points.map(({ y }) => y)) * room.height) / 100;
   // Reserve viewport margin around the focused room and its furniture controls.
-  const scale = Math.min(1.8, 85 / Math.max(right - left, bottom - top));
+  const scale = Math.min(
+    HOME_CAMERA_MAX_SCALE,
+    85 / Math.max(right - left, bottom - top),
+  );
   return boundHomeCamera(
     {
       scale,
@@ -96,6 +106,27 @@ export const zoomHomeCamera = (
   x: after.x - ((before.x - camera.x) * scale) / camera.scale,
   y: after.y - ((before.y - camera.y) * scale) / camera.scale,
 });
+
+/**
+ * Zoom within the camera's limits. The scale is clamped before anchoring, because bounding
+ * the result afterwards would move the world point the zoom keeps in place.
+ */
+export const zoomHomeCameraTo = (
+  camera: HomeCamera,
+  scale: number,
+  homeType: HomeType,
+  before: { x: number; y: number },
+  after = before,
+) =>
+  boundHomeCamera(
+    zoomHomeCamera(
+      camera,
+      clamp(scale, getHomeOverviewCamera(homeType).scale, HOME_CAMERA_MAX_SCALE),
+      before,
+      after,
+    ),
+    homeType,
+  );
 
 /** Keep saved room frames and physical scale while mapping all measured contours into them. */
 /** One room of a home, or undefined when the home lacks it. */
