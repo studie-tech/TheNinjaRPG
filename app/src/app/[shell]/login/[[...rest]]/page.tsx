@@ -4,14 +4,14 @@ import { SignIn } from "@clerk/nextjs";
 import { useState } from "react";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
-import { useWebGL2Detection } from "@/hooks/webgl";
+import { useWebGLDetection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
-import WebGL2Warning, { WebGL2WarningBanner } from "@/layout/WebGL2Warning";
+import WebGLWarning, { WebGLWarningBanner } from "@/layout/WebGLWarning";
 import { clerkAuthAppearance } from "@/libs/clerkAppearance";
 import { usePublicPathname } from "@/utils/routing";
 
 export default function LoginUser() {
-  const { webglError, isChecking } = useWebGL2Detection();
+  const { webglError, isChecking } = useWebGLDetection();
   const [proceedAnyway, setProceedAnyway] = useState<boolean>(false);
   const isNativeShell = useNativeShell();
   const pathname = usePublicPathname();
@@ -21,7 +21,7 @@ export default function LoginUser() {
   }
 
   if (webglError && !proceedAnyway) {
-    return <WebGL2Warning onProceed={() => setProceedAnyway(true)} />;
+    return <WebGLWarning onProceed={() => setProceedAnyway(true)} />;
   }
 
   return (
@@ -31,7 +31,7 @@ export default function LoginUser() {
       alreadyHasH1
       defaultBackHref="/"
     >
-      {webglError && <WebGL2WarningBanner />}
+      {webglError && <WebGLWarningBanner />}
       {pathname === "/login" && <NativeSignIn />}
       {/* Clerk mounts its root without the rootBox class for a frame; stretching it here
           keeps the card from painting shrink-wrapped and then widening. */}

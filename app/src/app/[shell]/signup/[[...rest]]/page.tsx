@@ -3,14 +3,14 @@
 import { SignUp } from "@clerk/nextjs";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
-import { useWebGL2Detection } from "@/hooks/webgl";
+import { useWebGLDetection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
-import WebGlError from "@/layout/WebGLError";
+import { WebGLUnsupported } from "@/layout/WebGLWarning";
 import { clerkAuthAppearance } from "@/libs/clerkAppearance";
 import { usePublicPathname } from "@/utils/routing";
 
 export default function SignupUser() {
-  const { webglError, isChecking } = useWebGL2Detection();
+  const { webglError, isChecking } = useWebGLDetection();
   const isNativeShell = useNativeShell();
   const pathname = usePublicPathname();
 
@@ -22,11 +22,11 @@ export default function SignupUser() {
     return (
       <ContentBox
         title="Browser Not Supported"
-        subtitle="WebGL2 is required to play this game"
+        subtitle="WebGL is required to play this game"
         alreadyHasH1
         defaultBackHref="/"
       >
-        <WebGlError />
+        <WebGLUnsupported />
       </ContentBox>
     );
   }
