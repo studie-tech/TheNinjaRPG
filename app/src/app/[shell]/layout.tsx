@@ -56,6 +56,7 @@ import "../../styles/layout-themes.css";
 import "../../styles/layout-directions.css";
 import "../../styles/layout-welcome.css";
 import "sonner/dist/styles.css";
+import { GITHUB_REPO_URL } from "@/drizzle/constants";
 
 /**
  * Every variant is built at deploy time and the segment is closed to anything else, so
@@ -257,7 +258,7 @@ export const metadata: Metadata = {
   authors: [
     {
       name: "Mathias F. Gruber",
-      url: "https://github.com/studie-tech/TheNinjaRPG",
+      url: GITHUB_REPO_URL,
     },
   ],
   creator: "Mathias F. Gruber",

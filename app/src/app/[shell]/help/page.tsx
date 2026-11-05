@@ -1,5 +1,9 @@
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
-import { DISCORD_INVITE_URL } from "@/drizzle/constants";
+import {
+  DISCORD_INVITE_URL,
+  GITHUB_ISSUES_URL,
+  GITHUB_REPO_URL,
+} from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 
@@ -10,15 +14,12 @@ export default function BugReport() {
     </Link>
   );
   const link_github = (
-    <Link className="font-bold" href="https://github.com/studie-tech/TheNinjaRPG">
+    <Link className="font-bold" href={GITHUB_REPO_URL}>
       GitHub
     </Link>
   );
   const link_issues = (
-    <Link
-      className="font-bold"
-      href="https://github.com/studie-tech/TheNinjaRPG/issues"
-    >
+    <Link className="font-bold" href={GITHUB_ISSUES_URL}>
       GitHub Issues
     </Link>
   );
@@ -43,7 +44,7 @@ export default function BugReport() {
             <p>Go to Discord</p>
           </Link>
           <Link
-            href="https://github.com/studie-tech/TheNinjaRPG/issues"
+            href={GITHUB_ISSUES_URL}
             className="flex flex-col items-center font-bold hover:opacity-50"
           >
             <SiGithub className="text-black dark:text-white" size={100} />
@@ -92,7 +93,7 @@ export default function BugReport() {
         </p>
         <div className="flex flex-row justify-center p-5">
           <Link
-            href="https://github.com/studie-tech/TheNinjaRPG"
+            href={GITHUB_REPO_URL}
             className="flex flex-col items-center font-bold hover:opacity-50"
           >
             <SiGithub className="text-black dark:text-white" size={100} />
