@@ -58,9 +58,9 @@ import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { GroupOrders } from "@/layout/GroupOrders";
 import Loader from "@/layout/Loader";
 import QuestPicker from "@/layout/QuestPicker";
-import RichInput from "@/layout/RichInput";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import { anbuEspionageChance, anbuStealthChance } from "@/libs/anbu";
@@ -69,15 +69,12 @@ import { hasRequiredRank } from "@/libs/train";
 import type { AnbuRouter } from "@/routers/anbu";
 import type { UserWithRelations } from "@/routers/profile";
 import type { BaseServerResponse } from "@/server/api/trpc";
-import { parseHtml } from "@/utils/parse";
 import { canEditClans } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { AnbuRenameSchema } from "@/validators/anbu";
 import { anbuRenameSchema } from "@/validators/anbu";
-import type { MutateContentSchema } from "@/validators/comments";
-import { mutateContentSchema } from "@/validators/comments";
 
 export default function ANBUDetails(props: { params: Promise<{ anbuid: string }> }) {
   const params = use(props.params);
@@ -732,16 +729,11 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
   // Destructure
   const { squadId, title, subtitle, type, canPost, order } = props;
 
-  // Keep progress local to this order card: leader and Kage orders can both be
-  // rendered on the page and should not block each other. The ref closes the
-  // brief pre-render gap so a rapid second confirmation cannot submit twice.
-  const updatePendingRef = useRef(false);
-
   // utils
   const utils = api.useUtils();
 
-  // Mutations
-  const { mutate: notice, isPending: isUpdatingNotice } =
+  // Mutations are per card: leader and Kage orders must not block each other.
+  const { mutateAsync: notice, isPending: isUpdatingNotice } =
     api.anbu.upsertNotice.useMutation({
       onSuccess: async (data: BaseServerResponse) => {
         showMutationToast(data);
@@ -749,79 +741,38 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
           await utils.anbu.get.invalidate();
         }
       },
-      onSettled: () => {
-        updatePendingRef.current = false;
-      },
     });
 
-  // Content
-  const content = order?.content ?? "No current orders";
-
-  // Order form
-  const {
-    handleSubmit,
-    control,
-    formState: { errors },
-  } = useForm<MutateContentSchema>({
-    defaultValues: { content },
-    resolver: zodResolver(mutateContentSchema),
-  });
-  const onUpdateOrder = handleSubmit((data) => {
-    if (updatePendingRef.current) return;
-    updatePendingRef.current = true;
-    notice({ ...data, type, squadId });
-  });
-
   return (
-    <ContentBox
+    <GroupOrders
       title={title}
       subtitle={subtitle}
-      initialBreak={true}
-      topRightContent={
-        <div>
-          {canPost && (
-            <Confirm
-              id={`update-${type.toLowerCase()}-orders`}
-              title="Update Orders"
-              proceed_label={isUpdatingNotice ? "Updating" : "Submit"}
-              disabled={isUpdatingNotice}
-              confirmDisabled={isUpdatingNotice}
-              button={
-                <Button
-                  id={`edit-${type.toLowerCase()}-orders`}
-                  hoverText={isUpdatingNotice ? "Updating" : "Edit Orders"}
-                  disabled={isUpdatingNotice}
-                  loading={isUpdatingNotice}
-                  aria-busy={isUpdatingNotice}
-                  aria-label={isUpdatingNotice ? `Updating ${title}` : `Edit ${title}`}
-                >
-                  {!isUpdatingNotice && <FilePenLine className="h-5 w-5" />}
-                  <span
-                    className={isUpdatingNotice ? undefined : "sr-only"}
-                    role={isUpdatingNotice ? "status" : undefined}
-                    aria-live="polite"
-                  >
-                    {isUpdatingNotice ? "Updating" : `Edit ${title}`}
-                  </span>
-                </Button>
-              }
-              onAccept={onUpdateOrder}
-            >
-              <RichInput
-                id="content"
-                label="Contents of your orders"
-                height="300"
-                placeholder={content}
-                control={control}
-                error={errors.content?.message}
-              />
-            </Confirm>
-          )}
-        </div>
-      }
-    >
-      {parseHtml(content)}
-    </ContentBox>
+      content={order?.content ?? "No current orders"}
+      canPost={canPost}
+      dialogId={`update-${type.toLowerCase()}-orders`}
+      isPending={isUpdatingNotice}
+      onSubmit={(data) => notice({ ...data, type, squadId })}
+      renderTrigger={(open) => (
+        <Button
+          id={`edit-${type.toLowerCase()}-orders`}
+          hoverText={isUpdatingNotice ? "Updating" : "Edit Orders"}
+          disabled={isUpdatingNotice}
+          loading={isUpdatingNotice}
+          aria-busy={isUpdatingNotice}
+          aria-label={isUpdatingNotice ? `Updating ${title}` : `Edit ${title}`}
+          onClick={open}
+        >
+          {!isUpdatingNotice && <FilePenLine className="h-5 w-5" />}
+          <span
+            className={isUpdatingNotice ? undefined : "sr-only"}
+            role={isUpdatingNotice ? "status" : undefined}
+            aria-live="polite"
+          >
+            {isUpdatingNotice ? "Updating" : `Edit ${title}`}
+          </span>
+        </Button>
+      )}
+    />
   );
 };
 
