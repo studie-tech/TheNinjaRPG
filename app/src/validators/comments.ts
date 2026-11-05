@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONVERSATION_MAX_USERS } from "@/drizzle/constants";
 
 export const mutateCommentSchema = z
   .strictObject({
@@ -23,7 +24,7 @@ export const createConversationSchema = z
   .strictObject({
     title: z.string().min(4).max(100),
     comment: z.string().min(4).max(5000),
-    users: z.array(z.string()).min(1).max(5),
+    users: z.array(z.string()).min(1).max(CONVERSATION_MAX_USERS),
     senderId: z.string().optional().nullable(),
   })
   .required();

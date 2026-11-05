@@ -1,4 +1,7 @@
-import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
+import {
+  FANCY_FORUM_THREADS_PER_PAGE,
+  FORUM_THREAD_POSTS_PER_PAGE,
+} from "@/drizzle/constants";
 import { canAdminForum, forumBoardPermissions } from "@/libs/forumAccess";
 import {
   countForumPosts,
@@ -177,7 +180,8 @@ export const fetchForumPageData = async (
   const initialThreads = await getInfiniteThreads({
     client,
     boardName,
-    limit: 10,
+    limit: FANCY_FORUM_THREADS_PER_PAGE,
+    highlightPinned: true,
     context,
   });
   return {

@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
-import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
+import { CONVERSATION_MAX_USERS, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
@@ -58,7 +58,6 @@ export interface NewConversationPromptProps {
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
   const { refreshConversationList } = useConversationCacheUpdate();
-  const maxUsers = 5;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
     props.defaultOpen ?? false,
   );
@@ -82,7 +81,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   });
 
   const { methods: userSearchMethods, users } = useUserPicker(
-    maxUsers,
+    CONVERSATION_MAX_USERS,
     props.preSelectedUser ? [props.preSelectedUser] : [],
   );
 
@@ -144,11 +143,6 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     });
   };
 
-  const openCreateDialog = () => {
-    if (createSubmissionRef.current) return;
-    setIsCreateDialogOpen(true);
-  };
-
   return (
     <div className="flex flex-row items-center">
       {userData && composeRestriction && (
@@ -195,7 +189,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
               if (createSubmissionRef.current) return;
               event.preventDefault();
               event.stopPropagation();
-              openCreateDialog();
+              setIsCreateDialogOpen(true);
             }}
           >
             {props.newButton}
@@ -233,7 +227,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
                     label="Users to send to"
                     showAi={false}
                     showYourself={false}
-                    maxUsers={maxUsers}
+                    maxUsers={CONVERSATION_MAX_USERS}
                   />
                 </div>
                 <FormField
