@@ -159,7 +159,7 @@ interface HealOthersComponentProps {
   timeDiff: number;
 }
 
-const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
+export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -257,6 +257,7 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
           maxHealth={user.maxHealth}
           missingHealth={missingHealth}
           maxHeal={maxHeal}
+          disabled={missingHealth <= 0}
           onHeal={(healPercentage) => userHeal({ userId: user.userId, healPercentage })}
         />
       ),
