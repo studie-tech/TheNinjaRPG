@@ -1820,10 +1820,14 @@ export const itemRouter = createTRPCRouter({
         );
       }
       if (failed.length > 0) {
-        return {
-          success: false,
-          message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
-        };
+        return actionReadinessResponse(
+          {
+            success: false,
+            message: `Merged ${mergedTypes} item type${mergedTypes === 1 ? "" : "s"}, but ${failed.length} other type${failed.length === 1 ? "" : "s"} did not complete (inventory may already show partial merges — try merge again).`,
+          },
+          confirmedReadiness,
+          ctx.drizzle,
+        );
       }
       return actionReadinessResponse(
         {

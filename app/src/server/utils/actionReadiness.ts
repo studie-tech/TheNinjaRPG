@@ -45,11 +45,11 @@ export type ActionReadiness<T extends UserData = UserData> = ActionReadinessWrit
 /**
  * Validate an already-loaded actor and project recovery without database access.
  * Endpoints merge set/where into their account claim, with their final activity status taking precedence.
- * Hydrated profiles retain their accrued regeneration rate; raw snapshots can supply loaded settings.
+ * Hydrated profiles retain their accrued regeneration rate; loaded settings settle regeneration and queued training.
  */
 export const prepareActionReadiness = <T extends UserData>(
   initial: T,
-  settings: GameSetting[] = [],
+  settings: GameSetting[],
   now = new Date(),
 ): ActionReadiness<T> => {
   const related = initial as T &

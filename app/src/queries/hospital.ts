@@ -119,17 +119,13 @@ export const updateUserDataForUserHeal = (
       ),
     );
 
-/**
- * Build free checkout after the caller verifies eligibility. Optional snapshot predicates
- * guard server-calculated recovery against concurrent changes in the same update.
- */
+/** Build free checkout after the caller verifies eligibility. */
 export const updateUserDataForNpcHeal = (
   client: Pick<DrizzleClient, "update">,
   user: { maxHealth: number; maxEnergy: number },
   energyRecovery: SQL<unknown>,
   healedAt: Date,
   ctx: { userId: string },
-  snapshot?: SQL,
 ) =>
   client
     .update(userData)
@@ -141,13 +137,7 @@ export const updateUserDataForNpcHeal = (
       updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
-    .where(
-      and(
-        eq(userData.userId, ctx.userId),
-        eq(userData.status, "HOSPITALIZED"),
-        snapshot,
-      ),
-    );
+    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")));
 
 /** Build the `userData` update for `npcHeal`, using predicates on `userId`, `money`, `status`. */
 export const updateUserDataForNpcHeal2 = (

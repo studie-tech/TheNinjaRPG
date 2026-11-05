@@ -204,12 +204,12 @@ export const hospitalRouter = createTRPCRouter({
             curChakra: sql`${readiness.set.curChakra ?? userData.curChakra} - ${chakraCost}`,
             ...(pools.includes("Health")
               ? {
-                  curHealth: sql`LEAST(${userData.curHealth} + ${toHeal}, ${t.maxHealth})`,
+                  curHealth: sql`LEAST(${readiness.set.curHealth ?? userData.curHealth} + ${toHeal}, ${t.maxHealth})`,
                 }
               : {}),
             ...(pools.includes("Stamina")
               ? {
-                  curStamina: sql`LEAST(${userData.curStamina} + ${toHeal}, ${t.maxStamina})`,
+                  curStamina: sql`LEAST(${readiness.set.curStamina ?? userData.curStamina} + ${toHeal}, ${t.maxStamina})`,
                 }
               : {}),
             curEnergy: sql`LEAST(${u.maxEnergy}, ${userData.curEnergy} + ${userRegenerationGainSql(u, userData.regenAt, healedAt)})`,

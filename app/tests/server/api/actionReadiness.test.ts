@@ -20,7 +20,7 @@ let invocations = 0;
 const router = createTRPCRouter({ train: createTRPCRouter({ startTraining: protectedProcedure.mutation(async ({ ctx }) => {
   const initial = await fetchActionUser(ctx.drizzle, ctx.userId);
   if (!initial) return errorResponse("User not found");
-  const readiness = prepareActionReadiness(initial);
+  const readiness = prepareActionReadiness(initial, []);
   if (readiness.error) return errorResponse(readiness.error);
   const claim = await claimUserSnapshot({ client: ctx.drizzle, userId: ctx.userId, updatedAt: initial.updatedAt, readiness });
   if (!claim.success) return errorResponse("Your status changed. Please try again.");
