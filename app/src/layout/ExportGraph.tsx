@@ -3,17 +3,17 @@ import { Button } from "@/components/ui/button";
 import { downloadBlob } from "@/utils/dom";
 
 interface ExportGraphProps {
-  canvas: HTMLCanvasElement | undefined | null;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   filename: string;
 }
 
 const ExportGraph: React.FC<ExportGraphProps> = (props) => {
-  const { canvas, filename } = props;
+  const { canvasRef, filename } = props;
   return (
     <Button
       className="w-full"
       onClick={() => {
-        canvas?.toBlob((blob) => {
+        canvasRef.current?.toBlob((blob) => {
           if (blob) downloadBlob(blob, `${filename}.png`);
         });
       }}
