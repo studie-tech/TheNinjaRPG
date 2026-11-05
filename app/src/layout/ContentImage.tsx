@@ -113,9 +113,12 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
       img = (
         <NextImage
           className={cn(
-            "aspect-square h-full w-full",
+            "aspect-square",
             props.roundFull ? "rounded-full" : "rounded-xl",
             props.className,
+            // The bordered box below takes the caller's size; the art fills the space inside
+            // its border instead of spilling over it.
+            "h-full w-full",
           )}
           src={props.image}
           alt={props.alt}

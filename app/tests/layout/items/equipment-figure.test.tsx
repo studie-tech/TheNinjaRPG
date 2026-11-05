@@ -137,3 +137,12 @@ it("shows stack size, level and wear the way the mockup does", () => {
   expect(slotOf("FEET").querySelector<HTMLElement>("[data-durability]")?.style.width).toBe("40%");
   expect(slotOf("HAND_1").textContent).toContain("Lv 1");
 });
+
+it("draws equipped art inside the slot's padding instead of over its border", () => {
+  renderFigure();
+  // ContentImage positions its art against the nearest relative box; padding on that box would not inset it.
+  const frame = screen.getByText("Shadowsteel Katana art").parentElement!;
+  expect(frame.className).toContain("relative");
+  expect(frame.className).not.toMatch(/(^|\s)p-\d/);
+  expect(frame.parentElement!.className).toContain("p-1");
+});

@@ -9,6 +9,7 @@
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import Link from "@/layout/Link";
 import RichInput from "@/layout/RichInput";
+import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -28,6 +29,7 @@ import * as userContext from "@/utils/UserContext";
 export const actualLink = Link;
 export const actualRichInput = RichInput;
 export const actualItemWithEffects = ItemWithEffects;
+export const actualContentImage = ContentImage;
 export const actualContentImageSelector = ContentImageSelector;
 export const actualContentBox = ContentBox;
 export const actualShowMutationToast = toast.showMutationToast;
