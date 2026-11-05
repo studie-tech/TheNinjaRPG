@@ -1,10 +1,12 @@
 import type {
   BanState,
+  QuestType,
   StaffApprovalGroup,
   SupportTicketStatus,
   UserRole,
 } from "@/drizzle/constants";
 import {
+  ABANDONABLE_QUEST_TYPES,
   isStaffApprovalGroup,
   MESSAGING_MIN_LEVEL,
   messagingLevelMessage,
@@ -151,6 +153,11 @@ export const canPlayHiddenQuests = (role: UserRole) => {
     "EVENT-ADMIN",
   ].includes(role);
 };
+
+/** Regular players abandon only the listed quest types; every other role abandons any. */
+export const canAbandonQuestType = (role: UserRole, questType: QuestType) =>
+  role !== "USER" ||
+  (ABANDONABLE_QUEST_TYPES as readonly QuestType[]).includes(questType);
 
 export const canSubmitNotification = (role: UserRole) =>
   SENIOR_STAFF_ROLES.includes(role);

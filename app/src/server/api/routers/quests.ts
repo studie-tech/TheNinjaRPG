@@ -18,7 +18,6 @@ import {
   getUnchangedRewardChoiceUserUpdate,
 } from "@/deltas/quests";
 import {
-  ABANDONABLE_QUEST_TYPES,
   ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   getUserCaps,
@@ -304,6 +303,7 @@ import { recordVillageMissionProgress } from "@/server/utils/villageMission";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
+  canAbandonQuestType,
   canAwardReputation,
   canChangeContent,
   canEditQuests,
@@ -811,10 +811,7 @@ export const questsRouter = createTRPCRouter({
             : {}),
         };
       }
-      if (
-        user.role === "USER" &&
-        ![...ABANDONABLE_QUEST_TYPES, "war"].includes(current.questType)
-      ) {
+      if (!canAbandonQuestType(user.role, current.questType)) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
       }
       if (
