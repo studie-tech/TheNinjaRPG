@@ -91,7 +91,7 @@ import {
 import { fetchItem, insertUserItems, listItemsByIds } from "@/queries/item";
 import { fetchAllGameSettings } from "@/queries/profile";
 import { fetchQuestTrackerState } from "@/queries/quests";
-import { fetchMasterySources, fetchUserSkills } from "@/queries/skillTree";
+import { fetchMasterySources } from "@/queries/skillTree";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
@@ -133,31 +133,20 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string(), seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [
-        initialUser,
-        userItems,
-        plot,
-        { seedItem, yieldItem },
-        questState,
-        passiveSources,
-        settings,
-      ] = await Promise.all([
-        fetchActionUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        findFarmPlotForPlantSeed(ctx.drizzle, input, ctx),
-        fetchFarmSeedAndYield(ctx.drizzle, input.seedItemId),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
-        fetchAllGameSettings(ctx.drizzle),
-      ]);
+      const [initialUser, userItems, plot, { seedItem, yieldItem }, settings] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          findFarmPlotForPlantSeed(ctx.drizzle, input, ctx),
+          fetchFarmSeedAndYield(ctx.drizzle, input.seedItemId),
+          fetchAllGameSettings(ctx.drizzle),
+        ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      const userSkills = passiveSources.userSkills;
-      const { farmingReductionPercent } = getActivityBonuses({
-        ...user,
-        ...passiveSources,
-      });
+      const userSkills = user.userSkills;
+      const { farmingReductionPercent } = getActivityBonuses(user);
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -273,12 +262,12 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [initialUser, plot, questState, settings] = await Promise.all([
+      const [initialUser, plot, settings] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -349,15 +338,13 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string(), userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [initialUser, userItems, plot, questState, userSkills, settings] =
-        await Promise.all([
-          fetchActionUser(ctx.drizzle, ctx.userId),
-          fetchUserItems(ctx.drizzle, ctx.userId),
-          fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-          fetchUserSkills(ctx.drizzle, ctx.userId),
-          fetchAllGameSettings(ctx.drizzle),
-        ]);
+      const [initialUser, userItems, plot, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -382,7 +369,7 @@ export const farmingRouter = createTRPCRouter({
       if (!fertilizerStack) {
         return errorResponse("Fertilizer not found");
       }
-      if (!hasRequiredSkill(fertilizerStack.item, { userSkills }))
+      if (!hasRequiredSkill(fertilizerStack.item, user))
         return errorResponse("Activate the required skill to use this fertilizer");
       if (!fertilizerStack.item.isFarmFertilizer) {
         return errorResponse("This item is not fertilizer");
@@ -471,13 +458,13 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [initialUser, userItems, plot, questState, settings] = await Promise.all([
+      const [initialUser, userItems, plot, settings] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -560,31 +547,19 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [
-        initialUser,
-        userItems,
-        seedItem,
-        plots,
-        questState,
-        passiveSources,
-        settings,
-      ] = await Promise.all([
+      const [initialUser, userItems, seedItem, plots, settings] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchItem(ctx.drizzle, input.seedItemId),
         listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
-      const userSkills = passiveSources.userSkills;
-      const { farmingReductionPercent } = getActivityBonuses({
-        ...user,
-        ...passiveSources,
-      });
+      const userSkills = user.userSkills;
+      const { farmingReductionPercent } = getActivityBonuses(user);
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -684,12 +659,12 @@ export const farmingRouter = createTRPCRouter({
     .meta({ mcp: { description: "Water every eligible farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
-      const [initialUser, plots, questState, settings] = await Promise.all([
+      const [initialUser, plots, settings] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         listFarmPlotForWaterAll(ctx.drizzle, ctx),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -766,15 +741,13 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [initialUser, userItems, plots, questState, userSkills, settings] =
-        await Promise.all([
-          fetchActionUser(ctx.drizzle, ctx.userId),
-          fetchUserItems(ctx.drizzle, ctx.userId),
-          listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-          fetchUserSkills(ctx.drizzle, ctx.userId),
-          fetchAllGameSettings(ctx.drizzle),
-        ]);
+      const [initialUser, userItems, plots, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;
@@ -788,7 +761,7 @@ export const farmingRouter = createTRPCRouter({
       if (!fertilizerStack?.item.isFarmFertilizer) {
         return errorResponse("Fertilizer not found");
       }
-      if (!hasRequiredSkill(fertilizerStack.item, { userSkills }))
+      if (!hasRequiredSkill(fertilizerStack.item, user))
         return errorResponse("Activate the required skill to use this fertilizer");
       const totalPlots = getTotalFarmPlots(user.farmPlotsPurchased);
       const eligible = plots.filter(
@@ -883,7 +856,7 @@ export const farmingRouter = createTRPCRouter({
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
       let inventoryRecovered = false;
-      const [initialUser, userItems, plots, questState, settings] = await Promise.all([
+      const [initialUser, userItems, plots, settings] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, {
           onStaleMergeClaimRecovery: () => {
@@ -891,9 +864,9 @@ export const farmingRouter = createTRPCRouter({
           },
         }),
         fetchFarmPlotsWithItems(ctx.drizzle, ctx.userId),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
+      const questState = initialUser;
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);
       const user = readiness.user;

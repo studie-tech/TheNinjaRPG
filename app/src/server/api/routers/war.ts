@@ -432,15 +432,13 @@ export const warRouter = createTRPCRouter({
     .input(startWarMissionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      let [activeWar, user, mission, completedQuests, mercenaryWarId, settings] =
-        await Promise.all([
-          findWarForStartWarMission(ctx.drizzle, input),
-          fetchActionUser(ctx.drizzle, ctx.userId),
-          fetchQuest(ctx.drizzle, input.questId),
-          listQuestHistoryForGetObjectiveWarInfo(ctx.drizzle, ctx),
-          fetchMercenaryWarId(ctx.drizzle, ctx.userId),
-          fetchAllGameSettings(ctx.drizzle),
-        ]);
+      let [activeWar, user, mission, mercenaryWarId, settings] = await Promise.all([
+        findWarForStartWarMission(ctx.drizzle, input),
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchQuest(ctx.drizzle, input.questId),
+        fetchMercenaryWarId(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       const readiness = prepareActionReadiness(user, settings);
       if (readiness.error) return errorResponse(readiness.error);
       user = readiness.user;
@@ -465,12 +463,7 @@ export const warRouter = createTRPCRouter({
         return errorResponse("This war mission is unavailable");
       if (!isObjectiveWarActive(activeWar))
         return errorResponse("War missions are only available during active combat");
-      const eligibility = isAvailableUserQuests(
-        mission,
-        { ...user, completedQuests },
-        true,
-        true,
-      );
+      const eligibility = isAvailableUserQuests(mission, user, true, true);
       if (!eligibility.check) return errorResponse(eligibility.message);
       if (user.isBanned || user.status !== "AWAKE" || user.warMission)
         return errorResponse("You must be awake with no pending war mission");
