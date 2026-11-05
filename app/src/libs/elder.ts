@@ -1,4 +1,5 @@
 import {
+  type ElderRotationLogEntry,
   fetchElderVote,
   insertVillageElderVoteEntryForCastElderVoteEntry,
   listVillageElderVoteForFetchElderVotes,
@@ -6,6 +7,86 @@ import {
   selectVillageForFetchElderVotes,
 } from "@/queries/elder";
 import type { DrizzleClient } from "@/server/db";
+
+/** The nominee fields that decide whether the monthly rotation can promote them. */
+type ElderNominee = {
+  userId: string;
+  username: string;
+  clanId: string | null;
+  villageId: string | null;
+  isBanned: boolean;
+  rank: string;
+  anbuId: string | null;
+};
+
+/**
+ * Why a clan's nominee cannot become elder, or undefined when they can. Demotions
+ * run first, so an elder renominated by their clan is a JONIN by this point.
+ */
+export const getElderNomineeSkipReason = (
+  nominee: ElderNominee | undefined,
+  clan: { id: string; villageId: string | null },
+) => {
+  if (!nominee) return "Character no longer exists";
+  if (nominee.isBanned) return "Banned";
+  if (nominee.villageId !== clan.villageId) return "Left the village";
+  if (nominee.clanId !== clan.id) return "Left the clan";
+  if (nominee.anbuId !== null) return "In ANBU";
+  if (nominee.rank !== "JONIN") return `Rank is ${nominee.rank}, not JONIN`;
+  return undefined;
+};
+
+/**
+ * Decide the outcome of the monthly rotation: who gets promoted, and the log rows
+ * that explain every demotion, promotion and skipped nominee.
+ */
+export const resolveElderRotation = (
+  elders: { userId: string; username: string; villageId: string | null }[],
+  clans: {
+    id: string;
+    name: string;
+    villageId: string | null;
+    leaderId: string;
+    elderNomineeId: string | null;
+  }[],
+  nominees: ElderNominee[],
+) => {
+  const nomineeById = new Map(nominees.map((n) => [n.userId, n]));
+  const logs: ElderRotationLogEntry[] = elders.map((elder) => ({
+    userId: elder.userId,
+    villageId: elder.villageId,
+    message: `${elder.username} demoted from elder`,
+    changes: [
+      `Demoted from elder to JONIN: ${elder.username} (${elder.userId})`,
+      "Reason: Monthly elder rotation",
+    ],
+  }));
+  const toPromote: string[] = [];
+  for (const clan of clans) {
+    const nomineeId = clan.elderNomineeId || clan.leaderId;
+    if (!nomineeId) continue;
+    const nominee = nomineeById.get(nomineeId);
+    const username = nominee?.username ?? nomineeId;
+    const reason = getElderNomineeSkipReason(nominee, clan);
+    if (!reason) toPromote.push(nomineeId);
+    logs.push({
+      userId: nomineeId,
+      villageId: clan.villageId,
+      message: reason
+        ? `${username} skipped as elder nominee`
+        : `${username} promoted to elder`,
+      changes: [
+        reason
+          ? `Skipped elder nominee: ${username} (${nomineeId})`
+          : `Promoted to elder: ${username} (${nomineeId})`,
+        `Clan: ${clan.name} (${clan.id})`,
+        clan.elderNomineeId ? "Selected by: Nomination" : "Selected by: Clan leader",
+        ...(reason ? [`Reason: ${reason}`] : []),
+      ],
+    });
+  }
+  return { toPromote, logs };
+};
 
 /**
  * Fetch all pending elder votes for a village, with enriched target names
