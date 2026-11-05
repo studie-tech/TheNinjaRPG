@@ -433,8 +433,8 @@ export const updateUserDataForJoinVillage = (
     })
     .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
 
-/** Build the `userData` update for `joinVillage`, setting `senseiId`, using predicates on `senseiId` and `rank`. */
-export const updateUserDataForJoinVillage2 = (
+/** Build the `userData` update releasing a member's genin students when the member changes village. */
+export const updateUserDataForDetachFromVillageRelations = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
 ) =>

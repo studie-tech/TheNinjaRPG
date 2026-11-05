@@ -33,8 +33,8 @@ import {
   updateUserDataForBuyFood,
   updateUserDataForDeclareEnemy,
   updateUserDataForDeclareEnemy2,
+  updateUserDataForDetachFromVillageRelations,
   updateUserDataForJoinVillage,
-  updateUserDataForJoinVillage2,
   updateUserDataForLeaveVillage,
   updateUserDataForSwapVillage,
   updateVillageAllianceForUpsertAllianceStatus,
@@ -240,7 +240,7 @@ export const villageRouter = createTRPCRouter({
       const saved = await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
-
+      await detachFromVillageRelations(ctx);
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return {
         success: true,
@@ -672,7 +672,7 @@ export const upsertAllianceStatus = async (
 const detachFromVillageRelations = (ctx: { drizzle: DrizzleClient; userId: string }) =>
   Promise.all([
     deleteRequests(ctx.drizzle, ctx.userId),
-    updateUserDataForJoinVillage2(ctx.drizzle, ctx),
+    updateUserDataForDetachFromVillageRelations(ctx.drizzle, ctx),
   ]);
 
 /**
