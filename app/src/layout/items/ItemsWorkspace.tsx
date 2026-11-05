@@ -1,22 +1,33 @@
 "use client";
 
+import { ListChecks } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { useBulkSellItems } from "@/hooks/useBulkSellItems";
 import { useItemActions } from "@/hooks/useItemActions";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { useHotkeyAssignment } from "@/layout/HotkeyControls";
 import { BackpackList } from "@/layout/items/BackpackList";
+import { BulkSellDialog, bulkSellSummary } from "@/layout/items/BulkSellDialog";
 import { EquipmentFigure } from "@/layout/items/EquipmentFigure";
 import { ItemContextMenu } from "@/layout/items/ItemContextMenu";
 import { ItemInspector } from "@/layout/items/ItemInspector";
 import { SlotPicker } from "@/layout/items/SlotPicker";
 import { applyActiveVariant } from "@/libs/combat/util";
-import { dropTargetsFor, equipLimitReason, slotName } from "@/libs/itemsPage";
+import {
+  bulkSellBlockReason,
+  bulkSellTotals,
+  dropTargetsFor,
+  equipLimitReason,
+  slotName,
+  toggleRarityPick,
+} from "@/libs/itemsPage";
 import { gearMissingMastery } from "@/libs/mastery";
 import { cn } from "@/libs/shadui";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
@@ -78,6 +89,32 @@ export function ItemsWorkspace({
   } = useHotkeyAssignment(
     Object.fromEntries(userItems.map((ui) => [ui.itemId, ui.item.name])),
   );
+  // Select mode: backpack cards tick for a bulk sell instead of opening.
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [tickedIds, setTickedIds] = useState<string[]>([]);
+  const [reviewIds, setReviewIds] = useState<string[] | null>(null);
+  const { sellMany, isSelling } = useBulkSellItems({
+    onSold: (result) => {
+      // Stacks that stayed remain selected so the player can see why and retry.
+      const stayed = result.refused.map((entry) => entry.userItemId);
+      setTickedIds((ids) => ids.filter((id) => stayed.includes(id)));
+      if (stayed.length === 0) setIsSelecting(false);
+    },
+    onSettled: () => setReviewIds(null),
+  });
+  // Stacks sold elsewhere or in another bag leave the selection.
+  const selectedItems = bagItems.filter((ui) => tickedIds.includes(ui.id));
+  const selectedIds = selectedItems.map((ui) => ui.id);
+  const toggleTicked = (userItemId: string) =>
+    setTickedIds((ids) =>
+      ids.includes(userItemId)
+        ? ids.filter((id) => id !== userItemId)
+        : [...ids, userItemId],
+    );
+  const stopSelecting = () => {
+    setIsSelecting(false);
+    setTickedIds([]);
+  };
 
   // A panel belongs to the bag it was opened in, and an item panel to an item still carried.
   const view: ItemsView =
@@ -294,7 +331,18 @@ export function ItemsWorkspace({
         >
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-bold text-2xl text-foreground">Backpack</h2>
-            {backpackStatus}
+            <div className="flex items-center gap-1">
+              <Button
+                variant={isSelecting ? "default" : "outline"}
+                size="sm"
+                aria-pressed={isSelecting}
+                onClick={() => (isSelecting ? stopSelecting() : setIsSelecting(true))}
+              >
+                <ListChecks className="mr-1 h-4 w-4" aria-hidden />
+                Select
+              </Button>
+              {backpackStatus}
+            </div>
           </div>
           {bagTabs && <div className="mt-1 mb-3">{bagTabs}</div>}
           <BackpackList
@@ -304,7 +352,68 @@ export function ItemsWorkspace({
             onSelect={(userItemId) => openView({ kind: "item", userItemId })}
             onDragItem={hasFinePointer ? setDragging : undefined}
             wrapCard={withMenu}
+            selection={
+              isSelecting
+                ? {
+                    ids: selectedIds,
+                    onToggle: toggleTicked,
+                    onPickRarity: (rarity, shown) =>
+                      setTickedIds(
+                        toggleRarityPick(
+                          shown,
+                          rarity,
+                          selectedIds,
+                          userData.farmCurrency,
+                        ),
+                      ),
+                    blockReason: (ui) => bulkSellBlockReason(ui, userData.farmCurrency),
+                  }
+                : undefined
+            }
           />
+          {isSelecting && (
+            <section
+              aria-label="Selected items"
+              className="sticky bottom-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2 shadow-lg"
+            >
+              <p className="min-w-0 flex-1 text-sm">
+                <b>{selectedItems.length} selected</b>
+                {selectedItems.length > 0 && (
+                  <span className="block text-muted-foreground text-xs">
+                    {bulkSellSummary(
+                      bulkSellTotals(
+                        selectedItems,
+                        userData,
+                        userData.village?.structures,
+                      ),
+                    )}
+                  </span>
+                )}
+              </p>
+              <Button variant="outline" size="sm" onClick={stopSelecting}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={selectedItems.length === 0}
+                onClick={() => setReviewIds(selectedIds)}
+              >
+                Sell / drop…
+              </Button>
+            </section>
+          )}
+          {reviewIds && (
+            <BulkSellDialog
+              items={bagItems.filter((ui) => reviewIds.includes(ui.id))}
+              selectedIds={selectedIds}
+              userData={userData}
+              isSelling={isSelling}
+              onToggle={toggleTicked}
+              onConfirm={sellMany}
+              onClose={() => setReviewIds(null)}
+            />
+          )}
         </TabsContent>
         {hasPanel && !isNarrow && (
           <div
