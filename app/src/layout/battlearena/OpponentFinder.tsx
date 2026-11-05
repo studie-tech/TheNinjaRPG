@@ -163,7 +163,7 @@ export function OpponentFinder({
   );
 }
 
-/** Who a listed player is, opened from their row as the tavern opens a chatter's card. */
+/** Compact player identity and progress, with a local fallback for unavailable portraits. */
 function PlayerCard({
   player,
   isOnline,
@@ -174,6 +174,8 @@ function PlayerCard({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
+  const avatar = player.avatar?.trim();
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -183,23 +185,39 @@ function PlayerCard({
         {children}
       </PopoverTrigger>
       <PopoverContent align="start" collisionPadding={8} className="w-[224px] p-3">
-        <Image
-          alt={player.username}
-          src={player.avatar ?? IMG_AVATAR_DEFAULT}
-          width={200}
-          height={200}
-          className="mb-2 aspect-square w-full rounded-lg object-cover"
-        />
-        <p className="truncate text-sm font-bold">{player.username}</p>
-        <p className="text-muted-foreground text-xs">
-          Lv {player.level} {capitalizeFirstLetter(player.rank)} ·{" "}
-          {player.village?.name ?? "No village"}
-        </p>
-        <p className="text-muted-foreground text-xs">
-          {isOnline
-            ? "Online now"
-            : `Seen ${formatTimeAgo(new Date(player.updatedAt))}`}
-        </p>
+        <div className="flex items-center gap-2.5">
+          <div className="bg-muted flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md">
+            {avatar && avatar !== failedAvatar ? (
+              <Image
+                alt={player.username}
+                src={avatar}
+                width={48}
+                height={48}
+                loading="eager"
+                className="h-full w-full object-cover"
+                onError={() => setFailedAvatar(avatar)}
+              />
+            ) : (
+              <UserRound
+                role="img"
+                aria-label={`${player.username} avatar unavailable`}
+                className="text-muted-foreground h-6 w-6"
+              />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold">{player.username}</p>
+            <p className="text-muted-foreground text-xs">
+              Lv {player.level} {capitalizeFirstLetter(player.rank)} ·{" "}
+              {player.village?.name ?? "No village"}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {isOnline
+                ? "Online now"
+                : `Seen ${formatTimeAgo(new Date(player.updatedAt))}`}
+            </p>
+          </div>
+        </div>
         <dl className="my-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
           <dt className="text-muted-foreground">Experience</dt>
           <dd className="text-right font-semibold">

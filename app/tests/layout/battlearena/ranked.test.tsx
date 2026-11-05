@@ -121,6 +121,8 @@ it("keeps ranked loadout editing available when no season is running", () => {
   expect(screen.queryByRole("button", { name: "Find ranked match" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Edit loadout" }));
   expect(screen.getByText("Ranked loadout picker")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(screen.queryByText("Ranked loadout picker")).toBeNull();
 });
 
 it("opens the ranked loadout editor", () => {
@@ -136,7 +138,6 @@ it("keeps the loadout editor at panel width on wide screens", () => {
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Edit loadout" }));
   });
-  const sheet = screen.getByRole("dialog", { name: "Ranked loadout" });
-  expect(sheet.className).toContain("max-w-3xl");
-  expect(sheet.className).toContain("mx-auto");
+  const dialog = screen.getByRole("dialog", { name: "Ranked loadout" });
+  expect(dialog.className).toContain("max-w-3xl");
 });

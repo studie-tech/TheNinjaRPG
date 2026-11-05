@@ -17,13 +17,14 @@ let finderInputs: Record<string, unknown>[];
 let finderOptions: Record<string, unknown>[];
 let finderUpdatedAt: number;
 let playerUpdatedAt: Date;
+let playerAvatar: string | null;
 const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
 const player = (userId: string, username: string, level: number) => ({
   userId,
   username,
   level,
   rank: "GENIN",
-  avatar: null,
+  avatar: playerAvatar,
   updatedAt: playerUpdatedAt,
   village: { name: "Akikaze" },
   experience: 15_000,
@@ -65,6 +66,7 @@ beforeEach(() => {
   finderOptions = [];
   finderUpdatedAt = Date.now();
   playerUpdatedAt = new Date(finderUpdatedAt);
+  playerAvatar = null;
   for (const name of ["createChallenge", "acceptChallenge", "rejectChallenge", "cancelChallenge"]) {
     mutations[name] = vi.fn();
   }
@@ -114,7 +116,7 @@ beforeEach(() => {
   vi.spyOn(jutsuLoadout, "default").mockImplementation((() => <p>Jutsu loadout</p>) as never);
   vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);
   // biome-ignore lint/performance/noImgElement: isolated avatar fixture
-  vi.spyOn(image, "default").mockImplementation((({ alt }: { alt: string }) => <img alt={alt} />) as never);
+  vi.spyOn(image, "default").mockImplementation(({ alt, src, onError }) => <img alt={alt} src={typeof src === "string" ? src : undefined} onError={onError} />);
 });
 
 afterEach(() => {
@@ -203,10 +205,21 @@ it("shows a player's card with their progress and profile from the list", async 
   const kaitoRow = within(finder()).getAllByRole("listitem")[0]!;
   fireEvent.click(within(kaitoRow).getByRole("button", { name: /^About / }));
   const card = await screen.findByRole("dialog");
+  expect(within(card).getByRole("img", { name: "Sora avatar unavailable" })).toBeDefined();
   expect(within(card).getByText("Experience")).toBeDefined();
   expect(within(card).getByText("15,000")).toBeDefined();
   expect(within(card).getByText("PvP experience")).toBeDefined();
   expect(within(card).getByText("420")).toBeDefined();
   const profile = within(card).getByRole("link", { name: "See profile" });
   expect(profile.getAttribute("href")).toMatch(/^\/username\//);
+});
+
+it("replaces a failed player portrait with the avatar fallback", async () => {
+  playerAvatar = "https://example.com/portrait.webp";
+  render(<SparringMode />);
+  fireEvent.click(screen.getByRole("button", { name: "About Sora" }));
+  const card = await screen.findByRole("dialog");
+  fireEvent.error(within(card).getByRole("img", { name: "Sora" }));
+  expect(within(card).queryByRole("img", { name: "Sora" })).toBeNull();
+  expect(within(card).getByRole("img", { name: "Sora avatar unavailable" })).toBeDefined();
 });
