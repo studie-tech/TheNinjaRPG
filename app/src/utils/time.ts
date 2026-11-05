@@ -296,6 +296,10 @@ export const getDateKey = (date: Date): string => {
 /** Zero-padded UTC day (YYYY-MM-DD), the format of date columns; getDateKey is unpadded. */
 export const getUtcDayKey = (now = new Date()) => now.toISOString().slice(0, 10);
 
+/** Whether a date column's end has passed; availability stops at midnight UTC of that date. */
+export const hasEndDatePassed = (endsAt?: string | null, now = new Date()) =>
+  !!endsAt && new Date(endsAt) <= now;
+
 /**
  * Return the next meal time, or null if this companion has never been fed.
  * The rolling cooldown is independent of battles and UTC day boundaries.

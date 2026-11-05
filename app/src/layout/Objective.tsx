@@ -21,7 +21,7 @@ import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { collapseRewards } from "@/libs/rewards";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { getCollectDeadline } from "@/utils/time";
+import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
@@ -372,7 +372,7 @@ export const EventTimer: React.FC<EventTimerProps> = (props) => {
   }
 
   // If event has started but not ended
-  if (endDate && now < endDate) {
+  if (endDate && !hasEndDatePassed(quest.endsAt, now)) {
     return (
       <div>
         <b>Time Left: </b> <Countdown targetDate={endDate} />
