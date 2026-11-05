@@ -20,7 +20,7 @@ import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { WarFieldActions } from "@/layout/WarFieldActions";
-import { getWarSide } from "@/libs/objectiveWar";
+import { getVillageWarShrineAction, getWarSide } from "@/libs/objectiveWar";
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
@@ -126,34 +126,14 @@ export default function Shrine() {
   const isHome = !!sectorData.village;
 
   // Check if user can attack OR defend the shrine in a Village War or Raid
-  // Attack: Attackers at defender's village, Defenders at attacker's village (reduces shrine HP)
-  // Defend: Attackers at their own village when damaged, Defenders at their own village when damaged (restores shrine HP)
-  const userCanBattleVillageWarShrine = sectorData.warData?.some((war) => {
-    if (!["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) return false;
-
-    const side = getWarSide(war, userData.villageId, userData.userId);
-    const isUserOnAttackerSide = side === war.attackerVillageId;
-    const isUserOnDefenderSide = side === war.defenderVillageId;
-
-    const atDefenderVillage = war.defenderVillage?.sector === userData.sector;
-    const atAttackerVillage = war.attackerVillage?.sector === userData.sector;
-
-    // Attack scenarios: at enemy's village
-    const canAttack =
-      (atDefenderVillage && isUserOnAttackerSide) ||
-      (atAttackerVillage && isUserOnDefenderSide);
-
-    // Defend scenarios: at own village when shrine is damaged
-    const canDefend =
-      (atAttackerVillage &&
-        isUserOnAttackerSide &&
-        war.attackerShrineHp < war.attackerShrineMaxHp) ||
-      (atDefenderVillage &&
-        isUserOnDefenderSide &&
-        war.defenderShrineHp < war.defenderShrineMaxHp);
-
-    return canAttack || canDefend;
-  });
+  const userCanBattleVillageWarShrine = sectorData.warData?.some(
+    (war) =>
+      getVillageWarShrineAction(
+        war,
+        getWarSide(war, userData.villageId, userData.userId),
+        userData.sector,
+      ) !== null,
+  );
 
   // Home sectors are protected UNLESS user can battle in a Village War/Raid
   const isProtected = isReserved || (isHome && !userCanBattleVillageWarShrine);
@@ -551,26 +531,15 @@ const WarCard = ({
     : war.defenderShrineStatus;
 
   // Determine action type: attack or defend
-  // Attackers at own village = defend (if shrine damaged)
-  // Attackers at enemy village = attack
-  // Defenders at own village = defend (if shrine damaged)
-  // Defenders at enemy village = attack
-  const isDefendAction =
-    isVillageWar &&
-    ((isUserAttacker &&
-      atAttackerVillage &&
-      war.attackerShrineHp < war.attackerShrineMaxHp) ||
-      (isUserDefender &&
-        atDefenderVillage &&
-        war.defenderShrineHp < war.defenderShrineMaxHp));
+  const shrineAction = getVillageWarShrineAction(war, sideVillageId, sector);
+  const isDefendAction = shrineAction === "defend";
 
   // For Village Wars: users can attack/defend based on location and shrine state
   const canAttackVillageWar =
-    isVillageWar &&
+    shrineAction === "attack" &&
+    targetShrineHp > 0 &&
     !hideAttackButton &&
-    !isProtected &&
-    ((isUserAttacker && atDefenderVillage && war.defenderShrineHp > 0) ||
-      (isUserDefender && atAttackerVillage && war.attackerShrineHp > 0));
+    !isProtected;
 
   const canDefendVillageWar =
     isVillageWar && !hideAttackButton && !isProtected && isDefendAction;
