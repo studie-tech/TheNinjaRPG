@@ -87,30 +87,36 @@ export const SHOP_SORTS: { value: ShopSort; label: string }[] = [
   { value: "type", label: "Type" },
 ];
 
-/** Unit prices of a shop item: ryo after the player's discounts, reputation and silver as listed. */
+/**
+ * What `quantity` of a shop item costs in each currency it is priced in, rounded the way the
+ * purchase charges it: ryo after the player's discounts, reputation and silver as listed.
+ */
 export const shopItemPrices = (
   item: Pick<Item, "cost" | "repsCost" | "seichiSilverCost">,
   ryoFactor: number,
-): ShopPrice[] => [
-  ...(item.cost > 0
-    ? [{ currency: "ryo" as const, amount: Math.ceil(item.cost * ryoFactor) }]
-    : []),
-  ...(item.repsCost > 0
-    ? [{ currency: "rep" as const, amount: Math.ceil(item.repsCost) }]
-    : []),
-  ...(item.seichiSilverCost > 0
-    ? [{ currency: "silver" as const, amount: Math.ceil(item.seichiSilverCost) }]
-    : []),
-];
+  quantity = 1,
+): ShopPrice[] => {
+  const { ryoCost, repsCost, seichiSilverCost } = getShopStackPrice(
+    item,
+    quantity,
+    ryoFactor,
+  );
+  return [
+    ...(item.cost > 0 ? [{ currency: "ryo" as const, amount: ryoCost }] : []),
+    ...(item.repsCost > 0 ? [{ currency: "rep" as const, amount: repsCost }] : []),
+    ...(item.seichiSilverCost > 0
+      ? [{ currency: "silver" as const, amount: seichiSilverCost }]
+      : []),
+  ];
+};
 
-/** How much of each currency the player is short of to buy `quantity` at these prices. */
+/** How much of each currency the player is short of to pay these prices. */
 export const missingForPrices = (
   prices: ShopPrice[],
   wallet: Record<ShopCurrency, number>,
-  quantity = 1,
 ): ShopPrice[] =>
   prices.flatMap(({ currency, amount }) => {
-    const missing = amount * quantity - wallet[currency];
+    const missing = amount - wallet[currency];
     return missing > 0 ? [{ currency, amount: missing }] : [];
   });
 

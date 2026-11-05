@@ -10,15 +10,13 @@ import { missingForPrices } from "@/libs/shop";
 export function ShopPriceTag({
   prices,
   wallet,
-  quantity = 1,
   silverLabel,
 }: {
   prices: ShopPrice[];
   wallet: Record<ShopCurrency, number>;
-  quantity?: number;
   silverLabel: string;
 }) {
-  const missing = missingForPrices(prices, wallet, quantity);
+  const missing = missingForPrices(prices, wallet);
   const label = (currency: ShopCurrency) =>
     currency === "silver" ? silverLabel : currency;
   return (
@@ -37,7 +35,7 @@ export function ShopPriceTag({
             )}
           >
             <Icon className="h-3 w-3 shrink-0" aria-hidden />
-            {(amount * quantity).toLocaleString()} {label(currency)}
+            {amount.toLocaleString()} {label(currency)}
           </span>
         );
       })}
