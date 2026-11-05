@@ -15,7 +15,7 @@ import {
 import dynamic from "next/dynamic";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -47,7 +46,6 @@ import {
   FACTION_RAID_STRUCTURE_ROUTES,
   FACTION_RAID_TARGET_COOLDOWN_HOURS,
   MAP_RESERVED_SECTORS,
-  MAP_SECTOR_ID_MAX,
   VILLAGE_SYNDICATE_ID,
   WAR_ALLY_OFFER_MIN,
   WAR_DAILY_TOKEN_DECAY_PERCENT_BASE,
@@ -67,6 +65,7 @@ import { useActiveWars } from "@/hooks/useActiveWars";
 import Building from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { FindSectorPopover } from "@/layout/FindSectorPopover";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
@@ -87,11 +86,6 @@ import { canAdministrateWars } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
-import {
-  type SectorForm,
-  type SectorFormInput,
-  sectorFormSchema,
-} from "@/validators/travel";
 import {
   type AllianceOfferSchema,
   type AllianceOfferSchemaInput,
@@ -268,16 +262,6 @@ export const WarMap: React.FC<{
     FACTION_RAID_STRUCTURE_ROUTES[0],
   );
   const [focusSector, setFocusSector] = useState<number | null>(null);
-
-  // Find sector form
-  const findSectorForm = useForm<SectorFormInput, unknown, SectorForm>({
-    mode: "all",
-    resolver: zodResolver(sectorFormSchema),
-  });
-  const findSectorValue = useWatch({
-    control: findSectorForm.control,
-    name: "sector",
-  }) as number | undefined;
 
   // Query data
   const { data: userData } = useRequiredUserData();
@@ -540,8 +524,11 @@ export const WarMap: React.FC<{
 
       {/* Find Sector Control */}
       <div className="absolute top-2 right-2 z-10">
-        <Popover>
-          <PopoverTrigger asChild>
+        <FindSectorPopover
+          focusSector={focusSector}
+          onFocusSector={setFocusSector}
+          triggerAsChild
+          trigger={
             <Button
               variant="outline"
               size="icon"
@@ -550,62 +537,8 @@ export const WarMap: React.FC<{
             >
               <Locate className="h-5 w-5" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent>
-            <p className="py-2 font-semibold">Find Sector</p>
-            <p className="pb-2 text-muted-foreground text-sm">
-              Enter a sector ID to locate it on the map.
-            </p>
-            <Form {...findSectorForm}>
-              <form
-                onSubmit={findSectorForm.handleSubmit((data) => {
-                  setFocusSector(data.sector);
-                })}
-                className="flex flex-col gap-2"
-              >
-                <FormField
-                  control={findSectorForm.control}
-                  name="sector"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <NumberInput
-                          className="w-full"
-                          placeholder={`Sector ID (0-${MAP_SECTOR_ID_MAX})`}
-                          {...field}
-                          value={field.value as number | undefined}
-                          onValueChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="flex-1"
-                    disabled={!Number.isFinite(findSectorValue)}
-                  >
-                    Find Sector{" "}
-                    {Number.isFinite(findSectorValue) ? findSectorValue : "..."}
-                  </Button>
-                  {focusSector !== null && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setFocusSector(null)}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </Form>
-          </PopoverContent>
-        </Popover>
+          }
+        />
       </div>
       {villages && globe && (
         <GlobalMap
