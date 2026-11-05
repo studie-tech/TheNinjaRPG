@@ -213,6 +213,65 @@ describeWithDatabase("shrine AI defenders", () => {
     });
   });
 
+  it("lets retired defenders hold no slot and drops them from the stored list", async () => {
+    await storeSettings(
+      ["retired-a", "retired-b", "retired-c"],
+      ["retired-a", "retired-b", "retired-c", "shrine-a"],
+    );
+    const kage = await shrineCaller("kage");
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-a" })).success).toBe(true);
+    expect(await homeVillage()).toMatchObject({
+      shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
+  });
+
+  it("removes a deleted defender and cleans its neighbours in one write", async () => {
+    await storeSettings(["deleted", "plain-ai", "shrine-a"], ["deleted", "shrine-a"]);
+    const kage = await shrineCaller("kage");
+    const result = await kage.toggleVillageAiDefender({ aiId: "deleted" });
+    expect(result).toMatchObject({
+      success: true,
+      message: "Retired AI defender removed from active defenders",
+    });
+    expect(await homeVillage()).toMatchObject({
+      shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
+  });
+
+  it("still enforces the cap on live defenders", async () => {
+    await storeSettings(
+      ["retired", "shrine-a", "shrine-b", "shrine-c"],
+      ["retired", "shrine-a", "shrine-b", "shrine-c", "shrine-d"],
+    );
+    await insertUsers([
+      { ...fighter, userId: "shrine-d", username: "shrine-d", isAi: true, inShrines: true },
+    ]);
+    const before = await homeVillage();
+    const kage = await shrineCaller("kage");
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-d" })).success).toBe(false);
+    expect(await homeVillage()).toEqual(before);
+  });
+
+  it("guards a cleaned write on the stored list, not the cleaned one", async () => {
+    await storeSettings(["retired", "shrine-a"], ["retired", "shrine-a", "shrine-b"]);
+    const db = await getTestDatabase();
+    const kage = callerForDatabase(
+      shrineRouter,
+      "kage",
+      beforeStatements(db, village, [
+        () =>
+          db
+            .update(village)
+            .set({ shrineSettings: settings(["shrine-a"], ["retired", "shrine-a", "shrine-b"]) })
+            .where(eq(village.id, "a")),
+      ]),
+    );
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-b" })).success).toBe(false);
+    expect(await homeVillage()).toMatchObject({
+      shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
+  });
+
   const racingCaller = async (rival: () => Promise<unknown>) =>
     callerForDatabase(
       shrineRouter,

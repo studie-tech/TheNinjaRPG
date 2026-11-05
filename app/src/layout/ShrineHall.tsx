@@ -632,8 +632,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                   {unlockedAis.map((ai) => {
                     const isAssigned = currentVillageAiIds.includes(ai.userId);
                     const canAssign =
-                      !isAssigned &&
-                      currentVillageAiIds.length < SHRINE_MAX_AI_ASSIGNMENTS;
+                      !isAssigned && assignedAis.length < SHRINE_MAX_AI_ASSIGNMENTS;
 
                     return (
                       <div
@@ -673,7 +672,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
                   })}
                 </div>
 
-                {currentVillageAiIds.length >= SHRINE_MAX_AI_ASSIGNMENTS && (
+                {assignedAis.length >= SHRINE_MAX_AI_ASSIGNMENTS && (
                   <p className="text-center text-muted-foreground text-sm">
                     Maximum defenders assigned ({SHRINE_MAX_AI_ASSIGNMENTS}). Remove one
                     to assign another.

@@ -352,12 +352,13 @@ export const shrineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [{ user, requiresUserRefresh }, ai] = await Promise.all([
+      const [{ user, requiresUserRefresh }, ai, shrineAis] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         findUserById(ctx.drizzle, input.aiId),
+        listUserDataForStartShrineBattle(ctx.drizzle),
       ]);
 
       if (!user) return errorResponse("User not found");
@@ -366,7 +367,6 @@ export const shrineRouter = createTRPCRouter({
       if (user.village.kageId !== user.userId) {
         return errorResponse("Only the Kage can manage AI defenders");
       }
-      if (!ai) return errorResponse("AI not found");
 
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       const currentAssigns = user.village.shrineSettings.activeAiIds || [];
@@ -375,21 +375,25 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("AI defender not unlocked");
       }
 
+      // Retired ids hold no slot and leave the list on any toggle.
+      const shrineAiIds = shrineAis.map((shrineAi) => shrineAi.userId);
+      const liveAssigns = currentAssigns.filter((id) => shrineAiIds.includes(id));
+
       let newAssigns: string[];
       let message: string;
 
       if (currentAssigns.includes(input.aiId)) {
-        newAssigns = currentAssigns.filter((id) => id !== input.aiId);
-        message = `AI defender ${ai.username} removed from active defenders`;
+        newAssigns = liveAssigns.filter((id) => id !== input.aiId);
+        message = `${ai ? `AI defender ${ai.username}` : "Retired AI defender"} removed from active defenders`;
       } else {
         // Stays out of the removal branch so a Kage can clear a retired defender.
-        if (!ai.isAi || !ai.inShrines) return errorResponse("AI not found");
-        if (currentAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
+        if (!ai?.isAi || !ai.inShrines) return errorResponse("AI not found");
+        if (liveAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
           return errorResponse(
             `Can only assign up to ${SHRINE_MAX_AI_ASSIGNMENTS} AI defenders`,
           );
         }
-        newAssigns = [...currentAssigns, input.aiId];
+        newAssigns = [...liveAssigns, input.aiId];
         message = `AI defender ${ai.username} added to active defenders`;
       }
 
