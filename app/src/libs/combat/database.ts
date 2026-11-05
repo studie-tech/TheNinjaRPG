@@ -1160,9 +1160,9 @@ export const updateRaidProgress = async (
 /**
  * Settlement writes of one action or poll tick, spread into the caller's single mutation
  * phase. Each is a no-op without a result; hunting and dungeon payouts settle in
- * updateBattle. Keeps updateUser first so callers can read its quest updates.
+ * updateBattle. Keeps updateUser first so callers can read its quest updates. Each player
+ * settles once: calcBattleResult returns null after their leftBattle flag is saved.
  * @param battleOver - from the version claim, which already committed terminal event outcomes
- * @param fromAction - also record usage statistics and clan leadership challenges
  */
 export const settlementWrites = (
   client: DrizzleClient,
@@ -1171,17 +1171,12 @@ export const settlementWrites = (
   result: CombatResult | null,
   userId: string,
   battleOver: boolean,
-  fromAction = false,
 ): [ReturnType<typeof updateUser>, ...Promise<unknown>[]] => [
   updateUser(client, pusher, battle, result, userId),
   ...(!battle.extraState.dungeon && !battle.extraState.hunting
     ? [
-        ...(fromAction
-          ? [
-              saveUsage(client, battle, result, userId),
-              updateClanLeaders(client, battle, result, userId),
-            ]
-          : []),
+        saveUsage(client, battle, result, userId),
+        updateClanLeaders(client, battle, result, userId),
         updateKage(client, battle, result),
         updateVillageAnbuClan(client, battle, result, userId),
         updateWars(client, pusher, battle, result, userId),
