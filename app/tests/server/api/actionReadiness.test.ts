@@ -1,15 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { beforeEach, afterEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
-import { userData, villageStructure } from "@/drizzle/schema";
+import { quest, questHistory, userData, village, villageStructure } from "@/drizzle/schema";
 import { AWAKE_ACTIONS, AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
 import { appRouter } from "@/server/api/root";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
-import { insertUsers } from "../../setup/factories";
+import { insertQuests, insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 import { beforeStatements } from "../../setup/statements";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 // The path activates the same gate used by the real training endpoint, with a handler
 // whose invocation makes rejection-before-side-effects observable.
@@ -81,5 +81,49 @@ describeWithDatabase("automatic action recovery", () => {
     expect(await callerForDatabase(router, userId, client).train.startTraining()).toMatchObject({ success: false });
     expect(invocations).toBe(0);
     expect((await current()).status).toBe("BATTLE");
+  });
+});
+
+
+describeWithDatabase("specific quest action recovery", () => {
+  beforeEach(async () => {
+    await resetTables(questHistory, quest, villageStructure, village, userData);
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    await insertUsers([{ userId, username: userId, rank: "JONIN", level: 50, status: "ASLEEP", regeneration: 0, primaryElement: "Fire", secondaryElement: "Water", villageId: "home", sector: 0 }]);
+    const database = await getTestDatabase();
+    await database.insert(village).values({ id: "home", name: "Home", sector: 0, kageId: userId });
+    await database.insert(villageStructure).values([
+      { id: "hq", villageId: "home", name: "Global ANBU HQ", route: "/globalanbuhq", image: "" },
+      { id: "mission", villageId: "home", name: "Mission Hall", route: "/missionhall", image: "" },
+    ]);
+    await insertQuests([{ id: "specific", name: "Specific quest", questType: "story", hidden: false, questRank: "D" }]);
+  });
+  it.each([
+    { status: "ASLEEP", autoWakeUp: true },
+    { status: "ASLEEP", autoWakeUp: false },
+    { status: "HOSPITALIZED", autoWakeUp: true },
+  ] as const)("preserves ordinary story eligibility and activity: %j", async (initial) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ ...initial, curHealth: 1, maxHealth: 100, regenAt: new Date() }).where(eq(userData.userId, userId));
+    const questReads = vi.spyOn(database.query.quest, "findFirst");
+    const result = await (await callerFor(appRouter, userId)).quests.startQuest({ questId: "specific", userSector: 0 });
+    expect(result.success).toBe(true);
+    expect(result).not.toHaveProperty("actionNotice");
+    expect((await current()).status).toBe(initial.status);
+    expect(questReads).toHaveBeenCalledTimes(1);
+  });
+  it.each(["mission", "battlepyramid"] as const)("recovers an awake-only %s start using its saved quest type", async (questType) => {
+    await (await getTestDatabase()).update(quest).set({ questType, questRank: "A" }).where(eq(quest.id, "specific"));
+    const result = await (await callerFor(appRouter, userId)).quests.startQuest({ questId: "specific", userSector: 0 });
+    expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+    expect((await current()).status).toBe("AWAKE");
+  });
+  it("rejects an awake-only quest when the sleeper opts out", async () => {
+    const database = await getTestDatabase();
+    await database.update(quest).set({ questType: "mission" }).where(eq(quest.id, "specific"));
+    await database.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, userId));
+    expect(await (await callerFor(appRouter, userId)).quests.startQuest({ questId: "specific", userSector: 0 })).toMatchObject({ success: false, message: expect.stringContaining("asleep") });
+    expect(await database.query.questHistory.findMany()).toHaveLength(0);
+    expect((await current()).status).toBe("ASLEEP");
   });
 });

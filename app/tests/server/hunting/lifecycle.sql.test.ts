@@ -145,6 +145,10 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect(await db.query.battle.findMany()).toHaveLength(0);
     expect(await db.query.huntingSession.findFirst()).toMatchObject({ id: session.id, battleId: null });
   });
+  it.each([false, true])("returns the hunter automatic-wake preference (%s)", async (autoWakeUp) => {
+    await (await getTestDatabase()).update(userData).set({ status: "ASLEEP", autoWakeUp }).where(eq(userData.userId, "hunter"));
+    expect((await (await callerFor(huntingRouter, "hunter")).getBoard()).user).toMatchObject({ status: "ASLEEP", autoWakeUp });
+  });
   it("returns only the creatures and materials referenced by visible contracts", async () => {
     await insertUsers([{ userId: "unlisted-ai", username: "unlisted-ai", isAi: true }]);
     await insertItems([{ id: "unlisted-material", name: "Unlisted material", canBeHunted: true }]);

@@ -743,7 +743,7 @@ export const questsRouter = createTRPCRouter({
           includeAnnouncementsInResponse: input.supportsAnnouncements === true,
         }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
-        fetchQuest(ctx.drizzle, input.questId),
+        ctx.actionQuest ?? fetchQuest(ctx.drizzle, input.questId),
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
       ]);
 

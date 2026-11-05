@@ -78,7 +78,6 @@ export const AWAKE_ACTIONS = new Set([
   "coop.quest.join",
   "coop.quest.startEncounter",
   "quests.startRandom",
-  "quests.startQuest",
   "quests.startPetTask",
   "quests.checkRewards",
   "quests.retryBattle",

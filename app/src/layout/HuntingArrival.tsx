@@ -22,6 +22,7 @@ export function HuntingArrival({ blocked = false }: { blocked?: boolean }) {
     userId: user.userId,
     occupation: user.occupation,
     status: user.status,
+    autoWakeUp: user.autoWakeUp,
     sector: user.sector,
   }));
   const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);

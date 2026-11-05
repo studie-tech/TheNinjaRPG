@@ -2332,7 +2332,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
-              userRef.current?.status === "AWAKE" &&
+              canAttemptAwakeAction(userRef.current) &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,

@@ -538,7 +538,7 @@ function Travel() {
     }
   }, [userData?.status, router]);
 
-  useAwake(userData);
+  useAwake(userData, { allowActionRecovery: true });
 
   // Tutorial step
   const { currentStep, completeTutorialAction } = useTutorialStep();

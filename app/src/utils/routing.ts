@@ -1,6 +1,7 @@
 import { usePathname, type useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { publicPathForShellPath } from "@/libs/shell";
 import type { UserWithRelations } from "../server/api/routers/profile";
 
@@ -37,12 +38,17 @@ export const pushToCombat = (
   router.push("/combat");
 };
 
-/** Redirect active non-awake states to their activity page and report awake availability. */
-export const useAwake = (userData: UserWithRelations) => {
+/** Route unavailable actors to their activity page; action pages may admit eligible recovery. */
+export const useAwake = (
+  userData: UserWithRelations,
+  { allowActionRecovery = false }: { allowActionRecovery?: boolean } = {},
+) => {
   const router = useNavigationRouter();
   const pathname = usePublicPathname();
   const userStatus = userData?.status;
+  const canRecover = allowActionRecovery && canAttemptAwakeAction(userData);
   useEffect(() => {
+    if (canRecover) return;
     if (userStatus === "HOSPITALIZED") {
       void router.push("/hospital");
     } else if (userStatus === "BATTLE") {
@@ -52,6 +58,6 @@ export const useAwake = (userData: UserWithRelations) => {
     } else if (userStatus === "ASLEEP") {
       void router.push("/home");
     }
-  }, [pathname, userStatus, router]);
+  }, [pathname, userStatus, router, canRecover]);
   return userStatus === "AWAKE";
 };

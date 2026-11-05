@@ -27,6 +27,7 @@ describe("character action readiness", () => {
     expect(shouldPrepareAction("train.updateEnergyTrainingQueue", { expectedEntries: [], entries: [{stat: "offence", energy: 40}] })).toBe(true);
     expect(shouldPrepareAction("train.updateEnergyTrainingQueue", { expectedEntries: [{stat: "offence", energy: 40}], entries: [] })).toBe(false);
     expect(shouldPrepareAction("train.updateMasteryTrainingQueue", { expectedEntries: [{stat: "Fire", speed: "15min"}], entries: [{stat: "Fire", speed: "30min"}] })).toBe(true);
+    expect(shouldPrepareAction("quests.startQuest", { questId: "story" })).toBe(false);
     expect(shouldPrepareAction("coop.dungeon.act", { action: "accept" })).toBe(true);
     expect(shouldPrepareAction("coop.dungeon.act", { action: "leave" })).toBe(false);
     expect(shouldPrepareAction("hunting.sessionAction", { action: "prepare" })).toBe(true);

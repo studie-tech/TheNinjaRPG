@@ -1,3 +1,4 @@
+import { MISSION_HALL_QUEST_TYPES } from "@/drizzle/constants";
 import { actionStatusMessage, shouldPrepareAction } from "@/libs/actionReadiness";
 import {
   fetchUserDataForEnforceRateLimit,
@@ -5,7 +6,7 @@ import {
   updateUserDataForEnforceRateLimit,
 } from "@/queries/concurrency";
 import { fetchActionReadiness } from "@/queries/profile";
-import { fetchIsolatedPyramid } from "@/queries/quests";
+import { fetchIsolatedPyramid, fetchQuest } from "@/queries/quests";
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
  * 1. You want to modify request context (see Part 1)
@@ -35,6 +36,7 @@ import {
 } from "@/libs/queryTelemetry";
 import {
   ISOLATED_PYRAMID_MESSAGE,
+  isManagedQuestRun,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
 import { trpcSessionUserId } from "@/libs/trpcSession";
@@ -432,13 +434,26 @@ const enforceUserIsAuthed = t.middleware(async ({ ctx: context, path, next }) =>
 /** Enforce persisted isolation and recover eligible characters before action handlers run. */
 const enforceCharacterActionReadiness = t.middleware(
   async ({ ctx, path, type, next, getRawInput }) => {
-    if (type !== "mutation" || !ctx.userId) return next();
-    const needsPreparation = shouldPrepareAction(path, await getRawInput());
-    const [isolated, readiness] = await Promise.all([
+    if (type !== "mutation" || !ctx.userId)
+      return next({ ctx: { actionQuest: undefined } });
+    const input = await getRawInput();
+    const questId =
+      path === "quests.startQuest" &&
+      input &&
+      typeof input === "object" &&
+      "questId" in input &&
+      typeof input.questId === "string"
+        ? input.questId
+        : undefined;
+    const needsPreparation = shouldPrepareAction(path, input);
+    const [isolated, readiness, actionQuest] = await Promise.all([
       isPyramidRestrictedProcedure(path)
         ? fetchIsolatedPyramid(ctx.drizzle, ctx.userId)
         : null,
-      needsPreparation ? fetchActionReadiness(ctx.drizzle, ctx.userId) : null,
+      needsPreparation || questId
+        ? fetchActionReadiness(ctx.drizzle, ctx.userId)
+        : null,
+      questId ? fetchQuest(ctx.drizzle, questId) : undefined,
     ]);
     const reject = (message: string) => ({
       ok: true as const,
@@ -447,7 +462,15 @@ const enforceCharacterActionReadiness = t.middleware(
     });
     if (isolated) return reject(ISOLATED_PYRAMID_MESSAGE);
     let notice: string | undefined;
+    // Specific quest starts share one server-loaded quest with the handler; ordinary
+    // stories preserve their activity while Mission Hall and managed runs recover.
+    const requiresAwake =
+      needsPreparation ||
+      (actionQuest &&
+        (MISSION_HALL_QUEST_TYPES.includes(actionQuest.questType) ||
+          isManagedQuestRun(actionQuest)));
     if (
+      requiresAwake &&
       readiness &&
       !readiness.isBanned &&
       ["ASLEEP", "HOSPITALIZED"].includes(readiness.status)
@@ -466,7 +489,7 @@ const enforceCharacterActionReadiness = t.middleware(
       if (prepared.error) return reject(prepared.error);
       notice = prepared.notice;
     }
-    const result = await next();
+    const result = await next({ ctx: { actionQuest } });
     if (notice) {
       if (result.ok && result.data && typeof result.data === "object") {
         const data = result.data as Record<string, unknown>;

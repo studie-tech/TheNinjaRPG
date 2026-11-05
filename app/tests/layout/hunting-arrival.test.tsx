@@ -216,3 +216,15 @@ it("offers Retry after an initial load failure and opens the recovered encounter
   await view.findByRole("dialog", { name: "Hunting encounter" });
   expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
 });
+
+
+it.each([false, true])("respects the sleeping hunter's automatic-wake preference (%s)", async (autoWakeUp) => {
+  const sleepingHunter = { ...user, status: "ASLEEP", autoWakeUp };
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: sleepingHunter, timeDiff: 0 } as never);
+  const view = render(<Provider store={store}><HuntingArrival /></Provider>);
+  if (autoWakeUp) await view.findByRole("dialog", { name: "Hunting encounter" });
+  else {
+    expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.queryByRole("button", { name: "Open hunting contract" })).toBeNull();
+  }
+});
