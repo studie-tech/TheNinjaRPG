@@ -2557,6 +2557,13 @@ export const ID_SFX_CLEAR = "mOSkDnYv4hchkPbhdpTDd";
 // Discord invite link
 export const DISCORD_INVITE_URL = "https://discord.gg/eNtgPdAh7j";
 
+/**
+ * Canonical origin for the site. Every absolute URL emitted in metadata, the sitemap
+ * and structured data is built from this, so the www/non-www split never produces two
+ * indexable copies of the same page.
+ */
+export const SITE_URL = "https://www.theninja-rpg.com";
+
 // Source repository
 export const GITHUB_REPO_URL = "https://github.com/studie-tech/TheNinjaRPG";
 export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
