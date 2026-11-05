@@ -1,32 +1,31 @@
 "use client";
 
-import { FileMinus, FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { Jutsu } from "@/drizzle/schema";
 import { useJutsuEditForm } from "@/hooks/jutsu";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { JutsuHelper } from "@/layout/ContentHelp";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import Loader from "@/layout/Loader";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
-import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
-import { DamageTag, JutsuValidatorRawSchema, tagTypes } from "@/validators/combat";
+import type { ZodJutsuType } from "@/validators/combat";
+import { DamageTag, JutsuValidatorRawSchema } from "@/validators/combat";
 
 export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> }) {
   const params = use(props.params);
   const jutsuId = params.jutsuid;
 
   // State
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(isStaffRole);
 
   // Queries
   const { data, isPending, isError, isFetching, refetch } = api.jutsu.get.useQuery(
@@ -37,37 +36,21 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not staff
-  useEffect(() => {
-    if (userData && !isStaffRole(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (!userData || !isStaffRole(userData.role)) {
+  if (!userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
   }
 
   const queryFeedback = (
-    <ContentBox
-      title="Content Panel"
+    <EditorQueryFeedback
+      label="jutsu"
       subtitle="Jutsu Management"
-      defaultBackHref="/manual/jutsu"
-    >
-      <p role="alert">
-        {isError
-          ? data
-            ? "Latest jutsu details could not be loaded. The editor is showing previously loaded data."
-            : "This jutsu could not be loaded. Please try again."
-          : "This jutsu could not be found."}
-      </p>
-      {isError && (
-        <Button disabled={isFetching} onClick={() => void refetch()}>
-          {isFetching ? "Retrying..." : "Retry"}
-        </Button>
-      )}
-    </ContentBox>
+      backHref="/manual/jutsu"
+      hasCachedData={!!data}
+      isError={isError}
+      isFetching={isFetching}
+      onRetry={refetch}
+    />
   );
 
   // Missing records settle the loading state; failed refreshes keep the cached editor visible.
@@ -106,27 +89,6 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
     reskinParentId,
     updateError,
   } = useJutsuEditForm(props.jutsu, props.refetch);
-
-  // Filter out any undefined effects from useWatch
-  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
-    []) as ZodAllTags[];
-
-  // Icon for adding tag
-  const AddTagIcon = (
-    <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
-      onClick={() => {
-        setEffects([
-          ...validEffects,
-          DamageTag.parse({
-            description: "placeholder",
-            rounds: 0,
-            residualModifier: 0,
-          }),
-        ]);
-      }}
-    />
-  );
 
   // Show panel controls
   return (
@@ -174,52 +136,25 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
         )}
       </ContentBox>
 
-      {!reskinParentId && validEffects.length === 0 && (
-        <ContentBox
-          title={`Jutsu Tags`}
-          initialBreak={true}
-          topRightContent={<div className="flex flex-row">{AddTagIcon}</div>}
-        >
-          Please add effects to this jutsu
-        </ContentBox>
-      )}
-      {validEffects.map((tag, i) => {
-        return (
-          <ContentBox
-            key={`${tag.type}-${i}`}
-            title={`Jutsu Tag #${i + 1}`}
-            subtitle="Control battle effects"
-            initialBreak={true}
-            topRightContent={
-              !reskinParentId ? (
-                <div className="flex flex-row">
-                  {AddTagIcon}
-                  <FileMinus
-                    className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                    onClick={() => {
-                      const newEffects = [...validEffects];
-                      newEffects.splice(i, 1);
-                      setEffects(newEffects);
-                    }}
-                  />
-                </div>
-              ) : undefined
-            }
-          >
-            <EffectFormWrapper
-              idx={i}
-              type="jutsu"
-              allowCoordinateTargeting
-              tag={tag}
-              availableTags={tagTypes}
-              hideTagType={!!reskinParentId}
-              editableFields={reskinParentId ? JUTSU_EFFECT_COSMETICS : undefined}
-              effects={validEffects}
-              setEffects={setEffects}
-            />
-          </ContentBox>
-        );
-      })}
+      <EffectTagListEditor
+        type="jutsu"
+        allowCoordinateTargeting
+        hideTagType={!!reskinParentId}
+        editableFields={reskinParentId ? JUTSU_EFFECT_COSMETICS : undefined}
+        effects={effects}
+        setEffects={setEffects}
+        newTag={() =>
+          DamageTag.parse({
+            description: "placeholder",
+            rounds: 0,
+            residualModifier: 0,
+          })
+        }
+        tagTitle="Jutsu Tag"
+        emptyTitle="Jutsu Tags"
+        emptyText="Please add effects to this jutsu"
+        lockStructure={!!reskinParentId}
+      />
     </>
   );
 };

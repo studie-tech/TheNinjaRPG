@@ -1,29 +1,28 @@
 "use client";
 
-import { FileMinus, FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect, useMemo } from "react";
+import { use, useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import type { SageMode } from "@/drizzle/schema";
 import { useSageModeEditForm } from "@/hooks/sageMode";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
-import { DamageTag, SageModeValidator, tagTypes } from "@/validators/combat";
+import { DamageTag, SageModeValidator } from "@/validators/combat";
 
 /** Staff editor route for one `SageMode` catalog row. */
 export default function SageModeEdit(props: {
   params: Promise<{ sagemodeid: string }>;
 }) {
   const params = use(props.params);
-  const router = useRouter();
   const sageModeId = params.sagemodeid;
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
-  const { data, isPending, refetch } = api.sageMode.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.sageMode.get.useQuery(
     { id: sageModeId },
     { retry: false, enabled: !!sageModeId && !!userData },
   );
@@ -40,14 +39,20 @@ export default function SageModeEdit(props: {
     return copy;
   }, [data]);
 
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !normalizedData) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!normalizedData) {
+    return (
+      <EditorQueryFeedback
+        label="sage mode"
+        subtitle="Sage Mode Management"
+        backHref="/manual/sageMode"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditSageMode sageMode={normalizedData} refetch={refetch} />;
@@ -74,60 +79,6 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     handleSageModeSubmit,
   } = useSageModeEditForm(props.sageMode, props.refetch);
 
-  /** Append a placeholder damage tag to the active-phase `effects` array. */
-  const addEffect = () => {
-    setEffects([
-      ...effects,
-      DamageTag.parse({
-        description: "placeholder",
-        residualModifier: 0,
-      }),
-    ]);
-  };
-
-  /** Drop the active-phase effect at index `i`. */
-  const removeEffect = (i: number) => {
-    const newEffects = [...effects];
-    newEffects.splice(i, 1);
-    setEffects(newEffects);
-  };
-
-  /** Append a placeholder damage tag to `afterEffects` (exhaustion phase). */
-  const addAfterEffect = () => {
-    setAfterEffects([
-      ...afterEffects,
-      DamageTag.parse({
-        description: "placeholder",
-        residualModifier: 0,
-      }),
-    ]);
-  };
-
-  /** Drop the after-effect at index `i`. */
-  const removeAfterEffect = (i: number) => {
-    const newEffects = [...afterEffects];
-    newEffects.splice(i, 1);
-    setAfterEffects(newEffects);
-  };
-
-  /** Append a placeholder damage tag to `level2Effects` (merged at combat level 2). */
-  const addLevel2Effect = () => {
-    setLevel2Effects([
-      ...level2Effects,
-      DamageTag.parse({
-        description: "placeholder",
-        residualModifier: 0,
-      }),
-    ]);
-  };
-
-  /** Drop the level-2-only effect at index `i`. */
-  const removeLevel2Effect = (i: number) => {
-    const newEffects = [...level2Effects];
-    newEffects.splice(i, 1);
-    setLevel2Effects(newEffects);
-  };
-
   return (
     <>
       <ContentBox
@@ -152,148 +103,47 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
       </ContentBox>
 
       {/* Active Effects */}
-      {effects.length === 0 && (
-        <ContentBox
-          title="Active Effects"
-          subtitle="Effects while Sage Mode is active"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addEffect}
-              />
-            </div>
-          }
-        >
-          Please add active effects to this sage mode
-        </ContentBox>
-      )}
-      {effects.map((tag, i) => (
-        <ContentBox
-          key={`effect-${tag.type}-${i}`}
-          title={`Active Effect #${i + 1}`}
-          subtitle="Effect while sage mode is active"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addEffect}
-              />
-              <FileMinus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={() => removeEffect(i)}
-              />
-            </div>
-          }
-        >
-          <EffectFormWrapper
-            idx={i}
-            type="sageMode"
-            tag={tag}
-            availableTags={tagTypes}
-            effects={effects}
-            setEffects={setEffects}
-          />
-        </ContentBox>
-      ))}
+      <EffectTagListEditor
+        type="sageMode"
+        effects={effects}
+        setEffects={setEffects}
+        newTag={newEffectTag}
+        tagTitle="Active Effect"
+        tagSubtitle="Effect while sage mode is active"
+        emptyTitle="Active Effects"
+        emptySubtitle="Effects while Sage Mode is active"
+        emptyText="Please add active effects to this sage mode"
+      />
 
       {/* After Effects (Exhaustion) */}
-      {afterEffects.length === 0 && (
-        <ContentBox
-          title="After Effects (Exhaustion)"
-          subtitle="Effects applied after Sage Mode expires"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addAfterEffect}
-              />
-            </div>
-          }
-        >
-          Please add after-effects (exhaustion debuffs) to this sage mode
-        </ContentBox>
-      )}
-      {afterEffects.map((tag, i) => (
-        <ContentBox
-          key={`aftereffect-${tag.type}-${i}`}
-          title={`After Effect #${i + 1}`}
-          subtitle="Exhaustion effect after sage mode expires"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addAfterEffect}
-              />
-              <FileMinus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={() => removeAfterEffect(i)}
-              />
-            </div>
-          }
-        >
-          <EffectFormWrapper
-            idx={i}
-            type="sageMode"
-            tag={tag}
-            availableTags={tagTypes}
-            effects={afterEffects}
-            setEffects={setAfterEffects}
-          />
-        </ContentBox>
-      ))}
+      <EffectTagListEditor
+        type="sageMode"
+        effects={afterEffects}
+        setEffects={setAfterEffects}
+        newTag={newEffectTag}
+        tagTitle="After Effect"
+        tagSubtitle="Exhaustion effect after sage mode expires"
+        emptyTitle="After Effects (Exhaustion)"
+        emptySubtitle="Effects applied after Sage Mode expires"
+        emptyText="Please add after-effects (exhaustion debuffs) to this sage mode"
+      />
 
       {/* Level 2 Effects */}
-      {level2Effects.length === 0 && (
-        <ContentBox
-          title="Level 2 Effects"
-          subtitle="Extra effects that apply only at sage level 2"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addLevel2Effect}
-              />
-            </div>
-          }
-        >
-          Add level 2 effects (applied additionally when the user reaches sage level 2)
-        </ContentBox>
-      )}
-      {level2Effects.map((tag, i) => (
-        <ContentBox
-          key={`level2effect-${tag.type}-${i}`}
-          title={`Level 2 Effect #${i + 1}`}
-          subtitle="Effect applied additionally at sage level 2"
-          initialBreak={true}
-          topRightContent={
-            <div className="flex flex-row">
-              <FilePlus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={addLevel2Effect}
-              />
-              <FileMinus
-                className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                onClick={() => removeLevel2Effect(i)}
-              />
-            </div>
-          }
-        >
-          <EffectFormWrapper
-            idx={i}
-            type="sageMode"
-            tag={tag}
-            availableTags={tagTypes}
-            effects={level2Effects}
-            setEffects={setLevel2Effects}
-          />
-        </ContentBox>
-      ))}
+      <EffectTagListEditor
+        type="sageMode"
+        effects={level2Effects}
+        setEffects={setLevel2Effects}
+        newTag={newEffectTag}
+        tagTitle="Level 2 Effect"
+        tagSubtitle="Effect applied additionally at sage level 2"
+        emptyTitle="Level 2 Effects"
+        emptySubtitle="Extra effects that apply only at sage level 2"
+        emptyText="Add level 2 effects (applied additionally when the user reaches sage level 2)"
+      />
     </>
   );
 };
+
+/** Placeholder damage tag appended by every sage mode effect list. */
+const newEffectTag = () =>
+  DamageTag.parse({ description: "placeholder", residualModifier: 0 });

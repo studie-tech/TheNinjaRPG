@@ -1,16 +1,18 @@
 "use client";
 
-import { FileMinus, FilePlus, MapPin } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { MapPin } from "lucide-react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { AiSpriteAnimations } from "@/layout/AiSpriteAnimations";
 import ContentBox from "@/layout/ContentBox";
 import { AiHelper } from "@/layout/ContentHelp";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
@@ -20,33 +22,36 @@ import { useAiEditForm } from "@/libs/ais";
 import { showMutationToast } from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { type InsertAiSchema, insertAiSchema } from "@/validators/aiInput";
-import { tagTypes, WeaknessTag, type ZodAllTags } from "@/validators/combat";
+import { WeaknessTag } from "@/validators/combat";
 
 export default function ManualAisEdit(props: { params: Promise<{ aiid: string }> }) {
   const params = use(props.params);
   // State
   const aiId = params.aiid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(isStaffRole);
 
   // Keep fetched values intact: nullable enums must stay null for form validation.
-  const { data, isPending, refetch } = api.profile.getAi.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.profile.getAi.useQuery(
     { userId: aiId },
     { enabled: aiId !== undefined },
   );
 
-  // Redirect to profile if not staff
-  useEffect(() => {
-    if (userData && !isStaffRole(userData.role)) {
-      router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="AI"
+        subtitle="AI Management"
+        backHref="/manual/ai"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return (
@@ -90,27 +95,6 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         }
       },
     });
-
-  // Filter out any undefined effects from useWatch
-  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
-    []) as ZodAllTags[];
-
-  // Icon for adding tag
-  const AddTagIcon = (
-    <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
-      onClick={() => {
-        setEffects([
-          ...validEffects,
-          WeaknessTag.parse({
-            rounds: 100,
-            residualModifier: 0,
-            dmgModifier: 1,
-          }),
-        ]);
-      }}
-    />
-  );
 
   // Show panel controls
   return (
@@ -164,47 +148,17 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         )}
       </ContentBox>
 
-      {validEffects.length === 0 && (
-        <ContentBox
-          title="AI Tags"
-          initialBreak={true}
-          topRightContent={<div className="flex flex-row">{AddTagIcon}</div>}
-        >
-          Please add effects to this item
-        </ContentBox>
-      )}
-      {validEffects.map((tag, i) => {
-        return (
-          <ContentBox
-            key={`${tag.type}-${i}`}
-            title={`AI Tag #${i + 1}`}
-            subtitle="Control battle effects"
-            initialBreak={true}
-            topRightContent={
-              <div className="flex flex-row">
-                {AddTagIcon}
-                <FileMinus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                  onClick={() => {
-                    const newEffects = [...validEffects];
-                    newEffects.splice(i, 1);
-                    setEffects(newEffects);
-                  }}
-                />
-              </div>
-            }
-          >
-            <EffectFormWrapper
-              idx={i}
-              type="item"
-              tag={tag}
-              availableTags={tagTypes}
-              effects={validEffects}
-              setEffects={setEffects}
-            />
-          </ContentBox>
-        );
-      })}
+      <EffectTagListEditor
+        type="item"
+        effects={effects}
+        setEffects={setEffects}
+        newTag={() =>
+          WeaknessTag.parse({ rounds: 100, residualModifier: 0, dmgModifier: 1 })
+        }
+        tagTitle="AI Tag"
+        emptyTitle="AI Tags"
+        emptyText="Please add effects to this AI"
+      />
 
       {props.canSave && (
         <>

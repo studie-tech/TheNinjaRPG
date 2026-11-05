@@ -1,32 +1,28 @@
 "use client";
 
-import { FileMinus, FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { SkillTree } from "@/drizzle/schema";
 import { useSkillTreeEditForm } from "@/hooks/skillTree";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { SkillTreeHelper } from "@/layout/ContentHelp";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import Loader from "@/layout/Loader";
 import { canAccessHiddenSkillTree, canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   DamageTag,
   SkillTreeValidator,
-  tagTypes,
-  type ZodAllTags,
   type ZodSkillTreeType,
 } from "@/validators/combat";
 
 export default function SkillTreeEdit(props: { params: Promise<{ skillid: string }> }) {
   const params = use(props.params);
-  const router = useRouter();
   const skillId = params.skillid;
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
   // Queries
   const { data, isPending, isError, refetch } = api.skillTree.get.useQuery(
@@ -37,15 +33,8 @@ export default function SkillTreeEdit(props: { params: Promise<{ skillid: string
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not content or admin
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role)) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
   }
 
@@ -88,27 +77,6 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
     handleSkillTreeSubmit,
   } = useSkillTreeEditForm(props.skillTree, props.refetch);
 
-  // Filter out any undefined effects from useWatch
-  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
-    []) as ZodAllTags[];
-
-  // Icon for adding tag
-  const AddTagIcon = (
-    <FilePlus
-      className="h-6 w-6 cursor-pointer hover:text-orange-500"
-      onClick={() => {
-        setEffects([
-          ...validEffects,
-          DamageTag.parse({
-            description: "placeholder",
-            rounds: 0,
-            residualModifier: 0,
-          }),
-        ]);
-      }}
-    />
-  );
-
   // Show panel controls
   return (
     <>
@@ -148,48 +116,22 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
         )}
       </ContentBox>
 
-      {validEffects.length === 0 && (
-        <ContentBox
-          title={`Skill Tags`}
-          initialBreak={true}
-          topRightContent={<div className="flex flex-row">{AddTagIcon}</div>}
-        >
-          Please add effects to this skill
-        </ContentBox>
-      )}
-      {validEffects.map((tag, i) => {
-        return (
-          <ContentBox
-            key={`${tag.type}-${i}`}
-            title={`Skill Tag #${i + 1}`}
-            subtitle="Control battle effects"
-            initialBreak={true}
-            topRightContent={
-              <div className="flex flex-row">
-                {AddTagIcon}
-                <FileMinus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                  onClick={() => {
-                    const newEffects = [...validEffects];
-                    newEffects.splice(i, 1);
-                    setEffects(newEffects);
-                  }}
-                />
-              </div>
-            }
-          >
-            <EffectFormWrapper
-              allowActivityBonuses={skillTree.pathType === "SKILL"}
-              idx={i}
-              type="skillTree"
-              tag={tag}
-              availableTags={tagTypes}
-              effects={validEffects}
-              setEffects={setEffects}
-            />
-          </ContentBox>
-        );
-      })}
+      <EffectTagListEditor
+        allowActivityBonuses={skillTree.pathType === "SKILL"}
+        type="skillTree"
+        effects={effects}
+        setEffects={setEffects}
+        newTag={() =>
+          DamageTag.parse({
+            description: "placeholder",
+            rounds: 0,
+            residualModifier: 0,
+          })
+        }
+        tagTitle="Skill Tag"
+        emptyTitle="Skill Tags"
+        emptyText="Please add effects to this skill"
+      />
     </>
   );
 };

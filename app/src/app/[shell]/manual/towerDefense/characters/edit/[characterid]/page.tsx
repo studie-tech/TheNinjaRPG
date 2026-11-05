@@ -1,8 +1,7 @@
 "use client";
 
 import { Image as ImageIcon, Upload } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -18,14 +17,15 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
 import { useTowerDefenseCharacterEditForm } from "@/hooks/towerDefenseCharacter";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { useUploadThing } from "@/utils/uploadthing";
 import type {
   CharacterAnimationState,
@@ -40,27 +40,32 @@ export default function TowerDefenseCharacterEdit(props: {
   const params = use(props.params);
   const characterId = params.characterid;
 
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
   // Queries
-  const { data, isPending, refetch } = api.towerDefense.getCharacter.useQuery(
-    { id: characterId },
-    { retry: false, enabled: !!characterId },
-  );
+  const { data, isPending, isError, isFetching, refetch } =
+    api.towerDefense.getCharacter.useQuery(
+      { id: characterId },
+      { retry: false, enabled: !!characterId },
+    );
 
   // Convert key null values to empty strings
   setNullsToEmptyStrings(data);
 
-  // Redirect if not content editor
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="character"
+        subtitle="Character Configuration"
+        backHref="/manual/towerDefense/characters"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditCharacter character={data} refetch={refetch} />;

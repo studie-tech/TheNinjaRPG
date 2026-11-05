@@ -3,8 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -14,17 +13,18 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { ActivityStreakTypes, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import Accordion from "@/layout/Accordion";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import type { FormEntry } from "@/layout/EditContent";
 import { EditContent, RewardFormWrapper } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { getRewardArray } from "@/libs/objectives";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
 import {
   type ActivityStreakFormType,
   activityStreakFormSchema,
@@ -46,22 +46,28 @@ export default function ActivityStreakEditPage(props: {
 }) {
   const params = use(props.params);
   const configId = params.configid;
-  const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(canChangeContent);
 
-  const { data, isPending, refetch } = api.activityStreak.getConfig.useQuery(
-    { id: configId },
-    { enabled: !!configId && !!userData },
-  );
+  const { data, isPending, isError, isFetching, refetch } =
+    api.activityStreak.getConfig.useQuery(
+      { id: configId },
+      { enabled: !!configId && !!userData },
+    );
 
-  useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
-      router.push("/profile");
-    }
-  }, [userData, router]);
-
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="activity streak config"
+        subtitle="Activity Streak Management"
+        backHref="/manual/activityStreak"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return <SingleEditConfig config={data} refetch={refetch} />;

@@ -1,8 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FileMinus, FilePlus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import React, { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -25,11 +23,14 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
+import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
 import ContentImageSelector from "@/layout/ContentImageSelector";
-import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import { EditContent } from "@/layout/EditContent";
+import { EditorQueryFeedback } from "@/layout/EditorQueryFeedback";
+import { EffectTagListEditor } from "@/layout/EffectTagListEditor";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
@@ -38,9 +39,8 @@ import { SuggestChange } from "@/layout/SuggestChange";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
-import type { ZodAllTags, ZodItemType } from "@/validators/combat";
-import { DamageTag, ItemValidatorRawSchema, tagTypes } from "@/validators/combat";
+import type { ZodItemType } from "@/validators/combat";
+import { DamageTag, ItemValidatorRawSchema } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
 import { displayCostType, ItemVariantValidator } from "@/validators/item";
 import {
@@ -54,12 +54,11 @@ import {
 /** Staff item editor with type-specific configuration and validated effects. */
 export default function ItemEdit(props: { params: Promise<{ itemid: string }> }) {
   const params = use(props.params);
-  const router = useRouter();
   const itemId = params.itemid;
-  const { data: userData } = useRequiredUserData();
+  const { userData, hasAccess } = useRequireRole(isStaffRole);
 
   // Queries
-  const { data, isPending, refetch } =
+  const { data, isPending, isError, isFetching, refetch } =
     api.item.getItemWithCraftingRequirements.useQuery(
       { id: itemId },
       { enabled: !!itemId },
@@ -68,16 +67,21 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not staff
-  useEffect(() => {
-    if (userData && !isStaffRole(userData.role)) {
-      void router.push("/profile");
-    }
-  }, [userData]);
-
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
+  if (isPending || !userData || !hasAccess) {
     return <Loader explanation="Loading data" />;
+  }
+  if (!data) {
+    return (
+      <EditorQueryFeedback
+        label="item"
+        subtitle="Item Management"
+        backHref="/manual/item"
+        isError={isError}
+        isFetching={isFetching}
+        onRetry={refetch}
+      />
+    );
   }
 
   return (
@@ -110,29 +114,6 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const itemDescription = useWatch({ control: form.control, name: "description" });
   const itemSlot = useWatch({ control: form.control, name: "slot" });
   const itemWeaponType = useWatch({ control: form.control, name: "weaponType" });
-
-  // Filter out any undefined effects from useWatch
-  const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
-    []) as ZodAllTags[];
-
-  // Icon for adding tag
-  const AddTagIcon = (
-    <FilePlus
-      className={`h-6 w-6 ${isUpdating ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-orange-500"}`}
-      aria-disabled={isUpdating}
-      onClick={() => {
-        if (isUpdating) return;
-        setEffects([
-          ...validEffects,
-          DamageTag.parse({
-            description: "placeholder",
-            rounds: 0,
-            residualModifier: 0,
-          }),
-        ]);
-      }}
-    />
-  );
 
   // Show panel controls
   return (
@@ -244,63 +225,34 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         )}
       </ContentBox>
 
-      {!isFurniture && validEffects.length === 0 && (
-        <ContentBox
-          title={`Item Tags`}
-          initialBreak={true}
-          topRightContent={<div className="flex flex-row">{AddTagIcon}</div>}
-        >
-          Please add effects to this item
-        </ContentBox>
+      {!isFurniture && (
+        <EffectTagListEditor
+          allowJutsuSlotGrants={itemType === "CONSUMABLE"}
+          allowActivityBonuses={["ARMOR", "ACCESSORY", "KEYSTONE", "CRYSTAL"].includes(
+            itemType,
+          )}
+          type="item"
+          allowCoordinateTargeting={
+            !NonActionItemTypes.includes(
+              itemType as (typeof NonActionItemTypes)[number],
+            )
+          }
+          effects={effects}
+          setEffects={setEffects}
+          newTag={() =>
+            DamageTag.parse({
+              description: "placeholder",
+              rounds: 0,
+              residualModifier: 0,
+            })
+          }
+          tagTitle="Item Tag"
+          emptyTitle="Item Tags"
+          emptyText="Please add effects to this item"
+          disabled={isUpdating}
+          submitLoading={isUpdating}
+        />
       )}
-      {!isFurniture &&
-        validEffects.map((tag, i) => {
-          return (
-            <ContentBox
-              key={`${tag.type}-${i}`}
-              title={`Item Tag #${i + 1}`}
-              subtitle="Control battle effects"
-              initialBreak={true}
-              topRightContent={
-                <div className="flex flex-row">
-                  {AddTagIcon}
-                  <FileMinus
-                    className={`h-6 w-6 ${isUpdating ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-orange-500"}`}
-                    aria-disabled={isUpdating}
-                    onClick={() => {
-                      if (isUpdating) return;
-                      const newEffects = [...validEffects];
-                      newEffects.splice(i, 1);
-                      setEffects(newEffects);
-                    }}
-                  />
-                </div>
-              }
-            >
-              <EffectFormWrapper
-                allowJutsuSlotGrants={itemType === "CONSUMABLE"}
-                allowActivityBonuses={[
-                  "ARMOR",
-                  "ACCESSORY",
-                  "KEYSTONE",
-                  "CRYSTAL",
-                ].includes(itemType)}
-                idx={i}
-                type="item"
-                allowCoordinateTargeting={
-                  !NonActionItemTypes.includes(
-                    itemType as (typeof NonActionItemTypes)[number],
-                  )
-                }
-                tag={tag}
-                availableTags={tagTypes}
-                effects={validEffects}
-                setEffects={setEffects}
-                submitLoading={isUpdating}
-              />
-            </ContentBox>
-          );
-        })}
     </>
   );
 };
