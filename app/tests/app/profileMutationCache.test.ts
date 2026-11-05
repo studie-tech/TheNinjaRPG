@@ -68,7 +68,9 @@ const setup = (file: string, procedure: string) => {
     ? source.slice(source.indexOf("  const prepareUpdate ="), source.indexOf("  const state =")) + source.slice(source.indexOf("  const refresh ="), source.indexOf("  const create ="))
     : procedure === "territoryWar.startBattle"
       ? source.slice(source.indexOf("  const onSuccess ="), source.indexOf("  const create ="))
-      : "";
+      : procedure === "shrine.initiateShrineBattle"
+        ? source.slice(source.indexOf("  const applyLobbyResult ="), source.indexOf("  // Mutations"))
+        : "";
   const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
