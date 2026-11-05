@@ -11,7 +11,7 @@ import {
 } from "@/hooks/localstorage";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
-import { calcHealFinish } from "@/libs/hospital";
+import { calcUserHealFinish } from "@/libs/hospital";
 import {
   appEvents,
   isNative,
@@ -32,7 +32,6 @@ import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
 import { createNativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { usePublicPathname } from "@/utils/routing";
 import { type useUserData, useUserDataSelector } from "@/utils/UserContext";
-import { getStrucBoost } from "@/utils/village";
 
 /**
  * Everything the native shell needs wired up once, mounted from the root layout.
@@ -311,11 +310,7 @@ const hospitalFinishesAt = (
   timeDiff: number,
 ): string | undefined => {
   if (userData.status !== "HOSPITALIZED") return undefined;
-  const finish = calcHealFinish({
-    user: userData,
-    timeDiff,
-    boost: getStrucBoost("hospitalSpeedupPerLvl", userData.village?.structures),
-  });
+  const finish = calcUserHealFinish(userData, timeDiff);
   const rounded = Math.round(finish.getTime() / 60_000) * 60_000;
   return new Date(rounded).toISOString();
 };

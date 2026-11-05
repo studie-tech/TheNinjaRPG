@@ -15,9 +15,9 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import {
   calcChakraToPools,
   calcHealCost,
-  calcHealFinish,
   calcMedninHealablePool,
   calcMedninRank,
+  calcUserHealFinish,
   snapToThresholds,
 } from "@/libs/hospital";
 import { showUserRank } from "@/libs/profile";
@@ -27,7 +27,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
-import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
@@ -37,7 +36,6 @@ export default function Hospital() {
 
   // Current interest
   const utils = api.useUtils();
-  const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
@@ -61,7 +59,7 @@ export default function Hospital() {
   });
 
   // Heal finish time
-  const healFinishAt = userData && calcHealFinish({ user: userData, timeDiff, boost });
+  const healFinishAt = userData && calcUserHealFinish(userData, timeDiff);
   const healCost = userData && calcHealCost(userData);
   const canAfford = userData && healCost && userData.money >= healCost;
   const canHealOthers = hasRequiredRank(userData?.rank, MEDNIN_MIN_RANK);
