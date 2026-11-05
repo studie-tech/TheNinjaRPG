@@ -124,6 +124,7 @@ describe("ShrineHall reserve boost locks", () => {
       false,
     );
     expect(view.queryByText(/Maximum defenders assigned/)).toBeNull();
+    expect(view.getByText("Using default AI defenders")).toBeTruthy();
   });
 
   it("disables assignment once live defenders fill the cap", () => {
