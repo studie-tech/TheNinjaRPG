@@ -741,7 +741,7 @@ export const jutsuRouter = createTRPCRouter({
       const blockers = describeJutsuRelations(relations);
       if (blockers.length > 0) {
         return errorResponse(
-          `Justu is being used by: ${blockers.join(", ")}. So you cannot delete it.`,
+          `Jutsu is being used by: ${blockers.join(", ")}. So you cannot delete it.`,
         );
       }
       // Mutate
@@ -1118,7 +1118,7 @@ export const jutsuRouter = createTRPCRouter({
         const injectors = describeJutsuInjectors(relations);
         if (injectors.length > 0) {
           return errorResponse(
-            `Justu is being injected by: ${injectors.join(", ")}. So you cannot disable it.`,
+            `Jutsu is being injected by: ${injectors.join(", ")}. So you cannot disable it.`,
           );
         }
       }
