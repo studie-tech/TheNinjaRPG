@@ -169,7 +169,7 @@ export const trainRouter = createTRPCRouter({
           : undefined,
         where: [
           shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-            ? readiness.where
+            ? undefined
             : eq(userData.status, initialUser.status),
         ],
         messages: {
@@ -261,7 +261,7 @@ export const trainRouter = createTRPCRouter({
           : undefined,
         where: [
           shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-            ? readiness.where
+            ? undefined
             : eq(userData.status, initialUser.status),
           ...elementalSnapshotConditions(user),
         ],

@@ -739,7 +739,6 @@ export const bloodlineRouter = createTRPCRouter({
         updatedAt: user.updatedAt,
         readiness,
         where: [
-          readiness.where ?? eq(userData.status, "AWAKE"),
           ne(userData.rank, "STUDENT"),
           starterBloodlineId
             ? eq(userData.bloodlineId, starterBloodlineId)

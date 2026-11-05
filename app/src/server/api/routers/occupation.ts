@@ -423,7 +423,6 @@ export const occupationRouter = createTRPCRouter({
           updatedAt: user.updatedAt,
           readiness,
           where: [
-            readiness.where ?? eq(userData.status, "AWAKE"),
             or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
           ],
         });
@@ -771,7 +770,6 @@ export const occupationRouter = createTRPCRouter({
         updatedAt: user.updatedAt,
         readiness,
         where: [
-          readiness.where ?? eq(userData.status, "AWAKE"),
           or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
         ],
       });

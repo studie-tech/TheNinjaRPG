@@ -616,15 +616,19 @@ export const raidsRouter = createTRPCRouter({
         if (isTraveling) {
           return errorResponse("You cannot ready up while traveling");
         }
-        // Clear any stale dirty fields. No rowsAffected check here — MySQL reports 0
-        // when the SET is a no-op (fields already null), which is indistinguishable
-        // from a concurrent status change. We already confirmed AWAKE above.
+        // A no-op for an already awake actor can report zero; recovery changes status
+        // and must confirm its guarded claim before cleanup or wake-up feedback.
         const result = await updateUserDataForReadyToQueue2(
           ctx.drizzle,
           userId,
           readiness,
         );
         confirmedAwake = result.rowsAffected === 1;
+        if (readiness.notice && !confirmedAwake) {
+          return errorResponse(
+            "Failed to update status - your status may have changed",
+          );
+        }
       }
       // Step 1: remove user from team + other independent cleanups in parallel.
       // mpvpBattleUser must be deleted before the NOT EXISTS team-cleanup check in step 2.
@@ -680,7 +684,7 @@ export const raidsRouter = createTRPCRouter({
             : "Ready status checked; refresh your current activity if needed.",
           ...getRaidQueueWakeUserUpdate({ confirmedAwake }),
         },
-        readiness,
+        confirmedAwake ? readiness : undefined,
         ctx.drizzle,
       );
     }),

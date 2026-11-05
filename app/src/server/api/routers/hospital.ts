@@ -1,6 +1,6 @@
 import type { ExecutedQuery } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
-import { eq, gte, sql } from "drizzle-orm";
+import { gte, sql } from "drizzle-orm";
 import { after } from "next/server";
 import {
   MEDNIN_EXP_CAP,
@@ -197,12 +197,9 @@ export const hospitalRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: u.userId,
           updatedAt: u.updatedAt,
-          where: [
-            readiness.where ?? eq(userData.status, "AWAKE"),
-            gte(userData.curChakra, chakraCost),
-          ],
+          readiness,
+          where: [gte(userData.curChakra, chakraCost)],
           set: {
-            ...readiness.set,
             medicalExperience: sql`LEAST(${userData.medicalExperience} + ${expGain}, ${MEDNIN_EXP_CAP})`,
             curChakra: sql`${readiness.set.curChakra ?? userData.curChakra} - ${chakraCost}`,
             ...(pools.includes("Health")

@@ -144,7 +144,8 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
         entry.guards.push({ owner, status: "actor.status", kind: "prepare" });
         return;
       }
-      if (callee?.name !== "actionReadinessResponse" && callee?.name !== "shouldPrepareAction") {
+      // Pure projections cannot establish mutation-phase recovery composition.
+      if (!["actionReadinessResponse", "shouldPrepareAction", "farmingQuestStateAfterClaim"].includes(callee?.name ?? "")) {
         let composesRecovery = false;
         walk(child, (part) => {
           if (part.type === "ObjectProperty" && part.key.type === "Identifier" && ["readiness", "actionReadiness", "actionUserId"].includes(part.key.name)) composesRecovery = true;

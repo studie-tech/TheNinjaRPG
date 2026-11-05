@@ -25,8 +25,12 @@ import {
   userItem,
 } from "@/drizzle/schema";
 import { EMPTY_PLOT } from "@/libs/farming";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { hasNoHuntingBattle } from "@/server/utils/concurrency";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** Load a seed and its yield definition; a missing seed leaves seedItem undefined and yieldItem null. */
 export const fetchFarmSeedAndYield = async (
@@ -175,8 +179,58 @@ export const updateFarmPlotForWater = (
         plot.lastWateredAt
           ? eq(farmPlot.lastWateredAt, plot.lastWateredAt)
           : isNull(farmPlot.lastWateredAt),
+        sql`EXISTS (SELECT 1 FROM ${userData} WHERE ${and(
+          eq(userData.userId, ctx.userId),
+          eq(userData.status, "AWAKE"),
+        )})`,
       ),
     );
+
+/** Water matching plot snapshots and commit their owner's recovery in the same claim. */
+export const waterFarmPlotsWithRecovery = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  plots: {
+    id: string;
+    seedItemId: string;
+    finishAt: Date;
+    lastWateredAt: Date | null;
+    newFinishAt: Date;
+  }[],
+  now: Date,
+  claimedAt: Date,
+  readiness: ActionReadinessWrite,
+) =>
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${farmPlot} ON ${eq(farmPlot.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(readiness, [])}
+      ${userData.updatedAt} = ${claimedAt},
+      ${farmPlot.finishAt} = CASE ${farmPlot.id}
+        ${sql.join(
+          plots.map((plot) => sql`WHEN ${plot.id} THEN ${plot.newFinishAt}`),
+          sql` `,
+        )}
+        ELSE ${farmPlot.finishAt} END,
+      ${farmPlot.lastWateredAt} = ${now},
+      ${farmPlot.updatedAt} = ${now}
+  WHERE ${and(
+    eq(userData.userId, userId),
+    readiness.where,
+    or(
+      ...plots.map((plot) =>
+        and(
+          eq(farmPlot.id, plot.id),
+          eq(farmPlot.seedItemId, plot.seedItemId),
+          eq(farmPlot.finishAt, plot.finishAt),
+          plot.lastWateredAt
+            ? eq(farmPlot.lastWateredAt, plot.lastWateredAt)
+            : isNull(farmPlot.lastWateredAt),
+        ),
+      ),
+    ),
+  )}
+`);
 
 /** Build the `farmPlot` update for fertilizing, including predicates on `id`, `userId`, `seedItemId`. */
 export const updateFarmPlotForFertilize = (
@@ -199,23 +253,52 @@ export const updateFarmPlotForFertilize = (
       ),
     );
 
-/** Build the `farmPlot` update clearing harvested plots, using predicates on `userId`, `id`, `finishAt`. */
+/** Claim ready plots and their owner's eligibility/recovery together before granting produce. */
 export const updateFarmPlotsForHarvest = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute" | "update">,
   now: Date,
-  ctx: { userId: string },
+  user: { userId: string; updatedAt: Date },
   plotIds: string[],
-) =>
-  client
-    .update(farmPlot)
-    .set({ ...EMPTY_PLOT, updatedAt: now })
-    .where(
-      and(
-        eq(farmPlot.userId, ctx.userId),
-        inArray(farmPlot.id, plotIds),
-        sql`${farmPlot.finishAt} <= ${now}`,
-      ),
-    );
+  readiness?: ActionReadinessWrite,
+) => {
+  // An awake claim only clears plots; preserving its account revision lets the
+  // existing quest-progress CAS commit without a recovery-only retry.
+  if (!readiness?.set.status) {
+    return client
+      .update(farmPlot)
+      .set({ ...EMPTY_PLOT, updatedAt: now })
+      .where(
+        and(
+          eq(farmPlot.userId, user.userId),
+          inArray(farmPlot.id, plotIds),
+          lte(farmPlot.finishAt, now),
+          sql`EXISTS (SELECT 1 FROM ${userData} WHERE ${and(
+            eq(userData.userId, user.userId),
+            readiness?.where ?? eq(userData.status, "AWAKE"),
+          )})`,
+        ),
+      );
+  }
+  const claimedAt = getNextUserSnapshotAt(user.updatedAt, now);
+  return client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${farmPlot} ON ${eq(farmPlot.userId, userData.userId)}
+    SET ${actionReadinessSqlSet(readiness, [])}
+        ${userData.updatedAt} = ${claimedAt},
+        ${farmPlot.seedItemId} = NULL,
+        ${farmPlot.plantedAt} = NULL,
+        ${farmPlot.finishAt} = NULL,
+        ${farmPlot.lastWateredAt} = NULL,
+        ${farmPlot.fertilizerApplied} = false,
+        ${farmPlot.updatedAt} = ${now}
+    WHERE ${and(
+      eq(userData.userId, user.userId),
+      readiness?.where ?? eq(userData.status, "AWAKE"),
+      inArray(farmPlot.id, plotIds),
+      lte(farmPlot.finishAt, now),
+    )}
+  `);
+};
 
 /** Build the `farmPlot` listing for `plantAllEmpty`, using predicates on `userId`. */
 export const listFarmPlotForPlantAllEmpty = (
@@ -236,20 +319,34 @@ export const listFarmPlotForWaterAll = (
     with: { seedItem: true },
   });
 
-/** Build the `userData` update for `sellCrop`, setting `farmCurrency`, using predicates on `userId`. */
-export const updateUserDataForSellCrop = (
-  client: Pick<DrizzleClient, "update">,
+/**
+ * Debit the owned crop stack and credit coins/recovery in one guarded joined statement.
+ * Exhausted stacks use the inventory's zero-quantity tombstones, excluded from reads and grants.
+ */
+export const sellFarmCrop = (
+  client: Pick<DrizzleClient, "execute">,
   totalValue: number,
-  ctx: { userId: string },
-  readiness?: ActionReadinessWrite,
+  userId: string,
+  cropStack: { id: string; quantity: number },
+  quantity: number,
+  readiness: ActionReadinessWrite,
 ) =>
-  client
-    .update(userData)
-    .set({
-      ...readiness?.set,
-      farmCurrency: sql`${userData.farmCurrency} + ${totalValue}`,
-    })
-    .where(and(eq(userData.userId, ctx.userId), readiness?.where));
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${userItem} ON ${eq(userItem.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(readiness, [])}
+      ${userData.farmCurrency} = ${userData.farmCurrency} + ${totalValue},
+      ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
+      ${userItem.quantity} = ${cropStack.quantity - quantity},
+      ${userItem.updatedAt} = ${new Date()}
+  WHERE ${and(
+    eq(userData.userId, userId),
+    readiness.where,
+    eq(userItem.id, cropStack.id),
+    eq(userItem.quantity, cropStack.quantity),
+    hasNoHuntingBattle(userId),
+  )}
+`);
 
 /**
  * Build the `userData` update for `buyShopItem`, setting `farmCurrency` and
@@ -589,15 +686,13 @@ export const updateUserDataForAwardFarmingProgress = (
   client: Pick<DrizzleClient, "update">,
   xpGain: number,
   user: { userId: string },
-  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
-      ...readiness?.set,
       farmingExperience: sql`${userData.farmingExperience} + ${xpGain}`,
     })
-    .where(and(eq(userData.userId, user.userId), readiness?.where));
+    .where(eq(userData.userId, user.userId));
 
 /**
  * Build the `item` listing for `getFarmCollectionState`, including predicates on

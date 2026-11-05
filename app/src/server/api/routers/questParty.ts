@@ -279,7 +279,7 @@ export const questPartyRouter = createTRPCRouter({
         updatedAt: user.updatedAt,
         readiness,
         set: { questPartyId: partyId },
-        where: [isNull(userData.questPartyId), readiness.where],
+        where: [isNull(userData.questPartyId)],
       });
       if (!reserved.success)
         return errorResponse("You already have a quest team or your status changed");
@@ -366,7 +366,7 @@ export const questPartyRouter = createTRPCRouter({
           updatedAt: user.updatedAt,
           readiness,
           set: { questPartyId: party.id },
-          where: [isNull(userData.questPartyId), readiness.where],
+          where: [isNull(userData.questPartyId)],
         }),
       ]);
       if (!reserved.success)

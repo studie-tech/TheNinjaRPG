@@ -1383,9 +1383,9 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           updatedAt: user.updatedAt,
+          readiness,
           where: [
             isNull(userData.petTask),
-            readiness.where,
             isNull(userData.battleId),
             eq(userData.isBanned, false),
             eq(userData.isAi, false),
@@ -1399,7 +1399,6 @@ export const questsRouter = createTRPCRouter({
             petTaskContentCondition(task, user.role),
           ],
           set: {
-            ...readiness.set,
             petTask: task,
             questData:
               user.questData?.filter((tracker) => tracker.id !== contract.id) ?? [],
@@ -3898,7 +3897,7 @@ export const commitQuestObjectiveRewards = async (info: {
       // the loaded history and guard those values instead of rereading a changed column.
       const startsNewPeriod =
         cps && (!managedRun.periodStartAt || managedRun.periodStartAt < cps);
-      claimManagedCompletion = async ({ set, where = [] }) => {
+      claimManagedCompletion = async ({ set, where = [], readiness }) => {
         // Drizzle has no joined UPDATE builder. This single guarded write closes the run
         // and removes its tracker atomically; no payout can precede a successful claim.
         const result = await retryOnDeadlock(() =>
@@ -3916,7 +3915,7 @@ export const commitQuestObjectiveRewards = async (info: {
             completionConditions,
 
             where,
-            info.readiness,
+            readiness,
           ),
         );
         return { success: result.rowsAffected > 0, claimedAt: completedAt };
@@ -4577,13 +4576,12 @@ export const handleQuestConsequences = async (
       client,
       userId: user.userId,
       updatedAt: user.updatedAt,
+      readiness: options?.readiness,
       where: [
-        options?.readiness?.where,
         ...(options?.claimConditions ?? []),
         ...(user.questParty ? [eq(userData.questPartyId, user.questParty.id)] : []),
       ],
       set: {
-        ...options?.readiness?.set,
         ...options?.progressionUpdate,
         questData: filterQuestTrackersForDbPersist(user.questData ?? [], user),
       },

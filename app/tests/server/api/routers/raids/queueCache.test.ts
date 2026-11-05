@@ -419,6 +419,25 @@ describeWithDatabase("raid join committed queue", () => {
     } finally { stop(); cache.clear(); }
   });
 
+  it("rejects a lost recovery before ready-up cleanup or wake-up feedback", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true })
+      .where(eq(userData.userId, "queue-sql-user"));
+    await db.insert(mpvpBattleUser).values({ id: "ready-member", userId: "queue-sql-user",
+      clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    const client = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ status: "BATTLE", battleId: "newer-battle" })
+        .where(eq(userData.userId, "queue-sql-user"));
+    }]);
+    const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).readyToQueue();
+    expect(result.success).toBe(false);
+    expect(result.actionNotice).toBeUndefined();
+    expect(result.message).not.toContain("woke you up");
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") }))
+      .toMatchObject({ status: "BATTLE", battleId: "newer-battle" });
+  });
+
   it("confirms a newer battle when ready-up's guarded cleanup loses", async () => {
     const db = await getTestDatabase();
     const client = beforeStatements(db, userData, [async () => {

@@ -71,6 +71,7 @@ import {
   listFarmPlotForWaterAll,
   listItemForBuildFarmState,
   rollbackBulkPlant,
+  sellFarmCrop,
   updateFarmExtractionForPayOutExtractions,
   updateFarmExtractionForPayOutExtractions2,
   updateFarmExtractionForPayOutExtractions3,
@@ -84,8 +85,8 @@ import {
   updateUserDataForBuyShopItem,
   updateUserDataForBuyShopItem2,
   updateUserDataForBuyShopItem3,
-  updateUserDataForSellCrop,
   updateUserItemForAwardItemToUser,
+  waterFarmPlotsWithRecovery,
 } from "@/queries/farming";
 import { fetchItem, insertUserItems, listItemsByIds } from "@/queries/item";
 import { fetchAllGameSettings } from "@/queries/profile";
@@ -110,6 +111,7 @@ import {
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
+import { getNextUserSnapshotAt } from "@/utils/time";
 import {
   type FarmShopEntryState,
   type FarmStateResponse,
@@ -294,21 +296,37 @@ export const farmingRouter = createTRPCRouter({
 
       const now = new Date();
       const newFinishAt = applyWaterReduction(plot.finishAt, now);
-      const [watered] = await waterFarmPlots(ctx.drizzle, ctx.userId, [plot], now);
-      if (!watered) return errorResponse("Could not water — please try again");
+      const { wateredCount, claimedAt } = await waterFarmPlots(
+        ctx.drizzle,
+        user,
+        [plot],
+        now,
+        readiness,
+      );
+      if (wateredCount === 0)
+        return errorResponse("Could not water — please try again");
 
       const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
         FARM_WATER_EXPERIENCE,
-        questState,
+        claimedAt
+          ? farmingQuestStateAfterClaim(
+              questState,
+              user.updatedAt,
+              claimedAt,
+              readiness,
+            )
+          : questState,
         "plants_watered",
         1,
-        undefined,
-        readiness,
       );
       if (xpGain === null) {
-        return errorResponse("Watered crop but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Watered crop but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       return actionReadinessResponse(
@@ -494,13 +512,25 @@ export const farmingRouter = createTRPCRouter({
         readiness,
       );
       if (harvest.outcome === "plotsChanged") {
-        return errorResponse("Could not harvest — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not harvest — please try again"),
+          harvest.recoveryCommitted ? readiness : undefined,
+          ctx.drizzle,
+        );
       }
       if (harvest.outcome === "grantFailed") {
-        return errorResponse("Harvested crop but failed to grant item");
+        return actionReadinessResponse(
+          errorResponse("Harvested crop but failed to grant item"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (harvest.outcome === "progressFailed") {
-        return errorResponse("Harvested crop but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Harvested crop but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       const { xpGain } = harvest;
 
@@ -678,8 +708,13 @@ export const farmingRouter = createTRPCRouter({
       );
       if (waterable.length === 0) return errorResponse("No plots need water");
 
-      const results = await waterFarmPlots(ctx.drizzle, ctx.userId, waterable, now);
-      const wateredCount = results.filter(Boolean).length;
+      const { wateredCount, claimedAt } = await waterFarmPlots(
+        ctx.drizzle,
+        user,
+        waterable,
+        now,
+        readiness,
+      );
       if (wateredCount === 0)
         return errorResponse("Could not water all — please try again");
 
@@ -688,14 +723,23 @@ export const farmingRouter = createTRPCRouter({
         ctx.drizzle,
         user,
         baseXpGain,
-        questState,
+        claimedAt
+          ? farmingQuestStateAfterClaim(
+              questState,
+              user.updatedAt,
+              claimedAt,
+              readiness,
+            )
+          : questState,
         "plants_watered",
         wateredCount,
-        undefined,
-        readiness,
       );
       if (xpGain === null) {
-        return errorResponse("Watered crops but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Watered crops but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       return actionReadinessResponse(
         {
@@ -703,9 +747,14 @@ export const farmingRouter = createTRPCRouter({
           message: `Watered ${wateredCount} plot${wateredCount === 1 ? "" : "s"} (+${xpGain} farming XP)`,
           farmingExperienceDelta: xpGain,
           // A lost plot CAS may hide another writer's timeline; recover the complete view.
-          updatedPlots: results.every(Boolean)
-            ? getWateredFarmPlots(waterable, results, now)
-            : undefined,
+          updatedPlots:
+            wateredCount === waterable.length
+              ? getWateredFarmPlots(
+                  waterable,
+                  waterable.map(() => true),
+                  now,
+                )
+              : undefined,
         },
         readiness,
         ctx.drizzle,
@@ -892,13 +941,25 @@ export const farmingRouter = createTRPCRouter({
         readiness,
       );
       if (harvest.outcome === "plotsChanged") {
-        return errorResponse("Could not harvest all — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not harvest all — please try again"),
+          harvest.recoveryCommitted ? readiness : undefined,
+          ctx.drizzle,
+        );
       }
       if (harvest.outcome === "grantFailed") {
-        return errorResponse("Harvested crops but failed to grant items");
+        return actionReadinessResponse(
+          errorResponse("Harvested crops but failed to grant items"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (harvest.outcome === "progressFailed") {
-        return errorResponse("Harvested crops but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Harvested crops but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       const { xpGain, awards } = harvest;
       return actionReadinessResponse(
@@ -958,26 +1019,16 @@ export const farmingRouter = createTRPCRouter({
       if (cropStack.quantity < input.quantity) return errorResponse("Not enough crops");
 
       const totalValue = sellValue * input.quantity;
-      const nextQuantity = cropStack.quantity - input.quantity;
-
-      const consumed = await updateUserItemQuantityAtomically({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userItemId: cropStack.id,
-        expectedQuantity: cropStack.quantity,
-        nextQuantity,
-      });
-      if (!consumed) return errorResponse("Could not sell crop — please try again");
-
-      const currencyResult = await updateUserDataForSellCrop(
+      const sold = await sellFarmCrop(
         ctx.drizzle,
         totalValue,
-        ctx,
+        ctx.userId,
+        cropStack,
+        input.quantity,
         readiness,
       );
-
-      if (currencyResult.rowsAffected !== 1) {
-        return errorResponse("Could not grant farm currency");
+      if (sold.rowsAffected !== 2) {
+        return errorResponse("Could not sell crop — please try again");
       }
 
       return actionReadinessResponse(
@@ -1412,10 +1463,10 @@ const plantFarmPlots = async (
   return "planted" as const;
 };
 
-/** Water each plot behind its own CAS; the result says which writes landed. */
-const waterFarmPlots = (
+/** Claim watering with recovery; awake plots keep their independent timeline guards. */
+const waterFarmPlots = async (
   client: DrizzleClient,
-  userId: string,
+  user: { userId: string; updatedAt: Date },
   plots: {
     id: string;
     seedItemId: string | null;
@@ -1423,8 +1474,34 @@ const waterFarmPlots = (
     lastWateredAt: Date | null;
   }[],
   now: Date,
-) =>
-  Promise.all(
+  readiness: ActionReadiness,
+) => {
+  if (readiness.notice) {
+    const validPlots = plots.flatMap((plot) =>
+      plot.seedItemId && plot.finishAt
+        ? [
+            {
+              ...plot,
+              seedItemId: plot.seedItemId,
+              finishAt: plot.finishAt,
+              newFinishAt: applyWaterReduction(plot.finishAt, now),
+            },
+          ]
+        : [],
+    );
+    if (!validPlots.length) return { wateredCount: 0 };
+    const claimedAt = getNextUserSnapshotAt(user.updatedAt, now);
+    const result = await waterFarmPlotsWithRecovery(
+      client,
+      user.userId,
+      validPlots,
+      now,
+      claimedAt,
+      readiness,
+    );
+    return { wateredCount: Math.max(0, result.rowsAffected - 1), claimedAt };
+  }
+  const results = await Promise.all(
     plots.map(async ({ id, seedItemId, finishAt, lastWateredAt }) => {
       if (!seedItemId || !finishAt) return false;
       const result = await updateFarmPlotForWater(
@@ -1432,11 +1509,13 @@ const waterFarmPlots = (
         applyWaterReduction(finishAt, now),
         now,
         { id, seedItemId, finishAt, lastWateredAt },
-        { userId },
+        user,
       );
       return result.rowsAffected === 1;
     }),
   );
+  return { wateredCount: results.filter(Boolean).length };
+};
 
 /** Fertilize every plot from one stack, all or nothing. */
 const fertilizeFarmPlots = async (
@@ -1477,7 +1556,7 @@ const fertilizeFarmPlots = async (
   return "fertilized" as const;
 };
 
-/** Clear the plots, grant their crops, then record the harvest and award its progress. */
+/** Claim plots with account eligibility/recovery, then grant produce and its earned progress. */
 const settleFarmHarvest = async (
   client: DrizzleClient,
   user: Awaited<ReturnType<typeof fetchUser>>,
@@ -1490,9 +1569,28 @@ const settleFarmHarvest = async (
   readiness?: ActionReadiness,
 ) => {
   const { userId } = user;
-  const cleared = await updateFarmPlotsForHarvest(client, now, { userId }, plotIds);
-  if (cleared.rowsAffected !== plotIds.length) {
-    return { outcome: "plotsChanged" as const };
+  const cleared = await updateFarmPlotsForHarvest(
+    client,
+    now,
+    user,
+    plotIds,
+    readiness,
+  );
+  if (cleared.rowsAffected !== plotIds.length + (readiness?.notice ? 1 : 0)) {
+    return {
+      outcome: "plotsChanged" as const,
+      recoveryCommitted: !!readiness?.notice && cleared.rowsAffected > 0,
+    };
+  }
+  // Recovery is already committed with the plot claim. Later progress may retry its
+  // quest CAS after another activity starts, without replaying queued training gains.
+  if (readiness?.notice) {
+    questState = farmingQuestStateAfterClaim(
+      questState,
+      user.updatedAt,
+      getNextUserSnapshotAt(user.updatedAt, now),
+      readiness,
+    );
   }
   // Distinct crops land in distinct stacks, so the grants do not contend and can
   // run together instead of paying one inventory round-trip per crop type.
@@ -1517,7 +1615,6 @@ const settleFarmHarvest = async (
       "plants_harvested",
       plotIds.length,
       () => harvestRecorded.then(() => getFarmCollectionCount(client, userId)),
-      readiness,
     ),
     harvestRecorded,
   ]);
@@ -2328,14 +2425,7 @@ const awardFarmingProgress = async (
   task: FarmingQuestTask,
   increment = 1,
   loadFarmingCollectionCount?: () => Promise<number>,
-  readiness?: ActionReadiness,
 ) => {
-  if (
-    readiness?.notice &&
-    questState?.updatedAt.getTime() === readiness.initial.updatedAt.getTime()
-  ) {
-    questState = { ...questState, questData: readiness.user.questData };
-  }
   xpGain = Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
   const emittedTasks = new Set<AllObjectiveTask>([
     task,
@@ -2419,16 +2509,11 @@ const awardFarmingProgress = async (
   };
 
   const first = await questUpdateFor(user, questState);
-  if (xpGain <= 0 && !first.advancesObjective && !readiness?.notice) return xpGain;
+  if (xpGain <= 0 && !first.advancesObjective) return xpGain;
 
   // Nothing but XP to persist: the SQL increment is already conflict-free.
   if (!first.advancesObjective) {
-    const result = await updateUserDataForAwardFarmingProgress(
-      client,
-      xpGain,
-      user,
-      readiness,
-    );
+    const result = await updateUserDataForAwardFarmingProgress(client, xpGain, user);
     return Number(result.rowsAffected ?? 0) >= 1 ? xpGain : null;
   }
 
@@ -2437,7 +2522,6 @@ const awardFarmingProgress = async (
   let update = first;
   for (let attempt = 0; attempt < QUEST_PROGRESS_ATTEMPTS; attempt++) {
     if (attempt > 0) {
-      if (readiness?.notice) return null;
       [snapshotUser, snapshotQuests] = await Promise.all([
         fetchUser(client, user.userId),
         fetchQuestTrackerState(client, user.userId),
@@ -2462,7 +2546,6 @@ const awardFarmingProgress = async (
       client,
       userId: user.userId,
       updatedAt: snapshotQuests.updatedAt,
-      readiness,
       set: {
         ...(xpGain > 0
           ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }

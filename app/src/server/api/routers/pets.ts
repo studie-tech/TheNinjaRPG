@@ -148,7 +148,7 @@ export const petsRouter = createTRPCRouter({
           updatedAt: user.updatedAt,
           readiness,
           where: [
-            ...ownerMutationWhere(user, readiness),
+            ...ownerMutationWhere(user),
             eq(userData.petSlots, user.petSlots),
             gte(payment.column, payment.cost),
           ],
@@ -547,7 +547,7 @@ export const petsRouter = createTRPCRouter({
               updatedAt: user.updatedAt,
               readiness,
               where: [
-                ...ownerMutationWhere(user, readiness),
+                ...ownerMutationWhere(user),
                 eq(userData.isAi, false),
                 eq(userData.sector, MAP_WAKE_ISLAND_SECTOR),
                 eq(userData.federalStatus, user.federalStatus),
@@ -671,7 +671,7 @@ export const petsRouter = createTRPCRouter({
               userId: user.userId,
               updatedAt: user.updatedAt,
               readiness,
-              where: ownerMutationWhere(user, readiness),
+              where: ownerMutationWhere(user),
               set: { petExperience: 0, activePetId: null },
             });
             if (!claim.success) return false;
@@ -1180,8 +1180,7 @@ const petFeedBlockMessage = (
 };
 
 /** Keep the validated rank, active identity and ability to mutate current at commit. */
-const ownerMutationWhere = (user: UserData, readiness?: ActionReadinessWrite) => [
-  readiness?.where ?? eq(userData.status, "AWAKE"),
+const ownerMutationWhere = (user: UserData) => [
   eq(userData.isBanned, false),
   isNull(userData.battleId),
   user.activePetId
@@ -1197,7 +1196,8 @@ const ownerSnapshotWhere = (user: UserData, readiness?: ActionReadinessWrite) =>
   and(
     eq(userData.userId, user.userId),
     eq(userData.updatedAt, user.updatedAt),
-    ...ownerMutationWhere(user, readiness),
+    readiness?.where ?? eq(userData.status, "AWAKE"),
+    ...ownerMutationWhere(user),
   );
 
 /** Snapshot conflicts remain recoverable mutation results, not server exceptions. */

@@ -1774,7 +1774,7 @@ export const executeResultForCommitQuestObjectiveRewards = (
               AND ${completionConditions}
               ${petTask ? sql`AND ${petTaskReceiptCondition(petTask)} AND ${questHistory.startedAt} = ${new Date(petTask.startedAt)} AND ${questHistory.questVersion} = ${new Date(petTask.questVersion)} AND ${petTaskOwnerReturnCondition(userId, petTask, readiness?.where)}` : sql``}
               ${cps ? sql`AND ${questHistory.periodCompletes} = ${managedRun.periodCompletes ?? 0} AND ${questHistory.periodStartAt} <=> ${managedRun.periodStartAt ?? null}` : sql``}
-              AND ${and(...where.filter(Boolean)) ?? sql`TRUE`}
+              AND ${and(...where.filter(Boolean), readiness?.where) ?? sql`TRUE`}
           `);
 
 /** Build the `questHistory` update for `commitQuestObjectiveRewards`, using the configured predicates. */
