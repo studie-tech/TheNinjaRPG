@@ -32,7 +32,7 @@ import {
 } from "@/drizzle/constants";
 import { type UserData, type UserPet, userData, userPet } from "@/drizzle/schema";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
-import { fetchPetArtProvider } from "@/libs/gamesettings";
+import { getPetArtProvider } from "@/libs/gamesettings";
 import {
   getPetAbilityCapacity,
   isPetJutsuAllowedForSpecies,
@@ -947,10 +947,12 @@ export const petsRouter = createTRPCRouter({
     .input(generatePetAppearanceSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user: initialUser, pet, settings }, provider] = await Promise.all([
-        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true),
-        fetchPetArtProvider(ctx.drizzle),
-      ]);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      const provider = getPetArtProvider(settings);
       if (!initialUser) return errorResponse("User not found");
       const readiness = prepareActionReadiness(initialUser, settings);
       if (readiness.error) return errorResponse(readiness.error);

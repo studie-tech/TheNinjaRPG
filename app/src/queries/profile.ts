@@ -1232,24 +1232,6 @@ export const insertActionLogForUpdateTavernColor = (
     relatedImage: user.avatarLight,
   });
 
-/** Build the `userData` lookup for `useUnusedExperiencePoints`, including predicates on `userId`, `equipped`, `quantity`. */
-export const findUserDataForUseUnusedExperiencePoints = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userId: string },
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, ctx.userId),
-    with: {
-      bloodline: true,
-      items: {
-        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
-        with: { item: true, imbuements: { with: { item: true } } },
-      },
-      titles: { with: { title: true } },
-      userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
-    },
-  });
-
 /** Build the `userAttribute` insert for `insertAttribute`, updating duplicate keys. */
 export const insertUserAttributeForInsertAttribute = (
   client: Pick<DrizzleClient, "insert">,

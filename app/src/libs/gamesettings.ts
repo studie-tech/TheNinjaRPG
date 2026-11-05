@@ -5,12 +5,13 @@ import { nanoid } from "nanoid";
 import {
   DMG_SETTING_DEFAULTS,
   DMG_SETTING_NAMES,
+  PET_ART_PROVIDER_SETTING,
   PetArtProviders,
 } from "@/drizzle/constants";
+import type { GameSetting } from "@/drizzle/schema";
 import type { DmgConfig } from "@/libs/combat/constants";
 import {
   findGameSettingByName,
-  findGameSettingForFetchPetArtProvider,
   insertGameSettings,
   selectGameSettingForFetchDmgConfig,
   updateGameSettingForUpdate,
@@ -228,11 +229,11 @@ const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
 };
 
 /**
- * Read the companion art provider without creating a row: the setting stores an index
- * into PetArtProviders, and an absent or unknown value selects GPT.
+ * Select the companion art provider from loaded settings. Its persistent index ignores
+ * boost expiration; an absent or unknown value selects GPT.
  */
-export const fetchPetArtProvider = async (client: DrizzleClient) => {
-  const setting = await findGameSettingForFetchPetArtProvider(client);
+export const getPetArtProvider = (settings: Pick<GameSetting, "name" | "value">[]) => {
+  const setting = settings.find((entry) => entry.name === PET_ART_PROVIDER_SETTING);
   return PetArtProviders[setting?.value ?? 0] ?? "GPT";
 };
 

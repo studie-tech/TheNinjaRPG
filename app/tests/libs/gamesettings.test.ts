@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { PetArtProviders } from "@/drizzle/constants";
+import { PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { actualGameSettings } from "../setup/preload";
 
 const {
-  fetchPetArtProvider,
+  getPetArtProvider,
   lockWithDailyTimer,
   lockWithHourlyTimer,
   lockWithMinuteTimer,
@@ -155,13 +155,14 @@ describe("timer cadence", () => {
   });
 });
 
-describe("fetchPetArtProvider", () => {
-  it("selects the companion art provider from its game setting, defaulting to GPT", async () => {
-    const client = (row?: { value: number }) => ({ query: { gameSetting: { findFirst: async () => row } } }) as unknown as DrizzleClient;
-    expect(await fetchPetArtProvider(client())).toBe("GPT");
-    expect(await fetchPetArtProvider(client({ value: PetArtProviders.indexOf("GPT") }))).toBe("GPT");
-    expect(await fetchPetArtProvider(client({ value: PetArtProviders.indexOf("NANO_BANANA") }))).toBe("NANO_BANANA");
-    expect(await fetchPetArtProvider(client({ value: 7 }))).toBe("GPT");
-    expect(await fetchPetArtProvider(client({ value: 0.5 }))).toBe("GPT");
+describe("getPetArtProvider", () => {
+  it("selects the persistent companion art index from loaded settings, defaulting to GPT", () => {
+    const settings = (value: number) => [{ name: PET_ART_PROVIDER_SETTING, value }];
+    expect(getPetArtProvider([])).toBe("GPT");
+    expect(getPetArtProvider([{ name: "unrelated", value: PetArtProviders.indexOf("NANO_BANANA") }])).toBe("GPT");
+    expect(getPetArtProvider(settings(PetArtProviders.indexOf("GPT")))).toBe("GPT");
+    expect(getPetArtProvider(settings(PetArtProviders.indexOf("NANO_BANANA")))).toBe("NANO_BANANA");
+    expect(getPetArtProvider(settings(7))).toBe("GPT");
+    expect(getPetArtProvider(settings(0.5))).toBe("GPT");
   });
 });

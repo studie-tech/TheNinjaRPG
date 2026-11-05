@@ -385,6 +385,7 @@ export const questPartyRouter = createTRPCRouter({
         return actionReadinessResponse(
           errorResponse("The team changed or is full. Please refresh and try again"),
           readiness,
+          ctx.drizzle,
         );
       }
       try {

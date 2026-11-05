@@ -1,6 +1,6 @@
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type UserItem, aiProfile, battle, battleHistory, quest, questHistory, questParty, overworldAiPlacement, item, userItem, userData, user2conversation, village, villageStructure } from "@/drizzle/schema";
 
 import * as Sentry from "@sentry/nextjs";
@@ -12,6 +12,7 @@ import { questPartyRouter } from "@/routers/questParty";
 import { overworldAiRouter } from "@/routers/overworldAi";
 import { commitQuestObjectiveRewards, handleQuestConsequences, questsRouter } from "@/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import * as liveActivity from "@/server/utils/push/liveActivity";
 import { type LoadedQuestParty, synchronizeQuestParty } from "@/server/utils/questParty";
 import { questPartyRelations } from "@/queries/questParty";
 import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/objectives";
@@ -30,6 +31,44 @@ describeWithDatabase("quest team eligibility and terminal failure", () => {
     await insertUsers(["leader", "helper"].map((userId) => ({ userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50, experience: 20_000_000, villageId: "home", sector: 50, longitude: 10, latitude: 10, money: 100, regenAt: new Date(), updatedAt: new Date() })));
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([false, true])("ends committed hospital recovery once when joining a team (roster conflict=%p)", async (conflict) => {
+    const client = await getTestDatabase();
+    const { party } = await claimReleaseFixture();
+    const publication = vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
+    await client.update(userData).set({ status: "HOSPITALIZED", curHealth: 1, maxHealth: 100, regenAt: new Date(0) })
+      .where(eq(userData.userId, "helper"));
+    let interleaved = false;
+    const joiningClient = new Proxy(client, {
+      get(target, key, receiver) {
+        if (key === "update") return (table: unknown) => {
+          if (table !== questParty) return target.update(table as typeof userData);
+          const write = target.update(questParty);
+          return { set: (...values: Parameters<typeof write.set>) => {
+            const pending = write.set(...values);
+            return { where: async (...conditions: Parameters<typeof pending.where>) => {
+              // Interleave at the roster claim, after the account recovery has committed.
+              if (conflict && Array.isArray(values[0].memberIds) && values[0].memberIds.includes("helper") && values[0].battleId) {
+                interleaved = true;
+                await client.update(questParty).set({ version: sql`${questParty.version} + 1` }).where(eq(questParty.id, party.id));
+              }
+              return pending.where(...conditions);
+            } };
+          } };
+        };
+        return Reflect.get(target, key, receiver);
+      },
+    }) as DrizzleClient;
+    const result = await callerForDatabase(questPartyRouter, "helper", joiningClient).join({ partyId: party.id });
+    expect(interleaved).toBe(conflict);
+    expect(result.success).toBe(!conflict);
+    expect(result).toMatchObject({ actionNotice: expect.stringContaining("checked you out") });
+    const saved = await client.query.userData.findFirst({ where: eq(userData.userId, "helper") });
+    expect(saved).toMatchObject({ status: "AWAKE", questPartyId: conflict ? null : party.id });
+    expect(publication).toHaveBeenCalledTimes(1);
+    expect(publication).toHaveBeenCalledWith(joiningClient, ["helper"], "hospital",
+      { title: "Recovered", endsAt: expect.any(Date) }, "end");
+  });
 
   it("preserves attached members when a progress preload omits their relation", async () => {
     const client = await getTestDatabase();

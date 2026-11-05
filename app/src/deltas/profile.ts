@@ -16,10 +16,7 @@ import { getPublicQuestUser, getQuestMaxLevel } from "@/libs/quest";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getReducedGainsDays } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
-import type {
-  fetchUser,
-  findUserDataForUseUnusedExperiencePoints,
-} from "@/queries/profile";
+import type { fetchUser, findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { fetchQuestBootstrap } from "@/routers/profile";
 import type {
   AchievementProgress,
@@ -472,9 +469,7 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
 }: {
   data: AssignedExperiencePatch;
   resultClaimedAt: Date;
-  user: NonNullable<
-    Awaited<ReturnType<typeof findUserDataForUseUnusedExperiencePoints>>
-  >;
+  user: NonNullable<Awaited<ReturnType<typeof findUserDataForQueryUpdatedUser>>>;
 }) => {
   if (hasEnergyQueue(user)) return {};
   return {

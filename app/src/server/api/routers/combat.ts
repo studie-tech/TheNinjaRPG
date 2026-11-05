@@ -3666,7 +3666,9 @@ export const initiateBattle = async (
       requiresUserRefresh,
       ...userUpdate,
     },
-    actionReadiness,
+    // Participant settlement publishes training history; recovery only ends the hospital activity here.
+    actionReadiness ? { ...actionReadiness, trainingLogs: [] } : undefined,
+    client,
   );
 };
 

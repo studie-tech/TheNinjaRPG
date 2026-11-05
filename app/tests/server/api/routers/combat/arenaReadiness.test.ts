@@ -6,17 +6,20 @@ import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness
 import { DMG_SETTING_DEFAULTS, HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile, battle, battleHistory, gameSetting, jutsu, quest, questHistory,
-  userCookingJob, userData, userJutsu, userQueue, userVote, village,
+  trainingLog, userCookingJob, userData, userJutsu, userQueue, userVote, village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
+import * as liveActivity from "@/server/utils/push/liveActivity";
 import { statSchema } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { withAfterTasks } from "../../../../setup/after";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase, getTestDatabase, recordQueries, resetTables,
@@ -36,9 +39,9 @@ const arenaResolver = (combatRouter.startArenaBattle._def as unknown as {
   resolver: ArenaResolver;
 }).resolver;
 const launch = (client: DrizzleClient, input: inferProcedureInput<typeof combatRouter.startArenaBattle> = { aiId }) =>
-  withRequestScope(() => arenaResolver({
+  withAfterTasks({ start: () => withRequestScope(() => arenaResolver({
     ctx: { drizzle: client, userId }, input, type: "mutation", path: "combat.startArenaBattle",
-  }));
+  })) }).start();
 
 const notificationReads = (statements: string[]) => statements.filter((statement) =>
   /from `(?:Poll|MpvpBattleQueue)`|from `Quest` `quest`/.test(statement));
@@ -46,8 +49,9 @@ const notificationReads = (statements: string[]) => statements.filter((statement
 describeWithDatabase("arena readiness reads", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
     await resetTables(battle, battleHistory, aiProfile, gameSetting, questHistory, quest,
-      userCookingJob, userQueue, userJutsu, jutsu, userVote, userData, village);
+      trainingLog, userCookingJob, userQueue, userJutsu, jutsu, userVote, userData, village);
     const client = await getTestDatabase();
     const now = new Date();
     await insertUsers([
@@ -78,7 +82,7 @@ describeWithDatabase("arena readiness reads", () => {
 
   it.each(["ASLEEP", "HOSPITALIZED"] as const)("commits explicit %s recovery in the existing battle claim without extra read or write phases", async (status) => {
     const client = await getTestDatabase();
-    const start = () => withRequestScope(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA"));
+    const start = () => withAfterTasks({ start: () => withRequestScope(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA")) }).start();
     // Warm shared content caches before comparing the two actor states.
     expect((await start()).success).toBe(true);
     await resetTables(battle, battleHistory);
@@ -106,6 +110,37 @@ describeWithDatabase("arena readiness reads", () => {
       expect((await client.query.battle.findFirst())?.usersState.find((user) => user.controllerId === userId)?.curHealth).toBe(1000);
     }
   });
+
+  for (const direct of [false, true]) {
+    it(`ends hospital recovery once for ${direct ? "direct" : "arena endpoint"} battle admission`, async () => {
+      const client = await getTestDatabase();
+      await client.update(userData).set({ status: "HOSPITALIZED", curHealth: 1, maxHealth: 1000, regenAt: new Date(0) })
+        .where(eq(userData.userId, userId));
+      const result = direct
+        ? await withAfterTasks({ start: () => withRequestScope(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA")) }).start()
+        : await launch(client);
+      expect(result).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
+      expect(await client.query.userData.findFirst({ where: eq(userData.userId, userId) }))
+        .toMatchObject({ status: "BATTLE", curHealth: 1000 });
+      expect(liveActivity.pushActivityUpdate).toHaveBeenCalledTimes(1);
+      expect(liveActivity.pushActivityUpdate).toHaveBeenCalledWith(client, [userId], "hospital",
+        { title: "Recovered", endsAt: expect.any(Date) }, "end");
+    });
+
+    it(`logs completed training once while waking for ${direct ? "direct" : "arena endpoint"} battle admission`, async () => {
+      const client = await getTestDatabase();
+      await client.update(userData).set({ status: "ASLEEP", autoWakeUp: true, curEnergy: 100, regeneration: 0 })
+        .where(eq(userData.userId, userId));
+      await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
+      const result = direct
+        ? await withAfterTasks({ start: () => withRequestScope(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA")) }).start()
+        : await launch(client);
+      expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+      expect(await client.query.trainingLog.findMany({ where: eq(trainingLog.userId, userId) }))
+        .toEqual([expect.objectContaining({ userId, stat: "offence" })]);
+      expect(liveActivity.pushActivityUpdate).not.toHaveBeenCalled();
+    });
+  }
 
   it.each([
     { status: "ASLEEP", autoWakeUp: false, message: "asleep" },
