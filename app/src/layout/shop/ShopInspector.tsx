@@ -299,7 +299,14 @@ export function ShopInspector({
       <section aria-label="Details" className="bg-card rounded-lg border">
         <h3 className="px-3 pt-2 text-sm font-semibold">Details</h3>
         <div className="p-2">
-          <ItemWithEffects item={item} key={item.id} hideTitle hideImage hideDates />
+          {/* The header above already shows the description. */}
+          <ItemWithEffects
+            item={{ ...item, description: "" }}
+            key={item.id}
+            hideTitle
+            hideImage
+            hideDates
+          />
         </div>
       </section>
     </section>

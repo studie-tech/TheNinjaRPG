@@ -207,6 +207,9 @@ describe("shop catalog", () => {
     const inspector = view.getByRole("region", { name: "Pill" });
     expect(within(inspector).getByRole("region", { name: "Details" })).toBeDefined();
     expect(within(inspector).queryByText("All details")).toBeNull();
+    // The header already shows the description, so the details start with the stats.
+    const details = (ItemWithEffects.default as unknown as { mock: { calls: [{ item: { description: string } }][] } }).mock.calls.at(-1)?.[0];
+    expect(details?.item.description).toBe("");
   });
 
   it("keeps a cleared quantity editable without breaking the price or stepper", () => {
