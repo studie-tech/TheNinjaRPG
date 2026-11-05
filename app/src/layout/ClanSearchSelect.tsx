@@ -12,8 +12,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
-import { getUnique } from "@/utils/grouping";
-import AvatarImage from "./Avatar";
+import AvatarImage from "@/layout/Avatar";
 
 interface ClanSearchSelectProps {
   useFormMethods: UseFormReturn<
@@ -27,13 +26,11 @@ interface ClanSearchSelectProps {
     },
     any
   >;
-  showOwn: boolean;
   userClanId?: string | null;
   label?: string;
-  inline?: boolean;
-  maxClans?: number;
 }
 
+/** Pick one clan other than `userClanId`, shown as a chip beside the search field. */
 const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
   const form = props.useFormMethods;
 
@@ -63,11 +60,10 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
         className="ml-2 h-6 w-6 rounded-full hover:bg-gray-300"
         onClick={(e) => {
           e.preventDefault();
-          const newSelected = getUnique(
+          form.setValue(
+            "clans",
             watchClans.filter((e) => e.id !== clan.id),
-            "id",
           );
-          form.setValue("clans", newSelected);
         }}
       />
     </span>
@@ -94,15 +90,12 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
             )}
           />
         </Form>
-        {props.inline && selectedVisual}
+        {selectedVisual}
       </div>
-      {!props.inline && (
-        <div className="mt-1 ml-1 flex w-full flex-row">{selectedVisual}</div>
-      )}
       {searchResults && watchName && (
         <div className="mt-1 w-full rounded-lg border-2 border-slate-500 bg-slate-100">
           {searchResults
-            ?.filter((c) => props.showOwn || c.id !== props.userClanId)
+            ?.filter((c) => c.id !== props.userClanId)
             .map((clan) => (
               <button
                 type="button"
@@ -110,12 +103,8 @@ const ClanSearchSelect: React.FC<ClanSearchSelectProps> = (props) => {
                 key={clan.id}
                 onClick={(e) => {
                   e.preventDefault();
-                  let newSelected = getUnique([...watchClans, clan], "id");
-                  if (props.maxClans && newSelected.length > props.maxClans) {
-                    newSelected = newSelected.slice(1);
-                  }
                   form.setValue("name", "");
-                  form.setValue("clans", newSelected);
+                  form.setValue("clans", [clan]);
                 }}
               >
                 <div className="basis-1/12">

@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import AvatarImage from "@/layout/Avatar";
 import { getUnique } from "@/utils/grouping";
 import type { UserSearchResult } from "@/validators/register";
-import AvatarImage from "./Avatar";
 
 interface UserSearchSelectProps {
   useFormMethods: UseFormReturn<
@@ -70,13 +70,10 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
         className="ml-2 h-6 w-6 rounded-full hover:bg-gray-300"
         onClick={(e) => {
           e.preventDefault();
-          if (watchUsers && user.userId) {
-            const newSelected = getUnique(
-              filteredUsers.filter((e) => e.userId !== user.userId),
-              "userId",
-            );
-            form.setValue("users", newSelected);
-          }
+          form.setValue(
+            "users",
+            filteredUsers.filter((e) => e.userId !== user.userId),
+          );
         }}
       />
     </span>
