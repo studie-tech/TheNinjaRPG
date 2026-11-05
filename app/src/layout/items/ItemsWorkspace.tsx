@@ -53,7 +53,6 @@ export function ItemsWorkspace({
   const hasFinePointer = useMediaQuery("(any-pointer: fine)");
 
   const { equip, merge, isEquipping } = useItemActions({
-    userData,
     useritem: undefined,
     onDone: () => {},
   });

@@ -78,7 +78,7 @@ describe("inventory pages", () => {
       isOpen = false;
       selected = undefined;
     });
-    const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userData", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+    const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userId", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", "inventoryQuery", `return (${callbacks});`)(
       {
         profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: ["profile"] }) } },
         item: { getUserItemsWithVariants: { invalidate: () => client.invalidateQueries({ queryKey: ["inventory"] }) } },
@@ -88,9 +88,9 @@ describe("inventory pages", () => {
       vi.fn(),
       onSettled,
       finishItemConsumeRequest,
-      { userId: "user" },
+      "user",
       getItemConsumeErrorMessage,
-      () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined),
+      () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, vi.fn(async () => undefined), "getUserItemsWithVariants",
     ) as MutationObserverOptions<{ success: boolean; message: string }, Error, z.input<typeof consumeItemInputSchema>>;
     const consume = new MutationObserver(client, { ...options, mutationFn: async () => ({ success: false, message: "Your meal stack changed. Refresh your inventory and try again" }) });
     try {
@@ -114,7 +114,7 @@ describe("inventory pages", () => {
     }
   });
 
-  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts"]) {
     it.each([
       { message: "Internal server error", cache: true, expected: undefined },
       { message: "Invalid input", cache: false, expected: undefined },
@@ -130,8 +130,7 @@ describe("inventory pages", () => {
       let selected: unknown = { item: { itemType: cache || pet ? "CONSUMABLE" : "MEAL", effects: cache || pet ? [{ type: "noncombatconsumereward", rewardMode: cache ? "weightedCache" : "standard", reward_pets: pet ? ["fox"] : [] }] : [] } };
       const setIsOpen = (value: boolean) => { isOpen = value; };
       const setUserItem = (value: unknown) => { selected = value; };
-      // Item actions close their panel through onDone; the travel page owns its own handler.
-      const settled = (file.startsWith("hooks/") ? source : source.split("const Backpack:")[1])?.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
+      const settled = source.match(/const onSettled = (\(\) => \{[\s\S]*?\n  \});/)?.[1];
       const onDone = () => { setIsOpen(false); setUserItem(undefined); };
       const onSettled = settled ? new Function("setIsOpen", "setUserItem", "onDone", `return (${settled});`)(setIsOpen, setUserItem, onDone) : undefined;
       const options = new Function("showMutationToast", "getItemConsumeErrorMessage", "useritem", "onSettled", "setIsOpen", "setUserItem", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
@@ -155,7 +154,7 @@ describe("inventory pages", () => {
     });
   }
 
-  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts"]) {
     it(`${file} refreshes the companion collection and forwards its generation link after a pet reward`, async () => {
       const callbacks = read(file).match(/api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");
@@ -166,8 +165,8 @@ describe("inventory pages", () => {
         item: { getUserItems: invalidate, getUserItemsWithVariants: invalidate },
         bloodline: { getItemRolls: invalidate }, raids: { getUserRaidBuffs: invalidate },
         pets: { getPet: { invalidate: refreshPets } } };
-      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
-        utils, rewardToast, vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, consumptionController(utils),
+      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userId", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+        utils, rewardToast, vi.fn(), vi.fn(), "recipient", vi.fn(), getItemConsumeErrorMessage, () => 17, vi.fn(async () => undefined), prepareConsumptionUpdate, consumptionController(utils),
       ) as { onMutate: () => unknown; onSuccess: (data: unknown, variables: { userItemId: string }, context: unknown) => Promise<void> };
       const petRewards = [{ id: "new-pet", speciesId: "fox", name: "Nami" }];
       await options.onSuccess({ success: true, rewards: {}, message: "Used contract", notifications: [], cacheRewards: [], petRewards }, { userItemId: "contract" }, options.onMutate());
@@ -177,7 +176,7 @@ describe("inventory pages", () => {
     });
   }
 
-  for (const file of ["hooks/useItemActions.ts", "app/[shell]/travel/page.tsx"]) {
+  for (const file of ["hooks/useItemActions.ts"]) {
     it(`${file} applies confirmed user changes instead of invalidating the profile`, async () => {
       const callbacks = read(file).match(/api\.item\.consume\.useMutation\((\{[\s\S]*?\n  \})\);/)?.[1];
       if (!callbacks) throw new Error("Consume callbacks were not found");
@@ -187,8 +186,8 @@ describe("inventory pages", () => {
       const invalidateProfile = vi.fn(async () => undefined);
       const leaf = { invalidate };
       const utils = { profile: { getUser: { invalidate: invalidateProfile } }, item: { getUserItems: leaf, getUserItemsWithVariants: leaf }, bloodline: { getItemRolls: leaf }, raids: { getUserRaidBuffs: leaf } };
-      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userData", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
-        utils, vi.fn(), vi.fn(), vi.fn(), { userId: "recipient" }, vi.fn(), getItemConsumeErrorMessage, prepareUserUpdate, updateUser, prepareConsumptionUpdate, consumptionController(utils),
+      const options = new Function("utils", "showRewardToast", "showMutationToast", "finishItemConsumeRequest", "userId", "onSettled", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", "prepareConsumptionUpdate", "updateConsumption", `return (${callbacks});`)(
+        utils, vi.fn(), vi.fn(), vi.fn(), "recipient", vi.fn(), getItemConsumeErrorMessage, prepareUserUpdate, updateUser, prepareConsumptionUpdate, consumptionController(utils),
       ) as { onMutate: () => number; onSuccess: (data: unknown, variables: { userItemId: string }, revision: number) => Promise<void> };
       const userPatch = { curHealth: 50 };
       const userDelta = {};
