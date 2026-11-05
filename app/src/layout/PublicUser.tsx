@@ -133,9 +133,9 @@ import {
   canUnstuckVillage,
   canViewOtherUsersBattleLogs,
 } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
 import { type ExperienceAwardSchema, experienceAwardSchema } from "@/validators/misc";
-import { getSearchValidator } from "@/validators/register";
 import { awardSchema } from "@/validators/reputation";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import GlowingBorder from "./GlowingBorder";
@@ -433,16 +433,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     },
   });
 
-  const userSearchSchema = getSearchValidator({ max: 10 });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
+  const { methods: userSearchMethods, users: watchedUsers } = useUserPicker(10);
   const watchedReputationAmount = useWatch({
     control: form.control,
     name: "reputationAmount",

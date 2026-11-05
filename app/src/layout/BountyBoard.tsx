@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, Plus, Trophy, Users, X } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -43,12 +43,11 @@ import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { createBountySchema } from "@/validators/bounty";
-import { getSearchValidator } from "@/validators/register";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
-type UserSearchFormData = z.infer<ReturnType<typeof getSearchValidator>>;
 
 interface BountyBoardProps {
   userData: NonNullable<UserWithRelations>;
@@ -76,19 +75,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
     },
   });
 
-  const userSearchForm = useForm<UserSearchFormData>({
-    resolver: zodResolver(getSearchValidator({ max: 1 })),
-    defaultValues: {
-      username: "",
-      users: [],
-    },
-  });
-
-  const selectedUsers = useWatch({
-    control: userSearchForm.control,
-    name: "users",
-    defaultValue: [],
-  });
+  const { methods: userSearchForm, users: selectedUsers } = useUserPicker();
 
   useEffect(() => {
     if (selectedUsers?.[0]) {

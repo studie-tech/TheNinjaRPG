@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   CheckCircle2,
   CircleHelp,
@@ -12,7 +11,6 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,10 +38,10 @@ import { getRewardArray } from "@/libs/objectives";
 import { canUsePet } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { DungeonContent, DungeonRewardReceipt } from "@/validators/dungeon";
-import { getSearchValidator } from "@/validators/register";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Show entry requirements, human or companion squads, readiness and completion claims. */
@@ -57,11 +55,7 @@ export default function DungeonPage() {
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [abandonId, setAbandonId] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const form = useForm({
-    resolver: zodResolver(getSearchValidator({ max: 1 })),
-    defaultValues: { username: "", users: [] },
-  });
-  const selected = useWatch({ control: form.control, name: "users" });
+  const { methods: form, users: selected } = useUserPicker();
   const available = useDungeonAvailability(user?.sector ?? 1, !!user, timeDiff, true);
   const prepareUpdate = () => ({
     userRevision: prepareUserUpdate(),

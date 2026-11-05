@@ -1,10 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +19,8 @@ import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
+import { useUserPicker } from "@/utils/search";
 import { parentalSettingsSchema } from "@/validators/parentalControls";
-import { getSearchValidator } from "@/validators/register";
 
 /** Loads account settings and resets the form from the saved policy after saving or reloading. */
 export function ParentalControls() {
@@ -71,16 +68,7 @@ function ParentalSettingsForm({
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const searchSchema = getSearchValidator({ max: 50 });
-  const searchForm = useForm<z.infer<typeof searchSchema>>({
-    resolver: zodResolver(searchSchema),
-    defaultValues: { username: "", users: settings.approvedPlayers },
-  });
-  const users = useWatch({
-    control: searchForm.control,
-    name: "users",
-    defaultValue: settings.approvedPlayers,
-  });
+  const { methods: searchForm, users } = useUserPicker(50, settings.approvedPlayers);
   const utils = api.useUtils();
   const save = api.parentalControls.save.useMutation({
     onSuccess: async (result) => {

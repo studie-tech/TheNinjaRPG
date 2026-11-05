@@ -110,6 +110,7 @@ import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
@@ -117,7 +118,6 @@ import {
   auctionListingSchemaForItem,
   type createAuctionListingSchema,
 } from "@/validators/auction";
-import { getSearchValidator } from "@/validators/register";
 import { AuctionOffers, NewOfferDialog } from "./Offers";
 
 type AuctionListingRow = RouterOutputs["auction"]["getAuctionListings"]["data"][number];
@@ -1520,11 +1520,7 @@ export const NewAuctionListingDialog: React.FC<{
 
   // Search Form for DIRECT auctions
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
+  const { methods: userSearchMethods } = useUserPicker(maxUsers);
 
   // Mutations
   const [itemSearchTerm, setItemSearchTerm] = useState("");

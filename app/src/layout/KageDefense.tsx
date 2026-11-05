@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +29,9 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { pushToCombat } from "@/utils/routing";
+import { useUserPicker } from "@/utils/search";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type KageWindow, kageScheduleSchema } from "@/validators/kage";
-import type { UserSearchResult } from "@/validators/register";
 
 /** Public UTC defenses with role-specific scheduling, attendance and optional early-fight consent. */
 export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) => {
@@ -40,11 +39,8 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
   const router = useRouter();
   const { updateUser, timeDiff } = useRequiredUserData();
   const [draft, setDraft] = useState<KageWindow[] | null>(null);
-  const nomineeForm = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
-  const nomineeId = useWatch({ control: nomineeForm.control, name: "users" })[0]
-    ?.userId;
+  const { methods: nomineeForm, user: nominee } = useUserPicker();
+  const nomineeId = nominee?.userId;
   const [aiRequested, setAiRequested] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,

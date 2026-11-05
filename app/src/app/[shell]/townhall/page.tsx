@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canTakeKage } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -76,7 +77,6 @@ import {
   type PrestigeTransferSchema,
   type PrestigeTransferSchemaInput,
 } from "@/validators/misc";
-import type { UserSearchResult } from "@/validators/register";
 
 /** Route village governance and diplomacy to the panels available to the current character. */
 export default function TownHall() {
@@ -182,11 +182,8 @@ const ElderHall: React.FC<{
   const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
   const syncedTime = Date.now() - timeDiff;
   const [removalReason, setRemovalReason] = useState("");
-  const nomineeForm = useForm<{ username: string; users: UserSearchResult[] }>({
-    defaultValues: { username: "", users: [] },
-  });
-  const nomineeId = useWatch({ control: nomineeForm.control, name: "users" })[0]
-    ?.userId;
+  const { methods: nomineeForm, user: nominee } = useUserPicker();
+  const nomineeId = nominee?.userId;
   const [governanceMessage, setGovernanceMessage] = useState("");
   const { data: removalHistory, refetch: refetchHistory } =
     api.kage.getRemovalHistory.useQuery(

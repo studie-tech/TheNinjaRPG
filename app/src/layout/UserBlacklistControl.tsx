@@ -1,10 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Ban, UserPlus } from "lucide-react";
 import type React from "react";
-import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,7 +10,7 @@ import AvatarImage from "@/layout/Avatar";
 import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
-import { getSearchValidator } from "@/validators/register";
+import { useUserPicker } from "@/utils/search";
 
 const UserBlacklistControl: React.FC = () => {
   const { refreshBlacklist } = useBlacklistCacheUpdate();
@@ -34,16 +31,7 @@ const UserBlacklistControl: React.FC = () => {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const targetUser = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  })?.[0];
+  const { methods: userSearchMethods, user: targetUser } = useUserPicker(maxUsers);
 
   // Render
   return (

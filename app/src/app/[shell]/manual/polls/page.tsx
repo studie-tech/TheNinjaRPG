@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { Eye, Pencil, Plus, Trash2, Type, User, Vote, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ import {
   canDeletePollOptions,
   canEditPolls,
 } from "@/utils/permissions";
+import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
 import {
   type AddPollOptionSchema,
@@ -57,7 +58,6 @@ import {
   type UpdatePollSchema,
   updatePollSchema,
 } from "@/validators/poll";
-import { getSearchValidator } from "@/validators/register";
 
 type PollUser = {
   userId: string;
@@ -394,17 +394,7 @@ function PollContent({
 
   // User search form for adding user options
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-
-  const selectedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
+  const { methods: userSearchMethods, users: selectedUsers } = useUserPicker(maxUsers);
 
   // Use the pre-calculated vote counts and percentages from the backend
   const optionVotes = poll.options;
@@ -740,15 +730,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
 
   // Form for user search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const selectedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-  });
+  const { methods: userSearchMethods, users: selectedUsers } = useUserPicker(maxUsers);
 
   useEffect(() => {
     const options = form.getValues("options");

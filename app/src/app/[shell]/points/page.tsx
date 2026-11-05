@@ -11,7 +11,6 @@ import {
 import { Check, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api, onError } from "@/app/_trpc/client";
 import NativeStore from "@/components/native/NativeStore";
 import { Button } from "@/components/ui/button";
@@ -100,11 +99,11 @@ import {
   fedStatusRepsCost,
   reps2dollars,
 } from "@/utils/paypal";
+import { useRecipientPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { BuyRepsSchema, SearchPaypalTransactionSchema } from "@/validators/points";
 import { buyRepsSchema, searchPaypalTransactionSchema } from "@/validators/points";
-import { getSearchValidator } from "@/validators/register";
 import { StoreBundles } from "./StoreBundles";
 import { StoreCheckout } from "./StoreCheckout";
 
@@ -262,20 +261,8 @@ const ReputationStore = () => {
     control: repFormMethods.control,
     name: "reputationPoints",
   });
-  const userSearchSchema = getSearchValidator({ max: 1 });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    defaultValues: { username: "", users: [] },
-    resolver: zodResolver(userSearchSchema),
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  useEffect(() => {
-    if (userData && watchedUsers.length === 0)
-      userSearchMethods.setValue("users", [userData]);
-  }, [userData, watchedUsers, userSearchMethods]);
+  const { methods: userSearchMethods, users: watchedUsers } =
+    useRecipientPicker(userData);
   const isAllowanceReady = !isLoadingLimit && !isError;
   const monthlyRemaining = isAllowanceReady
     ? Math.max(0, dynamicMonthlyRepCap(userData) - (purchasedReps ?? 0))
@@ -773,23 +760,8 @@ const PayPalSubscriptionButton = (props: {
 const FederalStore = () => {
   const { data: userData } = useRequiredUserData();
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    defaultValues: { username: "", users: [] },
-    resolver: zodResolver(userSearchSchema),
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const selectedUser = watchedUsers?.[0];
-
-  useEffect(() => {
-    if (userData?.username && watchedUsers.length === 0) {
-      userSearchMethods.setValue("users", [userData]);
-    }
-  }, [userData, userSearchMethods, watchedUsers]);
+  const { methods: userSearchMethods, user: selectedUser } =
+    useRecipientPicker(userData);
 
   const status = selectedUser?.federalStatus;
 

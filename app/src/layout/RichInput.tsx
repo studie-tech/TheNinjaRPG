@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Bold,
   Code2,
@@ -20,8 +19,7 @@ import {
 } from "lucide-react";
 import type Quill from "quill";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { useController, useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
+import { useController } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -38,8 +36,8 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getImageDimensions } from "@/utils/image";
 import { needsHtmlSource, richTextInput } from "@/utils/richText";
+import { useUserPicker } from "@/utils/search";
 import { useUploadThing } from "@/utils/uploadthing";
-import { getSearchValidator } from "@/validators/register";
 import "quill/dist/quill.core.css";
 import "./RichInput.css";
 
@@ -75,16 +73,7 @@ export const RichInput = (props: RichInputProps) => {
   const blocked = !!props.disabled || uploading;
   const allowImages = props.allowImages !== false;
   const isSource = props.plainText || sourceMode;
-  const userSearchSchema = getSearchValidator({ max: 1 });
-  const mentionForm = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const selectedUsers = useWatch({
-    control: mentionForm.control,
-    name: "users",
-    defaultValue: [],
-  });
+  const { methods: mentionForm, users: selectedUsers } = useUserPicker();
   const { startUpload } = useUploadThing("tavernUploader", {
     onUploadError: (error) => {
       uploadErrorRef.current = error.message;

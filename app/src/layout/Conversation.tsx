@@ -5,7 +5,6 @@ import { nanoid } from "nanoid";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
@@ -35,12 +34,12 @@ import {
   RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
 import { stripBlockquotes } from "@/utils/sanitize";
+import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import { type SearchFormSchema, searchFormSchema } from "@/validators/chat";
 import type { MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
-import { getSearchValidator } from "@/validators/register";
 
 /** Props that select a conversation and react to its events. */
 export interface ConversationLogicProps {
@@ -386,17 +385,7 @@ export const useConversation = (props: ConversationLogicProps) => {
 
   // User search for sender selection (AI posting)
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const senderUser = watchedUsers?.[0];
+  const { methods: userSearchMethods, user: senderUser } = useUserPicker(maxUsers);
   const canPostAsAI = userData && canPostAsAi(userData.role);
 
   // Current quote ID

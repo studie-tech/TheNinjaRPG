@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { GAME_SETTING_GAINS_MULTIPLIER } from "@/drizzle/constants";
@@ -22,11 +21,11 @@ import {
   canSubmitNotification,
   canUseMonitoringTests,
 } from "@/utils/permissions";
+import { useRecipientPicker } from "@/utils/search";
 import { DAY_S, secondsPassed } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { type MutateContentSchema, mutateContentSchema } from "@/validators/comments";
 import { type ChangeSettingSchema, changeSettingSchema } from "@/validators/misc";
-import { getSearchValidator } from "@/validators/register";
 
 export default function NotifyUsers() {
   return (
@@ -273,23 +272,7 @@ const NotificationSystem: React.FC = () => {
 
   // User search
   const maxUsers = 1;
-  const userSearchSchema = getSearchValidator({ max: maxUsers });
-  const userSearchMethods = useForm<z.infer<typeof userSearchSchema>>({
-    resolver: zodResolver(userSearchSchema),
-    defaultValues: { username: "", users: [] },
-  });
-  const watchedUsers = useWatch({
-    control: userSearchMethods.control,
-    name: "users",
-    defaultValue: [],
-  });
-  const targetUser = watchedUsers?.[0];
-
-  useEffect(() => {
-    if (userData?.username && watchedUsers.length === 0) {
-      userSearchMethods.setValue("users", [userData]);
-    }
-  }, [userData, userSearchMethods, watchedUsers]);
+  const { methods: userSearchMethods, user: targetUser } = useRecipientPicker(userData);
 
   // Handling submit
   const onSubmit = handleSubmit((data) => {
