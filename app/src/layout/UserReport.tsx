@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { FederalStatus, TimeUnit, UserRank, UserRole } from "@/drizzle/constants";
+import type { TimeUnit } from "@/drizzle/constants";
 import { REPORT_CONTEXT_WINDOW, TERR_BOT_ID, TimeUnits } from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { CommentOnReport } from "@/layout/Comment";
@@ -36,6 +36,7 @@ import ParsedReportJson from "@/layout/ReportReason";
 import RichInput from "@/layout/RichInput";
 import SliderField from "@/layout/SliderField";
 import { showMutationToast } from "@/libs/toast";
+import type { UserCard } from "@/queries/userColumns";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { parseHtml } from "@/utils/parse";
 import {
@@ -55,26 +56,8 @@ import { reportCommentSchema } from "@/validators/reports";
 
 interface UserReportProps {
   report: UserReport & {
-    reportedUser: {
-      userId: string;
-      username: string;
-      avatar: string | null;
-      rank: UserRank;
-      isOutlaw: boolean;
-      level: number;
-      role: UserRole;
-      federalStatus: FederalStatus;
-    } | null;
-    reporterUser: {
-      userId: string;
-      username: string;
-      avatar: string | null;
-      rank: UserRank;
-      isOutlaw: boolean;
-      level: number;
-      role: UserRole;
-      federalStatus: FederalStatus;
-    } | null;
+    reportedUser: UserCard | null;
+    reporterUser: UserCard | null;
   };
   initialBreak?: boolean;
   hideHrefBack?: boolean;
