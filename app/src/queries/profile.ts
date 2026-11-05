@@ -33,6 +33,7 @@ import {
   type CombatStatName,
   IMG_AVATAR_DEFAULT,
   KAGE_PRESTIGE_REQUIREMENT,
+  ONLINE_WINDOW_MINUTES,
   STRONGEST_USERS_COUNT,
   type StaffApprovalGroup,
   type TavernColorPreset,
@@ -361,6 +362,11 @@ export const listPublicUserRows = (
         : []),
       ...(input.inShrines !== undefined
         ? [eq(userData.inShrines, !!input.inShrines)]
+        : []),
+      ...(input.minLevel !== undefined ? [gte(userData.level, input.minLevel)] : []),
+      ...(input.maxLevel !== undefined ? [lte(userData.level, input.maxLevel)] : []),
+      ...(input.activeWithinMinutes !== undefined
+        ? [gte(userData.updatedAt, secondsFromNow(-input.activeWithinMinutes * 60))]
         : []),
     ),
     columns: {
@@ -1463,7 +1469,7 @@ export const selectUserDataForCountOnlineUsers = (
   client
     .select({ count: count() })
     .from(userData)
-    .where(gte(userData.updatedAt, secondsFromNow(-1800)));
+    .where(gte(userData.updatedAt, secondsFromNow(-ONLINE_WINDOW_MINUTES * 60)));
 
 /** Build the active-account count using a rolling one-day updatedAt cutoff. */
 export const countUsersActiveInLastDay = (client: Pick<DrizzleClient, "select">) =>

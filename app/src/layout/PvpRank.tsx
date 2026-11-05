@@ -6,9 +6,6 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MAX_PLAYER_LEVEL,
-  RANKED_DIVISIONS,
-  RANKED_ENTRY_COST,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_JUTSUS,
@@ -16,11 +13,9 @@ import {
   RANKED_LOADOUT_MAX_WEAPONS,
 } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
-import { useRankedQueueCountCache } from "@/hooks/useRankedQueueCount";
 import BanInfo from "@/layout/BanInfo";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
-import { QueueTimer } from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
 import Loader from "@/layout/Loader";
@@ -52,239 +47,6 @@ interface RankedLoadoutSaveSnapshot {
   targetId: string | null;
   loadout: RankedLoadoutSchema;
 }
-
-/**
- * Main ranked arena component for entering/leaving the arena
- * @returns The main ranked arena component
- */
-export const RankedArenaMain: React.FC = () => {
-  // Ensure user is in village
-  const { userData, access, prepareUserUpdate, updateUser } =
-    useRequireInVillage("/battlearena");
-  const utils = api.useUtils();
-
-  const { refreshRankedQueueCount } = useRankedQueueCountCache();
-
-  // Get queue data
-  const { data: queueData } = api.pvpRank.getRankedPvpQueue.useQuery(undefined, {
-    enabled: !!userData,
-    refetchInterval: 5000, // Refetch queue status every 5 seconds
-    refetchIntervalInBackground: false,
-  });
-
-  // Get current season
-  const { data: currentSeason } = api.pvpRank.getCurrentSeason.useQuery();
-
-  // Get ranked loadout
-  const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery();
-  // Enter ranked season
-  const { mutate: enterSeason, isPending: isEntering } =
-    api.pvpRank.enterRankedSeason.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          void updateUser(data, { revision, delta: data.userDelta });
-        }
-      },
-    });
-
-  // Queue for ranked PvP
-  const { mutate: queue, isPending: isQueuing } =
-    api.pvpRank.queueForRankedPvp.useMutation({
-      onSuccess: (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void refreshRankedQueueCount();
-          if (data.removedJutsuIds?.length || data.removedItemIds?.length) {
-            void utils.pvpRank.getRankedLoadout.invalidate();
-          }
-        }
-      },
-    });
-
-  // Leave queue for ranked PvP
-  const { mutate: leaveQueue, isPending: isLeaving } =
-    api.pvpRank.leaveRankedPvpQueue.useMutation({
-      onSuccess: (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void refreshRankedQueueCount();
-        }
-      },
-    });
-
-  // Check for any matches – guard concurrent requests with a ref
-  const isCheckingRef = useRef(false);
-
-  const { mutate: checkForMatches } = api.pvpRank.checkRankedPvpMatches.useMutation({
-    // Mark the request as in-flight before it starts
-    onMutate: () => {
-      isCheckingRef.current = true;
-    },
-    // Clear the in-flight flag regardless of outcome
-    onSettled: () => {
-      isCheckingRef.current = false;
-    },
-    onSuccess: (data) => {
-      if (data.message) {
-        showMutationToast(data);
-      }
-      if (data.success) {
-        void utils.pvpRank.getRankedPvpQueue.invalidate();
-        void refreshRankedQueueCount();
-      }
-    },
-  });
-
-  // Periodically check for ranked PvP matches while queued
-  useEffect(() => {
-    // Only start polling when the user is actively in the queue
-    if (!queueData?.inQueue) return;
-
-    // Set up an interval to run every 5 seconds (5000 ms)
-    const intervalId = setInterval(() => {
-      // Avoid overlapping requests by inspecting the ref
-      if (!isCheckingRef.current) {
-        checkForMatches();
-      }
-    }, 5000);
-
-    // Clear the interval when the component unmounts or the user leaves the queue
-    return () => clearInterval(intervalId);
-  }, [queueData?.inQueue, checkForMatches]);
-
-  // Guards
-  if (!userData) return <Loader explanation="Loading user" />;
-  if (!access) return <Loader explanation="Accessing Ranked PvP" />;
-  if (!currentSeason) return <Loader explanation="Searching for Season to Start" />;
-  if (userData.isBanned) return <BanInfo />;
-
-  // Check if season is paused
-  if (currentSeason.paused) {
-    return (
-      <div className="flex flex-col items-center gap-4 p-3">
-        <div className="text-center">
-          <p className="mb-2 font-semibold text-destructive text-lg">
-            Ranked Season Paused
-          </p>
-          <p className="text-muted-foreground text-sm">
-            The current ranked season &quot;{currentSeason.name}&quot; is currently
-            paused. Ranked battles are temporarily unavailable.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if user hasn't entered the ranked season yet
-  if (userData.rankedLp === 0) {
-    const hasEnoughPrestige = userData.villagePrestige >= RANKED_ENTRY_COST;
-
-    return (
-      <div className="flex flex-col items-center gap-4 p-3">
-        <div className="text-center">
-          <p className="mb-2 font-semibold text-lg">Enter Ranked Season</p>
-          <p className="mb-4 text-muted-foreground text-sm">
-            To participate in ranked PvP battles, you must first enter the ranked
-            season. This requires {RANKED_ENTRY_COST.toLocaleString()} village prestige
-            points.
-          </p>
-          <p className="mb-4 text-muted-foreground text-sm">
-            Your village prestige: <b>{userData.villagePrestige.toLocaleString()}</b>
-          </p>
-          {!hasEnoughPrestige && (
-            <p className="mb-4 text-destructive text-sm">
-              You need {RANKED_ENTRY_COST.toLocaleString()} village prestige to enter
-              the ranked season.
-            </p>
-          )}
-          <Button
-            className="w-full"
-            onClick={() => enterSeason()}
-            disabled={isEntering || !hasEnoughPrestige}
-          >
-            {isEntering ? "Entering" : "Enter Ranked Season"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Process loadout
-  const equippedJutsu = rankedLoadout?.loadout.jutsuIds.length ?? 0;
-  const equippedWeapons = rankedLoadout?.loadout.weaponIds.length ?? 0;
-  const equippedConsumables = rankedLoadout?.loadout.consumableIds.length ?? 0;
-
-  return (
-    <div className="flex flex-col items-center gap-4 p-3">
-      <p className="text-muted-foreground text-sm">
-        Queue for ranked PvP battles! You will be matched with players of similar LP.
-        All battles are fought with level {MAX_PLAYER_LEVEL} characters with max stats.
-      </p>
-      <div className="text-muted-foreground text-sm">
-        <p className="mb-1 font-medium">Rank Requirements:</p>
-        <div className="flex flex-col gap-y-1">
-          {RANKED_DIVISIONS.filter((d) => d.name !== "Unranked").map((division) => (
-            <div key={division.name} className="flex justify-between">
-              <span>{division.name}:</span>
-              <span className="font-mono">
-                {division.rankedLp === Infinity
-                  ? "Top 10"
-                  : `${division.rankedLp.toLocaleString()} LP`}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <p className="text-muted-foreground text-sm">
-        Current LP: <b>{userData.rankedLp}</b> | Players in queue:{" "}
-        <b>{queueData?.queueCount ?? 0}</b>
-      </p>
-      <p className="font-medium text-sm">
-        Selected Jutsu: {equippedJutsu}/{RANKED_LOADOUT_MAX_JUTSUS} | Weapons:{" "}
-        {equippedWeapons}/{RANKED_LOADOUT_MAX_WEAPONS} | Consumables:{" "}
-        {equippedConsumables}/{RANKED_LOADOUT_MAX_CONSUMABLES}
-      </p>
-      {queueData?.inQueue && (
-        <p className="text-orange-500">
-          You are currently in queue. Waiting for opponent...
-          {queueData.createdAt && (
-            <span className="ml-2">
-              Time in queue: <QueueTimer createdAt={queueData.createdAt} />
-            </span>
-          )}
-        </p>
-      )}
-      {!queueData?.inQueue ? (
-        <Button
-          className="w-full"
-          onClick={() => {
-            if (userData.status === "BATTLE") {
-              showMutationToast({
-                success: false,
-                message:
-                  "You cannot queue while in battle. Please finish your current battle first.",
-              });
-              return;
-            }
-
-            queue();
-          }}
-          disabled={isQueuing}
-        >
-          {isQueuing ? "Queuing" : "Queue for Ranked PvP"}
-        </Button>
-      ) : (
-        <Button className="w-full" onClick={() => leaveQueue()} disabled={isLeaving}>
-          {isLeaving ? "Leaving" : "Leave Queue"}
-        </Button>
-      )}
-    </div>
-  );
-};
 
 /**
  * Component for selecting a ranked loadout
@@ -720,7 +482,7 @@ export const RankedLoadoutSelector: React.FC = () => {
       <div aria-busy={isSaving}>
         {pendingSave && (
           <div
-            className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-950/40 px-3 py-2 text-blue-100 text-sm"
+            className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-blue-400/50 bg-blue-950/40 px-3 py-2 text-sm text-blue-100"
             role="status"
             aria-live="polite"
           >

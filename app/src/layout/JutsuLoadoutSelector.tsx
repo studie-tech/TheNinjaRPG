@@ -10,8 +10,6 @@ import { showMutationToast } from "@/libs/toast";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import { useUserDataSelector } from "@/utils/UserContext";
 
-const loadoutsKey = getQueryKey(api.jutsu.getLoadouts, undefined, "query");
-
 interface JutsuLoadoutSelectorProps {
   size?: "small" | "large";
   label?: string;
@@ -39,6 +37,7 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   const queryResult = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
+  const loadoutsKey = getQueryKey(api.jutsu.getLoadouts, undefined, "query");
   const loadoutsCache =
     useQueryCacheUpdate<RouterOutputs["jutsu"]["getLoadouts"]>(loadoutsKey);
 

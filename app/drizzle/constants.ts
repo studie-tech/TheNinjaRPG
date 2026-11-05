@@ -1924,6 +1924,10 @@ export const EVOLUTION_MAX_DEPTH = 3;
 
 // Combat config
 export const BATTLE_ARENA_DAILY_LIMIT = 99999;
+/** Levels above or below your own that count as "near my level" when finding spar opponents. */
+export const SPARRING_NEAR_LEVEL_RANGE = 5;
+/** Minutes since a player's last activity during which they count as online. */
+export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
 export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
@@ -3090,6 +3094,18 @@ export const IMG_BUILDING_ARCHIVE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXk8AUJqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
 export const IMG_BUILDING_ADMINBUILDING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
+
+/** Arena overview scenes, served through the shared game-media CDN. */
+export const IMG_ARENA_MODE_ARENA =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJX4nt3IqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
+export const IMG_ARENA_MODE_SPARRING =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjjOf1bHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A";
+export const IMG_ARENA_MODE_PYRAMID =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8B2KsI1kkp45TvAnoIBa0rtCf1lbyXYjVKQ2";
+export const IMG_ARENA_MODE_RANKED =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAdUaSkoZUC4muiGcQNzjfEndY5y1w20B8hTW";
+export const IMG_ARENA_MODE_TRAINING =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwfsuvnT2j854CWbaITZyegfXimvd7s16cO0h";
 
 export const IMG_INITIATIVE_D20 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE7476GLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";

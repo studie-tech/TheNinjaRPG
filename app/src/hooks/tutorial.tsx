@@ -170,7 +170,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Your first fight",
     description:
       "I've picked the <b>Academy Dummy</b> for you. Auto combat stays off while you train with me: today you fight with your own hands.",
-    action: "Tap Enter arena.",
+    action: "Tap the Fight button.",
     elementIds: ["tutorial-battlearena-challenge-ai-enter"],
     page: "/battlearena",
     advanceOn: "arenaStart",

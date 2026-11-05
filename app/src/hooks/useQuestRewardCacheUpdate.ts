@@ -44,6 +44,7 @@ export const useQuestRewardCacheUpdate = () => {
         : [
             utils.quests.missionHall.invalidate(),
             utils.quests.specificQuests.invalidate(),
+            utils.quests.upcomingQuests.invalidate(),
             utils.quests.getQuestHistory.invalidate(),
             utils.quests.allianceBuilding.invalidate(),
           ]),

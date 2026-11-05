@@ -56,6 +56,7 @@ import { getHuntingRank } from "@/libs/hunting";
 import {
   MASTERY_REQUIREMENT_FIELDS,
   type MasteryRequirementFields,
+  missingMasteryRequirement,
 } from "@/libs/mastery";
 import { canPromoteMastery } from "@/libs/masteryProgression";
 import {
@@ -2593,6 +2594,72 @@ export const isAvailableUserQuests = (
   // Returned detailed info on all the checks
   return { check, message };
 };
+
+/** Why a quest is not open yet, when the player can work towards it. */
+export type UpcomingBlock =
+  | { kind: "level"; required: number; current: number }
+  | { kind: "mastery"; label: string; required: number; current: number };
+
+/**
+ * The level or mastery a quest still needs, or null when it is open now, hidden, or blocked by
+ * any other rule. Re-runs `isAvailableUserQuests` with those requirements met, so every other
+ * availability rule stays in one place.
+ */
+export const getUpcomingQuestBlock = (
+  questInfo: Parameters<typeof isAvailableUserQuests>[0] & MasteryRequirementFields,
+  user: Parameters<typeof isAvailableUserQuests>[1],
+): UpcomingBlock | null => {
+  if (questInfo.hidden) return null;
+  if (isAvailableUserQuests(questInfo, user, true).check) return null;
+  const requiredLevel = questInfo.requiredLevel ?? 1;
+  const relaxed = { ...user, level: Math.max(user.level, requiredLevel) };
+  for (const [field, stat] of MASTERY_REQUIREMENT_FIELDS) {
+    const required = questInfo[field];
+    if (required) relaxed[stat] = Math.max(user[stat] ?? 0, required);
+  }
+  if (!isAvailableUserQuests(questInfo, relaxed, true).check) return null;
+  if (user.level < requiredLevel) {
+    return { kind: "level", required: requiredLevel, current: user.level };
+  }
+  const mastery = missingMasteryRequirement(user, questInfo);
+  return mastery ? { kind: "mastery", ...mastery } : null;
+};
+
+/**
+ * Quests a player is close to unlocking, with the requirement each still needs, sorted by
+ * required level and then name.
+ */
+export const listUpcomingQuests = <
+  T extends Parameters<typeof getUpcomingQuestBlock>[0] & {
+    id: string;
+    name: string;
+    image: string | null;
+    description: string | null;
+    requiredLevel: number;
+    maxLevel: number;
+  },
+>(
+  quests: T[],
+  user: Parameters<typeof isAvailableUserQuests>[1],
+) =>
+  quests
+    .flatMap((entry) => {
+      const block = getUpcomingQuestBlock(entry, user);
+      return block
+        ? [
+            {
+              id: entry.id,
+              name: entry.name,
+              image: entry.image,
+              description: entry.description,
+              requiredLevel: entry.requiredLevel,
+              maxLevel: entry.maxLevel,
+              block,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => a.requiredLevel - b.requiredLevel || a.name.localeCompare(b.name));
 
 /**
  * Validates that every newly authored dialog option routes to an existing objective. Legacy

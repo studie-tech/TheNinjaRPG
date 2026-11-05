@@ -30,8 +30,8 @@ const setup = () => {
   clients.push(client);
   const owned = { id: "stack", itemId: "herb", quantity: 3, variants: ["red"] };
   const candidate = { id: "quest", questType: "mission", hidden: false, maxAttempts: 100, maxCompletes: 100, requiredVillage: null, retryDelay: "none", previousAttempts: 0, previousCompletes: 0, periodCompletes: 0, periodStartAt: null, completed: 0 };
-  const keys = [getQueryKey(api.item.getUserItems, undefined, "query"), getQueryKey(api.item.getUserItemsWithVariants, undefined, "query"), getQueryKey(api.raids.getUserRaidBuffs, undefined, "query"), getQueryKey(api.bloodline.getItemRolls, undefined, "query"), getQueryKey(api.pets.getPet, undefined, "query"), getQueryKey(api.quests.missionHall, { level: 50, villageId: VILLAGE_SYNDICATE_ID }, "query"), getQueryKey(api.quests.specificQuests, { level: 50, questType: "mission" }, "query")];
-  const values = [[owned], [owned], { buffs: [] }, [], [], [candidate], [{ ...candidate, entryRequirements: [] }]];
+  const keys = [getQueryKey(api.item.getUserItems, undefined, "query"), getQueryKey(api.item.getUserItemsWithVariants, undefined, "query"), getQueryKey(api.raids.getUserRaidBuffs, undefined, "query"), getQueryKey(api.bloodline.getItemRolls, undefined, "query"), getQueryKey(api.pets.getPet, undefined, "query"), getQueryKey(api.quests.missionHall, { level: 50, villageId: VILLAGE_SYNDICATE_ID }, "query"), getQueryKey(api.quests.specificQuests, { level: 50, questType: "mission" }, "query"), getQueryKey(api.quests.upcomingQuests, { questType: "battlepyramid" }, "query")];
+  const values = [[owned], [owned], { buffs: [] }, [], [], [candidate], [{ ...candidate, entryRequirements: [] }], []];
   const reads = keys.map((queryKey, i) => {
     client.setQueryData(queryKey, values[i]);
     const queryFn = vi.fn(async () => values[i]);
