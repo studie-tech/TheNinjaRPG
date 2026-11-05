@@ -1,8 +1,9 @@
 
+import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { ContentAuditFocuses } from "@/drizzle/constants";
-import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
+import { ENTITY_CONFIG, normalizeEditable } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
 import {
   collectCandidates,
@@ -12,8 +13,10 @@ import {
 import * as replicate from "@/libs/replicate";
 import type { DrizzleClient } from "@/server/db";
 import {
+  directMediaValue,
   getAtPath,
   isMediaPath,
+  mediaPlaceholder,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -27,7 +30,6 @@ import {
   leadingRowsWithin,
   resolveFocus,
 } from "@/libs/contentReview/snapshot";
-import { normalizeEditable } from "@/libs/contentReview/submit";
 import { canonicalJson, contentVersion, sameValue } from "@/libs/contentReview/version";
 import { agentAuditOutputSchema } from "@/validators/contentReview";
 
@@ -146,6 +148,48 @@ describe("audit rules", () => {
     const one = normalizeEditable("AI", { jutsus: ["b", "a"], items: [{ ids: ["z"] }, { ids: ["y"] }] });
     const two = normalizeEditable("AI", { jutsus: ["a", "b"], items: [{ ids: ["y"] }, { ids: ["z"] }] });
     expect(sameValue(one, two)).toBe(true);
+  });
+});
+
+describe("AI editable fields", () => {
+  it("covers every field of the manual AI editor", () => {
+    const editor = readFileSync("src/libs/ais.ts", "utf8");
+    const form = editor.slice(editor.indexOf("useAiEditForm"));
+    const ids = [...form.matchAll(/\bid: "(\w+)"/g)].map((match) => match[1] as string);
+    expect(ids.length).toBeGreaterThan(30);
+    expect(ids.filter((id) => !ENTITY_CONFIG.AI.editableKeys.includes(id))).toEqual([]);
+  });
+});
+
+describe("media values", () => {
+  const candidate = { url: "https://cdn/a.png", externalId: "asset" };
+
+  it("writes image URLs and catalog ids directly", () => {
+    expect(
+      directMediaValue({ ...candidate, kind: "IMAGE", source: "GENERATED" }, "image"),
+    ).toBe(candidate.url);
+    expect(
+      directMediaValue(
+        { ...candidate, kind: "SFX", source: "CATALOG" },
+        "effects.0.appearSfx",
+      ),
+    ).toBe("asset");
+  });
+
+  it("leaves candidates that become assets on approval to a placeholder", () => {
+    expect(
+      directMediaValue(
+        { ...candidate, kind: "SFX", source: "EPIDEMIC" },
+        "effects.0.appearSfx",
+      ),
+    ).toBeUndefined();
+    expect(
+      directMediaValue(
+        { ...candidate, kind: "IMAGE", source: "GENERATED" },
+        "content.sceneCharacters.0",
+      ),
+    ).toBeUndefined();
+    expect(mediaPlaceholder("abc")).toBe("media:abc");
   });
 });
 

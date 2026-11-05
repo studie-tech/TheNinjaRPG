@@ -1,30 +1,17 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import { useWebGL2Detection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
 import WebGlError from "@/layout/WebGLError";
 import { usePublicPathname } from "@/utils/routing";
 
 export default function SignupUser() {
-  const [webglError, setWebglError] = useState<boolean>(false);
-  const [isChecking, setIsChecking] = useState<boolean>(true);
+  const { webglError, isChecking } = useWebGL2Detection();
   const isNativeShell = useNativeShell();
   const pathname = usePublicPathname();
-
-  useEffect(() => {
-    // Detect WebGL2 support on mount
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2");
-
-    if (!gl) {
-      setWebglError(true);
-    }
-
-    setIsChecking(false);
-  }, []);
 
   if (isChecking || isNativeShell === undefined) {
     return null; // Or a loading spinner if preferred

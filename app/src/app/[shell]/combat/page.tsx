@@ -38,10 +38,8 @@ import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { availableUserActions, getActionPointCost } from "@/libs/combat/actions";
 import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
-import {
-  getBattlefieldHeightRatio,
-  resolveControlledActorId,
-} from "@/libs/combat/util";
+import { resolveControlledActorId } from "@/libs/combat/util";
+import { hexGridHeightRatio } from "@/libs/hexgrid";
 import { isBetweenPyramidBattles } from "@/libs/questRun";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -635,7 +633,7 @@ export default function CombatPage() {
         style={
           battle && !results
             ? {
-                aspectRatio: `1 / ${getBattlefieldHeightRatio(battle.width, battle.height)}`,
+                aspectRatio: `1 / ${hexGridHeightRatio(battle.width, battle.height)}`,
               }
             : undefined
         }
@@ -892,7 +890,7 @@ export default function CombatPage() {
           renderTimer={renderTimer}
           field={renderBattlefield()}
           fieldRatio={
-            results ? undefined : getBattlefieldHeightRatio(battle.width, battle.height)
+            results ? undefined : hexGridHeightRatio(battle.width, battle.height)
           }
           dock={
             <>

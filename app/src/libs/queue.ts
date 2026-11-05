@@ -160,3 +160,15 @@ export const hasEnergyQueue = (user: {
   energyQueueHead: number;
   energyQueueTail: number;
 }) => user.energyQueueTail > user.energyQueueHead;
+
+/** Whether the user has queued or elemental training that may settle outside a profile read. */
+export const hasTrainingInProgress = (
+  user: QueueOwner & {
+    energyQueueTail: number;
+    currentlyTrainingElement?: unknown;
+  },
+) =>
+  hasEnergyQueue(user) ||
+  getMasteryQueue(user).length > 0 ||
+  getMasteryQueue(user, "ELEMENT").length > 0 ||
+  !!user.currentlyTrainingElement;

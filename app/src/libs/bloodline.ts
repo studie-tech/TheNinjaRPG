@@ -13,6 +13,8 @@ import type {
   BloodlineRolls,
   UserData,
 } from "@/drizzle/schema";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { isStaffMember } from "@/utils/permissions";
 
 export type BloodlineCollectionProgress = {
   rank: LetterRank;
@@ -119,4 +121,26 @@ export const getFreeBloodlineSwaps = (federalStatus: FederalStatus) => {
     default:
       return BLOODLINE_SWAP_FREE_AMOUNT;
   }
+};
+
+/** Resolve a user's free-swap allowance from the swaps logged this month. */
+export const getBloodlineSwapAllowance = (
+  user: Pick<UserData, "staffAccount" | "federalStatus">,
+  freeSwapsUsed: number,
+) => {
+  const federalStatus = getUserFederalStatus(user);
+  const freeSwapsRemaining = Math.max(
+    0,
+    getFreeBloodlineSwaps(federalStatus) - freeSwapsUsed,
+  );
+  const hasFreeSwapAvailable = freeSwapsRemaining > 0;
+  const isStaffFree = isStaffMember(user);
+  return {
+    federalStatus,
+    freeSwapsUsed,
+    freeSwapsRemaining,
+    hasFreeSwapAvailable,
+    isStaffFree,
+    isFree: hasFreeSwapAvailable || isStaffFree,
+  };
 };

@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { createPartyClaimId } from "@/libs/questParty";
 import {
   deleteBattleById,
   deleteBattleHistoryByBattleId,
@@ -30,7 +31,7 @@ export const launchCoopEncounter = async <
   recover: (launch: CoopLaunch) => Promise<void>;
 }) => {
   const battleId = nanoid();
-  const launch = { battleId, claimId: `claiming:${Date.now()}:${battleId}` };
+  const launch = { battleId, claimId: createPartyClaimId(battleId) };
   if (!(await reserve(launch)))
     return errorResponse("The party changed. Refresh and try again.");
   let result: T;

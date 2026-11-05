@@ -1,3 +1,4 @@
+import { PAYPAL_PAID_PERIOD_DAYS } from "@/drizzle/constants";
 import { handleEndpointError } from "@/libs/gamesettings";
 import {
   listPaypalSubscriptionForGET,
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
     // have orderIds; reputation subscriptions do not.
     const due = await listPaypalSubscriptionForGET(
       drizzleDB,
-      secondsFromNow(-31 * DAY_S),
+      secondsFromNow(-PAYPAL_PAID_PERIOD_DAYS * DAY_S),
     );
     const paypalSubscriptions = due.filter(
       (subscription) => subscription.orderId !== null,

@@ -8,6 +8,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   RANKED_PVP_STATS,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 import { getExpBracket } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
@@ -16,9 +17,13 @@ import {
   beginEventRound,
   completeEventGame,
   createEventState,
+  currentEventRound,
+  eligibilityError,
   eligibilityFailures,
   eventRewardFor,
   generateEventBracket,
+  isGameInFlight,
+  isSeriesAwaitingBegin,
 } from "@/libs/tournament/events";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
 import { findUserById, findUserRoleById } from "@/queries/profile";
@@ -56,6 +61,7 @@ import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
+import { shuffle } from "@/utils/array";
 import { canManageTournaments } from "@/utils/permissions";
 import {
   type EventParticipant,
@@ -197,12 +203,13 @@ export const eventTournamentProcedures = {
           const entrants = event.participants.filter((p) => p.accepted && !p.withdrawn);
           if (entrants.length < 2)
             return "At least two accepted participants are required to start early";
-          const shuffled = entrants.map((p) => p.id);
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = randomInt(i + 1);
-            [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-          }
-          generateEventBracket(event, shuffled);
+          generateEventBracket(
+            event,
+            shuffle(
+              entrants.map((p) => p.id),
+              randomInt,
+            ),
+          );
         } else if (input.action === "BEGIN") {
           if (!["PREPARED", "RUNNING"].includes(event.status))
             return "Generate the bracket before beginning matches";
@@ -211,16 +218,7 @@ export const eventTournamentProcedures = {
               return "Choose a future time before the event ends";
             if (event.config.scheduling === "SEQUENTIAL" && input.seriesId) {
               const series = event.series.find((s) => s.id === input.seriesId);
-              const round = Math.min(
-                ...event.series.filter((s) => !s.complete).map((s) => s.round),
-              );
-              if (
-                !series ||
-                !series.resolved ||
-                series.complete ||
-                series.begun ||
-                series.round !== round
-              )
+              if (!series || !isSeriesAwaitingBegin(series, currentEventRound(event)))
                 return "Series is not ready in the current round";
               series.scheduledAt = input.scheduledAt;
             } else event.scheduledRoundAt = input.scheduledAt;
@@ -229,11 +227,7 @@ export const eventTournamentProcedures = {
             if (error) return error;
           }
         } else if (input.action === "CANCEL") {
-          if (
-            event.series.some((s) =>
-              s.games.some((g) => ["STARTING", "FIGHTING"].includes(g.status)),
-            )
-          )
+          if (event.series.some((s) => s.games.some(isGameInFlight)))
             return "Wait for active games to finish before cancelling";
           event.status = "CANCELLED";
           event.finishedAt ??= now;
@@ -246,8 +240,8 @@ export const eventTournamentProcedures = {
             return "Invitations require open registration";
           if (!target || target.isAi || target.isBanned)
             return "An eligible player account is required";
-          const failures = eligibilityFailures(event.config, snapshotFor(target));
-          if (failures.length) return failures.join(". ");
+          const failure = eligibilityError(event.config, snapshotFor(target));
+          if (failure) return failure;
           if (
             event.participants.some((p) => !p.withdrawn && p.userId === target.userId)
           )
@@ -294,16 +288,14 @@ export const eventTournamentProcedures = {
             return "Replacement has already participated";
           if (
             event.series.some(
-              (s) =>
-                s.seats.includes(seat.id) &&
-                s.games.some((g) => ["STARTING", "FIGHTING"].includes(g.status)),
+              (s) => s.seats.includes(seat.id) && s.games.some(isGameInFlight),
             )
           )
             return "Wait for this participant's active game to finish";
           if (!event.series.some((s) => !s.complete && s.seats.includes(seat.id)))
             return "This seat has already been eliminated";
-          const failures = eligibilityFailures(event.config, snapshotFor(target));
-          if (failures.length) return failures.join(". ");
+          const failure = eligibilityError(event.config, snapshotFor(target));
+          if (failure) return failure;
           const originalId = seat.userId;
           seat.previousUsers.push({ userId: seat.userId, username: seat.username });
           seat.userId = target.userId;
@@ -377,8 +369,8 @@ export const eventTournamentProcedures = {
           if (seat?.accepted) return "Already registered";
           if (event.config.registration === "INVITE_ONLY" && !seat?.invited)
             return "A staff invitation is required";
-          const failures = eligibilityFailures(event.config, snapshotFor(user));
-          if (failures.length) return failures.join(". ");
+          const failure = eligibilityError(event.config, snapshotFor(user));
+          if (failure) return failure;
           if (seat) {
             seat.accepted = true;
             seat.snapshot = snapshotFor(user);
@@ -394,27 +386,16 @@ export const eventTournamentProcedures = {
           if (!seat) return "No registration or invitation found";
           seat.withdrawn = true;
         } else if (input.action === "READY" || input.action === "NOT_READY") {
-          const round = Math.min(
-            ...event.series.filter((s) => !s.complete).map((s) => s.round),
-          );
           const series = event.series.find((s) => s.id === input.seriesId);
           if (
             !seat?.accepted ||
             !series ||
-            !series.resolved ||
-            series.complete ||
-            series.begun ||
-            series.round !== round ||
+            !isSeriesAwaitingBegin(series, currentEventRound(event)) ||
             !series.seats.includes(seat.id)
           )
             return "This series is not waiting for staff to begin";
           // Players can cancel readiness anywhere; marking ready requires availability.
-          if (
-            input.action === "READY" &&
-            (user.status !== "AWAKE" ||
-              user.battleId ||
-              user.sector !== MAP_WAKE_ISLAND_SECTOR)
-          )
+          if (input.action === "READY" && !isReadyAtWakeIsland(user))
             return "Be awake and available at Wake Island to mark yourself ready";
           series.readyUserIds = (series.readyUserIds ?? []).filter(
             (id) => id !== user.userId,
@@ -429,11 +410,7 @@ export const eventTournamentProcedures = {
             return "Ready check not found";
           if (game.status !== "READY" || now < game.opensAt || now >= game.deadline)
             return "Ready check is not open";
-          if (
-            user.status !== "AWAKE" ||
-            user.battleId ||
-            user.sector !== MAP_WAKE_ISLAND_SECTOR
-          )
+          if (!isReadyAtWakeIsland(user))
             return "Ready check failed: be awake and available at Wake Island, outside combat, travel, hospital or queues";
           if (!game.accepted.includes(user.userId)) game.accepted.push(user.userId);
         }
@@ -509,9 +486,7 @@ export const syncEventTournament = async (
       .map((p) => p.userId);
     const saved = row.matches.find((m) => m.id === game.id);
     if (saved?.state === "PLAYED") {
-      const withdrawn = series.seats.some(
-        (sid) => event.participants.find((p) => p.id === sid)?.withdrawn,
-      );
+      const withdrawn = series.seats.some((sid) => isSeatWithdrawn(event, sid));
       completeEventGame(
         event,
         series,
@@ -522,9 +497,7 @@ export const syncEventTournament = async (
       );
       if (withdrawn) {
         series.winnerId =
-          series.seats.find(
-            (sid) => sid && !event.participants.find((p) => p.id === sid)?.withdrawn,
-          ) ?? null;
+          series.seats.find((sid) => sid && !isSeatWithdrawn(event, sid)) ?? null;
         series.loserId = null;
         series.winnerUserId =
           event.participants.find((p) => p.id === series.winnerId)?.userId ?? null;
@@ -544,9 +517,7 @@ export const syncEventTournament = async (
       );
     } else if (
       game.status === "READY" &&
-      series.seats.some(
-        (sid) => event.participants.find((p) => p.id === sid)?.withdrawn,
-      )
+      series.seats.some((sid) => isSeatWithdrawn(event, sid))
     ) {
       game.accepted = game.userIds.filter((uid) => activeUserIds.includes(uid));
       completeEventGame(
@@ -560,7 +531,7 @@ export const syncEventTournament = async (
       // Withdrawn entrants do not advance into the losers bracket.
       series.loserId = null;
     } else if (
-      ["STARTING", "FIGHTING"].includes(game.status) &&
+      isGameInFlight(game) &&
       now > game.deadline + EVENT_TOURNAMENT_LAUNCH_RECOVERY_SECONDS * 1000
     ) {
       const running = await findBattleForSyncEventTournament(client, game);
@@ -591,11 +562,7 @@ export const syncEventTournament = async (
     !["COMPLETED", "CANCELLED"].includes(event.status) &&
     now >= event.config.endsAt
   ) {
-    if (
-      !event.series.some((s) =>
-        s.games.some((g) => ["STARTING", "FIGHTING"].includes(g.status)),
-      )
-    ) {
+    if (!event.series.some((s) => s.games.some(isGameInFlight))) {
       event.status = "CANCELLED";
       event.finishedAt = now;
       event.payRewards = false;
@@ -886,3 +853,11 @@ const notifyEventParticipant = async (userId: string, originSocketId?: string) =
     }),
   ]);
 };
+
+/** A player can only take part in an event match while free at Wake Island. */
+const isReadyAtWakeIsland = (user: Pick<UserData, "status" | "battleId" | "sector">) =>
+  user.status === "AWAKE" && !user.battleId && user.sector === MAP_WAKE_ISLAND_SECTOR;
+
+/** Resolve stored seat IDs against the event's current withdrawal flags. */
+const isSeatWithdrawn = (event: EventTournamentState, seatId: string | null) =>
+  !!event.participants.find((p) => p.id === seatId)?.withdrawn;

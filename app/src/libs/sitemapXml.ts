@@ -1,4 +1,5 @@
 import { absoluteUrl } from "@/libs/seo";
+import { SITEMAP_SECTIONS } from "@/libs/sitemapSections.mjs";
 
 /**
  * Serialization for the split sitemap, kept free of database imports so the index route
@@ -30,14 +31,7 @@ export interface SitemapEntry {
   priority: number;
 }
 
-/** Child sitemaps listed by the index, in the order they are advertised. */
-export const SITEMAP_SECTIONS = [
-  "pages",
-  "manual",
-  "guide",
-  "forum",
-  "profiles",
-] as const;
+export { SITEMAP_SECTIONS };
 
 export type SitemapSection = (typeof SITEMAP_SECTIONS)[number];
 

@@ -6,7 +6,7 @@ import { insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
-describeWithDatabase("Link promotion review rewards", () => {
+describeWithDatabase("Link promotion submissions and review rewards", () => {
   beforeEach(async () => {
     await resetTables(linkPromotion, userData);
     await insertUsers([
@@ -17,6 +17,36 @@ describeWithDatabase("Link promotion review rewards", () => {
     await (await getTestDatabase()).insert(linkPromotion).values({
       id: "link", userId: "promoter", url: "https://example.com/post",
     });
+  });
+
+  it.each([
+    "https://www.theninja-rpg.com/post",
+    "https://theninja-rpg.com/post",
+    "http://www.theninja-rpg.com/post",
+    "https://WWW.THENINJA-RPG.COM/post",
+    "https://forum.theninja-rpg.com/post",
+    "https://theninja-rpg.com./post",
+    "https://www.theninja-rpg.com./post",
+  ])("rejects an own-site promotion without inserting it: %s", async (url) => {
+    const caller = await callerFor(linkPromotionRouter, "promoter");
+    expect(await caller.submitLinkPromotion({ url })).toMatchObject({
+      success: false,
+      message: "Cannot submit link to TNR",
+    });
+    expect(await (await getTestDatabase()).query.linkPromotion.findMany()).toHaveLength(1);
+  });
+
+  it.each([
+    "https://example.com/post?source=https://www.theninja-rpg.com",
+    "https://theninja-rpg.com.example.com/post",
+    "https://nottheninja-rpg.com/post",
+  ])("stores an external promotion using its actual host: %s", async (url) => {
+    const caller = await callerFor(linkPromotionRouter, "promoter");
+    expect((await caller.submitLinkPromotion({ url })).success).toBe(true);
+    const saved = await (await getTestDatabase()).query.linkPromotion.findFirst({
+      where: eq(linkPromotion.url, url),
+    });
+    expect(saved).toMatchObject({ userId: "promoter", url, points: 0, reviewed: false });
   });
 
   it("grants the reward once when two reviewers submit at the same time", async () => {

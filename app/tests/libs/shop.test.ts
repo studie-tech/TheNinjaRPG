@@ -1,6 +1,18 @@
 import { describe, expect, it } from "bun:test";
-import { MAX_ITEM_SHOP_PURCHASE_QUANTITY } from "@/drizzle/constants";
-import { getMaxItemShopPurchaseQuantity, isItemAvailableInStore } from "@/libs/shop";
+import {
+  ANBU_ITEMSHOP_DISCOUNT_PERC,
+  MAX_ITEM_SHOP_PURCHASE_QUANTITY,
+  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
+  MIN_ITEM_SHOP_DISCOUNT_FACTOR,
+} from "@/drizzle/constants";
+import {
+  getMaxItemShopPurchaseQuantity,
+  getShopDiscounts,
+  getShopStackPrice,
+  healItemDiscountPerc,
+  isItemAvailableInStore,
+  shopItemDiscountFactor,
+} from "@/libs/shop";
 
 describe("getMaxItemShopPurchaseQuantity", () => {
   it("uses the item's smaller stack size", () => {
@@ -26,5 +38,57 @@ describe("isItemAvailableInStore", () => {
 
   it("hides listings that have already expired", () => {
     expect(isItemAvailableInStore("2026-09-08", now)).toBe(false);
+  });
+});
+
+const heal = { effects: [{ type: "heal" }] } as Parameters<
+  typeof healItemDiscountPerc
+>[0];
+const plain = { effects: [] };
+const user = {
+  anbuId: null,
+  isOutlaw: false,
+  joinedVillageAt: new Date(),
+  villageId: null,
+};
+
+describe("getShopDiscounts", () => {
+  it("leaves out discounts that do not apply", () => {
+    expect(getShopDiscounts(user, undefined, plain)).toEqual([]);
+    expect(getShopDiscounts(user, undefined, null)).toEqual([]);
+  });
+
+  it("labels the ANBU and medic-nin discounts", () => {
+    expect(getShopDiscounts({ ...user, anbuId: "anbu" }, undefined, heal)).toEqual([
+      { label: "ANBU membership", value: ANBU_ITEMSHOP_DISCOUNT_PERC },
+      { label: "medic-nin item", value: MEDNIN_HEAL_ITEM_DISCOUNT_PERC },
+    ]);
+  });
+});
+
+describe("shopItemDiscountFactor", () => {
+  it("adds discounts up", () => {
+    expect(shopItemDiscountFactor([{ value: 10 }, { value: 15 }])).toBe(0.75);
+    expect(shopItemDiscountFactor([])).toBe(1);
+  });
+
+  it("stops at the price floor", () => {
+    expect(shopItemDiscountFactor([{ value: 100 }])).toBe(MIN_ITEM_SHOP_DISCOUNT_FACTOR);
+  });
+});
+
+describe("getShopStackPrice", () => {
+  it("discounts ryo only and rounds each currency up", () => {
+    expect(
+      getShopStackPrice({ cost: 101, repsCost: 3, seichiSilverCost: 5 }, 2, 0.5),
+    ).toEqual({ ryoCost: 101, repsCost: 6, seichiSilverCost: 10 });
+  });
+
+  it("prices a missing item at zero", () => {
+    expect(getShopStackPrice(undefined, 3, 1)).toEqual({
+      ryoCost: 0,
+      repsCost: 0,
+      seichiSilverCost: 0,
+    });
   });
 });

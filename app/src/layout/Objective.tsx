@@ -26,6 +26,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { QuestRewardType } from "@/validators/rewardPackages";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import { hasReward } from "@/validators/rewards";
 
 interface ObjectiveProps {
@@ -262,10 +263,7 @@ export const Reward: React.FC<RewardProps> = (props) => {
   const info = props.info
     ? {
         ...props.info,
-        ...collapseRewards([
-          props.info,
-          ...(props.info.reward_packages ?? []).map((pack) => pack.rewards),
-        ]),
+        ...collapseRewards(rewardPayloads(props.info)),
       }
     : props.info;
   let rewards = `${info?.reward_money ? `${info.reward_money} Ryo` : ""}`;

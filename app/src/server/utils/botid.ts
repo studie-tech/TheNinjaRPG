@@ -187,10 +187,10 @@ export const shouldGuardTrpcRequest = (
   isOnVercel: boolean = process.env.VERCEL === "1",
 ) => method === "POST" && isOnVercel && paths.some(isBotIdProtectedProcedure);
 
-/** `/api/trpc/a.b,c.d?batch=1` → `["a.b", "c.d"]`. */
-export const trpcPathsFromUrl = (url: string): string[] => {
+/** `/api/trpc/a.b,c.d?batch=1` → `["a.b", "c.d"]`. An undecodable path stays whole. */
+export const trpcPathsFromUrl = (url: string, endpoint = "/api/trpc"): string[] => {
   const pathname = new URL(url, "http://localhost").pathname;
-  const joined = pathname.replace(/^\/api\/trpc\/?/, "");
+  const joined = pathname.replace(new RegExp(`^${endpoint}/?`), "");
   try {
     return decodeURIComponent(joined).split(",").filter(Boolean);
   } catch {

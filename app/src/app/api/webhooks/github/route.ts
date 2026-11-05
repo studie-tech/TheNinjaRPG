@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/queries/support";
 
 import { drizzleDB } from "@/server/db";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 
 // GitHub webhook payload types
 interface GitHubWebhookPayload {
@@ -34,26 +35,12 @@ function verifyGitHubSignature(
   signature: string,
   secret: string,
 ): boolean {
-  if (!signature || !secret) {
-    console.log("Missing signature or secret");
-    return false;
-  }
-
   // Create HMAC with the secret
   const hmac = createHmac("sha256", secret);
   hmac.update(payload, "utf8");
   const expectedSignature = `sha256=${hmac.digest("hex")}`;
 
-  const actualSignature = signature;
-  if (expectedSignature.length !== actualSignature.length) {
-    console.log("Signature length mismatch");
-    return false;
-  }
-
-  return timingSafeEqual(
-    Buffer.from(expectedSignature, "utf8"),
-    Buffer.from(actualSignature, "utf8"),
-  );
+  return constantTimeEquals(expectedSignature, signature);
 }
 
 /**

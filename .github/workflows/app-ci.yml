@@ -1,4 +1,4 @@
-name: test_build
+name: app-ci
 on: pull_request
 
 permissions:
@@ -44,8 +44,6 @@ jobs:
             mobile
             scripts
             .github
-            .agents
-            .vscode
       - uses: ./.github/actions/setup-app
       - name: run tests
         run: bun run test
@@ -77,3 +75,45 @@ jobs:
       NODE_OPTIONS: "--max-old-space-size=4096"
       TEST_MYSQL_URL: "mysql://root@127.0.0.1:3306/tnr_test"
       TEST_MYSQL_ALLOW_DESTRUCTIVE: "1"
+  test_linting:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
+    name: test_linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # No step here runs git, so the job never needs the token on disk.
+          persist-credentials: false
+          # Sparse checkout also fetches blobs on demand; root media assets are not CI inputs.
+          sparse-checkout: |
+            app
+            mobile
+            scripts
+            .github
+      - uses: ./.github/actions/setup-app
+      - name: run lint
+        run: bun run lint
+        working-directory: ./app
+  test_typecheck:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
+    name: test_typecheck
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # No step here runs git, so the job never needs the token on disk.
+          persist-credentials: false
+          # Sparse checkout also fetches blobs on demand; root media assets are not CI inputs.
+          sparse-checkout: |
+            app
+            mobile
+            scripts
+            .github
+      - uses: ./.github/actions/setup-app
+      - name: run typecheck
+        run: bun run typecheck
+        working-directory: ./app
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"

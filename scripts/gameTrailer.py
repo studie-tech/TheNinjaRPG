@@ -21,14 +21,13 @@ import argparse
 
 # Configuration
 CLIPS_DIR = "clips"  # Directory containing the recorded video clips
-OUTPUT_FILE = "theninja_rpg_trailer.mp4"
 VIDEO_SIZE = (1920, 1080)  # Target resolution
 FPS = 30
+TEXT_DURATION = 3  # Seconds of each segment spent on its text screen
 
 # Background music (located in clips directory)
 BACKGROUND_MUSIC = os.path.join(CLIPS_DIR, "xevan_welcome_to_seichi_compressed.m4a")
 
-WALLPAPER = os.path.join(CLIPS_DIR, "wallpaper-bright.webp")
 WALLPAPER_ANIMATED = os.path.join(CLIPS_DIR, "wallpaper-bright-animated.mp4")
 
 LOGO_FILE = os.path.join(CLIPS_DIR, "logo_final.webp")
@@ -138,6 +137,26 @@ TIMELINE = [
 ]
 
 
+def resolve_font():
+    """Return the custom font, falling back to Impact when it is missing"""
+    if os.path.exists(FONT_FILE):
+        return FONT_FILE
+    print(f"⚠ Custom font not found: {FONT_FILE}, using Impact fallback")
+    return "Impact"
+
+
+def load_narration(path, duration):
+    """Load narration trimmed to duration, with short fades and a slight volume boost"""
+    narration_audio = AudioFileClip(path)
+    if narration_audio.duration > duration:
+        narration_audio = narration_audio.subclipped(0, duration)
+    return narration_audio.with_effects([
+        afx.AudioFadeIn(0.3),
+        afx.AudioFadeOut(0.3),
+        afx.MultiplyVolume(1.2)
+    ])
+
+
 def load_animated_wallpaper(wallpaper_path, duration, size, mobile_mode=False):
     """Load and prepare animated wallpaper background
     
@@ -214,12 +233,7 @@ def create_text_screen(text, duration, size=VIDEO_SIZE, fontsize=None, color="wh
     bg = load_animated_wallpaper(wallpaper_path, duration, size, mobile_mode=mobile_mode)
     bg = bg.with_effects([vfx.FadeIn(wallpaper_fade_duration)])
     
-    # Determine which font to use
-    if os.path.exists(FONT_FILE):
-        font = FONT_FILE
-    else:
-        print(f"⚠ Custom font not found: {FONT_FILE}, using Impact fallback")
-        font = "Impact"
+    font = resolve_font()
     
     # Create text clip with delayed fade-in and black stroke
     # Use standard text width since we have manual line breaks for mobile
@@ -368,8 +382,8 @@ def create_segment(timeline_item, video_size=VIDEO_SIZE, mobile_mode=False):
     else:
         clip_names = timeline_item["clips"]
     
-    # Allocate time: 3 seconds for text screen, remaining for clips
-    text_duration = 3
+    # Allocate time: text screen first, remaining for clips
+    text_duration = TEXT_DURATION
     clips_duration = total_duration - text_duration
     
     # Create text screen (fade-in is handled internally)
@@ -414,21 +428,7 @@ def create_segment(timeline_item, video_size=VIDEO_SIZE, mobile_mode=False):
     narration_path = timeline_item.get("narration")
     if narration_path and os.path.exists(narration_path):
         try:
-            narration_audio = AudioFileClip(narration_path)
-            
-            # Trim or loop narration to match segment duration if needed
-            if narration_audio.duration > total_duration:
-                narration_audio = narration_audio.subclipped(0, total_duration)
-            elif narration_audio.duration < total_duration:
-                # If narration is shorter, it will just play and then be silent
-                pass
-            
-            # Add fade in/out to narration for smooth audio
-            narration_audio = narration_audio.with_effects([
-                afx.AudioFadeIn(0.3),
-                afx.AudioFadeOut(0.3),
-                afx.MultiplyVolume(1.2)  # Boost narration volume slightly
-            ])
+            narration_audio = load_narration(narration_path, total_duration)
             
             # Mix narration with clip audio if clips have audio
             if final_segment.audio is not None:
@@ -571,11 +571,7 @@ def create_outro(duration=4, video_size=VIDEO_SIZE, wallpaper=None, narration=No
     # Auto-scale stroke width based on resolution
     stroke_width = max(1, int(video_size[1] / 180))  # Scales with height, min 1px
     
-    # Determine which font to use
-    if os.path.exists(FONT_FILE):
-        font = FONT_FILE
-    else:
-        font = "Impact"
+    font = resolve_font()
     
     # Use provided wallpaper or default
     wallpaper_path = wallpaper if wallpaper is not None else WALLPAPER_ANIMATED
@@ -664,18 +660,7 @@ def create_outro(duration=4, video_size=VIDEO_SIZE, wallpaper=None, narration=No
     # Add narration audio if provided
     if narration and os.path.exists(narration):
         try:
-            narration_audio = AudioFileClip(narration)
-            
-            # Trim or loop narration to match outro duration if needed
-            if narration_audio.duration > duration:
-                narration_audio = narration_audio.subclipped(0, duration)
-            
-            # Add fade in/out to narration for smooth audio
-            narration_audio = narration_audio.with_effects([
-                afx.AudioFadeIn(0.3),
-                afx.AudioFadeOut(0.3),
-                afx.MultiplyVolume(1.2)  # Boost narration volume slightly
-            ])
+            narration_audio = load_narration(narration, duration)
             
             # Attach narration to the outro
             outro = outro.with_audio(narration_audio)
@@ -754,7 +739,7 @@ def create_trailer(preview_mode=False, mobile_mode=False):
         
         # Calculate text and clips durations for this segment
         total_duration = timeline_item["duration"]
-        text_duration = 3
+        text_duration = TEXT_DURATION
         clips_duration = total_duration - text_duration
         has_narration = "narration" in timeline_item
         

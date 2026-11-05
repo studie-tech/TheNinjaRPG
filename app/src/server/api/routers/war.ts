@@ -91,11 +91,8 @@ import {
   insertNotificationForCancelWarDeclaration,
   insertNotificationForDeclareSectorWar,
   insertNotificationForDeclareVillageWarOrRaid,
-  insertNotificationForVoteOnWarDeclaration,
-  insertNotificationForVoteOnWarDeclaration2,
-  insertNotificationForVoteOnWarDeclaration3,
-  insertNotificationForVoteOnWarDeclaration4,
   insertVillageElderVoteForDeclareVillageWarOrRaid,
+  listAcceptedWarMercenaries,
   listQuestForGetObjectiveWarInfo,
   listQuestHistoryForGetObjectiveWarInfo,
   listUserDataForDeclareVillageWarOrRaid,
@@ -105,7 +102,6 @@ import {
   listWarKillForGetWarKills,
   listWarMercenaryForGetMercenaries,
   listWarMercenaryForGetMercenaryOffers,
-  listWarMercenaryForGetObjectiveWarInfo,
   listWarMercenaryForInviteMercenary,
   selectClanMemberCountForVillage,
   selectUserDataForCancelWarDeclaration,
@@ -123,7 +119,6 @@ import {
   updateUserDataForFinishWarSettlement,
   updateUserDataForStartWarMission,
   updateVillageElderVoteForCancelWarDeclaration,
-  updateVillageElderVoteForVoteOnWarDeclaration2,
   updateWarMercenaryForFinishWarSettlement,
 } from "@/queries/war";
 import { initiateBattle } from "@/routers/combat";
@@ -141,9 +136,11 @@ import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objective
 import { notifyWarVillages } from "@/server/utils/push/war";
 import {
   handleWarEnd,
-  startApprovedVoteWar,
+  notifyWarDeclarationInitiator,
+  startClaimedWarDeclaration,
   startDeclaredWar,
   startSectorWar,
+  warDeclarationRejectedMessage,
 } from "@/server/utils/war";
 import {
   acceptWarAllyOffer,
@@ -342,7 +339,7 @@ export const warRouter = createTRPCRouter({
         listQuestHistoryForGetObjectiveWarInfo(ctx.drizzle, ctx),
         selectVillageForGetObjectiveWarInfo(ctx.drizzle, ctx),
         listWarKillForGetObjectiveWarInfo(ctx.drizzle, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
         fetchMercenaryWarId(ctx.drizzle, ctx.userId),
       ]);
       if (
@@ -351,8 +348,8 @@ export const warRouter = createTRPCRouter({
       )
         return null;
       const side = getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)!;
-      const mercenaryIds = new Set(mercenaryHistory.map((m) => m.userId));
-      const isMasked = (id: string) => mercenaryIds.has(id) && id !== ctx.userId;
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
+      const isMasked = (id: string) => maskedIds.has(id);
       const displayName = (id: string, name: string | null | undefined) =>
         isMasked(id) ? "Mercenary" : (name ?? "Unknown ninja");
       const combatContributions = new Map<
@@ -1676,13 +1673,10 @@ export const warRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const [results, mercenaryHistory] = await Promise.all([
         listWarKillForGetWarKills(ctx.drizzle, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
       ]);
-      // Accepted contracts keep identities private after dismissal; recorded villages
-      // are credited war sides and remain visible alongside the kill records.
-      const maskedIds = new Set(
-        mercenaryHistory.filter((m) => m.userId !== ctx.userId).map((m) => m.userId),
-      );
+      // Recorded villages are credited war sides and remain visible alongside the kills.
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
       return results
         .filter((kill) => kill.killer && kill.victim)
         .map((kill) => ({
@@ -1730,11 +1724,9 @@ export const warRouter = createTRPCRouter({
           : sql<number>`sum(GREATEST(${aggregateField}, 0))`;
       const [results, mercenaryHistory] = await Promise.all([
         selectWarKillForGetWarKillStats(ctx.drizzle, aggregate, input),
-        listWarMercenaryForGetObjectiveWarInfo(ctx.drizzle, input),
+        listAcceptedWarMercenaries(ctx.drizzle, input),
       ]);
-      const maskedIds = new Set(
-        mercenaryHistory.filter((m) => m.userId !== ctx.userId).map((m) => m.userId),
-      );
+      const maskedIds = getMaskedMercenaryIds(mercenaryHistory, ctx.userId);
       return results.map((row) =>
         maskedIds.has(row.killerId)
           ? {
@@ -1895,7 +1887,7 @@ export const warRouter = createTRPCRouter({
         elderCount,
       );
       if (!voteResult) return errorResponse("You have already voted");
-      const { outcome, freshEntries } = voteResult;
+      const { outcome, yes, no } = voteResult;
       if (outcome === "APPROVED") {
         // Atomically claim the motion and pre-fetch needed data in parallel
         const [claimResult, defenderVillage, currentActiveWars] = await Promise.all([
@@ -1907,64 +1899,18 @@ export const warRouter = createTRPCRouter({
           return errorResponse("Vote already processed");
         }
 
-        // Re-check war involvement — a village may have entered a war during the voting window
-        if (
-          isVillageInvolvedInAnyWar(
-            currentActiveWars,
-            voteRecord.villageId,
-            undefined,
-            ["VILLAGE_WAR", "WAR_RAID"],
-          ) ||
-          isVillageInvolvedInAnyWar(currentActiveWars, voteRecord.targetId, undefined, [
-            "VILLAGE_WAR",
-            "WAR_RAID",
-          ])
-        ) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
+        const result = await startClaimedWarDeclaration(ctx.drizzle, voteRecord, {
+          attackerVillage,
+          defenderVillage,
+          activeWars: currentActiveWars,
+        });
+        if (result === "VILLAGE_IN_WAR") {
           return errorResponse("A village is already involved in an active war");
         }
-
-        // Start the war and deduct tokens
-        if (!attackerVillage) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration2(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
-          return errorResponse("Village no longer has enough tokens to declare war");
+        if (result === "ATTACKER_MISSING") {
+          return errorResponse("The attacking village no longer exists");
         }
-        const started = await startApprovedVoteWar(ctx.drizzle, input.voteId, {
-          attackerVillageId: voteRecord.villageId,
-          attackerVillageName: attackerVillage.name,
-          defenderVillageId: voteRecord.targetId,
-          defenderVillageName: defenderVillage?.name ?? "another village",
-          defenderKageId: defenderVillage?.kageId,
-          initiatedByUserId: voteRecord.initiatedByUserId,
-          warType: voteRecord.warType ?? "VILLAGE_WAR",
-          targetStructureRoute: voteRecord.targetStructureRoute ?? "/townhall",
-        });
-        if (!started) {
-          await Promise.all([
-            updateVillageElderVoteForVoteOnWarDeclaration2(ctx.drizzle, input),
-            insertNotificationForVoteOnWarDeclaration3(
-              ctx.drizzle,
-              voteRecord,
-              defenderVillage,
-            ),
-            incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-          ]);
+        if (result === "NOT_STARTED") {
           return errorResponse(
             "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
           );
@@ -1988,14 +1934,11 @@ export const warRouter = createTRPCRouter({
             message: "War declaration vote already resolved",
           };
         }
-        await Promise.all([
-          insertNotificationForVoteOnWarDeclaration4(
-            ctx.drizzle,
-            voteRecord,
-            targetVillage,
-          ),
-          incrementNotificationCounters(ctx.drizzle, [voteRecord.initiatedByUserId]),
-        ]);
+        await notifyWarDeclarationInitiator(
+          ctx.drizzle,
+          voteRecord,
+          warDeclarationRejectedMessage(targetVillage?.name),
+        );
         return {
           success: true,
           message: "War declaration rejected by the elders",
@@ -2004,7 +1947,7 @@ export const warRouter = createTRPCRouter({
 
       return {
         success: true,
-        message: `Vote recorded. Current tally: ${freshEntries.filter((e) => e.vote === "YES").length} YES, ${freshEntries.filter((e) => e.vote === "NO").length} NO`,
+        message: `Vote recorded. Current tally: ${yes} YES, ${no} NO`,
       };
     }),
 });
@@ -2050,6 +1993,10 @@ export type FetchActiveWarsReturnType = War & {
   attackerVillage: Village & { structures: VillageStructure[] };
   defenderVillage: Village & { structures: VillageStructure[] };
 };
+
+/** Accepted contracts keep identities private after dismissal, except from the viewer. */
+const getMaskedMercenaryIds = (mercenaries: { userId: string }[], viewerId: string) =>
+  new Set(mercenaries.map((m) => m.userId).filter((id) => id !== viewerId));
 
 /**
  * Count non-AI members of the owning faction for Hideouts and Strongholds,

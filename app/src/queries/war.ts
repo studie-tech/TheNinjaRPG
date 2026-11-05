@@ -17,6 +17,7 @@ import {
   notInArray,
   or,
   type SQL,
+  type SQLWrapper,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -523,25 +524,35 @@ export const listWarForResumePendingWarSettlements = (
     where: eq(war.settlementPending, true),
   });
 
-/** Build the `gameSetting` listing for `finishWarSettlement`, selecting only `name`, using predicates on `name`. */
-export const listGameSettingForFinishWarSettlement = (
-  client: Pick<DrizzleClient, "query">,
-  names: string[],
-) =>
-  client.query.gameSetting.findMany({
-    where: inArray(gameSetting.name, names),
-    columns: { name: true },
-  });
-
-/** Build the `gameSetting` insert for `finishWarSettlement`. */
+/** Seed absent boost names in one statement, preserving values and expiry on existing rows. */
 export const insertGameSettingForFinishWarSettlement = (
-  client: Pick<DrizzleClient, "insert">,
-  missing: string[],
-) =>
-  client
+  client: Pick<DrizzleClient, "insert" | "select">,
+  names: string[],
+) => {
+  // Settings can have generated IDs; names are indexed but are not unique.
+  const existing = alias(gameSetting, "existingBoost");
+  const name = sql<string>`candidate.name`;
+  return client
     .insert(gameSetting)
     .ignore()
-    .values(missing.map((name) => ({ id: name, name, value: 0, time: new Date(0) })));
+    .select(
+      client
+        .select({
+          id: name.as("id"),
+          name: name.as("name"),
+          time: sql<Date>`${sql.param(new Date(0), gameSetting.time)}`.as("time"),
+          value: sql<number>`0`.as("value"),
+        })
+        .from(
+          sql`(${sql.join(
+            names.map((name) => sql`SELECT ${name} AS name`),
+            sql` UNION ALL `,
+          )}) candidate`,
+        )
+        .leftJoin(existing, eq(existing.name, name))
+        .where(isNull(existing.id)),
+    );
+};
 
 /**
  * Build the `warMercenary` update for `finishWarSettlement` and `adminEndWar`, setting
@@ -572,22 +583,17 @@ export const updateUserDataForFinishWarSettlement = (
 /** Execute the database statement for `finishWarSettlement`. */
 export const executeRowsForFinishWarSettlement = (
   client: Pick<DrizzleClient, "execute">,
-  winningIds: string[],
-  endedWar: { rules: null | import("@/validators/war").WarRules },
-  winnerId: string,
+  boostNames: string[],
+  trainBoostNames: string[],
   boostEnd: Date,
-
   stepGuard: (
     key: "boostsDelivered" | "structuresDelivered" | "notified",
   ) => SQL<unknown>,
 ) =>
   client.execute(sql`
-        UPDATE ${war} LEFT JOIN ${gameSetting} ON ${inArray(gameSetting.name, [...winningIds.map((id) => `war-${id}-regen`), ...(endedWar.rules ? winningIds : [winnerId]).map((id) => `war-${id}-train`)])}
+        UPDATE ${war} LEFT JOIN ${gameSetting} ON ${inArray(gameSetting.name, boostNames)}
         SET ${gameSetting.value} = CASE WHEN ${gameSetting.time} < ${boostEnd}
-          THEN CASE WHEN ${inArray(
-            gameSetting.name,
-            (endedWar.rules ? winningIds : [winnerId]).map((id) => `war-${id}-train`),
-          )} THEN ${WAR_WINNING_BOOST_TRAINING_PERC} ELSE ${WAR_WINNING_BOOST_REGEN_PERC} END ELSE ${gameSetting.value} END,
+          THEN CASE WHEN ${inArray(gameSetting.name, trainBoostNames)} THEN ${WAR_WINNING_BOOST_TRAINING_PERC} ELSE ${WAR_WINNING_BOOST_REGEN_PERC} END ELSE ${gameSetting.value} END,
             ${gameSetting.time} = GREATEST(${gameSetting.time}, ${boostEnd}),
             ${war.settlement} = ${stepReceipt("boostsDelivered")}
         WHERE ${stepGuard("boostsDelivered")}
@@ -1091,9 +1097,7 @@ export const selectWarMercenaryForFetchMercenaryWarId = (
       and(
         eq(warMercenary.userId, userId),
         activeWarMercenaryWhere(),
-        eq(war.status, "ACTIVE"),
-        isNull(war.endedAt),
-        sql`${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0 AND SYSDATE(3) < DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY)`,
+        objectiveWarOpenSql(),
       ),
     );
 
@@ -1104,7 +1108,7 @@ export const executeRowsForAcceptWarMercenary = (
 ) =>
   client.execute(sql`UPDATE WarMercenary m INNER JOIN War w ON w.id = m.warId
     SET m.endedAt = COALESCE(w.endedAt, SYSDATE(3))
-    WHERE m.userId = ${userId} AND m.endedAt IS NULL AND (w.status != 'ACTIVE' OR w.endedAt IS NOT NULL OR w.attackerWarHealth <= 0 OR w.defenderWarHealth <= 0 OR SYSDATE(3) >= DATE_ADD(w.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(w.rules, '$.durationDays') AS UNSIGNED) DAY))`);
+    WHERE m.userId = ${userId} AND m.endedAt IS NULL AND NOT ${objectiveWarOpenSql("w")}`);
 
 /** Execute the database statement for `acceptWarMercenary`. */
 export const executeResultForAcceptWarMercenary = (
@@ -1121,9 +1125,7 @@ export const executeResultForAcceptWarMercenary = (
         recipient.money = recipient.money + m.tokens * ${WAR_MERCENARY_RYO_PER_TOKEN},
         m.acceptedAt = SYSDATE(3)
       WHERE m.id = ${id} AND m.userId = ${userId} AND m.acceptedAt IS NULL AND m.endedAt IS NULL
-        AND w.status = 'ACTIVE' AND w.endedAt IS NULL AND w.rules IS NOT NULL
-        AND w.attackerWarHealth > 0 AND w.defenderWarHealth > 0
-        AND SYSDATE(3) < DATE_ADD(w.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(w.rules, '$.durationDays') AS UNSIGNED) DAY)
+        AND w.rules IS NOT NULL AND ${objectiveWarOpenSql("w")}
         AND payer.kageId = m.invitedById AND payer.tokens >= m.tokens
         AND payer.id IN (w.attackerVillageId, w.defenderVillageId)
         AND NOT EXISTS (SELECT 1 FROM War otherWar WHERE otherWar.id != w.id AND otherWar.status = 'ACTIVE' AND otherWar.endedAt IS NULL AND (recipient.villageId IN (otherWar.attackerVillageId, otherWar.defenderVillageId) OR EXISTS (SELECT 1 FROM WarAlly otherAlly WHERE otherAlly.warId = otherWar.id AND otherAlly.villageId = recipient.villageId AND otherAlly.acceptedAt IS NOT NULL AND otherAlly.endedAt IS NULL)))
@@ -1168,21 +1170,7 @@ export const listWarForFetchWarCampEntry = (
 export const fetchActiveWar = async (client: DrizzleClient, warId: string) => {
   return await client.query.war.findFirst({
     where: and(eq(war.id, warId), eq(war.status, "ACTIVE")),
-    with: {
-      attackerVillage: {
-        with: { structures: true },
-      },
-      defenderVillage: {
-        with: { structures: true },
-      },
-      warMercenaries: { where: activeWarMercenaryWhere() },
-      warAllies: {
-        where: activeWarAllyWhere(),
-        with: {
-          village: true,
-        },
-      },
-    },
+    with: activeWarRelations(),
   });
 };
 
@@ -1228,7 +1216,7 @@ export const listWarMercenaryForGetMercenaryOffers = (
     where: and(
       eq(warMercenary.userId, ctx.userId),
       isNull(warMercenary.endedAt),
-      sql`EXISTS (SELECT 1 FROM War w WHERE w.id = ${warMercenary.warId} AND w.status = 'ACTIVE' AND w.endedAt IS NULL AND w.attackerWarHealth > 0 AND w.defenderWarHealth > 0 AND SYSDATE(3) < DATE_ADD(w.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(w.rules, '$.durationDays') AS UNSIGNED) DAY))`,
+      sql`EXISTS (SELECT 1 FROM War w WHERE w.id = ${warMercenary.warId} AND ${objectiveWarOpenSql("w")})`,
     ),
     with: {
       village: { columns: { name: true } },
@@ -1305,10 +1293,8 @@ export const executeSavedForInviteMercenary = (
         INSERT INTO WarMercenary (id, warId, sideVillageId, userId, invitedById, tokens, slot)
         SELECT ${nanoid()}, w.id, payer.id, ${input.userId}, ${ctx.userId}, ${input.tokens}, ${slot}
         FROM War w INNER JOIN Village payer ON payer.id IN (w.attackerVillageId, w.defenderVillageId)
-        WHERE w.id = ${input.warId} AND w.status = 'ACTIVE' AND w.endedAt IS NULL AND w.rules IS NOT NULL
+        WHERE w.id = ${input.warId} AND w.rules IS NOT NULL AND ${objectiveWarOpenSql("w")}
           AND payer.id = ${payer.id} AND payer.kageId = ${ctx.userId} AND payer.tokens >= ${input.tokens}
-          AND w.attackerWarHealth > 0 AND w.defenderWarHealth > 0
-          AND SYSDATE(3) < DATE_ADD(w.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(w.rules, '$.durationDays') AS UNSIGNED) DAY)
       `);
 
 /** Execute the database statement for `leaveMercenary`. */
@@ -1434,20 +1420,14 @@ export const listWarKillForGetObjectiveWarInfo = (
     },
   });
 
-/**
- * Build the `warMercenary` listing for `getObjectiveWarInfo`, selecting only `userId`,
- * using predicates on `warId` and `acceptedAt`.
- */
-export const listWarMercenaryForGetObjectiveWarInfo = (
+/** Build the `warMercenary` listing of every contract a war ever accepted, selecting `userId`. */
+export const listAcceptedWarMercenaries = (
   client: Pick<DrizzleClient, "query">,
   input: { warId: string },
 ) =>
   client.query.warMercenary.findMany({
     columns: { userId: true },
-    where: and(
-      eq(warMercenary.warId, input.warId),
-      sql`${warMercenary.acceptedAt} IS NOT NULL`,
-    ),
+    where: and(eq(warMercenary.warId, input.warId), isNotNull(warMercenary.acceptedAt)),
   });
 
 /** Build the `war` lookup for `startWarMission`, using predicates on `id`. */
@@ -1492,10 +1472,8 @@ export const updateUserDataForStartWarMission = (
           : isNull(userData.villageId),
         eq(userData.sector, user.sector),
         eq(userData.isBanned, false),
-        sql`EXISTS (SELECT 1 FROM War currentWar WHERE currentWar.id = ${activeWar.id} AND currentWar.endedAt IS NULL AND currentWar.status = 'ACTIVE'
-              AND currentWar.attackerWarHealth > 0 AND currentWar.defenderWarHealth > 0
-              AND currentWar.combatStartedAt <= SYSDATE(3)
-              AND SYSDATE(3) < DATE_ADD(currentWar.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(currentWar.rules, '$.durationDays') AS UNSIGNED) DAY)
+        sql`EXISTS (SELECT 1 FROM War currentWar WHERE currentWar.id = ${activeWar.id}
+              AND ${objectiveWarActiveSql("currentWar")}
               AND ${warMissionMembershipGuard(activeWar.id, side, ctx.userId)})`,
       ),
     );
@@ -1604,11 +1582,8 @@ export const selectWarCampForGetWarCampNotices = (
     .where(
       and(
         isNull(war.endedAt),
-        sql`NOT EXISTS (SELECT 1 FROM WarMercenary exclusiveMerc INNER JOIN War exclusiveWar ON exclusiveWar.id = exclusiveMerc.warId WHERE exclusiveMerc.userId = ${ctx.userId} AND exclusiveMerc.warId != ${war.id} AND exclusiveMerc.acceptedAt IS NOT NULL AND exclusiveMerc.endedAt IS NULL AND exclusiveWar.status = 'ACTIVE' AND exclusiveWar.endedAt IS NULL AND exclusiveWar.attackerWarHealth > 0 AND exclusiveWar.defenderWarHealth > 0 AND SYSDATE(3) < DATE_ADD(exclusiveWar.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(exclusiveWar.rules, '$.durationDays') AS UNSIGNED) DAY))`,
-        eq(war.status, "ACTIVE"),
-        sql`${war.combatStartedAt} <= SYSDATE(3) AND SYSDATE(3) < DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY)`,
-        gt(war.attackerWarHealth, 0),
-        gt(war.defenderWarHealth, 0),
+        notExclusiveMercenaryElsewhere(ctx.userId, war.id),
+        objectiveWarActiveSql(),
         isNull(warCamp.resolvedAt),
         sql`${warCamp.startsAt} <= SYSDATE(3) AND ${warCamp.endsAt} > SYSDATE(3)`,
         or(
@@ -1719,7 +1694,7 @@ export const updateUserDataForDeclareSectorWar = (
 ) =>
   client
     .update(userData)
-    .set({ unreadNotifications: sql`unreadNotifications + 1` })
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
     .where(
       inArray(
         userData.villageId,
@@ -1916,52 +1891,6 @@ export const findVillageForVoteOnWarDeclaration = (
     where: eq(village.id, voteRecord.targetId),
   });
 
-/**
- * Build the `villageElderVote` update for `voteOnWarDeclaration`, setting `status` and
- * `endsAt`, using predicates on `id`.
- */
-export const updateVillageElderVoteForVoteOnWarDeclaration2 = (
-  client: Pick<DrizzleClient, "update">,
-  input: { voteId: string },
-) =>
-  client
-    .update(villageElderVote)
-    .set({ status: "REJECTED", endsAt: new Date() })
-    .where(eq(villageElderVote.id, input.voteId));
-
-/** Build the `notification` insert for `voteOnWarDeclaration`. */
-export const insertNotificationForVoteOnWarDeclaration = (
-  client: Pick<DrizzleClient, "insert">,
-  voteRecord: { initiatedByUserId: string },
-  defenderVillage: { name: undefined | string } | undefined,
-) =>
-  client.insert(notification).values({
-    userId: voteRecord.initiatedByUserId,
-    content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in an active war.`,
-  });
-
-/** Build the `notification` insert for `voteOnWarDeclaration`. */
-export const insertNotificationForVoteOnWarDeclaration2 = (
-  client: Pick<DrizzleClient, "insert">,
-  voteRecord: { initiatedByUserId: string },
-  defenderVillage: { name: undefined | string } | undefined,
-) =>
-  client.insert(notification).values({
-    userId: voteRecord.initiatedByUserId,
-    content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — village no longer has enough tokens.`,
-  });
-
-/** Build the `notification` insert for `voteOnWarDeclaration`. */
-export const insertNotificationForVoteOnWarDeclaration3 = (
-  client: Pick<DrizzleClient, "insert">,
-  voteRecord: { initiatedByUserId: string },
-  defenderVillage: { name: undefined | string } | undefined,
-) =>
-  client.insert(notification).values({
-    userId: voteRecord.initiatedByUserId,
-    content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
-  });
-
 /** Build the `village` lookup for `voteOnWarDeclaration`, selecting only `name`, using predicates on `id`. */
 export const findVillageForVoteOnWarDeclaration2 = (
   client: Pick<DrizzleClient, "query">,
@@ -1972,36 +1901,11 @@ export const findVillageForVoteOnWarDeclaration2 = (
     where: eq(village.id, voteRecord.targetId),
   });
 
-/** Build the `notification` insert for `voteOnWarDeclaration`. */
-export const insertNotificationForVoteOnWarDeclaration4 = (
-  client: Pick<DrizzleClient, "insert">,
-  voteRecord: { initiatedByUserId: string },
-  targetVillage: { name: undefined | string } | undefined,
-) =>
-  client.insert(notification).values({
-    userId: voteRecord.initiatedByUserId,
-    content: `War declaration against ${targetVillage?.name ?? "another village"} was rejected by the elders.`,
-  });
-
 /** Build the `war` listing for `fetchActiveWars`, using predicates on `status` and `settlementPending`. */
 export const listWarForFetchActiveWars = (client: Pick<DrizzleClient, "query">) =>
   client.query.war.findMany({
     where: or(eq(war.status, "ACTIVE"), eq(war.settlementPending, true)),
-    with: {
-      attackerVillage: {
-        with: { structures: true },
-      },
-      defenderVillage: {
-        with: { structures: true },
-      },
-      warMercenaries: { where: activeWarMercenaryWhere() },
-      warAllies: {
-        where: activeWarAllyWhere(),
-        with: {
-          village: true,
-        },
-      },
-    },
+    with: activeWarRelations(),
   });
 
 /** Build the count of non-AI clan members belonging to a village. */
@@ -2075,15 +1979,38 @@ export const activeWarAllyWhere = () =>
 export const activeWarMercenaryWhere = () =>
   and(isNotNull(warMercenary.acceptedAt), isNull(warMercenary.endedAt));
 
+/** How a statement names the War table; raw names stay valid inside relational queries. */
+type WarTableName = "War" | "w" | "exclusiveWar" | "currentWar";
+
+/** SQL twin of `getObjectiveWarDeadline`. */
+const objectiveWarDeadlineSql = (table: WarTableName) => {
+  const w = sql.identifier(table);
+  return sql`DATE_ADD(${w}.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(${w}.rules, '$.durationDays') AS UNSIGNED) DAY)`;
+};
+
+/** SQL twin of `isObjectiveWarOpen`. */
+const objectiveWarOpenSql = (table: WarTableName = "War") => {
+  const w = sql.identifier(table);
+  return sql`(${w}.status = 'ACTIVE' AND ${w}.endedAt IS NULL AND ${w}.attackerWarHealth > 0 AND ${w}.defenderWarHealth > 0 AND SYSDATE(3) < ${objectiveWarDeadlineSql(table)})`;
+};
+
+/** SQL twin of `isObjectiveWarActive`. */
+const objectiveWarActiveSql = (table: WarTableName = "War") =>
+  sql`(${objectiveWarOpenSql(table)} AND ${sql.identifier(table)}.combatStartedAt <= SYSDATE(3))`;
+
+/** An accepted contract in another open war excludes the user from every other war. */
+const notExclusiveMercenaryElsewhere = (userId: string, warId: string | SQLWrapper) =>
+  sql`NOT EXISTS (SELECT 1 FROM WarMercenary exclusiveMerc INNER JOIN War exclusiveWar ON exclusiveWar.id = exclusiveMerc.warId
+      WHERE exclusiveMerc.userId = ${userId} AND exclusiveMerc.warId != ${warId} AND exclusiveMerc.acceptedAt IS NOT NULL AND exclusiveMerc.endedAt IS NULL
+      AND ${objectiveWarOpenSql("exclusiveWar")})`;
+
 /** Recheck live affiliation when a mission is claimed, including a racing resignation. */
 export const warMissionMembershipGuard = (
   warId: string,
   side: string,
   userId: string,
 ) => sql`
-  (NOT EXISTS (SELECT 1 FROM WarMercenary exclusiveMerc INNER JOIN War exclusiveWar ON exclusiveWar.id = exclusiveMerc.warId
-      WHERE exclusiveMerc.userId = ${userId} AND exclusiveMerc.warId != ${warId} AND exclusiveMerc.acceptedAt IS NOT NULL AND exclusiveMerc.endedAt IS NULL AND exclusiveWar.status = 'ACTIVE' AND exclusiveWar.endedAt IS NULL
-      AND exclusiveWar.attackerWarHealth > 0 AND exclusiveWar.defenderWarHealth > 0 AND SYSDATE(3) < DATE_ADD(exclusiveWar.combatStartedAt, INTERVAL CAST(JSON_EXTRACT(exclusiveWar.rules, '$.durationDays') AS UNSIGNED) DAY)))
+  ${notExclusiveMercenaryElsewhere(userId, warId)}
   AND ((${userData.villageId} = ${side} OR EXISTS (SELECT 1 FROM WarAlly ally WHERE ally.warId = ${warId}
       AND ally.villageId = ${userData.villageId} AND ally.supportVillageId = ${side} AND ally.acceptedAt IS NOT NULL AND ally.endedAt IS NULL))
    OR EXISTS (SELECT 1 FROM WarMercenary merc WHERE merc.warId = ${warId} AND merc.userId = ${userId}
@@ -2092,9 +2019,18 @@ export const warMissionMembershipGuard = (
 /** Reevaluate the deadline after row-lock waits rather than using the battle snapshot. */
 const objectiveWarCombatGuard = () => sql`(${war.rules} IS NULL OR (
   ${war.combatStartedAt} <= SYSDATE(3) AND
-  SYSDATE(3) < DATE_ADD(${war.combatStartedAt}, INTERVAL CAST(JSON_EXTRACT(${war.rules}, '$.durationDays') AS UNSIGNED) DAY)
+  SYSDATE(3) < ${objectiveWarDeadlineSql("War")}
   AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0))`;
 
 /** Mark one settlement delivery step in the same statement that publishes its effects. */
 const stepReceipt = (key: "boostsDelivered" | "structuresDelivered" | "notified") =>
   sql`JSON_SET(${war.settlement}, ${`$.${key}`}, CAST('true' AS JSON))`;
+
+/** Relations behind `FetchActiveWarsReturnType`, shared by the single and listing reads. */
+const activeWarRelations = () =>
+  ({
+    attackerVillage: { with: { structures: true } },
+    defenderVillage: { with: { structures: true } },
+    warMercenaries: { where: activeWarMercenaryWhere() },
+    warAllies: { where: activeWarAllyWhere(), with: { village: true } },
+  }) as const;

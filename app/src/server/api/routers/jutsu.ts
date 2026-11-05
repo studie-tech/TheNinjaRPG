@@ -35,6 +35,7 @@ import {
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
 } from "@/libs/combat/hotkeys";
+import { hasAppearAnimation } from "@/libs/combat/util";
 import {
   deletedReason,
   editedReason,
@@ -48,6 +49,7 @@ import {
   computeJutsuLoadoutAssignments,
   computeJutsuLoadoutPreview,
   countEquippedByCap,
+  filterFreeJutsuTransfers,
   findExceededJutsuEquipCap,
   getFreeTransfers,
   getJutsuCapFlags,
@@ -70,6 +72,7 @@ import { effectiveMasteries } from "@/libs/mastery";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import {
   filterQuestTrackersForDbPersist,
+  getJutsuLearnedTrackerTasks,
   getNewTrackers,
   getPublicQuestUser,
 } from "@/libs/quest";
@@ -198,8 +201,8 @@ import {
   debitUserMoney,
   fetchLoadoutUser,
   fetchUser,
+  fetchViewerRole,
   findUserDataForGetUsername,
-  findUserRoleById,
   incrementUserMoney,
   refundUserReputationPoints,
 } from "@/queries/profile";
@@ -216,6 +219,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   cancelQueuedJutsuTraining,
   enqueueJutsuLevels,
@@ -307,9 +311,7 @@ export const jutsuRouter = createTRPCRouter({
       const fromJutsu = fromUserJutsu?.jutsu;
       const toUserJutsu = userJutsus.find((j) => j.jutsuId === input.toJutsuId);
       const toJutsu = toUserJutsu?.jutsu;
-      const prevFreeTransfers = recentTransfers.filter((t) =>
-        (t.changes as string[]).some((c) => c.includes("Used free transfer.")),
-      );
+      const prevFreeTransfers = filterFreeJutsuTransfers(recentTransfers);
       // Guard
       if (queuedJutsuIds.has(input.fromJutsuId) || queuedJutsuIds.has(input.toJutsuId))
         return errorResponse(
@@ -427,8 +429,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build the base DB filter
       const baseFilters = jutsuDatabaseFilter(input);
@@ -439,7 +440,7 @@ export const jutsuRouter = createTRPCRouter({
       const filtered = filterByEffectConstraints(results, input);
 
       // Next cursor if more rows
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
 
       return {
         data: filtered,
@@ -730,17 +731,6 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.id),
         getJutsuRelations(ctx.drizzle, input.id),
       ]);
-      // Derived
-      const totalRelations =
-        relations.jutsuInjectors.length +
-        relations.bloodlineInjectors.length +
-        relations.skillInjectors.length +
-        relations.itemInjectors.length +
-        relations.aiUsingJutsu.length +
-        relations.questsUsingJutsu.length +
-        relations.childEvolutions.length +
-        relations.linkedReskins.length +
-        relations.playerReskins.length;
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -748,20 +738,10 @@ export const jutsuRouter = createTRPCRouter({
       if (entry.id === TUTORIAL_JUTSU_ID)
         return errorResponse("Cannot delete tutorial jutsu");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
-      if (totalRelations > 0) {
-        const message = [
-          ...relations.jutsuInjectors.map((j) => `Jutsu: ${j.name}`),
-          ...relations.bloodlineInjectors.map((b) => `Bloodline: ${b.name}`),
-          ...relations.skillInjectors.map((s) => `Skill: ${s.name}`),
-          ...relations.itemInjectors.map((i) => `Item: ${i.name}`),
-          ...relations.aiUsingJutsu.map((a) => `AI: ${a.name}`),
-          ...relations.questsUsingJutsu.map((q) => `Quest: ${q.name}`),
-          ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
-          ...relations.linkedReskins.map((e) => `Reskin: ${e.name}`),
-          ...relations.playerReskins.map((r) => `Player reskin: ${r.name}`),
-        ].join(", ");
+      const blockers = describeJutsuRelations(relations);
+      if (blockers.length > 0) {
         return errorResponse(
-          `Justu is being used by: ${message}. So you cannot delete it.`,
+          `Justu is being used by: ${blockers.join(", ")}. So you cannot delete it.`,
         );
       }
       // Mutate
@@ -821,12 +801,11 @@ export const jutsuRouter = createTRPCRouter({
     })
     .input(getEvolutionsSchema)
     .query(async ({ ctx, input }) => {
-      const [user, evolutions] = await Promise.all([
-        ctx.userId ? findUserRoleById(ctx.drizzle, ctx.userId) : Promise.resolve(null),
+      const [viewerRole, evolutions] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         listJutsuForGetEvolutions(ctx.drizzle, input),
       ]);
-      const canViewHidden = !!user && canChangeContent(user.role);
-      return filterVisibleEvolutions(evolutions, canViewHidden);
+      return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
     }),
 
   evolveJutsu: protectedProcedure
@@ -894,15 +873,13 @@ export const jutsuRouter = createTRPCRouter({
           "You don't have the required bloodline item equipped for this evolution",
         );
       // Quest tracking
-      const { trackers, consequences, questIdsUpdated } = getNewTrackers(user, [
-        { task: "jutsus_mastered", increment: 1 },
-        {
-          task: "train_specific_jutsu",
-          increment: 1,
-          contentId: input.evolutionJutsuId,
-          masteryTypes: jutsuMasteryTypes(evolutionJutsu),
-        },
-      ]);
+      const { trackers, consequences, questIdsUpdated } = getNewTrackers(
+        user,
+        getJutsuLearnedTrackerTasks(
+          input.evolutionJutsuId,
+          jutsuMasteryTypes(evolutionJutsu),
+        ),
+      );
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const evolutionCapFlags = getJutsuCapFlags(evolutionJutsu);
       const isRestrictedEquipType =
@@ -1138,32 +1115,15 @@ export const jutsuRouter = createTRPCRouter({
           );
       }
       if (!input.data.injectableInBattle) {
-        const totalRelations =
-          relations.jutsuInjectors.length +
-          relations.bloodlineInjectors.length +
-          relations.skillInjectors.length +
-          relations.itemInjectors.length;
-        if (totalRelations > 0) {
-          const message = [
-            ...relations.jutsuInjectors.map((j) => `Jutsu: ${j.name}`),
-            ...relations.bloodlineInjectors.map((b) => `Bloodline: ${b.name}`),
-            ...relations.skillInjectors.map((s) => `Skill: ${s.name}`),
-            ...relations.itemInjectors.map((i) => `Item: ${i.name}`),
-          ].join(", ");
+        const injectors = describeJutsuInjectors(relations);
+        if (injectors.length > 0) {
           return errorResponse(
-            `Justu is being injected by: ${message}. So you cannot disable it.`,
+            `Justu is being injected by: ${injectors.join(", ")}. So you cannot disable it.`,
           );
         }
       }
       // Validate that at least one effect has both appearAnimation and appearSfx
-      const hasValidAnimation = input.data.effects.some(
-        (effect) =>
-          "appearAnimation" in effect &&
-          effect.appearAnimation &&
-          "appearSfx" in effect &&
-          effect.appearSfx,
-      );
-      if (!input.data.hidden && !hasValidAnimation) {
+      if (!input.data.hidden && !hasAppearAnimation(input.data.effects)) {
         return errorResponse(
           "At least one effect must have both appearAnimation and appearSfx defined",
         );
@@ -1208,9 +1168,7 @@ export const jutsuRouter = createTRPCRouter({
         saved.ids,
         editedReason("JUTSU", entry.name, user.username),
       );
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-      }
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
 
@@ -1465,15 +1423,10 @@ export const jutsuRouter = createTRPCRouter({
       // Quests
       let questDataFull = user.questData ?? [];
       if (!userjutsuObj) {
-        const { trackers } = getNewTrackers(user, [
-          { task: "jutsus_mastered", increment: 1 },
-          {
-            task: "train_specific_jutsu",
-            increment: 1,
-            contentId: input.jutsuId,
-            masteryTypes: jutsuMasteryTypes(info),
-          },
-        ]);
+        const { trackers } = getNewTrackers(
+          user,
+          getJutsuLearnedTrackerTasks(input.jutsuId, jutsuMasteryTypes(info)),
+        );
         questDataFull = trackers;
       }
       const questDataForDb = filterQuestTrackersForDbPersist(questDataFull, user);
@@ -2240,8 +2193,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build the base DB filter (on underlying jutsu)
       const baseFilters = jutsuDatabaseFilter(input);
@@ -2279,7 +2231,7 @@ export const jutsuRouter = createTRPCRouter({
           },
         }));
 
-      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(rows);
       return {
         data: results,
         nextCursor,
@@ -2391,6 +2343,24 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     playerReskins,
   };
 };
+/** Label each piece of content that injects a jutsu into battle. */
+const describeJutsuInjectors = (relations: JutsuRelations) => [
+  ...relations.jutsuInjectors.map((j) => `Jutsu: ${j.name}`),
+  ...relations.bloodlineInjectors.map((b) => `Bloodline: ${b.name}`),
+  ...relations.skillInjectors.map((s) => `Skill: ${s.name}`),
+  ...relations.itemInjectors.map((i) => `Item: ${i.name}`),
+];
+
+/** Label everything that keeps a jutsu from being deleted. */
+const describeJutsuRelations = (relations: JutsuRelations) => [
+  ...describeJutsuInjectors(relations),
+  ...relations.aiUsingJutsu.map((a) => `AI: ${a.name}`),
+  ...relations.questsUsingJutsu.map((q) => `Quest: ${q.name}`),
+  ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
+  ...relations.linkedReskins.map((e) => `Reskin: ${e.name}`),
+  ...relations.playerReskins.map((r) => `Player reskin: ${r.name}`),
+];
+
 export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
 
 /**
@@ -2553,31 +2523,22 @@ export const jutsuDatabaseFilter = (
     ...(input?.rarity ? [eq(jutsu.jutsuRank, input.rarity)] : []),
     ...(input?.villageId ? [eq(jutsu.villageId, input.villageId)] : []),
 
-    ...(input?.appear
-      ? [
-          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.appear}, NULL, '$[*].appearAnimation') IS NOT NULL`,
-        ]
-      : []),
-    ...(input?.appearSfx
-      ? [
-          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.appearSfx}, NULL, '$[*].appearSfx') IS NOT NULL`,
-        ]
-      : []),
-    ...(input?.static
-      ? [
-          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.static}, NULL, '$[*].staticAnimation') IS NOT NULL`,
-        ]
-      : []),
-    ...(input?.disappear
-      ? [
-          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.disappear}, NULL, '$[*].disappearAnimation') IS NOT NULL`,
-        ]
-      : []),
-    ...(input?.disappearSfx
-      ? [
-          sql`JSON_SEARCH(${jutsu.effects}, 'one', ${input.disappearSfx}, NULL, '$[*].disappearSfx') IS NOT NULL`,
-        ]
-      : []),
+    // Include and exclude animations in JSON
+    ...JUTSU_ANIMATION_FILTERS.flatMap(([key, excludedKey, jsonPath]) => {
+      const path = sql.raw(`'${jsonPath}'`);
+      const included = input?.[key];
+      return [
+        ...(included
+          ? [
+              sql`JSON_SEARCH(${jutsu.effects}, 'one', ${included}, NULL, ${path}) IS NOT NULL`,
+            ]
+          : []),
+        ...(input?.[excludedKey] ?? []).map(
+          (excluded) =>
+            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${excluded}, NULL, ${path}) IS NULL`,
+        ),
+      ];
+    }),
     ...(input?.classification
       ? [eq(jutsu.statClassification, input.classification)]
       : []),
@@ -2711,40 +2672,6 @@ export const jutsuDatabaseFilter = (
         )
       : []),
 
-    // ---------------------------
-    // Exclude animations in JSON
-    // ---------------------------
-    ...(input?.excludedAppear?.length
-      ? input.excludedAppear.map(
-          (anim) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${anim}, NULL, '$[*].appearAnimation') IS NULL`,
-        )
-      : []),
-    ...(input?.excludedAppearSfx?.length
-      ? input.excludedAppearSfx.map(
-          (sfx) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${sfx}, NULL, '$[*].appearSfx') IS NULL`,
-        )
-      : []),
-    ...(input?.excludedDisappear?.length
-      ? input.excludedDisappear.map(
-          (anim) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${anim}, NULL, '$[*].disappearAnimation') IS NULL`,
-        )
-      : []),
-    ...(input?.excludedDisappearSfx?.length
-      ? input.excludedDisappearSfx.map(
-          (sfx) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${sfx}, NULL, '$[*].disappearSfx') IS NULL`,
-        )
-      : []),
-    ...(input?.excludedStatic?.length
-      ? input.excludedStatic.map(
-          (anim) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${anim}, NULL, '$[*].staticAnimation') IS NULL`,
-        )
-      : []),
-
     // --------------------------
     // Exclude elements/effects/stats in JSON
     // --------------------------
@@ -2768,6 +2695,15 @@ export const jutsuDatabaseFilter = (
       : []),
   ];
 };
+
+/** Animation and sound filters: the include key, the exclude key and the effect path searched. */
+const JUTSU_ANIMATION_FILTERS = [
+  ["appear", "excludedAppear", "$[*].appearAnimation"],
+  ["appearSfx", "excludedAppearSfx", "$[*].appearSfx"],
+  ["static", "excludedStatic", "$[*].staticAnimation"],
+  ["disappear", "excludedDisappear", "$[*].disappearAnimation"],
+  ["disappearSfx", "excludedDisappearSfx", "$[*].disappearSfx"],
+] as const;
 
 /**
  * Utility: Post-filter jutsu-like rows to ensure includes are satisfied within the same effect
@@ -3160,14 +3096,7 @@ const saveJutsuFamily = async (
           return errorResponse(
             `Invalid reskin mechanics or cosmetics for ${variant.name}: ${valid.error.issues[0]?.message}`,
           );
-        const hasAnimation = variant.effects.some(
-          (effect) =>
-            "appearAnimation" in effect &&
-            effect.appearAnimation &&
-            "appearSfx" in effect &&
-            effect.appearSfx,
-        );
-        if (!variant.hidden && !hasAnimation)
+        if (!variant.hidden && !hasAppearAnimation(variant.effects))
           return errorResponse(
             `Visible jutsu ${variant.name} needs an effect with both appear animation and sound`,
           );

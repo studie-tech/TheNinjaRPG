@@ -1,6 +1,7 @@
 import { detailedDiff } from "deep-object-diff";
 import { z } from "zod";
 import { IMG_ORIENTATIONS } from "@/drizzle/constants";
+import { literalType } from "@/validators/base";
 import { isActivityBonus, tagTypes } from "@/validators/combat";
 
 /** Shared content-generation input; existing callers retain the default provider. */
@@ -138,20 +139,12 @@ export const ZodAllAiConditions = z.union([
   ConditionSummonWithinRange,
 ]);
 
-export const AiConditionTypes = ZodAllAiConditions.options.map((o) => {
-  const typeField = o.shape.type;
-  const literal = typeField.unwrap(); // ZodLiteral
-  return literal.value as string;
-});
+export const AiConditionTypes = ZodAllAiConditions.options.map(literalType);
 
 export type ZodAllAiCondition = z.infer<typeof ZodAllAiConditions>;
 
 export const getConditionSchema = (type: ZodAllAiCondition["type"]) => {
-  const schema = ZodAllAiConditions.options.find((o) => {
-    const typeField = o.shape.type;
-    const literal = typeField.unwrap();
-    return literal.value === type;
-  });
+  const schema = ZodAllAiConditions.options.find((o) => literalType(o) === type);
   if (!schema) throw new Error(`No schema found for type ${type}`);
   return schema;
 };
@@ -253,20 +246,12 @@ export const ZodAllAiActions = z.union([
   ActionSpecificCombo,
 ]);
 
-export const AiActionTypes = ZodAllAiActions.options.map((o) => {
-  const typeField = o.shape.type;
-  const literal = typeField.unwrap(); // ZodLiteral
-  return literal.value as string;
-});
+export const AiActionTypes = ZodAllAiActions.options.map(literalType);
 
 export type ZodAllAiAction = z.infer<typeof ZodAllAiActions>;
 
 export const getActionSchema = (type: ZodAllAiAction["type"]) => {
-  const schema = ZodAllAiActions.options.find((o) => {
-    const typeField = o.shape.type;
-    const literal = typeField.unwrap();
-    return literal.value === type;
-  });
+  const schema = ZodAllAiActions.options.find((o) => literalType(o) === type);
   if (!schema) throw new Error(`No schema found for type ${type}`);
   return schema;
 };

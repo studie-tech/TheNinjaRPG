@@ -66,8 +66,9 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { auctionOutbid, tradeUpdate } from "@/server/utils/push/messages";
 import type { QueryCondition } from "@/utils/typeutils";
@@ -197,8 +198,7 @@ export const auctionRouter = createTRPCRouter({
       }
 
       // Get auction listings with joins for filtering
-      const currentCursor = cursor ?? 0;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage({ cursor, limit });
       const whereClause = and(...whereConditions);
 
       const listings = await fetchAuctionListingIds(ctx.drizzle, {
@@ -217,7 +217,7 @@ export const auctionRouter = createTRPCRouter({
           ? await listAuctionListingForGetAuctionListings(ctx.drizzle, listingIds)
           : [];
 
-      const nextCursor = listings.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(listings);
       return {
         data: fullListings,
         nextCursor,
@@ -818,7 +818,7 @@ const settleAuctionWithoutRefunds = async (
 
 /** Shares the bid transaction so a buyout debit and settlement commit together. */
 const settleAuction = async (
-  tx: AuctionTransaction,
+  tx: DrizzleTransaction,
   auctionId: string,
   winnerId?: string,
 ) => {
@@ -960,8 +960,6 @@ const recordBidActivity = async (
 const requireAuctionSettlementWrite = (rowsAffected: number, message: string) => {
   if (rowsAffected !== 1) throwAuctionSettlementConflict(message);
 };
-
-type AuctionTransaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];
 
 type AuctionSettlementSnapshot = NonNullable<
   Awaited<ReturnType<typeof fetchAuctionListing>>

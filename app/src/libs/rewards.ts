@@ -1,5 +1,6 @@
 import { UserRanks } from "@/drizzle/constants";
 import {
+  hasMasteryPromotion,
   ObjectiveReward,
   type ObjectiveRewardType,
   REWARD_CHOICE_AMOUNT_FIELDS,
@@ -20,11 +21,7 @@ export const collapseRewards = (
     for (const field of REWARD_CHOICE_AMOUNT_FIELDS)
       if (reward[field])
         collapsed[field] = (collapsed[field] ?? 0) + (reward[field] ?? 0);
-    if (
-      reward.reward_mastery_stat &&
-      reward.reward_mastery_stat !== "None" &&
-      reward.reward_mastery_rank
-    ) {
+    if (hasMasteryPromotion(reward)) {
       collapsed.reward_mastery_stat = reward.reward_mastery_stat;
       collapsed.reward_mastery_rank = reward.reward_mastery_rank;
     }

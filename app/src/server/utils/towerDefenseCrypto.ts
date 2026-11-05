@@ -18,6 +18,7 @@
 
 import { createHmac, randomBytes } from "node:crypto";
 import { env } from "@/env/server.mjs";
+import type { CreateSessionParams } from "@/libs/spacetimedb/bindings/types/reducers";
 import type {
   SignedEnemyDefinition,
   SignedUpgradeDefinition,
@@ -35,35 +36,19 @@ const getSecretKey = (): string => {
 /**
  * Session parameters that need to be signed
  */
-export interface SessionParams {
+export type SessionParams = Omit<
+  CreateSessionParams,
+  | "ninjarpgUserId"
+  | "seed"
+  | "sessionSignature"
+  | "upgradeDefinitionsJson"
+  | "enemyDefinitionsJson"
+> & {
   userId: string;
-  nonce: string;
-  abilityDamage: number;
-  abilityRange: number;
-  abilityCooldownMs: number;
-  abilityCritChance: number;
-  abilityDamagePerTile: number;
-  playerMaxHealth: number;
-  healthRegen: number;
-  defensePercent: number;
-  defenseFlat: number;
-  lifestealPercent: number;
-  knockbackChance: number;
-  knockbackForce: number;
-  tokensPerWave: number;
-  tokensPerKill: number;
-  interestPerWave: number;
-  skipEnemyChance: number;
-  scorePerKill: number;
-  scoreToPointsRatio: number;
-  initialGridSize: number;
-  maxGridSize: number;
-  gridExpandFreq: number;
-  rangeVisualFactor: number;
   // Definitions from database - included to prevent tampering
   upgradeDefinitions: SignedUpgradeDefinition[];
   enemyDefinitions: SignedEnemyDefinition[];
-}
+};
 
 /**
  * Create a canonical string for an upgrade definition.

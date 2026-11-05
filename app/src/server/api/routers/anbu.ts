@@ -47,8 +47,7 @@ import {
   updateAnbuSquadForAcceptAnbuRequest2,
   updateAnbuSquadForEditSquad,
   updateAnbuSquadForPromoteAnbuLeader,
-  updateAnbuSquadForPurchaseEspionageUpgrade,
-  updateAnbuSquadForPurchaseStealthUpgrade,
+  updateAnbuSquadForPurchaseUpgrade,
   updateAnbuSquadForRemoveFromSquad,
   updateAnbuSquadForRemoveFromSquad3,
   updateUserDataForDisbandSquad,
@@ -481,71 +480,26 @@ export const anbuRouter = createTRPCRouter({
     .meta({ mcp: { description: "Upgrade squad espionage level" } })
     .input(z.object({ squadId: z.string() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, squad] = await Promise.all([
-        fetchAnbuActor({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchSquadSummary(ctx.drizzle, input.squadId),
-      ]);
-      // Derived
-      const { isLeader } = getConvenienceStatus(user, squad);
-      // Guards
-      if (!user) return errorResponse("User not found");
-      if (!squad) return errorResponse("Squad not found");
-      if (!isLeader) return errorResponse("Not squad leader");
-      if (user.anbuId !== squad.id) return errorResponse("Not in this squad");
-      if (squad.points < ANBU_ESPIONAGE_UPGRADE_COST) {
-        return errorResponse("Not enough squad points");
-      }
-      if (squad.espionageLevel >= ANBU_MAX_ESPIONAGE_LEVEL) {
-        return errorResponse("Max espionage level reached");
-      }
-      // Mutate
-      const result = await updateAnbuSquadForPurchaseEspionageUpgrade(
-        ctx.drizzle,
-        squad,
-      );
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough squad points" };
-      }
-      return { success: true, message: "Espionage level upgraded" };
-    }),
+    .mutation(({ ctx, input }) =>
+      purchaseSquadUpgrade(ctx, input.squadId, {
+        levelColumn: "espionageLevel",
+        label: "Espionage",
+        cost: ANBU_ESPIONAGE_UPGRADE_COST,
+        maxLevel: ANBU_MAX_ESPIONAGE_LEVEL,
+      }),
+    ),
   purchaseStealthUpgrade: protectedProcedure
     .meta({ mcp: { description: "Upgrade squad stealth level" } })
     .input(z.object({ squadId: z.string() }))
     .output(baseServerResponse)
-    .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [user, squad] = await Promise.all([
-        fetchAnbuActor({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchSquadSummary(ctx.drizzle, input.squadId),
-      ]);
-      // Derived
-      const { isLeader } = getConvenienceStatus(user, squad);
-      // Guards
-      if (!user) return errorResponse("User not found");
-      if (!squad) return errorResponse("Squad not found");
-      if (!isLeader) return errorResponse("Not squad leader");
-      if (user.anbuId !== squad.id) return errorResponse("Not in this squad");
-      if (squad.points < ANBU_STEALTH_UPGRADE_COST) {
-        return errorResponse("Not enough squad points");
-      }
-      if (squad.stealthLevel >= ANBU_MAX_STEALTH_LEVEL) {
-        return errorResponse("Max stealth level reached");
-      }
-      // Mutate
-      const result = await updateAnbuSquadForPurchaseStealthUpgrade(ctx.drizzle, squad);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough squad points" };
-      }
-      return { success: true, message: "Stealth level upgraded" };
-    }),
+    .mutation(({ ctx, input }) =>
+      purchaseSquadUpgrade(ctx, input.squadId, {
+        levelColumn: "stealthLevel",
+        label: "Stealth",
+        cost: ANBU_STEALTH_UPGRADE_COST,
+        maxLevel: ANBU_MAX_STEALTH_LEVEL,
+      }),
+    ),
   performEspionage: protectedProcedure
     .meta({ mcp: { description: "Perform espionage on enemy village" } })
     .input(z.object({ villageId: z.string(), anbuId: z.string() }))
@@ -1021,6 +975,42 @@ type AnbuActor = Awaited<ReturnType<typeof fetchAnbuActor>>;
  * @param squad - The Anbu squad object.
  * @returns An object containing convenience status properties.
  */
+/** Spend squad points on one level of a squad upgrade; only the squad leader may buy. */
+const purchaseSquadUpgrade = async (
+  ctx: { drizzle: DrizzleClient; userId: string },
+  squadId: string,
+  upgrade: {
+    levelColumn: "espionageLevel" | "stealthLevel";
+    label: string;
+    cost: number;
+    maxLevel: number;
+  },
+) => {
+  // Fetch
+  const [user, squad] = await Promise.all([
+    fetchAnbuActor({
+      client: ctx.drizzle,
+      userId: ctx.userId,
+    }),
+    fetchSquadSummary(ctx.drizzle, squadId),
+  ]);
+  // Derived
+  const { isLeader } = getConvenienceStatus(user, squad);
+  // Guards
+  if (!user) return errorResponse("User not found");
+  if (!squad) return errorResponse("Squad not found");
+  if (!isLeader) return errorResponse("Not squad leader");
+  if (user.anbuId !== squad.id) return errorResponse("Not in this squad");
+  if (squad.points < upgrade.cost) return errorResponse("Not enough squad points");
+  if (squad[upgrade.levelColumn] >= upgrade.maxLevel) {
+    return errorResponse(`Max ${upgrade.label.toLowerCase()} level reached`);
+  }
+  // Mutate
+  const result = await updateAnbuSquadForPurchaseUpgrade(ctx.drizzle, squad, upgrade);
+  if (result.rowsAffected === 0) return errorResponse("Not enough squad points");
+  return { success: true, message: `${upgrade.label} level upgraded` };
+};
+
 const getConvenienceStatus = (
   user: AnbuActor,
   squad: Pick<AnbuSquad, "id" | "leaderId" | "villageId"> | null = null,

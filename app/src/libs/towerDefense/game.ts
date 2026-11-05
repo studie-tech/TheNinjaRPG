@@ -5,23 +5,30 @@
  * All game logic (spawning, combat, movement) is handled by SpacetimeDB.
  */
 
-import type { TDEnemyDirection } from "@/drizzle/constants";
+import { TD_PROJECTILE_SPEED, type TDEnemyDirection } from "@/drizzle/constants";
+import { oddQHexDistance } from "@/libs/hexgrid";
 import type { HexPosition, SpriteDirection } from "@/validators/towerDefense";
 
 /**
  * Calculate axial distance between two hexes.
  */
-export const calculateHexDistance = (a: HexPosition, b: HexPosition): number => {
-  const aq = a.col;
-  const ar = a.row - Math.floor((a.col - (a.col & 1)) / 2);
-  const bq = b.col;
-  const br = b.row - Math.floor((b.col - (b.col & 1)) / 2);
+export const calculateHexDistance = (a: HexPosition, b: HexPosition): number =>
+  oddQHexDistance(a.col, a.row, b.col, b.row);
 
-  const dq = Math.abs(aq - bq);
-  const dr = Math.abs(ar - br);
-  const ds = Math.abs(aq + ar - (bq + br));
-
-  return Math.max(dq, Math.max(dr, ds));
+/**
+ * Interpolate a projectile's flight, 0 to 1, from its local spawn time. The server only
+ * reports spawns and hits, so clients derive progress from the shared projectile speed.
+ */
+export const getProjectileProgress = (
+  origin: HexPosition,
+  target: HexPosition,
+  clientSpawnTime: number,
+  now: number,
+) => {
+  const distance = calculateHexDistance(origin, target);
+  if (distance <= 0) return 1;
+  const elapsedSeconds = (now - clientSpawnTime) / 1000;
+  return Math.max(0, Math.min(1, (elapsedSeconds * TD_PROJECTILE_SPEED) / distance));
 };
 
 // ============================================

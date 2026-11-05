@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { updateUserDataForGET } from "@/queries/profile";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
@@ -12,16 +12,11 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-counters", async () => {
     // For all users, increment villagePrestige by 1
     await updateUserDataForGET(drizzleDB);
 
     return Response.json(`OK`);
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

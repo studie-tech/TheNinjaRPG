@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
+import { hasRequiredRank } from "@/libs/train";
 import { getUserFederalStatus } from "@/utils/paypal";
 
 /** Tier loss reduces new-adoption capacity without removing permanent slots or owned pets. */
@@ -33,18 +34,15 @@ export const getPetRank = (rank: number) =>
  * Elite Jonin is the top shinobi rank. Elder is a village office held by Jonin,
  * who return to JONIN when they leave it, so it carries Jonin progression.
  */
-export const getMaxPetRank = (ownerRank: UserRank) => {
-  const ranks: Record<UserRank, number> = {
-    STUDENT: 1,
-    GENIN: 3,
-    CHUNIN: 5,
-    JONIN: 7,
-    "ELITE JONIN": 10,
-    ELDER: 7,
-    NONE: 0,
-  };
-  return ranks[ownerRank];
-};
+export const getMaxPetRank = (ownerRank: UserRank) =>
+  ownerRank === "NONE"
+    ? 0
+    : Math.max(
+        0,
+        ...PET_RANKS.filter((entry) =>
+          hasRequiredRank(ownerRank, entry.minUserRank),
+        ).map((entry) => entry.rank),
+      );
 
 /**
  * Abandoned generation leases expire without releasing ownership.

@@ -38,12 +38,7 @@ export const rollDungeonRewards = (
   });
   const rolled = postProcessRewards(
     collapseRewards([
-      ObjectiveReward.parse({
-        reward_money: rewards.money,
-        reward_exp: rewards.experience,
-        reward_tokens: rewards.tokens,
-        reward_prestige: rewards.prestige,
-      }),
+      scalarRewards(rewards),
       ...drops.flatMap((drop) => {
         const quantity = drop.quantity ?? 1;
         if (drop.type === "package") {
@@ -75,12 +70,7 @@ export const dungeonRewardError = (
   rewards: DungeonContent["rewards"],
 ): string | null => {
   let total = 0;
-  const amounts = ObjectiveReward.parse({
-    reward_money: rewards.money,
-    reward_exp: rewards.experience,
-    reward_tokens: rewards.tokens,
-    reward_prestige: rewards.prestige,
-  });
+  const amounts = scalarRewards(rewards);
   for (const drop of rewards.drops) {
     const quantity = drop.quantity ?? 1;
     if (drop.type === "package") {
@@ -110,3 +100,12 @@ export const dungeonRewardError = (
   }
   return null;
 };
+
+/** A dungeon's guaranteed amounts as objective reward fields. */
+const scalarRewards = (rewards: DungeonContent["rewards"]) =>
+  ObjectiveReward.parse({
+    reward_money: rewards.money,
+    reward_exp: rewards.experience,
+    reward_tokens: rewards.tokens,
+    reward_prestige: rewards.prestige,
+  });

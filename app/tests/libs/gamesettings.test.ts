@@ -44,6 +44,18 @@ const timerStore = (time = oldTime, value = 7) => {
 
 afterEach(() => setSystemTime());
 
+describe("weekly timer period", () => {
+  it("opens on Monday UTC and stays claimed through the rest of the week", async () => {
+    const store = timerStore();
+    setSystemTime(new Date("2026-11-02T00:00:00.000Z"));
+    expect((await lockWithWeeklyTimer(store.client, "timer")).isClaimed).toBe(true);
+    setSystemTime(new Date("2026-11-08T23:59:59.000Z"));
+    expect((await lockWithWeeklyTimer(store.client, "timer")).isClaimed).toBe(false);
+    setSystemTime(new Date("2026-11-09T00:00:00.000Z"));
+    expect((await lockWithWeeklyTimer(store.client, "timer")).isClaimed).toBe(true);
+  });
+});
+
 for (const [name, lock] of [
   ["hourly", lockWithHourlyTimer],
   ["minute", lockWithMinuteTimer],

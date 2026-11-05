@@ -26,13 +26,13 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
+  type ActivityStreakFormType,
   activityStreakFormSchema,
   streakDayRewardSchema,
 } from "@/validators/activityStreak";
 
 // Type aliases for form handling with z.coerce fields
 type ActivityStreakFormInput = z.input<typeof activityStreakFormSchema>;
-type ActivityStreakFormOutput = z.output<typeof activityStreakFormSchema>;
 
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -91,7 +91,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
   );
   const [openDay, setOpenDay] = useState<string>("");
 
-  const form = useForm<ActivityStreakFormInput, unknown, ActivityStreakFormOutput>({
+  const form = useForm<ActivityStreakFormInput, unknown, ActivityStreakFormType>({
     mode: "all",
     criteriaMode: "all",
     defaultValues: {
@@ -122,7 +122,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
     });
 
   const handleSubmit = form.handleSubmit(
-    (data: ActivityStreakFormOutput) => {
+    (data: ActivityStreakFormType) => {
       if (
         rewards.some(
           (reward) =>
@@ -181,7 +181,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
     }
   };
 
-  const formData: FormEntry<keyof ActivityStreakFormOutput>[] = [
+  const formData: FormEntry<keyof ActivityStreakFormType>[] = [
     { id: "name", label: "Name", type: "text" },
     {
       id: "description",
@@ -209,7 +209,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
           },
           { id: "startDate", label: "Start Date", type: "date" },
           { id: "endDate", label: "End Date", type: "date" },
-        ] as FormEntry<keyof ActivityStreakFormOutput>[])
+        ] as FormEntry<keyof ActivityStreakFormType>[])
       : []),
   ];
 
@@ -221,7 +221,7 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
     >
       <EditContent
         schema={activityStreakFormSchema}
-        form={form as UseFormReturn<ActivityStreakFormOutput>}
+        form={form as UseFormReturn<ActivityStreakFormType>}
         formData={formData}
         relationId={config.id}
         showSubmit={false}

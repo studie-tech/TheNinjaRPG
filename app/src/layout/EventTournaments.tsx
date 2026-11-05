@@ -21,6 +21,7 @@ import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
+import { currentEventRound } from "@/libs/tournament/events";
 import { canManageTournaments } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { UserSearchResult } from "@/validators/register";
@@ -199,9 +200,7 @@ export const EventTournaments = ({
     (p) => p.userId === user?.userId && !p.withdrawn,
   );
   const rounds = [...new Set(event.series.map((s) => s.round))].sort((a, b) => a - b);
-  const currentRound = Math.min(
-    ...event.series.filter((s) => !s.complete).map((s) => s.round),
-  );
+  const currentRound = currentEventRound(event);
   const seatName = (id: string | null) =>
     event.participants.find((p) => p.id === id)?.username ??
     "Bye / no advancing player";

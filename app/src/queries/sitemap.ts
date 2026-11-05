@@ -1,7 +1,7 @@
 /**
  * Database access for sitemap; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   bloodline,
   forumThread,
@@ -10,7 +10,7 @@ import {
   jutsu,
   userData,
 } from "@/drizzle/schema";
-import { PROFILE_INDEX_MIN_LEVEL, profileIndexCutoff } from "@/libs/profileIndexing";
+import { profileIndexableWhere } from "@/libs/profileIndexing";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `bloodline` selection for `manualEntries`, using predicates on `hidden`. */
@@ -72,14 +72,6 @@ export const selectUserDataForProfileEntries = (
   client
     .select({ username: userData.username, updatedAt: userData.updatedAt })
     .from(userData)
-    .where(
-      and(
-        gte(userData.level, PROFILE_INDEX_MIN_LEVEL),
-        gte(userData.updatedAt, profileIndexCutoff()),
-        eq(userData.isAi, false),
-        eq(userData.isBanned, false),
-        isNull(userData.deletionAt),
-      ),
-    )
+    .where(profileIndexableWhere())
     .orderBy(desc(userData.level))
     .limit(MAX_PROFILES);

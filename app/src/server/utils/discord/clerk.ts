@@ -1,5 +1,5 @@
 import { clerkClient } from "@clerk/nextjs/server";
-import { isClerkNotFound } from "@/server/utils/sanctionTombstone";
+import { isClerkNotFound, normalizeClerkProvider } from "@/server/utils/clerk";
 
 /**
  * Discord tokens from the player's Clerk Discord sign-in. Clerk signs in with the same
@@ -9,9 +9,8 @@ import { isClerkNotFound } from "@/server/utils/sanctionTombstone";
  * never stores or revokes it.
  */
 
-/** Clerk names the provider `discord` or, on older accounts, `oauth_discord`. */
 export const isClerkDiscordProvider = (provider: string) =>
-  provider.replace(/^oauth_/, "").toLowerCase() === "discord";
+  normalizeClerkProvider(provider) === "discord";
 
 export type ClerkDiscordToken = {
   accessToken: string;

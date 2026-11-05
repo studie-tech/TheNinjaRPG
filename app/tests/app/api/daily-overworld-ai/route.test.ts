@@ -76,7 +76,7 @@ describe("daily-overworld-ai route", () => {
     mocks.authenticate.mockReturnValue(null);
     mocks.lock.mockResolvedValue({
       release: mocks.rollback,
-      isNewDay: true,
+      isClaimed: true, isNewDay: true,
       prevTime: new Date("2026-08-14T00:00:00.000Z"),
       response: new Response("locked"),
     });
@@ -107,7 +107,7 @@ describe("daily-overworld-ai route", () => {
 
   it("does no placement work when another invocation owns the daily timer", async () => {
     mocks.lock.mockResolvedValue({
-      isNewDay: false,
+      isClaimed: false, isNewDay: false,
       prevTime: new Date(),
       response: new Response("locked"),
     });

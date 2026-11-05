@@ -16,6 +16,16 @@ export const VARIANT_COST_TYPES = [
 ] as const;
 export type VariantCostType = (typeof VARIANT_COST_TYPES)[number];
 
+/** Balance paying for each variant currency; VARIANT_TOKEN consumes an item instead. */
+export const VARIANT_CURRENCY_FIELD = {
+  MONEY: "money",
+  REPUTATION: "reputationPoints",
+  SEICHI_SILVER: "seichiSilver",
+  VILLAGE_PRESTIGE: "villagePrestige",
+} as const satisfies Record<Exclude<VariantCostType, "VARIANT_TOKEN">, string>;
+export type VariantCurrency = keyof typeof VARIANT_CURRENCY_FIELD;
+export type VariantCurrencyField = (typeof VARIANT_CURRENCY_FIELD)[VariantCurrency];
+
 export const MAX_ITEM_VARIANTS = 7;
 /** Rows in the sidebar banner of users with the most ranked LP. */
 export const STRONGEST_USERS_COUNT = 10;
@@ -898,6 +908,8 @@ export const PvpBattleTypes: BattleType[] = [
   "RANKED_PVP",
 ];
 
+export const RankedBattleTypes: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
+
 export const QuestBattleTypes: BattleType[] = [
   "HUNTING",
   "QUEST",
@@ -1035,7 +1047,46 @@ export const QuestTypes = [
   "special",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
+/** Action log marker for staff resets, which never draw on the monthly allowance. */
+export const SKILL_RESET_STAFF_RELATED_MSG = "Free reset for staff member";
+/** Solo assignments from the Mission Hall; one can be active at a time. */
+export const MISSION_HALL_SOLO_QUEST_TYPES: readonly QuestType[] = [
+  "mission",
+  "crime",
+  "errand",
+  "medical",
+  "pvp",
+];
+/** Daily-capped assignments accepted at the Mission Hall. */
+export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
+  ...MISSION_HALL_SOLO_QUEST_TYPES,
+  "war",
+];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+/** Types started only through a dedicated acquisition flow, never from public listings. */
+export const RESTRICTED_QUEST_TYPES = [
+  ...NPC_ONLY_QUEST_TYPES,
+  "special",
+] as const satisfies readonly QuestType[];
+/** Contracts a companion may take on. */
+export const PET_TASK_QUEST_TYPES = [
+  "hunting",
+  "gathering",
+] as const satisfies readonly QuestType[];
+/** Narrow companion assignments to hunting and gathering contracts. */
+export const isPetTaskQuestType = (
+  questType: QuestType,
+): questType is (typeof PET_TASK_QUEST_TYPES)[number] =>
+  (PET_TASK_QUEST_TYPES as readonly QuestType[]).includes(questType);
+/** Quests run together, without personal entry receipts. */
+export const SHARED_RUN_QUEST_TYPES = [
+  "raid",
+  "village_mission",
+  "achievement",
+] as const satisfies readonly QuestType[];
+/** Identify quest types excluded from personal entry receipts. */
+export const isSharedRunQuestType = (questType: QuestType) =>
+  (SHARED_RUN_QUEST_TYPES as readonly QuestType[]).includes(questType);
 export const QUESTS_CONCURRENT_LIMIT = 4;
 
 // Ordering here represents the default ordering for tutorial component
@@ -1402,7 +1453,7 @@ export const RECRUIT_RANK_MILESTONES = [
   { rank: "CHUNIN", reputation: 5 },
   { rank: "JONIN", reputation: 10 },
   { rank: "ELITE JONIN", reputation: 10 },
-] as const;
+] as const satisfies readonly { rank: RecruitMilestoneRank; reputation: number }[];
 export const RECRUIT_MILESTONE_RANKS = ["GENIN", "CHUNIN", "JONIN", "ELITE JONIN"] as const;
 export type RecruitMilestoneRank = (typeof RECRUIT_MILESTONE_RANKS)[number];
 
@@ -1474,6 +1525,8 @@ export const USER_CAPS: Record<
 
 // OpenAI models
 export const OPENAI_REVIEW_MODEL = "gpt-6-luna";
+/** OpenAI's moderation endpoint model, used as the text gate and for image screening. */
+export const OPENAI_OMNI_MODERATION_MODEL = "omni-moderation-latest";
 export const OPENAI_MODERATION_MODEL = "gpt-4o-mini";
 export const MODERATION_PROMPT_VERSION = "evidence-v1";
 export const MODERATION_SCAN_RETENTION_DAYS = 90;
@@ -1579,7 +1632,7 @@ export const SAGE_MASTERY_REQUIRED_EXP: Record<SAGE_MASTERY_RANK, number> = {
   LEGENDARY: 450000,
 };
 /** Hard cap on `userData.sageMasteryExperience` (Legendary threshold). */
-export const SAGE_MASTERY_EXP_CAP = 450_000;
+export const SAGE_MASTERY_EXP_CAP = SAGE_MASTERY_REQUIRED_EXP.LEGENDARY;
 
 /** Daily Activation uses allowed at each mastery rank. NONE and INITIATE share 10. */
 export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> = {
@@ -1625,6 +1678,8 @@ export const COST_RESKIN_JUTSU = 60;
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
+/** Guardian AI behind village protector encounters and the last-resort shrine defence. */
+export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";
 /** Ascending, incremental milestones; repeated categories add percentage points. */
 export const VILLAGE_LOYALTY_TIERS = [
   { days: 7, bonus: "regen", percent: 5 },
@@ -1970,6 +2025,10 @@ export const MAX_REPS_PER_MONTH = 4000;
 export const MAX_REPS_EXTRA_PER_MONTH = 250;
 
 // Federal config
+/** Days one PayPal or reputation payment keeps its federal tier. */
+export const PAYPAL_PAID_PERIOD_DAYS = 31;
+/** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
+export const STORE_RECEIPT_FALLBACK_DAYS = 63;
 export const FED_NORMAL_REPS_COST = 15;
 export const FED_SILVER_REPS_COST = 35;
 export const FED_GOLD_REPS_COST = 50;
@@ -2167,6 +2226,7 @@ export const SHRINE_HP_BY_LEVEL = { 1: 3000, 2: 4000, 3: 5000 } as const;
 export const SHRINE_MAX_LEVEL = Math.max(
   ...Object.keys(SHRINE_HP_BY_LEVEL).map(Number),
 );
+export const SHRINE_BOOST_REQUIRED_LEVEL = 3;
 export const SHRINE_BOOST_TYPES = [
   "Training",
   "PVP",
@@ -2261,22 +2321,6 @@ export const CLAN_POINT_RYO_RATE = 200;
 // Clan boost system - Ryo-based
 export const CLAN_BOOST_MAX_LEVEL = 10;
 export const CLAN_BOOST_PERCENT_PER_LEVEL = 2;
-export const CLAN_TRAINING_BOOST_BASE_COST = 100000;
-export const CLAN_TRAINING_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_RYO_BOOST_BASE_COST = 50000;
-export const CLAN_RYO_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_REGEN_BOOST_BASE_COST = 50000;
-export const CLAN_REGEN_BOOST_PER_LEVEL_COST = 20000;
-export const CLAN_MISSION_BOOST_BASE_COST = 100000;
-export const CLAN_MISSION_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_CRAFTING_TIME_BOOST_BASE_COST = 200000;
-export const CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST = 30000;
-export const CLAN_CRAFTING_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST = 40000;
-export const CLAN_HUNTER_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST = 40000;
-export const CLAN_GATHERER_EXP_BOOST_BASE_COST = 200000;
-export const CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST = 40000;
 
 export const ClanBoostTypes = [
   "trainingBoost",
@@ -2292,55 +2336,55 @@ export type ClanBoostType = (typeof ClanBoostTypes)[number];
 
 export const CLAN_BOOST_CONFIG: Record<
   ClanBoostType,
-  { baseCost: number; perLevelCost: number; label: string; factionOnly: boolean }
+  { baseCost: number; perLevelCost: number; label: string; villageOnly: boolean }
 > = {
   trainingBoost: {
-    baseCost: CLAN_TRAINING_BOOST_BASE_COST,
-    perLevelCost: CLAN_TRAINING_BOOST_PER_LEVEL_COST,
+    baseCost: 100000,
+    perLevelCost: 30000,
     label: "Training boost",
-    factionOnly: false,
+    villageOnly: false,
   },
   ryoBoost: {
-    baseCost: CLAN_RYO_BOOST_BASE_COST,
-    perLevelCost: CLAN_RYO_BOOST_PER_LEVEL_COST,
-    label: "Ryo boost",
-    factionOnly: false,
+    baseCost: 50000,
+    perLevelCost: 30000,
+    label: "Ryo gain boost",
+    villageOnly: false,
   },
   regenBoost: {
-    baseCost: CLAN_REGEN_BOOST_BASE_COST,
-    perLevelCost: CLAN_REGEN_BOOST_PER_LEVEL_COST,
+    baseCost: 50000,
+    perLevelCost: 20000,
     label: "Regen boost",
-    factionOnly: false,
+    villageOnly: true,
   },
   missionRewardBoost: {
-    baseCost: CLAN_MISSION_BOOST_BASE_COST,
-    perLevelCost: CLAN_MISSION_BOOST_PER_LEVEL_COST,
+    baseCost: 100000,
+    perLevelCost: 30000,
     label: "Mission reward boost",
-    factionOnly: false,
+    villageOnly: true,
   },
   craftingTimeBoost: {
-    baseCost: CLAN_CRAFTING_TIME_BOOST_BASE_COST,
-    perLevelCost: CLAN_CRAFTING_TIME_BOOST_PER_LEVEL_COST,
+    baseCost: 200000,
+    perLevelCost: 30000,
     label: "Crafting time reduction",
-    factionOnly: false,
+    villageOnly: false,
   },
   craftingExpBoost: {
-    baseCost: CLAN_CRAFTING_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_CRAFTING_EXP_BOOST_PER_LEVEL_COST,
-    label: "Crafting experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Crafting exp boost",
+    villageOnly: true,
   },
   hunterExpBoost: {
-    baseCost: CLAN_HUNTER_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_HUNTER_EXP_BOOST_PER_LEVEL_COST,
-    label: "Hunter experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Hunter exp boost",
+    villageOnly: true,
   },
   gathererExpBoost: {
-    baseCost: CLAN_GATHERER_EXP_BOOST_BASE_COST,
-    perLevelCost: CLAN_GATHERER_EXP_BOOST_PER_LEVEL_COST,
-    label: "Gatherer experience boost",
-    factionOnly: false,
+    baseCost: 200000,
+    perLevelCost: 40000,
+    label: "Gatherer exp boost",
+    villageOnly: true,
   },
 };
 
@@ -2433,16 +2477,20 @@ export const RANKED_RANKS = [
   "Sannin",
 ] as const;
 export type RankedRank = (typeof RANKED_RANKS)[number];
+export const RANKED_LEGEND_LP_REQUIREMENT = 900;
 export const RANKED_DIVISIONS = [
   { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
   { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
   { key: "ADEPT", name: "Adept", rankedLp: 300, kFactor: 32 },
   { key: "MASTER", name: "Master", rankedLp: 600, kFactor: 24 },
-  { key: "LEGEND", name: "Legend", rankedLp: 900, kFactor: 16 },
+  { key: "LEGEND", name: "Legend", rankedLp: RANKED_LEGEND_LP_REQUIREMENT, kFactor: 16 },
   { key: "SANNIN", name: "Sannin", rankedLp: Infinity, kFactor: 16 },
-] as const;
-export const RANKED_LEGEND_LP_REQUIREMENT =
-  RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
+] as const satisfies readonly {
+  key: string;
+  name: RankedRank;
+  rankedLp: number;
+  kFactor: number;
+}[];
 /** Masteries are maxed on purpose, because ranked waives progression gates. */
 export const RANKED_PVP_STATS = {
   strength: MAX_GENS_CAP,
@@ -3190,6 +3238,9 @@ export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDeta
 export const HomeFurnitureActions = ["sleep", "storage", "kitchen", "farm"] as const;
 export type HomeFurnitureAction = (typeof HomeFurnitureActions)[number];
 
+/** Alpha at or below which a pixel of a generated cutout counts as transparent. */
+export const CUTOUT_ALPHA_THRESHOLD = 16;
+
 /** Placement stores clockwise quarter turns; each direction uses separately painted art. */
 export const HOME_FURNITURE_ROTATIONS = [0, 1, 2, 3] as const;
 export type HomeFurnitureRotation = (typeof HOME_FURNITURE_ROTATIONS)[number];
@@ -3209,12 +3260,12 @@ export const HOME_FURNITURE_POSITION_MAX = 1000;
 export const HOME_FURNITURE_MIN_WIDTH = 6;
 export const HOME_FURNITURE_MAX_WIDTH = 40;
 export const HOME_FURNITURE_MAX_PLACEMENTS = 50;
+export const HOME_ROOM_IDS = ["main", "room-1", "room-2", "room-3", "room-4", "room-5", "room-6", "room-7", "room-8", "room-9", "yard"] as const;
 /** A property's room limit includes its yard; room identities remain stable across tiers. */
-export const HOME_MAX_ROOMS = 11;
+export const HOME_MAX_ROOMS = HOME_ROOM_IDS.length;
 export const HOME_MAX_INVITATIONS = 100;
 /** Pending home invitations follow the request cleaner’s one-day retention. */
 export const HOME_INVITATION_EXPIRY_SECONDS = 24 * 3600;
-export const HOME_ROOM_IDS = ["main", "room-1", "room-2", "room-3", "room-4", "room-5", "room-6", "room-7", "room-8", "room-9", "yard"] as const;
 /** Persist palette keys so editor choices and rendered wall finishes share one source. */
 export const HOME_WALL_PAINTS = { ivory: "#ddd0ac", sage: "#a9ba9a", indigo: "#8b96b7", rose: "#cfaaa3", charcoal: "#777b80" } as const;
 /** Complete property paintings share their source with every foreground depth mask. */
@@ -3355,15 +3406,8 @@ export const SUPPORT_TICKET_LIMITS = {
   TITLE_MAX_LENGTH: 255,
   DESCRIPTION_MIN_LENGTH: 50,
   DESCRIPTION_MAX_LENGTH: 5000,
-  COMMENT_MIN_LENGTH: 1,
-  COMMENT_MAX_LENGTH: 5000,
   MAX_TAGS: 20,
-  MAX_TAG_LENGTH: 50,
-  MAX_ATTACHMENT_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_SUGGESTIONS: 10,
-  MAX_SEARCH_RESULTS: 50,
-  MAX_BULK_ACTIONS: 100,
-};
+} as const;
 
 // Support Ticket Status Transitions
 export const SUPPORT_TICKET_STATUS_TRANSITIONS: Record<
@@ -3480,6 +3524,12 @@ export function getUserCaps(rank?: UserRank | null) {
   };
 }
 
+/** Offence and defence stop at the stats cap, the four generals at the generals cap. */
+export const getCombatStatCap = (
+  caps: { stats_cap: number; gens_cap: number },
+  stat: CombatStatName,
+) => (stat === "offence" || stat === "defence" ? caps.stats_cap : caps.gens_cap);
+
 // ============================================
 // Tower Defense Constants
 // ============================================
@@ -3561,7 +3611,7 @@ export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
 export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
 export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
 export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
-export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match lib.rs
+export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match PROJECTILE_SPEED in lib.rs
 export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
 export const TD_HIT_EVENT_DURATION_MS = 500; // Duration for hit event animations
 
@@ -3569,7 +3619,6 @@ export const TD_HIT_EVENT_DURATION_MS = 500; // Duration for hit event animation
 export const TD_ABILITY_IDS = {
   SHURIKEN: "shuriken",
 } as const;
-export type TDAbilityId = (typeof TD_ABILITY_IDS)[keyof typeof TD_ABILITY_IDS];
 
 // Visual & Effect Constants
 export const TD_DAMAGE_NUMBER_POOL_SIZE = 20;
@@ -3618,6 +3667,7 @@ export const OUT_OF_COMBAT_BASE_DAMAGE_INCREASE = 60; // Percentage points added
 export const PARRY_MAX_PERCENTAGE = 100;
 export const DIFFUSE_MAX_PERCENTAGE = 99;
 export const DIFFUSE_DEFAULT_DELAY_ROUNDS = 3;
+export const TEMPORAL_AP_DELTA = 10; // AP added or removed by time compression / dilation
 export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
 
 /** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */
@@ -3683,24 +3733,31 @@ export const COPYABLE_EFFECT_TYPES: ReadonlySet<string> = new Set(
   COPY_PRIORITY_TIERS.flat(),
 );
 
-/**
- * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
- * effects are not stealable/reflectable. Shared by both tags. Keep in step with
- * the passive/pre-battle sources in `persistentEffectSourceTypes` (tags.ts) and
- * `getEffectStage` (util.ts): a source those treat as passive belongs here too.
- */
-export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
-  "bloodline",
-  "armor",
-  "accessory",
-  "keystone",
-  "item",
-  "village",
+/** Sources (`fromType`) granted before battle; they resolve in damage-modifier stage 1. */
+export const PRE_BATTLE_SOURCE_TYPES: readonly string[] = [
+  ...preBattleGearFromTypes,
+  ...preBattleKeystoneFromTypes,
   "skill",
+  "village",
   "ranked",
   "elementalMastery",
+];
+
+/** Sources `clear` / `cleanse` never strip. Sage buffs and exhaustion are both protected. */
+export const PERSISTENT_EFFECT_SOURCE_TYPES: ReadonlySet<string> = new Set([
+  ...PRE_BATTLE_SOURCE_TYPES,
+  "bloodline",
   "sageMode",
   "sageModeAfter",
+]);
+
+/**
+ * Source (`fromType`) origins that copy/mirror never transfer — passive/gear
+ * effects are not stealable/reflectable. Shared by both tags.
+ */
+export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
+  ...PERSISTENT_EFFECT_SOURCE_TYPES,
+  "item",
 ]);
 
 /**

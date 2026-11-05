@@ -1,9 +1,10 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "jose";
+import { normalizeClerkProvider } from "@/server/utils/clerk";
 
 const appleKeys = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
 export const isAppleProvider = (provider: string) =>
-  provider === "apple" || provider === "oauth_apple";
+  normalizeClerkProvider(provider) === "apple";
 
 export const appleClientCredentials = async (source: "native" | "web") => {
   // Apple tokens are bound to the client that issued them: the native App ID or
@@ -44,6 +45,18 @@ export const revokeAppleToken = async (
     throw new Error("Apple authorization revocation failed. Please try again.");
 };
 
+/** Revoke every Apple OAuth token Clerk holds; returns how many there were. */
+export const revokeClerkAppleTokens = async (
+  clerk: Awaited<ReturnType<typeof clerkClient>>,
+  userId: string,
+  credentials: Awaited<ReturnType<typeof appleClientCredentials>>,
+) => {
+  const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");
+  for (const token of tokens.data)
+    await revokeAppleToken(token.token, "access_token", credentials);
+  return tokens.data.length;
+};
+
 /** Exchange the native sheet's single-use code and bind its signed subject to Clerk. */
 export const prepareAppleDeletion = async (
   userId: string,
@@ -60,14 +73,11 @@ export const prepareAppleDeletion = async (
   const credentials = await appleClientCredentials(code ? "native" : "web");
   if (!code) {
     // Android or older shells may have a server-managed OAuth token in Clerk.
-    const tokens = await clerk.users.getUserOauthAccessToken(userId, "apple");
-    if (!tokens.data.length)
+    if (!(await revokeClerkAppleTokens(clerk, userId, credentials)))
       return {
         error:
           "Please use the latest iPhone app and verify with Apple to delete this Apple-linked account.",
       };
-    for (const token of tokens.data)
-      await revokeAppleToken(token.token, "access_token", credentials);
     return {
       subject: accounts.length === 1 ? (accounts[0]?.providerUserId ?? null) : null,
     };

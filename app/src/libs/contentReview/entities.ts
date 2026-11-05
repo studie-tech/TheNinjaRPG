@@ -87,11 +87,45 @@ export const draftName = (fields: Record<string, unknown>) => {
 
 /** Adds the editable fields and their version to a loaded row. */
 const toEntity = (type: ContentProposalEntityType, loaded: Loaded): ContentEntity => {
-  const editable = pick(loaded.payload, ENTITY_CONFIG[type].editableKeys);
-  return { ...loaded, type, editable, version: contentVersion(editable) };
+  const payload = normalizeEditable(type, loaded.payload);
+  const editable = pick(payload, ENTITY_CONFIG[type].editableKeys);
+  return { ...loaded, payload, type, editable, version: contentVersion(editable) };
 };
 
-const pick = (source: Record<string, unknown>, keys: readonly string[]) =>
+/**
+ * Editable fields with their order-insensitive lists (item recipes, AI jutsus and drops)
+ * sorted, so reordering a list is not a change.
+ */
+export const normalizeEditable = (
+  entityType: ContentProposalEntityType,
+  editable: Record<string, unknown>,
+) => {
+  const byFirstId = (list: unknown) =>
+    Array.isArray(list)
+      ? [...(list as { ids?: string[] }[])].sort((a, b) =>
+          (a.ids?.[0] ?? "").localeCompare(b.ids?.[0] ?? ""),
+        )
+      : list;
+  if (entityType === "ITEM" && "craftingRequirements" in editable) {
+    return {
+      ...editable,
+      craftingRequirements: byFirstId(editable.craftingRequirements),
+    };
+  }
+  if (entityType === "AI") {
+    return {
+      ...editable,
+      ...("jutsus" in editable && Array.isArray(editable.jutsus)
+        ? { jutsus: [...(editable.jutsus as string[])].sort() }
+        : {}),
+      ...("items" in editable ? { items: byFirstId(editable.items) } : {}),
+    };
+  }
+  return editable;
+};
+
+/** Select the fields present in a content entity snapshot for the requested keys. */
+export const pick = (source: Record<string, unknown>, keys: readonly string[]) =>
   Object.fromEntries(
     keys.filter((key) => key in source).map((key) => [key, source[key]]),
   );
@@ -125,10 +159,13 @@ const AI_EDITABLE_KEYS = [
   "willpower",
   "speed",
   "isSummon",
+  "isEvent",
+  "isWarCamp",
   "inArena",
   "inShrines",
   "primaryElement",
   "secondaryElement",
+  "preferredDamageElement",
   "preferredGeneral1",
   "preferredGeneral2",
   "anbuId",
@@ -183,9 +220,10 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
             ? row.expireFromStoreAt.slice(0, 10)
             : "",
           crystalTargetTypes: row.crystalTargetTypes || null,
-          craftingRequirements: craftingRequirements
-            .map((req) => ({ ids: [req.requirementItemId], number: req.quantity }))
-            .sort((a, b) => (a.ids[0] ?? "").localeCompare(b.ids[0] ?? "")),
+          craftingRequirements: craftingRequirements.map((req) => ({
+            ids: [req.requirementItemId],
+            number: req.quantity,
+          })),
         },
       }));
     },
@@ -306,17 +344,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         isHidden: false,
         payload: {
           ...row,
-          jutsus: jutsus
-            .filter((entry) => entry.jutsu)
-            .map((entry) => entry.jutsuId)
-            .sort(),
+          jutsus: jutsus.filter((entry) => entry.jutsu).map((entry) => entry.jutsuId),
           items: items
             .filter((entry) => entry.item)
             .map((entry) => ({
               ids: [entry.itemId],
               number: entry.dropChancePerc ?? 0,
-            }))
-            .sort((a, b) => (a.ids[0] ?? "").localeCompare(b.ids[0] ?? "")),
+            })),
         },
       }));
     },

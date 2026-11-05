@@ -14,13 +14,11 @@ interface NamedEntity {
 
 interface BloodlineEntity extends NamedEntity {
   rank?: string | null;
-  hidden?: boolean | null;
 }
 
 interface ItemEntity extends NamedEntity {
   itemType?: string | null;
   rarity?: string | null;
-  hidden?: boolean | null;
 }
 
 const paragraph = (text: string) => `<p>${text}</p>`;

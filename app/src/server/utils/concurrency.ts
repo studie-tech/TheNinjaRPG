@@ -24,8 +24,8 @@ import {
   deleteUserItemWhere,
   insertUserItemForRefundUserItemQuantityAtomically,
   insertUserItemForRefundUserItemQuantityAtomically2,
+  selectClaimedRankedQueueEntry,
   selectMpvpBattleUserForBattleClaimRollbackStatus,
-  selectRankedPvpQueueForBattleClaimRollbackStatus,
   updateBloodlineRollsForRemoveBloodlineFromPoolAtomically,
   updateTableForReservePityCredit,
   updateUserDataForAdjustSeichiSilverAtomically,
@@ -71,7 +71,7 @@ export const claimUserSnapshot = async ({
 };
 
 type UpdateUserItemQuantityAtomicallyParams = {
-  client: DrizzleClient;
+  client: Pick<DrizzleClient, "update" | "delete">;
   userId: string;
   userItemId: string;
   expectedQuantity: number;
@@ -335,7 +335,7 @@ export const battleClaimRollbackStatus = (
   }
   if (battleType === "RANKED_PVP") {
     return sql`CASE WHEN ${exists(
-      selectRankedPvpQueueForBattleClaimRollbackStatus(client),
+      selectClaimedRankedQueueEntry(client, userData.userId),
     )} THEN "QUEUED" ELSE "AWAKE" END`;
   }
   return "AWAKE" as const;
@@ -374,12 +374,29 @@ export const reservePityCredit = async ({
  * Pass unstarted builders, not eager promises; already-running work cannot be sequenced here.
  * Independent autocommit reads should still use Promise.all.
  */
-export const queryInTransaction = async <
-  const T extends readonly PromiseLike<unknown>[],
->(
+export const queryInTransaction = async <const T extends readonly unknown[]>(
   queries: T,
 ): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> => {
   const results: unknown[] = [];
   for (const query of queries) results.push(await query);
   return results as { -readonly [K in keyof T]: Awaited<T[K]> };
 };
+
+/**
+ * Run deferred queries or writes, retaining parallel phases for ordinary callers.
+ * Transaction callers must pass unevaluated tasks: each statement starts after the previous
+ * statement supplies the driver's next session token. Results preserve the input tuple order.
+ */
+export const runRewardTasks =
+  (inTransaction: boolean) =>
+  async <T extends readonly (() => unknown)[]>(
+    tasks: readonly [...T],
+  ): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
+    if (!inTransaction)
+      return Promise.all(tasks.map((task) => task())) as Promise<{
+        [K in keyof T]: Awaited<ReturnType<T[K]>>;
+      }>;
+    const results: unknown[] = [];
+    for (const task of tasks) results.push(await task());
+    return results as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
+  };

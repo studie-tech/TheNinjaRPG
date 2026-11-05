@@ -14,8 +14,8 @@ import {
   updateQuestHistoryForPayQuestEntryAtStart,
 } from "@/queries/quests";
 import type { DrizzleClient } from "@/server/db";
+import { commitBattleAdmission } from "@/server/utils/battleAdmission";
 import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import type { QuestContentType } from "@/validators/objectives";
 
 /** Match the same open attempt and its playable content inside a guarded write. */
@@ -67,6 +67,15 @@ export const payQuestEntryAtStart = async ({
     questId,
   );
   if (receipt.rowsAffected !== 1) return false;
+  return debitQuestEntryCharges(client, userId, charges);
+};
+
+/** Debit each stack under its allocation's CAS guards, stopping at the first that moved. */
+const debitQuestEntryCharges = async (
+  client: DrizzleClient,
+  userId: string,
+  charges: NonNullable<ReturnType<typeof getQuestEntryCharges>>,
+) => {
   for (const charge of charges) {
     const debited = await updateUserItemQuantityAtomically({
       client,
@@ -158,55 +167,30 @@ export const commitQuestEntryBattle = async <T>({
   createBattle: (client: DrizzleClient) => Promise<T>;
   didClaim: (result: T) => boolean;
 }) => {
-  const rejected = new Error("Quest entry rejected");
-  let message = "This quest changed or ended. Abandon it and start again.";
   const charges = getQuestEntryCharges(attempt, items);
   if (!charges)
     return {
       success: false as const,
       message: "You do not have the required entry items in your inventory.",
     };
-  try {
-    const result = await retryOnDeadlock(() =>
-      client.transaction(async (tx) => {
-        const database = tx as unknown as DrizzleClient;
-        if (!attempt.entryPaid) {
-          const receipt = await updateQuestHistoryForCommitQuestEntryBattle(
-            tx,
-            attempt,
-            questAttemptWhere(database, attempt, role),
-          );
-          if (receipt.rowsAffected !== 1) throw rejected;
-          for (const charge of charges) {
-            const debited = await updateUserItemQuantityAtomically({
-              client: database,
-              userId: attempt.userId,
-              userItemId: charge.id,
-              expectedQuantity: charge.expectedQuantity,
-              nextQuantity: charge.expectedQuantity - charge.quantity,
-              where: [
-                eq(userItem.itemId, charge.itemId),
-                eq(userItem.storedAtHome, false),
-                eq(userItem.isInAuction, false),
-              ],
-            });
-            if (!debited) {
-              message = "Your entry items changed. Please try again.";
-              throw rejected;
-            }
-          }
-        }
-        const created = await createBattle(database);
-        if (!didClaim(created)) {
-          message = "Battle could not start. Please try again.";
-          throw rejected;
-        }
-        return created;
-      }),
-    );
-    return { success: true as const, result };
-  } catch (error) {
-    if (error === rejected) return { success: false as const, message };
-    throw error;
-  }
+  return commitBattleAdmission({
+    client,
+    createBattle,
+    didClaim,
+    claimFailedMessage: "Battle could not start. Please try again.",
+    admit: async (tx, reject) => {
+      if (attempt.entryPaid) return;
+      const receipt = await updateQuestHistoryForCommitQuestEntryBattle(
+        tx,
+        attempt,
+        questAttemptWhere(tx, attempt, role),
+      );
+      if (receipt.rowsAffected !== 1) {
+        reject("This quest changed or ended. Abandon it and start again.");
+      }
+      if (!(await debitQuestEntryCharges(tx, attempt.userId, charges))) {
+        reject("Your entry items changed. Please try again.");
+      }
+    },
+  });
 };

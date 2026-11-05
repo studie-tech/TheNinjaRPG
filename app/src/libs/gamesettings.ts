@@ -21,8 +21,8 @@ import {
   addDays,
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
-  getWeekNumber,
   isDifferentDay,
+  periodStart,
 } from "@/utils/time";
 
 /**
@@ -149,9 +149,7 @@ export const lockWithMinuteTimer = async (client: DrizzleClient, name: string) =
 
 /** Atomically claim once per UTC calendar day. */
 export const lockWithDailyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(client, name, (previous, now) =>
-    isDifferentDay(now, previous),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("daily"));
   return {
     ...claim,
     isNewDay: claim.isClaimed,
@@ -161,13 +159,9 @@ export const lockWithDailyTimer = async (client: DrizzleClient, name: string) =>
   };
 };
 
-/** Atomically claim when the existing calendar week number changes. */
+/** Atomically claim once per UTC calendar week, starting on Monday. */
 export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(
-    client,
-    name,
-    (previous, now) => getWeekNumber(now) !== getWeekNumber(previous),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("weekly"));
   return {
     ...claim,
     isNewWeek: claim.isClaimed,
@@ -179,13 +173,7 @@ export const lockWithWeeklyTimer = async (client: DrizzleClient, name: string) =
 
 /** Atomically claim once per UTC calendar month. */
 export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) => {
-  const claim = await claimGameTimer(
-    client,
-    name,
-    (previous, now) =>
-      now.getUTCFullYear() !== previous.getUTCFullYear() ||
-      now.getUTCMonth() !== previous.getUTCMonth(),
-  );
+  const claim = await claimGameTimer(client, name, startedSince("monthly"));
   return {
     ...claim,
     isNewMonth: claim.isClaimed,
@@ -193,6 +181,41 @@ export const lockWithMonthlyTimer = async (client: DrizzleClient, name: string) 
       claim.isClaimed ? null : "Wait until the next month to run this again",
     ),
   };
+};
+
+/** Whether a new UTC calendar period began after the timer's last claim. */
+const startedSince =
+  (period: "daily" | "weekly" | "monthly") => (previous: Date, now: Date) =>
+    periodStart(period, now) > previous;
+
+/**
+ * Run a cron's work under a period claim: answer with the wait response when another run
+ * holds it, and hand the period back on failure so the next invocation retries.
+ * `keepClaimOnError` is for work a same-period rerun must not repeat.
+ */
+export const runClaimedCron = async (
+  claim: {
+    isClaimed: boolean;
+    response: Response;
+    release: () => Promise<boolean>;
+  },
+  endpoint: string,
+  work: () => Promise<Response>,
+  { keepClaimOnError = false } = {},
+) => {
+  if (!claim.isClaimed) return claim.response;
+  try {
+    return await work();
+  } catch (cause) {
+    if (!keepClaimOnError) {
+      try {
+        await claim.release();
+      } catch (rollbackCause) {
+        console.error(`Failed to release the ${endpoint} timer`, rollbackCause);
+      }
+    }
+    return handleEndpointError(cause, { endpoint });
+  }
 };
 
 const gameTimerWaitResponse = (previous: Date, durationMs: number) => {
@@ -238,17 +261,34 @@ export const fetchDmgConfig = async (client: DrizzleClient): Promise<DmgConfig> 
   // Missing settings were inserted above, so every name resolves to a row
   const get = (name: string) => settings.find((s) => s.name === name)?.value ?? 0;
 
-  return {
-    stats_scaling: get("DMG_STATS_SCALING"),
-    base_hits: get("DMG_BASE_HITS"),
-    curve: get("DMG_CURVE"),
-    amplitude: get("DMG_AMPLITUDE"),
-    ep_normalization: get("DMG_EP_NORMALIZATION"),
-    gen_weight: get("DMG_GEN_WEIGHT"),
-    advantage_min: get("DMG_ADVANTAGE_MIN"),
-    advantage_max: get("DMG_ADVANTAGE_MAX"),
-  };
+  return Object.fromEntries(
+    dmgConfigSettings().map(([key, name]) => [key, get(name)]),
+  ) as DmgConfig;
 };
+
+/** Saves every DMG config value to its gameSetting row. */
+export const updateDmgConfig = (client: DrizzleClient, config: DmgConfig) =>
+  Promise.all(
+    dmgConfigSettings().map(([key, name]) =>
+      updateGameSetting(client, name, config[key], new Date()),
+    ),
+  );
+
+/** GameSetting row behind each DmgConfig field. */
+const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
+  stats_scaling: "DMG_STATS_SCALING",
+  base_hits: "DMG_BASE_HITS",
+  curve: "DMG_CURVE",
+  amplitude: "DMG_AMPLITUDE",
+  ep_normalization: "DMG_EP_NORMALIZATION",
+  gen_weight: "DMG_GEN_WEIGHT",
+  advantage_min: "DMG_ADVANTAGE_MIN",
+  advantage_max: "DMG_ADVANTAGE_MAX",
+};
+
+/** Keep config keys typed when enumerating their persisted setting names. */
+const dmgConfigSettings = () =>
+  Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, string][];
 
 /**
  * Handles errors that occur during endpoint processing.

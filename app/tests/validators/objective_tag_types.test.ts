@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
-import { activityBonusTypes, effectFilters } from "@/validators/combat";
+import { activityBonusTypes, tagTypes } from "@/validators/combat";
 import { OBJECTIVE_TAG_TYPES } from "@/validators/objectives";
 
 // Tag types excluded from OBJECTIVE_TAG_TYPES because they cannot produce a winnable
@@ -35,7 +35,7 @@ const EXCLUDED_TAG_TYPES = new Set([
 
 describe("OBJECTIVE_TAG_TYPES", () => {
   it("is exactly the combat-applicable subset of the canonical effect filters", () => {
-    const expected = [...effectFilters]
+    const expected = [...tagTypes]
       .filter((t) => !EXCLUDED_TAG_TYPES.has(t))
       .sort();
     expect([...OBJECTIVE_TAG_TYPES].sort()).toEqual<typeof expected>(expected);

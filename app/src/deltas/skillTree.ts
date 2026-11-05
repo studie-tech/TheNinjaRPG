@@ -37,17 +37,15 @@ export const getPurchaseSkillUserUpdate = ({
 export const getResetSkillPointsUserUpdate = ({
   updatedUserRequiresUserRefresh,
   isFreeReset,
-  resetState,
-  isStaffFreeReset,
+  monthlySkillResets,
   user,
 }: {
   updatedUserRequiresUserRefresh: boolean;
   isFreeReset: boolean;
-  resetState: {
+  monthlySkillResets: {
     month: string;
     count: number;
   };
-  isStaffFreeReset: boolean;
   user: NonNullable<NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>>["user"]>;
 }) => ({
   userDelta: updatedUserRequiresUserRefresh
@@ -58,10 +56,7 @@ export const getResetSkillPointsUserUpdate = ({
   userPatch: {
     maxEnergy: calcMaxEnergy({ ...user, userSkills: [] }),
     userSkills: [],
-    monthlySkillResets: {
-      ...resetState,
-      count: resetState.count + (isStaffFreeReset ? 0 : 1),
-    },
+    monthlySkillResets,
     effectiveMasteries: effectiveMasteries({ ...user, userSkills: [] }),
   },
 });

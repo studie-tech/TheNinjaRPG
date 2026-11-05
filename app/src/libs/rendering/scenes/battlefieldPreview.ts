@@ -1,9 +1,5 @@
 import type { Grid } from "honeycomb-grid";
-import {
-  type CombatBiome,
-  HEX_STACKING_DISPLACEMENT,
-  IMG_AVATAR_DEFAULT,
-} from "@/drizzle/constants";
+import { type CombatBiome, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
 import type {
   GroundEffect,
@@ -12,7 +8,7 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import {
-  getBattlefieldHeightRatio,
+  createEmptyExtraState,
   getBattleGrid,
   getDefaultBattleSizes,
 } from "@/libs/combat/util";
@@ -26,7 +22,7 @@ import {
   sceneAssetIds,
   sceneSoundIds,
 } from "@/libs/contentReview/battlefield";
-import type { TerrainHex } from "@/libs/hexgrid";
+import { hexGridHeightRatio, stackedHexWidths, type TerrainHex } from "@/libs/hexgrid";
 import {
   type CombatSceneSnapshot,
   createCombatScene,
@@ -78,7 +74,7 @@ export const createBattlefieldPreview = async (
     battle.width = options.targeting.width;
     battle.height = options.targeting.height;
   }
-  const hex = width / stacked(battle.width);
+  const hex = width / stackedHexWidths(battle.width);
   const grid = getBattleGrid(hex, battle, { x: -hex * 0.5, y: -hex * 0.5 });
   const corners = Object.values(placements).flatMap(
     (placement) => grid.getHex(placement)?.corners ?? [],
@@ -339,7 +335,7 @@ export const createBattlefieldPreview = async (
 
 /** Width of one hex on the viewport, as a regular battle lays them out. */
 export const previewHexWidth = (viewport: BattlefieldViewport) =>
-  BATTLEFIELD_VIEWPORTS[viewport] / stacked(GAME_COLUMNS);
+  BATTLEFIELD_VIEWPORTS[viewport] / stackedHexWidths(GAME_COLUMNS);
 
 /** Captures fixed desktop/phone phases into PNG sheets and disposes each temporary preview. */
 export const captureBattlefieldSheets = async (
@@ -402,9 +398,6 @@ export const captureBattlefieldSheets = async (
   return { sheets, missing: [...missing] };
 };
 
-const stacked = (columns: number) =>
-  columns - HEX_STACKING_DISPLACEMENT * (columns - 1);
-
 /** Size of the field on the viewport in CSS pixels, and its height to width ratio. */
 const fieldSize = (
   viewport: BattlefieldViewport,
@@ -413,8 +406,8 @@ const fieldSize = (
   const dimensions = targeting ?? FIELD;
   const width = targeting
     ? BATTLEFIELD_VIEWPORTS[viewport]
-    : previewHexWidth(viewport) * stacked(FIELD.width);
-  const ratio = getBattlefieldHeightRatio(dimensions.width, dimensions.height);
+    : previewHexWidth(viewport) * stackedHexWidths(FIELD.width);
+  const ratio = hexGridHeightRatio(dimensions.width, dimensions.height);
   return { width, height: width * ratio, ratio };
 };
 
@@ -442,25 +435,7 @@ const previewBattle = (
     round: 1,
     rewardScaling: 1,
     forceKeepPools: false,
-    extraState: {
-      jutsus: {},
-      jutsuReskins: {},
-      items: {},
-      bloodlines: {},
-      sageModes: {},
-      villages: {},
-      anbuSquads: {},
-      keystoneItems: {},
-      wars: {},
-      aiProfiles: {},
-      relations: {},
-      clans: {},
-      userQuests: {},
-      completedQuests: {},
-      questData: {},
-      bounties: {},
-      bountySignups: {},
-    },
+    extraState: createEmptyExtraState(),
   };
 };
 

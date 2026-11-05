@@ -68,12 +68,12 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import StatusBar from "@/layout/StatusBar";
 import { getEffectPower } from "@/libs/combat/power";
-import { sealCheck } from "@/libs/combat/tags";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
 import {
   getPreventTypeName,
   getStatTypeLabels,
   isEffectActive,
+  sealCheck,
 } from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import {

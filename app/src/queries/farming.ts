@@ -24,11 +24,8 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import { EMPTY_PLOT } from "@/libs/farming";
 import type { DrizzleClient } from "@/server/db";
-import {
-  completedQuestHistoryRelation,
-  userQuestHistoryRelation,
-} from "@/server/utils/achievementObjectives";
 
 /** Load a seed and its yield definition; a missing seed leaves seedItem undefined and yieldItem null. */
 export const fetchFarmSeedAndYield = async (
@@ -117,21 +114,6 @@ export const fetchFarmPlots = async (client: DrizzleClient, userId: string) => {
   });
 };
 
-/**
- * Thin quest-state fetch for farming objective emits. This keeps the tracker
- * snapshot internally consistent without pulling the full user relation graph.
- */
-export const fetchFarmingQuestState = async (client: DrizzleClient, userId: string) => {
-  return await client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: { userId: true, questData: true, updatedAt: true },
-    with: {
-      userQuests: userQuestHistoryRelation,
-      completedQuests: completedQuestHistoryRelation,
-    },
-  });
-};
-
 /** Build the `farmPlot` lookup for `plantSeed`, using predicates on `id` and `userId`. */
 export const findFarmPlotForPlantSeed = (
   client: Pick<DrizzleClient, "query">,
@@ -142,19 +124,19 @@ export const findFarmPlotForPlantSeed = (
     where: and(eq(farmPlot.id, input.plotId), eq(farmPlot.userId, ctx.userId)),
   });
 
-/** Build the `farmPlot` update for `plantSeed`, using predicates on `id`, `userId`, `seedItemId`. */
-export const updateFarmPlotForPlantSeed = (
+/** Build the `farmPlot` update planting empty plots, using predicates on `userId`, `id`, `seedItemId`. */
+export const updateFarmPlotsForPlant = (
   client: Pick<DrizzleClient, "update">,
-  input: { seedItemId: string },
+  seedItemId: string,
   now: Date,
   finishAt: Date,
-  plot: { id: string },
   ctx: { userId: string },
+  plotIds: string[],
 ) =>
   client
     .update(farmPlot)
     .set({
-      seedItemId: input.seedItemId,
+      seedItemId,
       plantedAt: now,
       finishAt,
       lastWateredAt: null,
@@ -163,39 +145,14 @@ export const updateFarmPlotForPlantSeed = (
     })
     .where(
       and(
-        eq(farmPlot.id, plot.id),
         eq(farmPlot.userId, ctx.userId),
+        inArray(farmPlot.id, plotIds),
         isNull(farmPlot.seedItemId),
       ),
     );
 
-/** Build the `farmPlot` update for `plantSeed`, using predicates on `id`, `userId`, `seedItemId`. */
-export const updateFarmPlotForPlantSeed2 = (
-  client: Pick<DrizzleClient, "update">,
-  plot: { id: string },
-  ctx: { userId: string },
-  input: { seedItemId: string },
-) =>
-  client
-    .update(farmPlot)
-    .set({
-      seedItemId: null,
-      plantedAt: null,
-      finishAt: null,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(farmPlot.id, plot.id),
-        eq(farmPlot.userId, ctx.userId),
-        eq(farmPlot.seedItemId, input.seedItemId),
-      ),
-    );
-
-/** Build the `farmPlot` update for `waterPlot`, including predicates on `id`, `userId`, `seedItemId`. */
-export const updateFarmPlotForWaterPlot = (
+/** Build the `farmPlot` update for watering, including predicates on `id`, `userId`, `seedItemId`. */
+export const updateFarmPlotForWater = (
   client: Pick<DrizzleClient, "update">,
   newFinishAt: Date,
   now: Date,
@@ -220,8 +177,8 @@ export const updateFarmPlotForWaterPlot = (
       ),
     );
 
-/** Build the `farmPlot` update for `applyFertilizer`, including predicates on `id`, `userId`, `seedItemId`. */
-export const updateFarmPlotForApplyFertilizer = (
+/** Build the `farmPlot` update for fertilizing, including predicates on `id`, `userId`, `seedItemId`. */
+export const updateFarmPlotForFertilize = (
   client: Pick<DrizzleClient, "update">,
   newFinishAt: Date,
   now: Date,
@@ -241,49 +198,20 @@ export const updateFarmPlotForApplyFertilizer = (
       ),
     );
 
-/** Build the `farmPlot` update for `applyFertilizer`, including predicates on `id`, `userId`, `seedItemId`. */
-export const updateFarmPlotForApplyFertilizer2 = (
-  client: Pick<DrizzleClient, "update">,
-  plot: { finishAt: Date; id: string; seedItemId: string },
-  ctx: { userId: string },
-) =>
-  client
-    .update(farmPlot)
-    .set({
-      finishAt: plot.finishAt,
-      fertilizerApplied: false,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(farmPlot.id, plot.id),
-        eq(farmPlot.userId, ctx.userId),
-        eq(farmPlot.seedItemId, plot.seedItemId),
-        eq(farmPlot.fertilizerApplied, true),
-      ),
-    );
-
-/** Build the `farmPlot` update for `harvestPlot`, using predicates on `id`, `userId`, `finishAt`. */
-export const updateFarmPlotForHarvestPlot = (
+/** Build the `farmPlot` update clearing harvested plots, using predicates on `userId`, `id`, `finishAt`. */
+export const updateFarmPlotsForHarvest = (
   client: Pick<DrizzleClient, "update">,
   now: Date,
-  plot: { id: string },
   ctx: { userId: string },
+  plotIds: string[],
 ) =>
   client
     .update(farmPlot)
-    .set({
-      seedItemId: null,
-      plantedAt: null,
-      finishAt: null,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: now,
-    })
+    .set({ ...EMPTY_PLOT, updatedAt: now })
     .where(
       and(
-        eq(farmPlot.id, plot.id),
         eq(farmPlot.userId, ctx.userId),
+        inArray(farmPlot.id, plotIds),
         sql`${farmPlot.finishAt} <= ${now}`,
       ),
     );
@@ -297,33 +225,6 @@ export const listFarmPlotForPlantAllEmpty = (
     where: eq(farmPlot.userId, ctx.userId),
   });
 
-/** Build the `farmPlot` update for `plantAllEmpty`, using predicates on `userId`, `id`, `seedItemId`. */
-export const updateFarmPlotForPlantAllEmpty = (
-  client: Pick<DrizzleClient, "update">,
-  seedItem: { id: string },
-  now: Date,
-  finishAt: Date,
-  ctx: { userId: string },
-  emptyPlotIds: string[],
-) =>
-  client
-    .update(farmPlot)
-    .set({
-      seedItemId: seedItem.id,
-      plantedAt: now,
-      finishAt,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(farmPlot.userId, ctx.userId),
-        inArray(farmPlot.id, emptyPlotIds),
-        isNull(farmPlot.seedItemId),
-      ),
-    );
-
 /** Build the `farmPlot` listing for `waterAll`, using predicates on `userId`. */
 export const listFarmPlotForWaterAll = (
   client: Pick<DrizzleClient, "query">,
@@ -333,73 +234,6 @@ export const listFarmPlotForWaterAll = (
     where: eq(farmPlot.userId, ctx.userId),
     with: { seedItem: true },
   });
-
-/** Build the `farmPlot` update for `waterAll`, including predicates on `id`, `userId`, `finishAt`. */
-export const updateFarmPlotForWaterAll = (
-  client: Pick<DrizzleClient, "update">,
-  newFinishAt: Date,
-  now: Date,
-  plot: { id: string; finishAt: Date; lastWateredAt: null | Date },
-  ctx: { userId: string },
-) =>
-  client
-    .update(farmPlot)
-    .set({ finishAt: newFinishAt, lastWateredAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(farmPlot.id, plot.id),
-        eq(farmPlot.userId, ctx.userId),
-        eq(farmPlot.finishAt, plot.finishAt),
-        plot.lastWateredAt
-          ? eq(farmPlot.lastWateredAt, plot.lastWateredAt)
-          : isNull(farmPlot.lastWateredAt),
-      ),
-    );
-
-/** Build the `farmPlot` update for `fertilizeAll`, including predicates on `id`, `userId`, `finishAt`. */
-export const updateFarmPlotForFertilizeAll = (
-  client: Pick<DrizzleClient, "update">,
-  newFinishAt: Date,
-  now: Date,
-  plot: { id: string; finishAt: Date },
-  ctx: { userId: string },
-) =>
-  client
-    .update(farmPlot)
-    .set({ finishAt: newFinishAt, fertilizerApplied: true, updatedAt: now })
-    .where(
-      and(
-        eq(farmPlot.id, plot.id),
-        eq(farmPlot.userId, ctx.userId),
-        eq(farmPlot.finishAt, plot.finishAt),
-        eq(farmPlot.fertilizerApplied, false),
-      ),
-    );
-
-/** Build the `farmPlot` update for `harvestAll`, using predicates on `userId`, `id`, `finishAt`. */
-export const updateFarmPlotForHarvestAll = (
-  client: Pick<DrizzleClient, "update">,
-  now: Date,
-  ctx: { userId: string },
-  readyPlotIds: string[],
-) =>
-  client
-    .update(farmPlot)
-    .set({
-      seedItemId: null,
-      plantedAt: null,
-      finishAt: null,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(farmPlot.userId, ctx.userId),
-        inArray(farmPlot.id, readyPlotIds),
-        sql`${farmPlot.finishAt} <= ${now}`,
-      ),
-    );
 
 /** Build the `userData` update for `sellCrop`, setting `farmCurrency`, using predicates on `userId`. */
 export const updateUserDataForSellCrop = (
@@ -562,14 +396,7 @@ export const rollbackBulkPlant = async (
 ) => {
   await client
     .update(farmPlot)
-    .set({
-      seedItemId: null,
-      plantedAt: null,
-      finishAt: null,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: new Date(),
-    })
+    .set({ ...EMPTY_PLOT, updatedAt: new Date() })
     .where(
       and(
         eq(farmPlot.userId, userId),
@@ -621,14 +448,7 @@ export const updateFarmPlotForBuildFarmState = (
 ) =>
   client
     .update(farmPlot)
-    .set({
-      seedItemId: null,
-      plantedAt: null,
-      finishAt: null,
-      lastWateredAt: null,
-      fertilizerApplied: false,
-      updatedAt: now,
-    })
+    .set({ ...EMPTY_PLOT, updatedAt: now })
     .where(
       and(
         eq(farmPlot.id, plotId),

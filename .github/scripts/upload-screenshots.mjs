@@ -15,7 +15,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, extname } from "node:path";
-import { setOutput, createGithubClient } from "./ci-helpers.mjs";
+import { setOutput, createGithubClient, encodeHeadsRef } from "./ci-helpers.mjs";
 
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
@@ -102,8 +102,7 @@ const main = async () => {
       body: JSON.stringify({ ref: `refs/heads/${BRANCH}`, sha: commit.sha }),
     });
   } catch {
-    const encoded = BRANCH.split("/").map(encodeURIComponent).join("/");
-    await apiRequest(`/repos/${repo}/git/refs/heads/${encoded}`, {
+    await apiRequest(`/repos/${repo}/git/refs/heads/${encodeHeadsRef(BRANCH)}`, {
       method: "PATCH",
       body: JSON.stringify({ sha: commit.sha, force: true }),
     });

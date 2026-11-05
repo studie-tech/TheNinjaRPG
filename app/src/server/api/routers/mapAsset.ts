@@ -110,10 +110,7 @@ export const mapAssetRouter = createTRPCRouter({
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
       await notifyMapLocationsChanged();
-      // Broadcast the change to the content Discord outside development
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, entry.name, diff, entry.imageUrl);
-      }
+      await callDiscordContent(user.username, entry.name, diff, entry.imageUrl);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   /**

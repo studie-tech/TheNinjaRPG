@@ -21,6 +21,7 @@ import {
   SHRINE_AI_UNLOCK_COST,
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BOOST_COST,
+  SHRINE_BOOST_REQUIRED_LEVEL,
   type SHRINE_BOOST_TYPE,
   SHRINE_UPGRADE_COST,
   SHRINE_WEEKLY_MAINTENANCE_COST,
@@ -33,6 +34,7 @@ import {
   village,
 } from "@/drizzle/schema";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import {
   boostInactivePredicate,
@@ -87,12 +89,7 @@ export const selectSectorForRunShrineBoostTick = (
   client
     .select({ villageId: sector.villageId })
     .from(sector)
-    .where(
-      and(
-        eq(sector.shrineLevel, 3),
-        or(isNull(sector.boostLockedUntil), lte(sector.boostLockedUntil, now)),
-      ),
-    );
+    .where(boostEligibleShrineCondition(now));
 
 /**
  * Build the `village` update for `runShrineBoostTick`, setting `shrineSettings` and
@@ -243,13 +240,7 @@ export const listUserDataForGetShrineAis = (client: Pick<DrizzleClient, "query">
         },
       },
     },
-    columns: {
-      userId: true,
-      username: true,
-      level: true,
-      rank: true,
-      avatar: true,
-    },
+    columns: userSummaryColumns,
     orderBy: asc(userData.level),
   });
 
@@ -718,10 +709,13 @@ export const selectSectorForHasLevel3Shrine = (
     .select({ id: sector.id })
     .from(sector)
     .where(
-      and(
-        eq(sector.villageId, villageId),
-        eq(sector.shrineLevel, 3),
-        or(isNull(sector.boostLockedUntil), lte(sector.boostLockedUntil, new Date())),
-      ),
+      and(eq(sector.villageId, villageId), boostEligibleShrineCondition(new Date())),
     )
     .limit(1);
+
+/** A shrine at the required level counts for boosts unless a boost lock is still running. */
+const boostEligibleShrineCondition = (now: Date) =>
+  and(
+    eq(sector.shrineLevel, SHRINE_BOOST_REQUIRED_LEVEL),
+    or(isNull(sector.boostLockedUntil), lte(sector.boostLockedUntil, now)),
+  );

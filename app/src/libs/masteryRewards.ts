@@ -1,5 +1,6 @@
 import { MasteryTypes } from "@/drizzle/constants";
 import {
+  hasMasteryPromotion,
   MASTERY_EXPERIENCE_FIELDS,
   type ObjectiveRewardType,
 } from "@/validators/rewards";
@@ -15,10 +16,7 @@ export const masteryRewardLabels = (reward: Partial<ObjectiveRewardType>): strin
       ? [`${reward[field]?.toLocaleString()} ${MasteryTypes[index]} Mastery XP`]
       : [],
   ),
-  ...(reward.reward_mastery_stat &&
-  reward.reward_mastery_stat !== "None" &&
-  reward.reward_mastery_rank &&
-  reward.reward_mastery_rank !== "NONE"
+  ...(hasMasteryPromotion(reward)
     ? [
         `${reward.reward_mastery_stat.replace("Mastery", "")} mastery rank: ${reward.reward_mastery_rank}`,
       ]

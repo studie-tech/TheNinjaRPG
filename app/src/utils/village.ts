@@ -86,22 +86,7 @@ export const canAccessStructure = (
   return structureAccess;
 };
 
-export type StructureAttribute =
-  | "anbuSquadsPerLvl"
-  | "arenaRewardPerLvl"
-  | "bankInterestPerLvl"
-  | "blackDiscountPerLvl"
-  | "clansPerLvl"
-  | "hospitalSpeedupPerLvl"
-  | "itemDiscountPerLvl"
-  | "missionRewardPerLvl"
-  | "patrolsPerLvl"
-  | "ramenDiscountPerLvl"
-  | "regenIncreasePerLvl"
-  | "sleepRegenPerLvl"
-  | "structureDiscountPerLvl"
-  | "trainBoostPerLvl"
-  | "villageDefencePerLvl";
+export type StructureAttribute = Extract<keyof VillageStructure, `${string}PerLvl`>;
 
 /**
  * Calculates the effective level of a structure, including temporary bonuses from war victories.

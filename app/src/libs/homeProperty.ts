@@ -51,7 +51,7 @@ export const boundHomeCamera = (camera: HomeCamera, homeType: HomeType): HomeCam
 
 /** Frame the selected floor with room headroom without leaving the painted property. */
 export const getHomeRoomCamera = (homeType: HomeType, id: HomeRoomId): HomeCamera => {
-  const room = getHomeRooms(homeType).find((room) => room.id === id);
+  const room = getHomeRoom(homeType, id);
   if (!room) return getHomeOverviewCamera(homeType);
   const points = [
     ...room.interior.flat(),
@@ -98,6 +98,10 @@ export const zoomHomeCamera = (
 });
 
 /** Keep saved room frames and physical scale while mapping all measured contours into them. */
+/** One room of a home, or undefined when the home lacks it. */
+export const getHomeRoom = (homeType: HomeType, id: HomeRoomId) =>
+  getHomeRooms(homeType).find((room) => room.id === id);
+
 export const getHomeRooms = (homeType: HomeType): HomeRoom[] => {
   const plan = HOME_ART_PLANS[homeType];
   const unit = plan.size / 100;

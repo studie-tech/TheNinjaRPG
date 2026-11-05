@@ -1,6 +1,7 @@
 /**
  * Database access for pvprank; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -8,7 +9,6 @@ import {
   gt,
   gte,
   inArray,
-  isNull,
   lt,
   lte,
   notExists,
@@ -27,14 +27,17 @@ import {
   item,
   logQueueLengths,
   logRankedPicks,
-  mpvpBattleQueue,
-  mpvpBattleUser,
   rankedLoadout,
   rankedPvpQueue,
   rankedSeason,
   rankedUserRewards,
   userData,
 } from "@/drizzle/schema";
+import {
+  nextSnapshotSql,
+  selectClaimedRankedQueueEntry,
+  selectUnresolvedClanLobbyEntry,
+} from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
@@ -249,32 +252,8 @@ export const updateUserDataForGetRankedPvpQueue = (
         eq(userData.status, "QUEUED"),
         withoutDungeonReservation(),
         // Independent reads may precede a ranked claim or belong to a clan lobby.
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, userData.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
-        notExists(
-          client
-            .select({ id: mpvpBattleUser.id })
-            .from(mpvpBattleUser)
-            .innerJoin(
-              mpvpBattleQueue,
-              eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id),
-            )
-            .where(
-              and(
-                eq(mpvpBattleUser.userId, userData.userId),
-                isNull(mpvpBattleQueue.winnerId),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
+        notExists(selectUnresolvedClanLobbyEntry(client, userData.userId)),
       ),
     );
 
@@ -300,7 +279,7 @@ export const updateRankedLoadoutForUpdateRankedLoadout = (
     .update(rankedLoadout)
     .set({
       loadout,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${rankedLoadout.updatedAt}))`,
+      updatedAt: nextSnapshotSql(rankedLoadout.updatedAt),
     })
     .where(eq(rankedLoadout.id, currentLoadout.id));
 

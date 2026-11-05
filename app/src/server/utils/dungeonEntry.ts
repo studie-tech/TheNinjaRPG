@@ -9,8 +9,8 @@ import {
   markDungeonFloorPublished,
 } from "@/queries/dungeon";
 import type { DrizzleClient } from "@/server/db";
+import { commitBattleAdmission } from "@/server/utils/battleAdmission";
 import { updateUserItemQuantityAtomically } from "@/server/utils/concurrency";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getQuestEntryCharges } from "@/server/utils/questEntry";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
@@ -111,7 +111,8 @@ export const commitDungeonEntryBattle = async <T>({
   createBattle: (client: DrizzleClient) => Promise<T>;
   didClaim: (result: T) => boolean;
 }) => {
-  const rejected = new Error("Dungeon admission changed");
+  const changed =
+    "Dungeon entry changed. Refresh and try again; no items or attempts were consumed.";
   for (const user of data ? users : []) {
     const admission = dungeonAdmission(data!, user, dungeonId, content);
     if (admission.error)
@@ -120,54 +121,43 @@ export const commitDungeonEntryBattle = async <T>({
         message: `${user.username}: ${admission.error}`,
       };
   }
-  try {
-    const result = await retryOnDeadlock(() =>
-      client.transaction(async (transaction) => {
-        const tx = transaction as unknown as DrizzleClient;
-        const receipt = await markDungeonFloorPublished(
-          tx,
-          runId,
-          battleId,
-          version,
-          state,
+  return commitBattleAdmission({
+    client,
+    createBattle,
+    didClaim,
+    claimFailedMessage: changed,
+    admit: async (tx, reject) => {
+      const receipt = await markDungeonFloorPublished(
+        tx,
+        runId,
+        battleId,
+        version,
+        state,
+      );
+      if (receipt.rowsAffected !== 1) reject(changed);
+      const requirements = dungeonRequirements(content);
+      for (const user of data ? users : []) {
+        const charges = getDungeonEntryCharges(
+          requirements,
+          data!.inventory.filter((row) => row.userId === user.userId),
         );
-        if (receipt.rowsAffected !== 1) throw rejected;
-        const requirements = dungeonRequirements(content);
-        for (const user of data ? users : []) {
-          const charges = getDungeonEntryCharges(
-            requirements,
-            data!.inventory.filter((row) => row.userId === user.userId),
-          );
-          if (!charges) throw rejected;
-          for (const charge of charges) {
-            const paid = await updateUserItemQuantityAtomically({
-              client: tx,
-              userId: user.userId,
-              userItemId: charge.id,
-              expectedQuantity: charge.expectedQuantity,
-              nextQuantity: charge.expectedQuantity - charge.quantity,
-              where: [
-                eq(userItem.itemId, charge.itemId),
-                eq(userItem.storedAtHome, false),
-                eq(userItem.isInAuction, false),
-              ],
-            });
-            if (!paid) throw rejected;
-          }
+        if (!charges) return reject(changed);
+        for (const charge of charges) {
+          const paid = await updateUserItemQuantityAtomically({
+            client: tx,
+            userId: user.userId,
+            userItemId: charge.id,
+            expectedQuantity: charge.expectedQuantity,
+            nextQuantity: charge.expectedQuantity - charge.quantity,
+            where: [
+              eq(userItem.itemId, charge.itemId),
+              eq(userItem.storedAtHome, false),
+              eq(userItem.isInAuction, false),
+            ],
+          });
+          if (!paid) reject(changed);
         }
-        const created = await createBattle(tx);
-        if (!didClaim(created)) throw rejected;
-        return created;
-      }),
-    );
-    return { success: true as const, result };
-  } catch (error) {
-    if (error === rejected)
-      return {
-        success: false as const,
-        message:
-          "Dungeon entry changed. Refresh and try again; no items or attempts were consumed.",
-      };
-    throw error;
-  }
+      }
+    },
+  });
 };

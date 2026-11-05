@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FEDERAL_MONTHLY_USD_CENTS } from "@/drizzle/constants";
+import type { stripeCheckout } from "@/drizzle/schema";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { findUserById } from "@/queries/profile";
 import {
@@ -37,7 +38,7 @@ import {
 } from "@/server/utils/stripe/client";
 import { fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
 import { dollars2reps, dynamicMonthlyRepCap, reps2dollars } from "@/utils/paypal";
-import { stripePurchaseSchema } from "@/validators/stripe";
+import { isEndedSubscriptionStatus, stripePurchaseSchema } from "@/validators/stripe";
 
 /** Authenticated web checkout, recovery and management; provider objects establish payment. */
 export const stripeRouter = createTRPCRouter({
@@ -83,14 +84,14 @@ export const stripeRouter = createTRPCRouter({
       const reputationPoints =
         input.purchase.type === "reputation" ? dollars2reps(amountCents / 100) : 0;
       const priceId = tier === "NONE" ? null : stripePriceIds()[tier];
-      if (
-        existing &&
-        (existing.createdById !== ctx.userId ||
-          existing.affectedUserId !== input.userId ||
-          existing.amountCents !== amountCents ||
-          existing.federalStatus !== tier ||
-          existing.reputationPoints !== reputationPoints)
-      )
+      const terms: CheckoutTerms = {
+        createdById: ctx.userId,
+        affectedUserId: input.userId,
+        amountCents,
+        federalStatus: tier,
+        reputationPoints,
+      };
+      if (existing && !hasCheckoutTerms(existing, terms))
         return errorResponse("Checkout changed. Start a new checkout.");
       if (
         existing?.closedAt ||
@@ -100,7 +101,7 @@ export const stripeRouter = createTRPCRouter({
           !existing.sessionId)
       )
         return errorResponse(
-          "This checkout cannot be resumed. Its reservation expires 25 hours after it started; then start a new checkout.",
+          `This checkout cannot be resumed. Its reservation expires ${RESERVATION_HOURS} hours after it started; then start a new checkout.`,
         );
       if (existing?.sessionId) {
         const session = await getStripe().checkout.sessions.retrieve(
@@ -143,12 +144,7 @@ export const stripeRouter = createTRPCRouter({
             stripe.subscriptions.retrieve(checkout.subscriptionId as string),
           ),
         );
-        if (
-          external.some(
-            (subscription) =>
-              !["canceled", "incomplete_expired"].includes(subscription.status),
-          )
-        )
+        if (external.some(({ status }) => !isEndedSubscriptionStatus(status)))
           return errorResponse(
             "You already pay for Stripe support for this recipient. Manage that subscription below first.",
           );
@@ -198,14 +194,7 @@ export const stripeRouter = createTRPCRouter({
       }
       // A concurrent request using the same id must agree with the saved, server-authored terms.
       const saved = await findStripeCheckoutById(ctx.drizzle, input.requestId);
-      if (
-        !saved ||
-        saved.createdById !== ctx.userId ||
-        saved.affectedUserId !== input.userId ||
-        saved.amountCents !== amountCents ||
-        saved.federalStatus !== tier ||
-        saved.reputationPoints !== reputationPoints
-      )
+      if (!saved || !hasCheckoutTerms(saved, terms))
         return errorResponse("Checkout changed. Start again.");
       const metadata = { tnrCheckoutId: saved.id };
       const session = await stripe.checkout.sessions.create(
@@ -265,7 +254,7 @@ export const stripeRouter = createTRPCRouter({
           STRIPE_CHECKOUT_RESERVATION_SECONDS * 1000
         )
           return errorResponse(
-            "Checkout is still being created. Retry opening it, or wait until its 25-hour reservation expires.",
+            `Checkout is still being created. Retry opening it, or wait until its ${RESERVATION_HOURS}-hour reservation expires.`,
           );
         await updateStripeCheckoutForCancelCheckout(ctx.drizzle, checkout);
         return {
@@ -362,7 +351,7 @@ export const stripeRouter = createTRPCRouter({
         return errorResponse("You are not associated with this subscription.");
       const stripe = getStripe();
       const subscription = await stripe.subscriptions.retrieve(checkout.subscriptionId);
-      if (["canceled", "incomplete_expired"].includes(subscription.status))
+      if (isEndedSubscriptionStatus(subscription.status))
         return { success: true, message: "This subscription has already ended." };
       await stripe.subscriptions.update(checkout.subscriptionId, {
         cancel_at_period_end: true,
@@ -374,3 +363,22 @@ export const stripeRouter = createTRPCRouter({
       };
     }),
 });
+
+const RESERVATION_HOURS = STRIPE_CHECKOUT_RESERVATION_SECONDS / 3600;
+
+type CheckoutTerms = Pick<
+  typeof stripeCheckout.$inferSelect,
+  | "createdById"
+  | "affectedUserId"
+  | "amountCents"
+  | "federalStatus"
+  | "reputationPoints"
+>;
+
+/** A request id may only resume a checkout with the same server-authored terms. */
+const hasCheckoutTerms = (checkout: CheckoutTerms, terms: CheckoutTerms) =>
+  checkout.createdById === terms.createdById &&
+  checkout.affectedUserId === terms.affectedUserId &&
+  checkout.amountCents === terms.amountCents &&
+  checkout.federalStatus === terms.federalStatus &&
+  checkout.reputationPoints === terms.reputationPoints;

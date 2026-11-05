@@ -1,5 +1,4 @@
 import alea from "alea";
-import { ring } from "honeycomb-grid";
 import {
   Container,
   Graphics,
@@ -12,9 +11,8 @@ import type { GameAsset, UserData } from "@/drizzle/schema";
 import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
-import { getBattlefieldHeightRatio } from "@/libs/combat/util";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
-import type { TerrainHex } from "@/libs/hexgrid";
+import { hexGridHeightRatio, type TerrainHex } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import {
@@ -27,7 +25,10 @@ import {
   nextCombatHoverCursor,
 } from "@/libs/rendering/combatHover";
 import { createMapControls } from "@/libs/rendering/mapControls";
-import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
+import {
+  createWorldSprites,
+  fadeSceneryNearPositions,
+} from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer, type GameFrame } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -75,7 +76,7 @@ export const createCombatScene = async (options: {
   advance?: (deltaMs: number) => number;
 }) => {
   const initial = options.getSnapshot(),
-    ratio = getBattlefieldHeightRatio(initial.battle.width, initial.battle.height);
+    ratio = hexGridHeightRatio(initial.battle.width, initial.battle.height);
   const game = await createGameRenderer({
     ...options,
     touchAction: options.interactive === false ? "auto" : "none",
@@ -257,25 +258,13 @@ export const createCombatScene = async (options: {
         viewer: snapshot.viewer,
         aggro: snapshot.aggro,
       });
-      const affected = new Set<string>();
-      for (const user of snapshot.battle.usersState)
-        if (user.curHealth > 0 && !user.fledBattle) {
-          const tile = data.grid.getHex({ col: user.longitude, row: user.latitude });
-          if (tile) {
-            affected.add(`${tile.col},${tile.row}`);
-            for (const neighbor of data.grid.traverse(
-              ring({ radius: 1, center: tile }),
-            ))
-              affected.add(`${neighbor.col},${neighbor.row}`);
-          }
-        }
-      for (const entry of art.entries)
-        if (!entry.description.small)
-          entry.sprite.alpha = affected.has(
-            entry.description.id.replace("scenery:", ""),
-          )
-            ? 0.5
-            : 1;
+      fadeSceneryNearPositions(
+        art.entries,
+        data.grid,
+        snapshot.battle.usersState
+          .filter((user) => user.curHealth > 0 && !user.fledBattle)
+          .map((user) => ({ col: user.longitude, row: user.latitude })),
+      );
       const known = [
         ...(snapshot.battle.extraState.textureAssets ?? []),
         ...(snapshot.battle.extraState.sfxAssets ?? []),

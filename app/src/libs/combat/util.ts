@@ -1,4 +1,4 @@
-import { Grid, Orientation, rectangle } from "honeycomb-grid";
+import type { Grid } from "honeycomb-grid";
 import type {
   AvatarFacing,
   BattleType,
@@ -11,10 +11,9 @@ import {
   AutoBattleTypes,
   BATTLE_TAG_STACKING,
   CombatStatTypes,
+  DURABILITY_USABILITY_THR,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
-  HEX_ASPECT_RATIO,
-  HEX_STACKING_DISPLACEMENT,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -30,6 +29,8 @@ import {
   KILLING_NOTORIETY_GAIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MasteryNames,
+  NO_DURABILITY_LOSS_COMBATS,
+  PRE_BATTLE_SOURCE_TYPES,
   PVP_KILL_ANBU_POINTS_REWARD,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
@@ -68,24 +69,25 @@ import type {
 } from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
 import { combatMasteryGains } from "@/libs/combat/mastery";
-import { areBattleAllies } from "@/libs/combat/participants";
+import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import { isSummonTemplate, spliceOrphanedSummons } from "@/libs/combat/summon";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import { dungeonCombatResult } from "@/libs/dungeon";
+import { applyGameSettingMultiplier } from "@/libs/gameSettingBoost";
 import { getWarSide } from "@/libs/objectiveWar";
 import { boostPvpGain, pvpExperienceReward } from "@/libs/pvpExperience";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
+import { findRelationship } from "@/utils/alliance";
 import { randomInt, round, secureRandomInt } from "@/utils/math";
-import { secondsPassed } from "@/utils/time";
 import { countBoostingShrines, getShrineBoost, getStrucBoost } from "@/utils/village";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 import type { PathCalculator, TerrainHex } from "../hexgrid";
-import { defineHex } from "../hexgrid";
+import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
@@ -95,14 +97,12 @@ import {
   POST_PIERCE_TAGS,
   publicState,
 } from "./constants";
-import { checkFriendlyFire, expireGroundEffects } from "./process";
 import {
-  decreaseMastery,
-  getPower,
-  increaseMastery,
-  sealCheck,
-  settleCurse,
-} from "./tags";
+  applySageModeAfterRoundTransition,
+  checkFriendlyFire,
+  expireGroundEffects,
+} from "./process";
+import { decreaseMastery, getPower, increaseMastery, settleCurse } from "./tags";
 import type {
   BattleRoundContext,
   BattleUserState,
@@ -203,6 +203,21 @@ export const getJutsuReskin = (
 /**
  * Get full Item data from extraState by itemId
  */
+/** Wear an item down, unequipping it at the usability floor, in battles with durability loss. */
+export const wearBattleItem = (
+  battle: CompleteBattle,
+  userItem: Pick<BattleUserState["items"][number], "durability" | "equipped">,
+  item: { maxDurability: number },
+  amount: number,
+) => {
+  if (NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)) return;
+  const currentDurability = Math.min(userItem.durability, item.maxDurability);
+  userItem.durability = Math.max(0, currentDurability - amount);
+  if (userItem.durability <= DURABILITY_USABILITY_THR) {
+    userItem.equipped = "NONE";
+  }
+};
+
 export const getItem = (battle: CompleteBattle | ReturnedBattle, itemId: string) => {
   return battle.extraState.items?.[itemId];
 };
@@ -401,6 +416,20 @@ export const getQuestDataFromBattle = (
   return battle.extraState.questData?.[controllerId] ?? [];
 };
 
+/** Row columns of a UserItem that only matter outside battle, for rows rebuilt in memory. */
+export const inertUserItemColumns = (userId: string, at: Date) => ({
+  userId,
+  createdAt: at,
+  updatedAt: at,
+  storedAtHome: false,
+  homeX: null,
+  homeY: null,
+  homeRotation: 0,
+  homeRoom: "main" as const,
+  craftingFinishedAt: null,
+  isInAuction: false,
+});
+
 /**
  * Hydrate a BattleUserState with data from extraState for use with e.g. getNewTrackers.
  * Returns a fully hydrated user with relations populated from battle.extraState.
@@ -429,16 +458,7 @@ export const hydrateUserForQuests = (battle: CompleteBattle, user: BattleUserSta
     const itemData = getItem(battle, bi.itemId);
     return {
       ...bi,
-      createdAt: now,
-      updatedAt: now,
-      userId: user.userId,
-      storedAtHome: false,
-      homeX: null,
-      homeY: null,
-      homeRotation: 0,
-      homeRoom: "main",
-      craftingFinishedAt: null,
-      isInAuction: false,
+      ...inertUserItemColumns(user.userId, now),
       activeVariantId: bi.activeVariantId ?? null,
       item: {
         id: bi.itemId,
@@ -554,13 +574,7 @@ export const isPvpEnergyRewardBattle = (
   if (["SPARRING", "RANKED_SPARRING"].includes(battle.battleType)) return false;
   const user = battle.usersState.find((u) => u.userId === userId);
   if (!user) return false;
-  return battle.usersState.some(
-    (candidate) =>
-      candidate.userId !== userId &&
-      candidate.direction !== user.direction &&
-      !candidate.isAi &&
-      !candidate.isSummon,
-  );
+  return hasHumanOpponent(battle.usersState, user);
 };
 
 /**
@@ -629,10 +643,7 @@ export const buildCombatTrackerTasks = (
   const tasks: CombatQuestTrackerTask[] = [];
 
   // Each cast counts, including repeated casts and battles lost or fled.
-  const isPvp = curBattle.usersState.some(
-    (opponent) =>
-      opponent.direction !== user.direction && !opponent.isAi && !opponent.isSummon,
-  );
+  const isPvp = hasHumanOpponent(curBattle.usersState, user);
   // Participation is settled once per real match on wins, losses, draws and fleeing.
   // Practice ranked spars and staff tournament exhibitions do not advance competitive counters.
   if (!curBattle.extraState.tournamentGameId && !user.isAi && !user.isSummon) {
@@ -912,6 +923,31 @@ export const applyPoolAdjustmentsToBase = (
   }
 };
 
+/**
+ * Adjust base pools for users with max-pool effects now or tracked from a previous
+ * adjustment, so an expiring effect is reversed.
+ */
+export const syncPoolAdjustments = (
+  usersState: BattleUserState[],
+  usersEffects: UserEffect[],
+) => {
+  usersState.forEach((user) => {
+    const hasPoolEffects = usersEffects.some(
+      (e) =>
+        e.targetId === user.userId &&
+        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
+        isEffectActive(e),
+    );
+    const hadPoolEffects =
+      user._prevHealthAdj !== undefined ||
+      user._prevChakraAdj !== undefined ||
+      user._prevStaminaAdj !== undefined;
+    if (hasPoolEffects || hadPoolEffects) {
+      applyPoolAdjustmentsToBase(user, usersEffects);
+    }
+  });
+};
+
 /** Preserve lobby pools while tracking the complete effect list saved to battle state. */
 export const reconcileLobbyPools = (
   user: BattleUserState,
@@ -938,8 +974,6 @@ export const reconcileLobbyPools = (
 /**
  * Height of the rendered battlefield as a fraction of its width, for a grid of the given size
  */
-export const getBattlefieldHeightRatio = (width: number, height: number) =>
-  ((height + 2) * HEX_ASPECT_RATIO) / (width - HEX_STACKING_DISPLACEMENT * (width - 1));
 
 /**
  * Gets the default width and height of the battle grid based on the type of battle and the level of the user
@@ -1002,28 +1036,29 @@ export const getBattleGrid = (
   hexsize: number,
   battle: ReturnedBattle,
   origin?: { x: number; y: number },
-) => {
-  const Tile = defineHex({
-    dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
-    origin,
-    orientation: Orientation.FLAT,
-  });
+) => createHexGrid(hexsize, battle.width, battle.height, origin).map(nameArenaTile);
 
-  const grid = new Grid(Tile, rectangle({ width: battle.width, height: battle.height }))
-    .filter((tile) => {
-      try {
-        return tile.width !== 0;
-      } catch (_e) {
-        return false;
-      }
-    })
-    .map((tile) => {
-      tile.cost = 1;
-      tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
-      return tile;
-    });
-  return grid;
-};
+/** The required maps of a battle's extra state, empty; callers fill in what they preload. */
+export const createEmptyExtraState = () =>
+  ({
+    jutsus: {},
+    jutsuReskins: {},
+    items: {},
+    bloodlines: {},
+    sageModes: {},
+    villages: {},
+    anbuSquads: {},
+    keystoneItems: {},
+    wars: {},
+    aiProfiles: {},
+    relations: {},
+    clans: {},
+    userQuests: {},
+    completedQuests: {},
+    questData: {},
+    bounties: {},
+    bountySignups: {},
+  }) satisfies ExtraState;
 
 /**
  * Finds a user in the battle state based on location
@@ -1085,6 +1120,33 @@ export const findBarrier = (
 };
 
 /**
+ * Effects of a type on the target that were not cast this round and are still enabled.
+ * Effects without a duration count, unlike in findActiveEffectOfType.
+ */
+export const getActiveTargetEffects = <T extends UserEffect["type"]>(
+  effects: UserEffect[] | undefined,
+  targetId: string | null | undefined,
+  type: T,
+) =>
+  effects?.filter(
+    (e): e is Extract<UserEffect, { type: T }> =>
+      e.type === type &&
+      e.targetId === targetId &&
+      !e.castThisRound &&
+      isEffectEnabled(e, effects),
+  ) ?? [];
+
+/** The user's first active effect of the type with rounds remaining. */
+const findActiveEffectOfType = <T extends UserEffect["type"]>(
+  userId: string | undefined,
+  userEffects: UserEffect[] | undefined,
+  type: T,
+) =>
+  getActiveTargetEffects(userEffects, userId, type).find(
+    (e) => e.rounds && e.rounds > 0,
+  );
+
+/**
  * Whether the user currently has an active effect of the given type.
  * Active = targeting the user, not cast this round, and still has rounds remaining.
  */
@@ -1092,20 +1154,7 @@ export const hasActiveEffectOfType = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
   type: ZodAllTags["type"],
-): boolean => {
-  return (
-    userEffects?.some(
-      (e) =>
-        e.type === type &&
-        e.targetId === userId &&
-        !e.castThisRound &&
-        isEffectEnabled(e, userEffects) &&
-        "rounds" in e &&
-        e.rounds &&
-        e.rounds > 0,
-    ) ?? false
-  );
-};
+): boolean => !!findActiveEffectOfType(userId, userEffects, type);
 
 /**
  * Checks if a user is stealthed based on their effects.
@@ -1132,17 +1181,7 @@ export const isUserDisarmed = (
 export const getUserElementalSeal = (
   userId: string | undefined,
   userEffects: UserEffect[] | undefined,
-) => {
-  return userEffects?.find(
-    (e) =>
-      e.type === "elementalseal" &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      isEffectEnabled(e, userEffects) &&
-      e.rounds &&
-      e.rounds > 0,
-  );
-};
+) => findActiveEffectOfType(userId, userEffects, "elementalseal");
 
 /**
  * Checks if a user is immobilized based on their effects.
@@ -1291,6 +1330,16 @@ export const calcEffectRoundInfo = (
 };
 
 /** Check whether a tag still has duration remaining. */
+/** Whether at least one effect carries both an appear animation and an appear sound. */
+export const hasAppearAnimation = (effects: ZodAllTags[]) =>
+  effects.some(
+    (effect) =>
+      "appearAnimation" in effect &&
+      effect.appearAnimation &&
+      "appearSfx" in effect &&
+      effect.appearSfx,
+  );
+
 export const isEffectActive = (effect: UserEffect | GroundEffect) => {
   if (
     "timedBuffExpiresAt" in effect &&
@@ -1316,13 +1365,22 @@ export const isEffectEnabled = (
     effect.fromType === "bloodline" &&
     "targetId" in effect &&
     usersEffects?.some(
-      (seal) =>
-        seal.type === "seal" &&
-        !seal.isNew &&
-        isEffectActive(seal) &&
-        seal.targetId === effect.targetId,
+      (seal) => isActiveSeal(seal) && seal.targetId === effect.targetId,
     )
   );
+
+/** A seal that has landed and not yet expired. */
+const isActiveSeal = (effect: UserEffect) =>
+  effect.type === "seal" && !effect.isNew && isEffectActive(effect);
+
+/** Collect resolved, unexpired seals for shared bloodline-suppression checks. */
+export const getActiveSealEffects = (usersEffects: UserEffect[]) =>
+  usersEffects.filter(isActiveSeal);
+
+/** Check if a given effect is sealed based on the output of getActiveSealEffects */
+export const sealCheck = (effect: UserEffect, sealEffects: UserEffect[]) =>
+  effect.fromType === "bloodline" &&
+  sealEffects.some((e) => e.targetId === effect.targetId);
 
 /** Potency for distinct selections or calculation modes can coexist. */
 export const getEffectStackKey = (effect: UserEffect) => {
@@ -1349,26 +1407,17 @@ export const canStackEffect = (effect: UserEffect, applied: Set<string>) =>
 
 /**
  * Determines the processing stage for a damage modifier effect.
- * Stage 1 (Equipment/Pre-Battle): armor, skill, village, ranked
- * Stage 2 (In-Battle): bloodline, jutsu, item, basic, undefined
+ * Stage 1 (Equipment/Pre-Battle): PRE_BATTLE_SOURCE_TYPES
+ * Stage 2 (In-Battle): every other source, e.g. bloodline, jutsu, item, basic
  *
  * This is used for staged damage calculation where equipment effects
  * apply first (Stage 1), then in-battle effects apply to the result (Stage 2).
  */
 export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
-  const stage1Types = [
-    "armor",
-    "accessory",
-    "keystone",
-    "skill",
-    "village",
-    "ranked",
-    "elementalMastery",
-  ];
   if (
     "fromType" in effect &&
     effect.fromType &&
-    stage1Types.includes(effect.fromType)
+    PRE_BATTLE_SOURCE_TYPES.includes(effect.fromType)
   ) {
     return 1;
   }
@@ -1959,7 +2008,7 @@ export const calcBattleResult = (
       battleType === "COMBAT" &&
       !user.isAi &&
       !user.isSummon &&
-      targets.some((target) => !target.isAi)
+      hasHumanOpponent(users, user)
         ? loyalty.pvpRewards
         : 0;
     const friends = getBattleTeamMembers(battle, user);
@@ -2039,14 +2088,12 @@ export const calcBattleResult = (
       experience *= battle.rewardScaling * shrineBoostFactor * (1 + pvpPercent / 100);
 
       // Apply battle arena exp multiplier if available
-      if (settings && (battleType === "ARENA" || battleType === "COMBAT")) {
-        const arenaSetting = settings.find((s) => s.name === "battleExpMultiplier");
-        if (arenaSetting) {
-          const secondsLeft = -secondsPassed(arenaSetting.time);
-          if (secondsLeft > 0 && arenaSetting.value > 0) {
-            experience *= arenaSetting.value;
-          }
-        }
+      if (battleType === "ARENA" || battleType === "COMBAT") {
+        experience = applyGameSettingMultiplier(
+          experience,
+          "battleExpMultiplier",
+          settings,
+        );
       }
       experience *= percentageMultiplier(pvpRewardBoost);
 
@@ -2152,35 +2199,23 @@ export const calcBattleResult = (
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (didWin && battleType === "COMBAT" && isInitiatingTeam) {
         targetUsers.forEach((target) => {
+          const targetRelations = getRelationsArray(battle, target);
+          const relation = findRelationship(targetRelations, vilId, target.villageId);
+          const isAlly = relation?.status === "ALLY";
+          const sameVillage = target.villageId === vilId;
           if (user.isOutlaw) {
             deltaPrestige += KILLING_NOTORIETY_GAIN;
           } else {
             // Prestige deduction for killing allies (skip if in war-torn sector)
             if (!isInWarTornSector) {
-              const targetRelations = getRelationsArray(battle, target);
-              const isAlly = targetRelations
-                .filter((r) => r.status === "ALLY")
-                .find(
-                  (r) =>
-                    (r.villageIdA === vilId && r.villageIdB === target.villageId) ||
-                    (r.villageIdA === target.villageId && r.villageIdB === vilId),
-                );
-              const sameVillage = target.villageId === vilId;
               deltaPrestige -= isAlly || sameVillage ? FRIENDLY_PRESTIGE_COST : 0;
             }
           }
 
           // Base prestige for PvP kill (only for enemies, even in war-torn sector)
-          const targetRelationsAll = getRelationsArray(battle, target);
           if (
             user.isOutlaw ||
-            !targetRelationsAll.some(
-              (r) =>
-                (r.status === "ALLY" &&
-                  ((r.villageIdA === vilId && r.villageIdB === target.villageId) ||
-                    (r.villageIdA === target.villageId && r.villageIdB === vilId))) ||
-                target.villageId === vilId,
-            )
+            !(isAlly || (sameVillage && targetRelations.length > 0))
           ) {
             const isUserAssassin =
               user.isOutlaw && checkAssassin(user.userId, userClan);
@@ -2205,19 +2240,15 @@ export const calcBattleResult = (
           }
 
           // Additional village tokens for killing enemies
-          deltaTokens +=
-            targetRelationsAll
-              .filter((r) => r.status === "ENEMY")
-              .filter(
-                (r) =>
-                  (r.villageIdA === vilId && r.villageIdB === target.villageId) ||
-                  (r.villageIdA === target.villageId && r.villageIdB === vilId),
-              ).length * 5;
+          deltaTokens += relation?.status === "ENEMY" ? 5 : 0;
         });
       }
 
       // Determine war kills bonus
       const warHealthInfo: Record<string, number> = {};
+      const addWarHealth = (villageName: string, change: number) => {
+        warHealthInfo[villageName] = (warHealthInfo[villageName] ?? 0) + change;
+      };
       const shrineInfo: Record<number, number> = {};
       // Track attacker and defender shrine changes separately per war
       const villageWarShrineInfo: Record<
@@ -2252,16 +2283,6 @@ export const calcBattleResult = (
             if (userVillageName && !(userVillageName in warHealthInfo)) {
               warHealthInfo[userVillageName] = 0;
             }
-            // Derived
-            const isUserFactionColeader =
-              user.isOutlaw && checkCoLeader(user.userId, userClan);
-            const targetClan = getClan(battle, target.clanId);
-            const isTargetFactionColeader =
-              target.isOutlaw && checkCoLeader(target.userId, targetClan);
-            const isUserAssassin =
-              user.isOutlaw && checkAssassin(user.userId, userClan);
-            const isTargetAssassin =
-              target.isOutlaw && checkAssassin(target.userId, targetClan);
 
             // Village wars & raids
             if (
@@ -2270,80 +2291,21 @@ export const calcBattleResult = (
             ) {
               const targetVillage = getVillage(battle, target.villageId);
               if (didWin) {
-                if (village?.kageId === user.userId) {
-                  warHealthChange += WAR_HEALTH_KAGE_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_KAGE_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) - WAR_HEALTH_KAGE_REMOVE;
-                } else if (user.rank === "ELDER") {
-                  warHealthChange += WAR_HEALTH_ELDER_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_ELDER_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) - WAR_HEALTH_ELDER_REMOVE;
-                } else if (isUserFactionColeader) {
-                  warHealthChange += WAR_HEALTH_COLEADER_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_COLEADER_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) -
-                    WAR_HEALTH_COLEADER_REMOVE;
-                } else if (user.anbuId) {
-                  warHealthChange += WAR_HEALTH_ANBU_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_ANBU_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) - WAR_HEALTH_ANBU_REMOVE;
-                } else if (isUserAssassin) {
-                  warHealthChange += WAR_HEALTH_ASSASSIN_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_ASSASSIN_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) -
-                    WAR_HEALTH_ASSASSIN_REMOVE;
-                } else {
-                  warHealthChange += WAR_HEALTH_RECOVER;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) + WAR_HEALTH_RECOVER;
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) - WAR_HEALTH_REMOVE;
-                }
+                const { recover, remove } = getWarHealthTier(user, village, userClan);
+                warHealthChange += recover;
+                addWarHealth(userVillageName, recover);
+                addWarHealth(targetVillageName, -remove);
                 if (targetVillage?.kageId === target.userId) {
-                  warHealthInfo[targetVillageName] =
-                    (warHealthInfo[targetVillageName] ?? 0) -
-                    WAR_HEALTH_KAGEDEATH_REMOVE;
+                  addWarHealth(targetVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
                 }
               } else {
-                if (targetVillage?.kageId === target.userId) {
-                  warHealthChange -= WAR_HEALTH_KAGE_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_KAGE_REMOVE;
-                } else if (target.rank === "ELDER") {
-                  warHealthChange -= WAR_HEALTH_ELDER_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_ELDER_REMOVE;
-                } else if (isTargetFactionColeader) {
-                  warHealthChange -= WAR_HEALTH_COLEADER_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_COLEADER_REMOVE;
-                } else if (target.anbuId) {
-                  warHealthChange -= WAR_HEALTH_ANBU_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_ANBU_REMOVE;
-                } else if (isTargetAssassin) {
-                  warHealthChange -= WAR_HEALTH_ASSASSIN_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_ASSASSIN_REMOVE;
-                } else {
-                  warHealthChange -= WAR_HEALTH_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_REMOVE;
-                }
+                const targetClan = getClan(battle, target.clanId);
+                const { remove } = getWarHealthTier(target, targetVillage, targetClan);
+                warHealthChange -= remove;
+                addWarHealth(userVillageName, -remove);
                 if (village?.kageId === user.userId) {
                   warHealthChange -= WAR_HEALTH_KAGEDEATH_REMOVE;
-                  warHealthInfo[userVillageName] =
-                    (warHealthInfo[userVillageName] ?? 0) - WAR_HEALTH_KAGEDEATH_REMOVE;
+                  addWarHealth(userVillageName, -WAR_HEALTH_KAGEDEATH_REMOVE);
                 }
               }
             }
@@ -2870,6 +2832,30 @@ export const calcBattleResult = (
   return null;
 };
 
+/** War health a kill recovers and removes, by the rank of the fighter it counts for. */
+const getWarHealthTier = (
+  fighter: BattleUserState,
+  village: CompleteBattle["extraState"]["villages"][string] | undefined,
+  clan: CompleteBattle["extraState"]["clans"][string] | undefined,
+) => {
+  if (village?.kageId === fighter.userId) {
+    return { recover: WAR_HEALTH_KAGE_RECOVER, remove: WAR_HEALTH_KAGE_REMOVE };
+  }
+  if (fighter.rank === "ELDER") {
+    return { recover: WAR_HEALTH_ELDER_RECOVER, remove: WAR_HEALTH_ELDER_REMOVE };
+  }
+  if (fighter.isOutlaw && checkCoLeader(fighter.userId, clan)) {
+    return { recover: WAR_HEALTH_COLEADER_RECOVER, remove: WAR_HEALTH_COLEADER_REMOVE };
+  }
+  if (fighter.anbuId) {
+    return { recover: WAR_HEALTH_ANBU_RECOVER, remove: WAR_HEALTH_ANBU_REMOVE };
+  }
+  if (fighter.isOutlaw && checkAssassin(fighter.userId, clan)) {
+    return { recover: WAR_HEALTH_ASSASSIN_RECOVER, remove: WAR_HEALTH_ASSASSIN_REMOVE };
+  }
+  return { recover: WAR_HEALTH_RECOVER, remove: WAR_HEALTH_REMOVE };
+};
+
 /**
  * Distributes a portion of experience to a given stat, based on usage
  * @returns The amount of experience distributed
@@ -3076,8 +3062,9 @@ export const alignBattle = (
     }
     // Tags that expired or landed last round change what the next actor may use
     refreshMasteries(battle.usersState, battle.usersEffects);
-    // Sage exhaustion + clearing `sageModeActivated` runs in `applySageModeAfterRoundTransition`
-    // (called from combat router when `progressRound` — avoids util ↔ process circular imports).
+    // Sage exhaustion must run on every round advance, including idle-timeout polls, or
+    // it stays stranded until the next action. In-memory and guarded on `sageModeActivated`.
+    applySageModeAfterRoundTransition(battle);
     // Remaining pool adjustment deltas are reconciled in the applyEffects post-pass.
   }
   // Update the active user on the battle
@@ -3099,13 +3086,7 @@ export const calcApReduction = (
 ) => {
   const user = battle?.usersState.find((u) => u.userId === userId);
   const stunEffects = [
-    ...(battle?.usersEffects?.filter(
-      (e) =>
-        e.type === "stun" &&
-        e.targetId === userId &&
-        !e.castThisRound &&
-        isEffectEnabled(e, battle?.usersEffects),
-    ) ?? []),
+    ...getActiveTargetEffects(battle?.usersEffects, userId, "stun"),
     ...(battle?.groundEffects?.filter((e) => {
       // Basic checks for stun effect at user's location
       const locationMatch =
@@ -3213,13 +3194,7 @@ export const isValidMove = (info: {
     (b) => b.longitude === target.col && b.latitude === target.row,
   );
   if (!barrier) {
-    const opponent = users.find(
-      (u) =>
-        u.longitude === target.col &&
-        u.latitude === target.row &&
-        u.curHealth > 0 &&
-        !u.fledBattle,
-    );
+    const opponent = findUser(users, target.col, target.row);
     if (action.target === "CHARACTER") {
       if (opponent) return true;
     } else if (action.target === "OPPONENT") {
@@ -3297,16 +3272,7 @@ export const getAffectedTiles = (info: {
     if (!pattern) return { green, red };
     const candidates = tiles.filter((target) => {
       // Coordinate patterns select tiles independently of the clicked anchor.
-      if (
-        action.target === "EMPTY_GROUND" &&
-        users.some(
-          (u) =>
-            u.longitude === target.col &&
-            u.latitude === target.row &&
-            u.curHealth > 0 &&
-            !u.fledBattle,
-        )
-      )
+      if (action.target === "EMPTY_GROUND" && findUser(users, target.col, target.row))
         return false;
       if (isValidMove({ action, target, user, users, barriers, clicked: b }))
         return true;
@@ -3394,38 +3360,6 @@ export const getActionAffectedTiles = (
 };
 
 /**
- * Calculate the hex distance between two positions using axial/cube coordinates.
- * For FLAT orientation hex grids with odd offset (-1) as used by honeycomb-grid.
- *
- * In honeycomb-grid with FLAT orientation:
- * - q = col (axial q is just the column)
- * - r = row - floor((col - (col & 1)) / 2) (offset applied to columns)
- */
-export const calcHexDistance = (
-  aCol: number,
-  aRow: number,
-  bCol: number,
-  bRow: number,
-): number => {
-  // Convert FLAT orientation offset coordinates to axial (q, r)
-  // For FLAT with odd offset: q = col, r = row - floor((col - (col & 1)) / 2)
-  const aq = aCol;
-  const ar = aRow - Math.floor((aCol - (aCol & 1)) / 2);
-
-  const bq = bCol;
-  const br = bRow - Math.floor((bCol - (bCol & 1)) / 2);
-
-  // Calculate cube distance using axial coordinates
-  // Cube coords: x = q, z = r, y = -x - z
-  // Distance = max(|dx|, |dy|, |dz|) = max(|dq|, |dr|, |dq + dr|)
-  const dq = Math.abs(aq - bq);
-  const dr = Math.abs(ar - br);
-  const ds = Math.abs(aq + ar - (bq + br));
-
-  return Math.max(dq, dr, ds);
-};
-
-/**
  * Get the distance to the closest enemy from a user's position.
  * Returns null if no enemies found or user not found.
  * Distance follows battle teams regardless of faction or controller identity.
@@ -3447,7 +3381,7 @@ export const getDistanceToClosestEnemy = (
 
   // Calculate distance to each enemy and return the minimum
   const distances = enemies.map((enemy) =>
-    calcHexDistance(user.longitude, user.latitude, enemy.longitude, enemy.latitude),
+    oddQHexDistance(user.longitude, user.latitude, enemy.longitude, enemy.latitude),
   );
 
   return Math.min(...distances);
@@ -3593,9 +3527,7 @@ export const refreshMasteries = (
   usersEffects: UserEffect[],
 ) => {
   usersState.forEach(resetMasteriesToBase);
-  const sealEffects = usersEffects.filter(
-    (e) => e.type === "seal" && !e.isNew && isEffectActive(e),
-  );
+  const sealEffects = getActiveSealEffects(usersEffects);
   const applied = new Set<string>();
   usersEffects
     .filter(

@@ -1,7 +1,7 @@
 import { userData, userJutsu, aiProfile } from "@/drizzle/schema";
 import { sql, eq } from "drizzle-orm";
-import { promises as fs } from "fs";
 import type { DrizzleClient } from "@/server/db";
+import { executeSqlDump } from "./sqlDump";
 
 // Delete anything not in above list, and insert those missing
 export const seedAI = async (client: DrizzleClient) => {
@@ -13,14 +13,8 @@ export const seedAI = async (client: DrizzleClient) => {
   );
   // Insert AI
   console.log("Syncing AIs...");
-  const aiData = await fs.readFile(process.cwd() + "/data/ai.sql", "utf8");
-  for (const statement of aiData.split(";")) {
-    if (statement.trim()) {
-      await client.execute(sql.raw(`${statement.trim()};`));
-    }
-  }
+  await executeSqlDump(client, "ai.sql");
   // Insert AI jutsu
   console.log("Syncing AI jutsus...");
-  const jutsuData = await fs.readFile(process.cwd() + "/data/userjutsu.sql", "utf8");
-  await client.execute(sql.raw(`${jutsuData}`));
+  await executeSqlDump(client, "userjutsu.sql");
 };

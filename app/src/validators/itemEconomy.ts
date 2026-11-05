@@ -1,16 +1,15 @@
 import { z } from "zod";
-import { ItemPurchaseLimitPeriods, MAX_ITEM_PURCHASE_LIMIT } from "@/drizzle/constants";
-
-const nullableInteger = (min: number, max: number) =>
-  z.preprocess(
-    (value) => (value === "" || value == null ? null : value),
-    z.coerce.number().int().min(min).max(max).nullable(),
-  );
+import {
+  AUCTION_OFFER_MAX_RYO,
+  ItemPurchaseLimitPeriods,
+  MAX_ITEM_PURCHASE_LIMIT,
+} from "@/drizzle/constants";
+import { makeCappedNullableNumber } from "@/validators/base";
 
 export const itemEconomySchema = z.object({
-  auctionMinPrice: nullableInteger(0, 4_294_967_295),
-  auctionMaxPrice: nullableInteger(0, 4_294_967_295),
-  purchaseLimit: nullableInteger(1, MAX_ITEM_PURCHASE_LIMIT),
+  auctionMinPrice: makeCappedNullableNumber(AUCTION_OFFER_MAX_RYO),
+  auctionMaxPrice: makeCappedNullableNumber(AUCTION_OFFER_MAX_RYO),
+  purchaseLimit: makeCappedNullableNumber(MAX_ITEM_PURCHASE_LIMIT, 1),
   purchaseLimitPeriod: z.enum(ItemPurchaseLimitPeriods).default("NONE"),
 });
 

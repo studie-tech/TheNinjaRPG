@@ -68,7 +68,11 @@ import {
   isArrivalPromptStale,
   resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
-import { getEffectiveLevel, getExpBracket, getScoutingUsers } from "@/libs/profile";
+import {
+  getKnownEffectiveLevel,
+  getKnownExpBracket,
+  getScoutingUsers,
+} from "@/libs/profile";
 import {
   GATHERING_CANCEL_PREFIX,
   getBoundObjectiveCandidates,
@@ -106,7 +110,7 @@ import { hasRequiredRank } from "@/libs/train";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
+import { getAllyStatus, isMapUserAlly } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
@@ -2881,30 +2885,12 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const village = data?.find((v) => v.id === user.villageId);
           const villageName = village ? village.name : "Unknown";
           const villageColor = village ? village.hexColor : "gray";
-          const relationship =
-            userData.village &&
-            findVillageUserRelationship(userData.village, user.villageId);
-          const isAlly =
-            user.allianceStatus === "ALLY" ||
-            (user.allianceStatus !== "ENEMY" &&
-              (user.villageId === userData.villageId ||
-                relationship?.status === "ALLY"));
+          const isAlly = isMapUserAlly(userData, user);
           const isPvpRestrictedRank = RANKS_RESTRICTED_FROM_PVP.includes(user.rank);
           const showAttack = !isPvpRestrictedRank && (props.allyAttack || !isAlly);
           const showRob = !isPvpRestrictedRank && sameHex && userData.isOutlaw;
-          // Elite rank/level remain known when a partial map update omits experience.
-          const userBracket =
-            user.rank === "ELITE JONIN"
-              ? MAX_PVP_BRACKET
-              : user.experience == null
-                ? null
-                : getExpBracket(user.experience, user.rank);
-          const userLevel =
-            user.rank === "ELITE JONIN"
-              ? user.level
-              : user.experience == null
-                ? null
-                : getEffectiveLevel({ ...user, experience: user.experience });
+          const userBracket = getKnownExpBracket(user);
+          const userLevel = getKnownEffectiveLevel(user);
 
           // Show user
           return (

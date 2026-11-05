@@ -16,6 +16,8 @@ import {
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
+import { useTargetingMethodFields } from "@/hooks/targetingMethod";
 import type { FormEntry } from "@/layout/EditContent";
 import { EVOLUTION_STAT_FORM_FIELDS } from "@/libs/evolution";
 import {
@@ -23,7 +25,6 @@ import {
   inheritJutsuReskinEffects,
 } from "@/libs/jutsu/reskins";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import { objectKeys } from "@/utils/typeutils";
 import type { ZodAllTags, ZodJutsuInput, ZodJutsuType } from "@/validators/combat";
 import { JutsuValidator } from "@/validators/combat";
@@ -45,6 +46,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Form handling
+  const submitContent = useContentSubmit();
   const form = useForm<ZodJutsuInput, unknown, ZodJutsuType>({
     mode: "all",
     criteriaMode: "all",
@@ -52,9 +54,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     defaultValues: jutsu as ZodJutsuInput,
     resolver: zodResolver(JutsuValidator),
   });
-  // Keep parent-owned objects registered while their conditional editors are hidden.
-  form.register("coordinateTargeting");
-  form.register("methodSize");
+  const targetingFields = useTargetingMethodFields(form);
 
   // Query for bloodlines, villages, and jutsus (for evolution parent selection)
   const { data: bloodlines, isPending: l1 } =
@@ -130,7 +130,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   // Mutation for updating jutsu
-  const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
+  const { mutateAsync: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
       setUpdateError(data.success ? null : data.message);
@@ -141,18 +141,17 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
 
   // Form submission
   const handleJutsuSubmit = form.handleSubmit(
-    (data: ZodJutsuType) => {
-      const newJutsu = {
-        ...jutsu,
-        ...data,
-        requiredPetSpeciesId:
-          data.jutsuType === "PETS" ? data.requiredPetSpeciesId : null,
-      };
-      const diff = calculateContentDiff(jutsu, newJutsu);
-      if (diff.length > 0) {
-        updateJutsu({ id: jutsu.id, data: newJutsu });
-      }
-    },
+    (data: ZodJutsuType) =>
+      submitContent(
+        jutsu,
+        {
+          ...jutsu,
+          ...data,
+          requiredPetSpeciesId:
+            data.jutsuType === "PETS" ? data.requiredPetSpeciesId : null,
+        },
+        (newJutsu) => updateJutsu({ id: jutsu.id, data: newJutsu }),
+      ),
     (errors) => showFormErrorsToast(errors),
   );
 
@@ -177,25 +176,6 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   });
 
   const { data: requiredSkills } = api.skillTree.getAllNames.useQuery();
-  const targetingMethod = useWatch({ control: form.control, name: "method" });
-  const previousTargetingMethod = useRef(targetingMethod);
-  useEffect(() => {
-    if (
-      previousTargetingMethod.current === "COORDINATES" &&
-      targetingMethod !== "COORDINATES"
-    ) {
-      form.setValue("coordinateTargeting", null, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    }
-    // Clear inactive expansion so a hidden draft cannot block schema validation.
-    if (targetingMethod === "ALL" || targetingMethod === "COORDINATES") {
-      form.setValue("methodSize", null, { shouldDirty: true, shouldValidate: true });
-    }
-    previousTargetingMethod.current = targetingMethod;
-  }, [targetingMethod, form]);
-
   // Object for form values
   const formData: FormEntry<keyof ZodJutsuType>[] = [
     {
@@ -270,19 +250,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "villageId", type: "db_values", values: villages, resetButton: true },
     { id: "jutsuWeapon", type: "str_array", values: WeaponTypes },
     { id: "method", type: "str_array", values: AttackMethods },
-    ...(targetingMethod !== "ALL" && targetingMethod !== "COORDINATES"
-      ? [{ id: "methodSize" as const, type: "method_size" as const, fullWidth: true }]
-      : []),
-    ...(targetingMethod === "COORDINATES"
-      ? [
-          {
-            id: "coordinateTargeting" as const,
-            label: "Coordinate pattern",
-            type: "coordinate_targeting" as const,
-            fullWidth: true,
-          },
-        ]
-      : []),
+    ...targetingFields,
     { id: "jutsuRank", type: "str_array", values: LetterRanks },
     { id: "requiredRank", type: "str_array", values: UserRanks },
     { id: "target", type: "str_array", values: AttackTargets },

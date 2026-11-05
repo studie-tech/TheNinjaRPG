@@ -1,5 +1,18 @@
-import { VILLAGE_SYNDICATE_ID, WAR_FUNDS_COST } from "@/drizzle/constants";
+import {
+  type AllianceState,
+  VILLAGE_SYNDICATE_ID,
+  WAR_FUNDS_COST,
+} from "@/drizzle/constants";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
+
+/** Whether a relationship row links the two villages, in either direction. */
+export const isVillagePair = (
+  relationship: Pick<VillageAlliance, "villageIdA" | "villageIdB">,
+  villageIdA: string | null,
+  villageIdB: string | null,
+) =>
+  (relationship.villageIdA === villageIdA && relationship.villageIdB === villageIdB) ||
+  (relationship.villageIdA === villageIdB && relationship.villageIdB === villageIdA);
 
 /**
  * Retrieves the relationship between two villages from the given array of VillageAlliance objects.
@@ -13,12 +26,20 @@ export const findRelationship = (
   villageIdA: string | null,
   villageIdB: string | null,
 ) => {
-  const relationship = relationships.find(
-    (a) =>
-      (a.villageIdA === villageIdA && a.villageIdB === villageIdB) ||
-      (a.villageIdA === villageIdB && a.villageIdB === villageIdA),
-  );
-  return relationship;
+  return relationships.find((a) => isVillagePair(a, villageIdA, villageIdB));
+};
+
+/** A village and its formal allies; empty for a user without a village. */
+export const getAlliedVillageIds = (
+  relationships: VillageAlliance[],
+  villageId: string | null,
+): string[] => {
+  if (!villageId) return [];
+  const allies = relationships
+    .filter((a) => a.villageIdA === villageId || a.villageIdB === villageId)
+    .filter((a) => a.status === "ALLY")
+    .flatMap((a) => [a.villageIdA, a.villageIdB]);
+  return [...new Set([villageId, ...allies])];
 };
 
 /**
@@ -46,6 +67,29 @@ export const findVillageUserRelationship = (
     villageData.id,
   );
   return relationship;
+};
+
+/**
+ * Whether a map user is friendly to the viewer: a target's `allianceStatus` override wins,
+ * then a shared village or a formal alliance.
+ */
+export const isMapUserAlly = (
+  viewer:
+    | {
+        villageId: string | null;
+        village?: Parameters<typeof findVillageUserRelationship>[0] | null;
+      }
+    | null
+    | undefined,
+  target: { villageId: string | null; allianceStatus?: AllianceState },
+) => {
+  const relationship =
+    viewer?.village && findVillageUserRelationship(viewer.village, target.villageId);
+  return (
+    target.allianceStatus === "ALLY" ||
+    (target.allianceStatus !== "ENEMY" &&
+      (target.villageId === viewer?.villageId || relationship?.status === "ALLY"))
+  );
 };
 
 /**

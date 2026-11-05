@@ -1,6 +1,4 @@
-import { Grid, Orientation, rectangle } from "honeycomb-grid";
-import { HEX_ASPECT_RATIO } from "@/drizzle/constants";
-import { defineHex, PathCalculator, type TerrainHex } from "@/libs/hexgrid";
+import { createHexGrid, PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
@@ -61,37 +59,27 @@ export const buildWindowNav = (
     }
     tilesByOffset.set(`${entry.dx},${entry.dy}`, lookup);
   }
-  const Tile = defineHex({
-    dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
-    origin: { x: -hexsize * 0.5, y: -hexsize * 0.5 },
-    orientation: Orientation.FLAT,
-  });
-  const grid = new Grid(Tile, rectangle({ width: 3 * W, height: 3 * H }))
-    .filter((tile) => {
-      try {
-        return tile.width !== 0;
-      } catch (_e) {
-        return false;
-      }
-    })
-    .map((tile) => {
-      const dx = Math.floor(tile.col / W) - 1;
-      const dy = Math.floor(tile.row / H) - 1;
-      const localCol = tile.col - (dx + 1) * W;
-      const localRow = tile.row - (dy + 1) * H;
-      const offsetKey = `${dx},${dy}`;
-      const lookup = tilesByOffset.get(offsetKey);
-      const mapTile = lookup?.get(`${localCol},${localRow}`);
-      if (!mapTile) {
-        // Sector missing from the window (polar edge) is an impassable wall
-        tile.blocked = true;
-        tile.cost = 9999;
-        return tile;
-      }
-      tile.blocked = false;
-      tile.cost = (mapTile.walkCost || 1) + 1;
+  const grid = createHexGrid(hexsize, 3 * W, 3 * H, {
+    x: -hexsize * 0.5,
+    y: -hexsize * 0.5,
+  }).map((tile) => {
+    const dx = Math.floor(tile.col / W) - 1;
+    const dy = Math.floor(tile.row / H) - 1;
+    const localCol = tile.col - (dx + 1) * W;
+    const localRow = tile.row - (dy + 1) * H;
+    const offsetKey = `${dx},${dy}`;
+    const lookup = tilesByOffset.get(offsetKey);
+    const mapTile = lookup?.get(`${localCol},${localRow}`);
+    if (!mapTile) {
+      // Sector missing from the window (polar edge) is an impassable wall
+      tile.blocked = true;
+      tile.cost = 9999;
       return tile;
-    });
+    }
+    tile.blocked = false;
+    tile.cost = (mapTile.walkCost || 1) + 1;
+    return tile;
+  });
   return {
     pathFinder: new PathCalculator(grid),
     toUnified: (dx, dy, col, row) =>

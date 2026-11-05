@@ -1,5 +1,5 @@
 /**
- * Shared helpers for TNR reviewer CI scripts.
+ * Shared helpers for TNR CI scripts: reviewer, preview and content audit.
  *
  * Provides authenticated GitHub API requests and GitHub Actions output helpers
  * so each script doesn't need its own copy.
@@ -23,6 +23,10 @@ export const setOutput = (key, value) => {
     appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${str}\n`);
   }
 };
+
+/** Encode a branch name for the `git/refs/heads/...` API paths, keeping its slashes. */
+export const encodeHeadsRef = (branch) =>
+  branch.split("/").map(encodeURIComponent).join("/");
 
 /**
  * Validate that a URL is a trusted Vercel deployment (*.vercel.app over HTTPS).

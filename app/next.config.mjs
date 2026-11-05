@@ -1,6 +1,7 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 import { withBotId } from "botid/next/config";
 import { cdnOrigin, contentSecurityPolicy } from "./src/libs/cdn.mjs";
+import { SITEMAP_SECTIONS } from "./src/libs/sitemapSections.mjs";
 
 // @ts-check
 /**
@@ -142,8 +143,8 @@ const config = {
         // has none), so they are cached at the edge instead. Crawlers fetch them rarely,
         // and a stale copy for an hour is harmless. The section names are listed rather
         // than matched with a wildcard so a typo'd /sitemap-<anything>.xml does not get
-        // its 404 cached at the edge for an hour. Keep in step with SITEMAP_SECTIONS.
-        source: "/:sitemap(sitemap|sitemap-pages|sitemap-manual|sitemap-guide|sitemap-forum|sitemap-profiles).xml",
+        // its 404 cached at the edge for an hour.
+        source: `/:sitemap(sitemap|${SITEMAP_SECTIONS.map((section) => `sitemap-${section}`).join("|")}).xml`,
         headers: [
           {
             key: "Cache-Control",

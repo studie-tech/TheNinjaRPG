@@ -1,5 +1,6 @@
 import { KAGE_DEFENSE_REMINDER_HOURS } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
+import { getWarSide } from "@/libs/objectiveWar";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { getKageSetupDeadline } from "@/utils/kage";
 
@@ -11,6 +12,8 @@ export const getUserFactionNotifications = (
   const notifications: NavBarDropdownLink[] = [];
   // Shrine notifications (use Set to avoid duplicate sectors)
   const userWithRelations = user;
+  const warSideOf = (war: Parameters<typeof getWarSide>[0]) =>
+    getWarSide(war, user?.villageId ?? null);
   const shrineDefenseSectors = [
     ...new Set(
       userWithRelations?.shrineBattles
@@ -49,15 +52,7 @@ export const getUserFactionNotifications = (
   const warDefenseSectors = [
     ...new Set(
       userWithRelations?.activeWars
-        ?.filter((w) => {
-          const isDefender = w.defenderVillageId === user?.villageId;
-          const isDefenderAlly = w.warAllies?.some(
-            (a) =>
-              a.villageId === user?.villageId &&
-              a.supportVillageId === w.defenderVillageId,
-          );
-          return (isDefender || isDefenderAlly) && w.sector;
-        })
+        ?.filter((w) => warSideOf(w) === w.defenderVillageId && w.sector)
         .map((w) => w.sector)
         .filter(Boolean) ?? [],
     ),
@@ -66,15 +61,7 @@ export const getUserFactionNotifications = (
   const warOffenseSectors = [
     ...new Set(
       userWithRelations?.activeWars
-        ?.filter((w) => {
-          const isAttacker = w.attackerVillageId === user?.villageId;
-          const isAttackerAlly = w.warAllies?.some(
-            (a) =>
-              a.villageId === user?.villageId &&
-              a.supportVillageId === w.attackerVillageId,
-          );
-          return (isAttacker || isAttackerAlly) && w.sector;
-        })
+        ?.filter((w) => warSideOf(w) === w.attackerVillageId && w.sector)
         .map((w) => w.sector)
         .filter(Boolean) ?? [],
     ),
@@ -100,19 +87,12 @@ export const getUserFactionNotifications = (
   // Village war / raid notifications (VILLAGE_WAR and WAR_RAID have sector=0)
   const villageWars =
     userWithRelations?.activeWars?.filter(
-      (w) =>
-        (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") &&
-        (w.attackerVillageId === user?.villageId ||
-          w.defenderVillageId === user?.villageId ||
-          w.warAllies?.some((a) => a.villageId === user?.villageId)),
+      (w) => (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") && !!warSideOf(w),
     ) ?? [];
   for (const w of villageWars) {
     const isAttacker = w.attackerVillageId === user?.villageId;
     const isDefender = w.defenderVillageId === user?.villageId;
-    const isAttackerAlly = w.warAllies?.some(
-      (a) =>
-        a.villageId === user?.villageId && a.supportVillageId === w.attackerVillageId,
-    );
+    const isAttackerAlly = warSideOf(w) === w.attackerVillageId;
     const defenderName = w.defenderVillage?.name ?? "another village";
     const attackerName = w.attackerVillage?.name ?? "another village";
     const label = isAttacker

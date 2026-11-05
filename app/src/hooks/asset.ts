@@ -1,14 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { GameAssetTypes } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
 import { useLpcCatalogInvalidation } from "@/hooks/lpc";
 import type { FormEntry } from "@/layout/EditContent";
 import { assetTypeLabels } from "@/libs/assetLibrary";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import type { ZodGameAssetInput, ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
 
@@ -18,8 +18,7 @@ import { gameAssetValidator } from "@/validators/asset";
  * @param refetch Reload the saved asset after a successful mutation.
  */
 export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknown>) => {
-  // Block same-tick submissions before React exposes the pending mutation.
-  const submitInFlight = useRef(false);
+  const submitContent = useContentSubmit();
   // Retain failure feedback until resubmission; editing a draft must not erase a new error.
   const [saveError, setSaveError] = useState<string | null>(null);
   const utils = api.useUtils();
@@ -56,27 +55,15 @@ export const useAssetEditForm = (asset: GameAsset, refetch: () => Promise<unknow
         }
       },
       onError: (error) => setSaveError(error.message),
-      onSettled: () => {
-        submitInFlight.current = false;
-      },
     });
 
   // Form submission
   const handleAssetSubmit = form.handleSubmit(
     async (data: ZodGameAssetType) => {
-      if (submitInFlight.current) return;
       setSaveError(null);
-      const newAsset = { ...asset, ...data };
-      const diff = calculateContentDiff(asset, newAsset);
-      if (diff.length > 0) {
-        submitInFlight.current = true;
-        try {
-          await updateAsset({ id: asset.id, data: newAsset });
-        } catch {
-          // onError provides inline feedback. Retain the current form values so
-          // the editor can retry without retyping.
-        }
-      }
+      await submitContent(asset, { ...asset, ...data }, (newAsset) =>
+        updateAsset({ id: asset.id, data: newAsset }),
+      );
     },
     (errors) => {
       setSaveError(null);

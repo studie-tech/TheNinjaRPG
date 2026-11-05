@@ -1,6 +1,7 @@
 /**
  * Database access for profile; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -88,6 +89,7 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
+import { userCardColumns } from "@/queries/userColumns";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
@@ -99,10 +101,11 @@ import {
 } from "@/server/utils/achievementObjectives";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import { clampActionLogText } from "@/utils/actionLog";
-import { getTimeOfLastReset, secondsFromNow } from "@/utils/time";
+import { periodStart, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
 /** Build the `userData` update for `GET`. */
@@ -182,10 +185,7 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
     where: eq(userData.userId, userId),
   });
   if (!user) {
-    throw serverError(
-      "NOT_FOUND",
-      `User not found: ${userId}. Please complete registration.`,
-    );
+    throw serverError("NOT_FOUND", missingUserMessage(userId));
   }
   return user;
 };
@@ -769,18 +769,6 @@ export const listQuestPartyForGetUser = (
     with: { quest: true },
   });
 
-/** Build the `gameSetting` insert for `getUser`. */
-export const insertGameSettingForGetUser = (
-  client: Pick<DrizzleClient, "insert">,
-  warRegenName: string,
-) =>
-  client.insert(gameSetting).values({
-    id: nanoid(),
-    name: warRegenName,
-    value: 0,
-    time: new Date(),
-  });
-
 /** Build the `userReport` selection for `getUser`, using predicates on `status`. */
 export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
@@ -1302,14 +1290,7 @@ export const listUserDataForSearchUsers = (
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
     columns: {
-      userId: true,
-      username: true,
-      avatar: true,
-      rank: true,
-      isOutlaw: true,
-      level: true,
-      role: true,
-      federalStatus: true,
+      ...userCardColumns,
       isAi: true,
 
       nRecruited: true,
@@ -1330,16 +1311,6 @@ export const listUserDataForSearchUsers = (
     ),
     orderBy: [sql`LENGTH(${userData.username}) asc`],
     limit: 5,
-  });
-
-/** Build the `userData` lookup for `getPublicUser`, selecting only `role`, using predicates on `userId`. */
-export const findUserDataForGetPublicUser = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userId: null | string },
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, ctx.userId ?? ""),
-    columns: { role: true },
   });
 
 /** Build the `userData` lookup for `getPublicUser`, including predicates on `userId`, `attackedId`, `battleType`. */
@@ -1445,7 +1416,7 @@ export const findUserDataForGetPublicUser2 = (
         where: and(
           eq(battleHistory.attackedId, input.userId),
           notInArray(battleHistory.battleType, ["SPARRING", "COMBAT"]),
-          gte(battleHistory.createdAt, getTimeOfLastReset()),
+          gte(battleHistory.createdAt, periodStart("daily", new Date())),
         ),
       },
     },
@@ -2070,8 +2041,8 @@ export const updateUserDataForFetchUpdatedUserOnce2 = (
     .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
     .where(eq(userData.userId, user.userId));
 
-/** Build the `historicalIp` insert for `persistPassiveRegenToDb`, updating duplicate keys. */
-export const insertHistoricalIpForPersistPassiveRegenToDb = (
+/** Build the `historicalIp` upsert recording that a user was seen on an IP. */
+export const upsertHistoricalIp = (
   client: Pick<DrizzleClient, "insert">,
   userId: string,
   userIp: string,
@@ -2235,6 +2206,19 @@ export const findUserRoleById = (
     columns: { role: true },
     where: eq(userData.userId, userId),
   });
+
+/**
+ * Role of a possibly signed-out viewer of a public endpoint. Defaults to "USER" so an
+ * unauthenticated visitor is treated exactly like an ordinary player.
+ */
+export const fetchViewerRole = async (
+  client: Pick<DrizzleClient, "query">,
+  userId: string | null | undefined,
+): Promise<UserRole> => {
+  if (!userId) return "USER";
+  const viewer = await findUserRoleById(client, userId);
+  return viewer?.role ?? "USER";
+};
 
 /** Build a public-profile row by ID with its display title and village; callers apply indexability checks. */
 export const findPublicProfileById = (

@@ -1,7 +1,7 @@
 import { and, eq, gte, or, sql } from "drizzle-orm";
 import { type UserRank, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { questHistory, userData } from "@/drizzle/schema";
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { getQuestMaxLevel } from "@/libs/quest";
 import { availableQuestLetterRanks } from "@/libs/train";
 import {
@@ -14,6 +14,7 @@ import { upsertQuestEntries } from "@/routers/quests";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { shuffle } from "@/utils/array";
 import { periodStart, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "daily-quest";
@@ -38,19 +39,17 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
+  return runClaimedCron(timerCheck, "/api/daily-quest", async () => {
+    const deadline = Date.now() + RUN_BUDGET_MS;
+    const dayStart = periodStart("daily", new Date());
+    // An interrupted run rolls the timer back to the instant before its own day with
+    // RESUME_PENDING, so only a tick on that same day resumes; any later day starts over.
+    const resumeMarker = new Date(dayStart.getTime() - 1);
+    const isResume =
+      timerCheck.prevValue === RESUME_PENDING &&
+      timerCheck.prevTime.getTime() === resumeMarker.getTime();
+    const activeSince = secondsFromNow(-ACTIVE_WINDOW_SECONDS);
 
-  const deadline = Date.now() + RUN_BUDGET_MS;
-  const dayStart = periodStart("daily", new Date());
-  // An interrupted run rolls the timer back to the instant before its own day with
-  // RESUME_PENDING, so only a tick on that same day resumes; any later day starts over.
-  const resumeMarker = new Date(dayStart.getTime() - 1);
-  const isResume =
-    timerCheck.prevValue === RESUME_PENDING &&
-    timerCheck.prevTime.getTime() === resumeMarker.getTime();
-  const activeSince = secondsFromNow(-ACTIVE_WINDOW_SECONDS);
-
-  try {
     // Reset all current dailies and load the independent assignment inputs together. A resumed
     // run skips the close: it would shut the dailies this day's earlier invocation handed out.
     const [dailies, villages, userRankPerVillageLevel] = await Promise.all([
@@ -81,15 +80,13 @@ export async function GET(request: Request) {
       if (village && questRanks.length > 0) {
         const requiredVillage =
           village.type === "OUTLAW" ? VILLAGE_SYNDICATE_ID : village.id;
-        const newDaily = [...dailies]
-          .sort(() => Math.random() - 0.5)
-          .find(
-            (q) =>
-              questRanks.includes(q.questRank) &&
-              (!q.requiredVillage || q.requiredVillage === requiredVillage) &&
-              q.requiredLevel <= level &&
-              getQuestMaxLevel(q) >= level,
-          );
+        const newDaily = shuffle(dailies).find(
+          (q) =>
+            questRanks.includes(q.questRank) &&
+            (!q.requiredVillage || q.requiredVillage === requiredVillage) &&
+            q.requiredLevel <= level &&
+            getQuestMaxLevel(q) >= level,
+        );
         if (newDaily) {
           const entry = memory.find((m) => m.quest.id === newDaily.id);
           if (!entry) {
@@ -156,9 +153,5 @@ export async function GET(request: Request) {
     }
 
     return Response.json(`OK`);
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

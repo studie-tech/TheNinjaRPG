@@ -10,6 +10,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  isPetTaskQuestType,
   VILLAGE_MISSION_RANK_POINTS,
   VILLAGE_MISSION_TASKS,
 } from "@/drizzle/constants";
@@ -255,7 +256,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             prerequisite restrictions do not apply; leave those restrictions empty.
           </p>
         )}
-        {["hunting", "gathering"].includes(currentValues.questType) && (
+        {isPetTaskQuestType(currentValues.questType) && (
           <p className="mb-4 text-muted-foreground text-sm">
             Set a companion task duration to allow Hunter-rank companions to complete
             this contract unattended. The task pays only the final quest reward and its

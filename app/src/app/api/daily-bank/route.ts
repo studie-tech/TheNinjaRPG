@@ -7,6 +7,7 @@ import { listVillagesWithStructures } from "@/queries/village";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { chunkArray } from "@/utils/array";
+import { getUtcDayKey } from "@/utils/time";
 import { calcBankInterest, getStrucBoost } from "@/utils/village";
 
 const ENDPOINT_NAME = "daily-bank";
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
   try {
     // Get today's date
-    const today = new Date().toISOString().split("T")[0] ?? "";
+    const today = getUtcDayKey();
 
     // Query all villages with their structures
     const villages = await listVillagesWithStructures(drizzleDB);

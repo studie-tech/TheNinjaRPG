@@ -1,4 +1,5 @@
 import type { VillageMissionTask } from "@/drizzle/constants";
+import { isHumanOpponent } from "@/libs/combat/participants";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { wasDefeated } from "@/libs/combat/util";
 
@@ -28,11 +29,7 @@ export const claimVillageMissionCombatEvents = (
   );
   if (hasCreditedWinner) return {};
   const kills = battle.usersState.filter(
-    (entry) =>
-      entry.direction !== user.direction &&
-      !entry.isAi &&
-      !entry.isSummon &&
-      wasDefeated(entry),
+    (entry) => isHumanOpponent(user, entry) && wasDefeated(entry),
   ).length;
   if (kills === 0) return {};
   user.villageMissionPvpCredited = true;

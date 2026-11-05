@@ -1,7 +1,8 @@
 /**
  * Database access for register; authorization and transaction scopes stay in callers.
  */
-import { and, eq, getTableColumns, inArray, or, type SQL, sql } from "drizzle-orm";
+
+import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   type RecruitEligibilityReason,
@@ -11,7 +12,6 @@ import {
 import {
   activityStreakConfig,
   bloodlineRolls,
-  historicalIp,
   paypalSubscription,
   questHistory,
   recruitReferral,
@@ -27,6 +27,7 @@ import {
   village,
   visitorLog,
 } from "@/drizzle/schema";
+import { insertValuesWhere } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import { createStarterHomeItems } from "@/server/utils/homeFurniture";
 import { hashIp } from "@/server/utils/ipHash";
@@ -48,23 +49,6 @@ export const findVisitorLogForSetReferralSource = (
   client.query.visitorLog.findFirst({
     where: eq(visitorLog.ipHash, hashIp(ip)),
   });
-
-/** Build the `historicalIp` lookup for `setReferralSource`, using predicates on `ip` and `userId`. */
-export const findHistoricalIpForSetReferralSource = (
-  client: Pick<DrizzleClient, "query">,
-  ip: string,
-  ctx: { userId: string },
-) =>
-  client.query.historicalIp.findFirst({
-    where: and(eq(historicalIp.ip, ip), eq(historicalIp.userId, ctx.userId)),
-  });
-
-/** Build a historical IP insert with its matching IP hash. */
-export const insertUserHistoricalIp = (
-  client: Pick<DrizzleClient, "insert">,
-  userId: string,
-  ip: string,
-) => client.insert(historicalIp).values({ userId: userId, ip, ipHash: hashIp(ip) });
 
 /** Build the `referralSource` insert for `setReferralSource`. */
 export const insertReferralSourceForSetReferralSource = (
@@ -91,18 +75,6 @@ export const findUserDataForCreateCharacter2 = (
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.username, input.username),
-  });
-
-/** Build the `historicalIp` lookup for `createCharacter`, using predicates on `ip` and `userId`. */
-export const findHistoricalIpForCreateCharacter = (
-  client: Pick<DrizzleClient, "query">,
-  ctx: { userIp: string; userId: string },
-) =>
-  client.query.historicalIp.findFirst({
-    where: and(
-      eq(historicalIp.ip, ctx.userIp ?? ""),
-      eq(historicalIp.userId, ctx.userId),
-    ),
   });
 
 /** Build the `storePurchase` lookup for `createCharacter`, selecting only `id`, using predicates on `userId`. */
@@ -183,19 +155,12 @@ export const executeCreatedUserForCreateCharacter = (
   sanctionGuard: undefined | SQL<unknown>,
   input: { username: string },
 ) => {
-  const columns = getTableColumns(userData);
-  const keys = Object.keys(values) as (keyof typeof values)[];
-  return client.execute(sql`
-        INSERT INTO ${userData} (${sql.join(
-          keys.map((key) => sql.identifier(columns[key].name)),
-          sql`, `,
-        )})
-        SELECT ${sql.join(
-          keys.map((key) => sql.param(values[key] ?? null, columns[key])),
-          sql`, `,
-        )}
-        WHERE ${sanctionGuard} AND NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${eq(userData.username, input.username)})
-      `);
+  return insertValuesWhere(
+    client,
+    userData,
+    values,
+    sql`${sanctionGuard} AND NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${eq(userData.username, input.username)})`,
+  );
 };
 
 /**

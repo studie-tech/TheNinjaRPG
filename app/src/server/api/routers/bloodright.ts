@@ -15,13 +15,9 @@ import {
 } from "@/queries/bloodright";
 import { findSkillWithFolderById } from "@/queries/skillTree";
 import { fetchUpdatedUser } from "@/routers/profile";
-import {
-  getFreeResetAmount,
-  getMonthlyResetState,
-  isSkillVisible,
-} from "@/routers/skillTree";
+import { getResetAllowance, isSkillVisible } from "@/routers/skillTree";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { canAccessHiddenSkillTree, isStaffMember } from "@/utils/permissions";
+import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -162,14 +158,8 @@ export const bloodrightRouter = createTRPCRouter({
       if (user.status === "BATTLE")
         return errorResponse("Finish your battle before changing Bloodright");
       if (!user.bloodright.length) return errorResponse("No Bloodright tiers to reset");
-      const allowance = getMonthlyResetState(user);
-      const isStaff = isStaffMember(user);
-      const isFree = isStaff || allowance.count < getFreeResetAmount(user);
+      const { isFree, isStaff, next: monthlySkillResets } = getResetAllowance(user);
       const cost = isFree ? 0 : COST_SKILL_RESET;
-      const monthlySkillResets = {
-        ...allowance,
-        count: allowance.count + (isStaff ? 0 : 1),
-      };
       const result = await updateUserDataForReset(
         ctx.drizzle,
         user,

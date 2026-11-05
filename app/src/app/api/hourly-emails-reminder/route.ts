@@ -1,7 +1,7 @@
 import sgMail from "@sendgrid/mail";
 import * as Sentry from "@sentry/nextjs";
 import { env } from "@/env/server.mjs";
-import { handleEndpointError, lockWithHourlyTimer } from "@/libs/gamesettings";
+import { lockWithHourlyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { SITE_URL } from "@/libs/seo";
 import {
   listEmailReminderForGET,
@@ -23,9 +23,8 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewHour && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/hourly-emails-reminder", async () => {
     // Fetch all the emails currently in the database
     const reminders = await listEmailReminderForGET(drizzleDB);
 
@@ -65,8 +64,5 @@ export async function GET(request: Request) {
     );
 
     return Response.json(`OK. Send emails to ${reminders.length} users`);
-  } catch (cause) {
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

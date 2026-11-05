@@ -11,6 +11,7 @@ import {
   ContentProposalCategories,
   type ContentProposalCategory,
   type ContentProposalSource,
+  ContentProposalSources,
   type ContentProposalStatus,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
@@ -149,7 +150,7 @@ export const ContentReviewDesk: React.FC = () => {
               />
             ))}
             <span className="grow" />
-            {(["AGENT", "STAFF"] as const).map((entry) => (
+            {ContentProposalSources.map((entry) => (
               <FilterChip
                 key={entry}
                 isActive={source === entry}

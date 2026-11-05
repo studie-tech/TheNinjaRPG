@@ -21,10 +21,7 @@ connections.
 Configuration changes require reloading the MCP connections; existing connections keep
 their original options. The **Restart** control in the Servers header restarts the
 selected host's app server and its MCP connections, rather than one browser server.
-Use it when active tool work can be interrupted. Do not kill other chats' browsers,
-remove profile locks, attach to their debugging endpoints, enable insecure certificates
-or change the personal profile's security settings. If the tool is unavailable,
-continue authenticated `dev-call` and server checks until the connection is ready.
+Use it when active tool work can be interrupted.
 
 ## Account and page isolation
 
@@ -53,6 +50,4 @@ last page, navigate that owned page to `about:blank` so its ticket or game scree
 left visible; the temporary profile is cleaned up when its owning MCP process exits.
 Do not disconnect a shared MCP process to remove one context. These sessions are
 ephemeral, so provision a fresh ticket when reconnecting rather than expecting a saved
-login. Keep the personal Chrome extension on its existing account; do not sign disposable
-users into that profile. Isolation in the DevTools connection does not isolate extension
-tabs.
+login. Isolation in the DevTools connection does not isolate extension tabs.

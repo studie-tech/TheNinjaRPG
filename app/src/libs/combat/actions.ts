@@ -2,7 +2,6 @@ import type { Grid } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import type { AttackTargets, ElementName, UserRank } from "@/drizzle/constants";
 import {
-  DURABILITY_USABILITY_THR,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_SFX_CLEANSE,
@@ -21,11 +20,12 @@ import {
   IMG_BASIC_OFFENSIVE_STANCE,
   IMG_BASIC_REPLACEMENT_TECHNIQUE,
   IMG_BASIC_WAIT,
-  NO_DURABILITY_LOSS_COMBATS,
   NonActionItemTypes,
   PET_BATTLE_CONFIG,
+  RankedBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
+  TEMPORAL_AP_DELTA,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import {
@@ -58,6 +58,7 @@ import {
   calcPoolCost,
   findBarrier,
   getActionAffectedTiles,
+  getActiveTargetEffects,
   getBarriersBetween,
   getEffectStackKey,
   getItem,
@@ -71,6 +72,7 @@ import {
   isUserImmobilized,
   isUserStealthed,
   isUserSummonPrevented,
+  wearBattleItem,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
@@ -79,7 +81,7 @@ import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { spriteActionAnimation } from "@/libs/lpc/actions";
 import { withSpriteEquipment } from "@/libs/lpc/appearance";
-import { hasMasteryRequirements } from "@/libs/mastery";
+import { hasMasteryRequirements, hasUsableDurability } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import {
@@ -116,8 +118,7 @@ export const availableUserActions = (
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
-  const isRankedBattle =
-    battle?.battleType === "RANKED_PVP" || battle?.battleType === "RANKED_SPARRING";
+  const isRankedBattle = !!battle && RankedBattleTypes.includes(battle.battleType);
   // A player-piloted summon must not hand its controller a second Clear/Cleanse
   // on an independent cooldown. Gated here so the UI and the server-side action
   // lookup in the combat router both lose it.
@@ -272,8 +273,7 @@ export const availableUserActions = (
             if (item.itemType === "WEAPON") {
               // Hide weapons when disarmed
               if (isDisarmed) return false;
-              const current = Math.min(ui.durability, item.maxDurability);
-              return current > DURABILITY_USABILITY_THR;
+              return hasUsableDurability(ui, item);
             }
             return true;
           })
@@ -1151,43 +1151,45 @@ export const insertAction = (info: {
             }
             // Extra: apply damage to barriers
             if (BARRIER_DAMAGE_TAG_TYPES.has(tag.type)) {
+              const addBarrierHit = (
+                barrier: BattleEffect,
+                absorbFraction?: number,
+              ) => {
+                const idx = `${barrier.id}-${tagIndex}`;
+                if (barrierAttacks.has(idx)) return;
+                barrierAttacks.add(idx);
+                targetUsernames.push("barrier");
+                targetGenders.push("it");
+                const barrierEffect = structuredClone(effect);
+                barrierEffect.targetType = "barrier";
+                barrierEffect.targetId = barrier.id;
+                barrierEffect.id = nanoid();
+                if (absorbFraction !== undefined) {
+                  barrierEffect.barrierAbsorb = absorbFraction;
+                }
+                usersEffects.push(barrierEffect);
+              };
               if (action.method === "SINGLE") {
-                // SINGLE: damage barriers on the A* path (projectile-in-path)
+                // SINGLE: damage barriers on the A* path (projectile-in-path).
+                // getBarriersBetween already reduced absorbPercentage to a 0-1 fraction.
                 barriers.forEach((barrier) => {
-                  const idx = `${barrier.id}-${tagIndex}`;
-                  if (!barrierAttacks.has(idx)) {
-                    barrierAttacks.add(idx);
-                    targetUsernames.push("barrier");
-                    targetGenders.push("it");
-                    const barrierEffect = structuredClone(effect);
-                    barrierEffect.targetType = "barrier";
-                    barrierEffect.targetId = barrier.id;
-                    barrierEffect.id = nanoid();
-                    if ("absorbPercentage" in barrier) {
-                      barrierEffect.barrierAbsorb = barrier.absorbPercentage;
-                    }
-                    usersEffects.push(barrierEffect);
-                  }
+                  addBarrierHit(
+                    barrier,
+                    "absorbPercentage" in barrier
+                      ? barrier.absorbPercentage
+                      : undefined,
+                  );
                 });
               } else {
                 // AOE: only damage barriers directly ON this affected tile
                 const barrierOnTile = findBarrier(groundEffects, tile.col, tile.row);
                 if (barrierOnTile && barrierOnTile.creatorId !== actorId) {
-                  const idx = `${barrierOnTile.id}-${tagIndex}`;
-                  if (!barrierAttacks.has(idx)) {
-                    barrierAttacks.add(idx);
-                    targetUsernames.push("barrier");
-                    targetGenders.push("it");
-                    const barrierEffect = structuredClone(effect);
-                    barrierEffect.targetType = "barrier";
-                    barrierEffect.targetId = barrierOnTile.id;
-                    barrierEffect.id = nanoid();
-                    if ("absorbPercentage" in barrierOnTile) {
-                      barrierEffect.barrierAbsorb =
-                        barrierOnTile.absorbPercentage / 100;
-                    }
-                    usersEffects.push(barrierEffect);
-                  }
+                  addBarrierHit(
+                    barrierOnTile,
+                    "absorbPercentage" in barrierOnTile
+                      ? barrierOnTile.absorbPercentage / 100
+                      : undefined,
+                  );
                 }
               }
             }
@@ -1256,8 +1258,7 @@ export const insertAction = (info: {
           useritem &&
           itemData?.destroyOnUse &&
           battle.battleType !== "SPARRING" &&
-          battle.battleType !== "RANKED_PVP" &&
-          battle.battleType !== "RANKED_SPARRING"
+          !RankedBattleTypes.includes(battle.battleType)
         ) {
           useritem.quantity -= 1;
         }
@@ -1394,19 +1395,12 @@ export const performBattleAction = (props: {
     );
   }
 
-  // Track weapon durability usage (skip for battles that don't lose durability)
-  if (
-    action.type === "item" &&
-    !NO_DURABILITY_LOSS_COMBATS.includes(battle.battleType)
-  ) {
+  // Track weapon durability usage
+  if (action.type === "item") {
     const used = user.items.find((i) => i.itemId === action.id);
     const usedItem = used ? getItem(battle, used.itemId) : undefined;
     if (used && usedItem?.itemType === "WEAPON") {
-      const currentDurability = Math.min(used.durability, usedItem.maxDurability);
-      used.durability = Math.max(0, currentDurability - 3);
-      if (used.durability <= DURABILITY_USABILITY_THR) {
-        used.equipped = "NONE" as const;
-      }
+      wearBattleItem(battle, used, usedItem, 3);
     }
   }
 
@@ -1591,7 +1585,7 @@ const collectJutsuActionElements = (action: CombatAction): Set<ElementName> => {
 };
 
 /**
- * Return one 10 AP adjustment per enabled temporal type, limited by element scope.
+ * Return one AP adjustment per enabled temporal type, limited by element scope.
  * Restored bloodline and temporary jutsu tags can overlap before effect processing.
  */
 const getTemporalApDelta = (
@@ -1603,14 +1597,7 @@ const getTemporalApDelta = (
   if (action.id === "wait") return 0;
   // Time dilation and time compression should not affect basic actions or items
   if (action.type === "basic" || action.type === "item") return 0;
-  const effects = battle.usersEffects.filter((e): e is UserEffect => {
-    return (
-      e.type === type &&
-      e.targetId === userId &&
-      !e.castThisRound &&
-      isEffectEnabled(e, battle.usersEffects)
-    );
-  });
+  const effects = getActiveTargetEffects(battle.usersEffects, userId, type);
   const appliesByElements = (effect: UserEffect) => {
     // No elements specified on the effect -> applies to all actions
     if (!effect.elements || effect.elements.length === 0) {
@@ -1627,7 +1614,7 @@ const getTemporalApDelta = (
     return effect.elements.some((el: ElementName) => actionElements.has(el));
   };
   // Seal expiry can restore a bloodline before overlapping jutsu are removed.
-  return effects.some(appliesByElements) ? 10 : 0;
+  return effects.some(appliesByElements) ? TEMPORAL_AP_DELTA : 0;
 };
 
 export const getActionPointCost = (

@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   executeRowsForGET,
   listRankedSeasonForGET,
@@ -16,18 +16,16 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
+  return runClaimedCron(timerCheck, "/api/daily-ranked-pvp", async () => {
+    // Fetch active (non-ended) seasons
+    const activeSeasons = await listRankedSeasonForGET(drizzleDB);
 
-  // Fetch active (non-ended) seasons
-  const activeSeasons = await listRankedSeasonForGET(drizzleDB);
+    // Check if any active season has expired
+    const endedSeason = activeSeasons.find(
+      (season: (typeof activeSeasons)[number]) => season.endDate < new Date(),
+    );
 
-  // Check if any active season has expired
-  const endedSeason = activeSeasons.find(
-    (season: (typeof activeSeasons)[number]) => season.endDate < new Date(),
-  );
-
-  // Perform work
-  try {
+    // Perform work
     if (endedSeason) {
       await endRankedSeason(drizzleDB, endedSeason.id);
     } else {
@@ -42,9 +40,5 @@ export async function GET(request: Request) {
     }
 
     return Response.json(`OK`);
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }

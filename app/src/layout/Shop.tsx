@@ -29,12 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  ANBU_ITEMSHOP_DISCOUNT_PERC,
-  ItemTypes,
-  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
-  TUTORIAL_ITEM_ID,
-} from "@/drizzle/constants";
+import { ItemTypes, TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import ContentBox from "@/layout/ContentBox";
@@ -53,16 +48,16 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import {
   getMaxItemShopPurchaseQuantity,
+  getShopDiscounts,
+  getShopStackPrice,
   isItemAvailableInStore,
   shopItemDiscountFactor,
 } from "@/libs/shop";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
-import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
-import { getStrucBoost } from "@/utils/village";
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
 const SHOP_CATALOG_PAGE_SIZE = 30;
@@ -383,29 +378,15 @@ const Shop: React.FC<ShopProps> = (props) => {
     onError: (error) => setPurchaseError(error.message),
   });
 
-  const sDiscount = getStrucBoost("itemDiscountPerLvl", userData.village?.structures);
-  const aDiscount = userData.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
-  const hDiscount = item?.effects?.find((e) => e.type === "heal")
-    ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
-    : 0;
-  const loyaltyDiscount = getVillageLoyaltyBonuses(userData).shopDiscount;
-  const selectedItemFactor = item
-    ? shopItemDiscountFactor(item, sDiscount, aDiscount, loyaltyDiscount)
-    : 1;
-
-  const discounts = [
-    ...(sDiscount > 0 ? [{ label: "village structures", value: sDiscount }] : []),
-    ...(aDiscount > 0 ? [{ label: "ANBU membership", value: aDiscount }] : []),
-    ...(hDiscount > 0 ? [{ label: "medic-nin item", value: hDiscount }] : []),
-    ...(loyaltyDiscount > 0
-      ? [{ label: "village loyalty", value: loyaltyDiscount }]
-      : []),
-  ];
+  const discounts = getShopDiscounts(userData, userData.village?.structures, item);
+  const selectedItemFactor = item ? shopItemDiscountFactor(discounts) : 1;
   const totalDiscount = discounts.reduce((acc, d) => acc + d.value, 0);
 
-  const ryoCost = Math.ceil((item?.cost ?? 0) * stacksize * selectedItemFactor);
-  const repsCost = Math.ceil((item?.repsCost ?? 0) * stacksize);
-  const seichiSilverCost = Math.ceil((item?.seichiSilverCost ?? 0) * stacksize);
+  const { ryoCost, repsCost, seichiSilverCost } = getShopStackPrice(
+    item,
+    stacksize,
+    selectedItemFactor,
+  );
   const canAfford =
     userData.money >= ryoCost &&
     userData.reputationPoints >= repsCost &&
@@ -793,10 +774,7 @@ const Shop: React.FC<ShopProps> = (props) => {
             <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
               {catalogItems.map((row) => {
                 const rowFactor = shopItemDiscountFactor(
-                  row,
-                  sDiscount,
-                  aDiscount,
-                  loyaltyDiscount,
+                  getShopDiscounts(userData, userData.village?.structures, row),
                 );
                 const ryoDue = row.cost > 0 ? Math.ceil(row.cost * rowFactor) : 0;
                 const repsDue = Math.ceil(row.repsCost ?? 0);

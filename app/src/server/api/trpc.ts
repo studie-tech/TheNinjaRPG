@@ -306,7 +306,9 @@ export const isPenalizedRateLimitViolation = (path: string, type: string) =>
  * mutations by logged-in users also incur a 1% money/bank fine (at most once per
  * RATE_LIMIT_FINE_COOLDOWN_SECONDS), reported in the error and in ActionLog. If
  * the Redis limiter is unreachable, development fails open (local shim may not
- * be running) while production fails closed.
+ * be running) while production fails closed. The SDK resolves its own timeout as
+ * success, so a slow Redis lets requests through rather than failing every one;
+ * tavern image uploads deliberately refuse that case instead.
  */
 const enforceRateLimit = async (
   context: Pick<

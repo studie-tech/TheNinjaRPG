@@ -6,7 +6,7 @@ import type {
   ContentProposalStatus,
   ItemType,
 } from "@/drizzle/constants";
-import { CONTENT_REVIEW_SFX_SEARCH_RESULTS, ItemTypes } from "@/drizzle/constants";
+import { CONTENT_REVIEW_SFX_SEARCH_RESULTS } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { contentProposal, type gameAsset } from "@/drizzle/schema";
 import {
@@ -16,6 +16,7 @@ import {
   editableOf,
   entityKey,
   loadEntities,
+  normalizeEditable,
 } from "@/libs/contentReview/entities";
 import { isEpidemicConfigured, searchEpidemicSfx } from "@/libs/contentReview/epidemic";
 import { importEpidemicSfx, materializeChoice } from "@/libs/contentReview/media";
@@ -31,11 +32,7 @@ import {
   topLevelField,
 } from "@/libs/contentReview/paths";
 import { buildReviewStats } from "@/libs/contentReview/stats";
-import {
-  createStaffProposal,
-  normalizeEditable,
-  validationError,
-} from "@/libs/contentReview/submit";
+import { createStaffProposal, validationError } from "@/libs/contentReview/submit";
 import { sameValue } from "@/libs/contentReview/version";
 import {
   deleteGameAssetForRollback,
@@ -187,9 +184,7 @@ export const contentReviewRouter = createTRPCRouter({
       /** Live value at `path` of a change's entity: an asset id or an image URL. */
       const currentAt = (changeId: string, path: string) => {
         const change = proposal.changes.find((entry) => entry.id === changeId);
-        const entity = change?.entityId
-          ? entities.get(entityKey(change.entityType, change.entityId))
-          : undefined;
+        const entity = entityOfChange(entities, change);
         const value = entity ? getAtPath(entity.editable, path) : undefined;
         return typeof value === "string" && value ? value : null;
       };
@@ -203,9 +198,7 @@ export const contentReviewRouter = createTRPCRouter({
         ]),
       );
       for (const change of proposal.changes) {
-        const entity = change.entityId
-          ? entities.get(entityKey(change.entityType, change.entityId))
-          : undefined;
+        const entity = entityOfChange(entities, change);
         for (const fields of [
           entity?.payload,
           change.before,
@@ -225,9 +218,7 @@ export const contentReviewRouter = createTRPCRouter({
         rationale: proposal.rationale,
         canReview,
         changes: proposal.changes.map((change) => {
-          const entity = change.entityId
-            ? entities.get(entityKey(change.entityType, change.entityId))
-            : undefined;
+          const entity = entityOfChange(entities, change);
           const config = ENTITY_CONFIG[change.entityType];
           return {
             id: change.id,
@@ -468,15 +459,9 @@ export const contentReviewRouter = createTRPCRouter({
             entityKey(change.entityType, change.entityId as string),
           );
           if (!entity || change.operation === "CREATE") continue;
-          const outcome = await updateEntity(
-            ctx,
-            change.entityType,
-            entity.id,
-            entity.payload,
-          ).catch((error: unknown) => ({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-          }));
+          const outcome = await settleOutcome(
+            updateEntity(ctx, change.entityType, entity.id, entity.payload),
+          );
           if (!outcome.success) {
             console.error(
               `Content review revert rollback failed for ${change.entityType} ${entity.id}: ${outcome.message}`,
@@ -628,9 +613,7 @@ const applyProposal = async (
   const chosenMedia: string[] = [];
   for (const change of proposal.changes) {
     const config = ENTITY_CONFIG[change.entityType];
-    const entity = change.entityId
-      ? entities.get(entityKey(change.entityType, change.entityId))
-      : undefined;
+    const entity = entityOfChange(entities, change);
     if (change.operation === "UPDATE" && !entity) {
       return errorResponse(`${config.label} ${change.entityId} no longer exists`);
     }
@@ -780,13 +763,11 @@ const rollback = async (
 ) => {
   for (const { plan, entityId } of [...done].reverse()) {
     const type = plan.change.entityType;
-    const outcome = await (plan.entity
-      ? updateEntity(ctx, type, entityId, plan.entity.payload)
-      : deleteEntity(ctx, type, entityId)
-    ).catch((error: unknown) => ({
-      success: false,
-      message: error instanceof Error ? error.message : String(error),
-    }));
+    const outcome = await settleOutcome(
+      plan.entity
+        ? updateEntity(ctx, type, entityId, plan.entity.payload)
+        : deleteEntity(ctx, type, entityId),
+    );
     if (!outcome.success) {
       console.error(
         `Content review rollback failed for ${type} ${entityId}: ${outcome.message}`,
@@ -880,10 +861,9 @@ const createEntity = async (
       case "JUTSU":
         return jutsuRouter.createCaller(ctx).create();
       case "ITEM": {
-        const itemType = ItemTypes.includes(editable.itemType as ItemType)
-          ? (editable.itemType as ItemType)
-          : "WEAPON";
-        return itemRouter.createCaller(ctx).create({ type: itemType });
+        return itemRouter
+          .createCaller(ctx)
+          .create({ type: editable.itemType as ItemType });
       }
       case "BLOODLINE":
         return bloodlineRouter.createCaller(ctx).create();
@@ -932,16 +912,20 @@ const discardPlaceholder = async (
   type: ContentProposalEntityType,
   id: string,
 ) => {
-  const outcome = await deleteEntity(ctx, type, id).catch((error: unknown) => ({
-    success: false,
-    message: error instanceof Error ? error.message : String(error),
-  }));
+  const outcome = await settleOutcome(deleteEntity(ctx, type, id));
   if (!outcome.success) {
     console.error(
       `Content review could not delete placeholder ${type} ${id}: ${outcome.message}`,
     );
   }
 };
+
+/** Reports a thrown procedure as a failed outcome, so cleanup keeps going. */
+const settleOutcome = (outcome: Promise<Outcome>): Promise<Outcome> =>
+  outcome.catch((error: unknown) => ({
+    success: false,
+    message: error instanceof Error ? error.message : String(error),
+  }));
 
 /** Delete an entity through its own delete procedure. */
 const deleteEntity = (
@@ -968,6 +952,15 @@ const deleteEntity = (
       return profileRouter.createCaller(ctx).delete({ id });
   }
 };
+
+/** The loaded entity a change targets; a new entry has none yet. */
+const entityOfChange = <T>(
+  entities: Map<string, T>,
+  change?: { entityType: ContentProposalEntityType; entityId: string | null },
+) =>
+  change?.entityId
+    ? entities.get(entityKey(change.entityType, change.entityId))
+    : undefined;
 
 /**
  * References to the entities the changes of these suggestions target, leaving out new
@@ -1033,9 +1026,7 @@ const toSummary = (
   createdBy: row.createdBy?.username ?? null,
   reviewedBy: row.reviewedBy?.username ?? null,
   targets: row.changes.map((change) => {
-    const entity = change.entityId
-      ? entities.get(entityKey(change.entityType, change.entityId))
-      : undefined;
+    const entity = entityOfChange(entities, change);
     return {
       entityType: change.entityType,
       entityId: change.entityId,

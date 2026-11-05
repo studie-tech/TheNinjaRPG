@@ -10,6 +10,7 @@ import {
   publicBfcacheRouteIntegration,
 } from "@/libs/browserRouteTelemetry";
 import { stripQueryMetricUserAttributes } from "@/libs/queryTelemetry";
+import { SENTRY_BASE_OPTIONS } from "@/libs/sentryOptions";
 import {
   isNetworkError as isNetworkErrorPattern,
   isHtmlResponseError as isHtmlResponseErrorPattern,
@@ -22,34 +23,18 @@ import {
 } from "@/utils/error";
 
 Sentry.init({
-  dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
+  ...SENTRY_BASE_OPTIONS,
 
   // Session Replay is not registered: the rrweb recorder would cost download, parse and
   // init time on every page load. To enable it, use
   // Sentry.lazyLoadIntegration("replayIntegration") so the recorder is fetched only for
   // sampled sessions.
 
-  // Adjust this value in production, or use tracesSampler for greater control
-  tracesSampleRate: 0.001,
   beforeSendMetric: stripQueryMetricUserAttributes,
   // Resolve the public URL rather than the internal app/[shell] rewrite. The SDK
   // also uses this provider for target navigations and delayed Web Vital reports.
   routeProvider: createPublicBrowserRouteProvider(() => window.location.href),
   integrations: [publicBfcacheRouteIntegration()],
-
-  // Keep diagnostics without sending account credentials or request/user data.
-  dataCollection: {
-    userInfo: false,
-    cookies: false,
-    httpHeaders: { request: false, response: false },
-    httpBodies: [],
-    urlQueryParams: false,
-    graphQL: { document: false, variables: false },
-    genAI: { inputs: false, outputs: false },
-    databaseQueryData: false,
-    queues: false,
-    stackFrameVariables: false,
-  },
 
   // Which errors to ignore from frontend
   ignoreErrors: [
@@ -251,9 +236,6 @@ Sentry.init({
   // Leave this off while a pull zone serves the bundle: app frames then come from
   // the zone's hostname, and an allowlist of the site would drop every client error.
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
-
-  // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
 });
 
 // Register a single browser-side global error handler for Promise rejections and uncaught errors.
@@ -970,7 +952,7 @@ const isClerkSignOutError = (event: Sentry.ErrorEvent): boolean => {
     return (
       url.includes("clerk") &&
       url.includes("/v1/client/sessions") &&
-      (data.status_code === 401 || data.status_code === "401")
+      hasStatusCode(data, 401)
     );
   });
 
@@ -979,6 +961,28 @@ const isClerkSignOutError = (event: Sentry.ErrorEvent): boolean => {
   return isFromClerkSignOut && hasSignOut401;
 };
 
+
+/** Whether a stack frame runs our code, validating URL hostnames to prevent spoofing. */
+const isOwnAppFrame = (frame: { filename?: string; abs_path?: string }): boolean => {
+  const filename = frame.filename ?? "";
+  const absPath = frame.abs_path ?? "";
+  if (filename.includes("/_next/") || filename.includes("/app/") || filename.includes("/src/")) {
+    return true;
+  }
+  try {
+    return [filename, absPath].some((path) => {
+      if (!path.startsWith("http")) return false;
+      const { hostname } = new URL(path);
+      return hostname === "theninja-rpg.com" || hostname.endsWith(".theninja-rpg.com");
+    });
+  } catch {
+    return false;
+  }
+};
+
+/** Whether fetch breadcrumb data reports this status, stored as a number or a string. */
+const hasStatusCode = (data: Record<string, unknown> | undefined, status: number) =>
+  data?.status_code === status || data?.status_code === String(status);
 
 /**
  * Check if an error is a scoped "invalid origin" error that should be filtered.
@@ -1003,35 +1007,7 @@ const isInvalidOriginError = (event: Sentry.ErrorEvent): boolean => {
   }
 
   // Check if any stack frames are from our application code
-  const hasAppFrames = stackFrames.some((frame) => {
-    const filename = frame.filename ?? "";
-    const absPath = frame.abs_path ?? "";
-
-    // Check for our app code paths
-    if (filename.includes("/_next/") || filename.includes("/app/") || filename.includes("/src/")) {
-      return true;
-    }
-
-    // For URL-based checks, validate hostname properly
-    try {
-      if (filename.startsWith("http")) {
-        const url = new URL(filename);
-        if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
-          return true;
-        }
-      }
-      if (absPath.startsWith("http")) {
-        const url = new URL(absPath);
-        if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
-          return true;
-        }
-      }
-    } catch {
-      // URL parsing failed
-    }
-
-    return false;
-  });
+  const hasAppFrames = stackFrames.some(isOwnAppFrame);
 
   // Only filter if no app frames are present (third-party origin)
   // OR if there's no meaningful stack trace (browser-level error)
@@ -1061,7 +1037,7 @@ const isRateLimitJsonParseError = (event: Sentry.ErrorEvent): boolean => {
 
   // Check breadcrumbs for 429 status code
   const has429Status = event.breadcrumbs?.some(
-    (b) => b.category === "fetch" && (b.data?.status_code === 429 || b.data?.status_code === "429")
+    (b) => b.category === "fetch" && hasStatusCode(b.data, 429)
   );
 
   return Boolean(has429Status);
@@ -1268,7 +1244,7 @@ const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
     // Check for POST request with 403 status code
     return (
       data.method === "POST" &&
-      (data.status_code === 403 || data.status_code === "403")
+      hasStatusCode(data, 403)
     );
   });
 
@@ -1282,7 +1258,7 @@ const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
     // Check for POST request with 429 status code (rate limiting)
     return (
       data.method === "POST" &&
-      (data.status_code === 429 || data.status_code === "429")
+      hasStatusCode(data, 429)
     );
   })() : false;
 
@@ -1604,35 +1580,7 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
 
     // Check stack frames to ensure this isn't from our application code
     const frames = exception.stacktrace?.frames ?? [];
-    const hasAppFrames = frames.some((frame) => {
-      const filename = frame.filename ?? "";
-      const absPath = frame.abs_path ?? "";
-
-      // Check for our app code paths (non-URL based)
-      if (filename.includes("/_next/") || filename.includes("/app/") || filename.includes("/src/")) {
-        return true;
-      }
-
-      // For URL-based checks, validate hostname properly to prevent spoofing
-      try {
-        if (filename.startsWith("http")) {
-          const url = new URL(filename);
-          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
-            return true;
-          }
-        }
-        if (absPath.startsWith("http")) {
-          const url = new URL(absPath);
-          if (url.hostname === "theninja-rpg.com" || url.hostname.endsWith(".theninja-rpg.com")) {
-            return true;
-          }
-        }
-      } catch {
-        // URL parsing failed, not a valid HTTP URL
-      }
-
-      return false;
-    });
+    const hasAppFrames = frames.some(isOwnAppFrame);
 
     // Only filter if no app frames are present (third-party origin)
     return !hasAppFrames;

@@ -62,12 +62,7 @@ export const senseiRouter = createTRPCRouter({
       }
       // Mutate
       await insertRequest(ctx.drizzle, user.userId, target.userId, "SENSEI");
-      void pusher.trigger(input.targetId, "event", {
-        type: "userMessage",
-        message: "Updates in sensei system",
-        route: "/traininggrounds",
-        routeText: "To Training Grounds",
-      });
+      notifySenseiUpdate(input.targetId);
       return { success: true, message: "Request created" };
     }),
   rejectRequest: protectedProcedure
@@ -82,12 +77,7 @@ export const senseiRouter = createTRPCRouter({
       if (request.status !== "PENDING") {
         return errorResponse("You can only reject pending requests");
       }
-      void pusher.trigger(request.senderId, "event", {
-        type: "userMessage",
-        message: "Updates in sensei system",
-        route: "/traininggrounds",
-        routeText: "To Training Grounds",
-      });
+      notifySenseiUpdate(request.senderId);
       return await updateRequestState(ctx.drizzle, input.id, "REJECTED", "SENSEI");
     }),
   cancelRequest: protectedProcedure
@@ -142,12 +132,7 @@ export const senseiRouter = createTRPCRouter({
       );
       if (result.rowsAffected !== 0) {
         await updateRequestState(ctx.drizzle, input.id, "ACCEPTED", "SENSEI");
-        void pusher.trigger(request.senderId, "event", {
-          type: "userMessage",
-          message: "Updates in sensei system",
-          route: "/traininggrounds",
-          routeText: "To Training Grounds",
-        });
+        notifySenseiUpdate(request.senderId);
         return {
           success: true,
           message: "Request accepted",
@@ -194,3 +179,13 @@ export const senseiRouter = createTRPCRouter({
       return { success: true, message: "Left sensei", ...getLeaveSenseiUserUpdate() };
     }),
 });
+
+/** Point the other party of a sensei request to the training grounds. */
+const notifySenseiUpdate = (userId: string) => {
+  void pusher.trigger(userId, "event", {
+    type: "userMessage",
+    message: "Updates in sensei system",
+    route: "/traininggrounds",
+    routeText: "To Training Grounds",
+  });
+};

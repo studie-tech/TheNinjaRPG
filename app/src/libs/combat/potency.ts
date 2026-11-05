@@ -1,11 +1,13 @@
-import {
-  BATTLE_TAG_STACKING,
-  type ElementName,
-  isPreBattleGearFromType,
-} from "@/drizzle/constants";
-import { sealCheck } from "@/libs/combat/tags";
+import type { ElementName } from "@/drizzle/constants";
+import { getEffectPower } from "@/libs/combat/power";
 import type { CombatAction, UserEffect } from "@/libs/combat/types";
-import { getEffectStackKey, isEffectActive } from "@/libs/combat/util";
+import {
+  canStackEffect,
+  getActiveSealEffects,
+  getEffectStackKey,
+  isEffectActive,
+  sealCheck,
+} from "@/libs/combat/util";
 import type { PotencyTag, ZodAllTags } from "@/validators/combat";
 import { PotencyTagTypes } from "@/validators/combat";
 
@@ -78,9 +80,7 @@ export const resolvePotencyTags = (
       ? action.data.elementClassification
       : undefined;
 
-  const sealEffects = usersEffects.filter(
-    (effect) => effect.type === "seal" && !effect.isNew && isEffectActive(effect),
-  );
+  const sealEffects = getActiveSealEffects(usersEffects);
   const seen = new Set<string>();
   const modifiers: (Pick<PotencyTag, "affectedTag" | "affectedElements"> & {
     flat: number;
@@ -92,30 +92,19 @@ export const resolvePotencyTags = (
       effect.targetId !== casterId ||
       effect.isNew ||
       !isEffectActive(effect) ||
-      sealCheck(effect, sealEffects)
+      sealCheck(effect, sealEffects) ||
+      !canStackEffect(effect, seen)
     ) {
       continue;
     }
-    const key = getEffectStackKey(effect);
-    if (
-      !BATTLE_TAG_STACKING &&
-      seen.has(key) &&
-      effect.fromType !== "bloodline" &&
-      effect.fromType !== "sageMode" &&
-      effect.fromType !== "sageModeAfter" &&
-      !isPreBattleGearFromType(effect.fromType)
-    ) {
-      continue;
-    }
-    seen.add(key);
-    const amount = effect.power + effect.level * effect.powerPerLevel;
+    seen.add(getEffectStackKey(effect));
+    const amount = getEffectPower(effect);
     const sign = effect.type === "increasepotency" ? 1 : -1;
     modifiers.push({
       affectedTag: effect.affectedTag,
       affectedElements: effect.affectedElements,
       flat: effect.calculation === "static" ? sign * amount : 0,
-      percentage:
-        effect.calculation === "percentage" ? sign * Math.min(100, amount) : 0,
+      percentage: effect.calculation === "percentage" ? sign * amount : 0,
     });
   }
 

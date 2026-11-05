@@ -40,6 +40,7 @@ export const useTowerDefenseUpgradeEditForm = (
     api.towerDefense.updateUpgrade.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        if (!data.success) return;
         await utils.towerDefense.getUpgrade.invalidate({ id: upgrade.id });
         refetch();
       },

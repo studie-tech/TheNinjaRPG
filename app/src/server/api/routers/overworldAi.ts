@@ -21,6 +21,7 @@ import {
 } from "@/libs/overworldAi";
 import {
   attemptCapReached,
+  expandAiCopies,
   getBoundObjectiveCandidates,
   getNewTrackers,
   getReward,
@@ -29,6 +30,7 @@ import {
   questDailyQuota,
   questTypeConcurrentBlockMessage,
 } from "@/libs/quest";
+import { findManagedQuestAttempt } from "@/libs/questRun";
 import {
   REWARD_CHOICE_PENDING_MESSAGE,
   REWARD_CHOICE_READY_MESSAGE,
@@ -490,19 +492,8 @@ export const overworldAiRouter = createTRPCRouter({
             forceKeepPools:
               "keepOriginalPools" in full ? full.keepOriginalPools : false,
             // Pyramid lifecycle/version guards apply even when the floor needs no ticket.
-            questAttempt: activeUser.userQuests.find(
-              (entry) =>
-                entry.questId === bound.questId &&
-                !entry.endAt &&
-                (entry.questType === "battlepyramid" ||
-                  !!entry.quest.content.entryItems?.length),
-            ),
-            allyAiIds:
-              "allyAIs" in full
-                ? full.allyAIs.flatMap((ally) =>
-                    Array(ally.number).fill(ally.ids).flat(),
-                  )
-                : [],
+            questAttempt: findManagedQuestAttempt(activeUser.userQuests, bound.questId),
+            allyAiIds: "allyAIs" in full ? expandAiCopies(full.allyAIs) : [],
           });
           return battle.success
             ? {
@@ -728,7 +719,6 @@ export const overworldAiRouter = createTRPCRouter({
             isAvailableUserQuests({ ...q, ...prev }, activeUser).check &&
             allowedRanks.includes(q.questRank) &&
             (!quota || quota.current < quota.limit) &&
-            !(q.startsAt && q.startsAt > now.toISOString()) &&
             warEligible &&
             !questTypeConcurrentBlockMessage(q, activeUser) &&
             !attemptCapReached(

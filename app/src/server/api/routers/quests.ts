@@ -25,12 +25,15 @@ import {
   MAX_SKILL_POINTS,
   MasteryNames,
   MEDNIN_EXP_CAP,
+  MISSION_HALL_QUEST_TYPES,
   NPC_ONLY_QUEST_TYPES,
   PET_TASK_MAX_MINUTES,
   PET_TASK_MIN_RANK,
+  PET_TASK_QUEST_TYPES,
   type QuestType,
   QuestTypes,
   REGEN_SECONDS,
+  RESTRICTED_QUEST_TYPES,
   SAGE_MASTERY_EXP_CAP,
   SENSEI_STUDENT_RYO_PER_MISSION,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
@@ -59,6 +62,7 @@ import {
 import { qualifiesForFarmActivityReward } from "@/libs/farming";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
+import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { isQuestPresentationOnlyChange } from "@/libs/mapLocations";
 import { canRetryQuestBattle } from "@/libs/objectives";
 import { getWarSide } from "@/libs/objectiveWar";
@@ -104,13 +108,16 @@ import {
   snapQuestTargetsToReachable,
   verifyQuestContentForSave,
 } from "@/libs/quest";
+import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import {
+  findManagedQuestAttempt,
   formatQuestEntryCost,
   getIsolatedPyramid,
   getQuestEntryRequirements,
-  hasQuestContentChanged,
   ISOLATED_PYRAMID_MESSAGE,
   isBetweenPyramidBattles,
+  isManagedQuestRun,
+  questAttemptBlockMessage,
 } from "@/libs/questRun";
 import {
   buildRewardChoiceCards,
@@ -118,6 +125,7 @@ import {
   REWARD_CHOICE_AMOUNT_LABELS,
   REWARD_CHOICE_PENDING_MESSAGE,
   REWARD_CHOICE_READY_MESSAGE,
+  rewardChoiceContentIds,
   rewardFromChoiceCards,
   validateRewardPicks,
   verifyRewardChoiceForSave,
@@ -127,10 +135,12 @@ import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
 import { villageMissionCompletionEvents } from "@/libs/villageMission";
 import { incrementAnbuPoints } from "@/queries/anbu";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
 import {
   fetchUser,
+  fetchViewerRole,
   findOwnedUserPet,
   findUserById,
   incrementUserMoney,
@@ -157,7 +167,6 @@ import {
   fetchRestrictedNewQuestTargets,
   fetchRewardChoiceOwnership,
   fetchUserQuestByQuestId,
-  fetchViewerRole,
   findOverworldAiPlacementQuestForAssignQuestToUser,
   findQuestHistoryForCheckRewards,
   findQuestHistoryForClaimRewardChoice,
@@ -261,7 +270,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { claimUserSnapshot, runRewardTasks } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
   fetchPublicQuestLocations,
@@ -273,6 +282,7 @@ import {
   masteryRankUpdate,
 } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements } from "@/server/utils/profile";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { hydrateQuestCollections } from "@/server/utils/questCollections";
@@ -303,9 +313,9 @@ import {
 import {
   getNextUserSnapshotAt,
   periodStart,
+  regenTicksSince,
   secondsFromDate,
   secondsFromNow,
-  secondsPassed,
 } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
@@ -328,8 +338,11 @@ import {
   startPetTaskSchema,
 } from "@/validators/petTasks";
 import { questFilteringSchema } from "@/validators/quest";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import {
   ClaimRewardChoiceSchema,
+  hasMasteryPromotion,
+  hasPromotionRank,
   MASTERY_EXPERIENCE_FIELDS,
   type PendingRewardChoice,
   PendingRewardChoiceSchema,
@@ -384,8 +397,7 @@ export const questsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const [viewerRole, results] = await Promise.all([
         fetchViewerRole(ctx.drizzle, ctx.userId),
         listQuestForGetAll(ctx.drizzle, input, skip),
@@ -395,7 +407,7 @@ export const questsRouter = createTRPCRouter({
       });
       // Paginate on the raw page so a hidden NPC-only quest shortens a page rather than
       // truncating the infinite scroll early.
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: hideRestrictedQuestsFrom(viewerRole, results),
         nextCursor: nextCursor,
@@ -477,7 +489,7 @@ export const questsRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
-          questTypes: ["mission", "errand", "crime", "medical", "pvp", "war"],
+          questTypes: [...MISSION_HALL_QUEST_TYPES],
           villageId: input.villageId,
           level: input.level,
         }),
@@ -831,12 +843,16 @@ export const questsRouter = createTRPCRouter({
       // Derived
       const trackers = user.questData?.filter((q) => q.id !== input.id) ?? [];
       const questData = filterQuestTrackersForDbPersist(trackers, user);
+      // Hunting, gathering and isolated attempts also hold account state, so abandoning
+      // them takes the same joined release as a managed run.
       const managedRun =
-        current.questType === "battlepyramid" ||
+        isManagedQuestRun({
+          questType: current.questType,
+          content: current.quest.content,
+        }) ||
         current.questType === "hunting" ||
         current.questType === "gathering" ||
-        current.isolated ||
-        !!current.quest.content.entryItems?.length;
+        current.isolated;
       const now = new Date();
       if (managedRun) {
         // Drizzle has no multi-table UPDATE builder. One joined write releases the run
@@ -894,15 +910,14 @@ export const questsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const results = await listQuestHistoryForGetQuestHistory(
         ctx.drizzle,
         ctx,
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -955,172 +970,155 @@ export const questsRouter = createTRPCRouter({
         return errorResponse("Cannot edit tutorial quest");
       }
       // Permission check
-      if (entry && canChangeContent(user.role)) {
-        const editingStarterQuest =
-          entry.questType === "starter" || input.data.questType === "starter";
-        if (editingStarterQuest && !canEditStarterQuests(user.role)) {
-          return { success: false, message: `Not allowed to edit starter quests` };
-        }
-        // Validate objective content before updating, keyed off the INCOMING quest (not the
-        // stored row): newly authored dialog branches must always route onward,
-        // and full chain/reachability flow is checked when the quest is consecutive.
-        const { check, message } = verifyQuestContentForSave(
-          input.data.content.objectives,
-          input.data.consecutiveObjectives,
-        );
-        if (!check) {
-          return { success: false, message: `Objective flow invalid: ${message}` };
-        }
-        // Shared Village Missions and concurrent war missions progress outside quest scenes.
-        const isConcurrentWarMission =
-          input.data.questType === "war" &&
-          input.data.content.objectives.some(
-            (objective) =>
-              objective.task === "espionage" || objective.task === "sabotage",
-          );
-        const hasMainSceneCharacters = input.data.content.sceneCharacters.length > 0;
-        const allObjectivesHaveSceneCharacters = input.data.content.objectives.every(
-          (objective) =>
-            objective.sceneCharacters && objective.sceneCharacters.length > 0,
-        );
-        if (
-          !input.data.hidden &&
-          input.data.questType !== "village_mission" &&
-          !isConcurrentWarMission &&
-          !hasMainSceneCharacters &&
-          !allObjectivesHaveSceneCharacters
-        ) {
-          return errorResponse(
-            "Quest must have either main sceneCharacters set or all objectives must have sceneCharacters defined",
-          );
-        }
-        // Prepare data for insertion into database
-        const data = input.data;
-        const packageError = validateQuestRewardPackages(
-          data.content,
-          entry.content,
-          packages,
-          user.role,
-        );
-        if (packageError) return errorResponse(packageError);
-        // Server-side enforcement: preserve existing reward_reputation if user lacks permission
-        if (!canAwardReputation(user.role)) {
-          data.content.reward.reward_reputation =
-            entry.content.reward.reward_reputation;
-          // Preserve by objective id; new objectives should not gain reputation
-          const existingObjectivesById = new Map(
-            entry.content.objectives.map((objective) => [objective.id, objective]),
-          );
-          data.content.objectives = data.content.objectives.map((objective) => {
-            const existingObjective = existingObjectivesById.get(objective.id);
-            return {
-              ...objective,
-              reward_reputation: existingObjective?.reward_reputation ?? 0,
-            };
-          });
-        }
-        const rewardChoiceCheck = verifyRewardChoiceForSave(input.data.content);
-        if (!rewardChoiceCheck.check) {
-          return errorResponse(rewardChoiceCheck.message);
-        }
-        // Check we only give ranks with exams
-        let rankError = false;
-        if (
-          collapseRewards([
-            data.content.reward,
-            ...(data.content.reward.reward_packages ?? []).map((pack) => pack.rewards),
-          ]).reward_rank !== "NONE" &&
-          !["starter", "exam"].includes(data.questType)
-        ) {
-          rankError = true;
-        }
-        data.content.objectives.forEach((objective) => {
-          if (
-            collapseRewards([
-              objective,
-              ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-            ]).reward_rank !== "NONE" &&
-            data.questType !== "exam"
-          ) {
-            rankError = true;
-          }
-        });
-        if (rankError) {
-          return {
-            success: false,
-            message: `Ranks rewards are only allowed with starter or exam quests`,
-          };
-        }
-        const edgeError = await restrictedNewQuestEdgeError(ctx.drizzle, {
-          questId: entry.id,
-          questName: entry.name,
-          currentType: entry.questType,
-          nextType: data.questType,
-          objectives: data.content.objectives,
-        });
-        if (edgeError) return errorResponse(edgeError);
-        const preparedBindings = await prepareOverworldBindings(
-          ctx.drizzle,
-          data.content.objectives,
-        );
-        if (!preparedBindings.success) return errorResponse(preparedBindings.message);
-        data.content.objectives = preparedBindings.objectives;
-        // Calculate diff
-        const diff = calculateContentDiff(entry, {
-          id: entry.id,
-          ...input.data,
-        });
-        const parsedPrevious = QuestValidator.safeParse(entry);
-        const isPresentationOnlyChange =
-          parsedPrevious.success &&
-          isQuestPresentationOnlyChange(parsedPrevious.data, input.data);
-        const updatedAt = new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1));
-        // Publish presentation and accepted run versions together so another quest's
-        // tracker persistence cannot discard a checkpoint during a split revision.
-        // One guarded statement avoids a transaction; Drizzle has no multi-table UPDATE builder.
-        // Gameplay edits use the ordinary builder and retain quest revision checks.
-        const definitionWrite = isPresentationOnlyChange
-          ? await retryOnDeadlock(() =>
-              executeDefinitionWriteForUpdate(ctx.drizzle, entry, input, updatedAt),
-            )
-          : await updateQuestForUpdate(ctx.drizzle, input, updatedAt, entry);
-        if (definitionWrite.rowsAffected === 0)
-          return errorResponse("Quest changed while saving. Refresh and try again.");
-        await Promise.all([
-          // Village Missions retire personal attempts without granting completions
-          // or reclassifying completed history as collective progress.
-          data.questType === "village_mission"
-            ? updateQuestHistoryForUpdate(ctx.drizzle, entry)
-            : updateQuestHistoryForUpdate2(ctx.drizzle, input, entry, updatedAt),
-          insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
-        ]);
-        // Assign a quest that just became an event only once the edit has been saved;
-        // re-saving does not repeat it, so a failed assignment needs a manual re-run.
-        if (entry.questType !== "event" && input.data.questType === "event") {
-          const roles = availableRanks(input.data.questRank);
-          await upsertQuestEntries(
-            ctx.drizzle,
-            { ...entry, ...input.data, updatedAt },
-            and(
-              inArray(userData.rank, roles),
-              gte(userData.updatedAt, secondsFromNow(-60 * 60 * 24 * 7)),
-            ),
-          );
-        }
-        await notifyMapLocationsChanged();
-        await outdateProposalsFor(
-          ctx.drizzle,
-          "QUEST",
-          [entry.id],
-          editedReason("QUEST", entry.name, user.username),
-        );
-        if (process.env.NODE_ENV !== "development") {
-          await callDiscordContent(user.username, entry.name, diff, entry.image);
-        }
-        return { success: true, message: `Data updated: ${diff.join(". ")}` };
-      } else {
-        return { success: false, message: `Not allowed to edit quest` };
+      if (!canChangeContent(user.role)) {
+        return errorResponse("Not allowed to edit quest");
       }
+      const editingStarterQuest =
+        entry.questType === "starter" || input.data.questType === "starter";
+      if (editingStarterQuest && !canEditStarterQuests(user.role)) {
+        return { success: false, message: `Not allowed to edit starter quests` };
+      }
+      // Validate objective content before updating, keyed off the INCOMING quest (not the
+      // stored row): newly authored dialog branches must always route onward,
+      // and full chain/reachability flow is checked when the quest is consecutive.
+      const { check, message } = verifyQuestContentForSave(
+        input.data.content.objectives,
+        input.data.consecutiveObjectives,
+      );
+      if (!check) {
+        return { success: false, message: `Objective flow invalid: ${message}` };
+      }
+      // Shared Village Missions and concurrent war missions progress outside quest scenes.
+      const isConcurrentWarMission =
+        input.data.questType === "war" &&
+        input.data.content.objectives.some(
+          (objective) =>
+            objective.task === "espionage" || objective.task === "sabotage",
+        );
+      const hasMainSceneCharacters = input.data.content.sceneCharacters.length > 0;
+      const allObjectivesHaveSceneCharacters = input.data.content.objectives.every(
+        (objective) =>
+          objective.sceneCharacters && objective.sceneCharacters.length > 0,
+      );
+      if (
+        !input.data.hidden &&
+        input.data.questType !== "village_mission" &&
+        !isConcurrentWarMission &&
+        !hasMainSceneCharacters &&
+        !allObjectivesHaveSceneCharacters
+      ) {
+        return errorResponse(
+          "Quest must have either main sceneCharacters set or all objectives must have sceneCharacters defined",
+        );
+      }
+      // Prepare data for insertion into database
+      const data = input.data;
+      const packageError = validateQuestRewardPackages(
+        data.content,
+        entry.content,
+        packages,
+        user.role,
+      );
+      if (packageError) return errorResponse(packageError);
+      // Server-side enforcement: preserve existing reward_reputation if user lacks permission
+      if (!canAwardReputation(user.role)) {
+        data.content.reward.reward_reputation = entry.content.reward.reward_reputation;
+        // Preserve by objective id; new objectives should not gain reputation
+        const existingObjectivesById = new Map(
+          entry.content.objectives.map((objective) => [objective.id, objective]),
+        );
+        data.content.objectives = data.content.objectives.map((objective) => {
+          const existingObjective = existingObjectivesById.get(objective.id);
+          return {
+            ...objective,
+            reward_reputation: existingObjective?.reward_reputation ?? 0,
+          };
+        });
+      }
+      const rewardChoiceCheck = verifyRewardChoiceForSave(input.data.content);
+      if (!rewardChoiceCheck.check) {
+        return errorResponse(rewardChoiceCheck.message);
+      }
+      // Check we only give ranks with exams
+      const rankError =
+        (collapseRewards(rewardPayloads(data.content.reward)).reward_rank !== "NONE" &&
+          !["starter", "exam"].includes(data.questType)) ||
+        (data.questType !== "exam" &&
+          data.content.objectives.some(
+            (objective) =>
+              collapseRewards(rewardPayloads(objective)).reward_rank !== "NONE",
+          ));
+      if (rankError) {
+        return {
+          success: false,
+          message: `Ranks rewards are only allowed with starter or exam quests`,
+        };
+      }
+      const edgeError = await restrictedNewQuestEdgeError(ctx.drizzle, {
+        questId: entry.id,
+        questName: entry.name,
+        currentType: entry.questType,
+        nextType: data.questType,
+        objectives: data.content.objectives,
+      });
+      if (edgeError) return errorResponse(edgeError);
+      const preparedBindings = await prepareOverworldBindings(
+        ctx.drizzle,
+        data.content.objectives,
+      );
+      if (!preparedBindings.success) return errorResponse(preparedBindings.message);
+      data.content.objectives = preparedBindings.objectives;
+      // Calculate diff
+      const diff = calculateContentDiff(entry, {
+        id: entry.id,
+        ...input.data,
+      });
+      const parsedPrevious = QuestValidator.safeParse(entry);
+      const isPresentationOnlyChange =
+        parsedPrevious.success &&
+        isQuestPresentationOnlyChange(parsedPrevious.data, input.data);
+      const updatedAt = new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1));
+      // Publish presentation and accepted run versions together so another quest's
+      // tracker persistence cannot discard a checkpoint during a split revision.
+      // One guarded statement avoids a transaction; Drizzle has no multi-table UPDATE builder.
+      // Gameplay edits use the ordinary builder and retain quest revision checks.
+      const definitionWrite = isPresentationOnlyChange
+        ? await retryOnDeadlock(() =>
+            executeDefinitionWriteForUpdate(ctx.drizzle, entry, input, updatedAt),
+          )
+        : await updateQuestForUpdate(ctx.drizzle, input, updatedAt, entry);
+      if (definitionWrite.rowsAffected === 0)
+        return errorResponse("Quest changed while saving. Refresh and try again.");
+      await Promise.all([
+        // Village Missions retire personal attempts without granting completions
+        // or reclassifying completed history as collective progress.
+        data.questType === "village_mission"
+          ? updateQuestHistoryForUpdate(ctx.drizzle, entry)
+          : updateQuestHistoryForUpdate2(ctx.drizzle, input, entry, updatedAt),
+        insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
+      ]);
+      // Assign a quest that just became an event only once the edit has been saved;
+      // re-saving does not repeat it, so a failed assignment needs a manual re-run.
+      if (entry.questType !== "event" && input.data.questType === "event") {
+        const roles = availableRanks(input.data.questRank);
+        await upsertQuestEntries(
+          ctx.drizzle,
+          { ...entry, ...input.data, updatedAt },
+          and(
+            inArray(userData.rank, roles),
+            gte(userData.updatedAt, secondsFromNow(-60 * 60 * 24 * 7)),
+          ),
+        );
+      }
+      await notifyMapLocationsChanged();
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "QUEST",
+        [entry.id],
+        editedReason("QUEST", entry.name, user.username),
+      );
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
+      return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   create: protectedProcedure
     .meta({
@@ -1219,7 +1217,7 @@ export const questsRouter = createTRPCRouter({
       if ([TUTORIAL_STARTER_QUEST_ID, TUTORIAL_GENIN_EXAM_QUEST_ID].includes(entry.id))
         return errorResponse("Cannot delete tutorial quest");
       // Permission check
-      if (entry && canChangeContent(user.role)) {
+      if (canChangeContent(user.role)) {
         await Promise.all([
           deleteQuestForDelete(ctx.drizzle, input),
           deleteQuestHistoryForDelete(ctx.drizzle, input),
@@ -1615,16 +1613,9 @@ export const questsRouter = createTRPCRouter({
           questHistoryPrefetch.questType === "achievement")
           ? questHistoryPrefetch
           : undefined);
-      if (
-        activeAttempt &&
-        (hasQuestContentChanged(activeAttempt) ||
-          (activeAttempt.quest.hidden && !canPlayHiddenQuests(user.role)))
-      )
-        return errorResponse(
-          activeAttempt.questType === "battlepyramid"
-            ? "This Pyramid is paused or changed. Return to the Battle Arena to resume or abandon it."
-            : "This quest is currently unavailable.",
-        );
+      const attemptBlock =
+        activeAttempt && questAttemptBlockMessage(activeAttempt, user.role);
+      if (attemptBlock) return errorResponse(attemptBlock);
 
       // Figure out if any finished quests & get rewards
       const {
@@ -1817,26 +1808,20 @@ export const questsRouter = createTRPCRouter({
       }
       // Payout leaves questData to the snapshot claim above instead of writing back this read.
       // Package cards can also carry promotions and membership, handled by updateRewards.
-      const { items, jutsus, bloodlines, badges, sageModes, titles } =
-        await updateRewards({
-          pvpBoostApplied: true,
-          client: ctx.drizzle,
-          user,
-          rewards,
-          reason: "QUEST",
-          persistQuestData: false,
-        });
-      rewards.reward_items = items.map((i) => i.name);
-      rewards.reward_jutsus = jutsus.map((i) => i.name);
-      rewards.reward_bloodlines = bloodlines.map((i) => i.name);
-      rewards.reward_sage_modes = sageModes.map((i) => i.name);
-      rewards.reward_badges = badges.map((i) => i.name);
-      rewards.reward_titles = titles.map((i) => i.name);
+      const granted = await updateRewards({
+        pvpBoostApplied: true,
+        client: ctx.drizzle,
+        user,
+        rewards,
+        reason: "QUEST",
+        persistQuestData: false,
+      });
+      nameGrantedRewards(rewards, granted);
       return {
         success: true,
         message: `Claimed rewards from ${questName}`,
         rewards,
-        badges,
+        badges: granted.badges,
         ...getClaimedRewardChoiceUserUpdate({ user, rewards }),
       };
     }),
@@ -2061,16 +2046,9 @@ export const questsRouter = createTRPCRouter({
       const activeAttempt = user.userQuests.find(
         (entry) => entry.questId === input.questId && !entry.endAt,
       );
-      if (
-        activeAttempt &&
-        (hasQuestContentChanged(activeAttempt) ||
-          (activeAttempt.quest.hidden && !canPlayHiddenQuests(user.role)))
-      )
-        return errorResponse(
-          activeAttempt.questType === "battlepyramid"
-            ? "This Pyramid is paused or changed. Return to the Battle Arena to resume or abandon it."
-            : "This quest is currently unavailable.",
-        );
+      const attemptBlock =
+        activeAttempt && questAttemptBlockMessage(activeAttempt, user.role);
+      if (attemptBlock) return errorResponse(attemptBlock);
       // Get updated quest information with start_battle task and retry flag
       const { trackers, notifications, consequences } = getNewTrackers(user, [
         { task: "start_battle", text: "retry" },
@@ -2294,23 +2272,8 @@ export const updateRewards = async (info: {
   const expandedRewardItems: { id: string; name: string; quantity: number }[] = [];
   for (const itemData of items) {
     const count = itemIdCounts.get(itemData.id) ?? 1;
-    if (itemData.canStack && itemData.stackSize > 1) {
-      // For stackable items, insert with quantity respecting stackSize limits
-      let remaining = count;
-      while (remaining > 0) {
-        const qty = Math.min(remaining, itemData.stackSize);
-        expandedRewardItems.push({
-          id: itemData.id,
-          name: itemData.name,
-          quantity: qty,
-        });
-        remaining -= qty;
-      }
-    } else {
-      // For non-stackable items, insert multiple rows (one per item)
-      for (let i = 0; i < count; i++) {
-        expandedRewardItems.push({ id: itemData.id, name: itemData.name, quantity: 1 });
-      }
+    for (const quantity of splitIntoStacks(count, getEffectiveStackSize(itemData))) {
+      expandedRewardItems.push({ id: itemData.id, name: itemData.name, quantity });
     }
   }
 
@@ -2362,10 +2325,7 @@ export const updateRewards = async (info: {
   );
   const updatedUserData: Record<string, unknown> = {
     ...masteryGainUpdates(masteryGains),
-    ...(rewards.reward_mastery_stat &&
-    rewards.reward_mastery_stat !== "None" &&
-    rewards.reward_mastery_rank &&
-    rewards.reward_mastery_rank !== "NONE"
+    ...(hasMasteryPromotion(rewards)
       ? {
           masteryRanks: masteryRankUpdate(
             rewards.reward_mastery_stat,
@@ -2531,13 +2491,29 @@ export const updateRewards = async (info: {
   };
 };
 
+/** Replace a reward's ids with the names of what `updateRewards` actually granted. */
+export const nameGrantedRewards = (
+  rewards: GetRewardResult,
+  granted: Pick<
+    Awaited<ReturnType<typeof updateRewards>>,
+    "items" | "jutsus" | "bloodlines" | "sageModes" | "badges" | "titles"
+  >,
+) => {
+  rewards.reward_items = granted.items.map((i) => i.name);
+  rewards.reward_jutsus = granted.jutsus.map((i) => i.name);
+  rewards.reward_bloodlines = granted.bloodlines.map((i) => i.name);
+  rewards.reward_sage_modes = granted.sageModes.map((i) => i.name);
+  rewards.reward_badges = granted.badges.map((i) => i.name);
+  rewards.reward_titles = granted.titles.map((i) => i.name);
+};
+
 /** True when a quest type can only ever be acquired from its assigned overworld NPC. */
 const isNpcOnlyQuestType = (questType: QuestType) =>
   (NPC_ONLY_QUEST_TYPES as readonly QuestType[]).includes(questType);
 
 /** These quests require their dedicated acquisition flow, including when linked by content. */
 const isRestrictedQuestType = (questType: QuestType) =>
-  isNpcOnlyQuestType(questType) || questType === "special";
+  (RESTRICTED_QUEST_TYPES as readonly QuestType[]).includes(questType);
 
 /**
  * Hide quests with dedicated acquisition flows from public content listings.
@@ -2753,16 +2729,7 @@ export const claimDailyQuestSlot = async (
 ) => {
   const quota = questDailyQuota(questType, user);
   if (!quota) return true;
-  const field =
-    questType === "errand"
-      ? "dailyErrands"
-      : questType === "medical"
-        ? "dailyMedicalMissions"
-        : questType === "pvp"
-          ? "dailyPvpMissions"
-          : questType === "war"
-            ? "dailyWarMissions"
-            : "dailyMissions";
+  const { field } = quota;
   const counter = userData[field];
   const result = await updateUserDataForClaimDailyQuestSlot(
     client,
@@ -2958,10 +2925,7 @@ export const assignQuestToUser = async (args: {
     );
   }
 
-  if (
-    (questData.questType === "battlepyramid" || questData.content.entryItems?.length) &&
-    user.status !== "AWAKE"
-  )
+  if (isManagedQuestRun(questData) && user.status !== "AWAKE")
     return errorResponse("You must be awake and outside combat to start this run.");
 
   // Per-type concurrent-limit guard (pure, no DB)
@@ -3114,10 +3078,7 @@ export const assignQuestToUser = async (args: {
       source,
       prevAttempt ?? null,
     );
-  } else if (
-    questData.questType === "battlepyramid" ||
-    questData.content.entryItems?.length
-  ) {
+  } else if (isManagedQuestRun(questData)) {
     // Publish the account claim and new history together: another request must not see
     // a fresh account stamp before the active Pyramid row. A joined UPDATE cannot insert
     // missing history or commit its tracker and initial recovery with that insertion.
@@ -3287,10 +3248,9 @@ export const upsertQuestEntry = async (
     Object.assign(user, assigned.user);
     return assigned.result;
   }
-  const ticks = settleRecovery
-    ? Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS))
-    : 0;
-  const regen = user.regeneration * ticks;
+  const ticks = settleRecovery ? regenTicksSince(user.regenAt) : 0;
+  const recoveredAt = new Date();
+  const regen = settleRecovery ? getUserRegenerationGain(user, recoveredAt) : 0;
   // Energy shares regenAt, so preserve its earned recovery before advancing that clock too.
   const recovery = settleRecovery
     ? {
@@ -3303,8 +3263,8 @@ export const upsertQuestEntry = async (
     : {};
   // Use the persisted pools/clock: a competing account write must not replay recovery
   // or overwrite the pools after the story's quest tracker has already been claimed.
-  const recoveryTicks = sql`FLOOR(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, ${new Date(Date.now())})) / ${REGEN_SECONDS * 1_000_000})`;
-  const poolRecovery = sql`${user.regeneration} * ${recoveryTicks}`;
+  const recoveryTicks = sql`FLOOR(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, ${recoveredAt})) / ${REGEN_SECONDS * 1_000_000})`;
+  const poolRecovery = userRegenerationGainSql(user, userData.regenAt, recoveredAt);
   const recoveryUpdate = settleRecovery
     ? {
         curHealth: sql`ROUND(LEAST(${userData.curHealth} + ${poolRecovery}, ${userData.maxHealth}))`,
@@ -3491,7 +3451,7 @@ const petTaskContentCondition = (task: PetTask, role: UserRole) =>
   sql`EXISTS (SELECT 1 FROM ${quest} WHERE ${and(
     eq(quest.id, task.questId),
     eq(quest.updatedAt, new Date(task.questVersion)),
-    inArray(quest.questType, ["hunting", "gathering"]),
+    inArray(quest.questType, PET_TASK_QUEST_TYPES),
     gte(quest.petTaskMinutes, 1),
     lte(quest.petTaskMinutes, PET_TASK_MAX_MINUTES),
     canPlayHiddenQuests(role) ? undefined : eq(quest.hidden, false),
@@ -3673,7 +3633,7 @@ export const commitQuestObjectiveRewards = async (info: {
     return { outcome: "state_changed" };
   if (petTask && !isPetTaskAttempt(petTask, userQuest))
     return { outcome: "state_changed" };
-  if (userQuest?.id === `party-${user.questPartyId}`) {
+  if (isQuestPartyHelperAttempt(userQuest, user.questPartyId)) {
     // Helpers keep their original completion receipt; this also covers bound NPC objectives.
     user.questData = trackers;
     const helperClaim = await handleQuestConsequences(
@@ -4008,7 +3968,7 @@ export const commitQuestObjectiveRewards = async (info: {
           curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyReward} + ${releaseIsolation ? userRegenerationGainSql(user, userData.regenAt, releasedAt) : sql`0`})`,
           ...(releaseIsolation ? { regenAt: releasedAt } : {}),
           // Invalidate passive-regeneration snapshots taken between the claim and payout.
-          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+          updatedAt: nextSnapshotSql(userData.updatedAt),
         }
       : undefined;
   const mergedUserDataPatch =
@@ -4099,7 +4059,7 @@ export const commitQuestObjectiveRewards = async (info: {
         ]
       : []),
   ]);
-  const { items, jutsus, bloodlines, badges, sageModes, titles } = rewardResult;
+  const { badges } = rewardResult;
   if (releaseIsolation) {
     user.status = "AWAKE";
     user.regenAt = releasedAt;
@@ -4173,12 +4133,7 @@ export const commitQuestObjectiveRewards = async (info: {
   user.questData = trackers;
 
   // Update rewards for readability
-  rewards.reward_items = items.map((i) => i.name);
-  rewards.reward_jutsus = jutsus.map((i) => i.name);
-  rewards.reward_bloodlines = bloodlines.map((i) => i.name);
-  rewards.reward_sage_modes = sageModes.map((i) => i.name);
-  rewards.reward_badges = badges.map((i) => i.name);
-  rewards.reward_titles = titles.map((i) => i.name);
+  nameGrantedRewards(rewards, rewardResult);
 
   return {
     outcome: "claimed",
@@ -4260,13 +4215,12 @@ const executeClaimedQuestConsequences = async ({
             const startable = quests.filter(
               (q) =>
                 // Managed runs must reach upsertQuestEntry's persisted recovery guards.
-                (q.questType === "battlepyramid" ||
-                  q.content.entryItems?.length ||
+                (isManagedQuestRun(q) ||
                   !user.userQuests.some(
                     (entry) =>
                       entry.questId === q.id &&
                       !entry.endAt &&
-                      entry.id !== `party-${user.questPartyId}`,
+                      !isQuestPartyHelperAttempt(entry, user.questPartyId),
                   )) &&
                 q.questType !== "hunting" &&
                 !isRestrictedQuestType(q.questType) &&
@@ -4362,13 +4316,7 @@ const executeClaimedQuestConsequences = async ({
                 givePools: opponent.givePools,
                 startingEffects: opponent.startingEffects,
                 questAttempt: opponent.questId
-                  ? user.userQuests.find(
-                      (entry) =>
-                        entry.questId === opponent.questId &&
-                        !entry.endAt &&
-                        (entry.questType === "battlepyramid" ||
-                          !!entry.quest.content.entryItems?.length),
-                    )
+                  ? findManagedQuestAttempt(user.userQuests, opponent.questId)
                   : undefined,
                 // Honour the player's stored preference for quest fights and random
                 // encounters (including hunting) alike; initiateBattle gates on
@@ -4493,6 +4441,7 @@ export const handleQuestConsequences = async (
   // If quests were reset, update the user's quest data
   if (resetQuests.length > 0) {
     // Managed runs resume their authored checkpoint without waiting for a manual retry.
+    // Isolated content resumes the same way, with or without an entry cost.
     user.questData = applyQuestResets(
       user.questData,
       resetQuests,
@@ -4501,9 +4450,11 @@ export const handleQuestConsequences = async (
           (entry) =>
             entry.questId === questId &&
             !entry.endAt &&
-            (entry.questType === "battlepyramid" ||
-              !!entry.quest.content.isolated ||
-              !!entry.quest.content.entryItems?.length),
+            (isManagedQuestRun({
+              questType: entry.questType,
+              content: entry.quest.content,
+            }) ||
+              !!entry.quest.content.isolated),
         ),
     );
   }
@@ -4651,18 +4602,7 @@ const resolveRewardChoiceDisplays = async (
         ]
       : [];
   });
-  const expandedCards = offers.flatMap((offer) =>
-    offer.cards.flatMap((card) =>
-      card.rewards ? buildRewardChoiceCards(card.rewards) : [card],
-    ),
-  );
-  const idsFor = (field: RewardChoiceCard["field"]) => [
-    ...new Set(
-      expandedCards.flatMap((card) =>
-        card.field === field && card.contentId ? [card.contentId] : [],
-      ),
-    ),
-  ];
+  const idsFor = rewardChoiceContentIds(offers.flatMap((offer) => offer.cards));
   const itemIds = idsFor("reward_items");
   const jutsuIds = idsFor("reward_jutsus");
   const bloodlineIds = idsFor("reward_bloodlines");
@@ -4829,30 +4769,12 @@ const describePackageRewards = (
   if (reward.reward_rank !== "NONE") entries.push(`Rank: ${reward.reward_rank}`);
   if (reward.reward_village_membership !== "NONE")
     entries.push(`Village: ${reward.reward_village_membership}`);
-  if (reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE")
+  if (hasPromotionRank(reward))
     entries.push(`${reward.reward_mastery_stat}: ${reward.reward_mastery_rank}`);
   if (reward.reward_hunter_items) entries.push("Hunting material drops");
   if (reward.reward_gathering_items) entries.push("Gathering material drops");
   return entries;
 };
-/**
- * Run deferred reward queries or writes, retaining parallel phases for ordinary callers.
- * Transaction callers must pass unevaluated tasks: each statement starts after the previous
- * statement supplies the driver's next session token. Results preserve the input tuple order.
- */
-export const runRewardTasks =
-  (inTransaction: boolean) =>
-  async <T extends readonly (() => unknown)[]>(
-    tasks: readonly [...T],
-  ): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
-    if (!inTransaction)
-      return Promise.all(tasks.map((task) => task())) as Promise<{
-        [K in keyof T]: Awaited<ReturnType<T[K]>>;
-      }>;
-    const results: unknown[] = [];
-    for (const task of tasks) results.push(await task());
-    return results as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
-  };
 
 /** Quest types the user fetch bootstraps automatically. */
 type BootstrapQuestType = Extract<QuestType, "tier" | "exam">;

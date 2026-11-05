@@ -1,9 +1,9 @@
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,
-  MAP_TOTAL_SECTORS,
   MAP_WORLD_COLUMNS,
   MAP_WORLD_ROWS,
 } from "@/drizzle/constants";
+import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 
 export interface WorldGridPosition {
   column: number;
@@ -12,9 +12,7 @@ export interface WorldGridPosition {
 
 /** Convert a stable row-major sector id into its cylindrical grid position. */
 export const sectorGridPosition = (sector: number): WorldGridPosition | null => {
-  if (!Number.isInteger(sector) || sector < 0 || sector >= MAP_TOTAL_SECTORS) {
-    return null;
-  }
+  if (!isValidSectorId(sector)) return null;
   return {
     column: sector % MAP_WORLD_COLUMNS,
     row: Math.floor(sector / MAP_WORLD_COLUMNS),
@@ -63,6 +61,20 @@ export const sectorGridEntryEdges = (
     neighbors[2] < 0 ? -1 : 0,
     neighbors[3] < 0 ? -1 : 1,
   ];
+};
+
+/** Geographic bounds of one row-major sector. */
+export const sectorGeographicBounds = (sector: number) => {
+  const position = sectorGridPosition(sector);
+  if (!position) throw new Error(`Invalid sector ${sector}`);
+  const longitudeStep = 360 / MAP_WORLD_COLUMNS;
+  const latitudeStep = (MAP_NAVIGABLE_LATITUDE_LIMIT * 2) / MAP_WORLD_ROWS;
+  return {
+    west: -180 + position.column * longitudeStep,
+    east: -180 + (position.column + 1) * longitudeStep,
+    north: MAP_NAVIGABLE_LATITUDE_LIMIT - position.row * latitudeStep,
+    south: MAP_NAVIGABLE_LATITUDE_LIMIT - (position.row + 1) * latitudeStep,
+  };
 };
 
 /**

@@ -2,8 +2,8 @@ import { and, eq, lt } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import {
   getGameSetting,
-  handleEndpointError,
   lockWithDailyTimer,
+  runClaimedCron,
 } from "@/libs/gamesettings";
 import { updateAnbuSquadForDecayClansAndAnbu } from "@/queries/anbu";
 import { updateClanForDecayClansAndAnbu } from "@/queries/clan";
@@ -35,20 +35,15 @@ export async function GET(request: Request) {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   // Perform work. Every step is guarded per day, so a retry after a partial failure
   // only finishes what is left. Steps run one after another rather than in parallel.
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-pvp", async () => {
     const dayStart = periodStart("daily", new Date());
     await decayClansAndAnbu(dayStart);
     await decayPlayerPvpExperience(dayStart);
     return Response.json(`OK`);
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 }
 
 /** Daily clan boost and clan/ANBU pvpActivity decay, applied at most once per day. */

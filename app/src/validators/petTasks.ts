@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PET_TASK_MAX_MINUTES } from "@/drizzle/constants";
+import { makeCappedNullableNumber } from "@/validators/base";
 import { petSelectionSchema } from "@/validators/pets";
 
 /** One accepted profession attempt; millisecond identities distinguish reused history rows. */
@@ -23,7 +24,4 @@ export const startPetTaskSchema = petSelectionSchema.extend({
   questId: z.string().min(1).max(191),
 });
 /** Blank means disabled; Content explicitly opts a hunting or gathering contract into delegation. */
-export const petTaskMinutesSchema = z.preprocess(
-  (value) => (value === "" || value === null || value === undefined ? null : value),
-  z.coerce.number().int().min(1).max(PET_TASK_MAX_MINUTES).nullable(),
-);
+export const petTaskMinutesSchema = makeCappedNullableNumber(PET_TASK_MAX_MINUTES, 1);

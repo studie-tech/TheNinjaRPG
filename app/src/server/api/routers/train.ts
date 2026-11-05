@@ -8,10 +8,10 @@ import {
 } from "@/deltas/train";
 import {
   BasicElementName,
+  getCombatStatCap,
   getUserCaps,
   MAX_DAILY_TRAININGS,
   MasteryNames,
-  STATS_PER_ENERGY,
   type TimedMasteryName,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
@@ -29,14 +29,13 @@ import {
   applyMasteryTrainingGains,
   calcMasteryTrainingAmount,
   getMasteryTrainingState,
-  getTrainingMultiplierBoost,
   masteryTrainingBlockMessage,
   masteryTrainingFields,
   masteryTrainingGainRoom,
   masteryTrainingSessionUpdate,
   queuedMasteryStartBlockMessage,
+  statsPerEnergy,
   statTrainingBlockMessage,
-  trainingBoost,
   trainingEnergyMessage,
 } from "@/libs/train";
 import { findUserWithBloodline } from "@/queries/profile";
@@ -238,13 +237,8 @@ export const trainRouter = createTRPCRouter({
       if (block) return errorResponse(block);
       const captchaBlock = await trainingCaptchaMessage(ctx.drizzle, user, input.guess);
       if (captchaBlock) return errorResponse(captchaBlock);
-      const { stats_cap, gens_cap } = getUserCaps(user.rank);
-      const cap =
-        input.stat === "offence" || input.stat === "defence" ? stats_cap : gens_cap;
-      const rate =
-        STATS_PER_ENERGY *
-        trainingBoost(user, settings) *
-        getTrainingMultiplierBoost(user);
+      const cap = getCombatStatCap(getUserCaps(user.rank), input.stat);
+      const rate = statsPerEnergy(user, settings);
       const availableRoom = Math.max(0, cap - user[input.stat]);
       if (availableRoom === 0) return errorResponse("Already capped");
       if (input.energy > user.curEnergy) return errorResponse("Not enough Energy");

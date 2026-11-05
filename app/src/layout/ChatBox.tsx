@@ -15,6 +15,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import type { SentimentType } from "@/drizzle/constants";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageRemoveItem,
@@ -92,7 +93,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     });
 
   // Handle feedback submission
-  const handleFeedback = async (sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL") => {
+  const handleFeedback = async (sentiment: SentimentType) => {
     if (feedbackSubmitted) return;
 
     try {

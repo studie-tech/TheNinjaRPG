@@ -15,8 +15,7 @@ import {
   updateDungeonRunForExpireDungeonRun,
   updateDungeonRunForRollbackDungeonStart,
   updateDungeonRunForSettleDungeonBattle,
-  updateUserDataForExpireDungeonRun,
-  updateUserDataForSettleDungeonBattle,
+  updateUserDataForReviveDungeonMembers,
 } from "@/queries/dungeon";
 import type { DrizzleClient } from "@/server/db";
 import { cleanupCoopBattleStart } from "@/server/utils/coop";
@@ -97,13 +96,16 @@ export const settleDungeonBattle = async (
       );
       if (run.rowsAffected !== 1)
         throw new Error("Dungeon run changed during floor settlement");
-      await updateUserDataForSettleDungeonBattle(
+      await updateUserDataForReviveDungeonMembers(
         tx,
         dungeonEnergyRecoverySql,
         current,
-        meta,
+        {
+          memberIds: meta.runState.memberIds,
+          battleId: current.id,
+          status: status === "BETWEEN" ? "QUEUED" : "AWAKE",
+        },
         settledAt,
-        status === "BETWEEN",
       );
       if (status === "ENDED") await clearDungeonActiveUsers(tx, meta.runId);
       return true;
@@ -150,11 +152,11 @@ export const expireDungeonRun = async (
       if (claim.rowsAffected === 0) return;
       if (run.battleId) {
         await deleteBattleById(tx, run.battleId);
-        await updateUserDataForExpireDungeonRun(
+        await updateUserDataForReviveDungeonMembers(
           tx,
           dungeonEnergyRecoverySql,
           snapshot,
-          { state: { memberIds: run.state.memberIds }, battleId: run.battleId },
+          { memberIds: run.state.memberIds, battleId: run.battleId, status: "AWAKE" },
           settledAt,
         );
       }

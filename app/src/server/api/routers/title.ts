@@ -127,8 +127,7 @@ export const titleRouter = createTRPCRouter({
         [entry.id],
         editedReason("TITLE", entry.name, user.username),
       );
-      if (process.env.NODE_ENV !== "development")
-        await callDiscordContent(user.username, entry.name, diff, "");
+      await callDiscordContent(user.username, entry.name, diff, "");
       return { success: true, message: "Title saved" };
     }),
 });

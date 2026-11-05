@@ -15,6 +15,7 @@ import {
   getUpdateUsernameUserUpdate,
   getUserProgressionUpdate,
   getUseUnusedExperiencePointsUserUpdate,
+  splitAchievementProgress,
 } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
@@ -87,6 +88,7 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { deferModeration } from "@/libs/moderation/defer";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { isQuestComplete } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import { isNewOnlineRecord } from "@/libs/onlineRecord";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { hasActiveGeneration } from "@/libs/pets/progression";
@@ -113,9 +115,10 @@ import {
   getQuestTargetSectorsToCheck,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
-  questHasOverworldObjectives,
+  publishedAchievementsOf,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { isQuestPartyHelperAttempt } from "@/libs/questParty";
 import { getIsolatedPyramid } from "@/libs/questRun";
 import {
   getRaidObjectiveData,
@@ -159,6 +162,7 @@ import {
   fetchAttributes,
   fetchHasUnvotedPolls,
   fetchUser,
+  fetchViewerRole,
   findAbEventForUpdateTutorialStep,
   findOwnedUserPet,
   findSageModeForUpdateUser,
@@ -166,7 +170,6 @@ import {
   findUserById,
   findUserDataForFetchUpdatedUserOnce,
   findUserDataForGetAi,
-  findUserDataForGetPublicUser,
   findUserDataForGetPublicUser2,
   findUserDataForGetSeichiSilverForStaff,
   findUserDataForGetUsername,
@@ -189,8 +192,6 @@ import {
   insertActionLogForUpdateUser,
   insertActionLogForUpdateUser2,
   insertActionLogForUpdateUsername,
-  insertGameSettingForGetUser,
-  insertHistoricalIpForPersistPassiveRegenToDb,
   insertRecruitmentRewardsForLevelUp,
   insertTrainingLogForPersistPassiveRegenToDb,
   insertTrainingLogForPersistPassiveRegenToDb2,
@@ -250,6 +251,7 @@ import {
   updateUserPetForResetPetImageGeneration,
   updateUserVoteForClaimVotes,
   updateVillageForFetchUpdatedUserOnce,
+  upsertHistoricalIp,
 } from "@/queries/profile";
 import {
   fetchBloodlineCollectionRolls,
@@ -288,6 +290,7 @@ import {
 } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
+import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import {
@@ -338,12 +341,14 @@ import {
   canSeeIps,
   canSeeSecretData,
   getApprovalGroup,
+  getBanOrSilenceRestriction,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
 import {
   DAY_S,
   isDifferentDay,
+  regenTicksSince,
   secondsFromDate,
   secondsFromNow,
   secondsPassed,
@@ -351,7 +356,7 @@ import {
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
-import { idSchema } from "@/validators/misc";
+import { experienceAwardSchema, idSchema } from "@/validators/misc";
 import {
   attributes,
   colors,
@@ -377,6 +382,7 @@ import {
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
+const voteSecret = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
 
 export const profileRouter = createTRPCRouter({
   getDashboard: protectedProcedure
@@ -789,7 +795,6 @@ export const profileRouter = createTRPCRouter({
         initialUser,
         readyFarmPlotsResult,
         waterableFarmPlotsResult,
-        publishedAchievements,
         questInvitations,
         tournamentNoticeState,
         activeDungeonRuns,
@@ -797,7 +802,6 @@ export const profileRouter = createTRPCRouter({
         fetchUser(),
         selectFarmPlotForGetUser(ctx.drizzle, ctx, now),
         selectFarmPlotForGetUser2(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
-        fetchPublishedAchievements(ctx.drizzle),
         listQuestPartyForGetUser(ctx.drizzle, ctx),
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
         findActiveDungeonRun(ctx.drizzle, ctx.userId),
@@ -820,9 +824,15 @@ export const profileRouter = createTRPCRouter({
       const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
       const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
       // Ship achievement progress on its own; the definitions come from the catalogue query
-      const achievementProgress = user
-        ? splitAchievementProgress(user, publishedAchievements)
-        : [];
+      let achievementProgress: AchievementProgress[] = [];
+      if (user) {
+        const split = splitAchievementProgress(
+          user.userQuests,
+          new Set(updatedUser.publishedAchievementIds),
+        );
+        user.userQuests = split.userQuests;
+        achievementProgress = split.achievementProgress;
+      }
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
@@ -887,7 +897,7 @@ export const profileRouter = createTRPCRouter({
           );
           return (
             entry.quest.teamEnabled &&
-            entry.id !== `party-${user.questPartyId}` &&
+            !isQuestPartyHelperAttempt(entry, user.questPartyId) &&
             !entry.endAt &&
             !entry.completed &&
             tracker &&
@@ -967,7 +977,6 @@ export const profileRouter = createTRPCRouter({
       if (user) {
         // War-time regen boost
         const warRegenName = `war-${user.village?.id}-regen`;
-        const warRegenSetting = settings.find((s) => s.name === warRegenName);
         const warRegenBoost = getGameSettingBoost(warRegenName, settings);
         if (warRegenBoost) {
           notifications.push({
@@ -977,13 +986,9 @@ export const profileRouter = createTRPCRouter({
             group: "Active boosts",
           });
         }
-        if (!warRegenSetting) {
-          await insertGameSettingForGetUser(ctx.drizzle, warRegenName);
-        }
 
         // War-time training boost
         const warTrainingName = `war-${user.village?.id}-train`;
-        const warTrainingSetting = settings.find((s) => s.name === warTrainingName);
         const warTrainingBoost = getGameSettingBoost(warTrainingName, settings);
         if (warTrainingBoost) {
           notifications.push({
@@ -992,9 +997,6 @@ export const profileRouter = createTRPCRouter({
             color: "green",
             group: "Active boosts",
           });
-        }
-        if (!warTrainingSetting) {
-          await insertGameSettingForGetUser(ctx.drizzle, warTrainingName);
         }
 
         if (getTerritoryWarBoost(user) > 0)
@@ -1583,9 +1585,7 @@ export const profileRouter = createTRPCRouter({
       );
 
       // Update discord channel
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(user.username, ai.username, diff, ai.avatar);
-      }
+      await callDiscordContent(user.username, ai.username, diff, ai.avatar);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   /** Save a cosmetic choice as an absolute user patch; stale guards return recoverable responses. */
@@ -1867,8 +1867,8 @@ export const profileRouter = createTRPCRouter({
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
+      const restriction = getBanOrSilenceRestriction(user);
+      if (restriction) return errorResponse(restriction);
       if (ctx.userId !== input.userId && !canSeeSecretData(user.role)) {
         return errorResponse("You can't change for other users");
       }
@@ -1959,38 +1959,34 @@ export const profileRouter = createTRPCRouter({
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const [requester, user] = await Promise.all([
-        findUserDataForGetPublicUser(ctx.drizzle, ctx),
+      const [viewerRole, user] = await Promise.all([
+        fetchViewerRole(ctx.drizzle, ctx.userId),
         findUserDataForGetPublicUser2(ctx.drizzle, input),
       ]);
       // Guard
       if (!user) return null;
       // Hide secrets
       const isSelf = ctx.userId === user.userId;
-      if (!isSelf && (!requester || !canSeeSecretData(requester.role))) {
+      if (!isSelf && !canSeeSecretData(viewerRole)) {
         user.earnedExperience = 8008;
         user.isBanned = false;
         user.aiProfileId = null;
         // Editors submit these ownership lists with the full profile form.
-        const canEditTarget = requester && !canOnlyEditSelf(requester.role);
-        if (!canEditTarget || !canEditJutsus(requester.role)) {
+        const canEditTarget = !canOnlyEditSelf(viewerRole);
+        if (!canEditTarget || !canEditJutsus(viewerRole)) {
           user.jutsus = [];
         }
-        if (!canEditTarget || !canEditItems(requester.role)) {
+        if (!canEditTarget || !canEditItems(viewerRole)) {
           user.items = [];
         }
       }
-      if (!requester || !canSeeIps(requester.role)) {
+      if (!canSeeIps(viewerRole)) {
         user.lastIp = "hidden";
       }
       if (user.bloodline && user.activeReskin) {
         user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
       }
-      if (
-        user.sageMode?.hidden &&
-        !isSelf &&
-        !(requester && canChangeContent(requester.role))
-      ) {
+      if (user.sageMode?.hidden && !isSelf && !canChangeContent(viewerRole)) {
         user.sageMode = null;
         user.sageModeId = null;
       }
@@ -2005,9 +2001,7 @@ export const profileRouter = createTRPCRouter({
       // Hide PvP W/L unless the owner opted in, the viewer is the owner, or staff.
       // Null (not omit) so the public payload shape stays stable for clients.
       const canSeePvpRecord =
-        isSelf ||
-        user.showPvpRecord ||
-        Boolean(requester && canSeeSecretData(requester.role));
+        isSelf || user.showPvpRecord || canSeeSecretData(viewerRole);
       if (!canSeePvpRecord) {
         return { ...user, pvpWins: null, pvpLosses: null };
       }
@@ -2067,15 +2061,14 @@ export const profileRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const results = await listRecruitmentRewardsForGetRecruitmentRewards(
         ctx.drizzle,
         ctx,
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: results, nextCursor };
     }),
   // Rank milestone eligibility and payouts for the current user's recruits
@@ -2188,15 +2181,11 @@ export const profileRouter = createTRPCRouter({
         return errorResponse("Votes already claimed");
       }
       // Update user's reputation points and mark votes as claimed
-      const smallNanoid = customAlphabet(
-        "1234567890abcdefghijklmnopqrstuvwxyzABCDEF",
-        8,
-      );
       // Only the request that flips `claimed` from false is credited, and the credit commits
       // together with that claim
       const claimed = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
-          const claim = await updateUserVoteForClaimVotes(tx, smallNanoid, ctx);
+          const claim = await updateUserVoteForClaimVotes(tx, voteSecret, ctx);
           if (claim.rowsAffected !== 1) return false;
           const credit = await updateUserDataForClaimVotes(tx, ctx);
           if (credit.rowsAffected !== 1)
@@ -2326,12 +2315,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Award experience to a user (staff only)
   awardExperience: protectedProcedure
-    .input(
-      z.object({
-        targetUserId: z.string(),
-        amount: z.number().min(1).max(100000),
-      }),
-    )
+    .input(experienceAwardSchema.extend({ targetUserId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -2370,11 +2354,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Award experience to all users (staff only)
   awardExperienceToAll: protectedProcedure
-    .input(
-      z.object({
-        amount: z.number().min(1).max(100000),
-      }),
-    )
+    .input(experienceAwardSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -2643,9 +2623,9 @@ const fetchUpdatedUserOnce = async (
     fetchBloodlineCollectionCatalogue(client),
     fetchBloodlineCollectionRolls(client, userId),
   ]);
-  const publishedAchievementIds = achievements
-    .filter((entry) => !questHasOverworldObjectives(entry))
-    .map((entry) => entry.id);
+  const publishedAchievementIds = publishedAchievementsOf(achievements).map(
+    (entry) => entry.id,
+  );
   if (props.rejectIsolatedPyramid && getIsolatedPyramid(fetchedUser)) {
     return {
       user: undefined,
@@ -2719,8 +2699,7 @@ const fetchUpdatedUserOnce = async (
 
   // Add votes entry if it doesn't exist
   if (user && !user.votes) {
-    const smallNanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
-    await insertUserVoteForFetchUpdatedUserOnce(client, user, smallNanoid);
+    await insertUserVoteForFetchUpdatedUserOnce(client, user, voteSecret);
   }
 
   let progressionQuestCandidates: NonNullable<typeof user>["userQuests"] = [];
@@ -2840,10 +2819,7 @@ const fetchUpdatedUserOnce = async (
   if (user?.villageId) {
     const userActiveWars = allActiveWars.filter(
       (w) =>
-        (!mercenaryWarId || w.id === mercenaryWarId) &&
-        (w.attackerVillageId === user.villageId ||
-          w.defenderVillageId === user.villageId ||
-          w.warAllies.some((a) => a.villageId === user.villageId)),
+        (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, user.villageId),
     );
     (user as NonNullable<UserWithRelations>).activeWars = userActiveWars;
   }
@@ -2870,12 +2846,7 @@ const fetchUpdatedUserOnce = async (
           (w) =>
             w.type === "SECTOR_WAR" &&
             w.defenderShrineHp <= 0 &&
-            (w.attackerVillageId === user.villageId ||
-              w.warAllies.some(
-                (ally) =>
-                  ally.villageId === user.villageId &&
-                  ally.supportVillageId === w.attackerVillageId,
-              )),
+            getWarSide(w, user.villageId) === w.attackerVillageId,
         )
         .map((w) => w.sector),
     );
@@ -3121,7 +3092,7 @@ const fetchUpdatedUserOnce = async (
 
     // Figure out if we're running update
     const sinceUpdate = secondsPassed(user.updatedAt);
-    const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
+    const ticks = regenTicksSince(user.regenAt);
     // Queued Energy and mastery training, settled in memory from the loaded rows.
     const regenerationGain = (fromTick: number, toTick: number) =>
       getTimedRegenerationGain(
@@ -3398,8 +3369,8 @@ const persistPassiveRegenToDb = async ({
   // Persist history before appending: concurrent deletion either reads this IP or creates
   // a retained source in time for the append to preserve it before history is removed.
   if (userIp && user.lastIp !== userIp) {
-    await insertHistoricalIpForPersistPassiveRegenToDb(client, userId, userIp).then(
-      () => retainSanctionIps(client, userId, [userIp]),
+    await upsertHistoricalIp(client, userId, userIp).then(() =>
+      retainSanctionIps(client, userId, [userIp]),
     );
   }
 
@@ -3519,23 +3490,9 @@ const persistPassiveRegenToDb = async ({
   return claim.success;
 };
 
-/**
- * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
- * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
- *
- * Both sides read this one list rather than re-deciding with a predicate: by the time `getUser`
- * runs, `fetchUpdatedUser` has rewritten the objectives on its own copy of these quests - trackers
- * write resolved coordinates back onto them, and location hiding rewrites them again - so a
- * predicate applied there and a predicate applied to the raw row can disagree, and a progress row
- * whose definition the catalogue withholds renders nothing at all.
- *
- * Inside a request scope the underlying read is memoized, so a caller that has already gone
- * through `fetchUpdatedUser` pays nothing for this.
- */
+/** The achievements `quests.getAchievementCatalogue` publishes; see `publishedAchievementsOf`. */
 export const fetchPublishedAchievements = async (client: DrizzleClient) =>
-  (await fetchAchievementCatalogue(client)).filter(
-    (achievement) => !questHasOverworldObjectives(achievement),
-  );
+  publishedAchievementsOf(await fetchAchievementCatalogue(client));
 
 /** A user's progress on one quest, without the static definition it belongs to. */
 export type AchievementProgress = Omit<UserQuest, "quest">;
@@ -3571,36 +3528,6 @@ export const fetchQuestBootstrap = (client: DrizzleClient, userId: string) =>
  * leaving a filter out can only let a call through that would have been skipped, never the
  * reverse. A `true` still goes to insertNextQuest, which remains the authority.
  */
-
-/**
- * Move a user's achievement rows out of `user.userQuests` and return them without their `quest`.
- *
- * Achievements are global static content: every player is handed the same definitions, and
- * `mockAchievementHistoryEntries` attaches the whole `Quest` row - every objective with its
- * description, scene assets and reward spec - to a progress row that is otherwise a handful of
- * counters. Sending that from `profile.getUser` re-serialised, re-transferred and re-parsed tens
- * of kilobytes of unchanging catalogue JSON on every page load. The client joins the returned
- * progress against `quests.getAchievementCatalogue`, which it holds for the session.
- *
- * A row moves exactly when `published` carries its definition, which makes the two halves a
- * partition by construction: nothing is sent twice, and nothing is stranded as a progress row the
- * client cannot resolve. Everything else - a hidden achievement, one the overworld still needs,
- * an orphaned row whose quest was deleted - stays on the user object untouched.
- */
-export const splitAchievementProgress = (
-  user: NonNullable<UserWithRelations>,
-  published: Quest[],
-) => {
-  const publishedIds = new Set(published.map((achievement) => achievement.id));
-  const progress: AchievementProgress[] = [];
-  user.userQuests = user.userQuests.filter((userQuest) => {
-    if (!publishedIds.has(userQuest.questId)) return true;
-    const { quest: _definition, ...rest } = userQuest;
-    progress.push(rest);
-    return false;
-  });
-  return progress;
-};
 
 /**
  * Scale an edited AI row to its level before it is saved. Changed combat stats are the

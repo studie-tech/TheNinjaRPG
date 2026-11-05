@@ -55,20 +55,7 @@ their conditional editors are hidden. This preserves dirty tracking and validati
 when clearing targeting drafts; see `tests/hooks/coordinate-targeting.test.tsx`.
 
 The [dev-server skill](.agents/skills/tnr-dev-server/SKILL.md) documents disposable users,
-authenticated endpoint calls and Chrome coordination. For parallel tests with different
-accounts, use Chrome DevTools MCP with `--isolated` and a unique named `isolatedContext`
-per worktree/chat/actor. Its temporary profiles and contexts keep login cookies separate;
-the [isolation guide](.agents/skills/tnr-dev-server/references/chrome-isolation.md) covers
-setup, page ownership and cleanup.
-
-The personal Chrome extension remains available for workflows using its existing
-signed-in account. Never sign disposable users into that profile or switch its account
-for local testing: tabs, windows and ports share cookies. If isolated Chrome is
-unavailable, continue authenticated API and server checks until its connection is ready.
-
-In [Codex local environments](https://developers.openai.com/codex/app/local-environments/),
-configure `make dev-prepare` as the worktree setup script and `make start` as the Run
-action. Preparation does not start a server or run migrations/seeds.
+authenticated endpoint calls, Chrome coordination and Codex local environments.
 
 ## Game and welcome layouts
 
@@ -98,11 +85,7 @@ The following videos on youtube are recommended to get a quick introduction to t
 
 # :bookmark: Local Development Guide
 
-Various `make` commands are available; type `make help` at the root directory for list of available commands. Most importantly:
-
-- Use `make bun add [package]` if you need to add some package
-- Use `make build` to build the project
-- Use `make makemigrations` to create migrations file for new database changes
+Type `make help` at the root directory for the list of available commands, and read [CONTRIBUTING.md](CONTRIBUTING.md) for the code conventions.
 
 # :lock: Licensing
 

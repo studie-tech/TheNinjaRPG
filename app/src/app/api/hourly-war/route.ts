@@ -7,24 +7,17 @@ import {
   WAR_MAX_DURATION_DAYS,
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
-import { resolveElderVote } from "@/libs/elder";
+import { resolveElderVote, tallyElderVotes } from "@/libs/elder";
 import {
-  getGameSetting,
-  handleEndpointError,
+  lockWithDailyTimer,
   lockWithHourlyTimer,
-  updateGameSetting,
+  runClaimedCron,
 } from "@/libs/gamesettings";
-import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import {
   fetchExpiredElderVotes,
   listVillageForProcessExpiredElderVotes,
   selectUserDataForProcessExpiredElderVotes,
-  updateVillageElderVoteForRejectWithNotification,
 } from "@/queries/elder";
-import {
-  incrementNotificationCounters,
-  insertNotificationForSubmitNotification,
-} from "@/queries/misc";
 import { updateVillageStructureForClearExpiredStructureBonuses } from "@/queries/village";
 import {
   approvePendingWarDeclaration,
@@ -46,8 +39,10 @@ import { settleObjectiveWarSchedule, syncWarCamps } from "@/server/utils/objecti
 import {
   applyRaidHealthDecay,
   handleWarEnd,
+  rejectWarDeclaration,
   resumePendingWarSettlements,
-  startApprovedVoteWar,
+  startClaimedWarDeclaration,
+  warDeclarationRejectedMessage,
 } from "@/server/utils/war";
 
 const ENDPOINT_NAME = "hourly-war";
@@ -59,9 +54,8 @@ export async function GET(request: Request) {
 
   // Check hourly timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewHour && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/hourly-war", async () => {
     const now = new Date();
     await syncStrongholdMembership(drizzleDB);
     // Replay due camp results and daily drains before settlement chooses a winner.
@@ -79,162 +73,19 @@ export async function GET(request: Request) {
     await syncWarCamps(drizzleDB, objectiveWars, now);
     await expireWarPoints(drizzleDB);
 
-    // Check if daily decay should run (separate from hourly tasks)
-    const dailyDecayTimer = await getGameSetting(drizzleDB, DAILY_DECAY_TIMER);
-    const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const prevUTC = Date.UTC(
-      dailyDecayTimer.time.getUTCFullYear(),
-      dailyDecayTimer.time.getUTCMonth(),
-      dailyDecayTimer.time.getUTCDate(),
-    );
-    const shouldRunDailyDecay = nowUTC !== prevUTC;
-
     await resumePendingWarSettlements(drizzleDB);
 
     // =============================================
     // DAILY TASK: Token decay and war health drain
     // =============================================
-    if (shouldRunDailyDecay) {
-      // fetchActiveWars is expensive (loads village structures); only fetch when needed
-      const activeWars = await fetchActiveWars(drizzleDB);
-      // Ordinary village wars drain treasury tokens; raid HP decay runs separately.
-      const decayWars = activeWars.filter((w) => w.type === "VILLAGE_WAR" && !w.rules);
-
-      for (const activeWar of decayWars) {
-        if (!activeWar.attackerVillage || !activeWar.defenderVillage) {
-          console.error("War found with missing village data:", activeWar.id);
-          continue;
-        }
-
-        const { startedAt, lastTokenReductionAt } = activeWar;
-
-        // Calculate time since last reduction
-        const hoursSinceLastReduction = lastTokenReductionAt
-          ? (now.getTime() - lastTokenReductionAt.getTime()) / (1000 * 60 * 60)
-          : WAR_TOKEN_REDUCTION_INTERVAL_HOURS;
-
-        // Only process if enough time has passed
-        if (hoursSinceLastReduction < WAR_TOKEN_REDUCTION_INTERVAL_HOURS) {
-          continue;
-        }
-
-        // Calculate number of reductions to apply
-        const reductionsToApply = Math.floor(
-          hoursSinceLastReduction / WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
-        );
-
-        // Calculate war duration in days
-        const warDuration = Math.floor(
-          (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24),
-        );
-
-        // Check if war has exceeded max duration (14 days) - auto-resolve
-        if (warDuration >= WAR_MAX_DURATION_DAYS) {
-          await handleWarEnd(activeWar, drizzleDB, { resolveByHealth: true });
-          continue;
-        }
-
-        // Calculate decay percentage based on war duration
-        // Day 1-4: 3%, Day 5-7: 6%, Day 8+: 10%
-        let decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_BASE;
-        if (warDuration >= 8) {
-          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8;
-        } else if (warDuration >= 5) {
-          decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5;
-        }
-
-        // Calculate token reduction as percentage of current tokens
-        // Apply multiple reductions if needed (but percentage is recalculated each time)
-        const attackerTokensBefore = activeWar.attackerVillage.tokens;
-        const defenderTokensBefore = activeWar.defenderVillage.tokens;
-        for (let i = 0; i < reductionsToApply; i++) {
-          const attackerReduction = Math.floor(
-            activeWar.attackerVillage.tokens * (decayPercent / 100),
-          );
-          const defenderReduction = Math.floor(
-            activeWar.defenderVillage.tokens * (decayPercent / 100),
-          );
-
-          activeWar.attackerVillage.tokens -= attackerReduction;
-          activeWar.defenderVillage.tokens -= defenderReduction;
-        }
-
-        // Ensure tokens don't go negative
-        activeWar.attackerVillage.tokens = Math.max(
-          0,
-          activeWar.attackerVillage.tokens,
-        );
-        activeWar.defenderVillage.tokens = Math.max(
-          0,
-          activeWar.defenderVillage.tokens,
-        );
-
-        // Apply the decay as decrements so token changes since the fetch are kept
-        const decayVillageTokens = () =>
-          Promise.all([
-            updateWarVillageTokens(
-              drizzleDB,
-              attackerTokensBefore - activeWar.attackerVillage.tokens,
-              activeWar.attackerVillage.id,
-            ),
-            updateWarVillageTokens(
-              drizzleDB,
-              defenderTokensBefore - activeWar.defenderVillage.tokens,
-              activeWar.defenderVillage.id,
-            ),
-          ]);
-
-        // Calculate war health drain (applied to both sides each reduction interval)
-        const totalHealthDrain = WAR_DAILY_HEALTH_DRAIN * reductionsToApply;
-
-        // Handle war end - check tokens OR war health reaching 0
-        // We need to check current war health minus the drain we're about to apply
-        const attackerHealthAfterDrain = activeWar.attackerWarHealth - totalHealthDrain;
-        const defenderHealthAfterDrain = activeWar.defenderWarHealth - totalHealthDrain;
-
-        if (
-          activeWar.attackerVillage.tokens <= 0 ||
-          activeWar.defenderVillage.tokens <= 0 ||
-          attackerHealthAfterDrain <= 0 ||
-          defenderHealthAfterDrain <= 0
-        ) {
-          // Apply the health drain before ending war so handleWarEnd sees accurate values
-          const result = await updateWarForGET(drizzleDB, totalHealthDrain, activeWar);
-
-          // Only proceed if the war update actually modified a row (guarded update)
-          if (result.rowsAffected > 0) {
-            await decayVillageTokens();
-
-            // Build updated war object with drained health values to avoid an extra DB roundtrip
-            const warWithDrain: FetchActiveWarsReturnType = {
-              ...activeWar,
-              attackerWarHealth: Math.max(
-                activeWar.attackerWarHealth - totalHealthDrain,
-                0,
-              ),
-              defenderWarHealth: Math.max(
-                activeWar.defenderWarHealth - totalHealthDrain,
-                0,
-              ),
-            };
-            await handleWarEnd(warWithDrain);
-          }
-          continue;
-        }
-
-        // Update token counts, war health drain, and last reduction time
-        const result = await updateWarForGET2(
-          drizzleDB,
-          now,
-          totalHealthDrain,
-          activeWar,
-        );
-
-        if (result.rowsAffected > 0) await decayVillageTokens();
+    const dailyDecayTimer = await lockWithDailyTimer(drizzleDB, DAILY_DECAY_TIMER);
+    if (dailyDecayTimer.isNewDay) {
+      try {
+        await applyDailyWarDecay(now);
+      } catch (cause) {
+        await dailyDecayTimer.release();
+        throw cause;
       }
-
-      // Update daily decay timer
-      await updateGameSetting(drizzleDB, DAILY_DECAY_TIMER, 0, now);
     }
 
     // =============================================
@@ -246,10 +97,136 @@ export async function GET(request: Request) {
     await clearExpiredStructureBonuses(now);
 
     return new Response("War hourly update completed", { status: 200 });
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
+  });
+}
+
+/** Daily task: token decay on ordinary wars, with health drain following from it. */
+async function applyDailyWarDecay(now: Date) {
+  // fetchActiveWars is expensive (loads village structures); only fetch when needed
+  const activeWars = await fetchActiveWars(drizzleDB);
+  // Ordinary village wars drain treasury tokens; raid HP decay runs separately.
+  const decayWars = activeWars.filter((w) => w.type === "VILLAGE_WAR" && !w.rules);
+
+  for (const activeWar of decayWars) {
+    if (!activeWar.attackerVillage || !activeWar.defenderVillage) {
+      console.error("War found with missing village data:", activeWar.id);
+      continue;
+    }
+
+    const { startedAt, lastTokenReductionAt } = activeWar;
+
+    // Calculate time since last reduction
+    const hoursSinceLastReduction = lastTokenReductionAt
+      ? (now.getTime() - lastTokenReductionAt.getTime()) / (1000 * 60 * 60)
+      : WAR_TOKEN_REDUCTION_INTERVAL_HOURS;
+
+    // Only process if enough time has passed
+    if (hoursSinceLastReduction < WAR_TOKEN_REDUCTION_INTERVAL_HOURS) {
+      continue;
+    }
+
+    // Calculate number of reductions to apply
+    const reductionsToApply = Math.floor(
+      hoursSinceLastReduction / WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
+    );
+
+    // Calculate war duration in days
+    const warDuration = Math.floor(
+      (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    // Check if war has exceeded max duration (14 days) - auto-resolve
+    if (warDuration >= WAR_MAX_DURATION_DAYS) {
+      await handleWarEnd(activeWar, drizzleDB, { resolveByHealth: true });
+      continue;
+    }
+
+    // Calculate decay percentage based on war duration
+    // Day 1-4: 3%, Day 5-7: 6%, Day 8+: 10%
+    let decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_BASE;
+    if (warDuration >= 8) {
+      decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8;
+    } else if (warDuration >= 5) {
+      decayPercent = WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5;
+    }
+
+    // Calculate token reduction as percentage of current tokens
+    // Apply multiple reductions if needed (but percentage is recalculated each time)
+    const attackerTokensBefore = activeWar.attackerVillage.tokens;
+    const defenderTokensBefore = activeWar.defenderVillage.tokens;
+    for (let i = 0; i < reductionsToApply; i++) {
+      const attackerReduction = Math.floor(
+        activeWar.attackerVillage.tokens * (decayPercent / 100),
+      );
+      const defenderReduction = Math.floor(
+        activeWar.defenderVillage.tokens * (decayPercent / 100),
+      );
+
+      activeWar.attackerVillage.tokens -= attackerReduction;
+      activeWar.defenderVillage.tokens -= defenderReduction;
+    }
+
+    // Ensure tokens don't go negative
+    activeWar.attackerVillage.tokens = Math.max(0, activeWar.attackerVillage.tokens);
+    activeWar.defenderVillage.tokens = Math.max(0, activeWar.defenderVillage.tokens);
+
+    // Apply the decay as decrements so token changes since the fetch are kept
+    const decayVillageTokens = () =>
+      Promise.all([
+        updateWarVillageTokens(
+          drizzleDB,
+          attackerTokensBefore - activeWar.attackerVillage.tokens,
+          activeWar.attackerVillage.id,
+        ),
+        updateWarVillageTokens(
+          drizzleDB,
+          defenderTokensBefore - activeWar.defenderVillage.tokens,
+          activeWar.defenderVillage.id,
+        ),
+      ]);
+
+    // Calculate war health drain (applied to both sides each reduction interval)
+    const totalHealthDrain = WAR_DAILY_HEALTH_DRAIN * reductionsToApply;
+
+    // Handle war end - check tokens OR war health reaching 0
+    // We need to check current war health minus the drain we're about to apply
+    const attackerHealthAfterDrain = activeWar.attackerWarHealth - totalHealthDrain;
+    const defenderHealthAfterDrain = activeWar.defenderWarHealth - totalHealthDrain;
+
+    if (
+      activeWar.attackerVillage.tokens <= 0 ||
+      activeWar.defenderVillage.tokens <= 0 ||
+      attackerHealthAfterDrain <= 0 ||
+      defenderHealthAfterDrain <= 0
+    ) {
+      // Apply the health drain before ending war so handleWarEnd sees accurate values
+      const result = await updateWarForGET(drizzleDB, totalHealthDrain, activeWar);
+
+      // Only proceed if the war update actually modified a row (guarded update)
+      if (result.rowsAffected > 0) {
+        await decayVillageTokens();
+
+        // Build updated war object with drained health values to avoid an extra DB roundtrip
+        const warWithDrain: FetchActiveWarsReturnType = {
+          ...activeWar,
+          attackerWarHealth: Math.max(
+            activeWar.attackerWarHealth - totalHealthDrain,
+            0,
+          ),
+          defenderWarHealth: Math.max(
+            activeWar.defenderWarHealth - totalHealthDrain,
+            0,
+          ),
+        };
+        await handleWarEnd(warWithDrain);
+      }
+      continue;
+    }
+
+    // Update token counts, war health drain, and last reduction time
+    const result = await updateWarForGET2(drizzleDB, now, totalHealthDrain, activeWar);
+
+    if (result.rowsAffected > 0) await decayVillageTokens();
   }
 }
 
@@ -294,9 +271,8 @@ async function processExpiredElderVotes() {
       const elderCount = villageElderIds.filter(
         (userId) => userId !== vote.initiatedByUserId,
       ).length;
-      const yesCount = vote.entries.filter((e) => e.vote === "YES").length;
-      const noCount = vote.entries.filter((e) => e.vote === "NO").length;
-      const outcome = resolveElderVote(yesCount, noCount, elderCount, true, true);
+      const { yes, no } = tallyElderVotes(vote.entries);
+      const outcome = resolveElderVote(yes, no, elderCount, true, true);
       promises.push(
         handleExpiredWarDeclaration(
           vote,
@@ -336,28 +312,22 @@ async function handleExpiredWarDeclaration(
   const attackerVillage = villagesById.get(vote.villageId);
   const defenderName = defenderVillage?.name ?? "another village";
 
-  const rejectWithNotification = async (content: string) => {
-    await Promise.all([
-      updateVillageElderVoteForRejectWithNotification(drizzleDB, vote),
-      insertNotificationForSubmitNotification(
-        drizzleDB,
-        { userId: vote.initiatedByUserId },
-        { content },
-      ),
-      incrementNotificationCounters(drizzleDB, [vote.initiatedByUserId]),
-    ]);
-  };
-
   if (outcome === "REJECTED") {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was rejected by the elders.`,
+    await rejectWarDeclaration(
+      drizzleDB,
+      vote,
+      warDeclarationRejectedMessage(defenderVillage?.name),
+      "PENDING",
     );
     return;
   }
 
   if (elderCount < ELDER_MIN_VOTING_COUNT) {
-    await rejectWithNotification(
+    await rejectWarDeclaration(
+      drizzleDB,
+      vote,
       `War declaration against ${defenderName} was cancelled — not enough elders in position.`,
+      "PENDING",
     );
     return;
   }
@@ -366,45 +336,11 @@ async function handleExpiredWarDeclaration(
   const warClaimResult = await approvePendingWarDeclaration(drizzleDB, vote.id);
   if (warClaimResult.rowsAffected === 0) return;
 
-  if (!attackerVillage) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — village no longer has enough tokens.`,
-    );
-    return;
-  }
-
-  // Use pre-fetched active wars for involvement check
-  if (
-    isVillageInvolvedInAnyWar(activeWars, vote.villageId, undefined, [
-      "VILLAGE_WAR",
-      "WAR_RAID",
-    ]) ||
-    isVillageInvolvedInAnyWar(activeWars, vote.targetId, undefined, [
-      "VILLAGE_WAR",
-      "WAR_RAID",
-    ])
-  ) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — a village is already involved in an active war.`,
-    );
-    return;
-  }
-
-  const started = await startApprovedVoteWar(drizzleDB, vote.id, {
-    attackerVillageId: vote.villageId,
-    attackerVillageName: attackerVillage.name,
-    defenderVillageId: vote.targetId,
-    defenderVillageName: defenderName,
-    defenderKageId: defenderVillage?.kageId,
-    initiatedByUserId: vote.initiatedByUserId,
-    warType: vote.warType ?? "VILLAGE_WAR",
-    targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+  await startClaimedWarDeclaration(drizzleDB, vote, {
+    attackerVillage,
+    defenderVillage,
+    activeWars,
   });
-  if (!started) {
-    await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
-    );
-  }
 }
 
 /**

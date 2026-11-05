@@ -120,8 +120,9 @@ return 403 and leave Clerk loading forever. API requests are unaffected.
 
 If Chrome DevTools reports a contended `chrome-profile`, its connection is not using
 `--isolated`. Check the isolation guide and continue API/server work until the connection
-is configured and reloaded. Do not kill Chrome, delete profile locks, change browser
-security settings or switch browsers to bypass a blocked action.
+is configured and reloaded. Do not kill Chrome, delete profile locks, attach to other
+chats' debugging endpoints, enable insecure certificates, change browser security settings
+or switch browsers to bypass a blocked action.
 
 ## Recovery
 

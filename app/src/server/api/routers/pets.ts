@@ -13,6 +13,7 @@ import {
 } from "@/deltas/pets";
 import {
   CombatStatNames,
+  getCombatStatCap,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_COLLECTION_SLOT_COST,
@@ -33,7 +34,7 @@ import { type UserData, type UserPet, userData, userPet } from "@/drizzle/schema
 import { fetchPetArtProvider } from "@/libs/gamesettings";
 import {
   getPetAbilityCapacity,
-  isPetJutsuAllowed,
+  isPetJutsuAllowedForSpecies,
   isPetSkillAllowed,
   validatePetAbilities,
 } from "@/libs/pets/abilities";
@@ -86,7 +87,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { getPetDayKey, getPetFeedAvailableAt } from "@/utils/time";
+import { getPetFeedAvailableAt, getUtcDayKey } from "@/utils/time";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
@@ -244,19 +245,10 @@ export const petsRouter = createTRPCRouter({
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
         findUserItemForFeedPet(ctx.drizzle, input, ctx),
       ]);
-      const restriction = petMutationBlockMessage(user, pet);
-      if (restriction || !user || !pet)
-        return errorResponse(restriction ?? "Pet not found");
-      if (pet.rank > getMaxPetRank(user.rank))
-        return errorResponse("Your rank does not support this companion rank.");
-      if (!isPetAppearanceReady(pet))
-        return errorResponse("Finish your companion's appearance before feeding it.");
       const now = new Date();
-      const feedAvailableAt = getPetFeedAvailableAt(pet.lastFedAt);
-      if (feedAvailableAt && feedAvailableAt > now)
-        return errorResponse(
-          `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.`,
-        );
+      const feedBlock = petFeedBlockMessage(user, pet, now);
+      if (feedBlock || !user || !pet)
+        return errorResponse(feedBlock ?? "Pet not found");
       if (
         meal?.item?.itemType !== "MEAL" ||
         meal.storedAtHome ||
@@ -334,7 +326,7 @@ export const petsRouter = createTRPCRouter({
       ]);
       if (!user) throw serverError("NOT_FOUND", "User not found");
       const now = new Date();
-      const dayKey = getPetDayKey(now);
+      const dayKey = getUtcDayKey(now);
       const capacity = getPetCollectionCapacity(user);
       const federalStatus = getUserFederalStatus(user);
       const options = getDailyPetOptions(
@@ -368,11 +360,8 @@ export const petsRouter = createTRPCRouter({
         slotCost: PET_COLLECTION_SLOT_COST,
         slotSilverCost: PET_SEICHI_SILVER_COST,
         abilities: {
-          jutsus: abilities.jutsus.filter(
-            (entry) =>
-              isPetJutsuAllowed(entry) &&
-              (!entry.requiredPetSpeciesId ||
-                entry.requiredPetSpeciesId === pet?.speciesId),
+          jutsus: abilities.jutsus.filter((entry) =>
+            isPetJutsuAllowedForSpecies(entry, pet?.speciesId),
           ),
           skills: abilities.skills.filter(isPetSkillAllowed),
         },
@@ -387,13 +376,7 @@ export const petsRouter = createTRPCRouter({
             experience: PET_FEED_EXPERIENCE_BY_RARITY[meal.item.rarity],
           })),
         feedAvailableAt,
-        canFeed: Boolean(
-          pet &&
-            !feedAvailableAt &&
-            !petMutationBlockMessage(user, pet) &&
-            isPetAppearanceReady(pet) &&
-            pet.rank <= getMaxPetRank(user.rank),
-        ),
+        canFeed: !petFeedBlockMessage(user, pet, now),
         options,
         dayKey,
         optionCount: PET_OPTION_COUNTS[federalStatus],
@@ -442,7 +425,7 @@ export const petsRouter = createTRPCRouter({
         return errorResponse(
           "Unlock another collection slot or release a companion before adopting another.",
         );
-      const dayKey = getPetDayKey();
+      const dayKey = getUtcDayKey();
       if (input.dayKey !== dayKey)
         return errorResponse(
           "Today's companion choices changed. Refresh and choose again.",
@@ -704,7 +687,7 @@ export const petsRouter = createTRPCRouter({
         return errorResponse(
           "Finish your pet's appearance before assigning experience.",
         );
-      const { stats_cap, gens_cap } = getPetStatCaps(pet);
+      const caps = getPetStatCaps(pet);
       const gains = Object.fromEntries(
         CombatStatNames.map((stat) => [stat, Math.floor(input[stat])]),
       ) as Record<(typeof CombatStatNames)[number], number>;
@@ -719,7 +702,7 @@ export const petsRouter = createTRPCRouter({
         willpower: pet.willpower,
       };
       for (const stat of CombatStatNames) {
-        const cap = stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
+        const cap = getCombatStatCap(caps, stat);
         if (stats[stat] + gains[stat] > cap)
           return errorResponse("One or more companion stats exceed this rank's cap.");
         stats[stat] += gains[stat];
@@ -818,7 +801,7 @@ export const petsRouter = createTRPCRouter({
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
       const now = new Date();
-      const dayKey = getPetDayKey(now);
+      const dayKey = getUtcDayKey(now);
       if (hasActiveGeneration(pet, now))
         return errorResponse(
           "Your companion's appearance is already generating. Please wait.",
@@ -994,6 +977,24 @@ const petMutationBlockMessage = (
   if (user.isBanned) return "You are banned";
   if (user.status !== "AWAKE" || user.battleId)
     return "You must be awake and out of combat to change your companion.";
+  return null;
+};
+
+/** Why a companion cannot be fed right now, ahead of any meal checks. */
+const petFeedBlockMessage = (
+  user: UserData | undefined,
+  pet: UserPet | undefined,
+  now: Date,
+) => {
+  const restriction = petMutationBlockMessage(user, pet);
+  if (restriction || !user || !pet) return restriction ?? "Pet not found";
+  if (pet.rank > getMaxPetRank(user.rank))
+    return "Your rank does not support this companion rank.";
+  if (!isPetAppearanceReady(pet))
+    return "Finish your companion's appearance before feeding it.";
+  const feedAvailableAt = getPetFeedAvailableAt(pet.lastFedAt);
+  if (feedAvailableAt && feedAvailableAt > now)
+    return `Feed this companion once every ${PET_FEED_COOLDOWN_HOURS} hours. Wait until its next feeding is available.`;
   return null;
 };
 

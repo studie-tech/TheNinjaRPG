@@ -6,11 +6,16 @@ export const baseServerResponse = z.object({
 });
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 
-/** Optional integer prerequisite stored in SQL: blank, null and omitted values are ungated. */
-export const makeCappedNullableNumber = (max: number) =>
+/** Read the literal `type` that discriminates a tag, AI condition or AI action schema. */
+export const literalType = (schema: {
+  shape: { type: { unwrap(): { value: unknown } } };
+}) => schema.shape.type.unwrap().value as string;
+
+/** Optional integer stored in SQL: blank, null and omitted values all become null. */
+export const makeCappedNullableNumber = (max: number, min = 0) =>
   z.preprocess(
     (value) => (value === "" || value === null || value === undefined ? null : value),
-    z.coerce.number().int().min(0).max(max).nullable(),
+    z.coerce.number().int().min(min).max(max).nullable(),
   );
 
 /**

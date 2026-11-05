@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { appRouter, CDN_CACHED_QUERY_PATHS } from "@/api/root";
 import { createCdnTRPCContext } from "@/server/api/trpc";
 import { withRequestScope } from "@/server/requestScope";
+import { trpcPathsFromUrl } from "@/server/utils/botid";
 import { flushSafe, logError } from "@/server/utils/sentry";
 
 export const runtime = "nodejs";
@@ -24,10 +25,11 @@ const cdnCachedQueries = new Set(CDN_CACHED_QUERY_PATHS);
  */
 const handler = async (req: NextRequest) => {
   const readHeaders = await headers();
-  const requested = decodeRequested(
-    new URL(req.url).pathname.replace(/^\/api\/trpc\/cdn\//, ""),
-  );
-  if (!requested?.every((path) => cdnCachedQueries.has(path))) {
+  const requested = trpcPathsFromUrl(req.url, "/api/trpc/cdn");
+  if (
+    requested.length === 0 ||
+    !requested.every((path) => cdnCachedQueries.has(path))
+  ) {
     return new Response("Not found", {
       status: 404,
       headers: { "cache-control": "no-store" },
@@ -75,15 +77,3 @@ const handler = async (req: NextRequest) => {
 };
 
 export { handler as GET };
-
-/**
- * Next rejects a malformed escape before routing, so this is belt-and-braces: an
- * undecodable path is unknown, which the caller answers the same way as an unlisted one.
- */
-const decodeRequested = (path: string) => {
-  try {
-    return decodeURIComponent(path).split(",");
-  } catch {
-    return null;
-  }
-};

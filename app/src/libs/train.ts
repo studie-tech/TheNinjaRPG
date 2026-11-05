@@ -11,12 +11,12 @@ import type {
 import {
   BasicElementName,
   CombatStatNames,
-  DURABILITY_USABILITY_THR,
   ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER,
   ElementNames,
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  getCombatStatCap,
   getUserCaps,
   ITEM_XP_BATTLE_TYPES,
   ITEM_XP_ON_LOSS,
@@ -27,6 +27,7 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryQueueKinds,
+  RankedBattleTypes,
   REGEN_SECONDS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
@@ -48,11 +49,15 @@ import type {
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { elementalGainRoom } from "@/libs/elementalMastery";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
-import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  applyGameSettingMultiplier,
+  getGameSettingBoost,
+} from "@/libs/gameSettingBoost";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import {
   effectiveMasteries,
   hasMasteryRequirements,
+  hasUsableDurability,
   missingMasteryRequirement,
 } from "@/libs/mastery";
 import { masteryGainRoom } from "@/libs/masteryProgression";
@@ -292,7 +297,7 @@ export const checkJutsuBloodlineItem = (
       ui.item.itemType === "ACCESSORY" ||
       ui.item.itemType === "KEYSTONE"
     ) {
-      return Math.min(ui.durability, ui.item.maxDurability) > DURABILITY_USABILITY_THR;
+      return hasUsableDurability(ui, ui.item);
     }
     return true;
   });
@@ -461,7 +466,7 @@ export const battleJutsuGateFailure = (
     return `${jutsu.name}: activate the required skill`;
   }
   // Ranked battles waive weapon and usability requirements, but not bloodline gates.
-  if (battleType !== "RANKED_PVP" && battleType !== "RANKED_SPARRING") {
+  if (!RankedBattleTypes.includes(battleType)) {
     if (!checkJutsuItems(jutsu, user.items)) {
       return `${jutsu.name}: no ${jutsu.jutsuWeapon.toLowerCase()} weapon equipped`;
     }
@@ -820,10 +825,10 @@ export const battleJutsuExp = (
 
   // Apply battle arena exp multiplier if available
   if (battleType === "ARENA" || battleType === "COMBAT") {
-    baseExp = applyExpMultiplierSetting(baseExp, "battleExpMultiplier", settings);
+    baseExp = applyGameSettingMultiplier(baseExp, "battleExpMultiplier", settings);
   }
   // Apply jutsu exp multiplier if available
-  baseExp = applyExpMultiplierSetting(baseExp, "jutsuExpMultiplier", settings);
+  baseExp = applyGameSettingMultiplier(baseExp, "jutsuExpMultiplier", settings);
 
   return Math.floor(baseExp);
 };
@@ -838,15 +843,8 @@ export const battleItemExp = (
     return 0;
   }
   const baseExp = didWin ? ITEM_XP_ON_WIN : ITEM_XP_ON_LOSS;
-  return Math.floor(applyExpMultiplierSetting(baseExp, "itemExpMultiplier", settings));
+  return Math.floor(applyGameSettingMultiplier(baseExp, "itemExpMultiplier", settings));
 };
-
-/** Multiply exp by an active gain-multiplier game setting. */
-const applyExpMultiplierSetting = (
-  baseExp: number,
-  settingName: string,
-  settings?: GameSetting[],
-): number => baseExp * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);
 
 type StatTrainingUser = UserStatData &
   Pick<
@@ -914,10 +912,7 @@ export const isStatTrainingCapped = (
   user: UserStatData & Pick<UserData, "rank">,
   stat: CombatStatName,
 ) => {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return (
-    user[stat] >= (stat === "offence" || stat === "defence" ? stats_cap : gens_cap)
-  );
+  return user[stat] >= getCombatStatCap(getUserCaps(user.rank), stat);
 };
 
 /** Offer training only when the player can start and at least one combat stat can gain. */
@@ -1032,6 +1027,16 @@ export const applyMasteryTrainingGains = (
  * `territoryBoost` is an additive fraction; timed sessions override the instantaneous
  * default with their period average, while Energy spending uses its actual tick.
  */
+/** Stat points one Energy buys at `at`, shared by instant and queued training. */
+export const statsPerEnergy = (
+  user: NonNullable<UserWithRelations>,
+  settings: GameSetting[],
+  at = new Date(),
+) =>
+  STATS_PER_ENERGY *
+  trainingBoost(user, settings, "STATS", at) *
+  getTrainingMultiplierBoost(user);
+
 export const trainingBoost = (
   user: NonNullable<UserWithRelations>,
   settings: GameSetting[],
@@ -1245,25 +1250,17 @@ export const settleEnergyTrainingQueue = (
     .filter((tick) => tick > 0 && tick <= ticks)
     .sort((a, b) => a - b);
   const rateAtTick = (tick: number) =>
-    STATS_PER_ENERGY *
-    trainingBoost(
-      user,
-      settings,
-      "STATS",
-      new Date(regenAt + tick * REGEN_SECONDS * 1000),
-    ) *
-    getTrainingMultiplierBoost(user);
+    statsPerEnergy(user, settings, new Date(regenAt + tick * REGEN_SECONDS * 1000));
   let rate = rateAtTick(0);
   // Sleeping is permitted for a previously authorized queue; all other training guards apply.
   const canTrain = !statTrainingBlockMessage({
     ...user,
     status: user.status === "ASLEEP" ? "AWAKE" : user.status,
   });
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  const caps = getUserCaps(user.rank);
   while (canTrain && entries.length > 0 && rate > 0) {
     const entry = entries[0]!;
-    const cap =
-      entry.stat === "offence" || entry.stat === "defence" ? stats_cap : gens_cap;
+    const cap = getCombatStatCap(caps, entry.stat);
     const room = Math.max(0, cap - user[entry.stat] - (gains[entry.stat] ?? 0));
     if (room === 0) {
       entries.shift();

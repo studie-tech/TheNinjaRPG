@@ -26,7 +26,7 @@ import {
 } from "@/drizzle/schema";
 import {
   filterRollableBloodlines,
-  getFreeBloodlineSwaps,
+  getBloodlineSwapAllowance,
   getPityRolls,
 } from "@/libs/bloodline";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
@@ -111,15 +111,11 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
-import { getUserFederalStatus } from "@/utils/paypal";
-import {
-  canChangeContent,
-  canRemoveBloodlineFromPool,
-  isStaffMember,
-} from "@/utils/permissions";
+import { canChangeContent, canRemoveBloodlineFromPool } from "@/utils/permissions";
 import {
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
@@ -158,8 +154,7 @@ export const bloodlineRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Build where conditions using the abstracted filter function
       const baseFilters = bloodlineDatabaseFilter(input);
@@ -170,7 +165,7 @@ export const bloodlineRouter = createTRPCRouter({
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -246,12 +241,10 @@ export const bloodlineRouter = createTRPCRouter({
           recentSwaps: [],
         };
       // Derived
-      const federalStatus = getUserFederalStatus(user);
-      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
-      const freeSwapsUsed = recentSwaps.length;
-      const rawRemaining = freeSwaps - freeSwapsUsed;
-      const freeSwapsRemaining = Math.max(0, rawRemaining);
-      const isFree = freeSwapsRemaining > 0 || isStaffMember(user);
+      const { isFree, freeSwapsUsed, freeSwapsRemaining } = getBloodlineSwapAllowance(
+        user,
+        recentSwaps.length,
+      );
       // Return
       return { isFree, freeSwapsUsed, freeSwapsRemaining, recentSwaps };
     }),
@@ -286,12 +279,12 @@ export const bloodlineRouter = createTRPCRouter({
       }
 
       // Check for free swap eligibility
-      const federalStatus = getUserFederalStatus(user);
-      const freeSwaps = getFreeBloodlineSwaps(federalStatus);
-      const freeSwapsUsed = monthlySwaps.length;
-      const hasFreeSwapAvailable = freeSwapsUsed < freeSwaps;
-      const isStaffFreeSwap = isStaffMember(user);
-      const isFreeSwap = hasFreeSwapAvailable || isStaffFreeSwap;
+      const {
+        federalStatus,
+        hasFreeSwapAvailable,
+        isFree: isFreeSwap,
+        isStaffFree: isStaffFreeSwap,
+      } = getBloodlineSwapAllowance(user, monthlySwaps.length);
 
       if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
@@ -541,8 +534,7 @@ export const bloodlineRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const baseFilters = bloodlineDatabaseFilter(input);
       const rows = await selectBloodlineReskinForGetAllReskins(
         ctx.drizzle,
@@ -555,7 +547,7 @@ export const bloodlineRouter = createTRPCRouter({
         userUsername: row.userUsername,
         bloodline: row.base,
       }));
-      const nextCursor = rows.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(rows);
       return { data: results, nextCursor };
     }),
   // Delete a bloodline
@@ -643,9 +635,7 @@ export const bloodlineRouter = createTRPCRouter({
             editedReason("BLOODLINE", entry.name, user.username),
           ),
         ]);
-        if (process.env.NODE_ENV !== "development") {
-          await callDiscordContent(user.username, entry.name, diff, entry.image);
-        }
+        await callDiscordContent(user.username, entry.name, diff, entry.image);
         return { success: true, message: `Data updated: ${diff.join(". ")}` };
       } else {
         return { success: false, message: `Not allowed to edit bloodline` };

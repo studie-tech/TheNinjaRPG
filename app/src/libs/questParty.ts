@@ -1,5 +1,35 @@
 import type { Quest, QuestParty } from "@/drizzle/schema";
+import { isInArray } from "@/utils/array";
 import type { ObjectiveTrackerType, QuestTrackerType } from "@/validators/objectives";
+import { PassiveSnapshotTasks } from "@/validators/objectives";
+
+const PARTY_CLAIM_PREFIX = "claiming:";
+
+/** How long a party battle reservation blocks others before synchronization may release it. */
+export const PARTY_CLAIM_TTL_MS = 60_000;
+
+/**
+ * Party `battleId` placeholder `claiming:<epochMs>:<suffix>`, held while a battle or a departure
+ * is being settled. The suffix is the reserved battle's id, or a nonce matching no battle.
+ */
+export const createPartyClaimId = (suffix: string) =>
+  `${PARTY_CLAIM_PREFIX}${Date.now()}:${suffix}`;
+
+/** Decode a reservation; a real battle id or an empty slot yields null. */
+export const parsePartyClaim = (battleId: string | null | undefined) => {
+  if (!battleId?.startsWith(PARTY_CLAIM_PREFIX)) return null;
+  const [, issuedAt, reservedBattleId] = battleId.split(":");
+  return { issuedAt: Number(issuedAt), reservedBattleId };
+};
+
+/** Id of the in-memory active row standing in for a completed helper's finished attempt. */
+export const questPartyHelperAttemptId = (partyId: string | null) => `party-${partyId}`;
+
+/** Whether an attempt row is that synthetic helper projection rather than a real attempt. */
+export const isQuestPartyHelperAttempt = (
+  attempt: { id: string } | undefined,
+  partyId: string | null,
+) => attempt?.id === questPartyHelperAttemptId(partyId);
 
 /** Record personal deltas in the outgoing trackers in place; copied team totals never contribute. */
 export const recordPartyContributions = (
@@ -78,29 +108,7 @@ export const mergePartyProgress = (
       const usesMaximum =
         objective &&
         (("singleBattle" in objective && objective.singleBattle) ||
-          [
-            "user_level",
-            "farming_level",
-            "farming_collection_log",
-            "bloodline_collection",
-            "days_in_village",
-            "days_as_kage",
-            "minutes_passed",
-            "reputation_points",
-            "errands_total",
-            "a_missions_total",
-            "b_missions_total",
-            "c_missions_total",
-            "d_missions_total",
-            "a_crimes_total",
-            "b_crimes_total",
-            "c_crimes_total",
-            "d_crimes_total",
-            "medical_experience",
-            "crafting_experience",
-            "hunting_experience",
-            "gathering_experience",
-          ].includes(objective.task));
+          isInArray(objective.task, PassiveSnapshotTasks));
       if (
         objective?.task === "damage_dealt" &&
         objective.singleBattle &&

@@ -19,11 +19,10 @@ import {
   findVillageForWithdrawDefense,
   insertKageDefendedChallengesForJoinDefenseQueue,
   listKageDefendedChallengesForStartDefense,
+  requeueKageDefendedChallenges,
   saveKageSchedule,
   updateKageDefendedChallengesForCheckInDefense,
-  updateKageDefendedChallengesForRescheduleDefense,
   updateKageDefendedChallengesForRescheduleDefense2,
-  updateKageDefendedChallengesForResetFailedLaunch,
 } from "@/queries/kageDefense";
 import { findUserById } from "@/queries/profile";
 
@@ -33,12 +32,15 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   assignKageMatches,
   getKageDefensePublic,
+  type KageDefenseHall,
   syncLockedKageDefense,
   withinKageChallengeLimits,
   withKageDefense,
+  withKageHall,
 } from "@/server/utils/kage";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getKageEligibility } from "@/utils/kage";
@@ -76,71 +78,67 @@ export const kageDefenseProcedures = {
     .input(kageScheduleSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return (
-        (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
-          if (hall.village.kageId !== ctx.userId)
-            return errorResponse("Only the current Kage can publish defense times");
-          // Reconcile first: an existing queue can acquire assignments that lock these windows.
-          if (!(await syncLockedKageDefense(tx, hall)))
-            return errorResponse("Leadership changed. Refresh the defense schedule.");
-          if (
-            hall.rows.some(({ match }) =>
-              ["SCHEDULED", "STARTING", "BATTLE"].includes(match.status),
-            )
+      return withKageHall(ctx.drizzle, input.villageId, async (tx, hall) => {
+        if (hall.village.kageId !== ctx.userId)
+          return errorResponse("Only the current Kage can publish defense times");
+        // Reconcile first: an existing queue can acquire assignments that lock these windows.
+        if (!(await syncLockedKageDefense(tx, hall)))
+          return errorResponse("Leadership changed. Refresh the defense schedule.");
+        if (
+          hall.rows.some(({ match }) =>
+            ["SCHEDULED", "STARTING", "BATTLE"].includes(match.status),
           )
-            return errorResponse(
-              "Assigned matches lock the schedule. Use the match reschedule action instead.",
-            );
-          hall.state.windows = input.windows;
-          hall.state.publishedAt = hall.now.toISOString();
-          await saveKageSchedule(tx, hall);
-          if (!hall.paused) await assignKageMatches(tx, hall);
-          return {
-            success: true,
-            message: "Defense schedule published in UTC game time",
-          };
-        })) ?? errorResponse("Village not found")
-      );
+        )
+          return errorResponse(
+            "Assigned matches lock the schedule. Use the match reschedule action instead.",
+          );
+        hall.state.windows = input.windows;
+        hall.state.publishedAt = hall.now.toISOString();
+        await saveKageSchedule(tx, hall);
+        if (!hall.paused) await assignKageMatches(tx, hall);
+        return {
+          success: true,
+          message: "Defense schedule published in UTC game time",
+        };
+      });
     }),
   /** Admit one eligible challenger per active queue entry without reserving their character. */
   joinDefenseQueue: protectedProcedure
     .input(kageJoinSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      return (
-        (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
-          const user = await findUserById(tx, ctx.userId);
-          if (!user) return errorResponse("Character not found");
-          if (hall.rows.some((r) => r.match.userId === ctx.userId))
-            return errorResponse("You already have an active queue entry");
-          const reason = getKageEligibility(user, input.villageId);
-          if (reason) return errorResponse(reason);
-          if (hall.village.kageId === ctx.userId)
-            return errorResponse("The Kage cannot challenge themselves");
-          if (!hall.village.kageId)
-            return errorResponse("The village is awaiting a new Kage");
-          if (!(await syncLockedKageDefense(tx, hall)))
-            return errorResponse("Leadership changed. Refresh the defense schedule.");
-          const result = await insertKageDefendedChallengesForJoinDefenseQueue(
-            tx,
-            input,
-            ctx,
-            hall,
-          ).catch((error: unknown) => {
-            if (isMysqlDuplicateKeyError(error)) return null;
-            throw error;
-          });
-          if (!result?.rowsAffected)
-            return errorResponse("You already have an active queue entry");
-          // Assignment uses the newly inserted row on the next authoritative sync, without blocking play.
-          return {
-            success: true,
-            message: hall.paused
-              ? "Joined the queue. Match scheduling is paused for war."
-              : "Joined the Kage defense queue",
-          };
-        })) ?? errorResponse("Village not found")
-      );
+      return withKageHall(ctx.drizzle, input.villageId, async (tx, hall) => {
+        const user = await findUserById(tx, ctx.userId);
+        if (!user) return errorResponse("Character not found");
+        if (hall.rows.some((r) => r.match.userId === ctx.userId))
+          return errorResponse("You already have an active queue entry");
+        const reason = getKageEligibility(user, input.villageId);
+        if (reason) return errorResponse(reason);
+        if (hall.village.kageId === ctx.userId)
+          return errorResponse("The Kage cannot challenge themselves");
+        if (!hall.village.kageId)
+          return errorResponse("The village is awaiting a new Kage");
+        if (!(await syncLockedKageDefense(tx, hall)))
+          return errorResponse("Leadership changed. Refresh the defense schedule.");
+        const result = await insertKageDefendedChallengesForJoinDefenseQueue(
+          tx,
+          input,
+          ctx,
+          hall,
+        ).catch((error: unknown) => {
+          if (isMysqlDuplicateKeyError(error)) return null;
+          throw error;
+        });
+        if (!result?.rowsAffected)
+          return errorResponse("You already have an active queue entry");
+        // Assignment uses the newly inserted row on the next authoritative sync, without blocking play.
+        return {
+          success: true,
+          message: hall.paused
+            ? "Joined the queue. Match scheduling is paused for war."
+            : "Joined the Kage defense queue",
+        };
+      });
     }),
   /** Cancel the caller's waiting entry atomically against schedule assignment and battle launch. */
   withdrawDefense: protectedProcedure
@@ -177,43 +175,35 @@ export const kageDefenseProcedures = {
         input,
       );
       if (!match) return errorResponse("Match not found");
-      return (
-        (await withKageDefense(ctx.drizzle, match.villageId, async (tx, hall) => {
-          if (!(await syncLockedKageDefense(tx, hall)))
-            return errorResponse("Leadership changed. Refresh the defense schedule.");
-          const m = hall.rows.find((r) => r.match.id === input.id)?.match;
-          if (!m || (ctx.userId !== m.userId && ctx.userId !== hall.village.kageId))
-            return errorResponse("Only match participants can reschedule");
-          if (
-            m.rescheduled ||
-            m.status !== "SCHEDULED" ||
-            !m.scheduledAt ||
-            hall.paused
-          )
-            return errorResponse(
-              "One reschedule is available for each assigned match outside war",
-            );
-          if (hall.now >= m.scheduledAt)
-            return errorResponse("Reschedule before the appointed match time");
-          // Reassign later waiting matches together: the original queue order remains authoritative.
-          const index = hall.rows.findIndex((r) => r.match.id === input.id);
-          const later = hall.rows
-            .slice(index)
-            .filter((r) => ["QUEUED", "SCHEDULED"].includes(r.match.status));
-          const notBefore = new Date(
-            Math.max(
-              secondsFromDate(KAGE_DEFENSE_NOTICE_HOURS * 3600, hall.now).getTime(),
-              secondsFromDate(KAGE_DEFENSE_SLOT_MINUTES * 60, m.scheduledAt).getTime(),
-            ),
+      return withKageHall(ctx.drizzle, match.villageId, async (tx, hall) => {
+        if (!(await syncLockedKageDefense(tx, hall)))
+          return errorResponse("Leadership changed. Refresh the defense schedule.");
+        const m = hall.rows.find((r) => r.match.id === input.id)?.match;
+        if (!m || (ctx.userId !== m.userId && ctx.userId !== hall.village.kageId))
+          return errorResponse("Only match participants can reschedule");
+        if (m.rescheduled || m.status !== "SCHEDULED" || !m.scheduledAt || hall.paused)
+          return errorResponse(
+            "One reschedule is available for each assigned match outside war",
           );
-          await updateKageDefendedChallengesForRescheduleDefense(tx, notBefore, later);
-          await updateKageDefendedChallengesForRescheduleDefense2(tx, input);
-          return {
-            success: true,
-            message: "Match rescheduled once; queue priority preserved",
-          };
-        })) ?? errorResponse("Village not found")
-      );
+        if (hall.now >= m.scheduledAt)
+          return errorResponse("Reschedule before the appointed match time");
+        // Reassign later waiting matches together: the original queue order remains authoritative.
+        const index = hall.rows.findIndex((r) => r.match.id === input.id);
+        const notBefore = new Date(
+          Math.max(
+            secondsFromDate(KAGE_DEFENSE_NOTICE_HOURS * 3600, hall.now).getTime(),
+            secondsFromDate(KAGE_DEFENSE_SLOT_MINUTES * 60, m.scheduledAt).getTime(),
+          ),
+        );
+        await requeueKageDefendedChallenges(tx, waitingFrom(hall, index), {
+          notBefore,
+        });
+        await updateKageDefendedChallengesForRescheduleDefense2(tx, input);
+        return {
+          success: true,
+          message: "Match rescheduled once; queue priority preserved",
+        };
+      });
     }),
   /** Save waiting-match AI consent using the current incumbent and invalidate acceptance on requests. */
   setDefenseAi: protectedProcedure
@@ -263,41 +253,39 @@ export const kageDefenseProcedures = {
         input,
       );
       if (!match) return errorResponse("Match not found");
-      return (
-        (await withKageDefense(ctx.drizzle, match.villageId, async (tx, hall) => {
-          if (!(await syncLockedKageDefense(tx, hall)))
-            return errorResponse("Leadership changed. Refresh the defense schedule.");
-          const row = hall.rows.find((r) => r.match.id === input.id);
-          const m = row?.match;
-          if (!m || m.userId !== ctx.userId)
-            return errorResponse("Only the challenger can check in");
-          if (
-            hall.paused ||
-            m.hospitalDeferred ||
-            m.status !== "SCHEDULED" ||
-            !m.scheduledAt
-          )
-            return errorResponse("Check-in is unavailable while this match is paused");
-          if (row.user.status !== "AWAKE")
-            return errorResponse("Be awake and free of other activities to check in");
-          if (
-            hall.now.getTime() <
-              m.scheduledAt.getTime() - KAGE_DEFENSE_CHECK_IN_MINUTES * 60_000 ||
-            hall.now.getTime() >
-              m.scheduledAt.getTime() + KAGE_DEFENSE_GRACE_MINUTES * 60_000
-          )
-            return errorResponse(
-              `Check in during the ${KAGE_DEFENSE_CHECK_IN_MINUTES} minutes before the match or its start grace period`,
-            );
-          await updateKageDefendedChallengesForCheckInDefense(tx, hall, input);
-          return {
-            success: true,
-            message: hall.village.kage?.isAi
-              ? "Checked in. Remain awake and start the title fight at the appointed time."
-              : "Checked in. Remain awake; the Kage starts the battle.",
-          };
-        })) ?? errorResponse("Village not found")
-      );
+      return withKageHall(ctx.drizzle, match.villageId, async (tx, hall) => {
+        if (!(await syncLockedKageDefense(tx, hall)))
+          return errorResponse("Leadership changed. Refresh the defense schedule.");
+        const row = hall.rows.find((r) => r.match.id === input.id);
+        const m = row?.match;
+        if (!m || m.userId !== ctx.userId)
+          return errorResponse("Only the challenger can check in");
+        if (
+          hall.paused ||
+          m.hospitalDeferred ||
+          m.status !== "SCHEDULED" ||
+          !m.scheduledAt
+        )
+          return errorResponse("Check-in is unavailable while this match is paused");
+        if (row.user.status !== "AWAKE")
+          return errorResponse("Be awake and free of other activities to check in");
+        if (
+          hall.now.getTime() <
+            m.scheduledAt.getTime() - KAGE_DEFENSE_CHECK_IN_MINUTES * 60_000 ||
+          hall.now.getTime() >
+            m.scheduledAt.getTime() + KAGE_DEFENSE_GRACE_MINUTES * 60_000
+        )
+          return errorResponse(
+            `Check in during the ${KAGE_DEFENSE_CHECK_IN_MINUTES} minutes before the match or its start grace period`,
+          );
+        await updateKageDefendedChallengesForCheckInDefense(tx, hall, input);
+        return {
+          success: true,
+          message: hall.village.kage?.isAi
+            ? "Checked in. Remain awake and start the title fight at the appointed time."
+            : "Checked in. Remain awake; the Kage starts the battle.",
+        };
+      });
     }),
   /**
    * Publish one invitation with a guarded village write, without reconciling attendance
@@ -398,7 +386,7 @@ export const kageDefenseProcedures = {
         input,
       );
       if (!match) return errorResponse("Match not found");
-      const admission = await withKageDefense(
+      const admission = await withKageHall(
         ctx.drizzle,
         match.villageId,
         async (tx, hall) => {
@@ -469,8 +457,7 @@ export const kageDefenseProcedures = {
           };
         },
       );
-      if (!admission?.success || !("match" in admission))
-        return admission ?? errorResponse("Village not found");
+      if (!admission.success || !("match" in admission)) return admission;
       const m = admission.match;
       // Combat preload runs without holding the schedule transaction; launch rechecks
       // the tenure, slot, attendance and selected AI mode before claiming either player.
@@ -523,11 +510,7 @@ export const kageDefenseProcedures = {
 };
 
 /** Requeue a failed system launch and its waiting followers without spending a voluntary reschedule. */
-const resetFailedLaunch = (
-  client: import("@/server/db").DrizzleClient,
-  id: string,
-  villageId: string,
-) =>
+const resetFailedLaunch = (client: DrizzleClient, id: string, villageId: string) =>
   withKageDefense(client, villageId, async (tx, hall) => {
     const index = hall.rows.findIndex(
       (r) => r.match.id === id && r.match.status === "SCHEDULED",
@@ -535,5 +518,15 @@ const resetFailedLaunch = (
     if (index < 0) return;
     // A running/finished match is never reset. Waiting followers move together so a
     // service failure preserves queue order and cannot become an attendance penalty.
-    await updateKageDefendedChallengesForResetFailedLaunch(tx, hall, index);
+    await requeueKageDefendedChallenges(tx, waitingFrom(hall, index), {
+      notBefore: secondsFromDate(KAGE_DEFENSE_NOTICE_HOURS * 3600, hall.now),
+      outcome: "Battle could not start; queue priority retained without penalty",
+    });
   });
+
+/** IDs of the match at `index` and the queue behind it that have not started. */
+const waitingFrom = (hall: KageDefenseHall, index: number) =>
+  hall.rows
+    .slice(index)
+    .filter((r) => ["QUEUED", "SCHEDULED"].includes(r.match.status))
+    .map((r) => r.match.id);

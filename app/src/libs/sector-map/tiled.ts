@@ -147,38 +147,25 @@ const getTilesetTileProperties = (
   tilesets: TiledTileset[],
   gid: number,
 ): Record<string, unknown> => {
-  const cleanGid = stripTileFlipFlags(gid);
-  if (cleanGid === 0) return {};
-  // The owning tileset is the one with the largest firstgid <= cleanGid. Find it
-  // in a single pass; this runs ~2x per tile during import, so avoid copying and
-  // re-sorting the tilesets array on every call.
-  let tileset: TiledTileset | undefined;
-  for (const candidate of tilesets) {
-    if (
-      candidate.firstgid <= cleanGid &&
-      (!tileset || candidate.firstgid > tileset.firstgid)
-    ) {
-      tileset = candidate;
-    }
-  }
-  if (!tileset) return {};
-  const tile = tileset.tiles?.find((candidate) => {
-    return tileset.firstgid + candidate.id === cleanGid;
-  });
+  const tile = findTilesetTile(tilesets, gid);
   return {
     type: tile?.type ?? tile?.class,
     ...propertiesToRecord(tile?.properties),
   };
 };
 
-/** Native sprite height of the tileset tile a gid refers to (undefined if unknown) */
-const getTilesetTileNativeHeight = (
-  tilesets: TiledTileset[],
+/**
+ * The tileset tile a gid refers to, flip flags stripped. The owning tileset is the one with
+ * the largest firstgid <= gid; gid 0 (empty cell) has none. This runs ~2x per tile during
+ * import, so it scans in a single pass rather than sorting the tilesets on every call.
+ */
+export const findTilesetTile = <Tile extends { id: number }>(
+  tilesets: { firstgid: number; tiles?: Tile[] }[],
   gid: number,
-): number | undefined => {
+): Tile | undefined => {
   const cleanGid = stripTileFlipFlags(gid);
   if (cleanGid === 0) return undefined;
-  let tileset: TiledTileset | undefined;
+  let tileset: (typeof tilesets)[number] | undefined;
   for (const candidate of tilesets) {
     if (
       candidate.firstgid <= cleanGid &&
@@ -187,10 +174,8 @@ const getTilesetTileNativeHeight = (
       tileset = candidate;
     }
   }
-  const tile = tileset?.tiles?.find((candidate) => {
-    return (tileset?.firstgid ?? 0) + candidate.id === cleanGid;
-  });
-  return tile?.imageheight;
+  const firstgid = tileset?.firstgid ?? 0;
+  return tileset?.tiles?.find((candidate) => firstgid + candidate.id === cleanGid);
 };
 
 /**
@@ -457,10 +442,10 @@ export const normalizeTiledSectorMap = (
       object.gid !== undefined &&
       object.height !== undefined
     ) {
-      const nativeHeight = getTilesetTileNativeHeight(
+      const nativeHeight = findTilesetTile(
         tiledMap.tilesets ?? [],
         object.gid,
-      );
+      )?.imageheight;
       if (nativeHeight !== undefined && Math.abs(object.height - nativeHeight) > 1) {
         scale = Math.round((object.height / tiledMap.tileheight) * 1000) / 1000;
       }

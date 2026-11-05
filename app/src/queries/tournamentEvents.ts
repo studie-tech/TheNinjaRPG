@@ -51,22 +51,23 @@ export const fetchEventNoticeState = async (client: DrizzleClient, userId: strin
     return event && seat ? [{ id: row.id, event, seat }] : [];
   });
   const notices = participations.flatMap(({ id, event, seat }) => {
-    const ready = event.series.find(
-      (s) =>
-        !s.complete &&
-        s.seats.includes(seat.id) &&
-        s.games.at(-1)?.status === "READY" &&
-        (s.games.at(-1)?.opensAt ?? Infinity) <= now &&
-        (s.games.at(-1)?.deadline ?? 0) > now &&
-        !s.games.at(-1)?.accepted.includes(userId),
-    );
-    if (ready)
+    const readyGame = event.series
+      .filter((s) => !s.complete && s.seats.includes(seat.id))
+      .map((s) => s.games.at(-1))
+      .find(
+        (game) =>
+          game?.status === "READY" &&
+          game.opensAt <= now &&
+          game.deadline > now &&
+          !game.accepted.includes(userId),
+      );
+    if (readyGame)
       return [
         {
           tournamentId: id,
           name: event.config.name,
           message: "Your tournament match is ready",
-          deadline: ready.games.at(-1)!.deadline,
+          deadline: readyGame.deadline,
         },
       ];
     if (

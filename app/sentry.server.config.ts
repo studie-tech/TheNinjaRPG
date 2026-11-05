@@ -4,18 +4,16 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { stripQueryMetricUserAttributes } from "@/libs/queryTelemetry";
+import { SENTRY_BASE_OPTIONS } from "@/libs/sentryOptions";
 
 Sentry.init({
-  dsn: "https://c35c54f99b73b4a3b8a7e60936bc2967@o4507797256601600.ingest.de.sentry.io/4507797262958672",
-
-  // Adjust this value in production, or use tracesSampler for greater control
-  tracesSampleRate: 0.001,
+  ...SENTRY_BASE_OPTIONS,
+  // NODE_ENV is "production" for every Vercel build, so VERCEL_ENV is what separates
+  // production from preview deployments.
+  environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
   beforeSendMetric: stripQueryMetricUserAttributes,
 
-  // Error sample rate
-  sampleRate: 1.0,
-
-  // Which errors to ignore from frontend
+  // Which server errors to ignore
   ignoreErrors: [
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
@@ -26,28 +24,4 @@ Sentry.init({
     // picks up the new build in the process, so it self-heals on that navigation.
     "The router state header was sent but could not be parsed.",
   ],
-
-  // Setting this option to true will print useful information to the console while you're setting up Sentry.
-  debug: false,
-
-  // Keep diagnostics without sending account credentials or request/user data.
-  dataCollection: {
-    userInfo: false,
-    cookies: false,
-    httpHeaders: { request: false, response: false },
-    httpBodies: [],
-    urlQueryParams: false,
-    graphQL: { document: false, variables: false },
-    genAI: { inputs: false, outputs: false },
-    databaseQueryData: false,
-    queues: false,
-    stackFrameVariables: false,
-  },
-
-  // Set the environment. NODE_ENV is "production" for every Vercel build, so
-  // VERCEL_ENV is what separates production from preview deployments.
-  environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
-
-  // Uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: process.env.NODE_ENV === 'development',
 });

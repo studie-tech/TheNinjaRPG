@@ -111,15 +111,12 @@ export const mapTerrainRouter = createTRPCRouter({
         updateMapTerrainForUpdate(ctx.drizzle, input, entry),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
-      // Broadcast the change to the content Discord outside development
-      if (process.env.NODE_ENV !== "development") {
-        await callDiscordContent(
-          user.username,
-          entry.name,
-          diff,
-          entry.textureUrl ?? undefined,
-        );
-      }
+      await callDiscordContent(
+        user.username,
+        entry.name,
+        diff,
+        entry.textureUrl ?? undefined,
+      );
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   /**

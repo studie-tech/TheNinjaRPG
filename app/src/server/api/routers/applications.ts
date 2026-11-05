@@ -28,6 +28,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   canDeleteStaffApplication,
   canViewAllApplications,
@@ -105,9 +106,8 @@ export const applicationsRouter = createTRPCRouter({
     })
     .input(listApplicationsInfiniteSchema)
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
       const limit = input.limit;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       const [user, usernameIds] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -153,7 +153,7 @@ export const applicationsRouter = createTRPCRouter({
         };
       });
 
-      const nextCursor = results.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: enriched, nextCursor };
     }),
 

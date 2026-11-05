@@ -41,7 +41,7 @@ export const useGuideEditForm = (article: GuideArticle, refetch: () => void) => 
   const { mutate: updateGuide, isPending } = api.guide.update.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
-      refetch();
+      if (data.success) refetch();
     },
   });
 

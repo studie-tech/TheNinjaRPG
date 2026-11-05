@@ -1,4 +1,5 @@
 import { IMG_URL_ASSISTANT, IMG_URL_ASSISTANT_ALTERNATIVES } from "@/drizzle/constants";
+import { getRandomElement } from "@/utils/array";
 
 export const LEMU_EXPERIMENT = "ab_lemu_replacement_3";
 export const LEMU_VARIANTS = [
@@ -28,7 +29,7 @@ export const normalizeLemuVariant = (value?: string | null): LemuVariant | undef
   LEMU_VARIANTS.find((variant) => variant === value);
 
 export const drawLemuVariant = (): LemuVariant =>
-  LEMU_VARIANTS[Math.floor(Math.random() * LEMU_VARIANTS.length)] ?? "control";
+  getRandomElement(LEMU_VARIANTS) ?? "control";
 
 /** Resolve the assigned portrait, using the control image for missing or invalid arms. */
 export const getLemuImage = (variant?: string) => {

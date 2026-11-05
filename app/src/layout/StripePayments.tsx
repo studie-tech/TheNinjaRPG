@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { stripePurchaseSchema } from "@/validators/stripe";
+import {
+  isEndedSubscriptionStatus,
+  type stripePurchaseSchema,
+} from "@/validators/stripe";
 
 /** Open hosted checkout with a stable request identity across uncertain responses. */
 export const StripeCheckoutButton = ({
@@ -320,7 +323,7 @@ export const StripeSubscriptions = () => {
             </p>
           )}
           {!subscription.cancelAtPeriodEnd &&
-            !["canceled", "incomplete_expired"].includes(subscription.status) && (
+            !isEndedSubscriptionStatus(subscription.status) && (
               <Button
                 className="mt-2"
                 disabled={cancel.isPending}

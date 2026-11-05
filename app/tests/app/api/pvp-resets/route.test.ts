@@ -91,12 +91,12 @@ describe("PvP reset crons", () => {
     });
     mocks.dailyLock.mockResolvedValue({
       release: mocks.rollback,
-      isNewDay: true,
+      isClaimed: true, isNewDay: true,
       prevTime: 1,
     });
     mocks.weeklyLock.mockResolvedValue({
       release: mocks.rollback,
-      isNewWeek: true,
+      isClaimed: true, isNewWeek: true,
       prevTime: 1,
     });
     // Bulk updates are awaited either directly or after .where().

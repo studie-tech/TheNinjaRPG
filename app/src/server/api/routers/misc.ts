@@ -7,17 +7,17 @@ import {
   getAwardReputationUserUpdate,
   getSetEventGameSettingUserUpdate,
 } from "@/deltas/misc";
-import {
-  DMG_SETTING_NAMES,
-  Sentiment,
-  TRAINING_CAPTCHA_REFRESHES_PER_MINUTE,
-} from "@/drizzle/constants";
+import { Sentiment, TRAINING_CAPTCHA_REFRESHES_PER_MINUTE } from "@/drizzle/constants";
 import {
   captchaAnswerMatches,
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
-import { fetchDmgConfig, updateGameSetting } from "@/libs/gamesettings";
+import {
+  fetchDmgConfig,
+  updateDmgConfig,
+  updateGameSetting,
+} from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
   deleteEmailReminderForDeleteEmailReminder,
@@ -71,6 +71,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   canAwardReputation,
   canEnableGlobalTavern,
@@ -187,14 +188,13 @@ export const miscRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const results = await listNotificationForGetPreviousNotifications(
         ctx.drizzle,
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -334,22 +334,7 @@ export const miscRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guards
       if (!canModifyCombatSettings(user.role)) return errorResponse("Not allowed");
-      // Update all DMG settings in parallel
-      const nameToValue: Record<string, number> = {
-        DMG_STATS_SCALING: input.stats_scaling,
-        DMG_BASE_HITS: input.base_hits,
-        DMG_CURVE: input.curve,
-        DMG_AMPLITUDE: input.amplitude,
-        DMG_EP_NORMALIZATION: input.ep_normalization,
-        DMG_GEN_WEIGHT: input.gen_weight,
-        DMG_ADVANTAGE_MIN: input.advantage_min,
-        DMG_ADVANTAGE_MAX: input.advantage_max,
-      };
-      await Promise.all(
-        DMG_SETTING_NAMES.map((name) =>
-          updateGameSetting(ctx.drizzle, name, nameToValue[name] ?? 0, new Date()),
-        ),
-      );
+      await updateDmgConfig(ctx.drizzle, input);
       return { success: true, message: "Damage config updated" };
     }),
   awardReputation: protectedProcedure
@@ -416,9 +401,8 @@ export const miscRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ?? 0;
       const limit = input.limit;
-      const skip = currentCursor * limit;
+      const { skip, cursorAfter } = offsetPage(input);
 
       // Resolve username filters to userId arrays (done upfront to keep main query simple)
       const [receiverIds, awardedByIds] = await Promise.all([
@@ -450,7 +434,7 @@ export const miscRouter = createTRPCRouter({
         awardedByIds,
       );
 
-      const nextCursor = results.length < limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: results, nextCursor: nextCursor };
     }),
 

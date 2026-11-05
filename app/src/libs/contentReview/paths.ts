@@ -48,6 +48,27 @@ export const setAtPath = <T>(root: T, path: string, value: unknown): T => {
   return write(root, 0) as T;
 };
 
+/** Value of a media field whose candidate is not in the catalog yet. */
+export const mediaPlaceholder = (mediaId: string) => `media:${mediaId}`;
+
+/**
+ * Value a media candidate writes as it stands: ordinary image fields hold URLs and catalog
+ * picks their asset id. Undefined when the candidate only gets a value on approval.
+ */
+export const directMediaValue = (
+  media: {
+    kind: ContentProposalMediaKind;
+    source: string;
+    url: string | null;
+    externalId: string | null;
+  },
+  path: string,
+) => {
+  if (media.kind === "IMAGE" && !isSceneCharacterPath(path)) return media.url;
+  if (media.source === "CATALOG") return media.externalId;
+  return undefined;
+};
+
 /** Whether `path` names a field a media candidate of `kind` may fill. */
 export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
   if (kind === "IMAGE" && isSceneCharacterPath(path)) return true;

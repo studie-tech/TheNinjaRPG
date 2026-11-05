@@ -45,6 +45,8 @@ import { getBackgroundMusicSrc } from "@/libs/music";
 import { audioSession, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { getRandomElement } from "@/utils/array";
+import { createSerialQueue } from "@/utils/async";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
@@ -115,11 +117,7 @@ const shouldPlayButtonSfxForTarget = (target: EventTarget | null) => {
   );
 };
 
-const getRandomButtonSfxUrl = () => {
-  return BUTTON_CLICK_SFX_URLS[
-    Math.floor(Math.random() * BUTTON_CLICK_SFX_URLS.length)
-  ];
-};
+const getRandomButtonSfxUrl = () => getRandomElement(BUTTON_CLICK_SFX_URLS);
 
 /**
  * Global context for sharing audio instance across all components
@@ -137,7 +135,7 @@ export const GlobalAudioProvider: React.FC<{
   const [isClient, setIsClient] = useState(false);
   // Bridge calls are asynchronous. Serialising them keeps a music-off deactivation from
   // being overtaken by an earlier activation.
-  const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
+  const enqueueAudioSession = useRef(createSerialQueue());
   const hasActiveAudioSession = useRef(false);
   // Remote Pause also works while Control Center is open and the WebView is visible.
   const isRemotePaused = useRef(false);
@@ -145,12 +143,10 @@ export const GlobalAudioProvider: React.FC<{
   const pauseVersion = useRef(0);
   // Release focus when playback is already stopped; transport Pause keeps Play available.
   const releaseAudioSession = (preserveControls = false) => {
-    audioSessionQueue.current = audioSessionQueue.current
-      .catch(() => undefined)
-      .then(async () => {
-        await audioSession.deactivate(preserveControls);
-        hasActiveAudioSession.current = false;
-      });
+    void enqueueAudioSession.current(async () => {
+      await audioSession.deactivate(preserveControls);
+      hasActiveAudioSession.current = false;
+    });
   };
   useEffect(() => {
     setIsClient(true);
@@ -229,50 +225,46 @@ export const GlobalAudioProvider: React.FC<{
   // WebView pauses so the player can resume without repeatedly changing the audio route.
   useEffect(() => {
     if (!isClient) return;
-    audioSessionQueue.current = audioSessionQueue.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (!audioEnabled) {
-          // WebKit can fire the background pause before our remote-command callback.
-          // Keep Play available for either order, while releasing audio focus.
-          const preserveControls =
-            platform() === "ios" &&
-            !isMusicTurnedOff.current &&
-            (isRemotePaused.current || document.hidden);
-          if (preserveControls && isPlaying) return;
-          await audioSession.deactivate(preserveControls);
+    void enqueueAudioSession.current(async () => {
+      if (!audioEnabled) {
+        // WebKit can fire the background pause before our remote-command callback.
+        // Keep Play available for either order, while releasing audio focus.
+        const preserveControls =
+          platform() === "ios" &&
+          !isMusicTurnedOff.current &&
+          (isRemotePaused.current || document.hidden);
+        if (preserveControls && isPlaying) return;
+        await audioSession.deactivate(preserveControls);
+        hasActiveAudioSession.current = false;
+        return;
+      }
+      if (!isPlaying && platform() !== "ios") {
+        if (hasActiveAudioSession.current) {
+          await audioSession.deactivate();
           hasActiveAudioSession.current = false;
-          return;
         }
-        if (!isPlaying && platform() !== "ios") {
-          if (hasActiveAudioSession.current) {
-            await audioSession.deactivate();
-            hasActiveAudioSession.current = false;
-          }
-          return;
-        }
-        if (!isPlaying) return;
-        if (!hasActiveAudioSession.current) {
-          hasActiveAudioSession.current = await audioSession.activate();
-          if (!hasActiveAudioSession.current) return;
-        }
-        await audioSession.setNowPlaying({
-          title: "TheNinja-RPG",
-          artist: userData?.village?.name ?? "Seichi",
-        });
+        return;
+      }
+      if (!isPlaying) return;
+      if (!hasActiveAudioSession.current) {
+        hasActiveAudioSession.current = await audioSession.activate();
+        if (!hasActiveAudioSession.current) return;
+      }
+      await audioSession.setNowPlaying({
+        title: "TheNinja-RPG",
+        artist: userData?.village?.name ?? "Seichi",
       });
+    });
   }, [audioEnabled, isClient, isPlaying, userData?.village?.name]);
 
   useEffect(
     () => () => {
-      audioSessionQueue.current = audioSessionQueue.current
-        .catch(() => undefined)
-        .then(async () => {
-          await audioSession.deactivate(
-            platform() === "ios" && isRemotePaused.current && !isMusicTurnedOff.current,
-          );
-          hasActiveAudioSession.current = false;
-        });
+      void enqueueAudioSession.current(async () => {
+        await audioSession.deactivate(
+          platform() === "ios" && isRemotePaused.current && !isMusicTurnedOff.current,
+        );
+        hasActiveAudioSession.current = false;
+      });
     },
     [],
   );
@@ -302,24 +294,22 @@ export const GlobalAudioProvider: React.FC<{
         // serialised so a later Pause or Music Off still wins.
         isRemotePaused.current = false;
         void setAudioEnabled(true);
-        audioSessionQueue.current = audioSessionQueue.current
-          .catch(() => undefined)
-          .then(async () => {
-            if (pauseVersion.current !== requestedPauseVersion) return;
-            const activated = await audioSession.activate();
-            if (!activated) return;
-            if (
-              pauseVersion.current !== requestedPauseVersion ||
-              isMusicTurnedOff.current
-            ) {
-              await audioSession.deactivate(
-                isRemotePaused.current && !isMusicTurnedOff.current,
-              );
-              hasActiveAudioSession.current = false;
-              return;
-            }
-            hasActiveAudioSession.current = true;
-          });
+        void enqueueAudioSession.current(async () => {
+          if (pauseVersion.current !== requestedPauseVersion) return;
+          const activated = await audioSession.activate();
+          if (!activated) return;
+          if (
+            pauseVersion.current !== requestedPauseVersion ||
+            isMusicTurnedOff.current
+          ) {
+            await audioSession.deactivate(
+              isRemotePaused.current && !isMusicTurnedOff.current,
+            );
+            hasActiveAudioSession.current = false;
+            return;
+          }
+          hasActiveAudioSession.current = true;
+        });
       }
     });
   }, [audioEnabled, isClient, setAudioEnabled]);

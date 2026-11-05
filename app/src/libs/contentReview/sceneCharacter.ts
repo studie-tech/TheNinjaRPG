@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { CUTOUT_ALPHA_THRESHOLD } from "@/drizzle/constants";
 
 /** Scene portraits are composited over backgrounds, rather than framed combat icons. */
 export const SCENE_CHARACTER_PREPROMPT =
@@ -22,7 +23,7 @@ export const validateSceneCharacterImage = async (buffer: Buffer) => {
   if (width < 64 || height < 64) throw new Error("Scene character is too small");
   let visible = 0;
   for (let index = channels - 1; index < data.length; index += channels) {
-    if ((data[index] ?? 0) > 16) visible += 1;
+    if ((data[index] ?? 0) > CUTOUT_ALPHA_THRESHOLD) visible += 1;
   }
   if (visible < width * height * 0.01)
     throw new Error("Scene character cutout is empty");
@@ -37,8 +38,8 @@ export const validateSceneCharacterImage = async (buffer: Buffer) => {
     let transparent = 0;
     for (let y = top ?? 0; y < (top ?? 0) + edge; y += 1) {
       for (let x = left ?? 0; x < (left ?? 0) + edge; x += 1) {
-        if ((data[(y * width + x) * channels + channels - 1] ?? 255) <= 16)
-          transparent += 1;
+        const alpha = data[(y * width + x) * channels + channels - 1] ?? 255;
+        if (alpha <= CUTOUT_ALPHA_THRESHOLD) transparent += 1;
       }
     }
     if (transparent < edge * edge * 0.9) {

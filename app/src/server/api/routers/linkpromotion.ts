@@ -15,6 +15,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { offsetPage } from "@/server/utils/pagination";
 import { canReviewLinkPromotions } from "@/utils/permissions";
 import {
   linkPromotionReviewSchema,
@@ -34,15 +35,14 @@ export const linkPromotionRouter = createTRPCRouter({
       // Query 1
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Query 2
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const results = await listLinkPromotionForGetLinkPromotions(
         ctx.drizzle,
         user,
         input,
         skip,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return { data: results, nextCursor };
     }),
 
@@ -54,7 +54,9 @@ export const linkPromotionRouter = createTRPCRouter({
       const result = await findLinkPromotionForSubmitLinkPromotion(ctx.drizzle, input);
       // Guard
       if (result) return errorResponse("URL already submitted");
-      if (input.url.includes("https://www.theninja-rpg.com")) {
+      // A trailing DNS root dot still names the same own-site host.
+      const hostname = new URL(input.url).hostname.replace(/\.$/, "");
+      if (hostname === "theninja-rpg.com" || hostname.endsWith(".theninja-rpg.com")) {
         return errorResponse("Cannot submit link to TNR");
       }
       // Mutate

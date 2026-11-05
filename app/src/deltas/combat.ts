@@ -8,6 +8,7 @@ import {
   REGEN_SECONDS,
 } from "@/drizzle/constants";
 import type { BattleAction, UserData, UserTitle } from "@/drizzle/schema";
+import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
 import type {
   BattleState,
   BattleUserItem,
@@ -24,7 +25,7 @@ import {
   type MasterySources,
 } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
-import { getMasteryQueue, hasEnergyQueue } from "@/libs/queue";
+import { hasTrainingInProgress } from "@/libs/queue";
 import { getRegenerationPeriodGain, type RegenerationPeriod } from "@/libs/timedBuffs";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
@@ -146,11 +147,7 @@ export const captureCombatCacheSnapshot = (
   regenAt: user.regenAt.toISOString(),
   titleIds: user.titles?.map(({ titleId }) => titleId) ?? [],
   // Training may settle while profile refreshes are paused during combat.
-  hadTrainingQueue:
-    hasEnergyQueue(user) ||
-    getMasteryQueue(user).length > 0 ||
-    getMasteryQueue(user, "ELEMENT").length > 0 ||
-    !!user.currentlyTrainingElement,
+  hadTrainingQueue: hasTrainingInProgress(user),
   items: user.items.map(
     ({ id, quantity, durability, level, experience, equipped }) => ({
       id,
@@ -190,15 +187,8 @@ export const combatProfilePatch = (
     titleIds.some((id) => !update.baseline.titleIds.includes(id))
   )
     return;
-  if (
-    hasEnergyQueue(current) ||
-    getMasteryQueue(current).length > 0 ||
-    getMasteryQueue(current, "ELEMENT").length > 0 ||
-    // Arena initiation may finish an elemental session before capturing its baseline.
-    current.currentlyTrainingElement ||
-    update.baseline.hadTrainingQueue
-  )
-    return;
+  // Arena initiation may finish an elemental session before capturing its baseline.
+  if (hasTrainingInProgress(current) || update.baseline.hadTrainingQueue) return;
   const items = getCombatInventoryUpdate(current.items, update);
   if (!items) return;
   return {
@@ -220,8 +210,6 @@ export const combatProfilePatch = (
     battleId: null,
     stealthActive: false,
     stealthActivatedAt: null,
-    maxEnergy: update.userPatch.maxEnergy,
-    effectiveMasteries: update.userPatch.effectiveMasteries,
   };
 };
 
@@ -459,7 +447,7 @@ export const mergeBattleEntries = (
   nextVersion: number,
 ): BattleAction[] | undefined => {
   const version = input.refreshKey;
-  const limit = input.limit ?? 30;
+  const limit = input.limit ?? BATTLE_LOG_PAGE_SIZE;
   const targetVersion = (previous ?? []).reduce(
     (latest, row) => Math.max(latest, row.battleVersion + 1),
     Math.max(version ?? 0, nextVersion),

@@ -1,13 +1,22 @@
 /** Materialize owned companions as self-contained AI actors during battle initiation. */
 import { nanoid } from "nanoid";
 import type { BattleType, PetSpawnPosition, UserRank } from "@/drizzle/constants";
-import { CombatStatNames, PET_BASE_STAT, PET_BATTLE_CONFIG } from "@/drizzle/constants";
+import {
+  CombatStatNames,
+  getCombatStatCap,
+  PET_BASE_STAT,
+  PET_BATTLE_CONFIG,
+} from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, UserPet } from "@/drizzle/schema";
 import { getDefaultBasicActions, stillInBattle } from "@/libs/combat/actions";
 import { GenNames, GROUND_EFFECT_TAG_TYPES } from "@/libs/combat/constants";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { checkFriendlyFire } from "@/libs/combat/process";
-import { realizeTag } from "@/libs/combat/tags";
+import {
+  markPassiveEffect,
+  realizePassiveEffect,
+  realizeTag,
+} from "@/libs/combat/tags";
 import type {
   BattleUserState,
   CombatQueryUserSkill,
@@ -113,17 +122,15 @@ export const addPetsToBattle = (info: {
         actor.activeSkillIds = selected.skills.map((entry) => entry.skillId);
         for (const { skill } of selected.skills) {
           for (const effect of skill.effects) {
-            const realized = realizeTag({
-              tag: structuredClone(effect) as UserEffect,
-              user: actor,
-              actionId: skill.id,
-              level: actor.level,
-            });
-            realized.isNew = false;
-            realized.castThisRound = false;
-            realized.targetId = actor.userId;
-            realized.fromType = "skill";
-            info.usersEffects.push(realized);
+            info.usersEffects.push(
+              realizePassiveEffect({
+                tag: structuredClone(effect) as UserEffect,
+                user: actor,
+                actionId: skill.id,
+                level: actor.level,
+                fromType: "skill",
+              }),
+            );
           }
         }
       }
@@ -175,11 +182,7 @@ export const addPetsToBattle = (info: {
           realized.createdRound = 1;
           info.groundEffects?.push(realized);
         } else {
-          // These passives are already active; action processing must not recast them.
-          realized.isNew = false;
-          realized.castThisRound = false;
-          realized.targetId = target.userId;
-          info.usersEffects?.push(realized);
+          info.usersEffects?.push(markPassiveEffect(realized, target.userId, "skill"));
         }
       }
     }
@@ -337,10 +340,7 @@ const createPetBattleUser = (
     bukijutsuMastery: PET_BASE_STAT,
   };
   for (const stat of CombatStatNames)
-    actor[stat] = Math.min(
-      pet[stat],
-      stat === "offence" || stat === "defence" ? caps.stats_cap : caps.gens_cap,
-    );
+    actor[stat] = Math.min(pet[stat], getCombatStatCap(caps, stat));
   actor.highestGenerals = GenNames.slice()
     .sort((a, b) => actor[b] - actor[a])
     .slice(0, 2);

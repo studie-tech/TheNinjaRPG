@@ -1,6 +1,7 @@
 /**
  * Database access for support; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -32,6 +33,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { getNextClosedAt } from "@/libs/support";
+import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /** Build the `userData` update for `POST`, setting `aiCalls`, using predicates on `userId` and `aiCalls`. */
@@ -311,42 +313,15 @@ export const findSupportTicketForGetSupportTicketWithRelations = (
     where: eq(supportTicket.id, ticketId),
     with: {
       createdBy: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
       assignedTo: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
       activities: {
         with: {
           author: {
-            columns: {
-              userId: true,
-              username: true,
-              avatar: true,
-              level: true,
-              rank: true,
-              isOutlaw: true,
-              role: true,
-              federalStatus: true,
-            },
+            columns: userCardColumns,
           },
         },
         orderBy: desc(supportTicketActivity.createdAt),
@@ -437,28 +412,10 @@ export const listSupportTicketForGetSupportTicketsWithRelations = (
     })(),
     with: {
       createdBy: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
       assignedTo: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
     },
     orderBy: (() => {

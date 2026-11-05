@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -43,8 +42,7 @@ import {
   insertUserTowerDefenseUpgradeForPurchasePermanentUpgrade,
   listTowerDefenseCharacterForGetAssetConfigs,
   listTowerDefenseCharacterForGetCharacters,
-  listTowerDefenseCharacterForInitiateSecureSession,
-  listTowerDefenseCharacterForInitiateSecureSession2,
+  listTowerDefenseCharacterForInitiateSession,
   listTowerDefenseRunForGetLeaderboard,
   listTowerDefenseRunForGetRunHistory,
   listTowerDefenseUpgradeForGetUpgrades,
@@ -64,6 +62,8 @@ import {
   publicProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   areTowerDefenseClaimsEnabled,
@@ -76,6 +76,7 @@ import {
   type SessionParams,
   signSessionParams,
 } from "@/server/utils/towerDefenseCrypto";
+import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
 import { validateUrlForSsrf } from "@/utils/ssrf";
 import { idSchema } from "@/validators/misc";
@@ -174,13 +175,11 @@ export const towerDefenseRouter = createTRPCRouter({
     })
     .use(ratelimitMiddleware)
     .mutation(async ({ ctx }) => {
-      const [userUpgrades, upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
-        await Promise.all([
-          listUserTowerDefenseUpgradeForGetUserUpgrades(ctx.drizzle, ctx),
-          listTowerDefenseUpgradeForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession2(ctx.drizzle),
-        ]);
+      const [userUpgrades, definitions] = await Promise.all([
+        listUserTowerDefenseUpgradeForGetUserUpgrades(ctx.drizzle, ctx),
+        fetchSessionDefinitions(ctx.drizzle),
+      ]);
+      const { upgradeDefinitions } = definitions;
 
       const baseShuriken = getShurikenAbility();
       const ability = applyUpgradesToAbility(
@@ -196,9 +195,7 @@ export const towerDefenseRouter = createTRPCRouter({
         ability,
         playerBonuses,
         maxHealth,
-        upgradeDefinitions,
-        enemyDefinitionsDb,
-        playerCharactersDb,
+        ...definitions,
       });
     }),
 
@@ -213,13 +210,7 @@ export const towerDefenseRouter = createTRPCRouter({
       mcp: { description: "Start a guest tower defense session" },
     })
     .mutation(async ({ ctx }) => {
-      const [upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
-        await Promise.all([
-          listTowerDefenseUpgradeForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession(ctx.drizzle),
-          listTowerDefenseCharacterForInitiateSecureSession2(ctx.drizzle),
-        ]);
-
+      const definitions = await fetchSessionDefinitions(ctx.drizzle);
       const ability = getShurikenAbility();
       const playerBonuses = getDefaultPlayerBonuses();
       const maxHealth = TD_PLAYER_BASE_HEALTH;
@@ -229,9 +220,7 @@ export const towerDefenseRouter = createTRPCRouter({
         ability,
         playerBonuses,
         maxHealth,
-        upgradeDefinitions,
-        enemyDefinitionsDb,
-        playerCharactersDb,
+        ...definitions,
         isGuest: true,
       });
     }),
@@ -445,11 +434,8 @@ export const towerDefenseRouter = createTRPCRouter({
         enemyDefinitions: enemyParseResult.data,
       };
 
-      const expectedBuffer = Buffer.from(signSessionParams(sessionParams), "utf8");
-      const runBuffer = Buffer.from(run.session_signature, "utf8");
       if (
-        expectedBuffer.length !== runBuffer.length ||
-        !timingSafeEqual(expectedBuffer, runBuffer)
+        !constantTimeEquals(signSessionParams(sessionParams), run.session_signature)
       ) {
         return errorResponse(
           "Invalid session signature. The session may have started with tampered data.",
@@ -965,6 +951,19 @@ function extractClientParams(sessionParams: SessionParams) {
   return clientParams;
 }
 
+/** Load the definitions a session signs; enemies keep their wave order. */
+const fetchSessionDefinitions = async (client: DrizzleClient) => {
+  const [upgradeDefinitions, characters] = await Promise.all([
+    listTowerDefenseUpgradeForInitiateSecureSession(client),
+    listTowerDefenseCharacterForInitiateSession(client),
+  ]);
+  return {
+    upgradeDefinitions,
+    enemyDefinitionsDb: characters.filter((c) => !c.isPlayer),
+    playerCharactersDb: characters.filter((c) => c.isPlayer),
+  };
+};
+
 /**
  * Shared logic for initiating a tower defense session
  */
@@ -1011,10 +1010,7 @@ function initiateSession(input: {
   const signature = signSessionParams(sessionParams);
 
   // Pick a random player character (or null if none configured)
-  const playerCharacter =
-    playerCharactersDb.length > 0
-      ? playerCharactersDb[Math.floor(Math.random() * playerCharactersDb.length)]
-      : null;
+  const playerCharacter = getRandomElement(playerCharactersDb) ?? null;
 
   return {
     seed,

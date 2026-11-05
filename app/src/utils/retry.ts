@@ -1,3 +1,4 @@
+import { sleep } from "@/utils/time";
 /**
  * Retry utility for handling transient errors with exponential backoff
  */
@@ -70,7 +71,7 @@ export const withRetry = async <T>(
       const jitter = Math.random() * 500;
       const delay = Math.min(exponentialDelay + jitter, remainingTime);
 
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleep(delay);
     }
   }
 

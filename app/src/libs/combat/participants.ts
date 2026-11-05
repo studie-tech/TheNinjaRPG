@@ -47,6 +47,25 @@ export const areBattleAllies = (
   second: { direction: "left" | "right" },
 ): boolean => first.direction === second.direction;
 
+type HumanOpponentCandidate = {
+  direction: "left" | "right";
+  isAi: boolean;
+  isSummon: boolean;
+};
+
+/** A human on the other team; summons never count, whoever controls them. */
+export const isHumanOpponent = (
+  user: { direction: "left" | "right" },
+  candidate: HumanOpponentCandidate,
+): boolean =>
+  !candidate.isAi && !candidate.isSummon && !areBattleAllies(user, candidate);
+
+/** Detect whether the opposing fixed team includes a human combatant. */
+export const hasHumanOpponent = (
+  usersState: HumanOpponentCandidate[],
+  user: { direction: "left" | "right" },
+): boolean => usersState.some((candidate) => isHumanOpponent(user, candidate));
+
 /**
  * Enumerate distinct spawn cells within one team's combat borders.
  * Capacity validation and placement share this finite list so an overcrowded

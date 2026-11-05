@@ -95,6 +95,22 @@ export const MERCH_PRODUCT_DETAILS: Record<
   },
 };
 
+/** Garments with printed sizes, by normalized kind. */
+export function isApparelMerchKind(kind: string) {
+  return [
+    "Organic T-Shirt",
+    "Organic Hoodie",
+    "Organic Sweatshirt",
+    "Oversized Sweatshirt",
+  ].includes(kind);
+}
+
+/** Where a product's design is printed, by normalized kind. */
+export function merchPrintTag(kind: string) {
+  if (kind === "Wide-Leg Joggers") return "Thigh print";
+  return isApparelMerchKind(kind) ? "Back print" : "Accessory";
+}
+
 export function normalizeMerchKind(value: string) {
   const text = value.toLowerCase();
   if (text.includes("jogger")) return "Wide-Leg Joggers";

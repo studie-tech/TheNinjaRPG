@@ -12,7 +12,7 @@ import { petExperienceGainSql } from "@/libs/pets/experience";
 import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
 import * as sentry from "@/server/utils/sentry";
-import { getPetDayKey, HOUR_S, secondsFromNow } from "@/utils/time";
+import { getUtcDayKey, HOUR_S, secondsFromNow } from "@/utils/time";
 import { initialPetSpecies } from "../../../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertItems, insertPetSpecies, insertUserItems, insertUsers } from "../../../setup/factories";
@@ -1357,7 +1357,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await readyPet(database, { rank: 2, artRank: 1, generationStatus: "PENDING" });
     const caller = callerForDatabase(petsRouter, userId, database); const before = await readPet(database);
     const generate = vi.spyOn(appearance, "generatePetAppearance").mockResolvedValue({ avatar, avatarFacing: "left" });
-    expect((await caller.generateAppearance({ petId, appearance: { dayKey: getPetDayKey(), paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 } })).success).toBe(false);
+    expect((await caller.generateAppearance({ petId, appearance: { dayKey: getUtcDayKey(), paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 } })).success).toBe(false);
     expect(generate).not.toHaveBeenCalled();
     expect(await readPet(database)).toEqual(before);
   });

@@ -74,6 +74,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsPassed } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
 import {
+  type RankedSeasonDivisionReward,
   rankedLoadoutSchema,
   rankedQueueResponseSchema,
   rankedSeasonSchema,
@@ -199,16 +200,9 @@ export const pvpRankRouter = createTRPCRouter({
         return errorResponse("A season is already active");
       }
       if (titleError) return errorResponse(titleError);
-      // Server-side enforcement: reset reward_reputation to 0 in all division rewards if user lacks permission
       const seasonData = { ...input };
       if (!canAwardReputation(user.role)) {
-        seasonData.rewards = seasonData.rewards.map((divisionReward) => ({
-          ...divisionReward,
-          rewards: {
-            ...divisionReward.rewards,
-            reward_reputation: 0,
-          },
-        }));
+        seasonData.rewards = keepStoredReputation(seasonData.rewards);
       }
       // insert new season
       const id = nanoid();
@@ -244,24 +238,9 @@ export const pvpRankRouter = createTRPCRouter({
         }
       }
       if (titleError) return errorResponse(titleError);
-      // Server-side enforcement: preserve existing reward_reputation in all division rewards if user lacks permission
       const { id, ...data } = input;
       if (!canAwardReputation(user.role)) {
-        data.rewards = data.rewards.map((divisionReward) => {
-          // Find existing division reward by division name to preserve its reputation value
-          const existingDivisionReward = existingSeason.rewards.find(
-            (r) => r.division === divisionReward.division,
-          );
-          const existingReputation =
-            existingDivisionReward?.rewards?.reward_reputation ?? 0;
-          return {
-            ...divisionReward,
-            rewards: {
-              ...divisionReward.rewards,
-              reward_reputation: existingReputation,
-            },
-          };
-        });
+        data.rewards = keepStoredReputation(data.rewards, existingSeason.rewards);
       }
       // update season
       await updateRankedSeasonForUpdateSeason(ctx.drizzle, data, id);
@@ -834,3 +813,21 @@ export const endRankedSeason = async (client: DrizzleClient, seasonId: string) =
       : null,
   ]);
 };
+
+/**
+ * Staff without reputation permission cannot change a season's reputation rewards:
+ * each division keeps its stored value, and a division with none gets 0.
+ */
+const keepStoredReputation = (
+  rewards: RankedSeasonDivisionReward[],
+  stored: RankedSeasonDivisionReward[] = [],
+) =>
+  rewards.map((divisionReward) => ({
+    ...divisionReward,
+    rewards: {
+      ...divisionReward.rewards,
+      reward_reputation:
+        stored.find((r) => r.division === divisionReward.division)?.rewards
+          ?.reward_reputation ?? 0,
+    },
+  }));

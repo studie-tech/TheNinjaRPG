@@ -1,12 +1,18 @@
 import { COMBAT_ENMITY_PER_DAMAGE } from "@/drizzle/constants";
-import { getPower, sealCheck } from "./tags";
+import { getPower } from "./tags";
 import type {
   BattleUserState,
   Consequence,
   EnmityDamageKey,
   UserEffect,
 } from "./types";
-import { canStackEffect, getEffectStackKey, isEffectActive } from "./util";
+import {
+  canStackEffect,
+  getActiveSealEffects,
+  getEffectStackKey,
+  isEffectActive,
+  sealCheck,
+} from "./util";
 
 /** Damage threat belongs to the actor, including summons, and excludes friendly fire. */
 export const creditDamageEnmity = (
@@ -25,9 +31,7 @@ export const creditDamageEnmity = (
   let percentage = 0;
   let flat = 0;
   const applied = new Set<string>();
-  const seals = effects.filter(
-    (e) => e.type === "seal" && !e.isNew && isEffectActive(e),
-  );
+  const seals = getActiveSealEffects(effects);
   for (const effect of effects) {
     if (
       (effect.type !== "increaseaggro" && effect.type !== "decreaseaggro") ||

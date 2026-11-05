@@ -1,6 +1,7 @@
 /**
  * Database access for quests; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -24,9 +25,9 @@ import {
   IMG_AVATAR_DEFAULT,
   type LetterRank,
   MAX_EXPERIENCE_LEVEL,
-  NPC_ONLY_QUEST_TYPES,
   PET_TASK_MIN_RANK,
   type QuestType,
+  RESTRICTED_QUEST_TYPES,
   type UserRole,
   UserRoles,
   VILLAGE_SYNDICATE_ID,
@@ -68,10 +69,11 @@ import { getFarmingLevel } from "@/libs/farming";
 import { isSupportedOverworldBindingTask } from "@/libs/overworldAi";
 import { filterQuestTrackersForDbPersist, getUserQuests } from "@/libs/quest";
 import {
-  buildRewardChoiceCards,
   type RewardChoiceOwnership,
+  rewardChoiceContentIds,
 } from "@/libs/rewardChoice";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
+import { grantableTitleWhere } from "@/queries/title";
 import {
   extendWarParticipantSql,
   liftBracketImmunitySql,
@@ -79,6 +81,10 @@ import {
 } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -146,19 +152,19 @@ export const fetchQuest = async (client: DrizzleClient, id: string) => {
 };
 
 /**
- * Role of the (possibly signed-out) caller of a public content-browsing endpoint. Defaults to
- * "USER" so an unauthenticated visitor is redacted exactly like an ordinary player.
+ * Thin quest-state fetch for tracker emits: only the relations getNewTrackers needs
+ * (active + achievement userQuests, plus completedQuests for availability checks).
+ * Avoids fetchUpdatedUser's fat row and its regen side-writes.
  */
-export const fetchViewerRole = async (
-  client: DrizzleClient,
-  userId: string | null | undefined,
-) => {
-  if (!userId) return "USER" as UserRole;
-  const viewer = await client.query.userData.findFirst({
-    columns: { role: true },
+export const fetchQuestTrackerState = async (client: DrizzleClient, userId: string) => {
+  return await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
+    columns: { userId: true, questData: true, updatedAt: true },
+    with: {
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
+    },
   });
-  return viewer?.role ?? ("USER" as UserRole);
 };
 
 /**
@@ -194,7 +200,7 @@ export const fetchRestrictedNewQuestTargets = async (
     columns: { id: true, name: true },
     where: and(
       inArray(quest.id, targetIds),
-      inArray(quest.questType, [...NPC_ONLY_QUEST_TYPES, "special"]),
+      inArray(quest.questType, [...RESTRICTED_QUEST_TYPES]),
     ),
   });
 };
@@ -253,16 +259,7 @@ export const fetchRewardChoiceOwnership = async (
   user: Pick<UserData, "userId" | "sageModeId" | "masteryRanks">,
   cards: RewardChoiceCard[],
 ): Promise<RewardChoiceOwnership> => {
-  const expandedCards = cards.flatMap((card) =>
-    card.rewards ? buildRewardChoiceCards(card.rewards) : [card],
-  );
-  const idsFor = (field: RewardChoiceCard["field"]) => [
-    ...new Set(
-      expandedCards.flatMap((card) =>
-        card.field === field && card.contentId ? [card.contentId] : [],
-      ),
-    ),
-  ];
+  const idsFor = rewardChoiceContentIds(cards);
   const jutsuIds = idsFor("reward_jutsus");
   const bloodlineIds = idsFor("reward_bloodlines");
   const badgeIds = idsFor("reward_badges");
@@ -329,13 +326,7 @@ export const fetchRewardChoiceOwnership = async (
         ? client
             .select({ id: title.id })
             .from(title)
-            .where(
-              and(
-                inArray(title.id, titleIds),
-                isNull(title.legacyOwnerId),
-                eq(title.archived, false),
-              ),
-            )
+            .where(grantableTitleWhere(titleIds))
         : [],
     ]);
   const toSet = (rows: { id: string | null }[]) =>
@@ -422,16 +413,7 @@ export const listUserItemForSpecificQuests = (
   ctx: { userId: string },
 ) =>
   client.query.userItem.findMany({
-    where: and(
-      eq(userItem.userId, ctx.userId),
-      eq(userItem.storedAtHome, false),
-      eq(userItem.isInAuction, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lte(userItem.craftingFinishedAt, new Date()),
-      ),
-      gt(userItem.quantity, 0),
-    ),
+    where: carriedUserItemWhere(ctx.userId),
     columns: { itemId: true, quantity: true },
     with: { item: { columns: { name: true } } },
   });
@@ -1129,14 +1111,7 @@ export const selectTitleForUpdateRewards = (
       userTitle,
       and(eq(userTitle.titleId, title.id), eq(userTitle.userId, user.userId)),
     )
-    .where(
-      and(
-        inArray(title.id, rewards.reward_titles),
-        eq(title.archived, false),
-        isNull(title.legacyOwnerId),
-        isNull(userTitle.userId),
-      ),
-    );
+    .where(and(grantableTitleWhere(rewards.reward_titles), isNull(userTitle.userId)));
 
 /** Build the `sageMode` selection for `updateRewards`, using predicates on `id` and `userId`. */
 export const selectSageModeForUpdateRewards = (
@@ -1917,15 +1892,8 @@ export const listUserItemForHandleQuestConsequences = (
 ) =>
   client.query.userItem.findMany({
     where: and(
-      eq(userItem.userId, user.userId),
+      carriedUserItemWhere(user.userId),
       inArray(userItem.itemId, missingItemIds),
-      gt(userItem.quantity, 0),
-      eq(userItem.isInAuction, false),
-      eq(userItem.storedAtHome, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lte(userItem.craftingFinishedAt, new Date()),
-      ),
     ),
     columns: { id: true, itemId: true, quantity: true },
   });
@@ -2200,18 +2168,20 @@ export const selectQuestHistoryForQuestAttemptIsActive = (
 
 /** Inventory that can pay a quest entry: carried, not listed, and not still being crafted. */
 export const fetchQuestEntryInventory = (client: DrizzleClient, userId: string) =>
-  client.query.userItem.findMany({
-    where: and(
-      eq(userItem.userId, userId),
-      gt(userItem.quantity, 0),
-      eq(userItem.storedAtHome, false),
-      eq(userItem.isInAuction, false),
-      or(
-        isNull(userItem.craftingFinishedAt),
-        lt(userItem.craftingFinishedAt, new Date()),
-      ),
+  client.query.userItem.findMany({ where: carriedUserItemWhere(userId) });
+
+/** Stacks a user has in hand, the definition behind quest entry costs and deliveries. */
+const carriedUserItemWhere = (userId: string) =>
+  and(
+    eq(userItem.userId, userId),
+    gt(userItem.quantity, 0),
+    eq(userItem.storedAtHome, false),
+    eq(userItem.isInAuction, false),
+    or(
+      isNull(userItem.craftingFinishedAt),
+      lt(userItem.craftingFinishedAt, new Date()),
     ),
-  });
+  );
 
 /**
  * Build the `questHistory` update for `payQuestEntryAtStart`, setting `entryPaid`,

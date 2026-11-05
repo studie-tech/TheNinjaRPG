@@ -7,9 +7,9 @@
  * calls would let anyone credit any account.
  */
 
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { StorePlatform } from "@/drizzle/constants";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 
 /**
  * Only the fields that decide what happens. RevenueCat sends a great deal more, and the
@@ -220,9 +220,5 @@ export const isAuthorized = (
   secret: string | undefined,
 ): boolean => {
   if (!secret || !header) return false;
-  const provided = Buffer.from(header);
-  const expected = Buffer.from(secret);
-  // timingSafeEqual throws on a length mismatch, which would itself leak the length.
-  if (provided.length !== expected.length) return false;
-  return timingSafeEqual(provided, expected);
+  return constantTimeEquals(header, secret);
 };

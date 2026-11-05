@@ -10,6 +10,7 @@ import type {
   UserRole,
 } from "@/drizzle/constants";
 import { staffApplication } from "@/drizzle/schema";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -29,23 +30,7 @@ export const fetchApplication = async (info: {
       ...(applicationId ? [eq(staffApplication.id, applicationId)] : []),
       ...(status ? [eq(staffApplication.state, status)] : []),
     ),
-    with: {
-      applicant: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-        },
-        with: { village: { columns: { name: true } } },
-      },
-      approvals: {
-        with: {
-          approver: { columns: { userId: true, username: true, avatar: true } },
-        },
-      },
-    },
+    with: staffApplicationRelations,
   });
 };
 
@@ -100,27 +85,24 @@ export const listStaffApplicationForList = (
         ? [inArray(staffApplication.applicantUserId, usernameIds)]
         : []),
     ),
-    with: {
-      applicant: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-        },
-        with: { village: { columns: { name: true } } },
-      },
-      approvals: {
-        with: {
-          approver: { columns: { userId: true, username: true, avatar: true } },
-        },
-      },
-    },
+    with: staffApplicationRelations,
     orderBy: [desc(staffApplication.createdAt)],
     limit,
     offset: skip,
   });
+
+/** Applicant card and approval details loaded with every staff application read. */
+const staffApplicationRelations = {
+  applicant: {
+    columns: userSummaryColumns,
+    with: { village: { columns: { name: true } } },
+  },
+  approvals: {
+    with: {
+      approver: { columns: { userId: true, username: true, avatar: true } },
+    },
+  },
+} as const;
 
 /** Build the `staffApplication` lookup for `delete`, using predicates on `id`. */
 export const findStaffApplicationForDelete = (

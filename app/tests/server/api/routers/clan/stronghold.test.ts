@@ -151,6 +151,17 @@ describeWithDatabase("Stronghold membership and restoration", () => {
     expect(faction?.trainingBoost).toBe(2);
     expect(faction?.bank).toBe(STRONGHOLD_REESTABLISH_COST * 2 - 100000);
   });
+
+  it("keeps village-only boosts out of faction banks", async () => {
+    await seedFaction("HIDEOUT");
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(clanRouter, "leader", db);
+    const result = await caller.purchaseBoost({ clanId: "faction", boostType: "regenBoost" });
+    expect(result.success).toBe(false);
+    const [faction] = await db.select().from(clan);
+    expect(faction?.regenBoost).toBe(0);
+    expect(faction?.bank).toBe(STRONGHOLD_REESTABLISH_COST * 2);
+  });
 });
 
 /** Competing purchases must read the same boost level before their guarded writes race. */

@@ -190,11 +190,8 @@ export const insertSectorMapForSaveTiledSectorMap = (
     updatedAt: now,
   });
 
-/**
- * Build the `sectorMap` update for `saveTiledSectorMap`, setting `status` and
- * `updatedAt`, using predicates on `sector`, `status`, `version`.
- */
-export const updateSectorMapForSaveTiledSectorMap = (
+/** Build the update archiving a sector's published maps below `version`. */
+export const archiveOlderPublishedSectorMaps = (
   client: Pick<DrizzleClient, "update">,
   now: Date,
   input: { sector: number },

@@ -27,6 +27,7 @@ import {
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import { isBattleClaimId } from "@/libs/raids";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
 import { fetchBadge } from "@/queries/badge";
@@ -273,7 +274,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { removeDiscordLink } from "@/server/utils/discord/linking";
-import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   isDeletedStoreUserId,
   migrateStoreEntitlementRevocations,
@@ -298,6 +299,14 @@ import {
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
+/** Database table behind each content backup type. */
+const BACKUP_TABLES = {
+  bloodline: "Bloodline",
+  jutsu: "Jutsu",
+  item: "Item",
+  ai: "UserData",
+} as const;
+
 export const staffRouter = createTRPCRouter({
   // Content Backups
   getBackups: protectedProcedure.query(async ({ ctx }) => {
@@ -320,14 +329,7 @@ export const staffRouter = createTRPCRouter({
       }
 
       // Create backup SQL
-      const tableMap: Record<typeof input.type, string> = {
-        bloodline: "Bloodline",
-        jutsu: "Jutsu",
-        item: "Item",
-        ai: "UserData",
-      };
-
-      const tableName = tableMap[input.type];
+      const tableName = BACKUP_TABLES[input.type];
 
       const result = (await executeSelectSqlForCreateBackup(
         ctx.drizzle,
@@ -392,13 +394,7 @@ export const staffRouter = createTRPCRouter({
       const client = new PlanetScaleClient({ url: devUrl });
 
       // Derived
-      const tableMap: Record<typeof backup.type, string> = {
-        bloodline: "Bloodline",
-        jutsu: "Jutsu",
-        item: "Item",
-        ai: "UserData",
-      };
-      const tableName = tableMap[backup.type];
+      const tableName = BACKUP_TABLES[backup.type];
 
       // Validate the backup against the destination schema before deleting content.
       try {
@@ -555,7 +551,7 @@ export const staffRouter = createTRPCRouter({
         } else {
           // If there are remaining members but battleId is a claiming ID, reset it
           const team = await findMpvpBattleQueueForForceAwake(ctx.drizzle, queueEntry);
-          if (team?.battleId?.startsWith("claiming-")) {
+          if (isBattleClaimId(team?.battleId)) {
             await clearQueueBattleId(ctx.drizzle, queueEntry.clanBattleId);
           }
         }
@@ -1019,13 +1015,6 @@ export const staffRouter = createTRPCRouter({
 });
 
 /**
- * Delay execution for a specified number of milliseconds.
- * @param ms - The number of milliseconds to delay.
- */
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
  * Delete a user and associated data, retrying MySQL deadlocks with bounded backoff.
  * Reject accepted hunting AI references before this helper begins destructive cleanup.
  * @param client - The database client.
@@ -1039,39 +1028,20 @@ export const deleteUser = async (client: DrizzleClient, userId: string) => {
     return errorResponse(
       "This AI is used by an active hunting session. Wait for it to finish.",
     );
-  const MAX_RETRIES = 6;
-  const BASE_DELAY_MS = 100;
-  const MAX_JITTER_MS = 100;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      await deleteUserInternal(client, userId);
-      return;
-    } catch (error) {
-      if (isMysqlDeadlockError(error) && attempt < MAX_RETRIES) {
-        // Jitter keeps concurrent cleanup retries from repeatedly colliding.
-        const jitter = Math.random() * MAX_JITTER_MS;
-        const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1) + jitter;
-
-        // Add Sentry breadcrumb for monitoring retry patterns
-        Sentry.addBreadcrumb({
-          category: "retry",
-          message: `Retrying deleteUser due to deadlock (attempt ${attempt}/${MAX_RETRIES}, delay: ${Math.round(delayMs)}ms)`,
-          level: "info",
-          data: {
-            attempt,
-            maxRetries: MAX_RETRIES,
-            delayMs: Math.round(delayMs),
-            userId,
-          },
-        });
-
-        await delay(delayMs);
-        continue;
-      }
-      throw error;
-    }
-  }
+  const maxRetries = 6;
+  await retryOnDeadlock(() => deleteUserInternal(client, userId), maxRetries, {
+    baseDelayMs: 100,
+    jitterMs: 100,
+    onRetry: (attempt, delayMs) => {
+      // Add Sentry breadcrumb for monitoring retry patterns
+      Sentry.addBreadcrumb({
+        category: "retry",
+        message: `Retrying deleteUser due to deadlock (attempt ${attempt}/${maxRetries}, delay: ${Math.round(delayMs)}ms)`,
+        level: "info",
+        data: { attempt, maxRetries, delayMs: Math.round(delayMs), userId },
+      });
+    },
+  });
 };
 
 /**

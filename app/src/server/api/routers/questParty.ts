@@ -7,6 +7,7 @@ import { questCoopParty, transitionCoopParty } from "@/libs/coop";
 import { isQuestComplete } from "@/libs/objectives";
 import { getServerPusher } from "@/libs/pusher";
 import {
+  expandAiCopies,
   getActiveObjectives,
   getNewTrackers,
   isAvailableUserQuests,
@@ -16,6 +17,7 @@ import {
   questTypeConcurrentBlockMessage,
   questUiAccessBlockMessage,
 } from "@/libs/quest";
+import { createPartyClaimId, questPartyHelperAttemptId } from "@/libs/questParty";
 import { deleteConversationMembership } from "@/queries/comments";
 import {
   deleteClaimedQuestParty,
@@ -55,7 +57,11 @@ import {
   joinCoopChat,
   launchCoopEncounter,
 } from "@/server/utils/coop";
-import { saveQuestPartyMember, synchronizeQuestParty } from "@/server/utils/questParty";
+import {
+  saveQuestPartyMember,
+  synchronizeExistingQuestParty,
+  synchronizeQuestParty,
+} from "@/server/utils/questParty";
 import { secondsPassed } from "@/utils/time";
 import { QuestTracker } from "@/validators/objectives";
 import {
@@ -72,9 +78,7 @@ export const questPartyRouter = createTRPCRouter({
     .input(questPartyIdSchema)
     .mutation(async ({ ctx, input }) => {
       const loaded = await findQuestPartyForDisband(ctx.drizzle, input);
-      const party = loaded?.quest
-        ? await synchronizeQuestParty(ctx.drizzle, loaded)
-        : loaded;
+      const party = await synchronizeExistingQuestParty(ctx.drizzle, loaded);
       if (!party) return errorResponse("Quest team not found");
       const transition = transitionCoopParty(
         "quest",
@@ -87,7 +91,7 @@ export const questPartyRouter = createTRPCRouter({
       const members = [...(loaded?.members ?? []), ...party.members];
       if (members.some((member) => member.status === "BATTLE"))
         return errorResponse("Finish all members' battles before disbanding the team");
-      const claimId = `claiming:${Date.now()}:${nanoid()}`;
+      const claimId = createPartyClaimId(nanoid());
       const claimed = await updateQuestPartyForDisband(ctx.drizzle, claimId, party);
       if (claimed.rowsAffected !== 1)
         return errorResponse("The team changed. Please try again");
@@ -334,7 +338,7 @@ export const questPartyRouter = createTRPCRouter({
         "join",
       );
       if (!transition.success) return errorResponse(transition.message);
-      const joinClaimId = `claiming:${Date.now()}:${nanoid()}`;
+      const joinClaimId = createPartyClaimId(nanoid());
       const [history, reserved] = await Promise.all([
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, party.questId),
         claimUserSnapshot({
@@ -444,9 +448,7 @@ export const questPartyRouter = createTRPCRouter({
         !loaded.members.some((member) => member.userId === input.userId)
       )
         return errorResponse("This player is not in the team");
-      const party = loaded.quest
-        ? await synchronizeQuestParty(ctx.drizzle, loaded)
-        : loaded;
+      const party = await synchronizeExistingQuestParty(ctx.drizzle, loaded);
       if (party.battleId)
         return errorResponse("Finish the team's encounter before removing members");
       const result = await removeMember(
@@ -492,13 +494,10 @@ export const questPartyRouter = createTRPCRouter({
               secondsPassed(member.updatedAt) <= 60))
         )
           return errorResponse("You are not in this team");
-        if (isEmptyLeader && loaded.quest)
-          await synchronizeQuestParty(ctx.drizzle, loaded);
+        if (isEmptyLeader) await synchronizeExistingQuestParty(ctx.drizzle, loaded);
         return removeMember(ctx.drizzle, input.partyId, ctx.userId);
       }
-      const party = loaded.quest
-        ? await synchronizeQuestParty(ctx.drizzle, loaded)
-        : loaded;
+      const party = await synchronizeExistingQuestParty(ctx.drizzle, loaded);
       if (party.battleId)
         return errorResponse("Finish the team's encounter before leaving");
       return removeMember(ctx.drizzle, input.partyId, ctx.userId);
@@ -555,7 +554,7 @@ const acceptTeamQuest = async (
       return errorResponse("Claim your pending quest reward choice first");
     await updateQuestHistoryForAcceptTeamQuest(client, history);
     user.userQuests.push({
-      id: `party-${user.questPartyId}`,
+      id: questPartyHelperAttemptId(user.questPartyId),
       userId: user.userId,
       questId: definition.id,
       questType: definition.questType,
@@ -634,9 +633,7 @@ const removeMember = async (
     );
     if (!transition.success) return errorResponse(transition.message);
     const members = transition.party.memberIds;
-    const departureClaimId = members.length
-      ? null
-      : `claiming:${Date.now()}:${nanoid()}`;
+    const departureClaimId = members.length ? null : createPartyClaimId(nanoid());
     // Retain the last roster and canonical progress while its personal save commits.
     const saved = await updateQuestPartyForRemoveMember(
       client,
@@ -776,18 +773,10 @@ export const startQuestPartyEncounter = async ({
           client: client,
           cacheUserId: userId,
           userIds: party.memberIds,
-          targetIds:
-            ambush?.ids ??
-            objective?.opponentAIs.flatMap(
-              (opponent) =>
-                Array(opponent.number).fill(opponent.ids).flat() as string[],
-            ) ??
-            [],
+          targetIds: ambush?.ids ?? expandAiCopies(objective?.opponentAIs ?? []),
           allyAiIds:
             objective && "allyAIs" in objective
-              ? objective.allyAIs.flatMap(
-                  (ally) => Array(ally.number).fill(ally.ids).flat() as string[],
-                )
+              ? expandAiCopies(objective.allyAIs)
               : [],
           sector: user.sector,
           longitude: user.longitude,

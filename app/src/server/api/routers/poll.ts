@@ -13,17 +13,15 @@ import {
   findPollOptionForDeletePollOption,
   findPollOptionForVote,
   insertActionLogForAddOption,
-  insertActionLogForAddOption2,
   insertActionLogForClosePoll,
   insertActionLogForCreatePoll,
   insertActionLogForDeletePollOption,
   insertActionLogForUpdatePoll,
   insertPollForCreatePoll,
-  insertPollOptionForAddOption,
-  insertPollOptionForAddOption2,
-  insertPollOptionForCreatePoll,
+  insertPollOptions,
   insertUserPollVoteForVote,
   listPollForGetPolls,
+  toPollOptionRow,
   updatePollForClosePoll,
   updatePollForUpdatePoll,
   updateUserPollVoteForVote,
@@ -37,6 +35,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   canAddNonCustomPollOptions,
   canClosePolls,
@@ -56,6 +55,8 @@ import {
   votePollSchema,
 } from "@/validators/poll";
 
+const POLL_RANK_MESSAGE = "Too low rank to vote. Must be at least Genin.";
+
 export const pollRouter = createTRPCRouter({
   // Create a new poll
   createPoll: protectedProcedure
@@ -66,7 +67,7 @@ export const pollRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!canCreatePolls(user.role)) {
         return errorResponse("You don't have permission to create polls");
@@ -75,32 +76,14 @@ export const pollRouter = createTRPCRouter({
       const pollId = nanoid();
 
       // Create poll options with proper type casting
-      const optionsToInsert = input.options.map((option) => {
-        if (option.type === "text") {
-          return {
-            id: nanoid(),
-            pollId,
-            text: option.text,
-            optionType: "text" as const,
-            createdByUserId: user.userId,
-            isCustomOption: false,
-          };
-        }
-        return {
-          id: nanoid(),
-          pollId,
-          text: option.username,
-          optionType: "user" as const,
-          targetUserId: option.userId,
-          createdByUserId: user.userId,
-          isCustomOption: false,
-        };
-      });
+      const optionsToInsert = input.options.map((option) =>
+        toPollOptionRow(option, pollId, user.userId, false),
+      );
 
       // Run both database operations in parallel
       await Promise.all([
         insertPollForCreatePoll(ctx.drizzle, pollId, input, user),
-        insertPollOptionForCreatePoll(ctx.drizzle, optionsToInsert),
+        insertPollOptions(ctx.drizzle, optionsToInsert),
         insertActionLogForCreatePoll(ctx.drizzle, user, input, pollId),
       ]);
 
@@ -120,7 +103,7 @@ export const pollRouter = createTRPCRouter({
 
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!existingPoll) return errorResponse("Poll not found");
       if (existingPoll.createdByUserId !== user.userId && !canEditPolls(user.role)) {
@@ -163,12 +146,12 @@ export const pollRouter = createTRPCRouter({
       ]);
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!existingPoll) return errorResponse("Poll not found");
       if (!existingPoll.isActive) return errorResponse("Poll is not active");
       if (!option) return errorResponse("Option not found");
-      if (existingPoll.endDate && new Date(existingPoll.endDate) < new Date()) {
+      if (hasPollEnded(existingPoll)) {
         return errorResponse("Poll has ended");
       }
 
@@ -202,27 +185,24 @@ export const pollRouter = createTRPCRouter({
       if (!isAdmin && !existingPoll.allowCustomOptions) {
         return errorResponse("Custom options are not allowed for this poll");
       }
-      if (existingPoll.endDate && new Date(existingPoll.endDate) < new Date()) {
+      if (hasPollEnded(existingPoll)) {
         return errorResponse("Poll has ended");
       }
 
       // Create new option
-      if (input.type === "text") {
-        await insertPollOptionForAddOption(ctx.drizzle, input, user, isAdmin);
-        await insertActionLogForAddOption(ctx.drizzle, user, existingPoll, input);
-      } else {
-        await insertPollOptionForAddOption2(ctx.drizzle, input, user, isAdmin);
-        await insertActionLogForAddOption2(ctx.drizzle, user, existingPoll, input);
-      }
+      // Only mark as custom if not admin
+      await insertPollOptions(ctx.drizzle, [
+        toPollOptionRow(input, input.pollId, user.userId, !isAdmin),
+      ]);
+      await insertActionLogForAddOption(ctx.drizzle, user, existingPoll, input);
 
       return { success: true, message: "Option added successfully" };
     }),
 
   // Get all polls with pagination
   getPolls: publicProcedure.input(getPollsSchema).query(async ({ ctx, input }) => {
-    const currentCursor = input.cursor ?? 0;
     const limit = input.limit;
-    const skip = currentCursor * limit;
+    const { skip, cursorAfter } = offsetPage(input);
     const whereClause = input.includeInactive ? undefined : eq(poll.isActive, true);
 
     // First, get the polls with their options and creators
@@ -252,7 +232,7 @@ export const pollRouter = createTRPCRouter({
       return processPollWithVotes(pollData, optionVotes, totalVotes);
     });
 
-    const nextCursor = polls.length < limit ? null : currentCursor + 1;
+    const nextCursor = cursorAfter(polls);
     return {
       data: pollsWithVoteCounts,
       nextCursor,
@@ -282,12 +262,12 @@ export const pollRouter = createTRPCRouter({
 
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!existingPoll) return errorResponse("Poll not found");
       if (!existingPoll.isActive) return errorResponse("Poll is not active");
       if (!existingVote) return errorResponse("You haven't voted in this poll");
-      if (existingPoll.endDate && new Date(existingPoll.endDate) < new Date()) {
+      if (hasPollEnded(existingPoll)) {
         return errorResponse("Poll has ended");
       }
 
@@ -309,7 +289,7 @@ export const pollRouter = createTRPCRouter({
 
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!existingPoll) return errorResponse("Poll not found");
       if (!canClosePolls(user.role)) {
@@ -342,7 +322,7 @@ export const pollRouter = createTRPCRouter({
 
       // Guard
       if (!canInteractWithPolls(user.rank)) {
-        return errorResponse("Too low rank to vote. Must be at least Genin.");
+        return errorResponse(POLL_RANK_MESSAGE);
       }
       if (!existingPoll) return errorResponse("Poll not found");
       if (!existingOption) return errorResponse("Option not found");
@@ -369,3 +349,7 @@ export const pollRouter = createTRPCRouter({
       return { success: true, message: "Poll option deleted successfully" };
     }),
 });
+
+/** Whether a poll with a closing date has passed it. */
+const hasPollEnded = (existingPoll: { endDate: Date | null }) =>
+  !!existingPoll.endDate && new Date(existingPoll.endDate) < new Date();

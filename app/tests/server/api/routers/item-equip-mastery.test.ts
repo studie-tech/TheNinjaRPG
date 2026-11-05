@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { toggleEquipItem } from "@/server/api/routers/item";
 import type { DrizzleClient } from "@/server/db";
@@ -50,7 +51,12 @@ const chestArmor = (
     },
   }) as unknown as UserItemWithRelations;
 
-const equip = (useritems: UserItemWithRelations[], userItemId: string, mastery: number) =>
+const equip = (
+  useritems: UserItemWithRelations[],
+  userItemId: string,
+  mastery: number,
+  slot?: ItemSlot,
+) =>
   toggleEquipItem(
     client,
     userItemId,
@@ -70,6 +76,7 @@ const equip = (useritems: UserItemWithRelations[], userItemId: string, mastery: 
       userSkills: [],
       items: useritems.filter((ui) => ui.equipped !== "NONE"),
     } as unknown as Parameters<typeof toggleEquipItem>[3],
+    slot,
   );
 
 describe("toggleEquipItem mastery gate", () => {
@@ -93,5 +100,40 @@ describe("toggleEquipItem mastery gate", () => {
     const worn = chestArmor("worn", { equipped: "CHEST", effects: [ninjutsuBuff(400)] });
     const result = await equip([worn, chestArmor("gated", { required: 500 })], "gated", 100);
     expect(result).toMatchObject({ success: false });
+  });
+});
+
+describe("toggleEquipItem slot choice", () => {
+  const trinket = (id: string, equipped = "NONE") => {
+    const row = chestArmor(id, { equipped });
+    row.item = { ...row.item, slot: "ITEM", itemType: "CONSUMABLE", maxEquips: 9 };
+    return row;
+  };
+
+  it("fills the last free compatible slot", async () => {
+    const result = await equip([trinket("a"), trinket("b", "ITEM_6")], "a", 100);
+    expect(result).toMatchObject({ success: true });
+    const equipped = "newUserItems" in result ? result.newUserItems : [];
+    expect(equipped.find((row) => row.id === "a")?.equipped).toBe("ITEM_5");
+  });
+
+  it("refuses an item without a real slot type", async () => {
+    const row = chestArmor("slotless");
+    row.item = { ...row.item, slot: "NONE" };
+    const result = await equip([row], "slotless", 100);
+    expect(result).toMatchObject({ success: false, message: "No slot found" });
+  });
+
+  it("refuses a requested slot the item does not fit", async () => {
+    const result = await equip([chestArmor("armor")], "armor", 100, "HEAD");
+    expect(result).toMatchObject({
+      success: false,
+      message: "This item does not fit that slot",
+    });
+  });
+
+  it("unequips into any requested slot it already occupies", async () => {
+    const result = await equip([chestArmor("armor", { equipped: "CHEST" })], "armor", 100, "CHEST");
+    expect(result).toMatchObject({ success: true, message: "Unequipped armor" });
   });
 });

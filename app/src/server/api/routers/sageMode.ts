@@ -7,7 +7,7 @@ import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
-import { fetchUser, findUserRoleById } from "@/queries/profile";
+import { fetchUser, fetchViewerRole } from "@/queries/profile";
 import {
   deleteSageModeForDelete,
   fetchSageMode,
@@ -34,6 +34,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
+import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
@@ -65,8 +66,8 @@ export const sageModeRouter = createTRPCRouter({
    * only for content staff (`canChangeContent`); everyone else sees visible rows.
    */
   getAllNames: publicProcedure.query(async ({ ctx }) => {
-    const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
-    const allowHidden = user ? canChangeContent(user.role) : false;
+    const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+    const allowHidden = canChangeContent(viewerRole);
     return await listSageModeForGetAllNames(ctx.drizzle, allowHidden);
   }),
 
@@ -82,10 +83,9 @@ export const sageModeRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
-      const user = ctx.userId ? await findUserRoleById(ctx.drizzle, ctx.userId) : null;
-      const allowHiddenFilter = user ? canChangeContent(user.role) : false;
+      const { skip, cursorAfter } = offsetPage(input);
+      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const allowHiddenFilter = canChangeContent(viewerRole);
       const baseFilters = sageModeDatabaseFilter(input, allowHiddenFilter);
       const results = await listSageModeForGetAll(
         ctx.drizzle,
@@ -93,7 +93,7 @@ export const sageModeRouter = createTRPCRouter({
         skip,
         input,
       );
-      const nextCursor = results.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(results);
       return {
         data: results,
         nextCursor: nextCursor,
@@ -204,9 +204,7 @@ export const sageModeRouter = createTRPCRouter({
           updateSageModeForUpdate(ctx.drizzle, newData, input),
           insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
         ]);
-        if (process.env.NODE_ENV !== "development") {
-          await callDiscordContent(user.username, entry.name, diff, entry.image);
-        }
+        await callDiscordContent(user.username, entry.name, diff, entry.image);
         return { success: true, message: `Data updated: ${diff.join(". ")}` };
       } else {
         return { success: false, message: `Not allowed to edit sage mode` };

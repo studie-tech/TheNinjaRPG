@@ -34,26 +34,44 @@ export const updateVillageForRecordVillageMissionProgress = (
     .set({
       missionCounters: sql`JSON_SET(${village.missionCounters}, ${sql.join(argumentsSql, sql`, `)})`,
     })
-    .where(
-      and(
-        eq(village.id, villageId),
-        eq(village.type, "VILLAGE"),
-        isNotNull(village.activeMission),
-        // A player who changed villages while an activity was in flight cannot credit the old village.
-        exists(
-          client
-            .select({ userId: userData.userId })
-            .from(userData)
-            .where(
-              and(
-                eq(userData.userId, userId),
-                eq(userData.villageId, village.id),
-                eq(userData.isOutlaw, false),
-              ),
-            ),
+    .where(missionEligibleVillage(client, villageId, userId));
+
+/** A village with a running mission that this player still belongs to. */
+export const missionEligibleVillage = (
+  client: Pick<DrizzleClient, "select">,
+  villageId: string,
+  userId: string,
+) =>
+  and(
+    eq(village.id, villageId),
+    eq(village.type, "VILLAGE"),
+    isNotNull(village.activeMission),
+    // A player who changed villages while an activity was in flight cannot credit the old village.
+    exists(
+      client
+        .select({ userId: userData.userId })
+        .from(userData)
+        .where(
+          and(
+            eq(userData.userId, userId),
+            eq(userData.villageId, village.id),
+            eq(userData.isOutlaw, false),
+          ),
         ),
-      ),
-    );
+    ),
+  );
+
+/** The JSON_SET path and value that add `amount` to a mission counter. */
+export const missionCounterIncrement = (
+  task: VillageMissionTask,
+  amount: number | SQL<unknown>,
+) => {
+  const path = `$.${task}`;
+  return [
+    sql`${path}`,
+    sql`COALESCE(JSON_EXTRACT(${village.missionCounters}, ${path}), 0) + ${amount}`,
+  ];
+};
 
 /**
  * Build the locking shrine snapshot derived table; compose it into the damage UPDATE
@@ -86,25 +104,6 @@ export const selectWarForApplyVillageMissionShrineDamage = (
     .limit(1)
     .for("update")
     .as("shrine_snapshot");
-
-/**
- * Build the `userData` selection for `applyVillageMissionShrineDamage`, including
- * predicates on `userId`, `villageId`, `id`.
- */
-export const selectUserDataForApplyVillageMissionShrineDamage = (
-  client: Pick<DrizzleClient, "select">,
-  userId: string,
-) =>
-  client
-    .select({ userId: userData.userId })
-    .from(userData)
-    .where(
-      and(
-        eq(userData.userId, userId),
-        eq(userData.villageId, village.id),
-        eq(userData.isOutlaw, false),
-      ),
-    );
 
 /** Execute the database statement for `applyVillageMissionShrineDamage`. */
 export const executeResultForApplyVillageMissionShrineDamage = (

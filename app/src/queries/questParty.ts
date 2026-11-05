@@ -1,6 +1,7 @@
 /**
  * Database access for quest party; authorization and transaction scopes stay in callers.
  */
+
 import { and, desc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { QUEST_PARTY_MAX_MEMBERS } from "@/drizzle/constants";
 import {
@@ -10,6 +11,7 @@ import {
   user2conversation,
   userData,
 } from "@/drizzle/schema";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { QuestTrackerType } from "@/validators/objectives";
 
@@ -256,7 +258,7 @@ export const releaseTeamSlot = (
     .update(userData)
     .set({
       questPartyId: null,
-      updatedAt: sql`GREATEST(NOW(3), DATE_ADD(${userData.updatedAt}, INTERVAL 1000 MICROSECOND))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(and(eq(userData.userId, userId), eq(userData.questPartyId, partyId)));
 

@@ -68,28 +68,15 @@ const moderateUploadedImage = async (
   return { fileUrl: servedUfsUrl(file) };
 };
 
-/**
- * Check if user is admin
- * @param file
- * @param userId
- */
+/** Require a signed-in, unbanned user who may change game content. */
 const adminMiddleware = async () => {
-  // Fetch & Guard
-  const { userId } = await auth();
-  if (!userId) throw new UploadThingError("Unauthorized");
-
-  const user = await findUserById(drizzleDB, userId);
-  if (!user) throw new UploadThingError("User not found");
-  if (user.isBanned) throw new UploadThingError("You are banned");
-
-  // Role Check
+  const user = await fetchUploadUser();
   if (!canChangeContent(user.role)) {
     throw new UploadThingError(
       `You do not have permission to upload content files. Your role: ${user.role}`,
     );
   }
-
-  return { userId };
+  return { userId: user.userId };
 };
 
 export const ourFileRouter = {

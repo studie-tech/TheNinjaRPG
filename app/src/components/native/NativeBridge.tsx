@@ -29,7 +29,7 @@ import {
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
-import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
+import { createNativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { usePublicPathname } from "@/utils/routing";
 import { type useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
@@ -68,7 +68,7 @@ export default function NativeBridge() {
   // Keep bridge writes ordered. A slow A snapshot must finish before the handoff clear,
   // and that clear must finish before B's first snapshot, or native completion order could
   // put stale A data back after React has already moved on.
-  const widgetOperations = useRef(new NativeWidgetOperations());
+  const widgetOperations = useRef(createNativeWidgetOperations());
 
   const clearWidgets = useCallback(async () => {
     // Invalidate queued snapshots synchronously, before this clear waits behind a native

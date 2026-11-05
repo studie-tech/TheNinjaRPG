@@ -16,12 +16,17 @@ import {
   RAID_CLAIMING_TIMEOUT_MS,
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
+import type { Quest } from "@/drizzle/schema";
+import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
 import {
+  createBattleClaimId,
   getRaidChatConversationId,
   getRaidObjectiveData,
+  isBattleClaimId,
   isRaidListedForVillage,
+  raidCaptureClosedMessage,
   raidRewardBlockMessage,
   validateRaidIsActive,
 } from "@/libs/raids";
@@ -116,6 +121,13 @@ import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
+const damageThresholdFields = {
+  damageRequired: z.number().min(1),
+  rewards: ObjectiveReward,
+  effects: z.array(AllTags).prefault([]),
+  effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
+};
+
 export const raidsRouter = createTRPCRouter({
   /**
    * Get completed raids (ended or boss defeated) for viewing history and claiming rewards
@@ -147,15 +159,7 @@ export const raidsRouter = createTRPCRouter({
           const timeExpired = raid.raidEndsAt ? raid.raidEndsAt < now : false;
 
           return {
-            id: raid.id,
-            name: raid.name,
-            description: raid.description,
-            image: raid.image,
-            raidType: raidData?.raidType ?? null,
-            raidBossMaxHealth: raid.raidBossMaxHealth,
-            raidBossCurrentHealth: raid.raidBossCurrentHealth,
-            raidEndsAt: raid.raidEndsAt,
-            raidSector: raidData?.sector ?? null,
+            ...toRaidSummary(raid, raidData),
             userParticipation: raid.raidParticipations[0] ?? null,
             // Completion status
             completionStatus: bossDefeated ? "boss_defeated" : "time_expired",
@@ -198,16 +202,7 @@ export const raidsRouter = createTRPCRouter({
       // Sectors where user's village is attacker (or ally of attacker) and shrine is defeated
       const attackerDefeatedShrineSectors = new Set(
         activeSectorWars
-          .filter((w) => {
-            // User's village is the attacker
-            if (w.attackerVillageId === user.villageId) return true;
-            // User's village is an ally supporting the attacker
-            return w.warAllies.some(
-              (a) =>
-                a.villageId === user.villageId &&
-                a.supportVillageId === w.attackerVillageId,
-            );
-          })
+          .filter((w) => getWarSide(w, user.villageId) === w.attackerVillageId)
           .map((w) => w.sector),
       );
 
@@ -234,15 +229,7 @@ export const raidsRouter = createTRPCRouter({
         raids: sectorFilteredRaids.map((raid) => {
           const raidData = getRaidObjectiveData(raid);
           return {
-            id: raid.id,
-            name: raid.name,
-            description: raid.description,
-            image: raid.image,
-            raidType: raidData?.raidType ?? null,
-            raidBossMaxHealth: raid.raidBossMaxHealth,
-            raidBossCurrentHealth: raid.raidBossCurrentHealth,
-            raidEndsAt: raid.raidEndsAt,
-            raidSector: raidData?.sector ?? null,
+            ...toRaidSummary(raid, raidData),
             raidCaptureDeadline: raid.raidCaptureDeadline,
             raidGracePeriodEnd: raid.raidGracePeriodEnd,
             userParticipation: raid.raidParticipations[0] ?? null,
@@ -286,15 +273,7 @@ export const raidsRouter = createTRPCRouter({
 
       return {
         raid: {
-          id: raid.id,
-          name: raid.name,
-          description: raid.description,
-          image: raid.image,
-          raidType: raidData?.raidType ?? null,
-          raidBossMaxHealth: raid.raidBossMaxHealth,
-          raidBossCurrentHealth: raid.raidBossCurrentHealth,
-          raidEndsAt: raid.raidEndsAt,
-          raidSector: raidData?.sector ?? null,
+          ...toRaidSummary(raid, raidData),
           raidChatConversationId: chatMembership ? raidChatConversationId : null,
         },
         participation,
@@ -378,8 +357,7 @@ export const raidsRouter = createTRPCRouter({
       }
 
       // Allow teams in "claiming-" state to be visible (they're stuck during battle initialization)
-      const isClaimingState =
-        queue.clanBattle.battleId?.startsWith("claiming-") ?? false;
+      const isClaimingState = isBattleClaimId(queue.clanBattle.battleId);
       if (queue.clanBattle.battleId !== null && !isClaimingState) {
         return { inQueue: false, queue: null, isClaiming: false };
       }
@@ -439,12 +417,9 @@ export const raidsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(
       z.object({
+        ...damageThresholdFields,
         questId: z.string(),
-        damageRequired: z.number().min(1),
         sortOrder: z.number().min(0).max(255).prefault(0),
-        rewards: ObjectiveReward,
-        effects: z.array(AllTags).prefault([]),
-        effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
       }),
     )
     .output(baseServerResponse)
@@ -478,12 +453,9 @@ export const raidsRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(
       z.object({
+        ...damageThresholdFields,
         thresholdId: z.string(),
-        damageRequired: z.number().min(1),
         sortOrder: z.number().min(0).max(255),
-        rewards: ObjectiveReward,
-        effects: z.array(AllTags).prefault([]),
-        effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
       }),
     )
     .output(baseServerResponse)
@@ -551,7 +523,7 @@ export const raidsRouter = createTRPCRouter({
       // Derived
       return {
         teams: teams.map((team) => {
-          const isClaiming = team.battleId?.startsWith("claiming-") ?? false;
+          const isClaiming = isBattleClaimId(team.battleId);
           return {
             id: team.id,
             createdAt: team.createdAt,
@@ -770,14 +742,8 @@ export const raidsRouter = createTRPCRouter({
         }
 
         // Check capture deadline and grace period
-        if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
-          if (!raid.raidGracePeriodEnd) {
-            return reject("This raid's capture deadline has passed");
-          }
-          if (raid.raidGracePeriodEnd < now) {
-            return reject("This raid's capture deadline and grace period have ended");
-          }
-        }
+        const captureClosed = raidCaptureClosedMessage(raid, now);
+        if (captureClosed) return reject(captureClosed);
 
         // Check sector ownership OR attacker in sector war with defeated shrine
         const [sectorOwnership, sectorWar] = await Promise.all([
@@ -791,12 +757,7 @@ export const raidsRouter = createTRPCRouter({
         // Check if user's village is attacker or ally supporting the attacker
         const isAttackerOrAlly =
           sectorWar &&
-          (sectorWar.attackerVillageId === user.villageId ||
-            sectorWar.warAllies.some(
-              (a) =>
-                a.villageId === user.villageId &&
-                a.supportVillageId === sectorWar.attackerVillageId,
-            ));
+          getWarSide(sectorWar, user.villageId) === sectorWar.attackerVillageId;
 
         if (!sectorOwnership && !isAttackerOrAlly) {
           return reject("Your village does not control this sector");
@@ -952,8 +913,7 @@ export const raidsRouter = createTRPCRouter({
         return reject("You are not in a raid queue");
       }
       // Allow leaving if not in a real battle (claiming state is allowed)
-      const isClaimingState =
-        queueEntry.clanBattle.battleId?.startsWith("claiming-") ?? false;
+      const isClaimingState = isBattleClaimId(queueEntry.clanBattle.battleId);
       if (queueEntry.clanBattle.battleId !== null && !isClaimingState) {
         return reject("Battle has already started");
       }
@@ -1029,7 +989,7 @@ export const raidsRouter = createTRPCRouter({
       // Check battleId state - handle stale claiming states or already started battles
       if (team.battleId !== null) {
         const isStaleClaimingState =
-          team.battleId.startsWith("claiming-") &&
+          isBattleClaimId(team.battleId) &&
           team.createdAt.getTime() < Date.now() - RAID_CLAIMING_TIMEOUT_MS;
 
         if (isStaleClaimingState) {
@@ -1083,7 +1043,7 @@ export const raidsRouter = createTRPCRouter({
       }
 
       // Mutation - claim the battle atomically
-      const claimId = `claiming-${nanoid()}`;
+      const claimId = createBattleClaimId(nanoid());
       const claimResult = await claimBattleQueue(ctx.drizzle, claimId, input.teamId);
 
       if (claimResult.rowsAffected === 0) {
@@ -1488,3 +1448,28 @@ const ensureRaidChatConversation = async (
 
   return conversationId;
 };
+
+/** Fields every raid listing shares; callers add their own participation or schedule. */
+const toRaidSummary = (
+  raid: Pick<
+    Quest,
+    | "id"
+    | "name"
+    | "description"
+    | "image"
+    | "raidBossMaxHealth"
+    | "raidBossCurrentHealth"
+    | "raidEndsAt"
+  >,
+  raidData: ReturnType<typeof getRaidObjectiveData>,
+) => ({
+  id: raid.id,
+  name: raid.name,
+  description: raid.description,
+  image: raid.image,
+  raidType: raidData?.raidType ?? null,
+  raidBossMaxHealth: raid.raidBossMaxHealth,
+  raidBossCurrentHealth: raid.raidBossCurrentHealth,
+  raidEndsAt: raid.raidEndsAt,
+  raidSector: raidData?.sector ?? null,
+});

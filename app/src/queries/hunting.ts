@@ -1,6 +1,7 @@
 /**
  * Database access for hunting; authorization and transaction scopes stay in callers.
  */
+
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -14,6 +15,7 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import type { HuntingHabitatContent, HuntingReceipt } from "@/validators/hunting";
 
@@ -98,18 +100,6 @@ export const listItemForSave = (
     columns: { id: true },
   });
 
-/** Build the `sectorMap` listing for `save`, using predicates on `sector` and `status`. */
-export const listSectorMapForSave = (
-  client: Pick<DrizzleClient, "query">,
-  input: { content: { sectors: number[] } },
-) =>
-  client.query.sectorMap.findMany({
-    where: and(
-      inArray(sectorMap.sector, input.content.sectors),
-      eq(sectorMap.status, "PUBLISHED"),
-    ),
-  });
-
 /** Build the `huntingHabitat` update for `save`, setting `content` and `updatedAt`, using predicates on `id`. */
 export const updateHuntingHabitatForSave = (
   client: Pick<DrizzleClient, "update">,
@@ -121,7 +111,7 @@ export const updateHuntingHabitatForSave = (
     .set({
       content,
       // Same-millisecond saves must invalidate admission's captured revision.
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${huntingHabitat.updatedAt}))`,
+      updatedAt: nextSnapshotSql(huntingHabitat.updatedAt),
     })
     .where(eq(huntingHabitat.id, id));
 

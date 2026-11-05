@@ -1,5 +1,6 @@
 import {
   AUCTION_SALES_TAX_PERCENT,
+  type AuctionListingType,
   type TradeableCurrencyType,
 } from "@/drizzle/constants";
 import type { Item, ItemPurchaseCounter } from "@/drizzle/schema";
@@ -11,7 +12,7 @@ export const getAuctionSellerPayout = (salePrice: number) =>
 
 export const getAuctionPriceError = (
   item: Pick<Item, "canBeTraded" | "auctionMinPrice" | "auctionMaxPrice">,
-  listingType: "AUCTION" | "DIRECT",
+  listingType: AuctionListingType,
   price: number,
   quantity: number,
   currencyType: TradeableCurrencyType,

@@ -128,11 +128,44 @@ export const PostProcessedRewardSchema = z.object({
 /** Type for post-processed rewards - single source of truth */
 export type PostProcessedRewards = z.infer<typeof PostProcessedRewardSchema>;
 
+type MasteryPromotionFields = Partial<
+  Pick<ObjectiveRewardType, "reward_mastery_stat" | "reward_mastery_rank">
+>;
+
+export const MASTERY_PROMOTION_PAIR_MESSAGE =
+  "Select both the mastery and its rank reward";
+
+/** True when a reward names a mastery rank to promote to. */
+export const hasPromotionRank = (reward: MasteryPromotionFields) =>
+  !!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE";
+
+/** Detect the mastery half of a rank-promotion reward. */
+const hasPromotionStat = (reward: MasteryPromotionFields) =>
+  !!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None";
+
+/** True when a reward carries a complete mastery promotion, narrowing both fields. */
+export const hasMasteryPromotion = <T extends MasteryPromotionFields>(
+  reward: T,
+): reward is T & {
+  reward_mastery_stat: Exclude<
+    MasteryPromotionFields["reward_mastery_stat"],
+    "None" | undefined
+  >;
+  reward_mastery_rank: Exclude<
+    MasteryPromotionFields["reward_mastery_rank"],
+    "NONE" | undefined
+  >;
+} => hasPromotionStat(reward) && hasPromotionRank(reward);
+
+/** True when only one half of a mastery promotion is set. */
+export const hasUnpairedMasteryPromotion = (reward: MasteryPromotionFields) =>
+  hasPromotionStat(reward) !== hasPromotionRank(reward);
+
 /** True when any reward field is non-empty, including sage modes and sage mastery XP. */
 export const hasReward = (reward: ObjectiveRewardType) => {
   const parsedReward = ObjectiveReward.parse(reward);
   return (
-    (parsedReward.reward_mastery_rank && parsedReward.reward_mastery_rank !== "NONE") ||
+    hasPromotionRank(parsedReward) ||
     REWARD_CHOICE_AMOUNT_FIELDS.some((field) => (parsedReward[field] ?? 0) > 0) ||
     parsedReward.reward_rank !== "NONE" ||
     parsedReward.reward_village_membership !== "NONE" ||

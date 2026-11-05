@@ -1,14 +1,11 @@
 import { z } from "zod";
 import { ActivityStreakTypes } from "@/drizzle/constants";
-import { rewardFields } from "./rewards";
-
-// Reward schema built from the shared reward fields
-export const streakRewardSchema = z.object(rewardFields);
+import { ObjectiveReward } from "./rewards";
 
 // Single day reward configuration
 export const streakDayRewardSchema = z.object({
   dayNumber: z.coerce.number().min(1).max(28),
-  rewards: streakRewardSchema,
+  rewards: ObjectiveReward,
   image: z.url().optional().nullable(),
 });
 export type StreakDayRewardType = z.infer<typeof streakDayRewardSchema>;
@@ -95,17 +92,7 @@ export const claimStreakDaySchema = z.object({
 });
 
 // Form schema for editing activity streak config (rewards managed separately in state)
-export const activityStreakFormSchema = z.object({
-  name: z.string().min(1, "Name is required").max(191),
-  description: z.string().max(5000).optional().nullable(),
-  image: z.url().optional().nullable(),
-  totalDays: z.coerce.number().min(1).max(28).prefault(14),
-  streakType: z.enum(ActivityStreakTypes).prefault("RECURRING"),
-  isActive: z.boolean().prefault(true),
-  ryoCost: z.coerce.number().min(0).prefault(0),
-  repsCost: z.coerce.number().min(0).prefault(0),
-  seichiSilverCost: z.coerce.number().min(0).prefault(0),
-  startDate: z.coerce.date().optional().nullable(),
-  endDate: z.coerce.date().optional().nullable(),
+export const activityStreakFormSchema = activityStreakConfigBaseSchema.omit({
+  rewards: true,
 });
 export type ActivityStreakFormType = z.infer<typeof activityStreakFormSchema>;

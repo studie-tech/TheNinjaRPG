@@ -15,6 +15,8 @@ const PET_SPRITE_ALPHA_THRESHOLD = 16;
 const PET_SPRITE_MAX_HAZE = 0.25;
 /** Provider canvases are larger than the stored sprite, so input decoding is bounded. */
 const MAX_SOURCE_PIXELS = 2048 * 2048;
+/** Decode limit for generated pet images and the references sent with them. */
+export const MAX_PET_IMAGE_PIXELS = 1024 * 1024;
 
 /**
  * Report whether a cutout keeps a semi-transparent backdrop: GPT Image's native

@@ -14,11 +14,12 @@ import {
   WeaponTypes,
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
+import { useContentSubmit } from "@/hooks/contentSubmit";
+import { useTargetingMethodFields } from "@/hooks/targetingMethod";
 import type { FormEntry } from "@/layout/EditContent";
 import { focusWeightedCacheError } from "@/layout/WeightedCacheEditor";
 import { EVOLUTION_STAT_FORM_FIELDS } from "@/libs/evolution";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
-import { calculateContentDiff } from "@/utils/diff";
 import type { ZodAllTags, ZodItemInput, ZodItemType } from "@/validators/combat";
 import { IncreaseStatTag, ItemValidator } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
@@ -33,7 +34,7 @@ export const useItemEditForm = (
   refetch: () => Promise<unknown>,
 ) => {
   const utils = api.useUtils();
-  const submitInFlight = useRef(false);
+  const submitContent = useContentSubmit();
 
   // Case type
   const expireFromStoreAt = data.expireFromStoreAt
@@ -63,9 +64,7 @@ export const useItemEditForm = (
     defaultValues: item as ZodItemInput,
     resolver: zodResolver(ItemValidator),
   });
-  // Keep parent-owned objects registered while their conditional editors are hidden.
-  form.register("coordinateTargeting");
-  form.register("methodSize");
+  const targetingFields = useTargetingMethodFields(form);
   form.register("furnitureData");
 
   // Mutation for updating item
@@ -82,34 +81,19 @@ export const useItemEditForm = (
           ]);
         }
       },
-      onSettled: () => {
-        submitInFlight.current = false;
-      },
     });
 
   // Form submission
   const handleItemSubmit = form.handleSubmit(
     async (data: ZodItemType) => {
-      if (submitInFlight.current) return;
       const cacheError = focusWeightedCacheError();
       if (cacheError) {
         showMutationToast({ success: false, message: `Cannot save. ${cacheError}` });
         return;
       }
-      const newItem = {
-        ...item,
-        ...data,
-      };
-      const diff = calculateContentDiff(item, newItem);
-      if (diff.length > 0) {
-        submitInFlight.current = true;
-        try {
-          await updateItem({ id: item.id, data: newItem });
-        } catch {
-          // The shared tRPC error handler reports transport failures. Do not
-          // refetch here: retaining this draft makes the failed save retryable.
-        }
-      }
+      await submitContent(item, { ...item, ...data }, (newItem) =>
+        updateItem({ id: item.id, data: newItem }),
+      );
     },
     (errors) => {
       const cacheError = errors.effects ? focusWeightedCacheError() : undefined;
@@ -203,25 +187,6 @@ export const useItemEditForm = (
   const { data: requiredSkills } = api.skillTree.getAllNames.useQuery();
 
   // Object for form values
-  const targetingMethod = useWatch({ control: form.control, name: "method" });
-  const previousTargetingMethod = useRef(targetingMethod);
-  useEffect(() => {
-    if (
-      previousTargetingMethod.current === "COORDINATES" &&
-      targetingMethod !== "COORDINATES"
-    ) {
-      form.setValue("coordinateTargeting", null, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    }
-    // Clear inactive expansion so a hidden draft cannot block schema validation.
-    if (targetingMethod === "ALL" || targetingMethod === "COORDINATES") {
-      form.setValue("methodSize", null, { shouldDirty: true, shouldValidate: true });
-    }
-    previousTargetingMethod.current = targetingMethod;
-  }, [targetingMethod, form]);
-
   const formData: FormEntry<Path<ZodItemType>>[] = [
     { id: "name", label: "Item Name", type: "text" },
     { id: "image", type: "avatar", href: imageUrl },
@@ -233,19 +198,7 @@ export const useItemEditForm = (
     { id: "battleDescription", type: "text", doubleWidth: true },
     { id: "target", type: "str_array", values: AttackTargets },
     { id: "method", type: "str_array", values: AttackMethods },
-    ...(targetingMethod !== "ALL" && targetingMethod !== "COORDINATES"
-      ? [{ id: "methodSize" as const, type: "method_size" as const, fullWidth: true }]
-      : []),
-    ...(targetingMethod === "COORDINATES"
-      ? [
-          {
-            id: "coordinateTargeting" as const,
-            label: "Coordinate pattern",
-            type: "coordinate_targeting" as const,
-            fullWidth: true,
-          },
-        ]
-      : []),
+    ...targetingFields,
     { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
     { id: "cost", type: "number" },
     { id: "repsCost", type: "number" },

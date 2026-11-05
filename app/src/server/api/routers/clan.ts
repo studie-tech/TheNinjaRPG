@@ -43,6 +43,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
+import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/train";
@@ -146,6 +147,7 @@ import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   checkAssassin,
+  checkClanLeadership,
   checkCoLeader,
   clanBankDepositSchema,
   clanBattleIdSchema,
@@ -153,6 +155,7 @@ import {
   clanCreateSchema,
   clanGetRequestSchema,
   clanPointConversionSchema,
+  factionColorEditSchema,
   factionEditSchema,
   restoreStrongholdSchema,
   strictClanNameField,
@@ -415,10 +418,8 @@ export const clanRouter = createTRPCRouter({
         return [];
       }
       // Derived
-      const isLeader = user.userId === fetchedClan.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
       // Authorization: verify calling user is leader or co-leader
-      if (!isLeader && !isColeader) {
+      if (!checkClanLeadership(user.userId, fetchedClan)) {
         return [];
       }
       // Bind to the caller's own clan; a cleared leader slot must not match empty ids.
@@ -492,9 +493,7 @@ export const clanRouter = createTRPCRouter({
       // Secondary fetch using user's clanId (resilient to leader changes)
       const fetchedClan = await fetchClan(ctx.drizzle, user.clanId);
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
-      const isLeader = user.userId === fetchedClan.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
-      if (!isLeader && !isColeader) {
+      if (!checkClanLeadership(user.userId, fetchedClan)) {
         return errorResponse(
           `Only ${groupLabel} leader or co-leaders can reject requests`,
         );
@@ -555,10 +554,8 @@ export const clanRouter = createTRPCRouter({
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (!requester) return errorResponse("Requester not found");
       const nMembers = fetchedClan.members.length;
-      const isLeader = user.userId === fetchedClan.leaderId;
-      const isColeader = checkCoLeader(user.userId, fetchedClan);
       if (nMembers >= CLAN_MAX_MEMBERS) return errorResponse(`${groupLabel} is full`);
-      if (!isLeader && !isColeader) {
+      if (!checkClanLeadership(user.userId, fetchedClan)) {
         return errorResponse(
           `Only ${groupLabel} leader or co-leaders can accept requests`,
         );
@@ -743,7 +740,7 @@ export const clanRouter = createTRPCRouter({
     }),
   editClanColor: protectedProcedure
     .meta({ mcp: { description: "Change faction color" } })
-    .input(z.object({ clanId: z.string(), color: z.string() }))
+    .input(factionColorEditSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -763,11 +760,6 @@ export const clanRouter = createTRPCRouter({
         return errorResponse(`${groupLabel} needs a hideout to change colors`);
       if (user.reputationPoints < CLAN_COLOR_CHANGE_REP_COST)
         return errorResponse(`Not enough reputation points`);
-      if (!/^#[0-9A-F]{6}$/i.test(input.color)) {
-        return errorResponse(
-          "Invalid color format. Must be a valid hex color (e.g. #FF0000)",
-        );
-      }
 
       // Mutate - deduct reputation points from the user
       const result = await updateUserDataForEditClanColor(ctx.drizzle, user);
@@ -1065,9 +1057,7 @@ export const clanRouter = createTRPCRouter({
       ]);
       const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
-      const isLeader = fetchedClan?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, fetchedClan);
-      const leaderLike = isLeader || isCoLeader;
+      const leaderLike = checkClanLeadership(ctx.userId, fetchedClan);
       // Guards
       if (!fetchedClan) return errorResponse(`${groupLabel} not found`);
       if (user.isBanned) return errorResponse("User is banned");
@@ -1134,7 +1124,7 @@ export const clanRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (
         user.clanId !== fetchedClan.id ||
-        (fetchedClan.leaderId !== ctx.userId && !checkCoLeader(ctx.userId, fetchedClan))
+        !checkClanLeadership(ctx.userId, fetchedClan)
       ) {
         return errorResponse("Only clan leaders and co-leaders can convert points");
       }
@@ -1212,17 +1202,15 @@ export const clanRouter = createTRPCRouter({
       ]);
       const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
-      const isLeader = clanData?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, clanData);
-      const leaderLike = isLeader || isCoLeader;
+      const leaderLike = checkClanLeadership(ctx.userId, clanData);
       // Convert stored percentage to actual level (e.g., 10% -> level 5)
       const currentBoost = clanData?.[input.boostType] ?? 0;
       const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
       const cost = config.baseCost + currentLevel * config.perLevelCost;
       // Guard
       if (!clanData) return errorResponse(`${groupLabel} not found`);
-      if (config.factionOnly && !user.isOutlaw) {
-        return errorResponse("Only available for factions");
+      if (config.villageOnly && user.isOutlaw) {
+        return errorResponse("Only available for village clans");
       }
       if (user.clanId !== clanData.id) {
         return errorResponse(`Not in the ${groupLabel}`);
@@ -1266,9 +1254,7 @@ export const clanRouter = createTRPCRouter({
       ]);
       const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
-      const isLeader = clanData?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, clanData);
-      const leaderLike = isLeader || isCoLeader;
+      const leaderLike = checkClanLeadership(ctx.userId, clanData);
       // Guard
       if (!clanData) return errorResponse(`${groupLabel} not found`);
       if (!nominee) return errorResponse("Nominee not found");
@@ -1305,9 +1291,15 @@ export const clanRouter = createTRPCRouter({
         clanData.elderCutoffYear === currentYear;
       if (!hasCutoffSnapshot) {
         // Fallback: calculate live eligibility if cutoff snapshot is missing
-        const liveRankings = await listClanForNominateElder(ctx.drizzle, clanData);
-        const isInTop3 = liveRankings.some((c) => c.id === clanData.id);
-        if (!isInTop3) {
+        const villageClans = await listClanForNominateElder(ctx.drizzle, clanData);
+        if (
+          !isElderCandidateWithoutCutoff(
+            villageClans,
+            clanData.id,
+            currentMonth,
+            currentYear,
+          )
+        ) {
           return errorResponse(
             "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
           );
@@ -1337,9 +1329,7 @@ export const clanRouter = createTRPCRouter({
       ]);
       const groupLabel = user.isOutlaw ? "faction" : "clan";
       // Derived
-      const isLeader = challenger?.leaderId === user.userId;
-      const isCoLeader = checkCoLeader(ctx.userId, challenger);
-      const leaderLike = isLeader || isCoLeader;
+      const leaderLike = checkClanLeadership(ctx.userId, challenger);
       // Guards
       if (user.status !== "AWAKE") return errorResponse("Must be awake to challenge");
       if (!challenger) return errorResponse("Challenger not found");
@@ -1485,8 +1475,9 @@ export const clanRouter = createTRPCRouter({
             "Battle started, was deleted, or queue changed; refresh and try again",
           );
         }
-      } catch {
+      } catch (error) {
         await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
+        if (!isMysqlDuplicateKeyError(error)) throw error;
         return errorResponse("Slot was taken. Please try again.");
       }
       return {

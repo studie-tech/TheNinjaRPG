@@ -1,3 +1,4 @@
+import { CLAN_ASSASSIN_SLOTS } from "@/drizzle/constants";
 import {
   abEvent,
   battleAction,
@@ -68,23 +69,9 @@ export const removeAccountGameData = async (userId: string) => {
     updateVillageForRemoveAccountGameData(drizzleDB, userId),
     updateClanForRemoveAccountGameData(drizzleDB, userId),
     updateClanForRemoveAccountGameData2(drizzleDB, userId),
-    ...(
-      [
-        "coLeader1",
-        "coLeader2",
-        "coLeader3",
-        "assassin1",
-        "assassin2",
-        "assassin3",
-        "assassin4",
-        "assassin5",
-        "assassin6",
-        "assassin7",
-        "assassin8",
-        "assassin9",
-        "assassin10",
-      ] as const
-    ).map((column) => updateClanForRemoveAccountGameData3(drizzleDB, column, userId)),
+    ...(["coLeader1", "coLeader2", "coLeader3", ...CLAN_ASSASSIN_SLOTS] as const).map(
+      (column) => updateClanForRemoveAccountGameData3(drizzleDB, column, userId),
+    ),
     deleteEmailReminderForRemoveAccountGameData(drizzleDB, userId),
   ]);
   await Promise.all(

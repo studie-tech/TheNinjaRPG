@@ -7,6 +7,7 @@ import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isQuestComplete } from "@/libs/objectives";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import {
+  chebyshevDistance,
   findNearestWalkableCoordinate,
   getSectorTile,
 } from "@/libs/sector-map/validation";
@@ -79,7 +80,7 @@ export const findLandingNear = (
   maxDistance = 3,
 ) => {
   const candidates = sectorMap.tiles.filter((tile) => {
-    const distance = Math.max(Math.abs(tile.x - target.x), Math.abs(tile.y - target.y));
+    const distance = chebyshevDistance(tile, target);
     return distance >= minDistance && distance <= maxDistance;
   });
   if (candidates.length === 0) return null;
@@ -211,14 +212,3 @@ export const calcIsInVillage = (
   position: SectorPoint,
   sectorMap: Pick<NormalizedSectorMap, "tiles">,
 ) => getSectorTile(sectorMap, position)?.zone === "village";
-
-// Maximum distance between two set of longitudes / latitudes
-export const maxDistance = (
-  userData: { longitude: number; latitude: number },
-  b: SectorPoint,
-) => {
-  return Math.max(
-    Math.abs(userData.longitude - b.x),
-    Math.abs(userData.latitude - b.y),
-  );
-};

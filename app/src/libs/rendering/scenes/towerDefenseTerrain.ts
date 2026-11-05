@@ -1,19 +1,14 @@
 import alea from "alea";
-import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { createNoise2D } from "simplex-noise";
-import {
-  HEX_ASPECT_RATIO,
-  TD_HEX_SIZE,
-  TD_PROJECTILE_SPEED,
-} from "@/drizzle/constants";
-import { defineHex } from "@/libs/hexgrid";
+import { TD_HEX_SIZE } from "@/drizzle/constants";
+import { createHexGrid, nameArenaTile } from "@/libs/hexgrid";
 import {
   getProceduralTerrain,
   proceduralDecoration,
 } from "@/libs/rendering/proceduralBiomes";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { buildHexTerrainData } from "@/libs/rendering/terrainData";
-import { calculateHexDistance } from "@/libs/towerDefense/game";
+import { getProjectileProgress } from "@/libs/towerDefense/game";
 import type {
   HexPosition,
   TowerDefenseEnemy,
@@ -26,20 +21,17 @@ export const prepareTowerDefenseTerrain = (
   size: number,
   center: HexPosition,
 ) => {
-  const Tile = defineHex({
-    dimensions: { width: TD_HEX_SIZE, height: TD_HEX_SIZE * HEX_ASPECT_RATIO },
-    origin: { x: -TD_HEX_SIZE / 2, y: -TD_HEX_SIZE / 2 },
-    orientation: Orientation.FLAT,
+  const grid = createHexGrid(TD_HEX_SIZE, size, size, {
+    x: -TD_HEX_SIZE / 2,
+    y: -TD_HEX_SIZE / 2,
   });
-  const grid = new Grid(Tile, rectangle({ width: size, height: size }));
   const prng = alea(seed),
     noise = createNoise2D(prng),
     assets = createNoise2D(prng);
   const scenery: WorldSpriteDescription[] = [];
   const looks = new Map<string, ReturnType<typeof getProceduralTerrain>>();
   for (const tile of grid) {
-    tile.cost = 1;
-    tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
+    nameArenaTile(tile);
     tile.level = noise(tile.col / size - 0.5, tile.row / size - 0.5) / 2 + 0.5;
     tile.assetStrength = assets(tile.col / size - 0.5, tile.row / size - 0.5) / 2 + 0.5;
   }
@@ -106,15 +98,10 @@ export const towerDefenseProjectileProgress = (
 ) => {
   if (projectile.clientSpawnTime === undefined)
     return Math.max(0, Math.min(1, projectile.progress));
-  const distance = calculateHexDistance(projectile.origin, projectile.target);
-  return distance > 0
-    ? Math.max(
-        0,
-        Math.min(
-          1,
-          (((now - projectile.clientSpawnTime) / 1000) * TD_PROJECTILE_SPEED) /
-            distance,
-        ),
-      )
-    : 1;
+  return getProjectileProgress(
+    projectile.origin,
+    projectile.target,
+    projectile.clientSpawnTime,
+    now,
+  );
 };

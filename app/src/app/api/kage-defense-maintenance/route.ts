@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithMinuteTimer } from "@/libs/gamesettings";
+import { lockWithMinuteTimer, runClaimedCron } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { maintainKageDefenses } from "@/server/utils/kage";
@@ -11,12 +11,8 @@ export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
   const timer = await lockWithMinuteTimer(drizzleDB, TIMER);
-  if (!timer.isNewMinute) return timer.response;
-  try {
+  return runClaimedCron(timer, "/api/kage-defense-maintenance", async () => {
     await maintainKageDefenses(drizzleDB);
     return Response.json({ success: true });
-  } catch (error) {
-    await timer.release();
-    return handleEndpointError(error);
-  }
+  });
 }

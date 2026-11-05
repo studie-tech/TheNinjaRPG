@@ -1,6 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
 import { isIP } from "node:net";
-import { clerkClient } from "@clerk/nextjs/server";
 import { and, eq, gt, inArray, isNull, lte, not, or, sql } from "drizzle-orm";
 import {
   ActiveBanStates,
@@ -33,6 +32,7 @@ import {
   updateSanctionTombstoneForRetainSanctionIps,
 } from "@/queries/reports";
 import type { DrizzleClient } from "@/server/db";
+import { fetchClerkUser, normalizeClerkProvider } from "@/server/utils/clerk";
 import { getIpHashSecret } from "@/server/utils/ipHash";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
@@ -95,13 +95,6 @@ export const normalizeEmail = (email: string) => {
   return `${local}@${domain}`;
 };
 
-/** Clerk names providers both `oauth_google` and `google`; treat them as one. */
-const normalizeProvider = (provider: string) =>
-  provider
-    .trim()
-    .toLowerCase()
-    .replace(/^oauth_/, "");
-
 /**
  * HMAC-SHA256 keyed with the app-wide hashing secret, labelled per identifier kind so a
  * value never hashes alike across kinds or across features that share the key.
@@ -140,7 +133,7 @@ const accountHashesOf = (identity: SanctionIdentity) => [
       .map((account) =>
         hashSanctionIdentifier(
           "oauth",
-          `${normalizeProvider(account.provider)}:${account.providerUserId}`,
+          `${normalizeClerkProvider(account.provider)}:${account.providerUserId}`,
         ),
       ),
   ),
@@ -168,23 +161,9 @@ const emailHashesOf = (identity: SanctionIdentity | null) => [
 ];
 
 /** Load the Clerk user, or null when Clerk has already deleted it. */
-export const fetchSanctionIdentity = async (
+export const fetchSanctionIdentity: (
   userId: string,
-): Promise<SanctionIdentity | null> => {
-  try {
-    return await (await clerkClient()).users.getUser(userId);
-  } catch (error) {
-    if (isClerkNotFound(error)) return null;
-    throw error;
-  }
-};
-
-/** A Clerk 404 means identity deletion is complete and cleanup can safely continue. */
-export const isClerkNotFound = (error: unknown) =>
-  typeof error === "object" &&
-  error !== null &&
-  "status" in error &&
-  error.status === 404;
+) => Promise<SanctionIdentity | null> = fetchClerkUser;
 
 /**
  * Store a tombstone for every sanction still running on this account. Call it before the
@@ -436,8 +415,6 @@ export const reapplySanctions = async (
         ),
       ),
     ) ?? sql`TRUE`;
-  // Drizzle INSERT SELECT requires every table column, including defaults. These small
-  // records need subset columns and an account-absence guard, so use parameterized SQL.
   const insertRecord = (
     table: typeof userReport | typeof userReportComment | typeof actionLog,
     values: Record<string, unknown>,

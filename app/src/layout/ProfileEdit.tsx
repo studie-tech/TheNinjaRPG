@@ -169,7 +169,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import { type StatSchemaType, statSchema } from "@/validators/combat";
+import { type StatSchemaType } from "@/validators/combat";
 import {
   attributes,
   type Color,
@@ -185,6 +185,7 @@ import {
 import {
   type GenderChangeSchema,
   genderChangeSchema,
+  type UpdateUserPreferencesSchema,
   updateUserPreferencesSchema,
 } from "@/validators/user";
 
@@ -660,7 +661,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
 
   // Form setup
-  const form = useForm<z.infer<typeof updateUserPreferencesSchema>>({
+  const form = useForm<UpdateUserPreferencesSchema>({
     resolver: zodResolver(updateUserPreferencesSchema),
     defaultValues: {
       preferredGeneral1: null,
@@ -746,7 +747,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   }, [hasUserData, storedGeneral1, storedGeneral2, storedDamageElement, form]);
 
   // Form submission
-  const onSubmit = async (values: z.infer<typeof updateUserPreferencesSchema>) => {
+  const onSubmit = async (values: UpdateUserPreferencesSchema) => {
     if (preferencesRequestRef.current) return;
 
     preferencesRequestRef.current = true;

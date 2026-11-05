@@ -17,7 +17,13 @@ import { retryRejectedOnce } from "./authRetry";
 import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { apnsAlertPayload } from "./payloads";
-import { isDeadApnsToken, type PushMessage, type PushResult } from "./types";
+import {
+  failAll,
+  isDeadApnsToken,
+  type PushMessage,
+  type PushResult,
+  toPublicResult,
+} from "./types";
 
 const PRODUCTION_HOST = "https://api.push.apple.com";
 const SANDBOX_HOST = "https://api.sandbox.push.apple.com";
@@ -187,19 +193,6 @@ const providerTokenAfterRejection = (rejectedToken: string): string => {
   return buildProviderToken();
 };
 
-const publicResult = (result: ApnsAttemptResult): PushResult => {
-  if (result.status === "sent") return { token: result.token, status: "sent" };
-  if (result.status === "expired") {
-    return { token: result.token, status: "expired", reason: result.reason };
-  }
-  return {
-    token: result.token,
-    status: "failed",
-    reason: result.reason,
-    retryable: result.retryable,
-  };
-};
-
 const parseReason = (raw: string): string => {
   if (!raw) return "Unknown";
   try {
@@ -217,12 +210,11 @@ const parseReason = (raw: string): string => {
 export const sendBatch = async (requests: ApnsRequest[]): Promise<PushResult[]> => {
   if (requests.length === 0) return [];
   if (!isConfigured()) {
-    return requests.map((request) => ({
-      token: request.token,
-      status: "failed" as const,
-      reason: "APNs is not configured",
-      retryable: false,
-    }));
+    return failAll(
+      requests.map((request) => request.token),
+      "APNs is not configured",
+      false,
+    );
   }
 
   let session: ClientHttp2Session;
@@ -232,12 +224,11 @@ export const sendBatch = async (requests: ApnsRequest[]): Promise<PushResult[]> 
     session = connect(apnsHost());
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Unknown APNs error";
-    return requests.map((request) => ({
-      token: request.token,
-      status: "failed" as const,
+    return failAll(
+      requests.map((request) => request.token),
       reason,
-      retryable: true,
-    }));
+      true,
+    );
   }
 
   // A connection-level error rejects the individual streams too, so this handler only
@@ -259,7 +250,7 @@ export const sendBatch = async (requests: ApnsRequest[]): Promise<PushResult[]> 
         );
       },
     );
-    return results.map(publicResult);
+    return results.map(toPublicResult);
   } finally {
     session.close();
   }

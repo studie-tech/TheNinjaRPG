@@ -529,4 +529,41 @@ describeWithDatabase("clan queue claim ownership", () => {
     expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(2);
     expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
   });
+
+  it("releases a failed join claim and propagates unexpected insertion errors", async () => {
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(
+      clanRouter,
+      "leader",
+      failStatements(db, mpvpBattleUser),
+    );
+    await expect(caller.joinClanBattle({ clanBattleId: "old" })).rejects.toThrow(
+      "Statement failed on purpose",
+    );
+    expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
+  });
+
+  it("releases a join claim that loses its slot to another member", async () => {
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(
+      clanRouter,
+      "leader",
+      beforeStatements(db, mpvpBattleUser, [
+        () =>
+          db.insert(mpvpBattleUser).values({
+            id: "slot-owner",
+            clanBattleId: "old",
+            userId: "enemy",
+            side: "ATTACKER",
+            slot: 0,
+          }),
+      ]),
+    );
+    await expect(caller.joinClanBattle({ clanBattleId: "old" })).resolves.toMatchObject({
+      success: false,
+      message: "Slot was taken. Please try again.",
+    });
+    expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
+  });
 });

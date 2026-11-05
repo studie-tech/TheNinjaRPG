@@ -21,6 +21,8 @@ import {
   MEDICAL_MISSIONS_PER_DAY,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
+  MISSION_HALL_QUEST_TYPES,
+  MISSION_HALL_SOLO_QUEST_TYPES,
   MISSIONS_FULL_REWARD_COUNT,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
@@ -48,8 +50,10 @@ import type {
 } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { BloodlineCollectionProgress } from "@/libs/bloodline";
+import { getClanBoost } from "@/libs/clanBoost";
 import { eliteJoninMilestoneBlockMessage } from "@/libs/eliteJonin";
 import { getFarmingLevel } from "@/libs/farming";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getGatheringRank } from "@/libs/gathering";
 import { calcMedninRank } from "@/libs/hospital";
 import { getHuntingRank } from "@/libs/hunting";
@@ -64,7 +68,9 @@ import {
   findPredecessor,
   isQuestComplete,
   isQuestObjectiveAvailable,
+  objectiveLinks,
 } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import {
   earlierBoundObjectivesComplete,
   isSupportedOverworldBindingTask,
@@ -72,7 +78,7 @@ import {
 } from "@/libs/overworldAi";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
 import { boostPvpGain, boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
-import { recordPartyContributions } from "@/libs/questParty";
+import { isQuestPartyHelperAttempt, recordPartyContributions } from "@/libs/questParty";
 import {
   getIsolatedPyramid,
   hasQuestContentChanged,
@@ -91,8 +97,9 @@ import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { availableQuestLetterRanks, hasRequiredRank } from "@/libs/train";
 import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
+import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import { isInArray } from "@/utils/array";
+import { getRandomElement, isInArray, shuffle } from "@/utils/array";
 import { getUnique } from "@/utils/grouping";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -125,9 +132,14 @@ import {
   QuestCompletionTasks,
   QuestTracker,
 } from "@/validators/objectives";
-import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
+import {
+  QuestReward,
+  type QuestRewardType,
+  rewardPayloads,
+} from "@/validators/rewardPackages";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
 import {
+  hasMasteryPromotion,
   MASTERY_EXPERIENCE_FIELDS,
   type PostProcessedRewards,
   REWARD_CHOICE_AMOUNT_FIELDS,
@@ -313,9 +325,10 @@ export const rollObjectiveAttackers = (
       objective.attackers_max_per_battle > 0 &&
       opponents.length > objective.attackers_max_per_battle
     ) {
-      opponents = opponents
-        .sort(() => random() - 0.5)
-        .slice(0, objective.attackers_max_per_battle);
+      opponents = shuffle(opponents, (n) => Math.floor(random() * n)).slice(
+        0,
+        objective.attackers_max_per_battle,
+      );
     }
     if (opponents.length > 0) {
       return {
@@ -435,7 +448,7 @@ export const getReward = (
         true,
       );
   const userQuest = user.userQuests.find((uq) => uq.questId === questId);
-  const isCompletedHelper = userQuest?.id === `party-${user.questPartyId}`;
+  const isCompletedHelper = isQuestPartyHelperAttempt(userQuest, user.questPartyId);
   let resolved = false;
   // Start mutating
   if (isCompletedHelper && userQuest) {
@@ -454,11 +467,7 @@ export const getReward = (
     // Village mission hall boost (percentage as decimal), applies to missions and errands
     const villageMissionBoost =
       getStrucBoost("missionRewardPerLvl", user.village?.structures) / 100;
-    // Get clan mission reward boost (percentage as decimal)
-    // Only apply for real clans, not outlaw factions/strongholds
-    const clanMissionBoost = user.isOutlaw
-      ? 0
-      : (user.clan?.missionRewardBoost ?? 0) / 100;
+    const clanMissionBoost = getClanBoost(user, "missionRewardBoost");
     const loyalty = getVillageLoyaltyBonuses(user);
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
@@ -486,10 +495,7 @@ export const getReward = (
         rawRewards = getFixedChoiceRewards(questReward);
         choiceRewards = questReward;
       } else {
-        rawRewards = collapseRewards([
-          questReward,
-          ...(questReward.reward_packages ?? []).map((pack) => pack.rewards),
-        ]);
+        rawRewards = collapseRewards(rewardPayloads(questReward));
       }
     }
     (completionOnly ? [] : userQuest.quest.content.objectives).forEach((objective) => {
@@ -501,10 +507,7 @@ export const getReward = (
         }
         // Compose packages with their objective's direct rewards before merging the payout.
         if (objective.reward_packages?.length) {
-          const objectiveReward = collapseRewards([
-            objective,
-            ...objective.reward_packages.map((pack) => pack.rewards),
-          ]);
+          const objectiveReward = collapseRewards(rewardPayloads(objective));
           rawRewards = collapseRewards([rawRewards, objectiveReward]);
           return;
         }
@@ -595,18 +598,16 @@ export const getReward = (
       );
       target.reward_seichi_silver = Math.floor(target.reward_seichi_silver * factor);
 
-      // Apply clan experience boosts (percentages stored in clan object)
-      // Only apply for real clans, not outlaw factions/strongholds
+      // Apply clan experience boosts
       const territoryBoost = getTerritoryWarBoost(user);
       target.reward_medical_experience = Math.floor(
         target.reward_medical_experience * (1 + territoryBoost),
       );
-      const clanHunterExpBoost =
-        (user.isOutlaw ? 0 : (user.clan?.hunterExpBoost ?? 0) / 100) + territoryBoost;
+      const clanHunterExpBoost = getClanBoost(user, "hunterExpBoost") + territoryBoost;
       const clanGathererExpBoost =
-        (user.isOutlaw ? 0 : (user.clan?.gathererExpBoost ?? 0) / 100) + territoryBoost;
+        getClanBoost(user, "gathererExpBoost") + territoryBoost;
       const clanCraftingExpBoost =
-        (user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100) + territoryBoost;
+        getClanBoost(user, "craftingExpBoost") + territoryBoost;
       if (clanHunterExpBoost > 0 && target.reward_hunting_experience > 0) {
         target.reward_hunting_experience = Math.floor(
           target.reward_hunting_experience * (1 + clanHunterExpBoost),
@@ -636,13 +637,8 @@ export const getReward = (
 
       // Apply mission experience multiplier if available (for missions, crimes, and medical missions)
       if (settings && (missionLike || userQuest.quest.questType === "medical")) {
-        const missionSetting = settings.find((s) => s.name === "missionExpMultiplier");
-        if (missionSetting) {
-          const secondsLeft = -secondsPassed(missionSetting.time);
-          if (secondsLeft > 0 && missionSetting.value > 0) {
-            target.reward_exp = Math.floor(target.reward_exp * missionSetting.value);
-          }
-        }
+        const boost = getGameSettingBoost("missionExpMultiplier", settings);
+        if (boost) target.reward_exp = Math.floor(target.reward_exp * boost.value);
       }
     };
     scaleRewards(rawRewards);
@@ -718,6 +714,35 @@ export const getReward = (
     rewardChoice,
   };
 };
+
+/** One id per spawned copy of each authored `{ ids, number }` AI entry. */
+export const expandAiCopies = (entries: { ids: string[]; number: number }[]) =>
+  entries.flatMap((entry) => Array(entry.number).fill(entry.ids).flat() as string[]);
+
+/** Tracker increments a finished craft earns, whether it ran directly or from the queue. */
+export const getCraftTrackerTasks = (
+  expGain: number,
+  quantity: number,
+  itemId: string,
+) => [
+  { task: "crafting_experience_gained" as const, increment: expGain },
+  { task: "items_crafted" as const, increment: quantity },
+  { task: "craft_specific_item" as const, increment: quantity, contentId: itemId },
+];
+
+/** Tracker increments for gaining a jutsu through training or evolution. */
+export const getJutsuLearnedTrackerTasks = (
+  jutsuId: string,
+  masteryTypes: MasteryType[],
+) => [
+  { task: "jutsus_mastered" as const, increment: 1 },
+  {
+    task: "train_specific_jutsu" as const,
+    increment: 1,
+    contentId: jutsuId,
+    masteryTypes,
+  },
+];
 
 /**
  * `*_experience_gained` tracker increments for the profession experience in a reward. Emitted
@@ -1145,41 +1170,21 @@ export const getNewTrackers = (
               if (objective.sectorList.length === 0) {
                 status.sector = pickPlaceableSector();
               } else {
-                const idx = Math.floor(Math.random() * objective.sectorList.length);
-                status.sector = Number(objective.sectorList?.[idx]);
+                status.sector = Number(getRandomElement(objective.sectorList));
               }
             } else if (objective.sectorType === "user_village") {
               status.sector = user?.village?.sector || user.sector;
             } else if (objective.sectorType === "current_sector") {
               status.sector = user.sector;
             } else if (objective.sectorType === "enemy_village") {
-              // Find enemy village from active wars
-              const userVillageId = user.villageId;
-              const activeWars = user.activeWars ?? [];
-
               // Find an active war and get the enemy village sector
-              for (const w of activeWars) {
-                // Check if user is direct participant
-                if (w.attackerVillageId === userVillageId) {
-                  status.sector = w.defenderVillage.sector;
-                  break;
-                } else if (w.defenderVillageId === userVillageId) {
-                  status.sector = w.attackerVillage.sector;
-                  break;
-                }
-
-                // Check if user is an ally - find which side they support
-                const allyEntry = w.warAllies?.find(
-                  (a) => a.villageId === userVillageId,
-                );
-                if (allyEntry) {
-                  // supportVillageId is the village the user's village is supporting
-                  // If supporting attacker, enemy is defender. If supporting defender, enemy is attacker.
-                  if (allyEntry.supportVillageId === w.attackerVillageId) {
-                    status.sector = w.defenderVillage.sector;
-                  } else {
-                    status.sector = w.attackerVillage.sector;
-                  }
+              for (const w of user.activeWars ?? []) {
+                const side = getWarSide(w, user.villageId);
+                if (side) {
+                  status.sector =
+                    side === w.attackerVillageId
+                      ? w.defenderVillage.sector
+                      : w.attackerVillage.sector;
                   break;
                 }
               }
@@ -1368,7 +1373,8 @@ export const getNewTrackers = (
             task === "pvp_kills" || task === "defeat_opponents";
           const isKage = user.village?.kageId === user.userId;
 
-          // General updates we want to apply every time
+          // General updates we want to apply every time. Team progress treats these
+          // overwrites as snapshots: keep PassiveSnapshotTasks in step with them.
           if (objective.task === "bloodline_collection") {
             // Sum the selected rank snapshots; no rank has an implicit exemption.
             const progress = user.bloodlineCollectionProgress
@@ -1468,9 +1474,9 @@ export const getNewTrackers = (
           // If opponentAIs is in objective, get the ids
           let opponentIds: string[] = [];
           if ("opponentAIs" in objective) {
-            opponentIds = objective.opponentAIs
-              .flatMap((o) => Array(o.number).fill(o.ids).flat() as string[])
-              .filter((id): id is string => id !== undefined);
+            opponentIds = expandAiCopies(objective.opponentAIs).filter(
+              (id): id is string => id !== undefined,
+            );
           }
 
           /** Helper function to put the user in combat */
@@ -1492,11 +1498,7 @@ export const getNewTrackers = (
                 ids: opponentIds,
                 // Each selected template contributes the authored number of allied copies.
                 allyAiIds:
-                  "allyAIs" in objective
-                    ? objective.allyAIs.flatMap((ally) =>
-                        Array(ally.number).fill(ally.ids).flat(),
-                      )
-                    : [],
+                  "allyAIs" in objective ? expandAiCopies(objective.allyAIs) : [],
                 scaleStats: objective.opponent_scaled_to_user,
                 scaleGains: objective.scaleGains,
                 forceKeepPools: objective.keepOriginalPools ?? false,
@@ -2174,7 +2176,6 @@ export const mockAchievementHistoryEntries = (
   user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,
 ) => {
   return achievements
-    .filter((q) => q !== null)
     .filter((q) => !q.hidden || canChangeContent(user.role))
     .filter((q) => !user.userQuests?.find((uq) => uq.questId === q.id))
     .map((a) => ({
@@ -2214,6 +2215,19 @@ export const mockAchievementHistoryEntries = (
  * `opponentAIs` are the other way round: nearly every objective serialises them as empty arrays,
  * so only a populated one means anything.
  */
+/**
+ * The achievements whose definitions `quests.getAchievementCatalogue` publishes for the client to
+ * cache, and therefore exactly the ones `profile.getUser` may send as progress alone.
+ *
+ * Both sides read this one list, cut from the raw catalogue, rather than re-deciding on their own
+ * copy: `fetchUpdatedUser` rewrites the objectives of its quests - trackers write resolved
+ * coordinates back onto them, and location hiding rewrites them again - so a predicate applied
+ * after that and one applied to the raw row can disagree, and a progress row whose definition the
+ * catalogue withholds renders nothing at all.
+ */
+export const publishedAchievementsOf = <T extends Quest>(catalogue: T[]) =>
+  catalogue.filter((achievement) => !questHasOverworldObjectives(achievement));
+
 export const questHasOverworldObjectives = (quest: Quest) =>
   quest.content.objectives.some(
     (objective) =>
@@ -2412,16 +2426,11 @@ export const isAvailableUserQuests = (
   const promotion =
     !isRewardChoiceQuest(questAndUserQuestInfo.content) &&
     completionReward?.reward_packages?.length
-      ? collapseRewards([
-          completionReward,
-          ...completionReward.reward_packages.map((pack) => pack.rewards),
-        ])
+      ? collapseRewards(rewardPayloads(completionReward))
       : completionReward;
   const promotionCheck =
-    !promotion?.reward_mastery_stat ||
-    promotion.reward_mastery_stat === "None" ||
-    !promotion.reward_mastery_rank ||
-    promotion.reward_mastery_rank === "NONE" ||
+    !promotion ||
+    !hasMasteryPromotion(promotion) ||
     canPromoteMastery(
       baseMasteries,
       promotion.reward_mastery_stat,
@@ -2710,30 +2719,8 @@ export const verifyDialogBranches = (
 export const verifyQuestObjectiveFlow = (
   objectives: AllObjectivesType[],
 ): { check: boolean; message: string } => {
-  // Helper which normalises the various `nextObjectiveId` shapes into a flat list of ids
-  const collectNextIds = (obj: AllObjectivesType): string[] => {
-    const result: string[] = [];
-    const ref: unknown = (obj as { nextObjectiveId?: unknown }).nextObjectiveId;
-
-    if (typeof ref === "string") {
-      result.push(ref);
-    } else if (Array.isArray(ref)) {
-      for (const branch of ref) {
-        if (branch && typeof branch === "object") {
-          const id = (branch as { nextObjectiveId?: string }).nextObjectiveId;
-          if (typeof id === "string") result.push(id);
-        }
-      }
-    }
-
-    // Also collect failObjectiveId if present
-    const failRef: unknown = (obj as { failObjectiveId?: unknown }).failObjectiveId;
-    if (typeof failRef === "string") {
-      result.push(failRef);
-    }
-
-    return result;
-  };
+  const collectNextIds = (obj: AllObjectivesType) =>
+    objectiveLinks(obj).flatMap((link) => (link.kind === "reset" ? [] : [link.target]));
 
   try {
     // ------------------------------------------------------------------
@@ -2772,9 +2759,7 @@ export const verifyQuestObjectiveFlow = (
         adjacency.set(obj.id, adjacency.get(obj.id) ?? []);
       }
 
-      for (const raw of neighbours) {
-        if (!raw) continue; // Safeguard against undefined values
-        const nextId = raw;
+      for (const nextId of neighbours) {
         // Self-reference
         if (nextId === obj.id) {
           throw new Error(
@@ -3003,9 +2988,8 @@ export const questTypeConcurrentBlockMessage = (
       return null;
     }
     case "war": {
-      const blockers = ["mission", "crime", "errand", "medical", "pvp", "war"];
       const found = user.userQuests?.find(
-        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+        (q) => MISSION_HALL_QUEST_TYPES.includes(q.quest.questType) && !q.endAt,
       );
       return found ? `Already have an active ${found.quest.questType}` : null;
     }
@@ -3014,9 +2998,8 @@ export const questTypeConcurrentBlockMessage = (
     case "medical":
     case "pvp":
     case "errand": {
-      const blockers = ["mission", "crime", "errand", "medical", "pvp"];
       const found = user.userQuests?.find(
-        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+        (q) => MISSION_HALL_SOLO_QUEST_TYPES.includes(q.quest.questType) && !q.endAt,
       );
       return found ? `Already active ${found.quest.questType}` : null;
     }
@@ -3024,16 +3007,6 @@ export const questTypeConcurrentBlockMessage = (
       return null;
   }
 };
-
-/** Daily-capped assignments accepted at the Mission Hall. */
-const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
-  "mission",
-  "crime",
-  "errand",
-  "medical",
-  "pvp",
-  "war",
-];
 
 /**
  * Explains why a player cannot act on quest steps right now. Dialog choices and reward
@@ -3117,7 +3090,7 @@ export const questUiAccessBlockMessage = (
       return "Must be in your allied village to start quest";
     }
     if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
-      return `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`;
+      return questDailyLimitMessage("war", WAR_MISSIONS_PER_DAY);
     }
   } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
     if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
@@ -3145,15 +3118,35 @@ export const questDailyQuota = (
   switch (questType) {
     case "mission":
     case "crime":
-      return { current: user.dailyMissions, limit: MISSIONS_PER_DAY };
+      return {
+        field: "dailyMissions" as const,
+        current: user.dailyMissions,
+        limit: MISSIONS_PER_DAY,
+      };
     case "errand":
-      return { current: user.dailyErrands, limit: ERRANDS_PER_DAY };
+      return {
+        field: "dailyErrands" as const,
+        current: user.dailyErrands,
+        limit: ERRANDS_PER_DAY,
+      };
     case "medical":
-      return { current: user.dailyMedicalMissions, limit: MEDICAL_MISSIONS_PER_DAY };
+      return {
+        field: "dailyMedicalMissions" as const,
+        current: user.dailyMedicalMissions,
+        limit: MEDICAL_MISSIONS_PER_DAY,
+      };
     case "pvp":
-      return { current: user.dailyPvpMissions, limit: PVP_MISSIONS_PER_DAY };
+      return {
+        field: "dailyPvpMissions" as const,
+        current: user.dailyPvpMissions,
+        limit: PVP_MISSIONS_PER_DAY,
+      };
     case "war":
-      return { current: user.dailyWarMissions, limit: WAR_MISSIONS_PER_DAY };
+      return {
+        field: "dailyWarMissions" as const,
+        current: user.dailyWarMissions,
+        limit: WAR_MISSIONS_PER_DAY,
+      };
     default:
       return null;
   }
@@ -3221,12 +3214,7 @@ export const isWarMissionAvailable = ({
 }) => {
   if (questType !== "war") return true;
   if (!villageId || dailyWarMissions >= WAR_MISSIONS_PER_DAY) return false;
-  return activeWars.some(
-    (activeWar) =>
-      activeWar.attackerVillageId === villageId ||
-      activeWar.defenderVillageId === villageId ||
-      activeWar.warAllies.some((ally) => ally.villageId === villageId),
-  );
+  return isVillageInvolvedInAnyWar(activeWars, villageId);
 };
 
 export const isQuestRankAllowed = (

@@ -1,5 +1,5 @@
 
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import {
   isMysqlDuplicateKeyError,
   retryOnDeadlock,
@@ -38,6 +38,22 @@ describe("isMysqlDuplicateKeyError", () => {
     ).toBe(true);
   });
 
+  it("returns true for a structured driver error down the cause chain", () => {
+    const cause = Object.assign(new Error("insert failed"), { errno: 1062 });
+    expect(isMysqlDuplicateKeyError(new Error("Failed query", { cause }))).toBe(true);
+    expect(
+      isMysqlDuplicateKeyError(
+        Object.assign(new Error("insert failed"), { code: "ER_DUP_ENTRY" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores 1062 in query text, which can be a bound parameter", () => {
+    expect(
+      isMysqlDuplicateKeyError(new Error("Failed query: insert\nparams: txn-1062")),
+    ).toBe(false);
+  });
+
   it("returns false for unrelated errors and non-errors", () => {
     expect(isMysqlDuplicateKeyError(new Error("connection timeout"))).toBe(false);
     expect(isMysqlDuplicateKeyError(null)).toBe(false);
@@ -69,6 +85,47 @@ describe("retryOnDeadlock", () => {
       }, 2),
     ).rejects.toThrow(/Deadlock/);
     expect(calls).toBe(2);
+  });
+
+  it("backs off exponentially from the base delay plus jitter", async () => {
+    const delays: (number | undefined)[] = [];
+    const timer = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      resolve: () => void,
+      ms?: number,
+    ) => {
+      delays.push(ms);
+      resolve();
+    }) as unknown as typeof setTimeout);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    await expect(
+      retryOnDeadlock(
+        async () => {
+          throw deadlock();
+        },
+        3,
+        { baseDelayMs: 100, jitterMs: 100 },
+      ),
+    ).rejects.toThrow(/Deadlock/);
+    timer.mockRestore();
+    random.mockRestore();
+    expect(delays).toEqual([150, 250]);
+  });
+
+  it("reports each retry with its backoff", async () => {
+    const retries: [number, number][] = [];
+    let calls = 0;
+    await retryOnDeadlock(
+      async () => {
+        calls += 1;
+        if (calls < 3) throw deadlock();
+      },
+      4,
+      { baseDelayMs: 2, onRetry: (attempt, delayMs) => retries.push([attempt, delayMs]) },
+    );
+    expect(retries).toEqual([
+      [1, 2],
+      [2, 4],
+    ]);
   });
 
   it("retries nothing else", async () => {

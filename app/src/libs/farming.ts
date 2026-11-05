@@ -20,6 +20,7 @@ import {
 import type { FarmPlot, Item, UserData } from "@/drizzle/schema";
 import { getWorldDayCycleIndex } from "@/libs/dayNight";
 import { calcLevelRequirements } from "@/libs/profile";
+import { calculatePercent } from "@/utils/math";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { reduceActivitySeconds } from "@/utils/time";
 import type { FarmPlotState } from "@/validators/farming";
@@ -64,10 +65,9 @@ export const getFarmingLevelProgress = (experience: number) => {
     0,
     Math.min(experienceNeededForLevel, experience - expForCurrentLevel),
   );
-  const progress = (experienceIntoLevel / experienceNeededForLevel) * 100;
   return {
     level,
-    progress: Math.max(0, Math.min(100, progress)),
+    progress: calculatePercent(experienceIntoLevel, experienceNeededForLevel),
     expForCurrentLevel,
     expForNextLevel,
     experienceIntoLevel,
@@ -180,7 +180,7 @@ export const getPlotGrowthProgress = (
   const total = finishAt.getTime() - plantedAt.getTime();
   if (total <= 0) return 100;
   const elapsed = now.getTime() - plantedAt.getTime();
-  return Math.max(0, Math.min(100, (elapsed / total) * 100));
+  return calculatePercent(elapsed, total);
 };
 
 export const getPlotGrowthStage = (
@@ -377,3 +377,12 @@ export const getFertilizerExperience = (
   const applyXp = Number(fertilizerItem.farmFertilizerExperience) || 0;
   return applyXp > 0 ? applyXp : 0;
 };
+
+/** Columns of a plot with nothing planted on it. */
+export const EMPTY_PLOT = {
+  seedItemId: null,
+  plantedAt: null,
+  finishAt: null,
+  lastWateredAt: null,
+  fertilizerApplied: false,
+} as const;

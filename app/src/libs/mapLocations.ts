@@ -4,6 +4,7 @@ import { findCompletedPredecessor, isQuestObjectiveAvailable } from "@/libs/obje
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
+import { getUtcDayKey } from "@/utils/time";
 import type { MapLocation } from "@/validators/mapLocation";
 import { mapLocationFields } from "@/validators/mapLocation";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
@@ -48,7 +49,7 @@ export const publicQuestLocations = (
   })[],
   now = new Date(),
 ): MapLocation[] => {
-  const today = now.toISOString().slice(0, 10);
+  const today = getUtcDayKey(now);
   return quests.flatMap((quest) => {
     if (
       quest.hidden ||

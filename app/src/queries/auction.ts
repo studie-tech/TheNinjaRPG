@@ -1,6 +1,7 @@
 /**
  * Database access for auction; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   desc,
@@ -26,6 +27,7 @@ import {
   userItem,
 } from "@/drizzle/schema";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -76,30 +78,7 @@ export const findAuctionListingForGetAuctionListing = (
   client.query.auctionListing.findFirst({
     where: eq(auctionListing.id, auctionId),
     with: {
-      userItem: {
-        with: {
-          item: true,
-          imbuements: {
-            with: {
-              item: true,
-            },
-          },
-        },
-      },
-      seller: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
-      targetUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
+      ...auctionListingRelations,
       bids: {
         with: {
           bidder: {
@@ -114,6 +93,13 @@ export const findAuctionListingForGetAuctionListing = (
       },
     },
   });
+
+/** Relations every auction listing read loads; each query adds its own `bids`. */
+const auctionListingRelations = {
+  userItem: { with: { item: true, imbuements: { with: { item: true } } } },
+  seller: { columns: { userId: true, username: true, avatar: true } },
+  targetUser: { columns: { userId: true, username: true, avatar: true } },
+} as const;
 
 /** Build the `auctionBid` selection for `getAuctionListings`, using predicates on `auctionId`, `id`, `bidderId`. */
 export const selectAuctionBidForGetAuctionListings = (
@@ -148,30 +134,7 @@ export const listAuctionListingForGetAuctionListings = (
   client.query.auctionListing.findMany({
     where: inArray(auctionListing.id, listingIds),
     with: {
-      userItem: {
-        with: {
-          item: true,
-          imbuements: {
-            with: {
-              item: true,
-            },
-          },
-        },
-      },
-      seller: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
-      targetUser: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-        },
-      },
+      ...auctionListingRelations,
       bids: {
         orderBy: desc(auctionBid.amount),
         limit: 1,
@@ -500,9 +463,9 @@ export const executeResultForSettleAuctionWithoutRefunds2 = (
           ${userItem.updatedAt} = CURRENT_TIMESTAMP(3),
           ${auctionBid.amount} = ${winningBid.amount}, ${auctionBid.status} = 'WON',
           ${sellerBalance} = ${sellerBalance} + ${getAuctionSellerPayout(winningBid.amount)},
-          ${seller.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${seller.updatedAt})),
+          ${seller.updatedAt} = ${nextSnapshotSql(seller.updatedAt)},
           ${buyerBalance} = ${buyerBalance} - ${raise?.amountToDeduct ?? 0},
-          ${userData.updatedAt} = GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
+          ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)}
       WHERE ${and(
         listingGuard,
         itemGuard,
@@ -529,7 +492,7 @@ export const updateAuctionListingForSettleAuction = (
   client
     .update(auctionListing)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${auctionListing.updatedAt}))`,
+      updatedAt: nextSnapshotSql(auctionListing.updatedAt),
     })
     .where(
       and(
@@ -588,7 +551,7 @@ export const updateUserDataForSettleAuction = (
       ...(auction.currencyType === "MONEY"
         ? { bank: sql`${userData.bank} + ${amounts}` }
         : { reputationPoints: sql`${userData.reputationPoints} + ${amounts}` }),
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(
       inArray(

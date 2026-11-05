@@ -115,15 +115,22 @@ export const listVillageForProcessExpiredElderVotes = (
     columns: { id: true, name: true, kageId: true, tokens: true },
   });
 
-/** Build the `villageElderVote` update for `rejectWithNotification`, setting `status`, using predicates on `id`. */
-export const updateVillageElderVoteForRejectWithNotification = (
+/**
+ * Build the `villageElderVote` update for `rejectWarDeclaration`, setting `status` and
+ * `endsAt`, using predicates on `id` and `status`.
+ */
+export const updateVillageElderVoteForRejectWarDeclaration = (
   client: Pick<DrizzleClient, "update">,
   vote: { id: string },
+  endsAt: Date,
+  fromStatus: "PENDING" | "APPROVED",
 ) =>
   client
     .update(villageElderVote)
-    .set({ status: "REJECTED" })
-    .where(eq(villageElderVote.id, vote.id));
+    .set({ status: "REJECTED", endsAt })
+    .where(
+      and(eq(villageElderVote.id, vote.id), eq(villageElderVote.status, fromStatus)),
+    );
 
 /** Build the `village` listing for `handleCutoff`, selecting only `id` and `name`, using predicates on `type`. */
 export const listVillageForHandleCutoff = (client: Pick<DrizzleClient, "query">) =>
@@ -174,24 +181,8 @@ export const updateClanForHandleCutoff2 = (
     })
     .where(eq(clan.id, c.id));
 
-/** Build the `clan` listing for `handleRotation`, using predicates on `elderCutoffRank`. */
-export const listClanForHandleRotation = (client: Pick<DrizzleClient, "query">) =>
-  client.query.clan.findMany({
-    where: isNotNull(clan.elderCutoffRank),
-    columns: {
-      id: true,
-      name: true,
-      villageId: true,
-      leaderId: true,
-      elderNomineeId: true,
-      elderCutoffRank: true,
-      activityPoints: true,
-      points: true,
-    },
-  });
-
 /** Build the `clan` listing for `handleRotation`, using predicates on `villageId`. */
-export const listClanForHandleRotation2 = (client: Pick<DrizzleClient, "query">) =>
+export const listClanForHandleRotation = (client: Pick<DrizzleClient, "query">) =>
   client.query.clan.findMany({
     where: isNotNull(clan.villageId),
     columns: {

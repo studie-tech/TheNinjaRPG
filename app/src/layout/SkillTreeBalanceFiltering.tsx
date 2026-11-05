@@ -7,7 +7,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { EffectType } from "@/validators/combat";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 /**
  * STATE HOOK
@@ -77,7 +77,7 @@ const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (pro
             <Label>Skill Effects</Label>
             <MultiSelect
               selected={skillEffects}
-              options={effectFilters.map((effect) => ({
+              options={tagTypes.map((effect) => ({
                 value: effect,
                 label: effect,
               }))}

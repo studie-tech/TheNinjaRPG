@@ -11,3 +11,7 @@ export const stripePurchaseSchema = z.discriminatedUnion("type", [
     federalStatus: z.enum(["NORMAL", "SILVER", "GOLD"]),
   }),
 ]);
+
+/** Stripe subscription statuses that can no longer renew or be cancelled. */
+export const isEndedSubscriptionStatus = (status: string) =>
+  status === "canceled" || status === "incomplete_expired";

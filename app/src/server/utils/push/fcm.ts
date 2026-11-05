@@ -11,7 +11,13 @@ import { retryRejectedOnce } from "./authRetry";
 import { mapWithConcurrency } from "./batch";
 import { signJwt } from "./jwt";
 import { fcmMessage } from "./payloads";
-import { isDeadFcmToken, type PushMessage, type PushResult } from "./types";
+import {
+  failAll,
+  isDeadFcmToken,
+  type PushMessage,
+  type PushResult,
+  toPublicResult,
+} from "./types";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
@@ -144,19 +150,6 @@ const accessTokenAfterRejection = (rejectedToken: string): Promise<string> => {
   return getAccessToken();
 };
 
-const publicResult = (result: FcmAttemptResult): PushResult => {
-  if (result.status === "sent") return { token: result.token, status: "sent" };
-  if (result.status === "expired") {
-    return { token: result.token, status: "expired", reason: result.reason };
-  }
-  return {
-    token: result.token,
-    status: "failed",
-    reason: result.reason,
-    retryable: result.retryable,
-  };
-};
-
 /** Deliver an alert to every token. Never throws. */
 export const sendAlerts = async (
   tokens: string[],
@@ -164,24 +157,14 @@ export const sendAlerts = async (
 ): Promise<PushResult[]> => {
   if (tokens.length === 0) return [];
   if (!isConfigured()) {
-    return tokens.map((token) => ({
-      token,
-      status: "failed" as const,
-      reason: "FCM is not configured",
-      retryable: false,
-    }));
+    return failAll(tokens, "FCM is not configured", false);
   }
   let accessToken: string;
   try {
     accessToken = await getAccessToken();
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Unknown FCM error";
-    return tokens.map((token) => ({
-      token,
-      status: "failed" as const,
-      reason,
-      retryable: true,
-    }));
+    return failAll(tokens, reason, true);
   }
   const results = await mapWithConcurrency(tokens, (token) =>
     sendOne(accessToken, token, message),
@@ -196,5 +179,5 @@ export const sendAlerts = async (
       );
     },
   );
-  return results.map(publicResult);
+  return results.map(toPublicResult);
 };

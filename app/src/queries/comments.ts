@@ -2,7 +2,27 @@
  * Database access for comments; authorization and transaction scopes stay in callers.
  */
 
+import type { SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
+import { nanoid } from "nanoid";
 import type { SupportTicketStatus, UserRole } from "@/drizzle/constants";
+import {
+  conversation,
+  conversationComment,
+  supportTicket,
+  supportTicketActivity,
+  user2conversation,
+  userBlackList,
+  userData,
+  userReportComment,
+  village,
+} from "@/drizzle/schema";
+import { userCardColumns } from "@/queries/userColumns";
+import type { DrizzleClient } from "@/server/db";
+import { displayTitleSql } from "@/server/utils/titleDisplay";
+import { canModerateRoles, canSeeSecretData } from "@/utils/permissions";
+import sanitize from "@/utils/sanitize";
 
 /**
  * Fetches comments from the database.
@@ -81,26 +101,6 @@ export const listNotificationUserCandidates = (
     },
   });
 
-import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
-import { nanoid } from "nanoid";
-import {
-  conversation,
-  conversationComment,
-  supportTicket,
-  supportTicketActivity,
-  user2conversation,
-  userBlackList,
-  userData,
-  userReportComment,
-  village,
-} from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
-import { displayTitleSql } from "@/server/utils/titleDisplay";
-import { canModerateRoles, canSeeSecretData } from "@/utils/permissions";
-import sanitize from "@/utils/sanitize";
-
 /** Table alias for reader blacklist joins, keeping its columns distinct from other participants. */
 const readerBlacklist = alias(userBlackList, "readerBlacklist");
 
@@ -125,16 +125,7 @@ export const listUserReportCommentForGetReportComments = (
     where: eq(userReportComment.reportId, report.id),
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          rank: true,
-          isOutlaw: true,
-          level: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
     },
     orderBy: [desc(userReportComment.createdAt)],
@@ -192,16 +183,6 @@ export const updateUserDataForGetUserConversations = (
 ) =>
   client.update(userData).set({ inboxNews: 0 }).where(eq(userData.userId, ctx.userId));
 
-/** Build the `supportTicket` lookup for `exitConversation`, selecting only `id`, using predicates on `conversationId`. */
-export const findSupportTicketForExitConversation = (
-  client: Pick<DrizzleClient, "query">,
-  input: { convo_id: string },
-) =>
-  client.query.supportTicket.findFirst({
-    where: eq(supportTicket.conversationId, input.convo_id),
-    columns: { id: true },
-  });
-
 /** Build the `conversation` deletion for `exitConversation`, using predicates on `id`. */
 export const deleteConversationForExitConversation = (
   client: Pick<DrizzleClient, "delete">,
@@ -231,32 +212,8 @@ export const selectConversationCommentForFetchConversationComment = (
 ) =>
   client
     .select({
-      id: conversationComment.id,
-      createdAt: conversationComment.createdAt,
-      content: conversationComment.content,
-      conversationId: conversationComment.conversationId,
-      authorId: conversationComment.authorId,
-      isPinned: conversationComment.isPinned,
-      isReported: conversationComment.isReported,
-      reactions: conversationComment.reactions,
-      villageName: village.name,
-      villageHexColor: village.hexColor,
-      villageKageId: village.kageId,
-      userId: posterUser.userId,
-      username: posterUser.username,
-      avatar: posterUser.avatar,
-      rank: posterUser.rank,
-      isOutlaw: posterUser.isOutlaw,
-      level: posterUser.level,
-      role: posterUser.role,
+      ...conversationCommentColumns(posterUser),
       readerRole: readerUser.role,
-      displayTitle: displayTitleSql(posterUser),
-      federalStatus: posterUser.federalStatus,
-      tavernUsernameColor: posterUser.tavernUsernameColor,
-      tavernTitleColor: posterUser.tavernTitleColor,
-      nRecruited: posterUser.nRecruited,
-      tavernMessages: posterUser.tavernMessages,
-      isStaffOnly: conversationComment.isStaffOnly,
     })
     .from(conversationComment)
     .innerJoin(posterUser, eq(posterUser.userId, conversationComment.userId))
@@ -288,6 +245,35 @@ export const selectConversationCommentForFetchConversationComment = (
       ),
     );
 
+/** Comment, poster and poster-village columns rendered for a conversation message. */
+const conversationCommentColumns = (poster: typeof posterUser | typeof userData) => ({
+  id: conversationComment.id,
+  createdAt: conversationComment.createdAt,
+  content: conversationComment.content,
+  conversationId: conversationComment.conversationId,
+  authorId: conversationComment.authorId,
+  reactions: conversationComment.reactions,
+  isPinned: conversationComment.isPinned,
+  isReported: conversationComment.isReported,
+  villageName: village.name,
+  villageHexColor: village.hexColor,
+  villageKageId: village.kageId,
+  userId: poster.userId,
+  username: poster.username,
+  avatar: poster.avatar,
+  rank: poster.rank,
+  isOutlaw: poster.isOutlaw,
+  level: poster.level,
+  role: poster.role,
+  displayTitle: displayTitleSql(poster),
+  federalStatus: poster.federalStatus,
+  tavernUsernameColor: poster.tavernUsernameColor,
+  tavernTitleColor: poster.tavernTitleColor,
+  nRecruited: poster.nRecruited,
+  tavernMessages: poster.tavernMessages,
+  isStaffOnly: conversationComment.isStaffOnly,
+});
+
 /** Build the `conversationComment` selection for `getConversationComments`, using the configured predicates. */
 export const selectConversationCommentForGetConversationComments = (
   client: Pick<DrizzleClient, "select">,
@@ -300,33 +286,7 @@ export const selectConversationCommentForGetConversationComments = (
   skip: number,
 ) =>
   client
-    .select({
-      id: conversationComment.id,
-      createdAt: conversationComment.createdAt,
-      content: conversationComment.content,
-      conversationId: conversationComment.conversationId,
-      authorId: conversationComment.authorId,
-      reactions: conversationComment.reactions,
-      isPinned: conversationComment.isPinned,
-      isReported: conversationComment.isReported,
-      villageName: village.name,
-      villageHexColor: village.hexColor,
-      villageKageId: village.kageId,
-      userId: userData.userId,
-      username: userData.username,
-      avatar: userData.avatar,
-      rank: userData.rank,
-      isOutlaw: userData.isOutlaw,
-      level: userData.level,
-      role: userData.role,
-      displayTitle: displayTitleSql(userData),
-      federalStatus: userData.federalStatus,
-      tavernUsernameColor: userData.tavernUsernameColor,
-      tavernTitleColor: userData.tavernTitleColor,
-      nRecruited: userData.nRecruited,
-      tavernMessages: userData.tavernMessages,
-      isStaffOnly: conversationComment.isStaffOnly,
-    })
+    .select(conversationCommentColumns(userData))
     .from(conversationComment)
     .innerJoin(userData, eq(conversationComment.userId, userData.userId))
     .leftJoin(
@@ -369,17 +329,14 @@ export const updateUserConversationReadAt = (
       ),
     );
 
-/**
- * Build the `supportTicket` lookup for `createConversationComment`, selecting only
- * `createdByUserId`, using predicates on `conversationId`.
- */
-export const findSupportTicketForCreateConversationComment = (
+/** Build the lookup of the support ticket linked to a conversation. */
+export const findSupportTicketForConversation = (
   client: Pick<DrizzleClient, "query">,
   convo: { id: string },
 ) =>
   client.query.supportTicket.findFirst({
     where: eq(supportTicket.conversationId, convo.id),
-    columns: { createdByUserId: true },
+    columns: { id: true, status: true, createdByUserId: true },
   });
 
 /** Build a conversation comment insert with separate displayed user and author IDs. */
@@ -538,16 +495,6 @@ export const findConversationForGetConvo3 = (
   client.query.conversation.findFirst({
     where: eq(conversation.title, title),
     with: { users: true },
-  });
-
-/** Build the `supportTicket` lookup for `updateSupportTicketStatusAfterComment`, using predicates on `conversationId`. */
-export const findSupportTicketForUpdateSupportTicketStatusAfterComment = (
-  client: Pick<DrizzleClient, "query">,
-  input: { conversationId: string },
-) =>
-  client.query.supportTicket.findFirst({
-    where: eq(supportTicket.conversationId, input.conversationId),
-    columns: { id: true, status: true, createdByUserId: true },
   });
 
 /**

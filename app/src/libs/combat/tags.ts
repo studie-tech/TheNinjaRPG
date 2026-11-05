@@ -16,7 +16,9 @@ import {
   MIRROR_EXCLUDED_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
+  PERSISTENT_EFFECT_SOURCE_TYPES,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
+  TEMPORAL_AP_DELTA,
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
@@ -36,6 +38,8 @@ import type { CombatAction } from "@/libs/combat/types";
 import {
   applyPoolAdjustmentsToBase,
   canStackEffect,
+  getActiveSealEffects,
+  getActiveTargetEffects,
   getBaseDamageForModifier,
   getEffectiveMaxPool,
   getEffectStackKey,
@@ -43,6 +47,7 @@ import {
   getPreventTypeName,
   isEffectActive,
   isEffectEnabled,
+  sealCheck,
   selectTransferEffects,
   sortEffects,
   storeMasteryBases,
@@ -130,6 +135,42 @@ export const realizeTag = <T extends BattleEffect>(props: {
   return structuredClone(tag);
 };
 
+/** Mark a realized tag as already active on its target, so processing does not recast it. */
+export const markPassiveEffect = <T extends UserEffect>(
+  realized: T,
+  targetId: string,
+  fromType: UserEffect["fromType"],
+): T => {
+  realized.isNew = false;
+  realized.castThisRound = false;
+  realized.targetId = targetId;
+  realized.fromType = fromType;
+  return realized;
+};
+
+/** Realize an authored tag as a passive effect, by default on the realizing user. */
+export const realizePassiveEffect = ({
+  targetId,
+  fromType,
+  ...props
+}: Parameters<typeof realizeTag<UserEffect>>[0] & {
+  targetId?: string;
+  fromType: UserEffect["fromType"];
+}) => markPassiveEffect(realizeTag(props), targetId ?? props.user.userId, fromType);
+
+/** Consequence key suffix and maximum-pool field of each combat pool. */
+const POOL_FIELDS = {
+  Health: { suffix: "hp", max: "maxHealth" },
+  Stamina: { suffix: "sp", max: "maxStamina" },
+  Chakra: { suffix: "cp", max: "maxChakra" },
+} as const;
+
+/** Pools named by an absorb or drain tag. An authored empty list selects no pool. */
+const getTagPools = (effect: UserEffect) =>
+  "poolsAffected" in effect && effect.poolsAffected
+    ? (effect.poolsAffected as PoolType[])
+    : (["Health"] as PoolType[]);
+
 /** Absorb damage & convert it to healing */
 export const absorb = (
   effect: UserEffect,
@@ -143,10 +184,7 @@ export const absorb = (
   // Calculate absorption
   const { power, qualifier } = getPower(effect);
   // Pools that are going to be restored
-  const pools =
-    "poolsAffected" in effect && effect.poolsAffected
-      ? effect.poolsAffected
-      : ["Health" as const];
+  const pools = getTagPools(effect);
   const nPools = pools.length;
   // Apply the absorb effect the round after the effect is applied
   if (!effect.isNew && !effect.castThisRound) {
@@ -171,20 +209,9 @@ export const absorb = (
 
           // Apply absorption to each pool
           pools.forEach((pool) => {
-            switch (pool) {
-              case "Health":
-                // Add to existing absorb value instead of overwriting
-                consequence.absorb_hp = (consequence.absorb_hp || 0) + convert / nPools;
-                break;
-              case "Stamina":
-                // Add to existing absorb value instead of overwriting
-                consequence.absorb_sp = (consequence.absorb_sp || 0) + convert / nPools;
-                break;
-              case "Chakra":
-                // Add to existing absorb value instead of overwriting
-                consequence.absorb_cp = (consequence.absorb_cp || 0) + convert / nPools;
-                break;
-            }
+            // Add to existing absorb value instead of overwriting
+            const key = `absorb_${POOL_FIELDS[pool].suffix}` as const;
+            consequence[key] = (consequence[key] || 0) + convert / nPools;
           });
         }
       }
@@ -229,26 +256,105 @@ const checkPreventImmunity = (
   return undefined;
 };
 
-/** Prevent buffing */
-export const buffPrevent = (
-  effect: UserEffect,
+/** Player-facing wording of each prevent status: immunity label, active and failed text. */
+const PREVENT_TAG_TEXT: Record<
+  PreventTagType,
+  { label: string; active: string; failed: string }
+> = {
+  buffprevent: {
+    label: "buff",
+    active: "cannot be buffed",
+    failed: "could not be prevented from buffs",
+  },
+  debuffprevent: {
+    label: "debuff",
+    active: "cannot be debuffed",
+    failed: "could not be prevented from debuffs",
+  },
+  fleeprevent: {
+    label: "flee",
+    active: "cannot flee",
+    failed: "could not be prevented from fleeing",
+  },
+  healprevent: {
+    label: "heal",
+    active: "cannot be healed",
+    failed: "could not be prevented from healing",
+  },
+  moveprevent: {
+    label: "movement",
+    active: "cannot move",
+    failed: "could not be prevented from moving",
+  },
+  onehitkillprevent: {
+    label: "one-hit-kill",
+    active: "cannot be one-hit-killed",
+    failed: "could not be prevented from one-hits",
+  },
+  robprevent: {
+    label: "rob",
+    active: "cannot be robbed",
+    failed: "could not be prevented from being robbed",
+  },
+  cleanseprevent: {
+    label: "cleanse",
+    active: "cannot be cleansed",
+    failed: "could not be prevented from cleansing",
+  },
+  clearprevent: {
+    label: "clear",
+    active: "cannot be cleared",
+    failed: "could not be prevented from being cleared",
+  },
+  sealprevent: {
+    label: "seal",
+    active: "bloodline cannot be sealed",
+    failed: "could not be prevented from being sealed",
+  },
+  stunprevent: {
+    label: "stun",
+    active: "cannot be stunned",
+    failed: "could not be prevented from being stunned",
+  },
+  summonprevent: {
+    label: "summon",
+    active: "cannot summon companions",
+    failed: "could not be prevented from summoning",
+  },
+  disarm: {
+    label: "disarm",
+    active: "cannot use weapons",
+    failed: "could not be disarmed",
+  },
+};
+
+type PreventEffect = Extract<UserEffect, { type: PreventTagType }>;
+
+/** Narrows an effect to the prevent statuses resolved by `applyPreventTag`. */
+export const isPreventEffect = (effect: UserEffect): effect is PreventEffect =>
+  effect.type in PREVENT_TAG_TEXT;
+
+/**
+ * Resolve a prevent status: immunity cancels a new one, a passed roll latches it at
+ * full power, and a failed roll ends a new one.
+ */
+export const applyPreventTag = (
+  effect: PreventEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "buff");
+  const { label, active, failed } = PREVENT_TAG_TEXT[effect.type];
+  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, label);
   if (immunityBlocked) return immunityBlocked;
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be buffed");
+    const info = getInfo(target, effect, active);
     effect.power = 100;
     return info;
   } else if (effect.isNew) {
     effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from buffs`,
-      color: "blue",
-    };
+    return { txt: `${target.username} ${failed}`, color: "blue" };
   }
 };
 
@@ -531,29 +637,6 @@ export const injectjutsus = (
   return undefined;
 };
 
-/** Prevent debuffing */
-export const debuffPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "debuff");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be debuffed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from debuffs`,
-      color: "blue",
-    };
-  }
-};
-
 /**
  * Human-readable summary of what an effect affects.
  * @param effect - the effect to describe
@@ -617,9 +700,10 @@ const applyPercentageStatModifier = (
   (target[statName] as number) = (target[statName] as number) + change;
 };
 
-const applyCombatStatChange = (
+/** Apply flat changes directly and stack percentage changes against saved base stats. */
+const applyStatChange = (
   target: BattleUserState,
-  stat: "offence" | "defence",
+  stat: keyof NonNullable<BattleUserState["baseStatsForModifiers"]>,
   power: number,
   calculation: string,
 ) => {
@@ -638,49 +722,14 @@ export const adjustStats = (effect: UserEffect, target: BattleUserState) => {
     if (!effect.isNew && !effect.castThisRound) {
       if ("statTypes" in effect && effect.statTypes?.length) {
         if (effect.direction === "offence" || effect.direction === "both") {
-          applyCombatStatChange(target, "offence", power, effect.calculation);
+          applyStatChange(target, "offence", power, effect.calculation);
         }
         if (effect.direction === "defence" || effect.direction === "both") {
-          applyCombatStatChange(target, "defence", power, effect.calculation);
+          applyStatChange(target, "defence", power, effect.calculation);
         }
       }
-      effect.generalTypes?.forEach((general: GeneralType) => {
-        if (general === "Highest") {
-          if (effect.calculation === "static") {
-            target.highestGenerals.forEach((gen: (typeof GenNames)[number]) => {
-              target[gen] += power;
-            });
-          } else if (effect.calculation === "percentage") {
-            // Percentage calculation - use additive stacking
-            target.highestGenerals.forEach((gen: (typeof GenNames)[number]) => {
-              applyPercentageStatModifier(target, gen, power);
-            });
-          }
-        } else if (general === "Strength") {
-          if (effect.calculation === "static") {
-            target.strength += power;
-          } else if (effect.calculation === "percentage") {
-            applyPercentageStatModifier(target, "strength", power);
-          }
-        } else if (general === "Intelligence") {
-          if (effect.calculation === "static") {
-            target.intelligence += power;
-          } else if (effect.calculation === "percentage") {
-            applyPercentageStatModifier(target, "intelligence", power);
-          }
-        } else if (general === "Willpower") {
-          if (effect.calculation === "static") {
-            target.willpower += power;
-          } else if (effect.calculation === "percentage") {
-            applyPercentageStatModifier(target, "willpower", power);
-          }
-        } else if (general === "Speed") {
-          if (effect.calculation === "static") {
-            target.speed += power;
-          } else if (effect.calculation === "percentage") {
-            applyPercentageStatModifier(target, "speed", power);
-          }
-        }
+      getLowerGenerals(effect.generalTypes, target.highestGenerals).forEach((gen) => {
+        applyStatChange(target, gen as GenName, power, effect.calculation);
       });
     }
   }
@@ -708,13 +757,9 @@ export const increaseStats = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
-  return adjustStats(effect, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "buffprevent", target) ??
+  adjustStats(effect, target);
 
 // ---------------------------------------------
 // Helper to adjust basic action attributes
@@ -728,15 +773,8 @@ const adjustBasicAction = (
   const { attr, isBuff } = opts;
   // Determine if blocked by (de)buff prevent
   const preventKind = isBuff ? "buffprevent" : "debuffprevent";
-  const { pass, preventTag } = preventCheck(usersEffects, preventKind, target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass)
-      return preventResponse(
-        effect,
-        target,
-        `cannot be ${isBuff ? "buffed" : "debuffed"}`,
-      );
-  }
+  const prevented = olderPreventResponse(effect, usersEffects, preventKind, target);
+  if (prevented) return prevented;
 
   const { adverb, qualifier } = getPower(effect);
   const actionsAffected =
@@ -827,16 +865,9 @@ export const decreaseStats = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
-  }
-  // Make power negative to decrease stats
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return adjustStats(effect, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "debuffprevent", target) ??
+  adjustStats(invertPower(effect), target);
 
 const adjustMasteries = (effect: UserEffect, target: BattleUserState) => {
   const { power, adverb, qualifier } = getPower(effect);
@@ -845,12 +876,12 @@ const adjustMasteries = (effect: UserEffect, target: BattleUserState) => {
     if (!effect.isNew && !effect.castThisRound) {
       storeMasteryBases(target);
       effect.masteryTypes.forEach((mastery: MasteryType) => {
-        const stat = MASTERY_TYPE_TO_STAT[mastery];
-        if (effect.calculation === "static") {
-          target[stat] += power;
-        } else {
-          applyPercentageStatModifier(target, stat, power);
-        }
+        applyStatChange(
+          target,
+          MASTERY_TYPE_TO_STAT[mastery],
+          power,
+          effect.calculation,
+        );
       });
     }
   }
@@ -861,34 +892,26 @@ export const increaseMastery = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
-  return adjustMasteries(effect, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "buffprevent", target) ??
+  adjustMasteries(effect, target);
 
 export const decreaseMastery = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
-  }
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return adjustMasteries(effect, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "debuffprevent", target) ??
+  adjustMasteries(invertPower(effect), target);
 
-/** Adjust damage given by target. Applies to both direct and residual (DOT) damage. */
-export const adjustDamageGiven = (
+/** Adjust the damage one side of a consequence deals or takes, direct or residual (DOT). */
+const adjustDamage = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
+  side: "userId" | "targetId",
+  label: "given" | "taken",
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
   const affected = getAffected(effect);
@@ -900,7 +923,7 @@ export const adjustDamageGiven = (
           : consequence.residual !== undefined
             ? "residual"
             : undefined;
-      if (consequence.userId === effect.targetId && damageKey !== undefined) {
+      if (consequence[side] === effect.targetId && damageKey !== undefined) {
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
@@ -936,122 +959,61 @@ export const adjustDamageGiven = (
   return getInfo(
     target,
     effect,
-    `damage given [${affected}] is ${adverb} by up to ${qualifier}`,
+    `damage ${label} [${affected}] is ${adverb} by up to ${qualifier}`,
   );
 };
+
+/** Adjust damage given by target */
+export const adjustDamageGiven = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  consequences: Map<string, Consequence>,
+  target: BattleUserState,
+) => adjustDamage(effect, usersEffects, consequences, target, "userId", "given");
 
 export const increaseDamageGiven = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
-  return adjustDamageGiven(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "buffprevent", target) ??
+  adjustDamageGiven(effect, usersEffects, consequences, target);
 
 export const decreaseDamageGiven = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
-  }
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return adjustDamageGiven(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "debuffprevent", target) ??
+  adjustDamageGiven(invertPower(effect), usersEffects, consequences, target);
 
-/** Adjust damage taken by user. Applies to both direct and residual (DOT) damage. */
+/** Adjust damage taken by user */
 export const adjustDamageTaken = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { power, adverb, qualifier } = getPower(effect);
-  const affected = getAffected(effect);
-  if (!effect.isNew && !effect.castThisRound) {
-    consequences.forEach((consequence, effectId) => {
-      const damageKey =
-        consequence.damage !== undefined
-          ? "damage"
-          : consequence.residual !== undefined
-            ? "residual"
-            : undefined;
-      if (consequence.targetId === effect.targetId && damageKey !== undefined) {
-        const damageEffect = usersEffects.find((e) => e.id === effectId);
-        if (damageEffect) {
-          const ratio = getEfficiencyRatio(damageEffect, effect);
-
-          if (effect.fromType === "bloodline") {
-            if (
-              "allowBloodlineDamageIncrease" in damageEffect &&
-              "allowBloodlineDamageDecrease" in damageEffect &&
-              ((power > 0 && !damageEffect.allowBloodlineDamageIncrease) ||
-                (power < 0 && !damageEffect.allowBloodlineDamageDecrease))
-            ) {
-              return;
-            }
-            if (effect.calculation === "static") {
-              const change = power;
-              consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
-            } else {
-              const current = consequence[damageKey] ?? 0;
-              const multiplier = 1 + (power / 100) * ratio;
-              consequence[damageKey] = current * multiplier;
-            }
-            return;
-          }
-
-          const baseDamage = getBaseDamageForModifier(effect, consequence);
-          const change =
-            effect.calculation === "percentage" ? (power / 100) * baseDamage : power;
-          consequence[damageKey] = (consequence[damageKey] ?? 0) + change * ratio;
-        }
-      }
-    });
-  }
-  return getInfo(
-    target,
-    effect,
-    `damage taken [${affected}] is ${adverb} by up to ${qualifier}`,
-  );
-};
+) => adjustDamage(effect, usersEffects, consequences, target, "targetId", "taken");
 
 export const increaseDamageTaken = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
-  }
-  return adjustDamageTaken(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "debuffprevent", target) ??
+  adjustDamageTaken(effect, usersEffects, consequences, target);
 
 export const decreaseDamageTaken = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return adjustDamageTaken(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "buffprevent", target) ??
+  adjustDamageTaken(invertPower(effect), usersEffects, consequences, target);
 
 /** Single prevent roll for pipeline + combat log (matches increase/decreaseDamage* wrappers). */
 export const getDamageModifierPreventState = (
@@ -1067,13 +1029,8 @@ export const getDamageModifierPreventState = (
         : null;
   if (!preventType) return { blocked: false, info: undefined };
 
-  const { pass, preventTag } = preventCheck(usersEffects, preventType, target);
-  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
-    const message =
-      preventType === "buffprevent" ? "cannot be buffed" : "cannot be debuffed";
-    return { blocked: true, info: preventResponse(effect, target, message) };
-  }
-  return { blocked: false, info: undefined };
+  const info = olderPreventResponse(effect, usersEffects, preventType, target);
+  return { blocked: info !== undefined, info };
 };
 
 /** Adjust ability to heal other of target */
@@ -1085,39 +1042,24 @@ export const adjustHealGiven = (
 ) => {
   const { power, adverb, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
+    const change = (value: number) =>
+      effect.calculation === "percentage" ? (power / 100) * value : power;
     consequences.forEach((consequence, effectId) => {
-      // Adjust heal
-      if (consequence.userId === effect.targetId && consequence.heal_hp) {
-        const healEffect = usersEffects.find((e) => e.id === effectId);
-        if (healEffect) {
-          const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * consequence.heal_hp
-              : power;
-          consequence.heal_hp = consequence.heal_hp + change;
+      // Adjust healing dealt by the target
+      if (
+        consequence.userId === effect.targetId &&
+        usersEffects.some((e) => e.id === effectId)
+      ) {
+        if (consequence.heal_hp) consequence.heal_hp += change(consequence.heal_hp);
+        if (consequence.lifesteal_hp) {
+          consequence.lifesteal_hp += change(consequence.lifesteal_hp);
         }
-      }
-      // Adjust lifesteal
-      if (consequence.userId === effect.targetId && consequence.lifesteal_hp) {
-        const stealEffect = usersEffects.find((e) => e.id === effectId);
-        if (stealEffect) {
-          const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * consequence.lifesteal_hp
-              : power;
-          consequence.lifesteal_hp = consequence.lifesteal_hp + change;
-        }
-      }
-      // Adjust vamp
-      if (consequence.userId === effect.targetId && consequence.vampRatio) {
-        const vampEffect = usersEffects.find((e) => e.id === effectId);
-        if (vampEffect) {
-          const change =
+        if (consequence.vampRatio) {
+          // vampRatio is a 0-1 ratio, so convert flat power (%) to ratio.
+          consequence.vampRatio +=
             effect.calculation === "percentage"
               ? (power / 100) * consequence.vampRatio
-              : // vampRatio is a 0-1 ratio, so convert flat power (%) to ratio.
-                power / 100;
-          consequence.vampRatio = consequence.vampRatio + change;
+              : power / 100;
         }
       }
       // Adjust absorb
@@ -1125,13 +1067,7 @@ export const adjustHealGiven = (
         const absorbEffect = usersEffects.find(
           (e) => e.id === (consequence.diffuseSourceEffectId ?? effectId),
         );
-        if (absorbEffect) {
-          const change =
-            effect.calculation === "percentage"
-              ? (power / 100) * consequence.absorb_hp
-              : power;
-          consequence.absorb_hp = consequence.absorb_hp + change;
-        }
+        if (absorbEffect) consequence.absorb_hp += change(consequence.absorb_hp);
       }
     });
   }
@@ -1143,28 +1079,18 @@ export const increaseHealGiven = (
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
-  return adjustHealGiven(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "buffprevent", target) ??
+  adjustHealGiven(effect, usersEffects, consequences, target);
 
 export const decreaseHealGiven = (
   effect: UserEffect,
   usersEffects: UserEffect[],
   consequences: Map<string, Consequence>,
   target: BattleUserState,
-) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed");
-  }
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return adjustHealGiven(effect, usersEffects, consequences, target);
-};
+) =>
+  olderPreventResponse(effect, usersEffects, "debuffprevent", target) ??
+  adjustHealGiven(invertPower(effect), usersEffects, consequences, target);
 
 /** Expire removable statuses when Clear/Cleanse succeeds, preserving protected sources. */
 const removeEffects = (
@@ -1194,7 +1120,7 @@ const removeEffects = (
     // Remove user effects
     usersEffects
       .filter((e) => e.targetId === effect.targetId)
-      .filter((e) => !persistentEffectSourceTypes.has(e.fromType))
+      .filter((e) => !PERSISTENT_EFFECT_SOURCE_TYPES.has(e.fromType ?? ""))
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .forEach((e) => {
         e.rounds = 0;
@@ -1220,20 +1146,6 @@ const removeEffects = (
   }
   return { txt: text, color: "blue" } as ActionEffect;
 };
-
-/** Sources that `clear` / `cleanse` must not strip. Sage buffs and exhaustion are both protected. */
-const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
-  "bloodline",
-  "armor",
-  "accessory",
-  "keystone",
-  "skill",
-  "ranked",
-  "village",
-  "elementalMastery",
-  "sageMode",
-  "sageModeAfter",
-]);
 
 /**
  * Resolve Clear prevention and remove positive statuses, including instant conversions.
@@ -1269,6 +1181,43 @@ const statScaleOf = (user: BattleUserState): StatScale =>
   user.isAi && user.isOriginal ? "ai" : "player";
 
 /**
+ * An AI-driven copy of `template` standing on the effect's tile, on the caster's side
+ * and at the caster's level, with combat stats scaled to `perc`. Identity and control
+ * flags are set explicitly rather than inherited from the template.
+ */
+const spawnStandIn = (
+  template: BattleUserState,
+  caster: BattleUserState,
+  effect: GroundEffect,
+  perc: number,
+  scale: StatScale,
+) => {
+  const standIn = structuredClone(template);
+  standIn.enmity = 0;
+  delete standIn.baseStatsForModifiers;
+  standIn.userId = nanoid();
+  standIn.isSummon = true;
+  standIn.isAi = true;
+  standIn.controllerId = caster.userId;
+  standIn.isSummonTemplate = false; // an active entity, not a template
+  standIn.hidden = undefined;
+  standIn.leftBattle = false;
+  standIn.longitude = effect.longitude;
+  standIn.latitude = effect.latitude;
+  standIn.villageId = caster.villageId;
+  standIn.direction = caster.direction;
+  standIn.level = caster.level;
+  scaleUserStats(standIn, scale);
+  standIn.offence = standIn.offence * perc;
+  standIn.defence = standIn.defence * perc;
+  standIn.strength = standIn.strength * perc;
+  standIn.intelligence = standIn.intelligence * perc;
+  standIn.willpower = standIn.willpower * perc;
+  standIn.speed = standIn.speed * perc;
+  return standIn;
+};
+
+/**
  * Clone the caster onto the battlefield. The clone does not inherit sage mode
  * (no `sageModeId`, Activation jutsu stripped, `sageModeUsedThisBattle` set) so
  * it cannot activate or continue the original's sage window.
@@ -1291,30 +1240,20 @@ export const clone = (
     return;
   }
   if (effect.isNew) {
-    const newAi = structuredClone(user);
+    const newAi = spawnStandIn(user, user, effect, perc, statScaleOf(user));
     // Clones use their innate default independently of the controller's saved preference.
     newAi.preferredDamageElement = getPreferredDamageElement({
       primaryElement: user.primaryElement,
     });
-    newAi.enmity = 0;
-    delete newAi.baseStatsForModifiers;
     // A clone did not receive the original's hits and must not inherit its deferred damage.
     delete newAi.diffuseDamage;
     // Remove companion identity so clones cannot access PETS-only jutsu.
     delete newAi.petId;
     delete newAi.petSpeciesId;
-    // Place on battlefield
-    newAi.userId = nanoid();
     effect.creatorId = newAi.userId;
-    newAi.isSummon = true;
-    newAi.leftBattle = false;
     newAi.username = `${user.username} clone`;
-    newAi.controllerId = user.userId;
     newAi.isOriginal = false;
-    newAi.isSummonTemplate = false; // a clone is an active entity, not a template
     newAi.isPiloted = undefined; // a clone is AI-driven, never piloted
-    newAi.isAi = true;
-    newAi.hidden = undefined;
     newAi.sageModeId = null;
     newAi.sageModeActivated = false;
     newAi.sageModeActivatedRound = null;
@@ -1323,21 +1262,6 @@ export const clone = (
     newAi.jutsus = newAi.jutsus.filter(
       (j) => j.jutsuId !== SAGE_MODE_ACTIVATION_JUTSU_ID,
     );
-    newAi.longitude = effect.longitude;
-    newAi.latitude = effect.latitude;
-    newAi.villageId = user.villageId;
-    newAi.direction = user.direction;
-    // Set level to summoner level
-    newAi.level = user.level;
-    // Scale to level
-    scaleUserStats(newAi, statScaleOf(user));
-    // Set stats
-    newAi.offence = newAi.offence * perc;
-    newAi.defence = newAi.defence * perc;
-    newAi.strength = newAi.strength * perc;
-    newAi.intelligence = newAi.intelligence * perc;
-    newAi.willpower = newAi.willpower * perc;
-    newAi.speed = newAi.speed * perc;
     // Remove all jutsus with summon/clone (use staticData to look up jutsu effects)
     newAi.jutsus = newAi.jutsus.filter((j) => {
       const jutsu = staticData?.jutsus[j.jutsuId];
@@ -1383,14 +1307,8 @@ export const updateStatUsage = (
     }
   }
   if ("generalTypes" in effect) {
-    effect.generalTypes?.forEach((general: GeneralType) => {
-      if (general === "Highest") {
-        user.highestGenerals.forEach((gen: GenName) => {
-          user.usedGenerals[gen] += 1;
-        });
-      } else {
-        user.usedGenerals[general.toLowerCase() as GenName] += 1;
-      }
+    getLowerGenerals(effect.generalTypes, user.highestGenerals).forEach((gen) => {
+      user.usedGenerals[gen as GenName] += 1;
     });
   }
 };
@@ -1646,29 +1564,6 @@ export const flee = (
   return { txt: text, color: "blue" } as ActionEffect;
 };
 
-/** Check if flee prevent is successful depending on static chance calculation */
-export const fleePrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "flee");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot flee");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from fleeing`,
-      color: "blue",
-    };
-  }
-};
-
 /** Calculate healing effect on target */
 export const heal = (
   effect: UserEffect,
@@ -1697,21 +1592,12 @@ export const heal = (
   }
   const parsedEffect = HealTag.parse(effect);
   const poolsAffects = parsedEffect.poolsAffected || ["Health"];
-  const heal_hp = poolsAffects.includes("Health")
-    ? effect.calculation === "percentage"
-      ? target.maxHealth * (power / 100) * applyTimes
-      : power * applyTimes * 10
-    : 0;
-  const heal_sp = poolsAffects.includes("Stamina")
-    ? effect.calculation === "percentage"
-      ? target.maxStamina * (power / 100) * applyTimes
-      : power * applyTimes * 10
-    : 0;
-  const heal_cp = poolsAffects.includes("Chakra")
-    ? effect.calculation === "percentage"
-      ? target.maxChakra * (power / 100) * applyTimes
-      : power * applyTimes * 10
-    : 0;
+  const poolHeal = (pool: PoolType) => {
+    if (!poolsAffects.includes(pool)) return 0;
+    return effect.calculation === "percentage"
+      ? target[POOL_FIELDS[pool].max] * (power / 100) * applyTimes
+      : power * applyTimes * 10;
+  };
   // If rounds=0 apply immidiately, otherwise only on following rounds
   if (
     (effect.castThisRound && effect.rounds === 0) ||
@@ -1720,35 +1606,12 @@ export const heal = (
     consequences.set(effect.id, {
       userId: effect.creatorId,
       targetId: effect.targetId,
-      heal_hp,
-      heal_sp,
-      heal_cp,
+      heal_hp: poolHeal("Health"),
+      heal_sp: poolHeal("Stamina"),
+      heal_cp: poolHeal("Chakra"),
     });
   }
   return getInfo(target, effect, "will heal");
-};
-
-/** Prevent healing */
-export const healPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "heal");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be healed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from healing`,
-      color: "blue",
-    };
-  }
 };
 
 export const pooladjust = (effect: UserEffect, target: BattleUserState) => {
@@ -1798,11 +1661,8 @@ export const increasepoolcost = (effect: UserEffect, target: BattleUserState) =>
   return pooladjust(effect, target);
 };
 
-export const decreasepoolcost = (effect: UserEffect, target: BattleUserState) => {
-  effect.power = -Math.abs(effect.power);
-  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
-  return pooladjust(effect, target);
-};
+export const decreasepoolcost = (effect: UserEffect, target: BattleUserState) =>
+  pooladjust(invertPower(effect), target);
 
 /** Activate a Curse instance without granting healing on the casting action. */
 export const curse = (
@@ -1840,13 +1700,7 @@ export const settleCurse = (
   const stored = state.storedHealing;
   state.storedHealing = 0;
   if (stored <= 0 || target.curHealth <= 0 || target.fledBattle) return;
-  if (
-    sealCheck(
-      effect,
-      usersEffects.filter((e) => e.type === "seal" && !e.isNew && isEffectActive(e)),
-    )
-  )
-    return;
+  if (sealCheck(effect, getActiveSealEffects(usersEffects))) return;
   if (!preventCheck(usersEffects, "healprevent", target).pass)
     return preventResponse(effect, target, "cannot receive Curse healing");
   const consequence: Consequence = {
@@ -1920,10 +1774,8 @@ export const reflect = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "buffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be buffed");
-  }
+  const prevented = olderPreventResponse(effect, usersEffects, "buffprevent", target);
+  if (prevented) return prevented;
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
@@ -1931,14 +1783,7 @@ export const reflect = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          const dmgConvert =
-            Math.floor(
-              effect.calculation === "percentage"
-                ? consequence.damage * (power / 100)
-                : power > consequence.damage
-                  ? consequence.damage
-                  : power,
-            ) * ratio;
+          const dmgConvert = capConversion(effect, power, consequence.damage) * ratio;
           consequence.reflect = (consequence.reflect || 0) + dmgConvert;
         }
       }
@@ -2034,10 +1879,14 @@ export const recoil = (
   consequences: Map<string, Consequence>,
   target: BattleUserState,
 ) => {
-  const { pass, preventTag } = preventCheck(usersEffects, "debuffprevent", target);
-  if (preventTag && preventTag.createdRound < effect.createdRound) {
-    if (!pass) return preventResponse(effect, target, "cannot be debuffed with recoil");
-  }
+  const prevented = olderPreventResponse(
+    effect,
+    usersEffects,
+    "debuffprevent",
+    target,
+    "cannot be debuffed with recoil",
+  );
+  if (prevented) return prevented;
   const { power, qualifier } = getPower(effect);
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
@@ -2049,14 +1898,7 @@ export const recoil = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          const convert =
-            Math.floor(
-              effect.calculation === "percentage"
-                ? consequence.damage * (power / 100)
-                : power > consequence.damage
-                  ? consequence.damage
-                  : power,
-            ) * ratio;
+          const convert = capConversion(effect, power, consequence.damage) * ratio;
           consequence.recoil = convert;
         }
       }
@@ -2084,14 +1926,7 @@ export const afterburn = (
         const damageEffect = usersEffects.find((e) => e.id === effectId);
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
-          const convert =
-            Math.floor(
-              effect.calculation === "percentage"
-                ? consequence.damage * (power / 100)
-                : power > consequence.damage
-                  ? consequence.damage
-                  : power,
-            ) * ratio;
+          const convert = capConversion(effect, power, consequence.damage) * ratio;
 
           // Add to existing afterburn damage (stacking) with 60% limit
           const currentAfterburn = consequence.afterburn || 0;
@@ -2148,13 +1983,8 @@ export const vamp = (
   target: BattleUserState,
 ) => {
   // Check healprevent on the caster directly (not the damage target)
-  const casterHealPrevented = usersEffects.some(
-    (e) =>
-      e.type === "healprevent" &&
-      e.targetId === effect.creatorId &&
-      !e.castThisRound &&
-      isEffectEnabled(e, usersEffects),
-  );
+  const casterHealPrevented =
+    getActiveTargetEffects(usersEffects, effect.creatorId, "healprevent").length > 0;
   if (casterHealPrevented) return preventResponse(effect, target, "cannot vamp");
   const { power, qualifier } = getPower(effect);
   // Store vampRatio on each outgoing damage consequence so the application phase
@@ -2236,10 +2066,7 @@ export const drain = (
   const { power, qualifier } = getPower(effect);
 
   // Get pools to drain from
-  const pools =
-    "poolsAffected" in effect && effect.poolsAffected
-      ? effect.poolsAffected
-      : ["Health" as const];
+  const pools = getTagPools(effect);
 
   // Apply drain effect each round
   if (
@@ -2259,29 +2086,15 @@ export const drain = (
 
     // Calculate drain amount for each pool
     pools.forEach((pool) => {
-      const poolValue =
-        pool === "Health"
-          ? target.maxHealth
-          : pool === "Chakra"
-            ? target.maxChakra
-            : target.maxStamina;
+      const { suffix, max } = POOL_FIELDS[pool];
       const drainAmount =
         effect.calculation === "percentage"
-          ? Math.floor((power / 100) * poolValue)
+          ? Math.floor((power / 100) * target[max])
           : power;
 
       // Add to existing drain value for the specific pool
-      switch (pool) {
-        case "Health":
-          consequence.drain_hp = (consequence.drain_hp || 0) + drainAmount;
-          break;
-        case "Chakra":
-          consequence.drain_cp = (consequence.drain_cp || 0) + drainAmount;
-          break;
-        case "Stamina":
-          consequence.drain_sp = (consequence.drain_sp || 0) + drainAmount;
-          break;
-      }
+      const key = `drain_${suffix}` as const;
+      consequence[key] = (consequence[key] || 0) + drainAmount;
     });
 
     consequences.set(consequenceKey, consequence);
@@ -2532,34 +2345,6 @@ export const move = (
   }
 };
 
-/** Prevent target from moving */
-export const movePrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(
-    effect,
-    usersEffects,
-    target,
-    "movement",
-  );
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot move");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from moving`,
-      color: "blue",
-    };
-  }
-};
-
 /** One-hit-kill target with a given static chance */
 export const onehitkill = (
   effect: UserEffect,
@@ -2583,34 +2368,6 @@ export const onehitkill = (
     };
   }
   return info;
-};
-
-/** Status effect to prevent OHKO */
-export const onehitkillPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(
-    effect,
-    usersEffects,
-    target,
-    "one-hit-kill",
-  );
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be one-hit-killed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from one-hits`,
-      color: "blue",
-    };
-  }
 };
 
 /** Rob a given user for a given amount of ryo */
@@ -2674,75 +2431,6 @@ export const rob = (
   return getInfo(target, effect, "will be robbed");
 };
 
-/** Prevent robbing */
-export const robPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "rob");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be robbed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from being robbed`,
-      color: "blue",
-    };
-  }
-};
-
-/** Prevent cleansing */
-export const cleansePrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "cleanse");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be cleansed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from cleansing`,
-      color: "blue",
-    };
-  }
-};
-
-/** Prevent clearing */
-export const clearPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "clear");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be cleared");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from being cleared`,
-      color: "blue",
-    };
-  }
-};
-
 /** Seal the bloodline effects of the target with static chance */
 export const seal = (
   effect: UserEffect,
@@ -2767,40 +2455,6 @@ export const seal = (
     }
   }
   return info;
-};
-
-/** Check if a given effect is sealed based on a list of pre-filtered user effects */
-export const sealCheck = (effect: UserEffect, sealEffects: UserEffect[]) => {
-  if (sealEffects.length > 0 && effect.fromType === "bloodline") {
-    const sealEffect = sealEffects.find((e) => e.targetId === effect.targetId);
-    if (sealEffect) {
-      return true;
-    }
-  }
-  return false;
-};
-
-/** Prevent sealing of bloodline effects with a static chance */
-export const sealPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "seal");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "bloodline cannot be sealed");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from being sealed`,
-      color: "blue",
-    };
-  }
 };
 
 /** Go into stealth mode */
@@ -2859,32 +2513,46 @@ export const stun = (
   return info;
 };
 
-/**
- * Time compression increases the AP cost of actions by 10 AP
- */
-export const timeCompression = (
-  effect: UserEffect,
+/** How each temporal tag differs: what prevents it, its name and its AP cost change. */
+const TEMPORAL_TAGS = {
+  timecompression: {
+    preventKind: "debuffprevent",
+    label: "time compression",
+    costChange: "more",
+    color: "red",
+  },
+  timedilation: {
+    preventKind: "buffprevent",
+    label: "time dilation",
+    costChange: "less",
+    color: "blue",
+  },
+} as const;
+
+/** Time compression and dilation raise or lower the AP cost of actions. */
+export const temporalShift = (
+  effect: Extract<UserEffect, { type: keyof typeof TEMPORAL_TAGS }>,
   usersEffects: UserEffect[],
   target: BattleUserState,
 ): ActionEffect | undefined => {
-  // Check if time compression is prevented
-  const { pass } = preventCheck(usersEffects, "debuffprevent", target, effect);
-  if (!pass)
-    return preventResponse(effect, target, "cannot be affected by time compression");
+  const { preventKind, label, costChange, color } = TEMPORAL_TAGS[effect.type];
+  // Check if the shift is prevented
+  const { pass } = preventCheck(usersEffects, preventKind, target, effect);
+  if (!pass) return preventResponse(effect, target, `cannot be affected by ${label}`);
 
-  // Check if there's already an active time compression effect on the target
-  const existingTimeCompression = usersEffects.find(
+  // Check if the same shift is already active on the target
+  const existingShift = usersEffects.find(
     (e) =>
-      e.type === "timecompression" &&
+      e.type === effect.type &&
       e.targetId === target.userId &&
       e.id !== effect.id &&
       isEffectEnabled(e, usersEffects),
   );
   // Restored bloodline tags keep their duration; the overlapping jutsu is rejected.
-  if (existingTimeCompression && (effect.isNew || effect.fromType !== "bloodline")) {
+  if (existingShift && (effect.isNew || effect.fromType !== "bloodline")) {
     effect.rounds = 0;
     return {
-      txt: `${target.username} already has time compression active`,
+      txt: `${target.username} already has ${label} active`,
       color: "blue",
     };
   }
@@ -2894,79 +2562,17 @@ export const timeCompression = (
   const primaryCheck = Math.random() < power / 100;
   if (effect.isNew && effect.rounds && effect.castThisRound) {
     if (primaryCheck) {
-      // Build element-specific message
-      let elementText = "";
-      if (effect.elements && effect.elements.length > 0) {
-        elementText = ` [${effect.elements.join(", ")} element jutsu]`;
-      } else {
-        elementText = " [all jutsu]";
-      }
-
+      const elementText = effect.elements?.length
+        ? ` [${effect.elements.join(", ")} element jutsu]`
+        : " [all jutsu]";
       return {
-        txt: `${target.username} is affected by time compression, actions will cost 10 more AP${elementText}`,
-        color: "red",
+        txt: `${target.username} is affected by ${label}, actions will cost ${TEMPORAL_AP_DELTA} ${costChange} AP${elementText}`,
+        color,
       };
     } else {
       effect.rounds = 0;
       return {
-        txt: `${target.username} resists the time compression effect`,
-        color: "blue",
-      };
-    }
-  }
-};
-
-/**
- * Time dilation decreases the AP cost of actions by 10 AP
- */
-export const timeDilation = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  // Check if time dilation is prevented
-  const { pass } = preventCheck(usersEffects, "buffprevent", target, effect);
-  if (!pass)
-    return preventResponse(effect, target, "cannot be affected by time dilation");
-
-  // Check if there's already an active time dilation effect on the target
-  const existingTimeDilation = usersEffects.find(
-    (e) =>
-      e.type === "timedilation" &&
-      e.targetId === target.userId &&
-      e.id !== effect.id &&
-      isEffectEnabled(e, usersEffects),
-  );
-  // Restored bloodline tags keep their duration; the overlapping jutsu is rejected.
-  if (existingTimeDilation && (effect.isNew || effect.fromType !== "bloodline")) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} already has time dilation active`,
-      color: "blue",
-    };
-  }
-
-  // Calculate chance of success
-  const { power } = getPower(effect);
-  const primaryCheck = Math.random() < power / 100;
-  if (effect.isNew && effect.rounds && effect.castThisRound) {
-    if (primaryCheck) {
-      // Build element-specific message
-      let elementText = "";
-      if (effect.elements && effect.elements.length > 0) {
-        elementText = ` [${effect.elements.join(", ")} element jutsu]`;
-      } else {
-        elementText = " [all jutsu]";
-      }
-
-      return {
-        txt: `${target.username} is affected by time dilation, actions will cost 10 less AP${elementText}`,
-        color: "blue",
-      };
-    } else {
-      effect.rounds = 0;
-      return {
-        txt: `${target.username} resists the time dilation effect`,
+        txt: `${target.username} resists the ${label} effect`,
         color: "blue",
       };
     }
@@ -3237,29 +2843,6 @@ export const redirection = (
   };
 };
 
-/** Prevent target from being stunned */
-export const stunPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "stun");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    const info = getInfo(target, effect, "cannot be stunned");
-    effect.power = 100;
-    return info;
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from being stunned`,
-      color: "blue",
-    };
-  }
-};
-
 /** summon()/clone() live here; summon predicates and lifecycle helpers are in summon.ts */
 export const summon = (
   usersState: BattleUserState[],
@@ -3307,88 +2890,51 @@ export const summon = (
         return { txt: blocked, color: "red" } as ActionEffect;
       }
       if (ai) {
-        const newAi = structuredClone(ai);
-        newAi.enmity = 0;
-        delete newAi.baseStatsForModifiers;
-        // Place on battlefield
-        newAi.userId = nanoid();
-        // Explicitly set identity/control flags (mirror clone(), do not rely on
-        // structuredClone inheritance from the template).
-        newAi.isSummon = true;
-        newAi.isAi = true;
+        const newAi = spawnStandIn(ai, user, effect, perc, "ai");
         // An original creature, not a clone. Set explicitly (clones set
         // isOriginal=false) so the isClone discriminator never misreads a summon.
         newAi.isOriginal = true;
-        newAi.controllerId = user.userId;
         newAi.isPiloted = wantsPilot;
         // AI exhibition rules also control summons that would normally accept player actions.
         if (battle.extraState?.tournamentAiOnly) newAi.isAutoCombat = true;
         // Remember which creature this is: controllerId is about to be rebound
         // to the summoner, so this is the only surviving link to the template.
         newAi.summonSourceId = effect.aiId;
-        newAi.isSummonTemplate = false; // never inherit the template's flag
         // Record which creature this effect spawned so teardown is exact.
         effect.summonedUserId = newAi.userId;
-        newAi.hidden = undefined;
-        newAi.leftBattle = false;
-        newAi.longitude = effect.longitude;
-        newAi.latitude = effect.latitude;
-        newAi.villageId = user.villageId;
-        newAi.direction = user.direction;
-        // Set level to summoner level
-        newAi.level = user.level;
-        // Scale to level
-        scaleUserStats(newAi, "ai");
         // Set pools
         newAi.maxHealth = effect.aiHp;
         newAi.curHealth = newAi.maxHealth;
-        // Set stats
-        newAi.offence = newAi.offence * perc;
-        newAi.defence = newAi.defence * perc;
-        newAi.strength = newAi.strength * perc;
-        newAi.intelligence = newAi.intelligence * perc;
-        newAi.willpower = newAi.willpower * perc;
-        newAi.speed = newAi.speed * perc;
         // Lookup bloodline from extraState and copy bloodlineId
         const aiBloodline = ai.bloodlineId
           ? battle.extraState.bloodlines?.[ai.bloodlineId]
           : null;
         newAi.bloodlineId = ai.bloodlineId;
-        // Realize bloodline effects if they exist
-        if (aiBloodline?.effects) {
-          aiBloodline.effects.forEach((bloodlineEffect) => {
-            const realizedEffect = realizeTag({
-              tag: bloodlineEffect as BattleEffect,
-              user: newAi,
-              actionId: "initial",
-              level: newAi.level,
-              round: battle.round,
-              battle,
-            }) as UserEffect;
-            realizedEffect.isNew = true;
-            realizedEffect.castThisRound = true;
-            realizedEffect.targetId = newAi.userId;
-            realizedEffect.fromType = "bloodline";
-            userEffects.push(realizedEffect);
-          });
-        }
-        // Realize and copy the AI's effects
-        newAi.effects = ai.effects.map((aiEffect) => {
+        const realizeOnSummon = (
+          tag: BattleEffect,
+          fromType: UserEffect["fromType"],
+        ) => {
           const realizedEffect = realizeTag({
-            tag: aiEffect as BattleEffect,
+            tag,
             user: newAi,
             actionId: "initial",
             level: newAi.level,
             round: battle.round,
             battle,
           }) as UserEffect;
-          realizedEffect.isNew = true;
-          realizedEffect.castThisRound = true;
           realizedEffect.targetId = newAi.userId;
-          realizedEffect.fromType = "jutsu"; // Use jutsu as fromType since summon isn't a valid type
+          realizedEffect.fromType = fromType;
           userEffects.push(realizedEffect);
           return realizedEffect;
+        };
+        // Realize bloodline effects if they exist
+        aiBloodline?.effects?.forEach((bloodlineEffect) => {
+          realizeOnSummon(bloodlineEffect as BattleEffect, "bloodline");
         });
+        // Realize and copy the AI's effects. Summon isn't a valid fromType.
+        newAi.effects = ai.effects.map((aiEffect) =>
+          realizeOnSummon(aiEffect as BattleEffect, "jutsu"),
+        );
         // Turn order is usersState order, and initiateBattle establishes that
         // array as initiative-sorted (descending). Give the summon its
         // summoner's initiative and insert it at the matching sorted position,
@@ -3431,52 +2977,6 @@ export const summon = (
   }
 };
 
-/** Prevent target from summoning */
-export const summonPrevent = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "summon");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    // Set the effect to be active and hide summon jutsu
-    effect.power = 100;
-    return getInfo(target, effect, "cannot summon companions");
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be prevented from summoning`,
-      color: "blue",
-    };
-  }
-};
-
-/** Prevent target from using weapons */
-export const disarm = (
-  effect: UserEffect,
-  usersEffects: UserEffect[],
-  target: BattleUserState,
-): ActionEffect | undefined => {
-  const immunityBlocked = checkPreventImmunity(effect, usersEffects, target, "disarm");
-  if (immunityBlocked) return immunityBlocked;
-  const { power } = getPower(effect);
-  const mainCheck = Math.random() < power / 100;
-  if (mainCheck) {
-    // Set the effect to be active and hide weapons
-    effect.power = 100;
-    return getInfo(target, effect, "cannot use weapons");
-  } else if (effect.isNew) {
-    effect.rounds = 0;
-    return {
-      txt: `${target.username} could not be disarmed`,
-      color: "blue",
-    };
-  }
-};
-
 /** Prevent target from being stunned */
 export const weakness = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
@@ -3508,6 +3008,42 @@ export const preventResponse = (
     color: "blue",
   } as ActionEffect;
 };
+
+/**
+ * Prevention from a buff/debuff prevent tag older than the effect. The prevent roll
+ * runs for any active tag, whatever its age.
+ */
+const olderPreventResponse = (
+  effect: UserEffect,
+  usersEffects: UserEffect[],
+  kind: "buffprevent" | "debuffprevent",
+  target: BattleUserState,
+  message = kind === "buffprevent" ? "cannot be buffed" : "cannot be debuffed",
+) => {
+  const { pass, preventTag } = preventCheck(usersEffects, kind, target);
+  if (preventTag && preventTag.createdRound < effect.createdRound && !pass) {
+    return preventResponse(effect, target, message);
+  }
+  return undefined;
+};
+
+/**
+ * Stores a decrease tag's power as negative. Persisted on the effect: AI rules read the
+ * raw signed power from battle state.
+ */
+export const invertPower = <T extends UserEffect>(effect: T): T => {
+  effect.power = -Math.abs(effect.power);
+  effect.powerPerLevel = -Math.abs(effect.powerPerLevel);
+  return effect;
+};
+
+/** Damage a conversion tag claims: a percentage of the hit, or flat power capped at it. */
+const capConversion = (effect: UserEffect, power: number, damage: number) =>
+  Math.floor(
+    effect.calculation === "percentage"
+      ? damage * (power / 100)
+      : Math.min(power, damage),
+  );
 
 /**
  * Returns an array of lowercase generals based on the input array of generals and the user's highest generals.
@@ -3649,13 +3185,7 @@ const preventCheck = (
   target: BattleUserState,
   effect?: UserEffect, // Add optional effect parameter to check creation time
 ) => {
-  const preventTag = usersEffects.find(
-    (e) =>
-      e.type === type &&
-      e.targetId === target.userId &&
-      !e.castThisRound &&
-      isEffectEnabled(e, usersEffects),
-  );
+  const preventTag = getActiveTargetEffects(usersEffects, target.userId, type)[0];
 
   if (preventTag && (preventTag.rounds === undefined || preventTag.rounds > 0)) {
     // Only prevent if the effect being checked was created after the prevent effect

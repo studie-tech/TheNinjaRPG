@@ -1,7 +1,21 @@
 /**
  * Database access for concurrency; authorization and transaction scopes stay in callers.
  */
-import { and, eq, gt, gte, isNull, lt, lte, ne, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  gt,
+  gte,
+  isNull,
+  lt,
+  lte,
+  ne,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
+import type { AnyMySqlColumn, MySqlTable } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -15,6 +29,40 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
+
+/** SQL twin of `getNextUserSnapshotAt`: it has to advance a CAS snapshot the same way. */
+export const nextSnapshotSql = (column: AnyMySqlColumn) =>
+  sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${column}))`;
+
+/**
+ * INSERT ... SELECT of only the given columns, written when `guard` holds. Drizzle's builder
+ * requires every table column for SELECT, including defaults, so this is parameterized SQL.
+ */
+export const insertValuesWhere = (
+  client: Pick<DrizzleClient, "execute">,
+  table: MySqlTable,
+  values: Record<string, unknown>,
+  guard: SQL | undefined,
+  { ignoreDuplicate = false } = {},
+) => {
+  const columns = getTableColumns(table);
+  const inserted = Object.entries(values).flatMap(([key, value]) => {
+    const column = columns[key];
+    return column ? [{ column, value }] : [];
+  });
+  return client.execute(sql`
+    INSERT INTO ${table} (${sql.join(
+      inserted.map(({ column }) => sql.identifier(column.name)),
+      sql`, `,
+    )})
+    SELECT ${sql.join(
+      inserted.map(({ column, value }) => sql.param(value ?? null, column)),
+      sql`, `,
+    )}
+    WHERE ${guard}
+    ${ignoreDuplicate ? sql`ON DUPLICATE KEY UPDATE id = id` : sql``}
+  `);
+};
 
 /** Build the `userData` lookup for `enforceRateLimit`, selecting `money` and `bank`. */
 export const fetchUserDataForEnforceRateLimit = (
@@ -298,19 +346,26 @@ export const selectMpvpBattleUserForBattleClaimRollbackStatus = (
       ),
     );
 
-/** Build the `rankedPvpQueue` selection for `battleClaimRollbackStatus`, using predicates on `userId` and `hasClaimed`. */
-export const selectRankedPvpQueueForBattleClaimRollbackStatus = (
+/** Build the EXISTS subquery for a user holding a claimed ranked-queue entry. */
+export const selectClaimedRankedQueueEntry = (
   client: Pick<DrizzleClient, "select">,
+  userId: string | SQLWrapper,
 ) =>
   client
     .select({ one: sql`1` })
     .from(rankedPvpQueue)
-    .where(
-      and(
-        eq(rankedPvpQueue.userId, userData.userId),
-        eq(rankedPvpQueue.hasClaimed, true),
-      ),
-    );
+    .where(and(eq(rankedPvpQueue.userId, userId), eq(rankedPvpQueue.hasClaimed, true)));
+
+/** Build the EXISTS subquery for a user sitting in a clan lobby without a winner. */
+export const selectUnresolvedClanLobbyEntry = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string | SQLWrapper,
+) =>
+  client
+    .select({ one: sql`1` })
+    .from(mpvpBattleUser)
+    .innerJoin(mpvpBattleQueue, eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id))
+    .where(and(eq(mpvpBattleUser.userId, userId), isNull(mpvpBattleQueue.winnerId)));
 
 /**
  * Build the `table` update for `reservePityCredit`, setting `pityRolls` and

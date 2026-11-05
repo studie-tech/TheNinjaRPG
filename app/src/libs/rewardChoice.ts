@@ -7,6 +7,7 @@ import { collapseRewards } from "@/libs/rewards";
 import type { QuestContentType } from "@/validators/objectives";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import {
+  hasMasteryPromotion,
   hasReward,
   ObjectiveReward,
   type ObjectiveRewardType,
@@ -61,6 +62,20 @@ export const getFixedChoiceRewards = (
     reward_gathering_items_ids: reward.reward_gathering_items_ids,
   });
 
+/** Distinct content ids per reward field, looking inside bundled package cards. */
+export const rewardChoiceContentIds = (cards: RewardChoiceCard[]) => {
+  const expandedCards = cards.flatMap((card) =>
+    card.rewards ? buildRewardChoiceCards(card.rewards) : [card],
+  );
+  return (field: RewardChoiceCard["field"]) => [
+    ...new Set(
+      expandedCards.flatMap((card) =>
+        card.field === field && card.contentId ? [card.contentId] : [],
+      ),
+    ),
+  ];
+};
+
 /** Split direct fields into cards and each saved package into one bundle, with stable ids/order. */
 export const buildRewardChoiceCards = (reward: QuestRewardType): RewardChoiceCard[] => {
   const cards: RewardChoiceCard[] = [];
@@ -105,10 +120,7 @@ export const isSageModeCard = (card: Pick<RewardChoiceCard, "field" | "rewards">
 
 /** The reward payload carries one mastery promotion, so promotion bundles are alternatives. */
 export const isMasteryPromotionCard = (card: Pick<RewardChoiceCard, "rewards">) =>
-  !!card.rewards?.reward_mastery_stat &&
-  card.rewards.reward_mastery_stat !== "None" &&
-  !!card.rewards.reward_mastery_rank &&
-  card.rewards.reward_mastery_rank !== "NONE";
+  !!card.rewards && hasMasteryPromotion(card.rewards);
 
 /** Most compatible cards: unrestricted cards plus one sage mode and one mastery promotion. */
 export const maxRewardPicks = (
@@ -162,13 +174,14 @@ export const getUnavailableRewardCards = (
   const unavailable = new Map<string, string>();
   for (const card of cards) {
     if (card.field === "reward_package" && card.rewards) {
-      const { reward_mastery_stat: stat, reward_mastery_rank: rank } = card.rewards;
+      const { rewards } = card;
       if (
-        stat &&
-        stat !== "None" &&
-        rank &&
-        rank !== "NONE" &&
-        !canPromoteMastery(ownership, stat, rank)
+        hasMasteryPromotion(rewards) &&
+        !canPromoteMastery(
+          ownership,
+          rewards.reward_mastery_stat,
+          rewards.reward_mastery_rank,
+        )
       ) {
         unavailable.set(card.id, "Requires the previous mastery rank");
         continue;

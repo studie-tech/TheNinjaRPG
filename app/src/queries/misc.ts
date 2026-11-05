@@ -15,6 +15,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { SentimentType } from "@/drizzle/constants";
 import { TRAINING_CAPTCHA_SOLVED_GRACE_MINUTES } from "@/drizzle/constants";
 import {
   abEvent,
@@ -103,7 +104,10 @@ export const insertNotificationForSubmitNotification = (
 /** Build the `userData` update for `submitNotification`, setting `unreadNotifications`. */
 export const updateUserDataForSubmitNotification = (
   client: Pick<DrizzleClient, "update">,
-) => client.update(userData).set({ unreadNotifications: sql`unreadNotifications + 1` });
+) =>
+  client
+    .update(userData)
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` });
 
 /** Build the `notification` listing for `getPreviousNotifications`. */
 export const listNotificationForGetPreviousNotifications = (
@@ -260,7 +264,7 @@ export const insertSupportReviewForReviewSupportWithAI = (
   input: {
     apiRoute: string;
     chatHistory: any[];
-    sentiment: "NEUTRAL" | "POSITIVE" | "NEGATIVE";
+    sentiment: SentimentType;
   },
 ) =>
   client.insert(supportReview).values({
@@ -354,5 +358,5 @@ export const incrementNotificationCounters = (
 ) =>
   client
     .update(userData)
-    .set({ unreadNotifications: sql`unreadNotifications + 1` })
+    .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
     .where(inArray(userData.userId, userIds));

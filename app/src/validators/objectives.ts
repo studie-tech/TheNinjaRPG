@@ -69,6 +69,8 @@ import {
   IMG_BADGE_USE_JUTSU_COMBAT,
   IMG_BADGE_USER_LEVEL,
   IMG_BADGE_WIN_QUEST,
+  isPetTaskQuestType,
+  isSharedRunQuestType,
   LetterRanks,
   MAX_PLAYER_LEVEL,
   MasteryTypes,
@@ -95,8 +97,14 @@ import {
   QuestReward,
   type QuestRewardType,
   questRewardFields,
+  rewardPayloads,
 } from "@/validators/rewardPackages";
-import { questRewardModeFields } from "@/validators/rewards";
+import {
+  hasPromotionRank,
+  hasUnpairedMasteryPromotion,
+  MASTERY_PROMOTION_PAIR_MESSAGE,
+  questRewardModeFields,
+} from "@/validators/rewards";
 import { villageMissionContentError } from "@/validators/villageMission";
 
 /** Event counters retain progress before an achievement's first reward claim. */
@@ -121,6 +129,32 @@ export const CompletionTasks = [
   ...Object.values(QuestCompletionTasks),
   "dungeons_completed",
   "raids_completed",
+] as const;
+
+/** Tasks overwritten from the user's state, which team progress merges by maximum. */
+export const PassiveSnapshotTasks = [
+  ...CompletionTasks,
+  "user_level",
+  "farming_level",
+  "farming_collection_log",
+  "bloodline_collection",
+  "days_in_village",
+  "days_as_kage",
+  "minutes_passed",
+  "reputation_points",
+  "errands_total",
+  "a_missions_total",
+  "b_missions_total",
+  "c_missions_total",
+  "d_missions_total",
+  "a_crimes_total",
+  "b_crimes_total",
+  "c_crimes_total",
+  "d_crimes_total",
+  "medical_experience",
+  "crafting_experience",
+  "hunting_experience",
+  "gathering_experience",
 ] as const;
 
 export const SimpleTasks = [
@@ -181,7 +215,7 @@ export const InstantTasks = [
 export const RaidTasks = ["open_raid", "exclusive_raid"] as const;
 export type RaidTask = (typeof RaidTasks)[number];
 
-// Curated subset of combat effect types (`effectFilters` in @/validators/combat) that can
+// Curated subset of combat effect types (`tagTypes` in @/validators/combat) that can
 // be applied during a winnable battle, used by the tag_usage_win objective picker + schema.
 // Excludes non-combat / out-of-battle tag types (noncombat*, marriage, reskin,
 // unlockitemvariant, repair, rollbloodline) AND combat tags that never resolve on a user
@@ -578,7 +612,7 @@ const SECTOR_TYPES = [
   "enemy_village",
 ] as const;
 export type SectorType = (typeof SECTOR_TYPES)[number];
-export const LOCATION_TYPES = ["specific", "random"] as const;
+const LOCATION_TYPES = ["specific", "random"] as const;
 
 const complexObjectiveFields = {
   // Location type fields
@@ -975,7 +1009,7 @@ const questSuperRefine = (
         "Public structures need a fixed, visible location without an NPC placement binding",
       );
   });
-  if (val.petTaskMinutes !== null && !["hunting", "gathering"].includes(val.questType))
+  if (val.petTaskMinutes !== null && !isPetTaskQuestType(val.questType))
     ctx.addIssue({
       code: "custom",
       path: ["petTaskMinutes"],
@@ -1002,10 +1036,7 @@ const questSuperRefine = (
       message: "Only Battle Pyramids can isolate a run",
     });
   }
-  if (
-    val.content.entryItems.length > 0 &&
-    ["raid", "village_mission", "achievement"].includes(val.questType)
-  ) {
+  if (val.content.entryItems.length > 0 && isSharedRunQuestType(val.questType)) {
     ctx.addIssue({
       code: "custom",
       path: ["content", "entryItems"],
@@ -1084,12 +1115,8 @@ const questSuperRefine = (
       (val.retryDelay && val.retryDelay !== "none") ||
       val.content.rewardMode !== "all" ||
       [
-        reward,
-        ...(reward.reward_packages ?? []).map((pack) => pack.rewards),
-        ...val.content.objectives.flatMap((objective) => [
-          objective,
-          ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-        ]),
+        ...rewardPayloads(reward),
+        ...val.content.objectives.flatMap((objective) => rewardPayloads(objective)),
       ].some((part) => part.reward_rank !== "NONE") ||
       !(reward.reward_stats && reward.reward_stats > 0)
     ) {
@@ -1118,25 +1145,16 @@ const questSuperRefine = (
       message:
         "Milestone levels and combat stats belong on the completed quest, not individual objectives.",
     });
-  const hasPromotionStat =
-    !!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None";
-  const hasPromotionRank =
-    !!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE";
-  if (hasPromotionStat !== hasPromotionRank) {
+  if (hasUnpairedMasteryPromotion(reward)) {
     ctx.addIssue({
       code: "custom",
-      message: "Select both the mastery and its rank reward",
+      message: MASTERY_PROMOTION_PAIR_MESSAGE,
       path: ["content", "reward"],
     });
   }
   if (
     val.content.objectives.some((objective) =>
-      [
-        objective,
-        ...(objective.reward_packages ?? []).map((pack) => pack.rewards),
-      ].some(
-        (reward) => reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE",
-      ),
+      rewardPayloads(objective).some(hasPromotionRank),
     )
   ) {
     ctx.addIssue({
@@ -1241,9 +1259,7 @@ export const QuestFormRawSchema = QuestValidatorRawSchema.extend(
  */
 export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
   ...val,
-  petTaskMinutes: ["hunting", "gathering"].includes(val.questType)
-    ? val.petTaskMinutes
-    : null,
+  petTaskMinutes: isPetTaskQuestType(val.questType) ? val.petTaskMinutes : null,
   content: {
     ...val.content,
     reward: {
@@ -1254,9 +1270,7 @@ export const QuestFormSchema = QuestFormRawSchema.transform((val) => ({
       reward_stats: val.reward_stats,
     },
     rewardMode: val.rewardMode,
-    entryItems: ["raid", "village_mission", "achievement"].includes(val.questType)
-      ? []
-      : val.entryItems,
+    entryItems: isSharedRunQuestType(val.questType) ? [] : val.entryItems,
     isolated: val.questType === "battlepyramid" && val.isolated,
   },
 })).superRefine(questSuperRefine);

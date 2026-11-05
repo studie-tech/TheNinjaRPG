@@ -6,7 +6,7 @@ import { BasicElementName, PetRarities, PetRoles } from "@/drizzle/constants";
 import type { PetSpecies } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
-import { isPetJutsuAllowed } from "@/libs/pets/abilities";
+import { isPetJutsuAllowedForSpecies } from "@/libs/pets/abilities";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { AiRuleType } from "@/validators/ai";
 import {
@@ -73,11 +73,7 @@ export const usePetSpeciesEditForm = (
   const availableJutsus =
     catalogue.data?.pages
       .flatMap((page) => page.data)
-      .filter(
-        (entry) =>
-          isPetJutsuAllowed(entry) &&
-          (!entry.requiredPetSpeciesId || entry.requiredPetSpeciesId === species?.id),
-      ) ?? [];
+      .filter((entry) => isPetJutsuAllowedForSpecies(entry, species?.id)) ?? [];
   const mutationOptions = {
     onSuccess: async (result: { success: boolean; message: string }) => {
       showMutationToast({

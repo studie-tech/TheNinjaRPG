@@ -1,3 +1,4 @@
+import { DEADLOCK_MARKERS, someErrorInChain } from "@/server/utils/mysqlErrors";
 import { type RetryOptions, withRetry } from "@/utils/retry";
 
 /**
@@ -73,13 +74,8 @@ export const isTransientDatabaseResponse = (status: number, body: string): boole
  * was applied and re-issuing it is safe even when it writes, increments a counter, or
  * carries a compare-and-swap guard whose predicate simply re-evaluates.
  *
- * Markers are taken verbatim from what PlanetScale returns, e.g. "target:
- * tnr.-.primary: vttablet: rpc error: code = Aborted desc = Deadlock found when trying
- * to get lock; try restarting transaction (errno 1213)".
+ * Detect that deadlock in a PlanetScale HTTP response body.
  */
-const DEADLOCK_MARKERS = ["Deadlock found", "errno 1213", "sqlstate 40001"] as const;
-
-/** Detect a deadlock in a PlanetScale HTTP response body. */
 export const isDeadlockResponse = (body: string): boolean =>
   DEADLOCK_MARKERS.some((marker) => body.includes(marker));
 
@@ -101,15 +97,10 @@ export const isRetryableResponse = (
  * wrapper above, so this is for a call site that wants to answer a lost connection
  * with something better than a 500 - not to re-issue the statement.
  */
-export const isTransientDatabaseError = (error: unknown): boolean => {
-  let current: unknown = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    const { message, cause } = current;
-    if (TRANSIENT_MARKERS.some((marker) => message.includes(marker))) return true;
-    current = cause;
-  }
-  return false;
-};
+export const isTransientDatabaseError = (error: unknown): boolean =>
+  someErrorInChain(error, ({ message }) =>
+    TRANSIENT_MARKERS.some((marker) => message.includes(marker)),
+  );
 
 interface DriverRequest {
   query: string;
@@ -153,8 +144,10 @@ const parseDriverRequest = (
  * increments, so a blind retry could double-apply a reward.
  *
  * A deadlock is retried whatever the statement was. InnoDB rolls the victim back in
- * full before reporting errno 1213, so re-issuing cannot double-apply - which is why
- * every mutation gets this for free rather than each call site opting in.
+ * full before reporting errno 1213, so re-issuing cannot double-apply. The retry is
+ * bounded for a request that is waiting, at two re-issues within three seconds, so a
+ * short statement on a request path needs no wrapper of its own; anything longer or
+ * multi-statement uses `retryOnDeadlock`.
  *
  * Statements inside a transaction are passed straight through. A reset aborts the
  * transaction server-side, so re-issuing the read would run it outside the

@@ -3,7 +3,11 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { IMG_AVATAR_DEFAULT, type UserRole } from "@/drizzle/constants";
+import {
+  IMG_AVATAR_DEFAULT,
+  type SupportTicketStatus,
+  type UserRole,
+} from "@/drizzle/constants";
 import {
   type Conversation,
   conversationComment,
@@ -35,9 +39,7 @@ import {
   findConversationForGetConvo,
   findConversationForGetConvo2,
   findConversationForGetConvo3,
-  findSupportTicketForCreateConversationComment,
-  findSupportTicketForExitConversation,
-  findSupportTicketForUpdateSupportTicketStatusAfterComment,
+  findSupportTicketForConversation,
   findUserDataForGetUserConversations,
   findUserDataForSendTypingIndicator,
   insertConversationComment,
@@ -71,6 +73,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { offsetPage } from "@/server/utils/pagination";
 import {
   notifyConversationMentions,
   notifyPrivateConversation,
@@ -85,6 +88,7 @@ import {
   canSeeReport,
   canSeeSecretData,
   canViewConversation,
+  getBanOrSilenceRestriction,
   getMessagingRestriction,
   isStaffRole,
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
@@ -123,15 +127,14 @@ export const commentsRouter = createTRPCRouter({
         throw serverError("NOT_FOUND", "Report not found");
       }
       // Get comments
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const comments = await listUserReportCommentForGetReportComments(
         ctx.drizzle,
         skip,
         input,
         report,
       );
-      const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(comments);
       // If not able to see secret data, hide reporter
       if (!canSeeSecretData(user.role)) maskStaffReportCommentAuthors(comments);
       return {
@@ -293,14 +296,14 @@ export const commentsRouter = createTRPCRouter({
       if (isRaidChatConversationId(input.convo_id)) {
         return errorResponse("Raid chat membership is managed by the raid queue");
       }
-      const [user, convo, linkedSupportTicket] = await Promise.all([
+      const [user, convo] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchConversation({
           client: ctx.drizzle,
           id: input.convo_id,
           userId: ctx.userId,
+          includeSupportTicket: true,
         }),
-        findSupportTicketForExitConversation(ctx.drizzle, input),
       ]);
       // Guard
       if (!convo) return errorResponse("Conversation not found");
@@ -316,7 +319,7 @@ export const commentsRouter = createTRPCRouter({
 
       // A support ticket's conversation is its message history with staff, and
       // its creator is its only member, so it must outlive the membership.
-      if (membershipDeleteResult.rowsAffected === 1 && !linkedSupportTicket) {
+      if (membershipDeleteResult.rowsAffected === 1 && !convo.supportTicket) {
         // Both cleanup deletes only need to know that no membership rows remain,
         // which the awaited membership delete above already settled. Guarding
         // each one on that condition keeps a concurrent exit from wiping a
@@ -400,8 +403,7 @@ export const commentsRouter = createTRPCRouter({
         ),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       // Fetch data
       const [user, convo] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -468,7 +470,7 @@ export const commentsRouter = createTRPCRouter({
           : []),
       ]);
       // Fetch
-      const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(comments);
       return {
         restrictionMessage: null,
         convo: { ...convo, ...(lastReadAt && { lastReadAt }) },
@@ -488,6 +490,7 @@ export const commentsRouter = createTRPCRouter({
           client: ctx.drizzle,
           id: input.object_id,
           userId: ctx.userId,
+          includeSupportTicket: true,
         }),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchComments(ctx.drizzle, input.quoteIds || []),
@@ -510,18 +513,14 @@ export const commentsRouter = createTRPCRouter({
         if (!isBannedOrSilenced || !convo.isStaffAvailable) {
           return errorResponse(messagingRestriction);
         }
-        const linkedSupportTicket = await findSupportTicketForCreateConversationComment(
-          ctx.drizzle,
-          convo,
-        );
         if (
           !canReplyToStaffConversationWhileRestricted(
             user,
-            linkedSupportTicket?.createdByUserId,
+            convo.supportTicket?.createdByUserId,
           )
         ) {
           return errorResponse(
-            linkedSupportTicket
+            convo.supportTicket
               ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
               : RESTRICTED_STAFF_CONVERSATION_MESSAGE,
           );
@@ -637,9 +636,8 @@ export const commentsRouter = createTRPCRouter({
       ]);
 
       // A reply on a support ticket moves it along the staff/creator workflow
-      if (convo.isStaffAvailable) {
-        await updateSupportTicketStatusAfterComment(ctx.drizzle, {
-          conversationId: convo.id,
+      if (convo.supportTicket) {
+        await updateSupportTicketStatusAfterComment(ctx.drizzle, convo.supportTicket, {
           userId: ctx.userId,
           isStaff: isStaffRole(user.role),
         });
@@ -704,8 +702,8 @@ export const commentsRouter = createTRPCRouter({
         findConversationCommentById(ctx.drizzle, input.commentId),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
+      const restriction = getBanOrSilenceRestriction(user);
+      if (restriction) return errorResponse(restriction);
       if (!comment) return errorResponse("Comment not found");
       const convo = comment.conversationId
         ? await fetchConversation({
@@ -779,8 +777,8 @@ export const commentsRouter = createTRPCRouter({
         moderateUserText(input.comment),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
+      const restriction = getBanOrSilenceRestriction(user);
+      if (restriction) return errorResponse(restriction);
       if (!comment) return errorResponse("Comment not found");
       const convo = comment.conversationId
         ? await fetchConversation({
@@ -822,8 +820,8 @@ export const commentsRouter = createTRPCRouter({
         findConversationCommentById(ctx.drizzle, input.id),
       ]);
       // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.isSilenced) return errorResponse("You are silenced");
+      const restriction = getBanOrSilenceRestriction(user);
+      if (restriction) return errorResponse(restriction);
       if (!comment) return errorResponse("Comment not found");
       if (!canDeleteComment(user, comment.userId)) {
         return errorResponse("You can only delete own comments");
@@ -839,6 +837,8 @@ interface FetchConvoOptions {
   id?: string;
   title?: string;
   userId: string;
+  /** Adds the linked ticket for callers that act on it; it never reaches a response. */
+  includeSupportTicket?: boolean;
 }
 
 /**
@@ -872,7 +872,7 @@ export const maskStaffReportCommentAuthors = (
  * Returns undefined when absent; throws BAD_REQUEST when neither an ID nor a title is supplied.
  */
 export const fetchConversation = async (params: FetchConvoOptions) => {
-  const { client, id, title, userId } = params;
+  const { client, id, title, userId, includeSupportTicket } = params;
   const getConvo = async () => {
     if (id) {
       return await findConversationForGetConvo(client, id);
@@ -903,8 +903,8 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
   // the lookup.
   const needsTicketLookup =
     convo.isStaffAvailable &&
-    !convo.isPublic &&
-    !convo.users.some((u) => u.userId === userId);
+    (includeSupportTicket ||
+      (!convo.isPublic && !convo.users.some((u) => u.userId === userId)));
   const [participantPolicies, senders, linkedSupportTicket] = await Promise.all([
     otherParticipantIds.length > 0
       ? fetchCommunicationPolicies(client, otherParticipantIds)
@@ -912,9 +912,7 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
     convo.isPublic || convo.isStaffAvailable
       ? []
       : fetchPrivateConversationSenders(client, userId, convo.id),
-    needsTicketLookup
-      ? findSupportTicketForCreateConversationComment(client, convo)
-      : undefined,
+    needsTicketLookup ? findSupportTicketForConversation(client, convo) : undefined,
   ]);
   const policies = [...initialPolicies, ...participantPolicies];
   const senderIds = senders.map((sender) => sender.userId);
@@ -932,6 +930,7 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
     readRestriction,
     sendRestriction,
     supportTicketCreatorId: linkedSupportTicket?.createdByUserId ?? null,
+    ...(includeSupportTicket && { supportTicket: linkedSupportTicket }),
   };
 };
 
@@ -942,13 +941,9 @@ export const fetchConversation = async (params: FetchConvoOptions) => {
  */
 const updateSupportTicketStatusAfterComment = async (
   client: DrizzleClient,
-  input: { conversationId: string; userId: string; isStaff: boolean },
+  ticket: { id: string; status: SupportTicketStatus; createdByUserId: string },
+  input: { userId: string; isStaff: boolean },
 ) => {
-  const ticket = await findSupportTicketForUpdateSupportTicketStatusAfterComment(
-    client,
-    input,
-  );
-  if (!ticket) return;
   const nextStatus = getStatusAfterComment(ticket.status, {
     isCreator: ticket.createdByUserId === input.userId,
     isStaff: input.isStaff,

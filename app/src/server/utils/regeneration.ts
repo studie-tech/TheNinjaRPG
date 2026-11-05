@@ -27,6 +27,10 @@ export const getUserRegenerationGain = (user: RegenerationUser, at: Date) =>
     REGEN_SECONDS,
   );
 
+/** Whole regeneration ticks between two SQL instants. DIV keeps exact tick boundaries. */
+export const regenTicksSql = (from: Date | SQLWrapper, at: Date | SQLWrapper) =>
+  sql`(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${from}, ${at})) DIV ${REGEN_SECONDS * 1_000_000})`;
+
 /** Integrate the same discrete timed ticks against the live SQL clock, including concurrent resets. */
 export const userRegenerationGainSql = (
   user: RegenerationUser,
@@ -35,7 +39,7 @@ export const userRegenerationGainSql = (
 ) => {
   const base = user.regenerationWithoutTimedBuffs ?? user.regeneration;
   const step = REGEN_SECONDS * 1_000_000;
-  const ticks = sql`(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${from}, ${at})) DIV ${step})`;
+  const ticks = regenTicksSql(from, at);
   // Retain sub-tick precision before CEIL; MySQL division of integers otherwise
   // rounds to four decimal places and can move a millisecond boundary onto the prior tick.
   const boundaryTick = (boundary: number) =>

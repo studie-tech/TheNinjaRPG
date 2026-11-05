@@ -7,6 +7,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  type MpvpBattleSide,
   SHRINE_BATTLE_LOBBY_SECONDS,
   SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BATTLE_MIN_ATTACKERS,
@@ -169,7 +170,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
 interface ShrineBattleCardProps {
   battle: ShrineBattleData;
   userId: string;
-  onJoin: (side: "ATTACKER" | "DEFENDER") => void;
+  onJoin: (side: MpvpBattleSide) => void;
   onLeave: () => void;
   onInitiate: () => void;
   isJoining: boolean;

@@ -108,7 +108,7 @@ import {
   optimisticGlobalTravelStart,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
-import { findVillageUserRelationship } from "@/utils/alliance";
+import { isMapUserAlly } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import {
@@ -118,13 +118,10 @@ import {
   useUserDataRef,
 } from "@/utils/UserContext";
 import {
-  type FindSectorSchema,
-  type FindSectorSchemaInput,
-  findSectorSchema,
   parseTravelPins,
-  type QuickTravelSchema,
-  type QuickTravelSchemaInput,
-  quickTravelSchema,
+  type SectorForm,
+  type SectorFormInput,
+  sectorFormSchema,
   type TravelLocation,
   type TravelPin,
   travelLocationSchema,
@@ -498,9 +495,9 @@ function Travel() {
   const globalLink = `Global`;
 
   // Quick travel form
-  const quickTravelForm = useForm<QuickTravelSchemaInput, unknown, QuickTravelSchema>({
+  const quickTravelForm = useForm<SectorFormInput, unknown, SectorForm>({
     mode: "all",
-    resolver: zodResolver(quickTravelSchema),
+    resolver: zodResolver(sectorFormSchema),
     defaultValues: { sector: undefined },
   });
   const quickTravelSector = useWatch({
@@ -509,9 +506,9 @@ function Travel() {
   }) as number | undefined;
 
   // Find sector form
-  const findSectorForm = useForm<FindSectorSchemaInput, unknown, FindSectorSchema>({
+  const findSectorForm = useForm<SectorFormInput, unknown, SectorForm>({
     mode: "all",
-    resolver: zodResolver(findSectorSchema),
+    resolver: zodResolver(sectorFormSchema),
   });
   const findSectorValue = useWatch({
     control: findSectorForm.control,
@@ -1899,11 +1896,7 @@ const RevealedPlayerCard = ({
   const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
   const villageColor = village?.hexColor ?? "gray";
 
-  const relationship =
-    userData?.village &&
-    findVillageUserRelationship(userData.village, player.villageId);
-  const isAlly =
-    player.villageId === userData?.villageId || relationship?.status === "ALLY";
+  const isAlly = isMapUserAlly(userData, { villageId: player.villageId });
   const showAttack = sensoryAllyAttack || !isAlly;
 
   return (

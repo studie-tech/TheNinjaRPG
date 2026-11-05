@@ -6,7 +6,7 @@ import {
 } from "@/layout/ContentFiltering";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 interface SkillTreeFilteringProps {
   state: SkillTreeFilteringState;
@@ -22,7 +22,7 @@ const makeSkillTreeSchema = () =>
         label: "Effects",
         type: "multi-select",
         defaultValue: [],
-        options: effectFilters.map((ef) => ({ value: ef, label: ef })),
+        options: tagTypes.map((ef) => ({ value: ef, label: ef })),
       },
       {
         id: "tier",

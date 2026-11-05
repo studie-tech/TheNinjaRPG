@@ -20,6 +20,7 @@ import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/ap
 import { getRandomElement } from "@/utils/array";
 import { isStaffRole } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   type VillageMission,
@@ -94,12 +95,8 @@ export const villageMissionRouter = createTRPCRouter({
         questId: candidate.id,
         name: candidate.name,
         description: candidate.description,
-        rewardTokens: collapseRewards([
-          candidate.content.reward,
-          ...(candidate.content.reward.reward_packages ?? []).map(
-            (pack) => pack.rewards,
-          ),
-        ]).reward_tokens,
+        rewardTokens: collapseRewards(rewardPayloads(candidate.content.reward))
+          .reward_tokens,
         objectives: candidate.content.objectives.map((objective) =>
           villageMissionObjectiveSchema.parse(objective),
         ),

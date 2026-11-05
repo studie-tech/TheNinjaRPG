@@ -7,6 +7,7 @@ import {
   CP_PER_LVL,
   ELITE_JONIN_BRACKET,
   ENERGY_PER_LVL,
+  getCombatStatCap,
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
@@ -72,22 +73,40 @@ export function calcLevelRequirements(level: number): number {
 }
 
 /** Rank and village progression gates shared by the level-up action and its previews. */
-export const levelUpBlockMessage = (
+export const levelUpBlock = (
   user: Pick<UserData, "rank" | "level" | "experience"> & {
     village?: Pick<Village, "name"> | null;
   },
-): string | null => {
+): { kind: LevelUpBlockKind; message: string } | null => {
   if (user.level >= getUserCaps(user.rank).lvl_cap)
-    return "User at max level for this rank!";
+    return { kind: "cap", message: "User at max level for this rank!" };
   if (user.rank === "ELITE JONIN")
-    return "Complete an Elite Jonin milestone at the academy to level up. Assigned experience cannot increase your level.";
+    return {
+      kind: "milestone",
+      message:
+        "Complete an Elite Jonin milestone at the academy to level up. Assigned experience cannot increase your level.",
+    };
   if (user.experience < calcLevelRequirements(user.level))
-    return "Not enough experience for level";
+    return { kind: "experience", message: "Not enough experience for level" };
   if (user.village?.name === "Horizon" && user.level > 9) {
-    return "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.";
+    return {
+      kind: "village",
+      message:
+        "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.",
+    };
   }
   return null;
 };
+
+type LevelUpBlockKind = "cap" | "milestone" | "experience" | "village";
+
+/** Why a user cannot level up, or null when they can. */
+export const levelUpBlockMessage = (user: Parameters<typeof levelUpBlock>[0]) =>
+  levelUpBlock(user)?.message ?? null;
+
+/** Experience still missing for the next level. */
+export const experienceToNextLevel = (user: Pick<UserData, "level" | "experience">) =>
+  Math.max(calcLevelRequirements(user.level) - user.experience, 0);
 
 /**
  * Calculate the level for a given experience
@@ -134,13 +153,7 @@ export const eliteJoninExamBlockMessage = (
   if (user.rank !== "JONIN" || user.level !== MAX_EXPERIENCE_LEVEL)
     return `The Elite Jonin exam requires level ${MAX_EXPERIENCE_LEVEL} and Jonin rank.`;
   const caps = getUserCaps("JONIN");
-  if (
-    user.offence < caps.stats_cap ||
-    user.defence < caps.stats_cap ||
-    [user.strength, user.speed, user.intelligence, user.willpower].some(
-      (value) => value < caps.gens_cap,
-    )
-  )
+  if (CombatStatNames.some((stat) => user[stat] < getCombatStatCap(caps, stat)))
     return "Cap your offence, defence and all four generals before taking the Elite Jonin exam.";
   return null;
 };
@@ -184,9 +197,26 @@ export const passesBracketFilter = (
   filterBracket: number,
 ): boolean => {
   if (filterBracket < 0) return true;
-  if (user.rank === "ELITE JONIN") return filterBracket === ELITE_JONIN_BRACKET;
-  if (user.experience == null) return false;
-  return getExpBracket(user.experience, user.rank) === filterBracket;
+  return getKnownExpBracket(user) === filterBracket;
+};
+
+/** Bracket of a map user; null when a partial update omitted the XP that decides it. */
+export const getKnownExpBracket = (user: {
+  experience?: number | null;
+  rank?: UserRank;
+}) => {
+  if (user.rank === "ELITE JONIN") return ELITE_JONIN_BRACKET;
+  return user.experience == null ? null : getExpBracket(user.experience, user.rank);
+};
+
+/** Displayed level of a map user; null when a partial update omitted the XP that decides it. */
+export const getKnownEffectiveLevel = (user: {
+  level: number;
+  experience?: number | null;
+  rank?: UserRank;
+}) => {
+  if (user.rank === "ELITE JONIN") return user.level;
+  return user.experience == null ? null : calcLevel(user.experience);
 };
 
 /** Awake players in the selected bracket, ordered by displayed level then name. */
@@ -209,19 +239,9 @@ export const getScoutingUsers = <
         passesBracketFilter(user, filterBracket),
     )
     .sort((a, b) => {
-      // Partial map updates can omit XP; keep unknown levels after known levels.
-      const aLevel =
-        a.rank === "ELITE JONIN"
-          ? a.level
-          : a.experience == null
-            ? Infinity
-            : calcLevel(a.experience);
-      const bLevel =
-        b.rank === "ELITE JONIN"
-          ? b.level
-          : b.experience == null
-            ? Infinity
-            : calcLevel(b.experience);
+      // Keep unknown levels after known levels.
+      const aLevel = getKnownEffectiveLevel(a) ?? Infinity;
+      const bLevel = getKnownEffectiveLevel(b) ?? Infinity;
       return aLevel - bLevel || a.username.localeCompare(b.username);
     });
 
@@ -255,19 +275,14 @@ export const withCappedStats = <T extends UserData>(user: T): T => {
  * @returns void
  */
 export function capUserStats(user: UserData, rank: UserRank = user.rank) {
-  const { stats_cap, gens_cap } = getUserCaps(rank);
-  if (user.offence > stats_cap) user.offence = stats_cap;
-  if (user.defence > stats_cap) user.defence = stats_cap;
-  if (user.strength > gens_cap) user.strength = gens_cap;
-  if (user.speed > gens_cap) user.speed = gens_cap;
-  if (user.intelligence > gens_cap) user.intelligence = gens_cap;
-  if (user.willpower > gens_cap) user.willpower = gens_cap;
-  if (user.ninjutsuMastery > MAX_MASTERY_CAP) user.ninjutsuMastery = MAX_MASTERY_CAP;
-  if (user.genjutsuMastery > MAX_MASTERY_CAP) user.genjutsuMastery = MAX_MASTERY_CAP;
-  if (user.taijutsuMastery > MAX_MASTERY_CAP) user.taijutsuMastery = MAX_MASTERY_CAP;
-  if (user.bukijutsuMastery > MAX_MASTERY_CAP) user.bukijutsuMastery = MAX_MASTERY_CAP;
-  if (user.bloodlineMastery > MAX_MASTERY_CAP) user.bloodlineMastery = MAX_MASTERY_CAP;
-  if (user.sageMastery > MAX_MASTERY_CAP) user.sageMastery = MAX_MASTERY_CAP;
+  const caps = getUserCaps(rank);
+  for (const stat of CombatStatNames) {
+    const cap = getCombatStatCap(caps, stat);
+    if (user[stat] > cap) user[stat] = cap;
+  }
+  for (const mastery of MasteryNames) {
+    if (user[mastery] > MAX_MASTERY_CAP) user[mastery] = MAX_MASTERY_CAP;
+  }
 }
 
 /** Highest whole pool modifier that keeps HP, CP and SP within the content cap. */
@@ -377,8 +392,11 @@ export const getRedistributableStatTotal = (
     "rank" | "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
   >,
 ) => {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return Math.min(getAssignedCombatStatTotal(user), 2 * stats_cap + 4 * gens_cap);
+  const caps = getUserCaps(user.rank);
+  return Math.min(
+    getAssignedCombatStatTotal(user),
+    CombatStatNames.reduce((total, stat) => total + getCombatStatCap(caps, stat), 0),
+  );
 };
 
 /**
@@ -398,12 +416,9 @@ export const canAssignExperience = (
     ElementalMasterySource,
 ) => {
   if (experienceAssignmentBlockMessage(user)) return false;
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  const caps = getUserCaps(user.rank);
   return (
-    CombatStatNames.some(
-      (stat) =>
-        user[stat] < (stat === "offence" || stat === "defence" ? stats_cap : gens_cap),
-    ) ||
+    CombatStatNames.some((stat) => user[stat] < getCombatStatCap(caps, stat)) ||
     assignableMasteryNames.some((name) => masteryGainRoom(user, name) > 0) ||
     (user.elementalMastery !== undefined &&
       BasicElementName.some((element) => elementalGainRoom(user, element) > 0))

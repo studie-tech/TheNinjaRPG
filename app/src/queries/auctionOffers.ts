@@ -6,7 +6,8 @@ import { AUCTION_HOUSE_MIN_LEVEL } from "@/drizzle/constants";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { userItem } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
+import { nextSnapshotSql } from "@/queries/concurrency";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import type { getAuctionOffersSchema } from "@/validators/auction";
 
 /** Build the offered-item lookup with its item and imbuement relations for offer validation. */
@@ -213,7 +214,7 @@ export const updateUserDataForClaimOfferUser = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(eligibleOfferUser(id));
 
@@ -300,7 +301,7 @@ export const insertUserItemForMoveOfferItem = (
 
 /** Build the action-log insert for an offer event; the caller controls when the offer and log commit. */
 export const logOffer = (
-  tx: Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0],
+  tx: DrizzleTransaction,
   userId: string,
   id: string,
   action: string,

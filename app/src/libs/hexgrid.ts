@@ -1,21 +1,23 @@
 import type {
   BoundingBox,
   Ellipse,
-  Grid,
   HexOffset,
   HexOptions,
-  Orientation,
   Point,
 } from "honeycomb-grid";
 import {
   createHexDimensions,
   createHexOrigin,
   defaultHexSettings,
+  Grid,
   Hex,
+  Orientation,
+  rectangle,
   ring,
   spiral,
 } from "honeycomb-grid";
 import type { CombatBiome } from "@/drizzle/constants";
+import { HEX_ASPECT_RATIO, HEX_STACKING_DISPLACEMENT } from "@/drizzle/constants";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorTile, SectorMapZone } from "@/libs/sector-map/types";
 import type { CombatAction } from "./combat/types";
@@ -70,6 +72,75 @@ export function defineHex(hexOptions?: Partial<HexOptions>): typeof TerrainHex {
     }
   };
 }
+
+/**
+ * Flat-top rectangular hex grid. A zero-width mount gives a zero hex size, which
+ * honeycomb's dimensions refuse, so that case yields an empty grid.
+ * @param origin - Passed through unchanged; omitting it keeps honeycomb's default
+ */
+export const createHexGrid = (
+  hexsize: number,
+  width: number,
+  height: number,
+  origin?: Point,
+) => {
+  const Tile = defineHex({
+    dimensions: { width: hexsize, height: hexsize * HEX_ASPECT_RATIO },
+    origin,
+    orientation: Orientation.FLAT,
+  });
+  return hexsize > 0 ? new Grid(Tile, rectangle({ width, height })) : new Grid(Tile);
+};
+
+/** Letter-and-row tile name and unit movement cost used by arena-style grids. */
+export const nameArenaTile = <T extends TerrainHex>(tile: T) => {
+  tile.cost = 1;
+  tile.name = `${String.fromCharCode(65 + tile.col)}${tile.row + 1}`;
+  return tile;
+};
+
+/** Hex widths spanned by `columns` stacked flat-top columns. */
+export const stackedHexWidths = (columns: number) =>
+  columns - HEX_STACKING_DISPLACEMENT * (columns - 1);
+
+/** Height to width ratio of a hex map, including its two border rows. */
+export const hexGridHeightRatio = (columns: number, rows: number) =>
+  ((rows + 2) * HEX_ASPECT_RATIO) / stackedHexWidths(columns);
+
+/** Keys of the given tiles and their direct neighbors. */
+export const tileKeysNear = (
+  grid: Grid<TerrainHex>,
+  positions: { col: number; row: number }[],
+) => {
+  const keys = new Set<string>();
+  for (const position of positions) {
+    const tile = grid.getHex(position);
+    if (!tile) continue;
+    keys.add(`${tile.col},${tile.row}`);
+    for (const neighbor of grid.traverse(ring({ radius: 1, center: tile }))) {
+      keys.add(`${neighbor.col},${neighbor.row}`);
+    }
+  }
+  return keys;
+};
+
+/** Cube coordinates of a flat-top odd-q offset position, as honeycomb-grid lays them out. */
+export const oddQToCube = (col: number, row: number) => {
+  const z = row - Math.floor((col - (col & 1)) / 2);
+  return { x: col, y: -col - z, z };
+};
+
+/** Hex steps between two flat-top odd-q offset positions. */
+export const oddQHexDistance = (
+  aCol: number,
+  aRow: number,
+  bCol: number,
+  bRow: number,
+) => {
+  const a = oddQToCube(aCol, aRow);
+  const b = oddQToCube(bCol, bRow);
+  return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z));
+};
 
 /**
  * A point defined by X and Y

@@ -14,8 +14,15 @@ import {
   userPushPreference,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { secondsFromDate, secondsFromNow } from "@/utils/time";
+import { DAY_S, secondsFromDate } from "@/utils/time";
 import type { RegisterDeviceInput, registerActivitySchema } from "@/validators/push";
+
+/**
+ * A device that has not checked in for a season is almost certainly uninstalled. Every
+ * reader applies this, so a count cannot promise a delivery the fan-out would skip.
+ */
+const freshDeviceWhere = (now = new Date()) =>
+  gte(userDevice.lastSeenAt, secondsFromDate(-PUSH_TOKEN_STALE_DAYS * DAY_S, now));
 
 /**
  * Build the `userDevice` lookup for `GET`, selecting row fields `userId`, using
@@ -24,14 +31,10 @@ import type { RegisterDeviceInput, registerActivitySchema } from "@/validators/p
 export const findUserDeviceForGET = (
   client: Pick<DrizzleClient, "query">,
   token: string,
-  freshSince: Date,
 ) =>
   client.query.userDevice.findFirst({
     columns: { userId: true },
-    where: and(
-      eq(userDevice.widgetToken, token),
-      gte(userDevice.lastSeenAt, freshSince),
-    ),
+    where: and(eq(userDevice.widgetToken, token), freshDeviceWhere()),
     with: {
       user: {
         columns: {
@@ -131,14 +134,7 @@ export const selectUserDeviceForGetPreferences = (
   client
     .select({ id: userDevice.id })
     .from(userDevice)
-    .where(
-      and(
-        eq(userDevice.userId, ctx.userId),
-        // Same window sendPushToUsers uses, so the count cannot promise a delivery
-        // the fan-out would skip.
-        gte(userDevice.lastSeenAt, secondsFromNow(-PUSH_TOKEN_STALE_DAYS * 86400)),
-      ),
-    );
+    .where(and(eq(userDevice.userId, ctx.userId), freshDeviceWhere()));
 
 /** Build the `userPushPreference` insert for `setPreference`, updating duplicate keys. */
 export const insertUserPushPreferenceForSetPreference = (
@@ -223,7 +219,6 @@ export const deleteUserDeviceForEvictExcessDevices = (
 export const selectUserDeviceForSendPushToUsers = (
   client: Pick<DrizzleClient, "select">,
   recipients: string[],
-  freshSince: Date,
 ) =>
   client
     .select({
@@ -232,12 +227,7 @@ export const selectUserDeviceForSendPushToUsers = (
       platform: userDevice.platform,
     })
     .from(userDevice)
-    .where(
-      and(
-        inArray(userDevice.userId, recipients),
-        gte(userDevice.lastSeenAt, freshSince),
-      ),
-    );
+    .where(and(inArray(userDevice.userId, recipients), freshDeviceWhere()));
 
 /** Build the `userPushPreference` selection for `sendPushToUsers`, using predicates on `userId`, `category`, `enabled`. */
 export const selectUserPushPreferenceForSendPushToUsers = (
@@ -294,9 +284,7 @@ export const selectDistinctUserDeviceForDeliverDueTimedPushes = (
   client
     .selectDistinct({ userId: userDevice.userId })
     .from(userDevice)
-    .where(
-      gte(userDevice.lastSeenAt, secondsFromDate(-PUSH_TOKEN_STALE_DAYS * 86400, now)),
-    );
+    .where(freshDeviceWhere(now));
 
 /** Build the `userData` listing for `deliverDueTimedPushes`, using predicates on `userId`, `isAi`, `finishTraining`. */
 export const listUserDataForDeliverDueTimedPushes = (
@@ -340,9 +328,6 @@ export const selectDistinctUserDeviceForNotifyWarVillages = (
       and(
         inArray(userData.villageId, villages),
         eq(userData.isAi, false),
-        gte(
-          userDevice.lastSeenAt,
-          secondsFromDate(-PUSH_TOKEN_STALE_DAYS * 86400, new Date()),
-        ),
+        freshDeviceWhere(),
       ),
     );

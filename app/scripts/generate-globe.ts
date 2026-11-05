@@ -17,7 +17,6 @@ import { writeFileSync } from "node:fs";
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,
   MAP_TOTAL_SECTORS,
-  MAP_WAKE_ISLAND_SECTOR,
   MAP_WORLD_COLUMNS,
   MAP_WORLD_ROWS,
 } from "@/drizzle/constants";
@@ -27,19 +26,23 @@ import {
   sectorGridPosition,
 } from "@/libs/sector-map/world-grid";
 import {
-  createWorldLandScore,
+  createSectorGridLandScore,
   globalBiomeType,
   globalElevation,
   globalFeature,
   globalMoisture,
   globalTemperature,
+  sectorGeometry,
+  smoothstep,
+  sphericalPoint,
+  tilePosition,
+  type Vec3,
   WORLDGEN_LAND_THRESHOLD,
-  WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
+  WORLDGEN_RADIUS,
 } from "@/libs/sector-map/worldgen";
 import { getWorldProtectedLandSectors } from "@/libs/sector-map/landmarks";
 import { getFlagValue, parseIntList } from "./cli";
 
-const RADIUS = 30;
 const VISUAL_SCALE = 6;
 const POLAR_CAP_VISUAL_COLUMNS = MAP_WORLD_COLUMNS * VISUAL_SCALE;
 const POLAR_CAP_VISUAL_ROWS = Math.ceil(
@@ -48,137 +51,15 @@ const POLAR_CAP_VISUAL_ROWS = Math.ceil(
 );
 const LAND_THRESHOLD = WORLDGEN_LAND_THRESHOLD;
 
-type Vec3 = { x: number; y: number; z: number };
-
 interface RawTile {
   id: number;
   corners: [Vec3, Vec3, Vec3, Vec3];
   center: Vec3;
 }
 
-const degreesToRadians = (degrees: number) => (degrees * Math.PI) / 180;
-
-/** Spherical point with +Y as north and longitude rotating around the Y axis. */
-const pointAt = (longitude: number, latitude: number): Vec3 => {
-  const lon = degreesToRadians(longitude);
-  const lat = degreesToRadians(latitude);
-  const horizontal = Math.cos(lat) * RADIUS;
-  return {
-    x: Math.cos(lon) * horizontal,
-    y: Math.sin(lat) * RADIUS,
-    z: Math.sin(lon) * horizontal,
-  };
-};
-
-/** Geographic bounds of one row-major sector. */
-export const sectorGeographicBounds = (sector: number) => {
-  const position = sectorGridPosition(sector);
-  if (!position) throw new Error(`Invalid sector ${sector}`);
-  const longitudeStep = 360 / MAP_WORLD_COLUMNS;
-  const latitudeStep = (MAP_NAVIGABLE_LATITUDE_LIMIT * 2) / MAP_WORLD_ROWS;
-  return {
-    west: -180 + position.column * longitudeStep,
-    east: -180 + (position.column + 1) * longitudeStep,
-    north: MAP_NAVIGABLE_LATITUDE_LIMIT - position.row * latitudeStep,
-    south: MAP_NAVIGABLE_LATITUDE_LIMIT - (position.row + 1) * latitudeStep,
-  };
-};
-
-/** Build spherical quads in canonical [NW, NE, SE, SW] order. */
+/** Spherical quads of every sector. */
 const buildTiles = (): RawTile[] =>
-  Array.from({ length: MAP_TOTAL_SECTORS }, (_, id) => {
-    const bounds = sectorGeographicBounds(id);
-    return {
-      id,
-      corners: [
-        pointAt(bounds.west, bounds.north),
-        pointAt(bounds.east, bounds.north),
-        pointAt(bounds.east, bounds.south),
-        pointAt(bounds.west, bounds.south),
-      ],
-      center: pointAt(
-        (bounds.west + bounds.east) / 2,
-        (bounds.north + bounds.south) / 2,
-      ),
-    };
-  });
-
-/** Bilinear sector position, normalized back onto the globe surface. */
-const tilePointAt = (tile: RawTile, u: number, v: number): Vec3 => {
-  const [nw, ne, se, sw] = tile.corners;
-  const top = {
-    x: nw.x + (ne.x - nw.x) * u,
-    y: nw.y + (ne.y - nw.y) * u,
-    z: nw.z + (ne.z - nw.z) * u,
-  };
-  const bottom = {
-    x: sw.x + (se.x - sw.x) * u,
-    y: sw.y + (se.y - sw.y) * u,
-    z: sw.z + (se.z - sw.z) * u,
-  };
-  const point = {
-    x: top.x + (bottom.x - top.x) * v,
-    y: top.y + (bottom.y - top.y) * v,
-    z: top.z + (bottom.z - top.z) * v,
-  };
-  const length = Math.hypot(point.x, point.y, point.z) || 1;
-  return {
-    x: (point.x / length) * RADIUS,
-    y: (point.y / length) * RADIUS,
-    z: (point.z / length) * RADIUS,
-  };
-};
-
-/**
- * Deterministic hierarchical continental field sampled in 3D, so the east/west
- * antimeridian has no noise discontinuity. Protected and supplied village ids
- * receive smooth land influence around their centers. Wake Island remains
- * isolated.
- */
-const createLandScore = (tiles: RawTile[], protectedSectors: number[]) => {
-  const protectedCenters = protectedSectors
-    .filter((sector) => sector !== MAP_WAKE_ISLAND_SECTOR)
-    .map((sector) => tiles[sector]?.center)
-    .filter((center): center is Vec3 => center !== undefined);
-  const wakeNeighbors = new Set(
-    sectorGridNeighbors(MAP_WAKE_ISLAND_SECTOR).filter((sector) => sector >= 0),
-  );
-  const wakeCenter = tiles[MAP_WAKE_ISLAND_SECTOR]!.center;
-  const wakeIslandRadius =
-    Math.min(
-      ...[...wakeNeighbors].map((sector) => {
-        const center = tiles[sector]!.center;
-        return Math.hypot(
-          wakeCenter.x - center.x,
-          wakeCenter.y - center.y,
-          wakeCenter.z - center.z,
-        );
-      }),
-    ) * WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR;
-  const wakeMoatRadius = Math.max(
-    ...[...wakeNeighbors].flatMap((sector) =>
-      tiles[sector]!.corners.map((corner) =>
-        Math.hypot(
-          wakeCenter.x - corner.x,
-          wakeCenter.y - corner.y,
-          wakeCenter.z - corner.z,
-        ),
-      ),
-    ),
-  );
-
-  return createWorldLandScore({
-    protectedCenters,
-    wakeIslandCenter: wakeCenter,
-    wakeIslandRadius,
-    wakeMoatRadius,
-  });
-};
-
-const smoothstep = (low: number, high: number, value: number) => {
-  const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
-  return t * t * (3 - 2 * t);
-};
+  Array.from({ length: MAP_TOTAL_SECTORS }, (_, id) => ({ id, ...sectorGeometry(id) }));
 
 type Rgb = [number, number, number];
 const mixColor = (a: Rgb, b: Rgb, amount: number): Rgb => [
@@ -221,7 +102,7 @@ const main = () => {
 
   const tiles = buildTiles();
   const protectedSectors = getWorldProtectedLandSectors(villageSectors);
-  const landScore = createLandScore(tiles, protectedSectors);
+  const landScore = createSectorGridLandScore(protectedSectors);
   const land = tiles.map((tile) => landScore(tile.center) > 0);
 
   const outTiles = tiles.map((tile) => ({
@@ -235,10 +116,12 @@ const main = () => {
     v: Array.from({ length: VISUAL_SCALE * VISUAL_SCALE }, (_, index) => {
       const x = index % VISUAL_SCALE;
       const y = Math.floor(index / VISUAL_SCALE);
-      const point = tilePointAt(
-        tile,
-        (x + 0.5) / VISUAL_SCALE,
-        (y + 0.5) / VISUAL_SCALE,
+      const point = tilePosition(
+        tile.corners,
+        x + 0.5,
+        y + 0.5,
+        VISUAL_SCALE + 1,
+        VISUAL_SCALE + 1,
       );
       return globalBiomeType(
         point,
@@ -249,7 +132,7 @@ const main = () => {
     vc: Array.from({ length: (VISUAL_SCALE + 1) ** 2 }, (_, index) => {
       const x = index % (VISUAL_SCALE + 1);
       const y = Math.floor(index / (VISUAL_SCALE + 1));
-      const point = tilePointAt(tile, x / VISUAL_SCALE, y / VISUAL_SCALE);
+      const point = tilePosition(tile.corners, x, y, VISUAL_SCALE + 1, VISUAL_SCALE + 1);
       return visualColorAt(point, landScore(point));
     }),
     n: sectorGridNeighbors(tile.id),
@@ -283,7 +166,7 @@ const main = () => {
         const latitude =
           MAP_NAVIGABLE_LATITUDE_LIMIT +
           (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
-        const point = pointAt(longitude, latitude);
+        const point = sphericalPoint(longitude, latitude);
         return visualColorAt(point, landScore(point));
       },
     ),
@@ -297,14 +180,14 @@ const main = () => {
         const latitude =
           -MAP_NAVIGABLE_LATITUDE_LIMIT -
           (ring / POLAR_CAP_VISUAL_ROWS) * (90 - MAP_NAVIGABLE_LATITUDE_LIMIT);
-        const point = pointAt(longitude, latitude);
+        const point = sphericalPoint(longitude, latitude);
         return visualColorAt(point, landScore(point));
       },
     ),
   };
 
   const payload = JSON.stringify({
-    radius: RADIUS,
+    radius: WORLDGEN_RADIUS,
     projection: "cylindrical",
     generation: "hierarchical-climate-v7-continuous-protection",
     visualScale: VISUAL_SCALE,

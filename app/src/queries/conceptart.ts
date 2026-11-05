@@ -1,9 +1,11 @@
 /**
  * Database access for conceptart; authorization and transaction scopes stay in callers.
  */
+
 import { eq } from "drizzle-orm";
 import { conceptImage } from "@/drizzle/schema";
 import { indexableConceptArt } from "@/libs/conceptart";
+import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /** Load an image with its author and viewer-specific reactions; a missing image yields undefined. */
@@ -16,16 +18,7 @@ export const fetchImage = async (
     where: eq(conceptImage.id, imageId),
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
       likes: {
         where: (userLikes) => eq(userLikes.userId, userId),
@@ -35,7 +28,7 @@ export const fetchImage = async (
   return result;
 };
 
-import { and, gte, isNotNull, sql } from "drizzle-orm";
+import { and, gte, sql } from "drizzle-orm";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { userData, userLikes } from "@/drizzle/schema";
 
@@ -260,9 +253,7 @@ export const listConceptImageForGetAll = (
     },
     where: and(
       ...[
-        input.only_own
-          ? eq(conceptImage.userId, userSearch)
-          : isNotNull(conceptImage.userId),
+        input.only_own ? eq(conceptImage.userId, userSearch) : undefined,
         secondsBack
           ? sql`createdAt > DATE_SUB(NOW(), INTERVAL ${secondsBack} SECOND)`
           : undefined,
@@ -272,16 +263,7 @@ export const listConceptImageForGetAll = (
     limit: input.limit,
     with: {
       user: {
-        columns: {
-          userId: true,
-          username: true,
-          avatar: true,
-          level: true,
-          rank: true,
-          isOutlaw: true,
-          role: true,
-          federalStatus: true,
-        },
+        columns: userCardColumns,
       },
       likes: {
         where: (userLikes) => eq(userLikes.userId, userSearch),

@@ -1,5 +1,5 @@
 import type { ContentProposal, ContentProposalChange } from "@/drizzle/schema";
-import { DAY_S, getUtcDayWindowStart, periodStart } from "@/utils/time";
+import { DAY_S, getUtcDayKey, getUtcDayWindowStart, periodStart } from "@/utils/time";
 import type { ReviewStatsInput } from "@/validators/contentReview";
 
 /** Current outcomes of submission cohorts; these are not a historical decision event log. */
@@ -30,7 +30,7 @@ export const buildReviewStats = (
   );
   const periods = new Map<string, Counts>();
   for (let at = start.getTime(); at <= now.getTime(); at += DAY_S * 1000) {
-    const key = periodStart(input.interval, new Date(at)).toISOString().slice(0, 10);
+    const key = getUtcDayKey(periodStart(input.interval, new Date(at)));
     if (!periods.has(key)) periods.set(key, emptyCounts());
   }
   const summary = emptyCounts();
@@ -45,7 +45,7 @@ export const buildReviewStats = (
   >();
   for (const row of filtered) {
     const period = periods.get(
-      periodStart(input.interval, row.createdAt).toISOString().slice(0, 10),
+      getUtcDayKey(periodStart(input.interval, row.createdAt)),
     );
     const key = JSON.stringify([row.source, row.agentName, row.category]);
     const group = groups.get(key) ?? {

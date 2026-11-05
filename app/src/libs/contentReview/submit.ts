@@ -39,14 +39,15 @@ import {
   editableOf,
   entityKey,
   loadEntities,
+  normalizeEditable,
 } from "./entities";
+import { collectCandidates, deleteStoredFiles, type MediaBudget } from "./media";
 import {
-  collectCandidates,
-  deleteStoredFiles,
-  type MediaBudget,
-  materializeChoice,
-} from "./media";
-import { isMediaPath, isSceneCharacterPath, topLevelField } from "./paths";
+  directMediaValue,
+  isMediaPath,
+  mediaPlaceholder,
+  topLevelField,
+} from "./paths";
 import {
   agentChangeViolation,
   applySetOperations,
@@ -65,41 +66,11 @@ export const ingestAgentSubmission = async (
   client: DrizzleClient,
   submission: AgentSubmission,
 ): Promise<SubmissionResult> => {
-  const refs = submission.proposals.flatMap((proposal) => [
-    ...proposal.basis.map((basis) => ({
-      entityType: basis.entityType,
-      entityId: basis.entityId,
-    })),
-    ...proposal.changes.flatMap((change) =>
-      change.entityId
-        ? [{ entityType: change.entityType, entityId: change.entityId }]
-        : [],
-    ),
-  ]);
-  const targetIds = [...new Set(refs.map((ref) => ref.entityId))];
-  // Names new content would take, read from its `set` up front so each type needs one query.
-  const drafts = submission.proposals.flatMap((proposal) =>
-    proposal.changes.flatMap((change) => {
-      if (change.operation !== "CREATE") return [];
-      const fields = Object.fromEntries(
-        change.set.map((set) => [set.path, parsedJson(set.valueJson)]),
-      );
-      const name = draftName(fields);
-      return name ? [{ entityType: change.entityType, name }] : [];
-    }),
+  const { entities, open, rejected, names } = await loadPlanningContext(
+    client,
+    submission.proposals,
   );
-  const [entities, open, rejected, names] = await Promise.all([
-    loadEntities(client, refs),
-    targetIds.length
-      ? openTargets(client, targetIds)
-      : Promise.resolve(new Set<string>()),
-    targetIds.length ? rejectedChanges(client, targetIds) : Promise.resolve([]),
-    drafts.length ? takenNames(client, drafts) : Promise.resolve(new Set<string>()),
-  ]);
-  const budget: MediaBudget = {
-    searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
-    generations: CONTENT_AUDIT_MAX_GENERATIONS,
-  };
+  const budget = newMediaBudget();
   const result: SubmissionResult = { accepted: [], refused: [], summary: "" };
   const claimed = new Set<string>();
   const planned: Rows[] = [];
@@ -264,32 +235,11 @@ export const reviseAgentProposal = async (
       reason: "Rationale and feedback response are too long",
     };
   }
-  const refs = [
-    ...proposal.basis,
-    ...proposal.changes.flatMap((change) =>
-      change.entityId
-        ? [{ entityType: change.entityType, entityId: change.entityId }]
-        : [],
-    ),
-  ];
-  const ids = [...new Set(refs.map((ref) => ref.entityId))];
-  const drafts = proposal.changes.flatMap((change) => {
-    if (change.operation !== "CREATE") return [];
-    const name = draftName(
-      Object.fromEntries(
-        change.set.map((set) => [set.path, parsedJson(set.valueJson)]),
-      ),
-    );
-    return name ? [{ entityType: change.entityType, name }] : [];
-  });
-  const [entities, open, rejected, names] = await Promise.all([
-    loadEntities(client, refs),
-    ids.length ? openTargets(client, ids, id) : Promise.resolve(new Set<string>()),
-    ids.length
-      ? rejectedChanges(client, ids, input.reactivate ? id : undefined)
-      : Promise.resolve([]),
-    drafts.length ? takenNames(client, drafts, id) : Promise.resolve(new Set<string>()),
-  ]);
+  const { entities, open, rejected, names } = await loadPlanningContext(
+    client,
+    [proposal],
+    { proposalId: id, rejectedProposalId: input.reactivate ? id : undefined },
+  );
   const uploaded: string[] = [];
   let saved = false;
   try {
@@ -297,10 +247,7 @@ export const reviseAgentProposal = async (
       client,
       proposal,
       entities,
-      {
-        searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
-        generations: CONTENT_AUDIT_MAX_GENERATIONS,
-      },
+      newMediaBudget(),
       { open, rejected, names, claimed: new Set() },
       uploaded,
       retained,
@@ -464,38 +411,6 @@ export const createStaffProposal = async (
   return { ok: true, id: proposalId };
 };
 
-/**
- * Editable fields with their order-insensitive lists (item recipes, AI jutsus and drops)
- * sorted the way the entity loader sorts them, so reordering a list is not a change.
- */
-export const normalizeEditable = (
-  entityType: ContentProposalEntityType,
-  editable: Record<string, unknown>,
-) => {
-  const byFirstId = (list: unknown) =>
-    Array.isArray(list)
-      ? [...(list as { ids?: string[] }[])].sort((a, b) =>
-          (a.ids?.[0] ?? "").localeCompare(b.ids?.[0] ?? ""),
-        )
-      : list;
-  if (entityType === "ITEM" && "craftingRequirements" in editable) {
-    return {
-      ...editable,
-      craftingRequirements: byFirstId(editable.craftingRequirements),
-    };
-  }
-  if (entityType === "AI") {
-    return {
-      ...editable,
-      ...("jutsus" in editable && Array.isArray(editable.jutsus)
-        ? { jutsus: [...(editable.jutsus as string[])].sort() }
-        : {}),
-      ...("items" in editable ? { items: byFirstId(editable.items) } : {}),
-    };
-  }
-  return editable;
-};
-
 /** First issue that makes `payload` invalid, as "path: message"; null when it is valid. */
 export const validationError = (validator: z.ZodType, payload: unknown) => {
   const parsed = validator.safeParse(payload);
@@ -599,19 +514,15 @@ const planAgentProposal = async (
       // The field shows the first candidate: its final value, or `media:<candidate id>` for a
       // sound that only becomes an asset when the suggestion is approved.
       const preview = media[0] as MediaInsert;
-      const value =
-        preview.source === "CATALOG" ||
-        (preview.kind === "IMAGE" && !isSceneCharacterPath(request.path))
-          ? materializeChoice(
-              {
-                ...preview,
-                path: request.path,
-                externalId: preview.externalId ?? null,
-                url: preview.url ?? null,
-              },
-              "",
-            ).value
-          : `media:${preview.id}`;
+      const direct = directMediaValue(
+        {
+          ...preview,
+          externalId: preview.externalId ?? null,
+          url: preview.url ?? null,
+        },
+        request.path,
+      );
+      const value = direct === undefined ? mediaPlaceholder(preview.id) : direct;
       const withMedia = applySetOperations(change.entityType, next, [
         { path: request.path, value },
       ]);
@@ -709,6 +620,59 @@ const submissionSummary = (submission: AgentSubmission, result: SubmissionResult
 };
 
 /** Targets that already have a pending suggestion, as `entityKey`s. */
+/**
+ * What planning proposals reads, in one round of parallel queries. `exclude` keeps a proposal
+ * under revision from conflicting with itself.
+ */
+const loadPlanningContext = async (
+  client: DrizzleClient,
+  proposals: AgentProposal[],
+  exclude: { proposalId?: string; rejectedProposalId?: string } = {},
+) => {
+  const refs = proposals.flatMap((proposal) => [
+    ...proposal.basis.map((basis) => ({
+      entityType: basis.entityType,
+      entityId: basis.entityId,
+    })),
+    ...proposal.changes.flatMap((change) =>
+      change.entityId
+        ? [{ entityType: change.entityType, entityId: change.entityId }]
+        : [],
+    ),
+  ]);
+  const targetIds = [...new Set(refs.map((ref) => ref.entityId))];
+  // Names new content would take, read from its `set` up front so each type needs one query.
+  const drafts = proposals.flatMap((proposal) =>
+    proposal.changes.flatMap((change) => {
+      if (change.operation !== "CREATE") return [];
+      const fields = Object.fromEntries(
+        change.set.map((set) => [set.path, parsedJson(set.valueJson)]),
+      );
+      const name = draftName(fields);
+      return name ? [{ entityType: change.entityType, name }] : [];
+    }),
+  );
+  const [entities, open, rejected, names] = await Promise.all([
+    loadEntities(client, refs),
+    targetIds.length
+      ? openTargets(client, targetIds, exclude.proposalId)
+      : Promise.resolve(new Set<string>()),
+    targetIds.length
+      ? rejectedChanges(client, targetIds, exclude.rejectedProposalId)
+      : Promise.resolve([]),
+    drafts.length
+      ? takenNames(client, drafts, exclude.proposalId)
+      : Promise.resolve(new Set<string>()),
+  ]);
+  return { entities, open, rejected, names };
+};
+
+/** Media allowance of one audit run; planning spends it, so each run needs its own. */
+const newMediaBudget = (): MediaBudget => ({
+  searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
+  generations: CONTENT_AUDIT_MAX_GENERATIONS,
+});
+
 const openTargets = async (
   client: DrizzleClient,
   ids: string[],

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { VILLAGE_MISSION_TASKS } from "@/drizzle/constants";
 import { collapseRewards } from "@/libs/rewards";
 import type { QuestRewardType } from "@/validators/rewardPackages";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import { hasReward, ObjectiveReward } from "@/validators/rewards";
 
 export const villageMissionActionSchema = z.object({
@@ -45,10 +46,9 @@ export const villageMissionContentError = (
   if (consecutiveObjectives) return "Village mission objectives must be simultaneous";
   if (content.rewardMode === "choose")
     return "Village missions cannot use reward choices";
-  const reward = collapseRewards([
-    ObjectiveReward.parse(content.reward),
-    ...(content.reward.reward_packages ?? []).map((pack) => pack.rewards),
-  ]);
+  const reward = collapseRewards(
+    rewardPayloads(content.reward, ObjectiveReward.parse(content.reward)),
+  );
   if (
     (content.reward.reward_packages ?? []).some((pack) =>
       hasReward({ ...pack.rewards, reward_tokens: 0 }),

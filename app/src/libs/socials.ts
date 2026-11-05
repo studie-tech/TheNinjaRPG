@@ -21,7 +21,7 @@ export const isExternalPostingDisabled = () => process.env.NODE_ENV === "test";
  * Validates that a webhook URL is a legitimate Discord webhook.
  * Prevents data exfiltration if environment variables are accidentally set to attacker-controlled URLs.
  */
-export const isValidDiscordWebhook = (url: string | undefined): boolean => {
+export const isValidDiscordWebhook = (url: string | undefined): url is string => {
   if (!url) return false;
   try {
     const parsed = new URL(url);
@@ -43,20 +43,11 @@ export const callDiscordContent = async (
   diff: string[],
   image_url?: string | null,
 ) => {
-  if (isExternalPostingDisabled()) return;
-  const webhookUrl = process.env.DISCORD_CONTENT_UPDATES;
-  if (!isValidDiscordWebhook(webhookUrl)) {
-    console.error("[Discord] Invalid webhook URL for content updates");
-    return;
-  }
-
-  return fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      avatar_url: image_url?.includes("https") ? image_url : "",
-      content: `**${username} updated ${updated_name}**\n* ${diff.join("\n* ")}`,
-    }),
+  // Local content edits must not reach the content channel
+  if (process.env.NODE_ENV === "development") return;
+  return postDiscordWebhook(process.env.DISCORD_CONTENT_UPDATES, "content updates", {
+    avatar_url: discordAvatar(image_url),
+    content: `**${username} updated ${updated_name}**\n* ${diff.join("\n* ")}`,
   });
 };
 
@@ -65,20 +56,9 @@ export const callDiscordNews = async (
   content: string,
   image_url?: string | null,
 ) => {
-  if (isExternalPostingDisabled()) return;
-  const webhookUrl = process.env.DISCORD_NEWS_UPDATES;
-  if (!isValidDiscordWebhook(webhookUrl)) {
-    console.error("[Discord] Invalid webhook URL for news updates");
-    return;
-  }
-
-  return fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      avatar_url: image_url?.includes("https") ? image_url : "",
-      content: nodeHtmlMarkdown.translate(`**${title}**\n* ${content} @everyone`),
-    }),
+  return postDiscordWebhook(process.env.DISCORD_NEWS_UPDATES, "news updates", {
+    avatar_url: discordAvatar(image_url),
+    content: nodeHtmlMarkdown.translate(`**${title}**\n* ${content} @everyone`),
   });
 };
 
@@ -347,3 +327,25 @@ export const callTwitterNews = async (title: string, content: string) => {
     body: JSON.stringify({ text: tweetText }),
   });
 };
+
+/** POST to a configured Discord webhook, skipping test runs and refusing foreign URLs. */
+const postDiscordWebhook = (
+  webhookUrl: string | undefined,
+  label: string,
+  body: Record<string, unknown>,
+) => {
+  if (isExternalPostingDisabled()) return;
+  if (!isValidDiscordWebhook(webhookUrl)) {
+    console.error(`[Discord] Invalid webhook URL for ${label}`);
+    return;
+  }
+  return fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+};
+
+/** Discord only accepts https avatars; anything else posts without one. */
+const discordAvatar = (imageUrl?: string | null) =>
+  imageUrl?.includes("https") ? imageUrl : "";

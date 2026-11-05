@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 // Combined with client-side interpolation, this maintains smooth visuals
 // while reducing compute costs by ~33%.
 const GAME_TICK_MS: u64 = 100;
+const PROJECTILE_SPEED: f64 = 5.0; // tiles/sec - must match TD_PROJECTILE_SPEED in constants.ts
 const HEX_ASPECT_RATIO: f64 = 0.866;
 
 
@@ -1173,7 +1174,7 @@ pub fn abandon_session(ctx: &ReducerContext, session_id: u64) {
     log::info!("Abandoned and deleted session {}", session_id);
 }
 
-/// Delete a completed run record after it has been claimed by tRPC
+/// Delete a session and all of its rows, its completed run included, after a claim
 #[reducer]
 pub fn delete_completed_run(ctx: &ReducerContext, session_id: u64) {
     if find_owned_session(ctx, session_id).is_none() {
@@ -1315,7 +1316,6 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
         
         // COST OPTIMIZATION: Process projectiles - only track progress server-side for hit detection
         // No updates sent to client - they compute progress from spawned_at
-        let projectile_speed = 5.0; // tiles per second
         // PERFORMANCE: Use index to find projectiles for this session
         for proj in ctx.db.projectile().session_id().filter(session_id) {
             // Calculate server-side progress for hit detection
@@ -1323,7 +1323,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
             let target = HexPosition { col: proj.target_col, row: proj.target_row };
             let distance = calculate_hex_distance(&origin, &target) as f64;
             let time_elapsed = now.saturating_sub(proj.spawned_at) as f64 / 1000.0;
-            let server_progress = time_elapsed * projectile_speed;
+            let server_progress = time_elapsed * PROJECTILE_SPEED;
             
             if server_progress >= distance {
                 // Projectile reached target - process hit

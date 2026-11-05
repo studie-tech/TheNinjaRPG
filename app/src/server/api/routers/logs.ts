@@ -13,6 +13,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { offsetPage } from "@/server/utils/pagination";
 import { canSeeSecretData } from "@/utils/permissions";
 import { extractValueFromJson } from "@/utils/regex";
 import { actionLogSchema } from "@/validators/logs";
@@ -28,8 +29,7 @@ export const logsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       // Query
       const [user, target] = await Promise.all([
         ctx.userId ? fetchUser(ctx.drizzle, ctx.userId) : null,
@@ -75,7 +75,7 @@ export const logsRouter = createTRPCRouter({
       }
 
       // Return
-      const nextCursor = entries.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(entries);
       return {
         data: entries.map((entry) => ({
           ...entry,

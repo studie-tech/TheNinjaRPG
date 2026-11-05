@@ -11,7 +11,7 @@ import { getNewTrackers, getReward, postProcessRewards } from "@/libs/quest";
 import { buildRewardChoiceCards, getUnavailableRewardCards, maxRewardPicks, requiredRewardPicks, rewardFromChoiceCards, toggleRewardPick, validateRewardPicks, verifyRewardChoiceForSave } from "@/libs/rewardChoice";
 import { validateQuestRewardPackages } from "@/server/api/routers/rewardPackages";
 import { QuestReward, RewardNodeValidator, RewardPackageValidator } from "@/validators/rewardPackages";
-import { hasReward, ObjectiveReward } from "@/validators/rewards";
+import { hasMasteryPromotion, hasReward, ObjectiveReward } from "@/validators/rewards";
 import type { QuestContentType } from "@/validators/objectives";
 
 /** Create a normalized snapshot with distinct attachment and source identities. */
@@ -458,5 +458,28 @@ describe("package validation and merging", () => {
     expect(villageMissionContentError(content,false)).toBeNull();
     content.reward.reward_packages![0]!.rewards.reward_money=1;
     expect(villageMissionContentError(content,false)).toContain("only contain village tokens");
+  });
+});
+
+describe("hasMasteryPromotion", () => {
+  it("needs both a stat and a rank", () => {
+    const stat = { reward_mastery_stat: "ninjutsuMastery" } as const;
+    expect(hasMasteryPromotion({ ...stat, reward_mastery_rank: "NONE" })).toBe(false);
+    expect(hasMasteryPromotion(stat)).toBe(false);
+    expect(
+      hasMasteryPromotion({ reward_mastery_stat: "None", reward_mastery_rank: "NONE" }),
+    ).toBe(false);
+  });
+
+  it("keeps an earlier promotion when a later reward names no rank", () => {
+    const promotion = ObjectiveReward.parse({
+      reward_mastery_stat: "ninjutsuMastery",
+      reward_mastery_rank: "ADEPT",
+    });
+    const collapsed = collapseRewards([
+      promotion,
+      { ...promotion, reward_mastery_rank: "NONE" },
+    ]);
+    expect(collapsed.reward_mastery_rank).toBe("ADEPT");
   });
 });

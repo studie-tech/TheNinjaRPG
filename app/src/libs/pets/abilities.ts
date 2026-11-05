@@ -62,6 +62,11 @@ const masteryRequirements = [
   "requiredSageMastery",
 ] as const;
 
+/** Allowed pet jutsu that are unlocked for everyone or locked to this species. */
+export const isPetJutsuAllowedForSpecies = (jutsu: Jutsu, speciesId?: string | null) =>
+  isPetJutsuAllowed(jutsu) &&
+  (!jutsu.requiredPetSpeciesId || jutsu.requiredPetSpeciesId === speciesId);
+
 /** Pets have no inherited elements, equipment, bloodline, mastery unlocks or content grants. */
 export const isPetJutsuAllowed = (jutsu: Jutsu) =>
   !jutsu.hidden &&

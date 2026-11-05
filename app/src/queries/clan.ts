@@ -3,7 +3,6 @@
  */
 import {
   and,
-  desc,
   eq,
   exists,
   getTableColumns,
@@ -13,7 +12,6 @@ import {
   like,
   lt,
   ne,
-  not,
   notExists,
   or,
   type SQL,
@@ -31,7 +29,6 @@ import {
   HIDEOUT_COST,
   IMG_AVATAR_DEFAULT,
   IMG_VILLAGE_FACTION,
-  KAGE_MAX_ELDERS,
   STRONGHOLD_MONTHLY_MAINTENANCE,
   STRONGHOLD_REESTABLISH_COST,
   VILLAGE_SYNDICATE_ID,
@@ -45,7 +42,6 @@ import {
   conversation,
   mpvpBattleQueue,
   mpvpBattleUser,
-  rankedPvpQueue,
   sector,
   userData,
   userRequest,
@@ -55,7 +51,12 @@ import {
   warAlly,
   warKill,
 } from "@/drizzle/schema";
+import {
+  selectClaimedRankedQueueEntry,
+  selectUnresolvedClanLobbyEntry,
+} from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { clampActionLogText } from "@/utils/actionLog";
@@ -172,31 +173,13 @@ export const fetchClans = async (
   return await client.query.clan.findMany({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       founder: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       members: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       village: true,
     },
@@ -217,22 +200,10 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
   return await client.query.clan.findFirst({
     with: {
       leader: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       founder: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
       village: {
         columns: {
@@ -260,13 +231,7 @@ export const fetchClan = async (client: DrizzleClient, clanId: string) => {
       },
       leaderOrder: true,
       elderNominee: {
-        columns: {
-          userId: true,
-          username: true,
-          level: true,
-          rank: true,
-          avatar: true,
-        },
+        columns: userSummaryColumns,
       },
     },
     where: eq(clan.id, clanId),
@@ -644,12 +609,7 @@ export const updateClanForConvertPointsToRyo = (
       and(
         eq(clan.id, input.clanId),
         gte(clan.points, input.points),
-        or(
-          eq(clan.leaderId, ctx.userId),
-          eq(clan.coLeader1, ctx.userId),
-          eq(clan.coLeader2, ctx.userId),
-          eq(clan.coLeader3, ctx.userId),
-        ),
+        clanLeadershipCondition(ctx.userId),
       ),
     );
 
@@ -687,16 +647,20 @@ export const updateClanForPurchaseBoost = (
       ),
     );
 
-/** Build the `clan` listing for `nominateElder`, selecting only `id`, using predicates on `villageId`. */
+/** Build the `clan` listing for `nominateElder`, selecting elder ranking columns, using predicates on `villageId`. */
 export const listClanForNominateElder = (
   client: Pick<DrizzleClient, "query">,
   clanData: { villageId: string },
 ) =>
   client.query.clan.findMany({
     where: eq(clan.villageId, clanData.villageId),
-    orderBy: [desc(clan.activityPoints), desc(clan.points)],
-    limit: KAGE_MAX_ELDERS,
-    columns: { id: true },
+    columns: {
+      id: true,
+      activityPoints: true,
+      points: true,
+      elderCutoffMonth: true,
+      elderCutoffYear: true,
+    },
   });
 
 /** Build the `clan` update for `nominateElder`, setting `elderNomineeId`, using predicates on `id`. */
@@ -728,17 +692,7 @@ export const updateUserDataForChallengeClan = (
             .from(mpvpBattleUser)
             .where(eq(mpvpBattleUser.userId, user.userId)),
         ),
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, user.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, user.userId)),
       ),
     );
 
@@ -780,12 +734,7 @@ export const listClanForDeleteClanBattle = (
   ctx: { userId: string },
 ) =>
   client.query.clan.findMany({
-    where: or(
-      eq(clan.leaderId, ctx.userId),
-      eq(clan.coLeader1, ctx.userId),
-      eq(clan.coLeader2, ctx.userId),
-      eq(clan.coLeader3, ctx.userId),
-    ),
+    where: clanLeadershipCondition(ctx.userId),
   });
 
 /** Build the `actionLog` insert for `deleteClanBattle`. */
@@ -862,19 +811,7 @@ export const updateUserDataForInitiateClanBattle = (
               ),
             ),
         ),
-        not(
-          exists(
-            client
-              .select({ id: rankedPvpQueue.id })
-              .from(rankedPvpQueue)
-              .where(
-                and(
-                  eq(rankedPvpQueue.userId, userData.userId),
-                  eq(rankedPvpQueue.hasClaimed, true),
-                ),
-              ),
-          ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
       ),
     );
 
@@ -960,14 +897,7 @@ export const findMpvpBattleQueueForHasClanBattleJoin = (
             ),
           ),
       ),
-      notExists(
-        client
-          .select({ id: rankedPvpQueue.id })
-          .from(rankedPvpQueue)
-          .where(
-            and(eq(rankedPvpQueue.userId, userId), eq(rankedPvpQueue.hasClaimed, true)),
-          ),
-      ),
+      notExists(selectClaimedRankedQueueEntry(client, userId)),
     ),
   });
 
@@ -994,36 +924,8 @@ export const updateUserDataForUndoClanBattleJoin = (
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
         withoutDungeonReservation(),
-        not(
-          exists(
-            client
-              .select({ id: rankedPvpQueue.id })
-              .from(rankedPvpQueue)
-              .where(
-                and(
-                  eq(rankedPvpQueue.userId, userData.userId),
-                  eq(rankedPvpQueue.hasClaimed, true),
-                ),
-              ),
-          ),
-        ),
-        not(
-          exists(
-            client
-              .select({ one: sql`1` })
-              .from(mpvpBattleUser)
-              .innerJoin(
-                mpvpBattleQueue,
-                eq(mpvpBattleUser.clanBattleId, mpvpBattleQueue.id),
-              )
-              .where(
-                and(
-                  eq(mpvpBattleUser.userId, userId),
-                  isNull(mpvpBattleQueue.winnerId),
-                ),
-              ),
-          ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
+        notExists(selectUnresolvedClanLobbyEntry(client, userId)),
       ),
     );
 
@@ -1342,17 +1244,7 @@ export const updateUserDataForDeleteClanBattle = (
             .from(mpvpBattleUser)
             .where(eq(mpvpBattleUser.clanBattleId, snapshot.id)),
         ),
-        notExists(
-          client
-            .select({ id: rankedPvpQueue.id })
-            .from(rankedPvpQueue)
-            .where(
-              and(
-                eq(rankedPvpQueue.userId, userData.userId),
-                eq(rankedPvpQueue.hasClaimed, true),
-              ),
-            ),
-        ),
+        notExists(selectClaimedRankedQueueEntry(client, userData.userId)),
       ),
     );
 
@@ -1391,3 +1283,12 @@ export const deleteBattleActionForClearClanCombat = (
   client: Pick<DrizzleClient, "delete">,
   battleId: string,
 ) => client.delete(battleAction).where(eq(battleAction.battleId, battleId));
+
+/** Match a clan where the user holds the leader or a co-leader seat. */
+const clanLeadershipCondition = (userId: string) =>
+  or(
+    eq(clan.leaderId, userId),
+    eq(clan.coLeader1, userId),
+    eq(clan.coLeader2, userId),
+    eq(clan.coLeader3, userId),
+  );

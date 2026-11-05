@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { SkillTreePathTypes } from "@/drizzle/constants";
 
 export const skillTreeFilteringSchema = z.object({
-  pathType: z.enum(["SKILL", "BLOODRIGHT"]).optional(),
+  pathType: z.enum(SkillTreePathTypes).optional(),
   bloodlineId: z.string().min(1).optional(),
   name: z.string().min(0).max(256).optional(),
   effect: z.array(z.string()).optional(),

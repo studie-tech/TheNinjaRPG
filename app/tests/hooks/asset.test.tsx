@@ -10,7 +10,6 @@ type Result = { success: boolean; message: string };
 type Callbacks = {
   onSuccess: (result: Result, variables: { data: { type: string } }) => Promise<void>;
   onError: (error: Error) => void;
-  onSettled: () => void;
 };
 const asset: GameAsset = {
   lpcConfig: null,
@@ -39,7 +38,7 @@ beforeEach(() => {
         setPending(true);
         try { const result = await save(input); await callbacks.onSuccess(result, input as { data: { type: string } }); return result; }
         catch (error) { callbacks.onError(error as Error); throw error; }
-        finally { callbacks.onSettled(); setPending(false); }
+        finally { setPending(false); }
       } };
     } } },
   });

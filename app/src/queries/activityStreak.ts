@@ -386,17 +386,7 @@ export const insertActivityStreakConfigForCreateConfig = (
 ) =>
   client.insert(activityStreakConfig).values({
     id: configId,
-    name: input.name,
-    description: input.description ?? null,
-    image: input.image ?? null,
-    totalDays: input.totalDays,
-    streakType: input.streakType,
-    isActive: input.isActive,
-    ryoCost: input.ryoCost,
-    repsCost: input.repsCost,
-    seichiSilverCost: input.seichiSilverCost,
-    startDate: input.startDate ?? null,
-    endDate: input.endDate ?? null,
+    ...toConfigColumns(input),
     createdByUserId: ctx.userId,
   });
 
@@ -408,17 +398,7 @@ export const updateActivityStreakConfigForUpdateConfig = (
   client
     .update(activityStreakConfig)
     .set({
-      name: input.name,
-      description: input.description ?? null,
-      image: input.image ?? null,
-      totalDays: input.totalDays,
-      streakType: input.streakType,
-      isActive: input.isActive,
-      ryoCost: input.ryoCost,
-      repsCost: input.repsCost,
-      seichiSilverCost: input.seichiSilverCost,
-      startDate: input.startDate ?? null,
-      endDate: input.endDate ?? null,
+      ...toConfigColumns(input),
       updatedAt: new Date(),
     })
     .where(eq(activityStreakConfig.id, input.id));
@@ -460,3 +440,18 @@ export const createRewardsForConfig = async (
     })),
   );
 };
+
+/** Config columns shared by the insert and the update; absent optionals clear the column. */
+const toConfigColumns = (input: Omit<ActivityStreakConfigInput, "rewards">) => ({
+  name: input.name,
+  description: input.description ?? null,
+  image: input.image ?? null,
+  totalDays: input.totalDays,
+  streakType: input.streakType,
+  isActive: input.isActive,
+  ryoCost: input.ryoCost,
+  repsCost: input.repsCost,
+  seichiSilverCost: input.seichiSilverCost,
+  startDate: input.startDate ?? null,
+  endDate: input.endDate ?? null,
+});

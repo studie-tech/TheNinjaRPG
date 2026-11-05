@@ -1,15 +1,15 @@
 import { merchProductSchema } from "@/validators/merch";
 import { getMerchDesign, merchDescriptionLead } from "./catalog";
 import mockups from "./preview-catalog.json";
+import { isApparelMerchKind, merchPrintTag } from "./products";
 
 /** Development selections are review options, not a live stock or sizing guarantee. */
 export function createMerchPreviewCatalog() {
   return mockups.map((mockup) => {
     const design = getMerchDesign(mockup.designKey);
     if (!design) throw new Error("A merch preview references an unknown design.");
-    const apparel = /T-Shirt|Hoodie|Sweatshirt/.test(mockup.kind);
     const colour = mockup.kind === "Straw Lid Water Bottle" ? "White" : "Black";
-    const sizes = apparel
+    const sizes = isApparelMerchKind(mockup.kind)
       ? ["S", "M", "L", "XL", "2XL"]
       : mockup.kind === "Black Glossy Mug"
         ? ["11 oz", "15 oz"]
@@ -40,7 +40,7 @@ export function createMerchPreviewCatalog() {
           { name: "Size", value: size },
         ],
       })),
-      tags: [apparel ? "Back print" : "Accessory"],
+      tags: [merchPrintTag(mockup.kind)],
       preview: true,
     });
   });

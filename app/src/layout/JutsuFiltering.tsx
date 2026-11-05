@@ -26,7 +26,7 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
-import { effectFilters } from "@/validators/combat";
+import { tagTypes } from "@/validators/combat";
 
 // Single-source schema
 const makeJutsuFilteringSchema = (defaultRank: UserRank[] = []) =>
@@ -78,7 +78,7 @@ const makeJutsuFilteringSchema = (defaultRank: UserRank[] = []) =>
         label: "Effects",
         type: "multi-select",
         defaultValue: [],
-        options: effectFilters.map((e) => ({ value: e, label: e })),
+        options: tagTypes.map((e) => ({ value: e, label: e })),
       },
       {
         id: "stat",
@@ -183,7 +183,7 @@ const makeJutsuFilteringSchema = (defaultRank: UserRank[] = []) =>
       { key: "excludedMethods", label: "Methods", options: [...AttackMethods] },
       { key: "excludedTargets", label: "Targets", options: [...AttackTargets] },
       { key: "excludedElements", label: "Elements", options: [...ElementNames] },
-      { key: "excludedEffects", label: "Effects", options: [...effectFilters] },
+      { key: "excludedEffects", label: "Effects", options: [...tagTypes] },
       { key: "excludedStats", label: "Stats", options: [...statFilters] },
     ] as const,
   });

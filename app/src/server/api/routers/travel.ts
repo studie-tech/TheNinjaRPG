@@ -14,11 +14,10 @@ import {
   ROBBING_STOLLEN_AMOUNT,
   ROBBING_SUCCESS_CHANCE,
   ROBBING_VILLAGE_PRESTIGE_GAIN,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
   UserStatuses,
+  VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
 import {
@@ -50,6 +49,7 @@ import {
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
+  chebyshevDistance,
   findNearestWalkableCoordinate,
   isReachableCoordinate,
   isWalkableCoordinate,
@@ -64,7 +64,6 @@ import {
   filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   findLandingNear,
-  maxDistance,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import {
@@ -118,13 +117,19 @@ import {
   publishedMapsToPrefetchForMove,
   resolveSectorCrossing,
 } from "@/server/utils/sectorMap";
+import { missingUserMessage } from "@/server/utils/sentry";
 import { canEnterWarCamp, fetchWarCampEntry } from "@/server/utils/warMercenary";
 import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
-import { secondsFromNow, secondsPassed } from "@/utils/time";
+import { regenTicksSince, secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import type { QuestTrackerType } from "@/validators/objectives";
-import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
+import {
+  sectorIdSchema,
+  sectorLatitudeSchema,
+  sectorLongitudeSchema,
+  startGlobalMoveSchema,
+} from "@/validators/travel";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
@@ -139,14 +144,8 @@ export const travelRouter = createTRPCRouter({
         // Coordinate bounds via zod (no sector-map read needed): the co-location
         // guards below require both robber and victim to stand on this exact tile,
         // and a player can only ever be on a walkable, in-bounds tile.
-        longitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_WIDTH - 1),
-        latitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_HEIGHT - 1),
+        longitude: sectorLongitudeSchema,
+        latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
       }),
@@ -339,10 +338,7 @@ export const travelRouter = createTRPCRouter({
       ]);
 
       if (!user) {
-        throw serverError(
-          "NOT_FOUND",
-          `User not found: ${ctx.userId}. Please complete registration.`,
-        );
+        throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
       }
 
       // Guard: Only awake/travel/queued users can scout
@@ -560,13 +556,9 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("The destination sector has no published map yet");
       }
       if (hasEnergyQueue(user)) {
-        const updated = await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        });
-        if (!updated.user) return errorResponse("User not found");
-        user = updated.user;
+        const settled = await settleEnergyQueueUser(ctx.drizzle, ctx.userId);
+        if (!settled) return errorResponse("User not found");
+        user = settled;
       }
       if (user.sector === input.sector) {
         return errorResponse("You are already in that sector");
@@ -680,16 +672,11 @@ export const travelRouter = createTRPCRouter({
       let user = loaded as NonNullable<UserWithRelations>;
       let canProject = true;
       if (hasEnergyQueue(user)) {
-        const updated = await fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        });
-        if (!updated.user) return errorResponse("User not found");
+        const settled = await settleEnergyQueueUser(ctx.drizzle, ctx.userId);
+        if (!settled) return errorResponse("User not found");
         user = {
-          ...updated.user,
-          regeneration:
-            updated.user.regenerationWithoutTimedBuffs ?? updated.user.regeneration,
+          ...settled,
+          regeneration: settled.regenerationWithoutTimedBuffs ?? settled.regeneration,
         };
         // Hydration can settle profile fields beyond the arrival projection.
         canProject = false;
@@ -942,10 +929,9 @@ export const travelRouter = createTRPCRouter({
           return errorResponse("The polar wastes block your path");
         }
         // Training eligibility is sector-based; ordinary steps can defer settlement.
-        const [updated, campEntry, neighbourMap] = await Promise.all([
-          hasEnergyQueue(originalUser)
-            ? fetchUpdatedUser({ client: ctx.drizzle, userId, forceRegen: true })
-            : null,
+        const needsSettlement = hasEnergyQueue(originalUser);
+        const [settled, campEntry, neighbourMap] = await Promise.all([
+          needsSettlement ? settleEnergyQueueUser(ctx.drizzle, userId) : undefined,
           // Authored dimensions can change the predicted crossing direction.
           targetSector === prefetchedCampSector && warCampEntry
             ? warCampEntry
@@ -953,11 +939,11 @@ export const travelRouter = createTRPCRouter({
           maps.get(targetSector) ??
             fetchPublishedSectorMap(ctx.drizzle, targetSector).catch(() => null),
         ]);
-        if (updated) {
-          if (!updated.user) return errorResponse("User not found");
+        if (needsSettlement) {
+          if (!settled) return errorResponse("User not found");
           moveUser = {
             ...originalUser,
-            ...updated.user,
+            ...settled,
             anbuSquad: originalUser.anbuSquad,
           };
         }
@@ -1018,12 +1004,8 @@ export const travelRouter = createTRPCRouter({
       const location = isVillage ? "Village" : "";
       const travelLength =
         crossing && entryTile
-          ? 1 +
-            maxDistance({ longitude: entryTile.x, latitude: entryTile.y }, destination)
-          : maxDistance(
-              { longitude: curLongitude, latitude: curLatitude },
-              destination,
-            );
+          ? 1 + chebyshevDistance(entryTile, destination)
+          : chebyshevDistance({ x: curLongitude, y: curLatitude }, destination);
       // Optimistic update & query simultaneously
       const moveOutcome = await Promise.all([
         updateUserDataForMoveInSector(
@@ -1082,7 +1064,7 @@ export const travelRouter = createTRPCRouter({
                   latitude: destination.y,
                   sector: targetSector,
                   userIds: [ctx.userId],
-                  targetIds: ["MJMzOE67Cx2YP3NX8SAbh"],
+                  targetIds: [VILLAGE_PROTECTOR_AI_ID],
                   client: ctx.drizzle,
                   scaleTarget: true,
                   biome: "default",
@@ -1223,10 +1205,7 @@ const completeGlobalTravel = async (
   user: UserData & { raidBuffs?: TimedBuff[] },
   questData?: QuestTrackerType[],
 ) => {
-  const recoveryTicks = Math.max(
-    0,
-    Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS),
-  );
+  const recoveryTicks = regenTicksSince(user.regenAt);
   const recovery = getTimedRegenerationGain(
     user.regeneration,
     regenerationBuffs(user),
@@ -1286,6 +1265,10 @@ export const completeExpiredGlobalTravel = async (client: DrizzleClient) => {
     ),
   ]);
 };
+
+/** Training eligibility is sector-based, so queued Energy work settles before a move. */
+const settleEnergyQueueUser = async (client: DrizzleClient, userId: string) =>
+  (await fetchUpdatedUser({ client, userId, forceRegen: true })).user;
 
 type RouterOutput = inferRouterOutputs<typeof travelRouter>;
 export type SectorVillage = RouterOutput["getSectorData"]["village"];

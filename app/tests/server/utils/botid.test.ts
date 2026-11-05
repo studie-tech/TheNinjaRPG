@@ -367,6 +367,19 @@ describe("trpcPathsFromUrl", () => {
       "c.d",
     ]);
   });
+
+  it("strips the endpoint it is given", () => {
+    expect(
+      trpcPathsFromUrl("https://x.test/api/trpc/cdn/a.b,c.d?batch=1", "/api/trpc/cdn"),
+    ).toEqual(["a.b", "c.d"]);
+    expect(trpcPathsFromUrl("https://x.test/api/trpc/cdn/", "/api/trpc/cdn")).toEqual([]);
+  });
+
+  it("keeps an undecodable path whole, so it can match nothing", () => {
+    expect(trpcPathsFromUrl("https://x.test/api/trpc/cdn/a%zz", "/api/trpc/cdn")).toEqual([
+      "a%zz",
+    ]);
+  });
 });
 
 describe("BotID timing", () => {

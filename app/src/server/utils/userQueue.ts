@@ -19,14 +19,21 @@ import {
   type userItem,
   userQueue,
 } from "@/drizzle/schema";
+import { getCraftingExperienceGain } from "@/libs/crafting";
 import {
   countsTowardInventoryStorage,
   getInventoryBucket,
   getInventoryBucketCapacity,
+  splitIntoStacks,
 } from "@/libs/item";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
-import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getPvpBoost } from "@/libs/pvpExperience";
+import {
+  filterQuestTrackersForDbPersist,
+  getCraftTrackerTasks,
+  getJutsuLearnedTrackerTasks,
+  getNewTrackers,
+} from "@/libs/quest";
 import {
   getNextQueueSchedule,
   getQueuedJobStart,
@@ -42,6 +49,7 @@ import {
   checkJutsuVillage,
   masteryTrainingFields,
 } from "@/libs/train";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { insertUserItems } from "@/queries/item";
 import { debitUserMoney, incrementUserMoney } from "@/queries/profile";
 import { fetchStudents } from "@/queries/sensei";
@@ -69,7 +77,7 @@ import {
   updateUserQueueForRescheduleWaiting,
 } from "@/queries/train";
 import type { UserWithRelations } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
+import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
@@ -96,8 +104,7 @@ import type {
  * users without rows pay no extra query, and timed jobs only cost writes when one is due.
  */
 
-type Transaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];
-type QueueClient = DrizzleClient | Transaction;
+type QueueClient = DrizzleClient | DrizzleTransaction;
 
 type JobOutcome = { finishesAt: Date } | "dropped" | "conflict";
 
@@ -656,7 +663,7 @@ const settleWaitingJobs = async <
   waiting: T[];
   now: Date;
   lastFinish: Date | null;
-  start: (client: Transaction, entry: T, startsAt: Date) => Promise<JobOutcome>;
+  start: (client: DrizzleTransaction, entry: T, startsAt: Date) => Promise<JobOutcome>;
 }) => {
   const { client, userId, kind, waiting, now, start } = props;
   if (props.lastFinish && props.lastFinish > now) {
@@ -734,7 +741,7 @@ const rescheduleWaiting = async (
  * is refunded. A level that can no longer be trained is dropped with a full refund.
  */
 const startQueuedJutsu = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedJutsu,
   startsAt: Date,
   students: Awaited<ReturnType<typeof fetchStudents>>,
@@ -787,15 +794,7 @@ const startQueuedJutsu = async (
     refund: entry.reservedRyo - cost,
     trackers: owned
       ? undefined
-      : [
-          { task: "jutsus_mastered", increment: 1 },
-          {
-            task: "train_specific_jutsu",
-            increment: 1,
-            contentId: entry.jutsuId,
-            masteryTypes: jutsuMasteryTypes(info),
-          },
-        ],
+      : getJutsuLearnedTrackerTasks(entry.jutsuId, jutsuMasteryTypes(info)),
   });
   return { finishesAt };
 };
@@ -806,7 +805,7 @@ const startQueuedJutsu = async (
  * materials were taken on enqueue; a craft that is no longer possible returns them.
  */
 const startQueuedCraft = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedCraft,
   startsAt: Date,
   average: GameSetting,
@@ -824,17 +823,16 @@ const startQueuedCraft = async (
     startsAt.getTime() +
       Math.max(1, Math.round(entry.durationSeconds * (1 - territoryBoost))) * 1000,
   );
-  const outputs: (typeof userItem.$inferInsert)[] = [];
-  const stackSize = Math.max(1, entry.item.stackSize);
-  for (let remaining = entry.quantity; remaining > 0; remaining -= stackSize) {
-    outputs.push({
-      id: nanoid(),
-      userId: entry.userId,
-      itemId: entry.itemId,
-      quantity: Math.min(remaining, stackSize),
-      craftingFinishedAt: finishesAt,
-    });
-  }
+  const outputs: (typeof userItem.$inferInsert)[] = splitIntoStacks(
+    entry.quantity,
+    entry.item.stackSize,
+  ).map((quantity) => ({
+    id: nanoid(),
+    userId: entry.userId,
+    itemId: entry.itemId,
+    quantity,
+    craftingFinishedAt: finishesAt,
+  }));
   // Cooking output must still fit the carried cooking bucket when the craft starts.
   if (getInventoryBucket(entry.item) === "cooking") {
     const carried = user.items.filter(
@@ -864,27 +862,15 @@ const startQueuedCraft = async (
     );
     return { finishesAt };
   }
-  // Clan boosts apply to the experience as they do for a direct craft.
-  const clanBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
-  const expGain = Math.floor(
-    boostPvpGain(
-      (entry.item.craftingExperience ?? 0) *
-        entry.quantity *
-        (1 + clanBoost + territoryBoost),
-      getPvpBoost(user, [average]).totalPercent,
-    ),
+  const expGain = getCraftingExperienceGain(
+    (entry.item.craftingExperience ?? 0) * entry.quantity,
+    user,
+    territoryBoost,
+    getPvpBoost(user, [average]).totalPercent,
   );
   await updateQueueOwner(client, user, {
     craftingExperience: expGain,
-    trackers: [
-      { task: "crafting_experience_gained", increment: expGain },
-      { task: "items_crafted", increment: entry.quantity },
-      {
-        task: "craft_specific_item",
-        increment: entry.quantity,
-        contentId: entry.itemId,
-      },
-    ],
+    trackers: getCraftTrackerTasks(expGain, entry.quantity, entry.itemId),
   });
   return { finishesAt };
 };
@@ -900,7 +886,7 @@ const claimQueueRow = async (client: QueueClient, id: string) => {
  * cancelled instead and its ryo or materials are returned.
  */
 const restoreQueueRow = async (
-  client: Transaction,
+  client: DrizzleTransaction,
   entry: QueuedJutsu | QueuedCraft,
 ) => {
   const { jutsu: _jutsu, item: _item, ...row } = entry as QueuedJutsu & QueuedCraft;
@@ -940,7 +926,7 @@ const updateQueueOwner = async (
         }
       : {}),
   };
-  const nextSnapshot = sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`;
+  const nextSnapshot = nextSnapshotSql(userData.updatedAt);
   let user = owner;
   for (let attempt = 0; trackers && attempt < QUEST_WRITE_ATTEMPTS; attempt++) {
     const questData = filterQuestTrackersForDbPersist(

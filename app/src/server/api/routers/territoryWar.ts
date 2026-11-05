@@ -30,6 +30,7 @@ import {
 } from "@/queries/territoryWar";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -203,7 +204,7 @@ export const territoryWarRouter = createTRPCRouter({
  * locking read is needed. Each guarded statement can restart after a deadlock rollback.
  */
 const joinTeam = async (
-  client: import("@/server/db").DrizzleClient,
+  client: DrizzleClient,
   user: Awaited<ReturnType<typeof fetchUser>>,
   teamId: string,
   competitorId: string,

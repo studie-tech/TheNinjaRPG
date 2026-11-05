@@ -1,5 +1,10 @@
 /** Shared eligibility for Content-authored companion profession contracts. */
-import { PET_TASK_MAX_MINUTES, PET_TASK_MIN_RANK } from "@/drizzle/constants";
+import {
+  isPetTaskQuestType,
+  PET_TASK_MAX_MINUTES,
+  PET_TASK_MIN_RANK,
+  type PET_TASK_QUEST_TYPES,
+} from "@/drizzle/constants";
 import type { Quest, UserData, UserPet } from "@/drizzle/schema";
 import { getMaxPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
 import type { PetTask } from "@/validators/petTasks";
@@ -9,8 +14,11 @@ export const isPetTaskContract = <
   T extends Pick<Quest, "questType" | "petTaskMinutes">,
 >(
   quest: T,
-): quest is T & { petTaskMinutes: number; questType: "hunting" | "gathering" } =>
-  (quest.questType === "hunting" || quest.questType === "gathering") &&
+): quest is T & {
+  petTaskMinutes: number;
+  questType: (typeof PET_TASK_QUEST_TYPES)[number];
+} =>
+  isPetTaskQuestType(quest.questType) &&
   quest.petTaskMinutes !== null &&
   Number.isInteger(quest.petTaskMinutes) &&
   quest.petTaskMinutes >= 1 &&

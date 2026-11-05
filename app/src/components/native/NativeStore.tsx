@@ -31,6 +31,7 @@ import {
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
+import { sleep } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import { storePurchaseLockSchema } from "@/validators/nativePurchases";
 
@@ -373,7 +374,7 @@ export default function NativeStore() {
     async (attempt: StorePurchaseAttempt, assertCurrent?: () => void) => {
       let observation: "pending" | "credited" | "rejected" = "pending";
       for (const delay of GRANT_POLL_DELAYS_MS) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await sleep(delay);
         assertCurrent?.();
         const matching = await fetchRecentFresh({
           limit: 50,
@@ -528,7 +529,7 @@ export default function NativeStore() {
     async (attempt: StoreRestoreAttempt, assertCurrent?: () => void) => {
       let observation = storeRestoreReconciliation([], attempt);
       for (const delay of GRANT_POLL_DELAYS_MS) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await sleep(delay);
         assertCurrent?.();
         const matching = (
           await Promise.all(

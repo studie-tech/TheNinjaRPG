@@ -46,12 +46,11 @@ import { getNeighborCoordinates } from "@/libs/sector-map/validation";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { getFlagValue, parseIntList } from "./cli";
 import {
-  createWorldLandScore,
+  createSectorGridLandScore,
   globalBiomeType,
   globalElevation,
   globalFeature,
   tilePosition,
-  WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR,
   type Vec3,
 } from "@/libs/sector-map/worldgen";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
@@ -94,47 +93,7 @@ const cornerVecs = (sector: number): [Vec3, Vec3, Vec3, Vec3] => {
   return b.map((p) => ({ x: +p.x, y: +p.y, z: +p.z })) as [Vec3, Vec3, Vec3, Vec3];
 };
 
-/** The sector's 3D center point on the globe */
-const centerVec = (sector: number): Vec3 => {
-  const c = globalMap.tiles[sector]!.c;
-  return { x: c.x, y: c.y, z: c.z };
-};
-
-const protectedLandSectors = globalMap.protectedLandSectors!;
-const wakeIslandCenter = centerVec(MAP_WAKE_ISLAND_SECTOR);
-const wakeIslandNeighborSectors = new Set(
-  globalMap.tiles[MAP_WAKE_ISLAND_SECTOR]!.n!.filter((sector) => sector >= 0),
-);
-const wakeIslandRadius =
-  Math.min(
-    ...[...wakeIslandNeighborSectors].map((sector) => {
-      const center = centerVec(sector);
-      return Math.hypot(
-        wakeIslandCenter.x - center.x,
-        wakeIslandCenter.y - center.y,
-        wakeIslandCenter.z - center.z,
-      );
-    }),
-  ) * WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR;
-const wakeMoatRadius = Math.max(
-  ...[...wakeIslandNeighborSectors].flatMap((sector) =>
-    globalMap.tiles[sector]!.b.map((corner) =>
-      Math.hypot(
-        wakeIslandCenter.x - +corner.x,
-        wakeIslandCenter.y - +corner.y,
-        wakeIslandCenter.z - +corner.z,
-      ),
-    ),
-  ),
-);
-const worldLandScore = createWorldLandScore({
-  protectedCenters: protectedLandSectors
-    .filter((sector) => sector !== MAP_WAKE_ISLAND_SECTOR)
-    .map(centerVec),
-  wakeIslandCenter,
-  wakeIslandRadius,
-  wakeMoatRadius,
-});
+const worldLandScore = createSectorGridLandScore(globalMap.protectedLandSectors!);
 
 /** Anchor keys (spawn.*, shrine.*, exit.*, structure.*) that downstream lookups resolve */
 const buildAnchors = (options: GeneratorOptions): AnchorSpec[] => {

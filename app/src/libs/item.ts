@@ -21,7 +21,6 @@ import {
   ItemSlotTypes,
   ItemTypes,
   MATERIALS_BASE_SLOTS,
-  MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
 import type {
   Item,
@@ -37,6 +36,7 @@ import type {
   MasteryStatSource,
 } from "@/libs/mastery";
 import { gearMissingMastery, missingMasteryRequirement } from "@/libs/mastery";
+import { healItemDiscountPerc } from "@/libs/shop";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
@@ -294,9 +294,7 @@ export const calcItemSellingPrice = (
   const bDiscount = 80;
   const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
   const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
-  const hDiscount = useritem.item.effects.find((e) => e.type === "heal")
-    ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
-    : 0;
+  const hDiscount = healItemDiscountPerc(useritem.item);
   const discount = Math.min(bDiscount + sDiscount + aDiscount + hDiscount, 95);
   const factor = (100 - discount) / 100;
   const isEventItem = useritem.item.isEventItem;
@@ -350,6 +348,20 @@ export const getEquipBlockReason = (
   return null;
 };
 
+/** Largest quantity one inventory row of this item holds. */
+export const getEffectiveStackSize = (item: Pick<Item, "canStack" | "stackSize">) =>
+  item.canStack ? Math.max(1, item.stackSize) : 1;
+
+/** Row quantities that hold `quantity` items at `stackSize` per row. */
+export const splitIntoStacks = (quantity: number, stackSize: number) => {
+  const size = Math.max(1, stackSize);
+  const stacks: number[] = [];
+  for (let remaining = quantity; remaining > 0; remaining -= size) {
+    stacks.push(Math.min(remaining, size));
+  }
+  return stacks;
+};
+
 /**
  * Whether a user item can be equipped from the normal inventory. Derived from
  * getEquipBlockReason so the inventory picker and loadout paths stay in sync.
@@ -391,6 +403,18 @@ export const byItemName = (
   a: { name?: string; item?: { name: string } },
   b: { name?: string; item?: { name: string } },
 ) => (a.name ?? a.item?.name ?? "").localeCompare(b.name ?? b.item?.name ?? "");
+
+/** The item fields equip limits read, from a user item row. */
+const toEquipConstraintInfo = (ui: {
+  itemId: string;
+  item: Omit<EquipConstraintInfo, "itemId">;
+}): EquipConstraintInfo => ({
+  itemId: ui.itemId,
+  bloodlineId: ui.item.bloodlineId,
+  itemType: ui.item.itemType,
+  slot: ui.item.slot,
+  maxEquips: ui.item.maxEquips,
+});
 
 export interface EquipConstraintInfo {
   itemId: string;
@@ -491,6 +515,19 @@ export const isCompatibleEquipSlot = (
   !!slotType &&
   slotType !== "NONE" &&
   candidate.includes(slotType);
+
+/** Concrete slots an item's slot type fits, in equip order. */
+export const compatibleEquipSlots = (slotType: string | null | undefined): ItemSlot[] =>
+  ItemSlots.filter((slot) => isCompatibleEquipSlot(slot, slotType));
+
+/** Last compatible slot nothing occupies; purchases and manual equips fill from the back. */
+export const findFreeEquipSlot = (
+  slotType: string | null | undefined,
+  useritems: { equipped: ItemSlot }[],
+): ItemSlot | undefined =>
+  compatibleEquipSlots(slotType)
+    .filter((slot) => !useritems.some((ui) => ui.equipped === slot))
+    .at(-1);
 
 /**
  * Catalog slot and item type for an item-list filter. Equipped positions are
@@ -617,10 +654,8 @@ export const computeLoadoutAssignments = (
     // sentinel and never for an item with no real slot type.
     const validSlots = ItemSlots as readonly string[];
     const slotType = item.slot;
-    const findFreeSlot = (): ItemSlot | undefined =>
-      slotType && slotType !== "NONE"
-        ? ItemSlots.find((s) => isCompatibleEquipSlot(s, slotType) && !usedSlots.has(s))
-        : undefined;
+    const findFreeSlot = () =>
+      ItemSlots.find((s) => isCompatibleEquipSlot(s, slotType) && !usedSlots.has(s));
     // isCompatibleEquipSlot excludes the NONE sentinel (a saved NONE would
     // otherwise consume a row/slot while equipping nothing) and rejects a
     // stale/corrupt entry that points at an incompatible slot (e.g. a HEAD item
@@ -642,13 +677,7 @@ export const computeLoadoutAssignments = (
       continue;
     }
     // Equip limits via checkEquipConstraints (maxEquips + canEquipAdditional).
-    const info: EquipConstraintInfo = {
-      itemId: useritem.itemId,
-      bloodlineId: item.bloodlineId,
-      itemType: item.itemType,
-      slot: item.slot,
-      maxEquips: item.maxEquips,
-    };
+    const info = toEquipConstraintInfo(useritem);
     const constraintError = checkEquipConstraints(info, current);
     if (constraintError) {
       invalidItems.push(`${item.name}: ${constraintError}`);
@@ -725,11 +754,7 @@ export const computeAutoEquipAssignments = (
   now: Date = new Date(),
 ): ComputedAutoEquip => {
   const candidates = useritems.filter(
-    (ui) =>
-      ui.equipped === "NONE" &&
-      !ui.storedAtHome &&
-      !ui.isInAuction &&
-      (!ui.craftingFinishedAt || ui.craftingFinishedAt < now),
+    (ui) => ui.equipped === "NONE" && isEquippableUserItem(ui, now),
   );
   const initialAvailableSlots = ItemSlots.filter(
     (slot) => slot !== "NONE" && !useritems.some((ui) => ui.equipped === slot),
@@ -739,13 +764,7 @@ export const computeAutoEquipAssignments = (
     .filter((ui) => ui.equipped !== "NONE")
     .map((ui) => ({
       slot: ui.equipped,
-      info: {
-        itemId: ui.itemId,
-        bloodlineId: ui.item.bloodlineId,
-        itemType: ui.item.itemType,
-        slot: ui.item.slot,
-        maxEquips: ui.item.maxEquips,
-      },
+      info: toEquipConstraintInfo(ui),
     }));
 
   const assignments: LoadoutAssignment[] = [];
@@ -764,13 +783,7 @@ export const computeAutoEquipAssignments = (
     if (missingMasteryRequirement(user, useritem.item)) continue;
     if (isImbuing(useritem, now)) continue;
 
-    const info: EquipConstraintInfo = {
-      itemId: useritem.itemId,
-      bloodlineId: useritem.item.bloodlineId,
-      itemType: useritem.item.itemType,
-      slot: useritem.item.slot,
-      maxEquips: useritem.item.maxEquips,
-    };
+    const info = toEquipConstraintInfo(useritem);
     const constraintError = checkEquipConstraints(info, current);
     if (constraintError) continue;
 

@@ -35,10 +35,23 @@ import {
   userRequest,
   war,
 } from "@/drizzle/schema";
-import { RAID_CHAT_CONVERSATION_LIKE_PATTERN } from "@/libs/raids";
+import {
+  BATTLE_CLAIM_LIKE_PATTERN,
+  RAID_CHAT_CONVERSATION_LIKE_PATTERN,
+} from "@/libs/raids";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
+
+/** Queue rows with no live battle: open, or held by a start claim. */
+const battleOpenOrClaimed = sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE ${BATTLE_CLAIM_LIKE_PATTERN})`;
+
+/** A start claim left behind by a battle setup that never finished. */
+const staleBattleClaim = () =>
+  and(
+    like(mpvpBattleQueue.battleId, BATTLE_CLAIM_LIKE_PATTERN),
+    lt(mpvpBattleQueue.createdAt, new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS)),
+  );
 
 /** Build the `quest` listing for `getCompletedRaids`, including predicates on `questType`, `hidden`, `raidEndsAt`. */
 export const listQuestForGetCompletedRaids = (
@@ -98,7 +111,12 @@ export const listWarForGetAvailableRaids = (
       lte(war.defenderShrineHp, 0),
       input?.sector !== undefined ? eq(war.sector, input.sector) : undefined,
     ),
-    columns: { id: true, sector: true, attackerVillageId: true },
+    columns: {
+      id: true,
+      sector: true,
+      attackerVillageId: true,
+      defenderVillageId: true,
+    },
     with: {
       warAllies: {
         where: activeWarAllyWhere(),
@@ -302,7 +320,7 @@ export const listMpvpBattleQueueForGetActiveRaidTeams = (
     where: and(
       eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
       eq(mpvpBattleQueue.attackerEntityId, input.questId),
-      sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
+      battleOpenOrClaimed,
     ),
     with: {
       queue: {
@@ -446,8 +464,7 @@ export const updateMpvpBattleQueueForReadyToQueue = (
       and(
         eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
         eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
-        like(mpvpBattleQueue.battleId, "claiming-%"),
-        lt(mpvpBattleQueue.createdAt, new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS)),
+        staleBattleClaim(),
       ),
     );
 
@@ -497,7 +514,7 @@ export const findWarForJoinRaidQueue = (
       isNull(war.endedAt),
       lte(war.defenderShrineHp, 0),
     ),
-    columns: { attackerVillageId: true },
+    columns: { attackerVillageId: true, defenderVillageId: true },
     with: {
       warAllies: {
         where: activeWarAllyWhere(),
@@ -621,13 +638,7 @@ export const updateMpvpBattleQueueForStartRaidBattle = (
   client
     .update(mpvpBattleQueue)
     .set({ battleId: null })
-    .where(
-      and(
-        eq(mpvpBattleQueue.id, input.teamId),
-        sql`${mpvpBattleQueue.battleId} LIKE 'claiming-%'`,
-        lt(mpvpBattleQueue.createdAt, new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS)),
-      ),
-    );
+    .where(and(eq(mpvpBattleQueue.id, input.teamId), staleBattleClaim()));
 
 /** Build a battle queue claim guarded by it having no existing battle ID. */
 export const claimBattleQueue = (
@@ -762,7 +773,7 @@ export const listMpvpBattleQueueForCheckAndCleanupExpiredRaid = (
     where: and(
       eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
       eq(mpvpBattleQueue.attackerEntityId, raidId),
-      sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
+      battleOpenOrClaimed,
     ),
     with: { queue: { columns: { userId: true } } },
   });
@@ -787,7 +798,7 @@ export const deleteMpvpBattleQueueForCheckAndCleanupExpiredRaid = (
       and(
         eq(mpvpBattleQueue.battleType, "RAID_BATTLE"),
         eq(mpvpBattleQueue.attackerEntityId, raidId),
-        sql`(${mpvpBattleQueue.battleId} IS NULL OR ${mpvpBattleQueue.battleId} LIKE 'claiming-%')`,
+        battleOpenOrClaimed,
       ),
     );
 

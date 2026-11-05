@@ -1,8 +1,11 @@
 import { z } from "zod";
 import {
   hasReward,
+  hasUnpairedMasteryPromotion,
+  MASTERY_PROMOTION_PAIR_MESSAGE,
   milestoneRewardFields,
   ObjectiveReward,
+  type ObjectiveRewardType,
   rewardFields,
 } from "@/validators/rewards";
 
@@ -29,10 +32,8 @@ export const RewardPackageValidator = z.object({
   name: z.string().trim().min(1).max(191),
   description: z.string().max(5000).prefault(""),
   rewards: ObjectiveReward.refine(hasReward, "Add at least one reward").refine(
-    (reward) =>
-      (!!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None") ===
-      (!!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE"),
-    "Select both the mastery and its rank reward",
+    (reward) => !hasUnpairedMasteryPromotion(reward),
+    MASTERY_PROMOTION_PAIR_MESSAGE,
   ),
 });
 /** An editable attachment whose copied payload survives catalog changes or deletion. */
@@ -48,6 +49,18 @@ export const questRewardFields = {
   ...milestoneRewardFields,
   reward_packages: z.array(RewardPackageSnapshot).max(50).optional(),
 };
+/** A reward, or its parsed `head`, followed by its package payloads, ready to collapse. */
+export const rewardPayloads = <
+  T extends { reward_packages?: { rewards: ObjectiveRewardType }[] },
+  H = T,
+>(
+  reward: T,
+  head?: H,
+) => [
+  (head ?? reward) as H,
+  ...(reward.reward_packages ?? []).map((pack) => pack.rewards),
+];
+
 /** Normalize quest rewards while retaining their package snapshots. */
 export const QuestReward = z.object(questRewardFields);
 export type QuestRewardType = z.infer<typeof QuestReward>;

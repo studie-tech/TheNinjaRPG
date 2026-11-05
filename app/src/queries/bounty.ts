@@ -172,17 +172,8 @@ export const insertBountySignupForSignup = (
     createdAt: new Date(),
   });
 
-/** Build the `bountySignup` lookup for `resign`, using predicates on `id`. */
-export const findBountySignupForResign = (
-  client: Pick<DrizzleClient, "query">,
-  input: { claimId: string },
-) =>
-  client.query.bountySignup.findFirst({
-    where: eq(bountySignup.id, input.claimId),
-  });
-
-/** Build the `bountySignup` deletion for `resign`, using predicates on `id`. */
-export const deleteBountySignupForResign = (
+/** Build the `bountySignup` deletion for `stopTracking`, using predicates on `id`. */
+export const deleteBountySignupForStopTracking = (
   client: Pick<DrizzleClient, "delete">,
   claim: { id: string },
 ) => client.delete(bountySignup).where(eq(bountySignup.id, claim.id));

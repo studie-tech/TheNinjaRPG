@@ -18,9 +18,16 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { DAY_S, HOUR_S, secondsFromNow } from "@/utils/time";
 import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentReview";
-import { type ContentEntity, editableOf, entityKey, loadAllEntities } from "./entities";
+import {
+  type ContentEntity,
+  editableOf,
+  entityKey,
+  loadAllEntities,
+  pick,
+} from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
+import { sceneAssetIds } from "./paths";
 import { contentVersion } from "./version";
 
 /**
@@ -226,18 +233,9 @@ const countAssetUse = (entities: ContentEntity[]) => {
   const used = new Map<string, number>();
   for (const entity of entities) {
     if (entity.type === "QUEST") {
-      const countScene = (node: unknown) => {
-        if (!node || typeof node !== "object") return;
-        for (const [key, value] of Object.entries(node)) {
-          if (key === "sceneCharacters" && Array.isArray(value)) {
-            for (const id of value)
-              if (typeof id === "string") used.set(id, (used.get(id) ?? 0) + 1);
-          } else if (key === "sceneBackground" && typeof value === "string") {
-            used.set(value, (used.get(value) ?? 0) + 1);
-          } else if (value && typeof value === "object") countScene(value);
-        }
-      };
-      countScene(entity.editable.content);
+      for (const id of sceneAssetIds(entity.editable.content)) {
+        used.set(id, (used.get(id) ?? 0) + 1);
+      }
     }
     const effects = entity.editable.effects;
     if (!Array.isArray(effects)) continue;
@@ -316,11 +314,6 @@ const textOnly = (node: unknown): unknown => {
 /** Number of the scheduled run window `now` falls in, counted from the epoch. */
 const auditRun = (now: Date) =>
   Math.floor(now.getTime() / 1000 / (CONTENT_AUDIT_INTERVAL_HOURS * HOUR_S));
-
-const pick = (source: Record<string, unknown>, keys: string[]) =>
-  Object.fromEntries(
-    keys.filter((key) => key in source).map((key) => [key, source[key]]),
-  );
 
 const omit = (source: Record<string, unknown>, keys: string[]) =>
   Object.fromEntries(Object.entries(source).filter(([key]) => !keys.includes(key)));

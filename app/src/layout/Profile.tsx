@@ -53,7 +53,7 @@ import { QuestTeams } from "@/layout/QuestTeams";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
 import { calcMedninRank } from "@/libs/hospital";
-import { calcLevelRequirements, showUserRank } from "@/libs/profile";
+import { experienceToNextLevel, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { isTutorialActive } from "@/libs/tutorial";
@@ -265,9 +265,7 @@ function CharacterProfile() {
   });
 
   // Derived
-  const expRequired =
-    userData &&
-    Math.max(calcLevelRequirements(userData.level) - userData.experience, 0);
+  const expRequired = userData && experienceToNextLevel(userData);
 
   // Loader
   if (!userData) {

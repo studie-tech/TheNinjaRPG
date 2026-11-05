@@ -1,4 +1,6 @@
+import type { UserRole } from "@/drizzle/constants";
 import type { UserData, UserQuest } from "@/drizzle/schema";
+import { canPlayHiddenQuests } from "@/utils/permissions";
 import type { QuestContentType } from "@/validators/objectives";
 
 /** Shared feedback for server rejections and the isolated-run boundary. */
@@ -28,6 +30,48 @@ export const hasQuestContentChanged = (
   (entry.questType === "battlepyramid" || entry.isolated) &&
   !!entry.questVersion &&
   new Date(entry.questVersion).getTime() !== new Date(entry.quest.updatedAt).getTime();
+
+/** Rejection for an attempt that cannot continue, or null while it remains playable. */
+export const questAttemptBlockMessage = (
+  attempt: Parameters<typeof hasQuestContentChanged>[0] & {
+    quest: Pick<UserQuest["quest"], "hidden">;
+  },
+  role: UserRole,
+) => {
+  if (
+    !hasQuestContentChanged(attempt) &&
+    (!attempt.quest.hidden || canPlayHiddenQuests(role))
+  )
+    return null;
+  return attempt.questType === "battlepyramid"
+    ? "This Pyramid is paused or changed. Return to the Battle Arena to resume or abandon it."
+    : "This quest is currently unavailable.";
+};
+
+/** Runs with a lifecycle of their own: start guards, recovery and battle version checks. */
+export const isManagedQuestRun = (quest: {
+  questType: string;
+  content: Pick<QuestContentType, "entryItems">;
+}) => quest.questType === "battlepyramid" || !!quest.content.entryItems?.length;
+
+/** The open attempt of a managed run; battles started for it carry its lifecycle guards. */
+export const findManagedQuestAttempt = <
+  T extends {
+    questId: string;
+    questType: string;
+    endAt?: Date | null;
+    quest: { content: Pick<QuestContentType, "entryItems"> };
+  },
+>(
+  userQuests: readonly T[],
+  questId: string,
+) =>
+  userQuests.find(
+    (entry) =>
+      entry.questId === questId &&
+      !entry.endAt &&
+      isManagedQuestRun({ questType: entry.questType, content: entry.quest.content }),
+  );
 
 /** Every selected item is required; duplicate selections add to the required quantity. */
 export const getQuestEntryRequirements = (

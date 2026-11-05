@@ -1,4 +1,4 @@
-import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
   resolveOverworldPosition,
   snapOverworldPositionToWalkable,
@@ -24,9 +24,8 @@ export const GET = async (request: Request) => {
 
   // Check timer
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-overworld-ai", async () => {
     // Fetch active placements with any positional randomness — a random sector OR a random
     // tile within a fixed sector (sectorType=specific, locationType=random). Only fully-fixed
     // placements (specific/specific) stay put; resolveOverworldPosition keeps the fixed axes.
@@ -62,9 +61,5 @@ export const GET = async (request: Request) => {
     );
 
     return Response.json("OK");
-  } catch (cause) {
-    // Rollback
-    await timerCheck.release();
-    return await handleEndpointError(cause);
-  }
+  });
 };

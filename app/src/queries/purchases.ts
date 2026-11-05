@@ -1,6 +1,7 @@
 /**
  * Database access for purchases; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
@@ -17,7 +18,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { FederalStatus } from "@/drizzle/constants";
+import { type FederalStatus, FederalStatuses } from "@/drizzle/constants";
 import {
   paypalSubscription,
   paypalTransaction,
@@ -32,6 +33,7 @@ import {
   webStoreOrder,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
 import {
   completedQuestHistoryRelation,
@@ -110,6 +112,13 @@ export const selectUserDataForReputationAllowanceUsed = (
     .from(userData)
     .where(eq(userData.userId, buyerId));
 
+/** One-based position of the user's tier in `FederalStatuses`. */
+export const userFederalRankSql = () =>
+  sql`FIELD(${userData.federalStatus}, ${sql.join(
+    FederalStatuses.map((status) => sql`${status}`),
+    sql`, `,
+  )})`;
+
 /** Build the `userData` update for `lockPurchaseBuyer`, setting `updatedAt`, using predicates on `userId`. */
 export const updateUserDataForLockPurchaseBuyer = (
   client: Pick<DrizzleClient, "update">,
@@ -118,7 +127,7 @@ export const updateUserDataForLockPurchaseBuyer = (
   client
     .update(userData)
     .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), ${userData.updatedAt} + INTERVAL 1000 MICROSECOND)`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
     })
     .where(eq(userData.userId, buyerId));
 
@@ -435,7 +444,7 @@ export const executeResultForApplyStorePurchase2 = (
             ON ${storePurchase.userId} = ${userData.userId}
           SET ${storePurchase.grantedAt} = CURRENT_TIMESTAMP(3),
               ${userData.federalStatus} = CASE
-                WHEN FIELD(${userData.federalStatus}, 'NONE', 'NORMAL', 'SILVER', 'GOLD') < ${rankOf(federal?.federalStatus ?? "NONE") + 1}
+                WHEN ${userFederalRankSql()} < ${rankOf(federal?.federalStatus ?? "NONE") + 1}
                 THEN ${federal?.federalStatus ?? "NONE"}
                 ELSE ${userData.federalStatus}
               END

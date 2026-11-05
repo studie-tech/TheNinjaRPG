@@ -46,6 +46,10 @@ export const flushSafe = async (timeout = 5000): Promise<boolean> => {
  * Whether a tRPC error the /api/trpc route handler sees is expected traffic rather than a
  * failure worth reporting from the route's onError.
  */
+/** The NOT_FOUND text for a user without a character; the route filter matches on it. */
+export const missingUserMessage = (userId: string) =>
+  `User not found: ${userId}. Please complete registration.`;
+
 export const isExpectedTrpcRouteError = (props: {
   code: string;
   message: string;
@@ -76,13 +80,9 @@ export const isExpectedTrpcRouteError = (props: {
   // A Clerk session with no UserData row of its OWN: character creation was never
   // finished, or the character was deleted while the tab stayed open. The client
   // forwards to /register off profile.getUser's undefined user, so the guard firing
-  // elsewhere in the same request is expected. fetchUser raises the identical message
-  // for a missing *target* user, so match the session id rather than the shape.
-  if (
-    code === "NOT_FOUND" &&
-    userId &&
-    message === `User not found: ${userId}. Please complete registration.`
-  ) {
+  // elsewhere in the same request is expected. Every missingUserMessage throw for a
+  // missing *target* user reads the same, so match the session id rather than the shape.
+  if (code === "NOT_FOUND" && userId && message === missingUserMessage(userId)) {
     return true;
   }
   return false;

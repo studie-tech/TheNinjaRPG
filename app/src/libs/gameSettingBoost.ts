@@ -34,6 +34,13 @@ export const getGameSettingBoost = (
   return null;
 };
 
+/** Multiply `value` by a game setting's boost while it is active. */
+export const applyGameSettingMultiplier = (
+  value: number,
+  settingName: string,
+  settings?: Pick<GameSetting, "name" | "value" | "time">[],
+) => value * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);
+
 /** Format one saved global boost, or clear its notice when inactive or expired. */
 export const getGlobalGameSettingNotification = (
   settingName: EventGameSettingName,

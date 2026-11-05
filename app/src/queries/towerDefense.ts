@@ -56,21 +56,12 @@ export const listTowerDefenseUpgradeForInitiateSecureSession = (
   client: Pick<DrizzleClient, "query">,
 ) => client.query.towerDefenseUpgrade.findMany();
 
-/** Build the `towerDefenseCharacter` listing for `initiateSecureSession`, using predicates on `isPlayer`. */
-export const listTowerDefenseCharacterForInitiateSecureSession = (
+/** Build the `towerDefenseCharacter` listing for session definitions, in wave order. */
+export const listTowerDefenseCharacterForInitiateSession = (
   client: Pick<DrizzleClient, "query">,
 ) =>
   client.query.towerDefenseCharacter.findMany({
-    where: eq(towerDefenseCharacter.isPlayer, false),
     orderBy: [asc(towerDefenseCharacter.firstAppearWave)],
-  });
-
-/** Build the `towerDefenseCharacter` listing for `initiateSecureSession`, using predicates on `isPlayer`. */
-export const listTowerDefenseCharacterForInitiateSecureSession2 = (
-  client: Pick<DrizzleClient, "query">,
-) =>
-  client.query.towerDefenseCharacter.findMany({
-    where: eq(towerDefenseCharacter.isPlayer, true),
   });
 
 /**

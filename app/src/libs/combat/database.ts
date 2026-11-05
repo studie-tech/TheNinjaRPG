@@ -18,14 +18,13 @@ import {
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   REGEN_SECONDS,
-  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
-import { areBattleAllies } from "@/libs/combat/participants";
+import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import type {
   ActionEffect,
@@ -51,6 +50,7 @@ import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import { getJutsuMaxLevel } from "@/libs/jutsuProgression";
 import { allocateMasteryGains } from "@/libs/masteryProgression";
 import { isQuestComplete } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import {
   broadcastRaidAvailability,
   type PusherClient,
@@ -132,6 +132,7 @@ import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
+import { postCombatStealthCooldownAt } from "@/utils/time";
 
 /**
  * A raid is "boss defeated" when the boss AI exists in the battle and no
@@ -678,13 +679,7 @@ export const updateWars = async (
       // Village missions belong to a participating village, even when battle
       // teammates from unrelated factions share the team's war/shrine credit.
       const canCreditVillageMission =
-        !user.isAi &&
-        (userVillageId === killerSideVillageId ||
-          w.warAllies.some(
-            (ally) =>
-              ally.villageId === userVillageId &&
-              ally.supportVillageId === killerSideVillageId,
-          ));
+        !user.isAi && getWarSide(w, userVillageId) === killerSideVillageId;
       // Insert war kill for tracking purposes
       // Use per-war shrine HP change for village wars/raids (includes level diff adjustment)
       // For sector wars, use the total accumulated shrineChangeHp value
@@ -1163,6 +1158,42 @@ export const updateRaidProgress = async (
 };
 
 /**
+ * Settlement writes of one action or poll tick, spread into the caller's single mutation
+ * phase. Each is a no-op without a result; hunting and dungeon payouts settle in
+ * updateBattle. Keeps updateUser first so callers can read its quest updates.
+ * @param battleOver - from the version claim, which already committed terminal event outcomes
+ * @param fromAction - also record usage statistics and clan leadership challenges
+ */
+export const settlementWrites = (
+  client: DrizzleClient,
+  pusher: PusherClient,
+  battle: CompleteBattle,
+  result: CombatResult | null,
+  userId: string,
+  battleOver: boolean,
+  fromAction = false,
+): [ReturnType<typeof updateUser>, ...Promise<unknown>[]] => [
+  updateUser(client, pusher, battle, result, userId),
+  ...(!battle.extraState.dungeon && !battle.extraState.hunting
+    ? [
+        ...(fromAction
+          ? [
+              saveUsage(client, battle, result, userId),
+              updateClanLeaders(client, battle, result, userId),
+            ]
+          : []),
+        updateKage(client, battle, result),
+        updateVillageAnbuClan(client, battle, result, userId),
+        updateWars(client, pusher, battle, result, userId),
+        ...(battleOver && battle.extraState.tournamentGameId
+          ? []
+          : [updateTournament(client, battle, result, userId)]),
+        ...(result ? [updateRaidProgress(client, battle, userId)] : []),
+      ]
+    : []),
+];
+
+/**
  * Persist player recovery and progression from the preloaded combat result.
  * Hunting calls may set settlingHunt only inside settleHuntingBattle's transaction;
  * ordinary action/poll callbacks skip those rewards to prevent a second settlement.
@@ -1200,13 +1231,7 @@ export const updateUser = async (
   }
   if (result && user) {
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
-    const hasHumanOpponent = curBattle.usersState.some(
-      (candidate) =>
-        candidate.userId !== userId &&
-        candidate.direction !== user.direction &&
-        !candidate.isAi &&
-        !candidate.isSummon,
-    );
+    const facedHuman = hasHumanOpponent(curBattle.usersState, user);
     result.energyReward =
       isPvpEnergyRewardBattle(curBattle, userId) &&
       curBattle.extraState.energyRewardEligible === true &&
@@ -1218,7 +1243,7 @@ export const updateUser = async (
     const farmActivityReductionSeconds = getPvpFarmActivityReductionSeconds(
       curBattle.battleType,
       result.outcome,
-      hasHumanOpponent,
+      facedHuman,
     );
     const farmActivityAt = new Date();
 
@@ -1314,7 +1339,7 @@ export const updateUser = async (
         inWarTornSector: isInWarTornSector,
         inTerritoryWar:
           curBattle.battleType === "COMBAT" &&
-          hasHumanOpponent &&
+          facedHuman &&
           curBattle.extraState.territoryWar !== undefined,
         isWarParticipant: isWarBattleParticipant,
         questBattleSource: curBattle.extraState.questBattleSource,
@@ -1620,7 +1645,7 @@ export const updateUser = async (
             userId,
             result,
             settledAt,
-            hasHumanOpponent,
+            facedHuman,
             user,
             updatedQuestData,
             tookKageSeat,
@@ -1695,10 +1720,7 @@ export const updateUser = async (
             curBattle.extraState.energyRegenerationPeriods?.[userId],
           ),
           regenAt: settledAt,
-          stealthCooldownAt: new Date(
-            Math.floor(settledAt.getTime() / 1000) * 1000 +
-              STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
-          ),
+          stealthCooldownAt: postCombatStealthCooldownAt(settledAt),
           pvpStreak: result.pvpStreak,
           questData: publicUser.questData,
           pveFights: baseline.pveFights + 1,

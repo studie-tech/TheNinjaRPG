@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ActivityStreakType } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -36,9 +37,7 @@ export default function ActivityStreakListPage() {
   const { data: userData } = useUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedConfig, setSelectedConfig] = useState<ConfigWithRewards | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "RECURRING" | "EVENT_PASS">(
-    "all",
-  );
+  const [typeFilter, setTypeFilter] = useState<"all" | ActivityStreakType>("all");
   const router = useRouter();
 
   const {

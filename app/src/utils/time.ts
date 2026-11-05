@@ -4,7 +4,9 @@ import {
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
+  STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
 } from "@/drizzle/constants";
+import { clamp } from "@/utils/math";
 import type { ObjectiveTrackerType } from "@/validators/objectives";
 
 /**
@@ -60,24 +62,6 @@ export const getGameTime = () => {
 };
 
 /**
- * Get time since last reset which is in YYYY-MM-DDTHH:mm:ss.sssZ format
- *
- * @returns The time since last reset
- */
-export const getTimeOfLastReset = () => {
-  const date = new Date();
-  const now_utc = Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate(),
-    0,
-    0,
-    0,
-  );
-  return new Date(now_utc);
-};
-
-/**
  * Number of seconds passed since the given date
  *
  * @param date - The date to calculate the seconds passed since; battle JSON columns
@@ -105,13 +89,20 @@ export const secondsFromDate = (seconds: number, date: Date) => {
   return new Date(date.getTime() + seconds * 1000);
 };
 
+/** End of the stealth cooldown after leaving combat, on the column's whole-second clock. */
+export const postCombatStealthCooldownAt = (settledAt: Date) =>
+  new Date(
+    Math.floor(settledAt.getTime() / 1000) * 1000 +
+      STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
+  );
+
+/** Whole regeneration ticks elapsed on the saved clock, adjusted for client/server time. */
+export const regenTicksSince = (regenAt: Date, timeDiff?: number) =>
+  Math.max(0, Math.floor(secondsPassed(regenAt, timeDiff) / REGEN_SECONDS));
+
 /** Next regeneration tick anchored to the saved clock, adjusted for client/server time. */
 export const nextRegenerationTickAt = (regenAt: Date, timeDiff?: number) =>
-  secondsFromDate(
-    (Math.max(0, Math.floor(secondsPassed(regenAt, timeDiff) / REGEN_SECONDS)) + 1) *
-      REGEN_SECONDS,
-    regenAt,
-  );
+  secondsFromDate((regenTicksSince(regenAt, timeDiff) + 1) * REGEN_SECONDS, regenAt);
 
 /**
  * Current date plus the given number of seconds
@@ -153,7 +144,7 @@ export const getTimeLeftStr = (
 /**
  * Sleep for x number of milliseconds
  */
-export const sleep = (ms: number) => {
+export const sleep = (ms: number): Promise<void> => {
   return new Promise((res) => setTimeout(res, ms));
 };
 
@@ -215,16 +206,6 @@ export const getMillisecondsFromTimeUnit = (timeUnit: TimeUnit) => {
 };
 
 /**
- * Get the week number of the given date
- */
-export const getWeekNumber = (date: Date) => {
-  const yearStart = +new Date(date.getFullYear(), 0, 1);
-  const today = +new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayOfYear = (today - yearStart + 1) / 86400000;
-  return Math.ceil(dayOfYear / 7).toString();
-};
-
-/**
  * Convenience variables for time units
  */
 export const MINUTE_S = 60;
@@ -238,19 +219,8 @@ export const YEAR_S = 365 * DAY_S;
  * Check if two dates are on different days (UTC-based comparison)
  * This is more reliable than comparing getDate() which doesn't account for month/year differences
  */
-export const isDifferentDay = (date1: Date, date2: Date): boolean => {
-  const utc1 = new Date(
-    date1.getUTCFullYear(),
-    date1.getUTCMonth(),
-    date1.getUTCDate(),
-  );
-  const utc2 = new Date(
-    date2.getUTCFullYear(),
-    date2.getUTCMonth(),
-    date2.getUTCDate(),
-  );
-  return utc1.getTime() !== utc2.getTime();
-};
+export const isDifferentDay = (date1: Date, date2: Date): boolean =>
+  periodStart("daily", date1).getTime() !== periodStart("daily", date2).getTime();
 
 /**
  * Format a date to a short datetime string in "YYYY-MM-DD HH:MM" format (UTC)
@@ -310,8 +280,8 @@ export const getDateKey = (date: Date): string => {
   return `${date.getUTCFullYear()}-${date.getUTCMonth() + 1}-${date.getUTCDate()}`;
 };
 
-/** Zero-padded UTC day for persisted pet quotas and deterministic menus; getDateKey is unpadded. */
-export const getPetDayKey = (now = new Date()) => now.toISOString().slice(0, 10);
+/** Zero-padded UTC day (YYYY-MM-DD), the format of date columns; getDateKey is unpadded. */
+export const getUtcDayKey = (now = new Date()) => now.toISOString().slice(0, 10);
 
 /**
  * Return the next meal time, or null if this companion has never been fed.
@@ -345,17 +315,7 @@ export const formatSoundLength = (lengthMs: number) =>
  */
 export const getFirstOfNextMonth = (): Date => {
   const now = new Date();
-  return new Date(
-    Date.UTC(
-      now.getUTCMonth() === 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear(),
-      now.getUTCMonth() === 11 ? 0 : now.getUTCMonth() + 1,
-      1,
-      0,
-      0,
-      0,
-      0,
-    ),
-  );
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 };
 
 /**
@@ -366,7 +326,7 @@ export const getFirstOfNextMonth = (): Date => {
  */
 export const getSlotIndex = (utcHour: number): number => {
   if (!Number.isFinite(utcHour)) return 0;
-  return Math.min(11, Math.max(0, Math.floor(utcHour / 2)));
+  return clamp(Math.floor(utcHour / 2), 0, 11);
 };
 
 /**
@@ -413,8 +373,8 @@ export const getBankInterestDateRange = (now = new Date()) => {
   const oldest = new Date(now);
   oldest.setUTCDate(oldest.getUTCDate() - (BANK_INTEREST_CLAIM_DAYS - 1));
   return {
-    oldestDate: oldest.toISOString().slice(0, 10),
-    today: now.toISOString().slice(0, 10),
+    oldestDate: getUtcDayKey(oldest),
+    today: getUtcDayKey(now),
   };
 };
 

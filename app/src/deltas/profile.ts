@@ -171,20 +171,40 @@ const USER_DELTA_CAPS = {
   sageMasteryExperience: SAGE_MASTERY_EXP_CAP,
 };
 
+/**
+ * Partition loaded quest rows by catalogue membership without changing the supplied rows.
+ * Published progress omits static definitions supplied by `quests.getAchievementCatalogue`;
+ * unpublished rows retain their definitions for active quests and overworld objectives.
+ */
+export const splitAchievementProgress = <
+  T extends AchievementProgress & { quest?: unknown },
+>(
+  rows: readonly T[],
+  publishedIds: ReadonlySet<string>,
+) => {
+  const userQuests: T[] = [];
+  const achievementProgress: AchievementProgress[] = [];
+  for (const userQuest of rows) {
+    if (publishedIds.has(userQuest.questId)) {
+      const { quest: _definition, ...progress } = userQuest;
+      achievementProgress.push(progress);
+    } else {
+      userQuests.push(userQuest);
+    }
+  }
+  return { userQuests, achievementProgress };
+};
+
 /** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
 export const getUserProgressionUpdate = (
   user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
   publishedAchievementIds: readonly string[],
 ) => {
   const publicUser = getPublicQuestUser(user);
-  const publishedIds = new Set(publishedAchievementIds);
-  const achievementProgress: AchievementProgress[] = [];
-  publicUser.userQuests = publicUser.userQuests.filter((entry) => {
-    if (!publishedIds.has(entry.questId)) return true;
-    const { quest: _definition, ...progress } = entry;
-    achievementProgress.push(progress);
-    return false;
-  });
+  const { userQuests, achievementProgress } = splitAchievementProgress(
+    publicUser.userQuests,
+    new Set(publishedAchievementIds),
+  );
   return {
     achievementProgress,
     userPatch: {
@@ -265,7 +285,7 @@ export const getUserProgressionUpdate = (
       sageMastery: user.sageMastery,
 
       questData: publicUser.questData,
-      userQuests: publicUser.userQuests,
+      userQuests,
       completedQuests: publicUser.completedQuests,
       effectiveMasteries: effectiveMasteries(user),
       maxEnergy: calcMaxEnergy(user),

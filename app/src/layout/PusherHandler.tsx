@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { useStore } from "jotai";
 import Pusher from "pusher-js";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
@@ -20,6 +22,7 @@ import {
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
+import { updateUserCache } from "@/utils/userCache";
 
 // Events sent to the user from websockets
 export type UserEvent = {
@@ -54,6 +57,7 @@ export const usePusherHandler = (
 
   // tRPC utility
   const utils = api.useUtils();
+  const queryClient = useQueryClient();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
   const store = useStore();
 
@@ -122,25 +126,15 @@ export const usePusherHandler = (
       channel.bind("event", async (data: UserEvent) => {
         if (data.type === "battle") {
           if (data?.battleId) {
-            // NOTE: for some reason using updateUser does not work from this hook
+            // UserContext's updateUser is not available here: this hook runs inside its
+            // provider. Cancelling first applies the patch before navigating, without
+            // waiting on the refetch updateUserCache runs for an unfinished read.
             await utils.profile.getUser.cancel();
-            // Update user data with battle status
-            utils.profile.getUser.setData(undefined, (old) => {
-              if (!old) return old;
-              return {
-                ...old,
-                userData: {
-                  ...old.userData,
-                  status: "BATTLE",
-                  battleId: data.battleId,
-                  updatedAt: new Date(),
-                },
-                notifications: [
-                  ...(old.notifications || []),
-                  { href: "/combat", name: "In combat", color: "red" },
-                ],
-              } as typeof old;
-            });
+            void updateUserCache(
+              queryClient,
+              getQueryKey(api.profile.getUser, undefined, "query"),
+              { status: "BATTLE", battleId: data.battleId, updatedAt: new Date() },
+            );
             pushToCombat(router, data.battleId);
             void utils.combat.getBattle.invalidate();
           }
@@ -342,7 +336,16 @@ export const usePusherHandler = (
         pusher.disconnect();
       };
     }
-  }, [userId, clanId, villageId, router, utils, store, refreshEventTournamentNotices]);
+  }, [
+    userId,
+    clanId,
+    villageId,
+    router,
+    utils,
+    queryClient,
+    store,
+    refreshEventTournamentNotices,
+  ]);
 
   return pusher;
 };

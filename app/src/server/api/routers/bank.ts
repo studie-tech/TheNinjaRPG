@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
 
-import { bankAccessBlockMessage } from "@/libs/bank";
+import { bankAccessBlockMessage, clampToRyoCap } from "@/libs/bank";
 import {
   fetchUserBalances,
   incrementUserBank,
@@ -25,6 +25,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { offsetPage } from "@/server/utils/pagination";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
@@ -68,15 +69,12 @@ export const bankRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       // Derived
-      const raw = input.amount;
-      const overCap = target.bank + raw > RYO_CAP;
-      const value = overCap ? RYO_CAP - target.bank : raw;
+      const value = clampToRyoCap(target.bank, input.amount);
       // Guard
-      if (value <= 0 && overCap) return errorResponse("Ryo cap reached");
+      if (value === null) return errorResponse("Ryo cap reached");
       if (user.bank < value) return errorResponse("Not enough money in bank");
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.status === "BATTLE")
-        return errorResponse("Cannot access bank while in combat");
+      const block = bankAccessBlockMessage(user);
+      if (block) return errorResponse(block);
       // Update
       const result = await updateUserDataForTransfer(ctx.drizzle, value, ctx);
       if (result.rowsAffected === 0) return errorResponse("Not enough money in bank");
@@ -84,8 +82,7 @@ export const bankRouter = createTRPCRouter({
         incrementUserBank(ctx.drizzle, value, input.targetId),
         insertBankTransfersForTransfer(ctx.drizzle, ctx, input, value),
       ]);
-      // Re-fetch user to get accurate bank balance after concurrent updates
-      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
+      const updatedUser = await fetchUserBalances(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: `Successfully transferred ${value} ryo to ${target.username}`,
@@ -127,14 +124,13 @@ export const bankRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const currentCursor = input.cursor ? input.cursor : 0;
-      const skip = currentCursor * input.limit;
+      const { skip, cursorAfter } = offsetPage(input);
       const transfers = await listBankTransfersForGetTransfers(
         ctx.drizzle,
         input,
         skip,
       );
-      const nextCursor = transfers.length < input.limit ? null : currentCursor + 1;
+      const nextCursor = cursorAfter(transfers);
       return {
         data: transfers,
         nextCursor: nextCursor,
@@ -184,17 +180,15 @@ const transferRyo = async (
   const fromPocket = direction === "toBank";
   const capColumn = fromPocket ? user.bank : user.money;
   const sourceColumn = fromPocket ? user.money : user.bank;
-  const overCap = capColumn + amount > RYO_CAP;
-  const value = overCap ? RYO_CAP - capColumn : amount;
-  if (value <= 0 && overCap) return errorResponse("Ryo cap reached");
+  const value = clampToRyoCap(capColumn, amount);
+  if (value === null) return errorResponse("Ryo cap reached");
   if (sourceColumn < value) {
     return errorResponse(
       fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
     );
   }
-  if (user.isBanned) return errorResponse("You are banned");
-  if (user.status === "BATTLE")
-    return errorResponse("Cannot access bank while in combat");
+  const block = bankAccessBlockMessage(user);
+  if (block) return errorResponse(block);
   const result = await updateUserDataForTransferRyo(client, fromPocket, value, userId);
   if (result.rowsAffected === 0) {
     return {

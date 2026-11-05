@@ -8,6 +8,9 @@ import { createRetryingFetch } from "@/server/dbRetry";
 import * as schema from "../../drizzle/schema";
 
 export type DrizzleClient = PlanetScaleDatabase<typeof schema>;
+export type DrizzleTransaction = Parameters<
+  Parameters<DrizzleClient["transaction"]>[0]
+>[0];
 
 declare global {
   var drizzleClient: DrizzleClient | undefined;

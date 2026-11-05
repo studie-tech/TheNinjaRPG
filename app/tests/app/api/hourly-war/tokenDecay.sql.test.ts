@@ -21,7 +21,7 @@ describeWithDatabase("daily war token decay", () => {
     await resetTables(gameSetting, village, villageStructure, war);
     stubCronAuth(() => null);
     spies.push(vi.spyOn(gamesettings, "lockWithHourlyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewHour: true, prevTime: new Date(0), response: Response.json("Ready") }));
-    spies.push(vi.spyOn(gamesettings, "getGameSetting").mockResolvedValue({ id: "daily-timer", name: "daily-war-decay", time: hours(24), value: 0 }));
+    spies.push(vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ ...timerClaimFixture(), isNewDay: true, prevTime: hours(24), response: Response.json(null) }));
     const db = await getTestDatabase();
     await db.insert(village).values(["attacker", "defender"].map((id, index) => ({
       id, name: id, sector: 301 + index, kageId: `${id}-kage`, tokens: startingTokens,

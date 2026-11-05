@@ -39,10 +39,10 @@ import {
   PoolTypes,
   PvpBattleTypes,
   RANKS_RESTRICTED_FROM_PVP,
+  RankedBattleTypes,
   REGEN_SECONDS,
-  SECTOR_HEIGHT,
-  SECTOR_WIDTH,
   TERRITORY_WAR_TEAM_SIZE,
+  VILLAGE_PROTECTOR_AI_ID,
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
@@ -74,20 +74,10 @@ import {
   COMBAT_LOBBY_SECONDS,
   RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
-import {
-  createAction,
-  saveUsage,
-  updateBattle,
-  updateClanLeaders,
-  updateKage,
-  updateRaidProgress,
-  updateTournament,
-  updateUser,
-  updateVillageAnbuClan,
-  updateWars,
-} from "@/libs/combat/database";
+import { createAction, settlementWrites, updateBattle } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
+import { BATTLE_LOG_PAGE_SIZE } from "@/libs/combat/log";
 import {
   fitsBattleUsage,
   getBattleSpawnLocations,
@@ -96,7 +86,6 @@ import {
 import { addPetsToBattle, petsAllowedInBattle } from "@/libs/combat/pets";
 import {
   applyEffects,
-  applySageModeAfterRoundTransition,
   checkFriendlyFire,
   consolidatePreBattleDamageModifiers,
   emptyPreBattleGearModifiers,
@@ -107,7 +96,7 @@ import {
   mergeLoadoutParticipants,
   summonActionBlockedReason,
 } from "@/libs/combat/summon";
-import { realizeTag } from "@/libs/combat/tags";
+import { realizePassiveEffect } from "@/libs/combat/tags";
 import type {
   ActionEffect,
   BattleUserItem,
@@ -124,26 +113,31 @@ import type {
 } from "@/libs/combat/types";
 import {
   alignBattle,
-  applyPoolAdjustmentsToBase,
   calcBattleResult,
+  createEmptyExtraState,
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
   getEffectiveMaxPool,
   getPoolKeys,
   getTurnControl,
-  isEffectActive,
+  inertUserItemColumns,
   maskBattle,
   mergeExtraState,
   reconcileLobbyPools,
   refreshMasteries,
   resetMasteriesToBase,
   rollInitiative,
+  syncPoolAdjustments,
 } from "@/libs/combat/util";
 import type { CoopEncounter } from "@/libs/coop";
 import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
-import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
+import {
+  buildJutsuEquipCaps,
+  compareByLoadoutOrder,
+  computeJutsuLoadoutCapAssignments,
+} from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
 import {
   anonymousSpriteAppearance,
@@ -154,9 +148,11 @@ import {
 import { effectiveMasteries, isWornGear, isWornGearDisabled } from "@/libs/mastery";
 import {
   areWarObjectivesRevealed,
+  findShrineAttackWar,
   getWarRelationship,
   getWarSide,
   isObjectiveWarActive,
+  isWarMercenary,
 } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { canUsePet } from "@/libs/pets/progression";
@@ -182,7 +178,7 @@ import {
   getNewTrackers,
   mockAchievementHistoryEntries,
 } from "@/libs/quest";
-import { projectPartyTracker } from "@/libs/questParty";
+import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questParty";
 import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
@@ -243,6 +239,7 @@ import {
   updateUserJutsuForUpdateCombatLoadout,
   updateVillageForInitiateBattle,
 } from "@/queries/combat";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import { fetchItemLoadouts, listItemsByIds } from "@/queries/item";
 import {
   fetchBloodlineJutsuReskins,
@@ -271,6 +268,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { commitBattleAdmission } from "@/server/utils/battleAdmission";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import {
   commitDungeonEntryBattle,
@@ -278,7 +276,6 @@ import {
   getDungeonEntryCharges,
 } from "@/server/utils/dungeonEntry";
 import { masteryGainUpdates } from "@/server/utils/masteryProgression";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { notifyBattleDefenders } from "@/server/utils/push/combat";
 import {
   commitQuestEntryBattle,
@@ -291,7 +288,7 @@ import { getRandomElement } from "@/utils/array";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
-import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
+import { regenTicksSince, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
 import type { BaseServerResponse } from "@/validators/base";
 import {
@@ -304,7 +301,11 @@ import {
 } from "@/validators/combat";
 import type { HuntingBattleState } from "@/validators/hunting";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
-import { sectorIdSchema } from "@/validators/travel";
+import {
+  sectorIdSchema,
+  sectorLatitudeSchema,
+  sectorLongitudeSchema,
+} from "@/validators/travel";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 import { fetchUpdatedUser, type UserWithRelations } from "./profile";
 
@@ -351,14 +352,6 @@ export const combatRouter = createTRPCRouter({
         const fetchedUpdatedAt = userBattle.updatedAt;
         const { progressRound, changedActor, actionRound, expiredEffects } =
           alignBattle(userBattle, actionRounds, ctx.userId);
-        // A round can advance on this poll path too (idle turn timeout), not only via
-        // performAction. Run the sage exhaustion transition here as well, or it stays
-        // stranded until the next action. In-memory (no DB round-trip) and idempotent
-        // (guarded on sageModeActivated); the persist below carries the change, and the
-        // applyEffects call in the no-activity branch ticks any queued after-effects.
-        if (progressRound) {
-          applySageModeAfterRoundTransition(userBattle);
-        }
         if (changedActor || spawnedWave) userBattle.version = userBattle.version + 1;
         advanceEncounterWave(userBattle, !!dungeonBattleOutcome(userBattle));
 
@@ -449,29 +442,14 @@ export const combatRouter = createTRPCRouter({
           const [logEntries] = await Promise.all([
             createAction(ctx.drizzle, settledBattle, history),
             finishBattle(),
-            ...(result &&
-            !settledBattle.extraState.dungeon &&
-            !settledBattle.extraState.hunting
-              ? [
-                  updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                  // Polling settlement pays the same faction counters as an action.
-                  updateVillageAnbuClan(ctx.drizzle, settledBattle, result, ctx.userId),
-                  updateWars(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
-                  updateKage(ctx.drizzle, settledBattle, result),
-                  // Terminal event outcomes were committed with the battle version claim.
-                  ...(claim.battleOver && settledBattle.extraState.tournamentGameId
-                    ? []
-                    : [
-                        updateTournament(
-                          ctx.drizzle,
-                          settledBattle,
-                          result,
-                          ctx.userId,
-                        ),
-                      ]),
-                  updateRaidProgress(ctx.drizzle, settledBattle, ctx.userId),
-                ]
-              : []),
+            ...settlementWrites(
+              ctx.drizzle,
+              pusher,
+              settledBattle,
+              result,
+              ctx.userId,
+              claim.battleOver,
+            ),
           ]);
           // Idle effects can land a killing blow here too. Announce only after
           // their log insert finishes so clients can refresh an earlier read.
@@ -514,7 +492,7 @@ export const combatRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const limit = input.limit ?? 30;
+      const limit = input.limit ?? BATTLE_LOG_PAGE_SIZE;
       const filter = input.userFilter ?? "all";
       const showBasicActions = input.showBasicActions ?? true;
 
@@ -694,12 +672,8 @@ export const combatRouter = createTRPCRouter({
           const {
             actor,
             actionRound,
-            progressRound: progressedRoundBeforeAction,
             expiredEffects: expiredBeforeAction,
           } = alignBattle(newBattle, actionRounds, suid);
-          if (progressedRoundBeforeAction) {
-            applySageModeAfterRoundTransition(newBattle);
-          }
           // Record all rounds for this endpoint call¨
           if (!actionRounds.includes(actionRound)) {
             actionRounds.push(actionRound);
@@ -810,9 +784,6 @@ export const combatRouter = createTRPCRouter({
             orphanedSummons,
             expiredEffects,
           } = alignBattle(newBattle, actionRounds, suid);
-          if (progressRound) {
-            applySageModeAfterRoundTransition(newBattle);
-          }
           actionEffects.push(...expiredEffects);
           // Tell players why a summon left the field, rather than having it
           // silently disappear once its summoner is dead/fled/gone.
@@ -907,23 +878,15 @@ export const combatRouter = createTRPCRouter({
             const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
-              updateUser(db, pusher, newBattle, result, suid),
-              ...(!newBattle.extraState.dungeon && !newBattle.extraState.hunting
-                ? [
-                    saveUsage(db, newBattle, result, suid),
-                    updateKage(db, newBattle, result),
-                    updateClanLeaders(db, newBattle, result, suid),
-                    updateVillageAnbuClan(db, newBattle, result, suid),
-                    updateWars(db, pusher, newBattle, result, suid),
-                    // Terminal event outcomes were committed with the battle version claim.
-                    ...(battleOver && newBattle.extraState.tournamentGameId
-                      ? []
-                      : [updateTournament(db, newBattle, result, suid)]),
-                    result
-                      ? updateRaidProgress(db, newBattle, suid)
-                      : Promise.resolve(),
-                  ]
-                : []),
+              ...settlementWrites(
+                db,
+                pusher,
+                newBattle,
+                result,
+                suid,
+                battleOver,
+                true,
+              ),
               finishBattle(),
             ]);
             const newMaskedBattle = maskBattle(newBattle, suid);
@@ -1045,14 +1008,8 @@ export const combatRouter = createTRPCRouter({
         // Coordinate bounds are enforced here (zod), so no sector-map read is
         // needed to validate reachability: the target is another player, who can
         // only ever stand on a walkable, in-bounds tile.
-        longitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_WIDTH - 1),
-        latitude: z
-          .int()
-          .min(0)
-          .max(SECTOR_HEIGHT - 1),
+        longitude: sectorLongitudeSchema,
+        latitude: sectorLatitudeSchema,
         sector: sectorIdSchema,
         userId: z.string(),
         asset: z.enum(COMBAT_BIOMES).optional(),
@@ -1354,23 +1311,14 @@ export const combatRouter = createTRPCRouter({
             // Add missing UserItem fields needed for CombatQueryUserItem
             return {
               ...ref,
+              ...inertUserItemColumns(user.controllerId, now),
               item,
               imbuements: [],
               imbuementEffects: ref.imbuementEffects ?? [],
-              userId: user.controllerId,
-              createdAt: now,
-              updatedAt: now,
-              storedAtHome: false,
-              homeX: null,
-              homeY: null,
-              homeRotation: 0,
-              homeRoom: "main" as const,
-              isInAuction: false,
               activeVariantId: ref.activeVariantId ?? null,
               variantBattleDescription: ref.variantBattleDescription ?? null,
               variantImage: ref.variantImage ?? null,
               variantName: ref.variantName ?? null,
-              craftingFinishedAt: null,
             };
           })
           .filter((i): i is NonNullable<typeof i> => i !== null);
@@ -1471,9 +1419,7 @@ export const combatRouter = createTRPCRouter({
       );
 
       if (result.rowsAffected > 0) {
-        void pusher.trigger(userBattle.id, "event", {
-          version: userBattle.version + 1,
-        });
+        announceLobbyChange(userBattle);
         return {
           success: true,
           message: [
@@ -1533,9 +1479,7 @@ export const combatRouter = createTRPCRouter({
         const result = await updateBattleForIAmHere(ctx.drizzle, userBattle, input);
 
         if (result.rowsAffected > 0) {
-          void pusher.trigger(userBattle.id, "event", {
-            version: userBattle.version + 1,
-          });
+          announceLobbyChange(userBattle);
           return {
             success: true,
             message: "",
@@ -1642,9 +1586,7 @@ export const combatRouter = createTRPCRouter({
 
         if (result.rowsAffected > 0) {
           const userPatch = await rememberPreference(userBattle.battleType);
-          void pusher.trigger(userBattle.id, "event", {
-            version: userBattle.version + 1,
-          });
+          announceLobbyChange(userBattle);
           return {
             success: true,
             userPatch,
@@ -1677,52 +1619,13 @@ export const combatRouter = createTRPCRouter({
       ]);
 
       // Find the war the user is involved with
-      // For SECTOR_WAR: check war.sector matches and user is attacker
-      // For VILLAGE_WAR/WAR_RAID: check village sectors for attack OR defend scenarios
-      const userWar = activeWars.find((w) => {
-        if (w.status !== "ACTIVE") return false;
-        const side = getWarSide(w, user?.villageId ?? null, user?.userId);
-        const isUserOnAttackerSide = side === w.attackerVillageId;
-        const isUserOnDefenderSide = side === w.defenderVillageId;
-
-        if (w.rules) {
-          return (
-            !!side &&
-            isObjectiveWarActive(w) &&
-            areWarObjectivesRevealed(w, side) &&
-            w.objectiveState?.objectives.some(
-              (o) => o.sector === input.sector && o.villageId !== side && !o.destroyed,
-            )
-          );
-        }
-        if (w.type === "SECTOR_WAR") {
-          // Sector wars use war.sector and only attackers can attack
-          return w.sector === input.sector && isUserOnAttackerSide;
-        }
-
-        if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
-          const atDefenderVillage = w.defenderVillage?.sector === input.sector;
-          const atAttackerVillage = w.attackerVillage?.sector === input.sector;
-
-          // Attack scenarios: at enemy's village (reduce their shrine HP)
-          const canAttack =
-            (atDefenderVillage && isUserOnAttackerSide) ||
-            (atAttackerVillage && isUserOnDefenderSide);
-
-          // Defend scenarios: at own village when shrine is damaged (restore shrine HP)
-          const canDefend =
-            (atAttackerVillage &&
-              isUserOnAttackerSide &&
-              w.attackerShrineHp < w.attackerShrineMaxHp) ||
-            (atDefenderVillage &&
-              isUserOnDefenderSide &&
-              w.defenderShrineHp < w.defenderShrineMaxHp);
-
-          return canAttack || canDefend;
-        }
-
-        return false;
-      });
+      const userWar = findShrineAttackWar(
+        activeWars,
+        user?.villageId ?? null,
+        user?.userId,
+        input.sector,
+        { allowDefend: true },
+      );
 
       // Check if this is a Village War or Raid (allows attacking home sectors)
       const isVillageWarOrRaid =
@@ -1758,7 +1661,7 @@ export const combatRouter = createTRPCRouter({
       const targetIds =
         validAis.length > 0
           ? validAis.map((ai) => ai.userId)
-          : ["MJMzOE67Cx2YP3NX8SAbh"];
+          : [VILLAGE_PROTECTOR_AI_ID];
 
       // Return battle
       return await initiateBattle(
@@ -2273,7 +2176,7 @@ export const initiateBattle = async (
       ];
       if (!participant.userQuests.some((entry) => entry.questId === party.quest.id))
         participant.userQuests.push({
-          id: `party-${party.id}`,
+          id: questPartyHelperAttemptId(party.id),
           userId: participant.userId,
           questId: party.quest.id,
           questType: party.quest.questType,
@@ -2330,7 +2233,7 @@ export const initiateBattle = async (
     )
       return [];
     const original = { ...user };
-    const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
+    const ticks = regenTicksSince(user.regenAt);
     const trainingUser = {
       ...user,
       // Existing training keeps its earned Energy when the next isolated floor starts.
@@ -2441,26 +2344,17 @@ export const initiateBattle = async (
             const owned =
               progressionQueues.get(`${user.userId}:${item.id}`)?.shift() ?? null;
             return {
+              ...inertUserItemColumns(user.userId, new Date()),
               // Synthetic id so battle-end quantity/durability writes never touch
               // real inventory rows; XP is credited via progressionRowId instead.
               id: nanoid(),
               progressionRowId: owned?.id ?? null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              userId: user.userId,
               itemId: item.id,
               quantity: 1,
               level: owned?.level ?? 1,
               experience: owned?.experience ?? 0,
               equipped: "ITEM_1" as const,
               item: { ...item, variants: owned?.item?.variants ?? [] },
-              storedAtHome: false,
-              homeX: null,
-              homeY: null,
-              homeRotation: 0,
-              homeRoom: "main" as const,
-              craftingFinishedAt: null,
-              isInAuction: false,
               activeVariantId: owned?.activeVariantId ?? null,
               imbuements: [],
               dropChancePerc: 0,
@@ -2845,14 +2739,8 @@ export const initiateBattle = async (
             const targetIsWarParticipant = t.warParticipantUntil > now;
             const atWar = getWarRelationship(activeWars, user, t) === "ENEMY";
             if (
-              (attackerIsWarParticipant ||
-                activeWars.some((w) =>
-                  w.warMercenaries?.some((m) => m.userId === user.userId),
-                )) &&
-              (targetIsWarParticipant ||
-                activeWars.some((w) =>
-                  w.warMercenaries?.some((m) => m.userId === t.userId),
-                )) &&
+              (attackerIsWarParticipant || isWarMercenary(activeWars, user.userId)) &&
+              (targetIsWarParticipant || isWarMercenary(activeWars, t.userId)) &&
               atWar
             )
               return false;
@@ -2890,8 +2778,7 @@ export const initiateBattle = async (
 
     // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
     // ELITE JONIN, so its distributions cap at that rank rather than the player's own.
-    const isRankedBattle =
-      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
+    const isRankedBattle = RankedBattleTypes.includes(battleType);
     capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
 
     // Add achievements to users for tracking
@@ -3086,17 +2973,7 @@ export const initiateBattle = async (
   }
 
   // Apply pool adjustments to base values for all users with pool effects at battle start
-  usersState.forEach((user) => {
-    const hasPoolEffects = userEffects.some(
-      (e) =>
-        e.targetId === user.userId &&
-        (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
-        isEffectActive(e),
-    );
-    if (hasPoolEffects) {
-      applyPoolAdjustmentsToBase(user, userEffects);
-    }
-  });
+  syncPoolAdjustments(usersState, userEffects);
 
   if (info.givePools !== undefined) {
     for (const user of usersState.filter(
@@ -3281,7 +3158,7 @@ export const initiateBattle = async (
     queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
       userData.userId,
       queuedParticipants.map((entry) => entry.user.userId),
-    )} THEN GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})) ELSE ${userData.updatedAt} END`;
+    )} THEN ${nextSnapshotSql(userData.updatedAt)} ELSE ${userData.updatedAt} END`;
     const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
     const recoveryParticipants = info.tournamentGame
       ? queuedParticipants
@@ -3393,9 +3270,7 @@ export const initiateBattle = async (
   }
   const equipCaps = buildJutsuEquipCaps(
     jutsuEquipLimits,
-    battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING"
-      ? "ranked"
-      : "unranked",
+    RankedBattleTypes.includes(battleType) ? "ranked" : "unranked",
   );
   for (const participant of usersState) {
     if (participant.isAi) continue;
@@ -3508,6 +3383,8 @@ export const initiateBattle = async (
       failed,
     };
   };
+  const claimedEveryone = (created: Awaited<ReturnType<typeof createBattle>>) =>
+    created.claimedUsers?.rowsAffected === expectedRows;
   const attempt = info.questAttempt;
   let result: Awaited<ReturnType<typeof createBattle>>;
   // Every dungeon floor commits its playable battle with the publication/recovery fence.
@@ -3524,8 +3401,7 @@ export const initiateBattle = async (
       content: dungeonEncounter.content,
       users: fetchedUsers.filter((user) => userIds.includes(user.userId)),
       createBattle,
-      didClaim: (result) =>
-        !result.failed && result.claimedUsers?.rowsAffected === expectedRows,
+      didClaim: (result) => !result.failed && claimedEveryone(result),
     });
     if (!committed.success) return errorResponse(committed.message);
     result = committed.result;
@@ -3537,7 +3413,7 @@ export const initiateBattle = async (
       items: entryInventory,
       role: player?.role ?? "USER",
       createBattle,
-      didClaim: (result) => result.claimedUsers?.rowsAffected === expectedRows,
+      didClaim: claimedEveryone,
     });
     if (!committed.success) return { success: false, message: committed.message };
     result = committed.result;
@@ -3547,84 +3423,65 @@ export const initiateBattle = async (
     // A single guarded UPDATE cannot also insert the battle/history; throwing on a
     // partial participant claim rolls back all writes instead of publishing half a fight.
     const m = info.kageMatch;
-    const rejected = new Error("Kage defense admission changed");
-    try {
-      result = await retryOnDeadlock(() =>
-        client.transaction(async (transaction) => {
-          const tx = transaction as unknown as DrizzleClient;
-          const launchAt = new Date();
-          // Consume consent with the receipt and participant claims so a rejected
-          // launch restores the invitation rather than publishing half a fight.
-          const leader = await updateVillageForInitiateBattle(tx, m, launchAt);
-          if (leader.rowsAffected !== 1) throw rejected;
-          const receipt = await updateKageDefendedChallengesForInitiateBattle(
-            tx,
-            battleId,
-            launchAt,
-            m,
-          );
-          if (receipt.rowsAffected !== 1) throw rejected;
-          const created = await createBattle(tx);
-          if (created.claimedUsers?.rowsAffected !== expectedRows) throw rejected;
-          return created;
-        }),
-      );
-    } catch (error) {
-      if (error === rejected)
-        return {
-          success: false,
-          message: "Match admission changed. Refresh the schedule and try again.",
-        };
-      throw error;
-    }
+    const changed = "Match admission changed. Refresh the schedule and try again.";
+    const committed = await commitBattleAdmission({
+      client,
+      createBattle,
+      didClaim: claimedEveryone,
+      claimFailedMessage: changed,
+      admit: async (tx, reject) => {
+        const launchAt = new Date();
+        // Consume consent with the receipt and participant claims so a rejected
+        // launch restores the invitation rather than publishing half a fight.
+        const leader = await updateVillageForInitiateBattle(tx, m, launchAt);
+        if (leader.rowsAffected !== 1) reject(changed);
+        const receipt = await updateKageDefendedChallengesForInitiateBattle(
+          tx,
+          battleId,
+          launchAt,
+          m,
+        );
+        if (receipt.rowsAffected !== 1) reject(changed);
+      },
+    });
+    if (!committed.success) return { success: false, message: committed.message };
+    result = committed.result;
   } else if (info.hunting) {
     // The session reservation, battle/history inserts and guarded character claim must
     // commit together. The character claim also settles queued training and recovery;
     // a single CAS cannot cover those rows or undo them after a partial admission.
     const meta = info.hunting;
-    const rejected = new Error("Hunting admission changed");
-    try {
-      result = await retryOnDeadlock(() =>
-        client.transaction(async (tx) => {
-          // Reserve only while the accepted session and allowance remain unchanged.
-          const session = await updateHuntingSessionForInitiateBattle(
-            tx,
-            battleId,
-            meta,
-            sector,
-          );
-          if (session.rowsAffected !== 1) throw rejected;
-          const created = await createBattle(tx as unknown as DrizzleClient);
-          if (created.claimedUsers?.rowsAffected !== expectedRows) throw rejected;
-          return created;
-        }),
-      );
-    } catch (error) {
-      if (error === rejected)
-        return {
-          success: false,
-          message: "Your hunting session changed. Refresh the board and try again.",
-        };
-      throw error;
-    }
+    const changed = "Your hunting session changed. Refresh the board and try again.";
+    const committed = await commitBattleAdmission({
+      client,
+      createBattle,
+      didClaim: claimedEveryone,
+      claimFailedMessage: changed,
+      admit: async (tx, reject) => {
+        // Reserve only while the accepted session and allowance remain unchanged.
+        const session = await updateHuntingSessionForInitiateBattle(
+          tx,
+          battleId,
+          meta,
+          sector,
+        );
+        if (session.rowsAffected !== 1) reject(changed);
+      },
+    });
+    if (!committed.success) return { success: false, message: committed.message };
+    result = committed.result;
   } else if (info.tournamentGame) {
     // Battle/history inserts and both user claims must commit together. A single-row
     // CAS cannot hide a staged battle from recovery or roll back partial claims'
     // training and pool recovery; status compensation cannot undo those writes.
-    const rejected = new Error("Tournament participant claim failed");
-    try {
-      result = await retryOnDeadlock(() =>
-        client.transaction(async (tx) => {
-          const created = await createBattle(tx as unknown as DrizzleClient);
-          if (created.claimedUsers?.rowsAffected !== expectedRows) throw rejected;
-          return created;
-        }),
-      );
-    } catch (error) {
-      if (error === rejected)
-        return { success: false, message: "Attack failed, did the target move?" };
-      throw error;
-    }
+    const committed = await commitBattleAdmission({
+      client,
+      createBattle,
+      didClaim: claimedEveryone,
+      claimFailedMessage: "Attack failed, did the target move?",
+    });
+    if (!committed.success) return { success: false, message: committed.message };
+    result = committed.result;
   } else {
     result = await createBattle(client);
   }
@@ -3845,6 +3702,7 @@ export const processUsersForBattle = async (
         )?.jutsu ?? null,
     }));
   }
+  const isRankedBattle = RankedBattleTypes.includes(battleType);
   // Collect user effects here
   // Companion skills share the summon preload pipeline with character abilities.
   const allSummons: string[] = (info.petPreload?.pets ?? []).flatMap((pet) =>
@@ -3969,7 +3827,7 @@ export const processUsersForBattle = async (
             regenerationBuffs(inputUser),
             // Lobby reconstruction reads this timestamp from battle JSON.
             new Date(user.regenAt),
-            Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS)),
+            regenTicksSince(user.regenAt),
             REGEN_SECONDS,
           );
     user.curHealth = Math.min(user.curHealth + restored, user.maxHealth);
@@ -3989,10 +3847,7 @@ export const processUsersForBattle = async (
     }
 
     // Ranked players use the endgame level and pools regardless of their progression.
-    if (
-      (battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING") &&
-      !user.isAi
-    ) {
+    if (isRankedBattle && !user.isAi) {
       user.maxHealth = calcHP(MAX_PLAYER_LEVEL);
       user.maxChakra = calcCP(MAX_PLAYER_LEVEL);
       user.maxStamina = calcSP(MAX_PLAYER_LEVEL);
@@ -4047,7 +3902,7 @@ export const processUsersForBattle = async (
 
     // Update user level to the effective level if he had leveled up (to combat level-holding, as some things are scaled based on level)
     // Ranked battles keep their normalized level.
-    if (battleType !== "RANKED_SPARRING" && battleType !== "RANKED_PVP") {
+    if (!isRankedBattle) {
       user.level = getEffectiveLevel(user);
     }
 
@@ -4074,7 +3929,7 @@ export const processUsersForBattle = async (
 
     if (
       (battleType === "COMBAT" || battleType === "SHRINE_WAR") &&
-      info.wars.some((w) => w.warMercenaries?.some((m) => m.userId === user.userId))
+      isWarMercenary(info.wars, user.userId)
     ) {
       user.isMasked = true;
       user.username = "Mercenary";
@@ -4117,8 +3972,6 @@ export const processUsersForBattle = async (
     );
 
     // The mastery sources this battle applies; ranked battles skip bloodline and skills
-    const isRankedBattle =
-      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
     const wearer = {
       ...user,
       bloodline: isRankedBattle ? null : user.bloodline,
@@ -4144,21 +3997,19 @@ export const processUsersForBattle = async (
     // Capture the unlocked element's passive once; action processing uses only battle state.
     const trainedElement = activeTrainedElement(user);
     if (trainedElement && !isRankedBattle) {
-      const realized = realizeTag({
-        tag: IncreaseDamageGivenTag.parse({
-          power: ELEMENTAL_MASTERY_BOOST,
-          elements: [trainedElement],
-          target: "SELF",
-        }) as UserEffect,
-        user,
-        actionId: "elemental-mastery",
-        level: user.level,
-      });
-      realized.isNew = false;
-      realized.castThisRound = false;
-      realized.targetId = user.userId;
-      realized.fromType = "elementalMastery";
-      userEffects.push(realized);
+      userEffects.push(
+        realizePassiveEffect({
+          tag: IncreaseDamageGivenTag.parse({
+            power: ELEMENTAL_MASTERY_BOOST,
+            elements: [trainedElement],
+            target: "SELF",
+          }) as UserEffect,
+          user,
+          actionId: "elemental-mastery",
+          level: user.level,
+          fromType: "elementalMastery",
+        }),
+      );
     }
 
     // Ranked replaces unique bloodline effects with a uniform, sealable damage bonus.
@@ -4169,17 +4020,15 @@ export const processUsersForBattle = async (
           : [{ ...RANKED_BLOODLINE_DAMAGE_TAG }]
         : (user.bloodline.effects ?? []).filter((effect) => !isActivityBonus(effect));
       effects.forEach((effect: unknown) => {
-        const realized = realizeTag({
-          tag: effect as UserEffect,
-          user,
-          actionId: user.bloodline?.id ?? "initial",
-          level: user.level,
-        });
-        realized.isNew = false;
-        realized.castThisRound = false;
-        realized.targetId = user.userId;
-        realized.fromType = "bloodline";
-        userEffects.push(realized);
+        userEffects.push(
+          realizePassiveEffect({
+            tag: effect as UserEffect,
+            user,
+            actionId: user.bloodline?.id ?? "initial",
+            level: user.level,
+            fromType: "bloodline",
+          }),
+        );
       });
     }
 
@@ -4201,12 +4050,7 @@ export const processUsersForBattle = async (
     }
 
     // Add skill tree effects
-    if (
-      user.userSkills &&
-      user.userSkills.length > 0 &&
-      battleType !== "RANKED_PVP" &&
-      battleType !== "RANKED_SPARRING"
-    ) {
+    if (user.userSkills && user.userSkills.length > 0 && !isRankedBattle) {
       user.userSkills.forEach(
         (userSkill: {
           skillId: string;
@@ -4223,17 +4067,15 @@ export const processUsersForBattle = async (
           // Self-targeted effects can be applied immediately
           if (!skill.target || skill.target === "SELF") {
             skill.effects.forEach((effect: unknown) => {
-              const realized = realizeTag({
-                tag: effect as UserEffect,
-                user: user,
-                actionId: userSkill.skillId,
-                level: user.level,
-              });
-              realized.isNew = false;
-              realized.castThisRound = false;
-              realized.targetId = user.userId;
-              realized.fromType = "skill";
-              userEffects.push(realized);
+              userEffects.push(
+                realizePassiveEffect({
+                  tag: effect as UserEffect,
+                  user: user,
+                  actionId: userSkill.skillId,
+                  level: user.level,
+                  fromType: "skill",
+                }),
+              );
             });
           } else if (skill.target === "ENEMIES") {
             user.enemySkillIds ??= [];
@@ -4261,18 +4103,16 @@ export const processUsersForBattle = async (
       for (const owned of inputUser.titles ?? []) {
         for (const effect of owned.effects) {
           if (effect.type !== "increasemastery") continue;
-          const realized = realizeTag({
-            tag: titleCombatTag(effect) as UserEffect,
-            user,
-            actionId: owned.titleId,
-            level: 0,
-          });
-          realized.isNew = false;
-          realized.castThisRound = false;
-          realized.targetId = user.userId;
-          // Clear cannot remove permanent ownership bonuses; reuse the protected skill source.
-          realized.fromType = "skill";
-          userEffects.push(realized);
+          userEffects.push(
+            realizePassiveEffect({
+              tag: titleCombatTag(effect) as UserEffect,
+              user,
+              actionId: owned.titleId,
+              level: 0,
+              // Clear cannot remove permanent ownership bonuses; reuse the protected skill source.
+              fromType: "skill",
+            }),
+          );
         }
       }
     }
@@ -4283,16 +4123,13 @@ export const processUsersForBattle = async (
       if (buff.expiresAt <= new Date()) continue;
       for (const effect of buff.effects) {
         if (effect.type === "increaseregeneration") continue;
-        const realized = realizeTag({
+        const realized = realizePassiveEffect({
           tag: { ...effect, rounds: undefined, powerPerLevel: 0 } as UserEffect,
           user,
           actionId: buff.id,
           level: 0,
+          fromType: "item",
         });
-        realized.isNew = false;
-        realized.castThisRound = false;
-        realized.targetId = user.userId;
-        realized.fromType = "item";
         realized.timedBuffExpiresAt = buff.expiresAt.getTime();
         userEffects.push(realized);
       }
@@ -4302,17 +4139,15 @@ export const processUsersForBattle = async (
     // Add users effects to the battle
     if (user.effects.length > 0) {
       user.effects.forEach((effect: unknown) => {
-        const realized = realizeTag({
-          tag: effect as UserEffect,
-          user: user,
-          actionId: "initial",
-          level: user.level,
-        });
-        realized.isNew = false;
-        realized.castThisRound = false;
-        realized.targetId = user.userId;
-        realized.fromType = "bloodline";
-        userEffects.push(realized);
+        userEffects.push(
+          realizePassiveEffect({
+            tag: effect as UserEffect,
+            user: user,
+            actionId: "initial",
+            level: user.level,
+            fromType: "bloodline",
+          }),
+        );
       });
       user.effects = []; // Reset to avoid storing in battle table
     }
@@ -4347,14 +4182,7 @@ export const processUsersForBattle = async (
 
     // Sort if we have a loadout
     if (user?.loadout?.jutsuIds) {
-      user.jutsus.sort((a, b) => {
-        const aIndex = user?.loadout?.jutsuIds.indexOf(a.jutsuId) ?? -1;
-        const bIndex = user?.loadout?.jutsuIds.indexOf(b.jutsuId) ?? -1;
-        if (aIndex === -1 && bIndex === -1) return 0;
-        if (aIndex === -1) return 1;
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      });
+      user.jutsus.sort(compareByLoadoutOrder(user.loadout.jutsuIds));
     }
 
     // Determine equipped keystone item name for quick display later
@@ -4419,24 +4247,22 @@ export const processUsersForBattle = async (
             (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId)
           ) {
             effects.forEach((effect) => {
-              const realized = realizeTag({
-                tag: effect,
-                user: user,
-                actionId: ui.itemId,
-                // AI gear can never earn item XP; keep character-level scaling
-                // for AI so boss/raid content is not silently nerfed to level 1.
-                level: user.isAi ? user.level : ui.level,
-              });
-              realized.isNew = false;
-              realized.fromType =
-                itemType === "ACCESSORY"
-                  ? "accessory"
-                  : itemType === "KEYSTONE"
-                    ? "keystone"
-                    : "armor";
-              realized.castThisRound = false;
-              realized.targetId = user.userId;
-              userEffects.push(realized);
+              userEffects.push(
+                realizePassiveEffect({
+                  tag: effect,
+                  user: user,
+                  actionId: ui.itemId,
+                  // AI gear can never earn item XP; keep character-level scaling
+                  // for AI so boss/raid content is not silently nerfed to level 1.
+                  level: user.isAi ? user.level : ui.level,
+                  fromType:
+                    itemType === "ACCESSORY"
+                      ? "accessory"
+                      : itemType === "KEYSTONE"
+                        ? "keystone"
+                        : "armor",
+                }),
+              );
             });
           }
         }
@@ -4592,24 +4418,10 @@ export const processUsersForBattle = async (
 
   // Build extraState from all users
   const extraState: ExtraState = {
-    jutsus: {},
-    jutsuReskins: {},
-    items: {},
-    bloodlines: {},
+    ...createEmptyExtraState(),
     enemySkills,
-    sageModes: {},
-    villages: {},
-    anbuSquads: {},
-    keystoneItems: {},
     wars: Object.fromEntries(info.wars.map((w) => [w.id, w])),
-    aiProfiles: {},
     relations: Object.fromEntries(info.relations.map((r) => [r.id, r])),
-    clans: {},
-    userQuests: {},
-    completedQuests: {},
-    questData: {},
-    bounties: {},
-    bountySignups: {},
   };
 
   // Add default AI profile
@@ -4831,16 +4643,14 @@ export const processUsersForBattle = async (
     );
     for (const target of targets) {
       for (const effect of pending.effects) {
-        const realized = realizeTag({
+        const realized = realizePassiveEffect({
           tag: structuredClone(effect),
           user: creator,
           actionId: pending.skillId,
           level: pending.level,
+          targetId: target.userId,
+          fromType: "skill",
         });
-        realized.isNew = false;
-        realized.castThisRound = false;
-        realized.targetId = target.userId;
-        realized.fromType = "skill";
         if (checkFriendlyFire(realized, target, convertedUsersState)) {
           userEffects.push(realized);
         }
@@ -4860,4 +4670,12 @@ export const processUsersForBattle = async (
     extraState,
     initialDurability,
   };
+};
+
+/**
+ * Tell a battle's clients a lobby change landed. The announced version is one past the
+ * saved one so every client, the requester included, refetches getBattle.
+ */
+const announceLobbyChange = (userBattle: { id: string; version: number }) => {
+  void pusher.trigger(userBattle.id, "event", { version: userBattle.version + 1 });
 };

@@ -22,6 +22,7 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import * as combatRouter from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { startDeclaredWar } from "@/server/utils/war";
 import { insertUsers } from "../../../setup/factories";
@@ -129,6 +130,23 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
       expect(user.status).toBe("QUEUED");
       expect(user.battleId).toBeNull();
     }
+  });
+
+  it("releases the lobby when battle setup throws", async () => {
+    const db = await getTestDatabase();
+    const declared = (await db.query.war.findFirst({ where: eq(war.id, warId) }))!;
+    await db.update(war).set({
+      combatStartedAt: new Date(Date.now() - 3600000),
+      objectiveState: { ...declared.objectiveState!, attackerEspionage: WAR_ESPIONAGE_TARGET },
+    }).where(eq(war.id, warId));
+    vi.spyOn(combatRouter, "initiateBattle").mockRejectedValue(new Error("setup failed"));
+
+    await expect(
+      callerForDatabase(shrineRouter, "hero", db).initiateShrineBattle({ shrineBattleId: lobbyId }),
+    ).rejects.toThrow("setup failed");
+    expect((await db.query.mpvpBattleQueue.findFirst({
+      where: eq(mpvpBattleQueue.id, lobbyId),
+    }))?.battleId).toBeNull();
   });
 
   it("allows the rejected lobby to retry after combat starts and espionage completes", async () => {

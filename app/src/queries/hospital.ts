@@ -1,6 +1,7 @@
 /**
  * Database access for hospital; authorization and transaction scopes stay in callers.
  */
+
 import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -12,16 +13,13 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
+import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
-import { userRegenerationGainSql } from "@/server/utils/regeneration";
+import { regenTicksSql, userRegenerationGainSql } from "@/server/utils/regeneration";
 import { getNextUserSnapshotAt, secondsFromNow } from "@/utils/time";
 
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
 const recipient = alias(userData, "recipient");
-/** Build the `villageAlliance` listing for `getHospitalizedUsers`. */
-export const listVillageAllianceForGetHospitalizedUsers = (
-  client: Pick<DrizzleClient, "query">,
-) => client.query.villageAlliance.findMany();
 
 /** Build the `userData` listing for `getHospitalizedUsers`, including predicates on `sector`, `villageId`, `status`. */
 export const listUserDataForGetHospitalizedUsers = (
@@ -87,9 +85,9 @@ export const executeResultForUserHeal = (
                 ${recipient.regenAt} = ${
                   t.status === "HOSPITALIZED"
                     ? sql`NOW(3)`
-                    : sql`TIMESTAMPADD(SECOND, FLOOR(GREATEST(0, TIMESTAMPDIFF(SECOND, ${recipient.regenAt}, NOW(3))) / ${REGEN_SECONDS}) * ${REGEN_SECONDS}, ${recipient.regenAt})`
+                    : sql`TIMESTAMPADD(SECOND, ${regenTicksSql(recipient.regenAt, sql`NOW(3)`)} * ${REGEN_SECONDS}, ${recipient.regenAt})`
                 },
-                ${recipient.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${recipient.updatedAt}))
+                ${recipient.updatedAt} = ${nextSnapshotSql(recipient.updatedAt)}
             WHERE ${and(
               eq(userData.userId, u.userId),
               eq(userData.updatedAt, u.updatedAt),
@@ -133,7 +131,7 @@ export const updateUserDataForNpcHeal = (
       curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
       maxEnergy: user.maxEnergy,
       regenAt: healedAt,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
     .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "HOSPITALIZED")));
@@ -155,7 +153,7 @@ export const updateUserDataForNpcHeal2 = (
       curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyRecovery})`,
       maxEnergy: user.maxEnergy,
       regenAt: healedAt,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
     })
     .where(

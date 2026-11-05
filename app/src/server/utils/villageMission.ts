@@ -1,4 +1,4 @@
-import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   type VillageMissionTask,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
@@ -6,7 +6,8 @@ import {
 import { village, war } from "@/drizzle/schema";
 import {
   executeResultForApplyVillageMissionShrineDamage,
-  selectUserDataForApplyVillageMissionShrineDamage,
+  missionCounterIncrement,
+  missionEligibleVillage,
   selectWarForApplyVillageMissionShrineDamage,
   updateVillageForRecordVillageMissionProgress,
 } from "@/queries/villageMission";
@@ -24,13 +25,9 @@ export const recordVillageMissionProgress = async (
     ([, increment]) => Number.isFinite(increment) && increment > 0,
   );
   if (!villageId || increments.length === 0) return;
-  const argumentsSql = increments.flatMap(([task, increment]) => {
-    const path = `$.${task}`;
-    return [
-      sql`${path}`,
-      sql`COALESCE(JSON_EXTRACT(${village.missionCounters}, ${path}), 0) + ${increment}`,
-    ];
-  });
+  const argumentsSql = increments.flatMap(([task, increment]) =>
+    missionCounterIncrement(task as VillageMissionTask, increment),
+  );
   await retryOnDeadlock(() =>
     updateVillageForRecordVillageMissionProgress(
       client,
@@ -73,17 +70,18 @@ export const applyVillageMissionShrineDamage = async (
   // Drizzle emits computed selection aliases without table qualification in SQL
   // fragments, so qualify this derived field explicitly.
   const captureFlag = sql`${sql.identifier("shrine_snapshot")}.${sql.identifier("shouldCapture")}`;
-  const eligibleVillage = and(
-    eq(village.id, villageId ?? ""),
-    eq(village.type, "VILLAGE"),
-    isNotNull(village.activeMission),
-    exists(selectUserDataForApplyVillageMissionShrineDamage(client, userId)),
-  );
+  const eligibleVillage = missionEligibleVillage(client, villageId ?? "", userId);
   const assignments = [
     sql`${hp} = GREATEST(${snapshot.hp} - ${damage}, 0)`,
     ...(villageId
       ? [
-          sql`${village.missionCounters} = JSON_SET(${village.missionCounters}, '$.siege_operation', COALESCE(JSON_EXTRACT(${village.missionCounters}, '$.siege_operation'), 0) + LEAST(${snapshot.hp}, ${damage}))`,
+          sql`${village.missionCounters} = JSON_SET(${village.missionCounters}, ${sql.join(
+            missionCounterIncrement(
+              "siege_operation",
+              sql`LEAST(${snapshot.hp}, ${damage})`,
+            ),
+            sql`, `,
+          )})`,
         ]
       : []),
     ...(canCapture

@@ -12,7 +12,7 @@ import {
   listGuideArticleForGetAll,
   updateGuideArticleForUpdate,
 } from "@/queries/guide";
-import { fetchUser, findUserRoleById } from "@/queries/profile";
+import { fetchUser, fetchViewerRole } from "@/queries/profile";
 
 import {
   baseServerResponse,
@@ -34,11 +34,10 @@ export const guideRouter = createTRPCRouter({
     .meta({ mcp: { description: "List player guide articles" } })
     .input(GuideListFilterSchema.optional())
     .query(async ({ ctx, input }) => {
-      const viewer = ctx.userId
-        ? await findUserRoleById(ctx.drizzle, ctx.userId)
-        : null;
-      const canSeeDrafts = Boolean(viewer && canChangeContent(viewer.role));
-      const includeDrafts = Boolean(input?.includeDrafts && canSeeDrafts);
+      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const includeDrafts = Boolean(
+        input?.includeDrafts && canChangeContent(viewerRole),
+      );
       if (!includeDrafts) {
         return await fetchPublishedGuides(ctx.drizzle);
       }
@@ -51,10 +50,8 @@ export const guideRouter = createTRPCRouter({
       const article = await fetchGuide(ctx.drizzle, input.id);
       if (!article) throw serverError("NOT_FOUND", "Guide not found");
       if (!article.published) {
-        const viewer = ctx.userId
-          ? await findUserRoleById(ctx.drizzle, ctx.userId)
-          : null;
-        if (!viewer || !canChangeContent(viewer.role)) {
+        const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+        if (!canChangeContent(viewerRole)) {
           throw serverError("NOT_FOUND", "Guide not found");
         }
       }

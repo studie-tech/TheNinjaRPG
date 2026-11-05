@@ -15,6 +15,7 @@ import {
   WAR_VICTORY_BOOSTED_STRUCTURES,
   WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
   WAR_VICTORY_TOKEN_BONUS,
+  WAR_WINNING_BOOST_DAYS,
   WAR_WINNING_BOOST_REGEN_PERC,
   WAR_WINNING_BOOST_TRAINING_PERC,
   type WarType,
@@ -350,6 +351,36 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     expect(settings.find((row) => row.name === "war-attacker-train")?.value).toBe(
       WAR_WINNING_BOOST_TRAINING_PERC,
     );
+  });
+
+  it("seeds missing boost rows for a war without rules", async () => {
+    const db = await seed();
+    await addAlly(db);
+    await db.delete(gameSetting);
+    const initial = await snapshot(db);
+    const recorded = await recordQueries(() => handleWarEnd(initial, db));
+    expect(recorded.statements.filter((query) => /^select\b/i.test(query) && /\bfrom `GameSetting`/i.test(query))).toHaveLength(0);
+    expect(recorded.statements.filter((query) => /^insert ignore into `GameSetting`/i.test(query))).toHaveLength(1);
+    const settings = await db.select().from(gameSetting);
+    expect(settings.map((row) => [row.name, row.value]).sort()).toEqual([
+      ["war-ally-regen", WAR_WINNING_BOOST_REGEN_PERC],
+      ["war-attacker-regen", WAR_WINNING_BOOST_REGEN_PERC],
+      ["war-attacker-train", WAR_WINNING_BOOST_TRAINING_PERC],
+    ]);
+  });
+
+  it("preserves an existing boost with a generated ID and a later expiry", async () => {
+    const db = await seed();
+    const expiry = new Date(Date.now() + (WAR_WINNING_BOOST_DAYS + 1) * 86400000);
+    await db.update(gameSetting).set({ id: "legacy-regen", value: 99, time: expiry })
+      .where(eq(gameSetting.name, "war-attacker-regen"));
+    await handleWarEnd(await snapshot(db), db);
+    const settings = await db.select().from(gameSetting);
+    expect(settings.filter((row) => row.name === "war-attacker-regen")).toEqual([
+      expect.objectContaining({ id: "legacy-regen", value: 99, time: expiry }),
+    ]);
+    expect(settings.find((row) => row.name === "war-attacker-train")?.value).toBe(WAR_WINNING_BOOST_TRAINING_PERC);
+    expect((await savedWar(db))?.settlementPending).toBe(false);
   });
 
   it("rolls back every balance and the claim if the core SQL update fails", async () => {

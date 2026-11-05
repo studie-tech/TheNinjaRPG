@@ -20,6 +20,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { prepareBattlefieldLabels } from "./battlefield-labels.mjs";
 import { setOutput } from "./ci-helpers.mjs";
+import { isSafePath, setAtPath } from "./proposal-paths.mjs";
 
 const VISUAL_FIELDS = [
   "staticAssetPath",
@@ -28,7 +29,6 @@ const VISUAL_FIELDS = [
   "disappearAnimation",
 ];
 const GALLERY_SIZE = 32;
-const FORBIDDEN_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
 const required = (name) => {
   const value = process.env[name];
@@ -82,9 +82,6 @@ const setsVisuals = ([fieldPath, value]) =>
   fieldPath === "avatar" ||
   holdsVisuals(value);
 
-const isSafePath = (fieldPath) =>
-  !fieldPath.split(".").some((segment) => FORBIDDEN_SEGMENTS.has(segment));
-
 /**
  * A change's set operations as [path, value] pairs, or null when a value does not parse or a
  * path is unsafe. The server refuses such a suggestion, so it is not drawn either.
@@ -98,20 +95,7 @@ const assignmentsOf = (change) => {
   }
 };
 
-/** Set a dotted path in place, creating the arrays and objects along it. */
-const setAtPath = (target, fieldPath, value) => {
-  const keys = fieldPath.split(".");
-  let node = target;
-  for (const [index, key] of keys.slice(0, -1).entries()) {
-    if (node[key] === undefined || node[key] === null) {
-      node[key] = /^\d+$/.test(keys[index + 1]) ? [] : {};
-    }
-    node = node[key];
-  }
-  node[keys.at(-1)] = value;
-};
-
-/** A copy of `fields` with every [path, value] assignment applied. */
+/** A copy of `fields` with every [path, value] assignment applied; throws on a bad path. */
 const withValues = (fields, assignments) => {
   const next = structuredClone(fields);
   for (const [fieldPath, value] of assignments) setAtPath(next, fieldPath, value);
@@ -143,22 +127,28 @@ const verifyRequests = (output) =>
       );
       if (change.entityId && !entity) return [];
       const current = entity?.fields ?? {};
-      const proposed = withValues(current, assignments);
-      rendered.add(index);
       const candidates = Math.max(1, ...media.map((request) => request.catalogIds.length));
-      const suggested = Array.from({ length: candidates }, (_, k) => {
-        const picks = media.map((request) => [
-          request.path,
-          request.catalogIds[Math.min(k, request.catalogIds.length - 1)],
-        ]);
-        return {
-          name:
-            picks.length > 0
-              ? `suggested, candidate ${k + 1}: ${picks.map(([p, id]) => `${p} = ${describe(id)}`).join(", ")}`
-              : "suggested",
-          fields: withValues(proposed, picks),
-        };
-      });
+      let suggested;
+      try {
+        const proposed = withValues(current, assignments);
+        suggested = Array.from({ length: candidates }, (_, k) => {
+          const picks = media.map((request) => [
+            request.path,
+            request.catalogIds[Math.min(k, request.catalogIds.length - 1)],
+          ]);
+          return {
+            name:
+              picks.length > 0
+                ? `suggested, candidate ${k + 1}: ${picks.map(([p, id]) => `${p} = ${describe(id)}`).join(", ")}`
+                : "suggested",
+            fields: withValues(proposed, picks),
+          };
+        });
+      } catch {
+        // The server refuses a path it cannot write, so such a suggestion is not drawn either.
+        return [];
+      }
+      rendered.add(index);
       return [
         {
           title: `Suggestion ${index}: ${proposal.title} · ${change.entityType} ${entity?.fields?.name ?? change.entityId ?? "(new)"}`,

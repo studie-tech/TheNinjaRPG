@@ -1,6 +1,7 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserQueueState } from "@/deltas/profile";
 import { getUserProgressionUpdate } from "@/deltas/profile";
+import { VARIANT_CURRENCY_FIELD, type VariantCurrency } from "@/drizzle/constants";
 import type { UserData, UserItem, UserItemWithRelations } from "@/drizzle/schema";
 import {
   effectiveMasteries,
@@ -91,20 +92,14 @@ export const getPurchaseVariantUserUpdate = ({
 }: {
   user: UserQueueState;
   variantCost: number;
-  variantCostType: "MONEY" | "REPUTATION" | "SEICHI_SILVER" | "VILLAGE_PRESTIGE";
+  variantCostType: VariantCurrency;
 }) => ({
   userDelta:
     hasEnergyQueue(user) || (variantCost > 0 && variantCostType === "VILLAGE_PRESTIGE")
       ? undefined
       : variantCost === 0
         ? {}
-        : {
-            [variantCostType === "MONEY"
-              ? "money"
-              : variantCostType === "REPUTATION"
-                ? "reputationPoints"
-                : "seichiSilver"]: -variantCost,
-          },
+        : { [VARIANT_CURRENCY_FIELD[variantCostType]]: -variantCost },
 });
 
 /**

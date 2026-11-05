@@ -1,10 +1,5 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHmac,
-  randomBytes,
-  timingSafeEqual,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import { constantTimeEquals } from "@/server/utils/constantTime";
 
 /**
  * Stored Discord OAuth tokens are encrypted with AES-256-GCM. The format is
@@ -79,17 +74,14 @@ export const verifyLinkState = (
   if (!state || !expected.nonce) return false;
   const [body, signature] = state.split(".");
   if (!body || !signature) return false;
-  const actual = Buffer.from(signature);
-  const wanted = Buffer.from(signState(body, expected.clientSecret));
-  if (actual.length !== wanted.length || !timingSafeEqual(actual, wanted)) return false;
+  if (!constantTimeEquals(signature, signState(body, expected.clientSecret)))
+    return false;
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as
       | Partial<StatePayload>
       | undefined;
     const nonceMatches =
-      typeof payload?.n === "string" &&
-      payload.n.length === expected.nonce.length &&
-      timingSafeEqual(Buffer.from(payload.n), Buffer.from(expected.nonce));
+      typeof payload?.n === "string" && constantTimeEquals(payload.n, expected.nonce);
     return (
       payload?.u === expected.userId &&
       nonceMatches &&

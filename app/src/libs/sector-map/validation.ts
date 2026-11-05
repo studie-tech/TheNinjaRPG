@@ -115,27 +115,7 @@ export const isReachableCoordinate = (
   if (!isWalkableCoordinate(map, from) || !isWalkableCoordinate(map, to)) return false;
   if (from.x === to.x && from.y === to.y) return true;
 
-  const visited = new Set<string>();
-  const queue: SectorCoordinate[] = [from];
-  // Advance a head pointer instead of Array.shift() (which is O(n)); on a large
-  // map that would make the whole BFS O(n^2) on the move hot-path.
-  let head = 0;
-  visited.add(getSectorTileKey(from.x, from.y));
-
-  while (head < queue.length) {
-    const current = queue[head++];
-    if (!current) continue;
-
-    for (const neighbor of getNeighborCoordinates(current)) {
-      const key = getSectorTileKey(neighbor.x, neighbor.y);
-      if (visited.has(key) || !isWalkableCoordinate(map, neighbor)) continue;
-      if (neighbor.x === to.x && neighbor.y === to.y) return true;
-      visited.add(key);
-      queue.push(neighbor);
-    }
-  }
-
-  return false;
+  return getConnectedWalkableKeys(map, from, to).has(getSectorTileKey(to.x, to.y));
 };
 
 /** The map anchor with the given key (e.g. "spawn.default"), if any */
@@ -166,26 +146,24 @@ export const findNearestWalkableCoordinate = (
     return { x: fallback.x, y: fallback.y };
   }
 
-  const candidates = [...map.tiles].sort((a, b) => {
-    const distA = Math.max(Math.abs(a.x - coordinate.x), Math.abs(a.y - coordinate.y));
-    const distB = Math.max(Math.abs(b.x - coordinate.x), Math.abs(b.y - coordinate.y));
-    return distA - distB;
-  });
-  const candidate = candidates[0];
-  return candidate ? { x: candidate.x, y: candidate.y } : null;
+  return findNearestTile(map.tiles, coordinate);
 };
 
 /**
  * Every walkable coordinate connected to `from`, keyed by getSectorTileKey.
- * Empty when `from` itself is not walkable.
+ * Empty when `from` itself is not walkable. Stops early once `stopAt` is found.
  */
 const getConnectedWalkableKeys = (
   map: Pick<NormalizedSectorMap, "width" | "height" | "tiles">,
   from: SectorCoordinate,
+  stopAt?: SectorCoordinate,
 ) => {
   const visited = new Set<string>();
   if (!isWalkableCoordinate(map, from)) return visited;
+  const stopKey = stopAt && getSectorTileKey(stopAt.x, stopAt.y);
   const queue: SectorCoordinate[] = [from];
+  // Advance a head pointer instead of Array.shift() (which is O(n)); on a large
+  // map that would make the whole BFS O(n^2) on the move hot-path.
   let head = 0;
   visited.add(getSectorTileKey(from.x, from.y));
   while (head < queue.length) {
@@ -195,6 +173,7 @@ const getConnectedWalkableKeys = (
       const key = getSectorTileKey(neighbor.x, neighbor.y);
       if (visited.has(key) || !isWalkableCoordinate(map, neighbor)) continue;
       visited.add(key);
+      if (key === stopKey) return visited;
       queue.push(neighbor);
     }
   }
@@ -222,19 +201,36 @@ export const findNearestReachableCoordinate = (
 
   // Ties on Chebyshev distance prefer the smaller Manhattan offset, so the
   // replacement sits as straight across from the original as possible.
+  return findNearestTile(
+    map.tiles.filter(isReachable),
+    coordinate,
+    (tile) => Math.abs(tile.x - coordinate.x) + Math.abs(tile.y - coordinate.y),
+  );
+};
+
+/** Straight-line steps on the map grid: the larger of the two axis offsets. */
+export const chebyshevDistance = (a: SectorCoordinate, b: SectorCoordinate) =>
+  Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+/** Nearest tile by Chebyshev distance; `tieBreak` orders equals, else the first one wins. */
+const findNearestTile = (
+  tiles: readonly SectorCoordinate[],
+  coordinate: SectorCoordinate,
+  tieBreak: (tile: SectorCoordinate) => number = () => 0,
+): SectorCoordinate | null => {
   let best: SectorCoordinate | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
-  let bestOffset = Number.POSITIVE_INFINITY;
-  for (const tile of map.tiles) {
-    if (!isReachable(tile)) continue;
-    const dx = Math.abs(tile.x - coordinate.x);
-    const dy = Math.abs(tile.y - coordinate.y);
-    const distance = Math.max(dx, dy);
-    const offset = dx + dy;
-    if (distance < bestDistance || (distance === bestDistance && offset < bestOffset)) {
+  let bestTieBreak = Number.POSITIVE_INFINITY;
+  for (const tile of tiles) {
+    const distance = chebyshevDistance(tile, coordinate);
+    const tieValue = tieBreak(tile);
+    if (
+      distance < bestDistance ||
+      (distance === bestDistance && tieValue < bestTieBreak)
+    ) {
       best = { x: tile.x, y: tile.y };
       bestDistance = distance;
-      bestOffset = offset;
+      bestTieBreak = tieValue;
     }
   }
   return best;

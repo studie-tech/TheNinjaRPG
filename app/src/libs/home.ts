@@ -16,7 +16,7 @@ import {
 } from "@/libs/homeFloorGeometry";
 import {
   getHomePlacementRoom,
-  getHomeRooms,
+  getHomeRoom,
   homeRoomLayoutError,
 } from "@/libs/homeProperty";
 
@@ -28,8 +28,6 @@ import type {
   FurnitureImageBounds,
   FurnitureViews,
 } from "@/validators/itemFurniture";
-
-export { isPointInHomePolygon } from "@/libs/homeFloorGeometry";
 
 /** A furniture instance is an owned inventory row; content supplies its appearance and home action. */
 export type HomeFurniture = {
@@ -100,13 +98,11 @@ export const getHomeFurnitureGeometry = (
 ) => {
   const view = getHomeFurnitureView(furniture, placement.rotation);
   const anchor = projectHomePlacement(placement);
-  const room = getHomeRooms(homeType).find(
-    ({ id }) => id === getHomePlacementRoom(placement),
-  );
+  const room = getHomeRoom(homeType, getHomePlacementRoom(placement));
   const width = (view.width * 100) / (room?.width ?? 100);
   // Scale against the painted world canvas before converting into room-local vertical percentages.
   const height =
-    (view.width * (HOME_ART_PLANS[homeType].aspectRatio ?? 4 / 3) * 100) /
+    (view.width * HOME_ART_PLANS[homeType].aspectRatio * 100) /
     view.geometry.aspectRatio /
     (room?.height ?? 100);
   const image = {
@@ -157,12 +153,7 @@ export const homeLayoutPlacementError = (
     const footprint = getHomeFurnitureGeometry(piece, placement, homeType).footprint;
     for (const other of placements.slice(index + 1)) {
       const otherPiece = available.get(other.id);
-      if (
-        !otherPiece ||
-        getHomePlacementRoom(other) !== getHomePlacementRoom(placement) ||
-        otherPiece.isFloor ||
-        (piece.action === "farm") !== (otherPiece.action === "farm")
-      )
+      if (!otherPiece || !canHomePiecesCollide(placement, piece, other, otherPiece))
         continue;
       if (
         doHomeBoundsOverlap(
@@ -207,10 +198,8 @@ export const fitHomeFurniturePlacement = (
     : placements.flatMap((other) => {
         const piece = available.get(other.id);
         return other.id !== placement.id &&
-          getHomePlacementRoom(other) === getHomePlacementRoom(placement) &&
           piece &&
-          !piece.isFloor &&
-          (piece.action === "farm") === (furniture.action === "farm")
+          canHomePiecesCollide(placement, furniture, other, piece)
           ? [getHomeFurnitureGeometry(piece, other, homeType).footprint]
           : [];
       });
@@ -337,15 +326,25 @@ export const homeLayoutOrientationError = (
 /** Cache lifetime follows furniture identity; callers replace snapshots when appearance changes. */
 const homeAnchorCache = new WeakMap<HomeFurniture, Map<string, HomeFloorRegions>>();
 
+/** Pieces only collide inside one room, above the floor layer, and on the same side of farming. */
+const canHomePiecesCollide = (
+  placement: HomePlacement,
+  piece: HomeFurniture,
+  other: HomePlacement,
+  otherPiece: HomeFurniture,
+) =>
+  getHomePlacementRoom(other) === getHomePlacementRoom(placement) &&
+  !piece.isFloor &&
+  !otherPiece.isFloor &&
+  (piece.action === "farm") === (otherPiece.action === "farm");
+
 /** Intersect footprint-safe room-local floors with visible-art and saved-position limits. */
 const getHomeAnchorRegions = (
   furniture: HomeFurniture,
   placement: HomePlacement,
   homeType: HomeType,
 ): HomeFloorRegions => {
-  const room = getHomeRooms(homeType).find(
-    ({ id }) => id === getHomePlacementRoom(placement),
-  );
+  const room = getHomeRoom(homeType, getHomePlacementRoom(placement));
   if (!room) return [];
   if (!room.isYard && furniture.action === "farm") return [];
   const key = `${homeType}:${room.id}:${placement.rotation}`;

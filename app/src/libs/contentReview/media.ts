@@ -22,7 +22,7 @@ import {
   isEpidemicConfigured,
   searchEpidemicSfx,
 } from "./epidemic";
-import { isSceneCharacterPath } from "./paths";
+import { directMediaValue, isSceneCharacterPath } from "./paths";
 import {
   SCENE_CHARACTER_PREPROMPT,
   validateSceneCharacterImage,
@@ -168,11 +168,10 @@ export const materializeChoice = (
   > & { path?: string },
   reviewerId: string,
 ) => {
+  const direct = directMediaValue(media, media.path ?? "");
+  if (direct !== undefined) return { value: direct, asset: null };
   const sceneCharacter =
     media.kind === "IMAGE" && isSceneCharacterPath(media.path ?? "");
-  if (media.kind === "IMAGE" && !sceneCharacter)
-    return { value: media.url, asset: null };
-  if (media.source === "CATALOG") return { value: media.externalId, asset: null };
   const id =
     media.source === "EPIDEMIC" && media.externalId
       ? epidemicAssetId(media.externalId)

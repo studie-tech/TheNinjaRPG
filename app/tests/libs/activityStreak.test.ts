@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
+import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
+  getStreakClaimState,
   isActivityStreakPopupBlocking,
   isEventPassCompletion,
   normalizeRecurringStreakProgress,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
+  resolveStreakClaim,
   shouldFetchActivityStreaksForPopup,
   type ActivityStreakPopupState,
 } from "@/libs/activityStreak";
@@ -269,4 +272,118 @@ it("resets an expanded converted pass only until its new recurring cycle starts"
   expect(normalized.currentDay).toBe(0);
   const nextDay = { ...normalized, currentDay: 1 };
   expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+});
+
+describe("streak claim state", () => {
+  const now = new Date("2026-10-10T12:00:00Z");
+  const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3600 * 1000);
+  const recurring = { streakType: "RECURRING", totalDays: 7 };
+
+  it("caps the reachable day at the streak length", () => {
+    const progress = { currentDay: 2, startedAt: hoursAgo(49), lastClaimDate: null };
+    expect(getStreakClaimState(progress, recurring, now).theoreticalMaxDay).toBe(3);
+    expect(
+      getStreakClaimState(progress, { ...recurring, totalDays: 2 }, now)
+        .theoreticalMaxDay,
+    ).toBe(2);
+  });
+
+  it("does not treat a fresh start as behind", () => {
+    const fresh = { currentDay: 0, startedAt: hoursAgo(72), lastClaimDate: null };
+    expect(getStreakClaimState(fresh, recurring, now).isBehind).toBe(false);
+    expect(
+      getStreakClaimState({ ...fresh, currentDay: 1 }, recurring, now).isBehind,
+    ).toBe(true);
+  });
+
+  it("reads claim timing from the given clock", () => {
+    const progress = { currentDay: 1, startedAt: hoursAgo(2), lastClaimDate: hoursAgo(2) };
+    const state = getStreakClaimState(progress, recurring, now);
+    expect(state.alreadyClaimedToday).toBe(true);
+    expect(state.continuous).toBe(true);
+    const later = getStreakClaimState(progress, recurring, new Date("2026-10-14T00:00:00Z"));
+    expect(later.alreadyClaimedToday).toBe(false);
+    expect(later.continuous).toBe(false);
+  });
+
+  it("completes an event pass by day count or a logged completion", () => {
+    const pass = { streakType: "EVENT_PASS", totalDays: 2 };
+    const base = { startedAt: hoursAgo(1), lastClaimDate: null };
+    expect(
+      getStreakClaimState({ ...base, currentDay: 1 }, pass, now).isPassCompleted,
+    ).toBe(false);
+    expect(
+      getStreakClaimState({ ...base, currentDay: 2 }, pass, now).isPassCompleted,
+    ).toBe(true);
+    expect(
+      getStreakClaimState({ ...base, currentDay: 1 }, pass, now, now).isPassCompleted,
+    ).toBe(true);
+    expect(
+      getStreakClaimState({ ...base, currentDay: 7 }, recurring, now, now).isPassCompleted,
+    ).toBe(false);
+  });
+});
+
+describe("streak claim resolution", () => {
+  const onTrack = { alreadyClaimedToday: false, continuous: true, isBehind: false };
+  const request = { reset: false, payCatchUp: false, reputationPoints: 0 };
+  const advance = (newCurrentDay: number) => ({
+    newCurrentDay,
+    streakReset: false,
+    paidCatchUp: false,
+  });
+  const restart = { newCurrentDay: 1, streakReset: true, paidCatchUp: false };
+
+  it("advances a continuous streak or a first claim once per day", () => {
+    expect(resolveStreakClaim(3, onTrack, request)).toEqual(advance(4));
+    expect(
+      resolveStreakClaim(0, { ...onTrack, continuous: false }, request),
+    ).toEqual(advance(1));
+    expect(
+      resolveStreakClaim(3, { ...onTrack, alreadyClaimedToday: true }, request),
+    ).toEqual({ error: "You have already claimed this streak today" });
+  });
+
+  it("restarts a broken streak unless the player pays", () => {
+    const broken = { ...onTrack, continuous: false, isBehind: true };
+    expect(resolveStreakClaim(3, broken, request)).toEqual(restart);
+    expect(
+      resolveStreakClaim(3, broken, {
+        ...request,
+        payCatchUp: true,
+        reputationPoints: COST_STREAK_CATCHUP_DAY,
+      }),
+    ).toEqual({ newCurrentDay: 4, streakReset: false, paidCatchUp: true });
+  });
+
+  it("refuses a catch-up without arrears or reputation", () => {
+    const payCatchUp = { ...request, payCatchUp: true };
+    expect(resolveStreakClaim(3, onTrack, payCatchUp)).toEqual({
+      error: "You can only pay to catch up when you are behind. Come back tomorrow!",
+    });
+    expect(
+      resolveStreakClaim(3, { ...onTrack, isBehind: true }, {
+        ...payCatchUp,
+        reputationPoints: COST_STREAK_CATCHUP_DAY - 0.5,
+      }),
+    ).toEqual({
+      error: `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${COST_STREAK_CATCHUP_DAY - 1}`,
+    });
+  });
+
+  it("only resets a started streak that is behind and unclaimed today", () => {
+    const reset = { ...request, reset: true };
+    expect(resolveStreakClaim(0, onTrack, reset)).toEqual({
+      error: "Nothing to reset - you haven't started yet",
+    });
+    expect(
+      resolveStreakClaim(3, { ...onTrack, alreadyClaimedToday: true }, reset),
+    ).toEqual({ error: "You have already claimed this streak today" });
+    expect(resolveStreakClaim(3, onTrack, reset)).toEqual({
+      error: "Cannot reset - your streak is on track! Just claim the next day.",
+    });
+    expect(resolveStreakClaim(3, { ...onTrack, isBehind: true }, reset)).toEqual(
+      restart,
+    );
+  });
 });

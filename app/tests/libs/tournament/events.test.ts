@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { advanceEvent, beginEventRound, completeEventGame, createEventState, eventRewardFor, generateEventBracket, isActiveEventEntrant } from "@/libs/tournament/events";
+import { advanceEvent, beginEventRound, completeEventGame, createEventState, currentEventRound, eligibilityError, eventRewardFor, generateEventBracket, isActiveEventEntrant, isGameInFlight, isSeriesAwaitingBegin } from "@/libs/tournament/events";
 import { eventTournamentConfigSchema, type EventTournamentConfig, type EventTournamentState } from "@/validators/tournament";
 
 const makeEvent = (count = 8, overrides: Partial<EventTournamentConfig> = {}) => {
@@ -186,3 +186,30 @@ const eventAfterFirstGame = (event: EventTournamentState) => {
   completeEventGame(event, series, game.userIds[0]!, "BATTLE", 0);
   return event;
 };
+
+describe("staff event tournament predicates", () => {
+  it("tracks the earliest unfinished round and the series waiting in it", () => {
+    const event = makeEvent(4);
+    advanceEvent(event, 0);
+    const round = currentEventRound(event);
+    expect(round).toBe(Math.min(...event.series.map((s) => s.round)));
+    const series = event.series.find((s) => s.round === round)!;
+    expect(isSeriesAwaitingBegin(series, round)).toBe(series.resolved);
+    expect(isSeriesAwaitingBegin(series, round + 1)).toBe(false);
+    expect(isSeriesAwaitingBegin({ ...series, resolved: true, begun: true }, round)).toBe(false);
+    expect(currentEventRound({ series: [] })).toBe(Infinity);
+  });
+
+  it("treats only launched games as in flight", () => {
+    expect(isGameInFlight({ status: "STARTING" } as never)).toBe(true);
+    expect(isGameInFlight({ status: "FIGHTING" } as never)).toBe(true);
+    expect(isGameInFlight({ status: "READY" } as never)).toBe(false);
+  });
+
+  it("joins every failed requirement into one rejection", () => {
+    const { config } = makeEvent(2, { minPvpWins: 5, minWinRate: 40 });
+    const snapshot = { bracket: 1, pvpWins: 0, winRate: 0, masteredJutsu: 0 };
+    expect(eligibilityError(config, snapshot)).toBe("Requires 5 PvP wins. Requires 40% PvP win rate");
+    expect(eligibilityError(config, { ...snapshot, pvpWins: 5, winRate: 40 })).toBe("");
+  });
+});

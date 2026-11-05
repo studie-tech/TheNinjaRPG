@@ -4,6 +4,7 @@
 import { and, asc, eq, lte } from "drizzle-orm";
 import { SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -19,7 +20,7 @@ export const fetchStudents = async (client: DrizzleClient, userId: string) => {
       eq(userData.senseiId, userId),
       lte(userData.level, SENSEI_MAX_STUDENT_LEVEL),
     ),
-    columns: { userId: true, username: true, avatar: true, rank: true, level: true },
+    columns: userSummaryColumns,
     orderBy: asc(userData.level),
   });
 };

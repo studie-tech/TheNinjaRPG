@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { CUTOUT_ALPHA_THRESHOLD } from "@/drizzle/constants";
 import {
   type FurnitureGeometry,
   furnitureGeometrySchema,
@@ -24,7 +25,7 @@ export const measureFurnitureImage = async (
   );
 };
 
-/** Match scene-character alpha tolerance so faint cutout shadows do not inflate selection. */
+/** Faint cutout shadows stay below the alpha threshold, so they do not inflate selection. */
 export const furnitureGeometryFromPixels = (
   pixels: Uint8Array,
   width: number,
@@ -38,7 +39,8 @@ export const furnitureGeometryFromPixels = (
   let bottom = -1;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if ((pixels[(y * width + x) * channels + channels - 1] ?? 0) <= 16) continue;
+      const alpha = pixels[(y * width + x) * channels + channels - 1] ?? 0;
+      if (alpha <= CUTOUT_ALPHA_THRESHOLD) continue;
       left = Math.min(left, x);
       top = Math.min(top, y);
       right = Math.max(right, x);

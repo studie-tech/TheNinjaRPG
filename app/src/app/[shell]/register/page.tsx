@@ -51,6 +51,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { getRandomElement, shuffle } from "@/utils/array";
 import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -858,7 +859,7 @@ const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => 
 
 /** Helper to get randomized initial form values */
 const getRandomizedFormValues = () => {
-  const shuffledAttributes = [...attributes].sort(() => 0.5 - Math.random());
+  const shuffledAttributes = shuffle(attributes);
   const [attr1, attr2, attr3] = shuffledAttributes
     .filter(
       (attribute, index, all) =>
@@ -872,10 +873,9 @@ const getRandomizedFormValues = () => {
     attribute_1: attr1 ?? attributes[0],
     attribute_2: attr2 ?? attributes[1],
     attribute_3: attr3 ?? attributes[2],
-    hair_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
-    eye_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
-    skin_color:
-      skin_colors[Math.floor(Math.random() * skin_colors.length)] ?? skin_colors[0],
+    hair_color: getRandomElement(colors) ?? colors[0],
+    eye_color: getRandomElement(colors) ?? colors[0],
+    skin_color: getRandomElement(skin_colors) ?? skin_colors[0],
     gender: genders[secureRandomInt(genders.length)] ?? genders[0],
   };
 };

@@ -31,11 +31,11 @@ import {
   getHomeFurnitureRotations,
   getHomeFurnitureView,
   type HomeFurniture,
-  isPointInHomePolygon,
   projectHomePlacement,
   recoverHomeLayout,
   unprojectHomePlacement,
 } from "@/libs/home";
+import { isPointInHomePolygon } from "@/libs/homeFloorGeometry";
 import {
   boundHomeCamera,
   getHomeOverviewCamera,
@@ -417,7 +417,7 @@ export const HomeScene = ({
       <fieldset
         ref={sceneRef}
         aria-label="Home scene"
-        style={{ aspectRatio: HOME_ART_PLANS[homeType].aspectRatio ?? 4 / 3 }}
+        style={{ aspectRatio: HOME_ART_PLANS[homeType].aspectRatio }}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: The scene supports keyboard camera panning.
         tabIndex={0}
         className={cn(

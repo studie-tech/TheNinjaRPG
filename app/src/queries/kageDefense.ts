@@ -81,21 +81,16 @@ export const findVillageForWithdrawDefense = (
     where: eq(village.id, match.villageId),
   });
 
-/** Build the `kageDefendedChallenges` update for `rescheduleDefense`, using predicates on `id`. */
-export const updateKageDefendedChallengesForRescheduleDefense = (
+/** Return matches to the queue, clearing their slot until `notBefore`. */
+export const requeueKageDefendedChallenges = (
   client: Pick<DrizzleClient, "update">,
-  notBefore: Date,
-  later: { match: { id: string } }[],
+  ids: string[],
+  values: { notBefore: Date; outcome?: string },
 ) =>
   client
     .update(kageDefendedChallenges)
-    .set({ status: "QUEUED", scheduledAt: null, checkedInAt: null, notBefore })
-    .where(
-      inArray(
-        kageDefendedChallenges.id,
-        later.map((r) => r.match.id),
-      ),
-    );
+    .set({ status: "QUEUED", scheduledAt: null, checkedInAt: null, ...values })
+    .where(inArray(kageDefendedChallenges.id, ids));
 
 /** Build the `kageDefendedChallenges` update for `rescheduleDefense`, setting `rescheduled`, using predicates on `id`. */
 export const updateKageDefendedChallengesForRescheduleDefense2 = (
@@ -221,31 +216,6 @@ export const listKageDefendedChallengesForStartDefense = (
     where: eq(kageDefendedChallenges.userId, m.userId),
   });
 
-/** Build the `kageDefendedChallenges` update for `resetFailedLaunch`, using predicates on `id`. */
-export const updateKageDefendedChallengesForResetFailedLaunch = (
-  client: Pick<DrizzleClient, "update">,
-  hall: { now: Date; rows: { match: { id: string; status: string } }[] },
-  index: number,
-) =>
-  client
-    .update(kageDefendedChallenges)
-    .set({
-      status: "QUEUED",
-      scheduledAt: null,
-      checkedInAt: null,
-      notBefore: secondsFromDate(KAGE_DEFENSE_NOTICE_HOURS * 3600, hall.now),
-      outcome: "Battle could not start; queue priority retained without penalty",
-    })
-    .where(
-      inArray(
-        kageDefendedChallenges.id,
-        hall.rows
-          .slice(index)
-          .filter((r) => ["QUEUED", "SCHEDULED"].includes(r.match.status))
-          .map((r) => r.match.id),
-      ),
-    );
-
 /** Build the `village` lookup for `loadKageDefense`, using predicates on `id`. */
 export const findVillageForLoadKageDefense = (
   client: Pick<DrizzleClient, "query">,
@@ -286,10 +256,7 @@ export const listWarForLoadKageDefense = (
 ) =>
   client.query.war.findMany({
     columns: { id: true, status: true, startedAt: true, endedAt: true },
-    where: and(
-      eq(war.type, "VILLAGE_WAR"),
-      or(eq(war.attackerVillageId, villageId), eq(war.defenderVillageId, villageId)),
-    ),
+    where: villageWarWhere(villageId),
   });
 
 /** Persist schedule JSON only for the tenure loaded under the village lock. */
@@ -671,11 +638,7 @@ export const selectVillageForMaintainKageDefenses = (
           .from(war)
           .where(
             and(
-              eq(war.type, "VILLAGE_WAR"),
-              or(
-                eq(war.attackerVillageId, village.id),
-                eq(war.defenderVillageId, village.id),
-              ),
+              villageWarWhere(village.id),
               or(eq(war.status, "ACTIVE"), gte(war.startedAt, uninterruptedSince)),
             ),
           ),
@@ -719,3 +682,10 @@ export const incrementKageScheduleVersion = (
     .update(village)
     .set({ kageScheduleVersion: sql`${village.kageScheduleVersion} + 1` })
     .where(eq(village.id, villageId));
+
+/** A VILLAGE_WAR the village fights on either side; takes a bound id or a joined column. */
+const villageWarWhere = (villageId: string | typeof village.id) =>
+  and(
+    eq(war.type, "VILLAGE_WAR"),
+    or(eq(war.attackerVillageId, villageId), eq(war.defenderVillageId, villageId)),
+  );

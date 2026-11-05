@@ -7,6 +7,7 @@ import {
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
+import { queryInTransaction } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 
 /**
@@ -44,9 +45,8 @@ export const hydrateQuestCollections = async (
       ? (snapshot?.rolls ?? fetchBloodlineCollectionRolls(client, user.userId))
       : undefined,
   ] as const;
-  // Drizzle queries are lazy; independent sessions can run together, a transaction cannot.
   const [farmingCollectionCount, catalogue, rolls] = inTransaction
-    ? [await queries[0], await queries[1], await queries[2]]
+    ? await queryInTransaction(queries)
     : await Promise.all(queries);
   return {
     ...user,

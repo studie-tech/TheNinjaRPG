@@ -33,6 +33,28 @@ export type PushResult =
   | { token: string; status: "expired"; reason: string }
   | { token: string; status: "failed"; reason: string; retryable: boolean };
 
+/** Drop whatever a transport tracked on an attempt, keeping the shared outcome. */
+export const toPublicResult = (result: PushResult): PushResult => {
+  if (result.status === "sent") return { token: result.token, status: "sent" };
+  if (result.status === "expired") {
+    return { token: result.token, status: "expired", reason: result.reason };
+  }
+  return {
+    token: result.token,
+    status: "failed",
+    reason: result.reason,
+    retryable: result.retryable,
+  };
+};
+
+/** The same failure for every token of a batch that could not be attempted. */
+export const failAll = (
+  tokens: string[],
+  reason: string,
+  retryable: boolean,
+): PushResult[] =>
+  tokens.map((token) => ({ token, status: "failed", reason, retryable }));
+
 export interface PushSendSummary {
   sent: number;
   failed: number;

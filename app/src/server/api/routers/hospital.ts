@@ -25,7 +25,6 @@ import { hasRequiredRank } from "@/libs/train";
 import {
   executeResultForUserHeal,
   listUserDataForGetHospitalizedUsers,
-  listVillageAllianceForGetHospitalizedUsers,
   updateUserDataForNpcHeal,
   updateUserDataForNpcHeal2,
   updateUserDataForUserHeal,
@@ -48,7 +47,7 @@ import {
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { flushSafe } from "@/server/utils/sentry";
-import { findRelationship } from "@/utils/alliance";
+import { findRelationship, getAlliedVillageIds } from "@/utils/alliance";
 import { secondsFromDate } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
 import {
@@ -69,23 +68,13 @@ export const hospitalRouter = createTRPCRouter({
       // Query
       const [user, alliances] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        listVillageAllianceForGetHospitalizedUsers(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
       ]);
-      // Derived
-      const allies = alliances
-        .filter(
-          (a) => a.villageIdA === user.villageId || a.villageIdB === user.villageId,
-        )
-        .filter((a) => a.status === "ALLY")
-        .flatMap((a) => [a.villageIdA, a.villageIdB]);
-      const uniqueVillageIds = user.villageId
-        ? [...new Set([user.villageId, ...allies])]
-        : [];
       // Return filtered data
       return await listUserDataForGetHospitalizedUsers(
         ctx.drizzle,
         user,
-        uniqueVillageIds,
+        getAlliedVillageIds(alliances, user.villageId),
       );
     }),
   /** Deliver allowed healing pools with their chakra payment and medical progress. */

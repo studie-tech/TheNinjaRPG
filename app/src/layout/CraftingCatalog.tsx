@@ -25,12 +25,12 @@ import Modal from "@/layout/Modal";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import {
   formatCraftingRank,
+  getCraftingExperienceGain,
   getCraftingRank,
   getCraftingSeconds,
   getMissingCraftingRank,
   getTotalItemQuantity,
 } from "@/libs/crafting";
-import { boostPvpGain } from "@/libs/pvpExperience";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -117,15 +117,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [craftQuantityInput, setCraftQuantity] = useState<number>(1);
   const craftQuantity = craftQuantityInput || 1;
-  const craftingExperienceGain = Math.floor(
-    boostPvpGain(
-      (selectedItem?.craftingExperience ?? 0) *
-        craftQuantity *
-        (1 +
-          (userData?.isOutlaw ? 0 : (userData?.clan?.craftingExpBoost ?? 0) / 100) +
-          territoryWarBoost),
-      userData?.pvpBoost?.totalPercent ?? 0,
-    ),
+  const craftingExperienceGain = getCraftingExperienceGain(
+    (selectedItem?.craftingExperience ?? 0) * craftQuantity,
+    userData,
+    territoryWarBoost,
+    userData?.pvpBoost?.totalPercent ?? 0,
   );
   const craftRequestInFlight = useRef(false);
 

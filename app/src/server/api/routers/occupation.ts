@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { eq, isNull, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -19,6 +19,7 @@ import {
   calculateItemConsumption,
   craftingStartBlockMessage,
   formatCraftingRank,
+  getCraftingExperienceGain,
   getCraftingRank,
   getCraftingSeconds,
   getEffectiveMaxImbuements,
@@ -31,16 +32,17 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  splitIntoStacks,
 } from "@/libs/item";
-import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getPvpBoost } from "@/libs/pvpExperience";
+import {
+  filterQuestTrackersForDbPersist,
+  getCraftTrackerTasks,
+  getNewTrackers,
+} from "@/libs/quest";
 import { getNextQueueSchedule } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import {
-  deleteUserItemWhere,
-  updateUserItemForUpdateUserItemQuantityAtomically,
-} from "@/queries/concurrency";
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import {
   deleteUserItemImbuementForRemoveImbuement,
@@ -69,6 +71,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import {
   claimUserSnapshot,
   updateUserItemQuantityAtomically,
@@ -92,6 +95,7 @@ import {
   getNextUserSnapshotAt,
   getSecondPrecisionDate,
 } from "@/utils/time";
+import type { QueryCondition } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { cookItemInputSchema } from "@/validators/cooking";
 import {
@@ -344,22 +348,20 @@ export const occupationRouter = createTRPCRouter({
       // Create crafting item entry/entries
       // Respect stackSize limit when creating items
       const craftingItemValues: (typeof userItem.$inferInsert)[] = [];
-      const stackSize = itemWithRequirements.stackSize;
-      for (let remaining = outputQuantity; remaining > 0; remaining -= stackSize) {
+      for (const quantity of splitIntoStacks(
+        outputQuantity,
+        itemWithRequirements.stackSize,
+      )) {
         craftingItemValues.push({
           id: nanoid(),
           userId: ctx.userId,
           itemId: input.itemId,
-          quantity: Math.min(remaining, stackSize),
+          quantity,
           craftingFinishedAt: finishTime,
         });
       }
 
       // Award crafting experience (from item config, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/strongholds)
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
       const baseExpGain = isMeal
         ? 0
         : (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
@@ -370,11 +372,11 @@ export const occupationRouter = createTRPCRouter({
               (1 + getTerritoryWarBoost(user)),
           )
         : 0;
-      const expGain = Math.floor(
-        boostPvpGain(
-          baseExpGain * (1 + clanCraftingExpBoost + getTerritoryWarBoost(user)),
-          getPvpBoost(user, settings).totalPercent,
-        ),
+      const expGain = getCraftingExperienceGain(
+        baseExpGain,
+        user,
+        getTerritoryWarBoost(user),
+        getPvpBoost(user, settings).totalPercent,
       );
       // Update trackers: crafting experience, total items crafted, and any
       // craft-this-specific-item objectives. Emitted here (behind the transaction's
@@ -385,17 +387,7 @@ export const occupationRouter = createTRPCRouter({
         ? { trackers: user.questData ?? [], consequences: [], questIdsUpdated: [] }
         : getNewTrackers(
             { ...user, craftingExperience: user.craftingExperience + expGain },
-            isMeal
-              ? []
-              : [
-                  { task: "crafting_experience_gained", increment: expGain },
-                  { task: "items_crafted", increment: input.quantity },
-                  {
-                    task: "craft_specific_item",
-                    increment: input.quantity,
-                    contentId: input.itemId,
-                  },
-                ],
+            isMeal ? [] : getCraftTrackerTasks(expGain, input.quantity, input.itemId),
           );
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       const materials: CraftingQueueMaterial[] = allConsumptions.flatMap(
@@ -432,26 +424,11 @@ export const occupationRouter = createTRPCRouter({
           );
         }
         const taken = await Promise.all(
-          allConsumptions.map(async (consumption) => {
-            const itemWhere = and(
-              eq(userItem.id, consumption.userItemId),
-              eq(userItem.userId, ctx.userId),
+          allConsumptions.map((consumption) =>
+            takeCraftMaterial(ctx.drizzle, ctx.userId, consumption, [
               eq(userItem.isInAuction, false),
-              eq(
-                userItem.quantity,
-                consumption.consumeQuantity + consumption.newQuantity,
-              ),
-            );
-            const result =
-              consumption.newQuantity > 0
-                ? await updateUserItemForUpdateUserItemQuantityAtomically(
-                    ctx.drizzle,
-                    consumption.newQuantity,
-                    itemWhere,
-                  )
-                : await deleteUserItemWhere(ctx.drizzle, itemWhere);
-            return result.rowsAffected === 1;
-          }),
+            ]),
+          ),
         );
         if (taken.some((ok) => !ok)) {
           await returnCraftMaterials(
@@ -524,22 +501,9 @@ export const occupationRouter = createTRPCRouter({
           if (claimResult.rowsAffected !== 1) return false;
 
           for (const consumption of allConsumptions) {
-            const expectedQuantity =
-              consumption.consumeQuantity + consumption.newQuantity;
-            const itemWhere = and(
-              eq(userItem.id, consumption.userItemId),
-              eq(userItem.userId, ctx.userId),
-              eq(userItem.quantity, expectedQuantity),
-            );
-            const materialResult =
-              consumption.newQuantity > 0
-                ? await updateUserItemForUpdateUserItemQuantityAtomically(
-                    tx,
-                    consumption.newQuantity,
-                    itemWhere,
-                  )
-                : await deleteUserItemWhere(tx, itemWhere);
-            if (materialResult.rowsAffected !== 1) throw materialConflict;
+            if (!(await takeCraftMaterial(tx, ctx.userId, consumption))) {
+              throw materialConflict;
+            }
           }
 
           await insertUserItems(tx, craftingItemValues);
@@ -824,16 +788,12 @@ export const occupationRouter = createTRPCRouter({
       );
 
       // Award small amount of crafting experience (half of crystal's crafting experience, or 0 if not set)
-      // Apply clan crafting experience boost (only for real clans, not outlaw factions/strongholds)
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
       const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
-      const expGain = Math.floor(
-        boostPvpGain(
-          baseExpGain * (1 + clanCraftingExpBoost + getTerritoryWarBoost(user)),
-          getPvpBoost(user, updatedUserResult.settings).totalPercent,
-        ),
+      const expGain = getCraftingExperienceGain(
+        baseExpGain,
+        user,
+        getTerritoryWarBoost(user),
+        getPvpBoost(user, updatedUserResult.settings).totalPercent,
       );
       // Update trackers with crafting experience gained
       const { trackers } = getNewTrackers(user, [
@@ -1006,3 +966,19 @@ export const occupationRouter = createTRPCRouter({
       };
     }),
 });
+
+/** Debit one material stack, failing when it no longer holds the planned quantity. */
+const takeCraftMaterial = (
+  client: Pick<DrizzleClient, "update" | "delete">,
+  userId: string,
+  consumption: { userItemId: string; consumeQuantity: number; newQuantity: number },
+  where?: QueryCondition[],
+) =>
+  updateUserItemQuantityAtomically({
+    client,
+    userId,
+    userItemId: consumption.userItemId,
+    expectedQuantity: consumption.consumeQuantity + consumption.newQuantity,
+    nextQuantity: consumption.newQuantity,
+    where,
+  });

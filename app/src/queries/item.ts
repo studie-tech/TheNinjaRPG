@@ -1,13 +1,13 @@
 /**
  * Database access for item; authorization and transaction scopes stay in callers.
  */
+
 import {
   and,
   asc,
   count,
   eq,
   exists,
-  getTableColumns,
   gt,
   gte,
   inArray,
@@ -26,6 +26,7 @@ import type { z } from "zod";
 import {
   IMG_AVATAR_DEFAULT,
   type VariantCostType,
+  type VariantCurrencyField,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import {
@@ -58,12 +59,9 @@ import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { getJutsuSlotIncreaseLimit } from "@/libs/jutsuSlots";
 import { collapseRewards } from "@/libs/quest";
 import { cacheItemIds, isRestrictedCacheReward } from "@/libs/weightedCache";
+import { insertValuesWhere, nextSnapshotSql } from "@/queries/concurrency";
 import { lpcDesignAssignmentGuard } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
-import {
-  completedQuestHistoryRelation,
-  userQuestHistoryRelation,
-} from "@/server/utils/achievementObjectives";
 import {
   hasNoHuntingBattle,
   userItemMergeQuantityCase,
@@ -73,22 +71,6 @@ import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
 import type { FurnitureVariantData } from "@/validators/itemFurniture";
 import type { cacheConsumptionResponseSchema } from "@/validators/weightedCache";
-
-/**
- * Thin quest-state fetch for tracker emits: only the relations getNewTrackers needs
- * (active + achievement userQuests, plus completedQuests for availability checks).
- * Avoids fetchUpdatedUser's fat row and its regen side-writes.
- */
-export const fetchUserQuestState = async (client: DrizzleClient, userId: string) => {
-  return await client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: { userId: true, questData: true },
-    with: {
-      userQuests: userQuestHistoryRelation,
-      completedQuests: completedQuestHistoryRelation,
-    },
-  });
-};
 
 /** Load an item definition by ID; a missing definition yields undefined. */
 export const fetchItem = async (client: DrizzleClient, id: string) => {
@@ -1069,23 +1051,16 @@ export const insertItemVariantForUpsertItemVariant = (
     battleDescription: safeBattleDescription,
     furnitureData: input.variant.furnitureData,
   };
-  const columns = getTableColumns(itemVariant);
-  const keys = Object.keys(values) as (keyof typeof values)[];
   // INSERT SELECT keeps item and LPC design references valid when the variant is saved.
-  return client.execute(sql`
-    INSERT INTO ${itemVariant} (${sql.join(
-      keys.map((key) => sql.identifier(columns[key].name)),
-      sql`, `,
-    )})
-    SELECT ${sql.join(
-      keys.map((key) => sql.param(values[key], columns[key])),
-      sql`, `,
-    )}
-    WHERE EXISTS (SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})
+  return insertValuesWhere(
+    client,
+    itemVariant,
+    values,
+    sql`EXISTS (SELECT 1 FROM ${item} WHERE ${eq(item.id, input.itemId)})
       AND ${input.variant.requiredItemId ? exists(sql`(SELECT 1 FROM ${item} WHERE ${eq(item.id, input.variant.requiredItemId)})`) : sql`TRUE`}
-      AND ${lpcDesignAssignmentGuard(input.variant.lpcProfile)}
-    ON DUPLICATE KEY UPDATE id = id
-  `);
+      AND ${lpcDesignAssignmentGuard(input.variant.lpcProfile)}`,
+    { ignoreDuplicate: true },
+  );
 };
 
 /** Build the `itemVariant` selection for `upsertItemVariant`, using predicates on `itemId`. */
@@ -1157,11 +1132,7 @@ export const findUserItemVariantForPurchaseVariant = (
 export const updateUserDataForPurchaseVariant = (
   client: Pick<DrizzleClient, "update">,
   currency: {
-    decrementSet:
-      | { money: SQL<unknown> }
-      | { reputationPoints: SQL<unknown> }
-      | { seichiSilver: SQL<unknown> }
-      | { villagePrestige: SQL<unknown> };
+    decrementSet: Partial<Record<VariantCurrencyField, SQL>>;
     where: SQL<unknown>;
   },
   ctx: { userId: string },
@@ -1175,11 +1146,7 @@ export const updateUserDataForPurchaseVariant = (
 export const updateUserDataForRefundCurrency = (
   client: Pick<DrizzleClient, "update">,
   currency: {
-    incrementSet:
-      | { money: SQL<unknown> }
-      | { reputationPoints: SQL<unknown> }
-      | { seichiSilver: SQL<unknown> }
-      | { villagePrestige: SQL<unknown> };
+    incrementSet: Partial<Record<VariantCurrencyField, SQL>>;
   },
   ctx: { userId: string },
 ) =>
@@ -1356,7 +1323,7 @@ export const updateUserItemForUnequipAllItems = (
     .update(userItem)
     .set({
       equipped: "NONE",
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1784,7 +1751,7 @@ export const updateUserItemForSelectItemLoadout = (
     .set({
       equipped,
       // Even an unchanged loadout must acknowledge the hunting guard.
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -1900,7 +1867,7 @@ export const updateUserItemForToggleEquipItem = (
     .update(userItem)
     .set({
       equipped: sql`CASE WHEN ${userItem.id} = ${useritem.id} THEN ${useritem.equipped} ELSE 'NONE' END`,
-      updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
     })
     .where(
       and(
@@ -2266,7 +2233,7 @@ export const executeRowsForSettleCookingExperience = (
           UPDATE ${userData}
           INNER JOIN ${userCookingJob} ON ${userCookingJob.userId} = ${userData.userId}
           SET ${userData.cookingExperience} = ${userData.cookingExperience} + ${job.experience},
-              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})),
+              ${userData.updatedAt} = ${nextSnapshotSql(userData.updatedAt)},
               ${userCookingJob.experience} = 0
           WHERE ${userData.userId} = ${userId}
             AND ${userCookingJob.id} = ${job.id}

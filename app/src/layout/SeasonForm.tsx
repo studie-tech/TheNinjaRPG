@@ -40,11 +40,13 @@ import { useUserData } from "@/utils/UserContext";
 import {
   type RankedSeason,
   type RankedSeasonInput,
-  type RankedSeasonReward,
-  type RankedSeasonRewardInput,
   rankedSeasonSchema,
-  rewardSchema,
 } from "@/validators/pvpRank";
+import {
+  ObjectiveReward,
+  type ObjectiveRewardInputType,
+  type ObjectiveRewardType,
+} from "@/validators/rewards";
 
 type FormValues = RankedSeason;
 type FormValuesInput = RankedSeasonInput;
@@ -124,7 +126,7 @@ export default function SeasonForm({
       ...currentRewards,
       {
         division: "Unranked",
-        rewards: rewardSchema.parse({}),
+        rewards: ObjectiveReward.parse({}),
       },
     ]);
   };
@@ -139,7 +141,7 @@ export default function SeasonForm({
 
   // Build formData for reward edit dialog
   const buildRewardFormData = () => {
-    const data: FormEntry<keyof RankedSeasonReward>[] = [
+    const data: FormEntry<keyof ObjectiveRewardType>[] = [
       { id: "reward_money", type: "number" },
       { id: "reward_seichi_silver", type: "number" },
       { id: "reward_clanpoints", type: "number" },
@@ -365,7 +367,7 @@ export default function SeasonForm({
                   {/* Rewards summary and edit button */}
                   <div className="flex items-center justify-between rounded-md border p-3">
                     <span className="text-muted-foreground text-sm">
-                      {getRewardArray(division.rewards as RankedSeasonReward).join(
+                      {getRewardArray(division.rewards as ObjectiveRewardType).join(
                         " • ",
                       )}
                     </span>
@@ -428,7 +430,7 @@ interface RewardDialogProps {
   onOpenChange: (open: boolean) => void;
   divisionIndex: number;
   parentForm: UseFormReturn<FormValuesInput, unknown, FormValues>;
-  buildRewardFormData: () => FormEntry<keyof RankedSeasonReward>[];
+  buildRewardFormData: () => FormEntry<keyof ObjectiveRewardType>[];
   disabled: boolean;
   pendingText: string;
 }
@@ -446,10 +448,10 @@ const RewardDialog: React.FC<RewardDialogProps> = ({
     control: parentForm.control,
     name: `rewards.${divisionIndex}.rewards`,
   });
-  const rewardForm = useForm<RankedSeasonRewardInput, unknown, RankedSeasonReward>({
-    resolver: zodResolver(rewardSchema),
-    values: parentReward ?? rewardSchema.parse({}),
-    defaultValues: parentReward ?? rewardSchema.parse({}),
+  const rewardForm = useForm<ObjectiveRewardInputType, unknown, ObjectiveRewardType>({
+    resolver: zodResolver(ObjectiveReward),
+    values: parentReward ?? ObjectiveReward.parse({}),
+    defaultValues: parentReward ?? ObjectiveReward.parse({}),
     mode: "all",
   });
 
@@ -488,8 +490,8 @@ const RewardDialog: React.FC<RewardDialogProps> = ({
           <DialogTitle>Edit Rewards</DialogTitle>
         </DialogHeader>
         <EditContent
-          schema={rewardSchema}
-          form={rewardForm as UseFormReturn<RankedSeasonReward, unknown>}
+          schema={ObjectiveReward}
+          form={rewardForm as UseFormReturn<ObjectiveRewardType, unknown>}
           formData={buildRewardFormData()}
           showSubmit={true}
           buttonTxt="Save Rewards"

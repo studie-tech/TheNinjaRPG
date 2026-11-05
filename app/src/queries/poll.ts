@@ -2,10 +2,12 @@
  * Database access for poll; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq } from "drizzle-orm";
-import { poll, userPollVote } from "@/drizzle/schema";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { actionLog, poll, pollOption, userPollVote } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
+import type { PollOptionSchema } from "@/validators/poll";
 
 /**
  * Fetch a poll by ID
@@ -40,10 +42,6 @@ export const fetchUserVote = async (
   return vote || null;
 };
 
-import { count, desc, inArray } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { actionLog, pollOption } from "@/drizzle/schema";
-
 /** Build the `poll` insert for `createPoll`. */
 export const insertPollForCreatePoll = (
   client: Pick<DrizzleClient, "insert">,
@@ -65,20 +63,31 @@ export const insertPollForCreatePoll = (
     endDate: input.endDate,
   });
 
-/** Build the `pollOption` insert for `createPoll`. */
-export const insertPollOptionForCreatePoll = (
+/** Build a `pollOption` row for a text option or an option naming a user. */
+export const toPollOptionRow = (
+  option: PollOptionSchema,
+  pollId: string,
+  createdByUserId: string,
+  isCustomOption: boolean,
+) => ({
+  id: nanoid(),
+  pollId,
+  createdByUserId,
+  isCustomOption,
+  ...(option.type === "text"
+    ? { text: option.text, optionType: "text" as const }
+    : {
+        text: option.username,
+        optionType: "user" as const,
+        targetUserId: option.userId,
+      }),
+});
+
+/** Build the `pollOption` insert. */
+export const insertPollOptions = (
   client: Pick<DrizzleClient, "insert">,
-  optionsToInsert: (
-    | (Pick<
-        import("@/drizzle/schema").PollOption,
-        "id" | "text" | "createdByUserId" | "pollId" | "isCustomOption"
-      > & { optionType: "text"; targetUserId?: undefined })
-    | (Pick<
-        import("@/drizzle/schema").PollOption,
-        "id" | "text" | "createdByUserId" | "pollId" | "isCustomOption"
-      > & { optionType: "user"; targetUserId: string })
-  )[],
-) => client.insert(pollOption).values(optionsToInsert);
+  options: ReturnType<typeof toPollOptionRow>[],
+) => client.insert(pollOption).values(options);
 
 /** Build the `actionLog` insert for `createPoll`. */
 export const insertActionLogForCreatePoll = (
@@ -184,73 +193,28 @@ export const findPollOptionForAddOption = (
           ),
   });
 
-/** Build the `pollOption` insert for `addOption`. */
-export const insertPollOptionForAddOption = (
-  client: Pick<DrizzleClient, "insert">,
-  input: { pollId: string; text: string },
-  user: { userId: string },
-  isAdmin: false | true,
-) =>
-  client.insert(pollOption).values({
-    id: nanoid(),
-    pollId: input.pollId,
-    text: input.text,
-    optionType: "text" as const,
-    createdByUserId: user.userId,
-    isCustomOption: !isAdmin, // Only mark as custom if not admin
-  });
-
 /** Build the `actionLog` insert for `addOption`. */
 export const insertActionLogForAddOption = (
   client: Pick<DrizzleClient, "insert">,
   user: { userId: string },
   existingPoll: { title: string },
-  input: { text: string; pollId: string },
-) =>
-  client.insert(actionLog).values({
-    id: nanoid(),
-    userId: user.userId,
-    tableName: "poll",
-    changes: [`Added option to poll: ${existingPoll.title}`, `Option: ${input.text}`],
-    relatedId: input.pollId,
-    relatedMsg: clampActionLogText(`Added option: ${input.text}`),
-  });
-
-/** Build the `pollOption` insert for `addOption`. */
-export const insertPollOptionForAddOption2 = (
-  client: Pick<DrizzleClient, "insert">,
-  input: { pollId: string; username: string; userId: string },
-  user: { userId: string },
-  isAdmin: false | true,
-) =>
-  client.insert(pollOption).values({
-    id: nanoid(),
-    pollId: input.pollId,
-    text: input.username,
-    optionType: "user" as const,
-    targetUserId: input.userId,
-    createdByUserId: user.userId,
-    isCustomOption: !isAdmin, // Only mark as custom if not admin
-  });
-
-/** Build the `actionLog` insert for `addOption`. */
-export const insertActionLogForAddOption2 = (
-  client: Pick<DrizzleClient, "insert">,
-  user: { userId: string },
-  existingPoll: { title: string },
-  input: { username: string; pollId: string },
-) =>
-  client.insert(actionLog).values({
+  input: PollOptionSchema & { pollId: string },
+) => {
+  const isUser = input.type === "user";
+  const label = isUser ? input.username : input.text;
+  const kind = isUser ? "user option" : "option";
+  return client.insert(actionLog).values({
     id: nanoid(),
     userId: user.userId,
     tableName: "poll",
     changes: [
-      `Added user option to poll: ${existingPoll.title}`,
-      `User: ${input.username}`,
+      `Added ${kind} to poll: ${existingPoll.title}`,
+      `${isUser ? "User" : "Option"}: ${label}`,
     ],
     relatedId: input.pollId,
-    relatedMsg: clampActionLogText(`Added user option: ${input.username}`),
+    relatedMsg: clampActionLogText(`Added ${kind}: ${label}`),
   });
+};
 
 /** Build the `poll` listing for `getPolls`, using the configured predicates. */
 export const listPollForGetPolls = (

@@ -10,11 +10,7 @@ Connect an MCP client that supports remote HTTP servers and OAuth, then sign in 
 
 ## Fair play for AI players
 
-With authorization from their human owner, AI players may choose and execute game actions through this official MCP server without approval for each action or the owner remaining continuously present. The allowance covers every exposed endpoint the account is authorized to use under its normal access checks and gameplay prerequisites; there is no separate AI-only endpoint ban. Follow the server's rate limits and game cooldowns; do not bypass limits or restrictions.
-
-All other [game rules](https://www.theninja-rpg.com/rules), including account limits, identification of AI players and their human owner, authorized information access, bug reporting and conduct, still apply. The human owner remains responsible for the account. Outside the official API allowance, AI may advise, but the human owner must choose and manually initiate each gameplay action. Automated play and scripted presence remain prohibited even under supervision. Game-managed timers and queued progress started through permitted play are allowed; session length alone does not establish prohibited automation.
-
-API and MCP clients accessing the official server within this allowance are authorized tools. Each human owner may own up to two accounts in total, including AI-played accounts; using multiple agents or clients does not increase that limit. Permitted AI play does not count as sharing with another human player. Multiple accounts on the same IP must still be reported to moderators, but a shared IP, including shared API hosting, does not by itself establish account sharing or common ownership.
+AI play through this server is governed by section 7.4 "AI Players" of the [game rules](https://www.theninja-rpg.com/rules). The allowance covers every endpoint the server exposes that the account may use under its normal access checks and gameplay prerequisites. All other rules still apply, including the account limits in section 7.2, and the human owner remains responsible for the account.
 
 ## Client setup
 
