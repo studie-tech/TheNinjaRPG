@@ -16,9 +16,9 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
+import { UserInfoCell } from "@/layout/UserInfoCell";
 import { getFarmingLevel } from "@/libs/farming";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -87,15 +87,7 @@ export default function Users() {
     const farmingExperience = Math.max(0, user.farmingExperience);
     return {
       ...user,
-      info: (
-        <div>
-          <p className="font-bold">{user.username}</p>
-          <p>
-            Lvl. {user.level} {showUserRank(user)}
-          </p>
-          <p>{user.village?.name || "Syndicate"}</p>
-        </div>
-      ),
+      info: <UserInfoCell user={user} />,
       pvpRank: getRankedRank(user.rankedLp, topPlayersLP ?? []),
       farmingExperience: `${farmingExperience.toLocaleString()} (${getFarmingLevel(farmingExperience)})`,
     };

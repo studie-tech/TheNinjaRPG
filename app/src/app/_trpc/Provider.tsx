@@ -35,6 +35,7 @@ import {
   queryMetricsHeaders,
   queryMetricsLink,
 } from "@/libs/queryMetrics";
+import { trpcPathFromKey } from "@/libs/queryTelemetry";
 import { showMutationToast } from "@/libs/toast";
 import { shouldLogTrpcOperation } from "@/libs/trpcLogging";
 import {
@@ -121,11 +122,7 @@ const TrpcClientProvider = (props: {
         onMutate: (_variables, mutation) => {
           // Reject before a local onMutate callback can apply optimistic changes.
           session.assertCurrent();
-          // Extract tRPC mutation path from mutation key (e.g., [["towerDefense", "initiateGuestSession"]])
-          const key = mutation.options.mutationKey;
-          const mutationPath =
-            Array.isArray(key) && Array.isArray(key[0]) ? key[0].join(".") : undefined;
-          onMutateCheck(mutationPath);
+          onMutateCheck(trpcPathFromKey(mutation.options.mutationKey));
         },
       }),
     });
