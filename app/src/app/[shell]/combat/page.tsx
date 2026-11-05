@@ -36,7 +36,11 @@ import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
-import { availableUserActions, getActionPointCost } from "@/libs/combat/actions";
+import {
+  actionPointsAfterAction,
+  availableUserActions,
+  getActionPointCost,
+} from "@/libs/combat/actions";
 import { isBattleHotkeyBlocked, toHotkey } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
 import { resolveControlledActorId } from "@/libs/combat/util";
@@ -145,6 +149,9 @@ export default function CombatPage() {
   // on the summon's turn (control is sequential -> exactly one).
   const controlledActorId = resolveControlledActorId(battle, userId);
   const user = battle?.usersState.find((u) => u.userId === controlledActorId);
+  const availableActionPoints = user
+    ? actionPointsAfterAction(user, battle).availableActionPoints
+    : undefined;
   // The session user's own battle entry (auto combat is a property of the
   // player, not of whichever actor is currently controlled)
   const sessionBattleUser = battle?.usersState.find((u) => u.userId === userId);
@@ -491,9 +498,9 @@ export default function CombatPage() {
         ? getActionPointCost(controlledActorId, battle, action)
         : action.actionCostPerc;
       const tooExpensive =
-        user?.actionPoints !== undefined &&
+        availableActionPoints !== undefined &&
         cost !== undefined &&
-        user.actionPoints < cost;
+        availableActionPoints < cost;
       if (actionId !== boundId && (onCooldown || tooExpensive)) return;
       event.preventDefault();
       setActionId(actionId === boundId ? undefined : boundId);
@@ -511,7 +518,7 @@ export default function CombatPage() {
     hotkeys.byKey,
     results,
     setActionId,
-    user?.actionPoints,
+    availableActionPoints,
   ]);
 
   // Action click handler
@@ -682,7 +689,7 @@ export default function CombatPage() {
             showLabels={layout.labels}
             selectedId={actionId}
             combatMode={true}
-            userActionPoints={user?.actionPoints}
+            userActionPoints={availableActionPoints}
             battle={battle}
             userId={controlledActorId}
             gridClassNameOverwrite={layout.grid}
@@ -709,7 +716,7 @@ export default function CombatPage() {
       actions,
       config.useSmallActions,
       actionId,
-      user?.actionPoints,
+      availableActionPoints,
       controlledActorId,
       handleActionClick,
       hotkeys.byAction,

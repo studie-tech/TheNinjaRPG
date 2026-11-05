@@ -73,6 +73,7 @@ interface ActionSelectorSettingsProps {
    */
   eagerImages?: boolean;
   combatMode?: boolean;
+  /** Usable AP after combat effects such as stun. */
   userActionPoints?: number;
   battle?: ReturnedBattle | null;
   userId?: string;
