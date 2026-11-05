@@ -1,9 +1,10 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { actionLog, petSpecies, userData, userPet } from "@/drizzle/schema";
+import type { DrizzleClient } from "@/server/db";
 import { petsRouter } from "@/server/api/routers/pets";
 import { insertPetSpecies, insertUsers } from "../../../setup/factories";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, failStatements } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 const ownerId = "potential-owner";
@@ -74,6 +75,20 @@ describeWithDatabase("companion potential and transfers", () => {
     await db.update(userData).set({ money: 999_999 }).where(eq(userData.userId, ownerId));
     expect((await caller.transferExperience(input)).success).toBe(false);
     expect((await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) }))?.experience).toBe(1000);
+  });
+  it("rolls back the override and account revision if its audit insert fails", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "HEAD_CONTENT" }).where(eq(userData.userId, ownerId));
+    const before = await db.query.userData.findFirst({ where: eq(userData.userId, ownerId) });
+    const hooked = new Proxy(db, { get(target, property, receiver) {
+      if (property === "transaction") return (callback: (client: DrizzleClient) => Promise<unknown>) =>
+        target.transaction((tx) => callback(failStatements(tx as unknown as DrizzleClient, actionLog)));
+      return Reflect.get(target, property, receiver);
+    } });
+    await expect(callerForDatabase(petsRouter, ownerId, hooked).setPotentialForStaff({ userId: ownerId, petId: sourceId, value: 5, reason: "Approved companion support adjustment" })).rejects.toThrow("Statement failed on purpose");
+    expect(await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) })).toMatchObject({ potentialValue: 3, potentialRevealed: false, potentialAllocations: {}, revision: 0 });
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, ownerId) }))?.updatedAt.getTime()).toBe(before?.updatedAt.getTime());
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });
   it("restricts and audits staff overrides", async () => {
     const db = await getTestDatabase(); const caller = callerForDatabase(petsRouter, ownerId, db);

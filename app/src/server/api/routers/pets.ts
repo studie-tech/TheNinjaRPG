@@ -145,19 +145,21 @@ export const petsRouter = createTRPCRouter({
       const restriction = petMutationBlockMessage(target, pet);
       if (restriction || !pet)
         return errorResponse(restriction ?? "Companion not found");
-      const changed = await updateOwnedPet(ctx.drizzle, target, pet, {
-        potentialValue: input.value,
-        potentialRevealed: true,
-        potentialAllocations: {},
-      });
-      if (!changed) return changedResponse();
-      await logPetPotentialOverride(
-        ctx.drizzle,
-        ctx.userId,
-        pet,
-        input.value,
-        input.reason,
+      // MySQL cannot update an owned pet and insert a separate audit row in one
+      // statement. Commit both together so an override always has its audit record.
+      const changed = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const updated = await updateOwnedPetOnce(tx, target, pet, {
+            potentialValue: input.value,
+            potentialRevealed: true,
+            potentialAllocations: {},
+          });
+          if (!updated) return false;
+          await logPetPotentialOverride(tx, ctx.userId, pet, input.value, input.reason);
+          return true;
+        }),
       );
+      if (!changed) return changedResponse();
       return {
         success: true,
         message: "Companion potential updated; points are available to allocate again.",
@@ -1209,9 +1211,13 @@ const petMutationConflict = () =>
 const isPetMutationConflict = (error: unknown) =>
   error instanceof Error && error.name === "PetMutationConflict";
 
-/** Publish a pet patch guarded by the owner and pet snapshots. */
-const updateOwnedPet = async (
-  client: DrizzleClient,
+/** Retry a standalone guarded pet patch without introducing a transaction. */
+const updateOwnedPet = (...args: Parameters<typeof updateOwnedPetOnce>) =>
+  retryOnDeadlock(() => updateOwnedPetOnce(...args));
+
+/** Apply one guarded patch; transactional callers retry their whole transaction. */
+const updateOwnedPetOnce = async (
+  client: Pick<DrizzleClient, "execute">,
   user: UserData,
   pet: UserPet,
   patch: Partial<UserPet>,
@@ -1227,16 +1233,13 @@ const updateOwnedPet = async (
     });
   // Drizzle cannot build a multi-table UPDATE. Both snapshot guards gate the
   // patch and the account claim together.
-  const result = await retryOnDeadlock(() =>
-    executeResultForUpdateOwnedPet(
-      client,
-      user,
-      now,
-      assignments,
-      ownerSnapshotWhere,
-
-      pet,
-    ),
+  const result = await executeResultForUpdateOwnedPet(
+    client,
+    user,
+    now,
+    assignments,
+    ownerSnapshotWhere,
+    pet,
   );
   return result.rowsAffected > 0;
 };
