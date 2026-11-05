@@ -77,6 +77,13 @@ it("equips into the picked slot", () => {
   expect(onEquip).toHaveBeenCalledWith("Twin Fang Blade", "HAND_1");
 });
 
+it("opens a fitting item's details from its row", () => {
+  const { onInspect, onEquip } = renderPicker();
+  fireEvent.click(screen.getByRole("button", { name: "Details of Twin Fang Blade" }));
+  expect(onInspect).toHaveBeenCalledWith("Twin Fang Blade");
+  expect(onEquip).not.toHaveBeenCalled();
+});
+
 it("unequips and inspects the current item", () => {
   const { onUnequip, onInspect } = renderPicker();
   const current = screen.getByRole("region", { name: "Equipped now" });

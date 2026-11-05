@@ -501,10 +501,9 @@ export function ItemInspector({
       {isEquipping && <Loader explanation="Equipping" />}
       {isEvolving && <Loader explanation="Evolving" />}
       {isRepairingWithRyo && <Loader explanation="Repairing" />}
-      <details className="group rounded-lg border bg-card">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 font-semibold text-sm">
-          All details
-        </summary>
+      {/* The full stats show straight away; the header above already carries the name and art. */}
+      <section aria-label="Details" className="rounded-lg border bg-card">
+        <h3 className="px-3 pt-2 font-semibold text-sm">Details</h3>
         <div className="p-2">
           <ItemWithEffects
             item={{
@@ -517,9 +516,11 @@ export function ItemInspector({
             key={useritem.id}
             showStatistic="item"
             showEvolutions
+            hideTitle
+            hideImage
           />
         </div>
-      </details>
+      </section>
       {!isLoading && (
         <div className="flex items-center gap-2 border-t pt-3">
           <span className="flex-1 text-muted-foreground text-xs">

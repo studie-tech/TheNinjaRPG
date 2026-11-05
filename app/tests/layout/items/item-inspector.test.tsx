@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
@@ -198,12 +198,14 @@ it("puts the actions before the long effects card", () => {
   expect(screen.getByText("Twin Fang Blade art").parentElement?.className).toContain("relative");
 });
 
-it("keeps the full stats in a collapsed All details section", () => {
+it("shows the full stats straight away without repeating the header", () => {
+  const spy = vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);
   renderInspector();
-  const details = screen.getByText("Item effects").closest("details");
-  expect(details).not.toBeNull();
-  expect(details?.open).toBe(false);
-  expect(details?.querySelector("summary")?.textContent).toBe("All details");
+  const details = screen.getByRole("region", { name: "Details" });
+  expect(within(details).getByText("Item effects")).toBeDefined();
+  expect(screen.getByText("Item effects").closest("details")).toBeNull();
+  expect(screen.queryByText("All details")).toBeNull();
+  expect(spy.mock.calls.at(-1)?.[0]).toMatchObject({ hideTitle: true, hideImage: true });
 });
 
 it("shows durability with its repair actions when the item wears", () => {
