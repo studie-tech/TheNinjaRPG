@@ -34,16 +34,6 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 import { createStatSchema } from "@/validators/combat";
 
-/** The training dummy fought from the arena. */
-const TRAINING_DUMMY_ID = "tra93opw09262024jut5ufa8f";
-const MIN_STAT = 10;
-const PRESETS: DummyPreset[] = ["Minimum", "Like me", "Maximum", "Custom"];
-
-interface TrainingModeProps {
-  statDistribution: StatSchemaType | undefined;
-  setStatDistribution: (newValue: StatSchemaType | undefined) => void;
-}
-
 /** Training: fight an unbeatable dummy whose stats you choose, with quick presets. */
 export function TrainingMode({
   statDistribution,
@@ -237,4 +227,14 @@ export function TrainingMode({
       <BattleSetupPanel autoCombat action={action} />
     </div>
   );
+}
+
+/** The training dummy fought from the arena. */
+const TRAINING_DUMMY_ID = "tra93opw09262024jut5ufa8f";
+const MIN_STAT = 10;
+const PRESETS: DummyPreset[] = ["Minimum", "Like me", "Maximum", "Custom"];
+
+interface TrainingModeProps {
+  statDistribution: StatSchemaType | undefined;
+  setStatDistribution: (newValue: StatSchemaType | undefined) => void;
 }

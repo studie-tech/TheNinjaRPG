@@ -12,15 +12,6 @@ import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Link from "@/layout/Link";
 
-interface BattleSetupPanelProps {
-  /** Offer the auto combat switch. */
-  autoCombat?: boolean;
-  /** Mode-specific options shown under the loadouts. */
-  children?: React.ReactNode;
-  /** The mode's primary button. */
-  action: React.ReactNode;
-}
-
 /**
  * Loadouts, auto combat and the primary action for a fight. A rail beside the mode on wide
  * screens; on narrow ones the controls move into a sheet and the action stays in view.
@@ -118,4 +109,13 @@ export function BattleSetupControls({
       {children}
     </>
   );
+}
+
+interface BattleSetupPanelProps {
+  /** Offer the auto combat switch. */
+  autoCombat?: boolean;
+  /** Mode-specific options shown under the loadouts. */
+  children?: React.ReactNode;
+  /** The mode's primary button. */
+  action: React.ReactNode;
 }

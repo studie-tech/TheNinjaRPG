@@ -18,14 +18,6 @@ import Loader from "@/layout/Loader";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 
-const MODE_SUBTITLES = {
-  Arena: "Fight creatures picked for your level",
-  Sparring: "Spar with ninja from any village, with no consequences",
-  Training: "An unbeatable dummy that self-destructs. Practice with no risk",
-  "PVP Rank": "Equal stats, ranked loadout, climb the divisions",
-  "Battle Pyramid": "Climb a tower floor by floor, one tower at a time",
-} as const;
-
 /** The battle arena: an overview of its modes, or the mode named in the URL hash. */
 export default function Arena() {
   const { mode, openMode, openOverview } = useArenaView();
@@ -87,3 +79,11 @@ export default function Arena() {
     </ContentBox>
   );
 }
+
+const MODE_SUBTITLES = {
+  Arena: "Fight creatures picked for your level",
+  Sparring: "Spar with ninja from any village, with no consequences",
+  Training: "An unbeatable dummy that self-destructs. Practice with no risk",
+  "PVP Rank": "Equal stats, ranked loadout, climb the divisions",
+  "Battle Pyramid": "Climb a tower floor by floor, one tower at a time",
+} as const;

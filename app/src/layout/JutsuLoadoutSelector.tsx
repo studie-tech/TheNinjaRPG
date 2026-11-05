@@ -37,7 +37,6 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   const queryResult = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
-  // Built on render so the module loads where tests replace the tRPC client.
   const loadoutsKey = getQueryKey(api.jutsu.getLoadouts, undefined, "query");
   const loadoutsCache =
     useQueryCacheUpdate<RouterOutputs["jutsu"]["getLoadouts"]>(loadoutsKey);

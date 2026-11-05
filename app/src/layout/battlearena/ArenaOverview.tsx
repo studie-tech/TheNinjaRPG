@@ -21,10 +21,6 @@ import { type ArenaMode, rankedProgress, sparExamProgress } from "@/libs/battleA
 import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-interface ArenaOverviewProps {
-  onOpen: (mode: ArenaMode) => void;
-}
-
 /** Every arena mode as a card with its current status and a way in. */
 export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
   const { data: userData } = useRequiredUserData();
@@ -250,3 +246,7 @@ type OverviewCard = {
   wide?: boolean;
   quiet?: boolean;
 };
+
+interface ArenaOverviewProps {
+  onOpen: (mode: ArenaMode) => void;
+}

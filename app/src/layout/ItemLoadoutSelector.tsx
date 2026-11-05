@@ -42,7 +42,6 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   const queryResult = api.item.getItemLoadouts.useQuery(undefined, {
     enabled: maxLoadouts > 1,
   });
-  // Built on render so the module loads where tests replace the tRPC client.
   const loadoutsKey = getQueryKey(api.item.getItemLoadouts, undefined, "query");
   const loadoutsCache =
     useQueryCacheUpdate<RouterOutputs["item"]["getItemLoadouts"]>(loadoutsKey);

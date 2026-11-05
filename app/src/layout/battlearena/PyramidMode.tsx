@@ -24,7 +24,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
  * towers you are still working towards.
  */
 export function PyramidMode() {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
   const [startError, setStartError] = useState<{
     questId: string;
@@ -53,7 +53,10 @@ export function PyramidMode() {
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
     onMutate: () => {
       setStartError(null);
-      return prepareQuestStartUpdate();
+      return {
+        userRevision: prepareUserUpdate(),
+        quests: prepareQuestStartUpdate(),
+      };
     },
     onSuccess: async (data, variables, snapshot) => {
       // Failures show above the towers, so only successes get a toast.
@@ -70,8 +73,10 @@ export function PyramidMode() {
               : data.message,
         });
       }
-      const profileApplied = await updateUser(data);
-      await updateQuestStart(data, snapshot, profileApplied);
+      const profileApplied = await updateUser(data, {
+        revision: snapshot?.userRevision,
+      });
+      await updateQuestStart(data, snapshot.quests, profileApplied);
     },
   });
 

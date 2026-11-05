@@ -16,13 +16,6 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-interface OpponentFinderProps {
-  onChallenge: (targetId: string) => void;
-  /** Players with a pending challenge from you. */
-  challengedIds: Set<string>;
-  isChallenging: boolean;
-}
-
 /**
  * Players to spar with: near your level and online by default, narrowed to your village on
  * request. A name search finds any ninja, whatever their level or activity.
@@ -188,4 +181,11 @@ function FilterChip({
       {label}
     </button>
   );
+}
+
+interface OpponentFinderProps {
+  onChallenge: (targetId: string) => void;
+  /** Players with a pending challenge from you. */
+  challengedIds: Set<string>;
+  isChallenging: boolean;
 }

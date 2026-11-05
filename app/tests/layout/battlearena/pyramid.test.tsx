@@ -11,6 +11,11 @@ import * as userContext from "@/utils/UserContext";
 const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 let startQuest: ReturnType<typeof vi.fn>;
+let mutationOptions: NonNullable<Parameters<typeof client.api.quests.startQuest.useMutation>[0]>;
+let prepareUserUpdate: ReturnType<typeof vi.fn>;
+let updateUser: ReturnType<typeof vi.fn>;
+let prepareQuestStartUpdate: ReturnType<typeof vi.fn>;
+let updateQuestStart: ReturnType<typeof vi.fn>;
 let towers: Record<string, unknown>[];
 let userQuests: Record<string, unknown>[];
 let questData: Record<string, unknown>[];
@@ -34,6 +39,10 @@ beforeEach(() => {
     if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
   }
   startQuest = vi.fn();
+  prepareUserUpdate = vi.fn(() => 7);
+  updateUser = vi.fn(async () => true);
+  prepareQuestStartUpdate = vi.fn(() => ({ inventory: 3 }));
+  updateQuestStart = vi.fn();
   towers = [
     tower("t-open", "Test Arena", { content: { objectives: [], reward: { reward_money: 2000 }, isolated: false } }),
     tower("t-items", "Tower of Echoes", {
@@ -69,7 +78,10 @@ beforeEach(() => {
           ],
         }),
       },
-      startQuest: { useMutation: () => ({ mutate: startQuest, isPending: false }) },
+      startQuest: { useMutation: (options: typeof mutationOptions) => {
+        mutationOptions = options;
+        return { mutate: startQuest, isPending: false };
+      } },
     },
     item: { getAllNames: { useQuery: () => ({ data: [{ id: "shard", name: "Echo Shard" }] }) } },
   });
@@ -77,13 +89,13 @@ beforeEach(() => {
     () =>
       ({
         data: { userId: "me", level: 30, sector: 4, userQuests, questData, petTask: null },
-        prepareUserUpdate: vi.fn(),
-        updateUser: vi.fn(),
+        prepareUserUpdate,
+        updateUser,
       }) as never,
   );
   vi.spyOn(questStart, "useQuestStartCacheUpdate").mockReturnValue({
-    prepareQuestStartUpdate: vi.fn(),
-    updateQuestStart: vi.fn(),
+    prepareQuestStartUpdate,
+    updateQuestStart,
   } as never);
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(() => <p>Current objective</p>);
   vi.spyOn(questTeams, "QuestTeams").mockImplementation(() => null);
@@ -164,4 +176,16 @@ it("shows rewards or says none are listed", () => {
   render(<PyramidMode />);
   expect(within(card("Test Arena")).getByText("2000 ryo")).toBeDefined();
   expect(within(card("Tower of Echoes")).getByText("No reward listed")).toBeDefined();
+});
+
+it("reconciles tower starts with the profile and inventory revisions captured before mutation", async () => {
+  render(<PyramidMode />);
+  const input = { questId: "t-open", userSector: 4, supportsAnnouncements: true };
+  const response = { success: true, message: "Started", userPatch: { money: 900 } };
+  const context = await mutationOptions.onMutate?.(input, {} as never);
+  await mutationOptions.onSuccess?.(response as never, input, context, {} as never);
+  expect(prepareUserUpdate).toHaveBeenCalledTimes(1);
+  expect(prepareQuestStartUpdate).toHaveBeenCalledTimes(1);
+  expect(updateUser).toHaveBeenCalledWith(response, { revision: 7 });
+  expect(updateQuestStart).toHaveBeenCalledWith(response, { inventory: 3 }, true);
 });
