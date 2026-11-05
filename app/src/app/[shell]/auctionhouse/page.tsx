@@ -106,7 +106,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import Table from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { isImbuing } from "@/libs/item";
+import { finishedImbuementItems, isImbuing } from "@/libs/item";
 import { getAuctionSellerPayout } from "@/libs/itemEconomy";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
@@ -814,7 +814,7 @@ interface AuctionDetailsDialogProps {
  * @param setIsOpen - Function to set the dialog open state
  * @returns Auction details dialog
  */
-const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
+export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   auctionId,
   isOpen,
   setIsOpen,
@@ -1011,9 +1011,7 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
           <ItemWithEffects
             item={{
               ...listing.userItem.item,
-              imbuements: listing.userItem.imbuements.map(
-                (imbuement) => imbuement.item,
-              ),
+              imbuements: finishedImbuementItems(listing.userItem),
               curDurability: listing.userItem.durability,
             }}
             showStatistic="item"
