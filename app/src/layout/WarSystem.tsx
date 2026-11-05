@@ -59,7 +59,12 @@ import {
   WAR_SHRINE_IMAGE,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
-import type { Village, VillageAlliance, VillageStructure } from "@/drizzle/schema";
+import type {
+  UserRequest,
+  Village,
+  VillageAlliance,
+  VillageStructure,
+} from "@/drizzle/schema";
 import { useMap } from "@/hooks/map";
 import { useActiveWars } from "@/hooks/useActiveWars";
 import Building from "@/layout/Building";
@@ -145,6 +150,16 @@ export const WarRoom: React.FC<{
     warType === "Active"
       ? activeWars
       : endedWars?.filter((war) => war.type !== "SECTOR_WAR");
+  // Each village war card lists its own offers with their war; the board keeps the rest.
+  const warIdsListingOffers = user.isOutlaw
+    ? []
+    : (activeWars ?? [])
+        .filter((war) => war.type !== "SECTOR_WAR" && war.status === "ACTIVE")
+        .map((war) => war.id);
+  const boardOffers = requests?.filter(
+    (request) => !warIdsListingOffers.some((id) => isOfferForWarCard(request, id)),
+  );
+  const areAllOffersOnCards = !!requests?.length && boardOffers?.length === 0;
 
   return (
     <>
@@ -218,24 +233,24 @@ export const WarRoom: React.FC<{
           )}
         </div>
       </ContentBox>
-      {isLeader && warType === "Active" && (
+      {isLeader && warType === "Active" && !areAllOffersOnCards && (
         <ContentBox
           title="War Contract Offers"
           subtitle="Pending war participation requests"
           initialBreak={true}
           padding={false}
         >
-          {requests && requests.length > 0 && (
+          {boardOffers && boardOffers.length > 0 && (
             <UserRequestSystem
               isLoading={allyOffers.isPending}
-              requests={requests}
+              requests={boardOffers}
               userId={user.userId}
               onAccept={allyOffers.onAccept}
               onReject={allyOffers.onReject}
               onCancel={allyOffers.onCancel}
             />
           )}
-          {requests && requests.length === 0 && (
+          {boardOffers && boardOffers.length === 0 && (
             <p className="p-4">No pending war participation requests</p>
           )}
         </ContentBox>
@@ -1282,9 +1297,7 @@ export const VillageWar: React.FC<{
   });
 
   // Derived for this war
-  const warRequests = requests?.filter(
-    (r) => r.relatedId === war.id && r.status !== "ACCEPTED",
-  );
+  const warRequests = requests?.filter((r) => isOfferForWarCard(r, war.id));
 
   // Mutations
   const allyOffers = useAllyOfferActions();
@@ -1850,6 +1863,12 @@ export const VillageWar: React.FC<{
     </div>
   );
 };
+
+/** Whether a village war card lists this ally offer. */
+const isOfferForWarCard = (
+  offer: Pick<UserRequest, "relatedId" | "status">,
+  warId: string,
+) => offer.relatedId === warId && offer.status !== "ACCEPTED";
 
 /** Ally-offer handlers for `UserRequestSystem`, sharing one pending flag. */
 const useAllyOfferActions = () => {
