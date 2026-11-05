@@ -26,6 +26,8 @@ const player = (userId: string, username: string, level: number) => ({
   avatar: null,
   updatedAt: playerUpdatedAt,
   village: { name: "Akikaze" },
+  experience: 15_000,
+  pvpExperience: 420,
 });
 
 const challenges = [
@@ -194,4 +196,17 @@ it("refreshes activity results and labels from the query timestamp", () => {
   finderUpdatedAt += 31 * 60_000;
   view.rerender(<SparringMode />);
   expect(screen.queryByText(/online$/)).toBeNull();
+});
+
+it("shows a player's card with their progress and profile from the list", async () => {
+  render(<SparringMode />);
+  const kaitoRow = within(finder()).getAllByRole("listitem")[0]!;
+  fireEvent.click(within(kaitoRow).getByRole("button", { name: /^About / }));
+  const card = await screen.findByRole("dialog");
+  expect(within(card).getByText("Experience")).toBeDefined();
+  expect(within(card).getByText("15,000")).toBeDefined();
+  expect(within(card).getByText("PvP experience")).toBeDefined();
+  expect(within(card).getByText("420")).toBeDefined();
+  const profile = within(card).getByRole("link", { name: "See profile" });
+  expect(profile.getAttribute("href")).toMatch(/^\/username\//);
 });

@@ -1,9 +1,12 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
+import type React from "react";
 import { useState } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   IMG_AVATAR_DEFAULT,
   ONLINE_WINDOW_MINUTES,
@@ -11,6 +14,7 @@ import {
 } from "@/drizzle/constants";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { formatTimeAgo } from "@/utils/time";
@@ -105,26 +109,28 @@ export function OpponentFinder({
               key={player.userId}
               className="bg-card flex items-center gap-2.5 rounded-lg border p-2"
             >
-              <span className="relative shrink-0">
-                <Image
-                  alt=""
-                  src={player.avatar ?? IMG_AVATAR_DEFAULT}
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 rounded-md object-cover"
-                />
-                {isOnline && (
-                  <span className="border-card absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 bg-green-600" />
-                )}
-              </span>
-              <span className="min-w-0 flex-1 text-sm">
-                <b>{player.username}</b> · Lv {player.level}{" "}
-                {capitalizeFirstLetter(player.rank)}
-                <span className="text-muted-foreground block text-xs">
-                  {player.village?.name ?? "No village"} ·{" "}
-                  {isOnline ? "online" : formatTimeAgo(new Date(player.updatedAt))}
+              <PlayerCard player={player} isOnline={isOnline}>
+                <span className="relative shrink-0">
+                  <Image
+                    alt=""
+                    src={player.avatar ?? IMG_AVATAR_DEFAULT}
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 rounded-md object-cover"
+                  />
+                  {isOnline && (
+                    <span className="border-card absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full border-2 bg-green-600" />
+                  )}
                 </span>
-              </span>
+                <span className="min-w-0 flex-1 text-sm">
+                  <b>{player.username}</b> · Lv {player.level}{" "}
+                  {capitalizeFirstLetter(player.rank)}
+                  <span className="text-muted-foreground block text-xs">
+                    {player.village?.name ?? "No village"} ·{" "}
+                    {isOnline ? "online" : formatTimeAgo(new Date(player.updatedAt))}
+                  </span>
+                </span>
+              </PlayerCard>
               <Button
                 className="h-11 shrink-0"
                 variant={isChallenged ? "secondary" : "default"}
@@ -157,6 +163,63 @@ export function OpponentFinder({
   );
 }
 
+/** Who a listed player is, opened from their row as the tavern opens a chatter's card. */
+function PlayerCard({
+  player,
+  isOnline,
+  children,
+}: {
+  player: PublicPlayer;
+  isOnline: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        aria-label={`About ${player.username}`}
+        className="hover:bg-muted focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-left focus-visible:ring-2"
+      >
+        {children}
+      </PopoverTrigger>
+      <PopoverContent align="start" collisionPadding={8} className="w-[224px] p-3">
+        <Image
+          alt={player.username}
+          src={player.avatar ?? IMG_AVATAR_DEFAULT}
+          width={200}
+          height={200}
+          className="mb-2 aspect-square w-full rounded-lg object-cover"
+        />
+        <p className="truncate text-sm font-bold">{player.username}</p>
+        <p className="text-muted-foreground text-xs">
+          Lv {player.level} {capitalizeFirstLetter(player.rank)} ·{" "}
+          {player.village?.name ?? "No village"}
+        </p>
+        <p className="text-muted-foreground text-xs">
+          {isOnline
+            ? "Online now"
+            : `Seen ${formatTimeAgo(new Date(player.updatedAt))}`}
+        </p>
+        <dl className="my-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+          <dt className="text-muted-foreground">Experience</dt>
+          <dd className="text-right font-semibold">
+            {player.experience.toLocaleString()}
+          </dd>
+          <dt className="text-muted-foreground">PvP experience</dt>
+          <dd className="text-right font-semibold">
+            {player.pvpExperience.toLocaleString()}
+          </dd>
+        </dl>
+        <Button asChild variant="outline" className="h-10 w-full">
+          <Link href={`/username/${player.username}`} onClick={() => setOpen(false)}>
+            <UserRound className="mr-2 h-4 w-4" aria-hidden /> See profile
+          </Link>
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function FilterChip({
   label,
   pressed,
@@ -182,6 +245,8 @@ function FilterChip({
     </button>
   );
 }
+
+type PublicPlayer = RouterOutputs["profile"]["getPublicUsers"]["data"][number];
 
 interface OpponentFinderProps {
   onChallenge: (targetId: string) => void;
