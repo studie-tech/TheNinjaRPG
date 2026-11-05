@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   GUIDE_CATEGORY_LABELS,
   GUIDE_HUB_CATEGORY_ORDER,
-  type GuideCategory,
   IMG_MANUAL_COMBAT,
 } from "@/drizzle/constants";
 import type { GuideArticle } from "@/drizzle/schema";
@@ -18,6 +17,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
+import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -72,12 +72,7 @@ export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
   }, [catalog, search, selectedCategory]);
 
   const grouped = useMemo(() => {
-    const groups = new Map<GuideCategory, GuideArticle[]>();
-    for (const article of visible) {
-      const list = groups.get(article.category) ?? [];
-      list.push(article);
-      groups.set(article.category, list);
-    }
+    const groups = groupBy(visible, "category");
     return GUIDE_HUB_CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => ({
       key,
       label: GUIDE_CATEGORY_LABELS[key],

@@ -146,7 +146,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {related.map((item) => (
-                  <GuideRelatedCard key={item.slug} article={item} />
+                  <GuideNavCard key={item.slug} article={item} />
                 ))}
               </div>
             </div>
@@ -176,7 +176,7 @@ const GuideToc: React.FC<{
 
 const GuideNavCard: React.FC<{
   article: NeighborGuide;
-  direction: "previous" | "next";
+  direction?: "previous" | "next";
 }> = ({ article, direction }) => {
   const isNext = direction === "next";
   return (
@@ -188,20 +188,24 @@ const GuideNavCard: React.FC<{
     >
       <GuideThumb src={article.image} alt={article.title} />
       <div className="min-w-0 grow">
-        <p className="flex items-center gap-1 font-bold text-muted-foreground text-xs uppercase tracking-wide">
-          {isNext ? (
-            <>
-              Next
-              <ArrowRight className="h-3 w-3" />
-            </>
-          ) : (
-            <>
-              <ArrowLeft className="h-3 w-3" />
-              Previous
-            </>
-          )}
-        </p>
-        <p className="mt-1 font-bold leading-tight group-hover:text-orange-600">
+        {direction && (
+          <p className="flex items-center gap-1 font-bold text-muted-foreground text-xs uppercase tracking-wide">
+            {isNext ? (
+              <>
+                Next
+                <ArrowRight className="h-3 w-3" />
+              </>
+            ) : (
+              <>
+                <ArrowLeft className="h-3 w-3" />
+                Previous
+              </>
+            )}
+          </p>
+        )}
+        <p
+          className={`font-bold leading-tight group-hover:text-orange-600 ${direction ? "mt-1" : ""}`}
+        >
           {article.title}
         </p>
         {article.excerpt && (
@@ -211,23 +215,6 @@ const GuideNavCard: React.FC<{
     </Link>
   );
 };
-
-const GuideRelatedCard: React.FC<{ article: NeighborGuide }> = ({ article }) => (
-  <Link
-    href={`/guide/${article.slug}`}
-    className="group flex gap-3 rounded-lg border p-3 transition-colors hover:border-orange-500 hover:bg-orange-500/5"
-  >
-    <GuideThumb src={article.image} alt={article.title} />
-    <div className="min-w-0">
-      <p className="font-bold leading-tight group-hover:text-orange-600">
-        {article.title}
-      </p>
-      {article.excerpt && (
-        <p className="mt-1 line-clamp-2 text-sm">{article.excerpt}</p>
-      )}
-    </div>
-  </Link>
-);
 
 const GuideThumb: React.FC<{ src?: string | null; alt: string }> = ({ src, alt }) =>
   src ? (
