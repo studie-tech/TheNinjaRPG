@@ -21,6 +21,7 @@ import {
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
+import { spriteGroundContact } from "@/libs/rendering/assets";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
@@ -339,9 +340,10 @@ export const createCombatActors = (
           const sprite = entry.sprite;
           sprite.updateLocalTransform();
           // Contacts and physical shadows share the visible footer, including mirrored asymmetric cutouts.
+          const contact = spriteGroundContact(sprite);
           const foot = sprite.localTransform.apply({
-            x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
-            y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+            x: contact.x - sprite.texture.orig.width * sprite.anchor.x,
+            y: contact.y - sprite.texture.orig.height * sprite.anchor.y,
           });
           for (const marker of [record.shadow, record.selection, record.hover])
             marker.position.copyFrom(foot);

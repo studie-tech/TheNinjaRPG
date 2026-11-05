@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Assets, Sprite, Texture, TextureSource } from "pixi.js";
+import { Assets, BufferImageSource, Sprite, Texture, TextureSource } from "pixi.js";
+import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import { acquireAnimationTexture, animationTextureUrl, clearUnusedAnimationTextures } from "@/libs/rendering/animationTextures";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import variants from "@/libs/rendering/animationTextureVariants.json";
@@ -9,6 +10,25 @@ const atlas=()=>new Texture({source:new TextureSource({width:256,height:256})});
 const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 afterEach(async()=>{clearUnusedAnimationTextures();await flush();vi.restoreAllMocks();});
 describe("Pixi AI atlases",()=>{
+ it("grounds padded frames at the static feet, retains jumps, mirrors, and restores placement", async()=>{
+  const pixels=new Uint8Array(256*256*4);
+  // Rest foot at row 110; the next cell lifts it by ten pixels.
+  for(const [left,bottom] of [[0,110],[128,100]])for(let y=20;y<bottom!;y++)for(let x=40;x<80;x++)pixels[(y*256+left!+x)*4+3]=255;
+  const texture=new Texture({source:new BufferImageSource({resource:pixels,width:256,height:256})});
+  vi.spyOn(Assets,"load").mockImplementation(async()=>texture);vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
+  const original=new Texture({source:new BufferImageSource({resource:new Uint8Array([0,0,0,255]),width:1,height:1})});
+  const sprite=new Sprite(original);sprite.anchor.set(.5);sprite.position.set(7,90);sprite.scale.set(100,-100);
+  const player=createCharacterAnimation(sprite,128,{idle});
+  const render=(now:number,facing:"left"|"right"="left",enabled=true)=>player.render({now,moving:false,enabled,facing,sourceFacing:"left",reducedMotion:false});
+  render(0);await flush();render(0);
+  const worldFoot=()=>{sprite.updateLocalTransform();const p=spriteGroundContact(sprite);return sprite.localTransform.apply({x:p.x-sprite.anchor.x*sprite.texture.orig.width,y:p.y-sprite.anchor.y*sprite.texture.orig.height});};
+  expect(worldFoot()).toMatchObject({x:7,y:40});expect(sprite.anchor.y).toBeCloseTo(110/128);
+  render(250);expect(worldFoot()).toMatchObject({x:7,y:40});
+  expect(textureGroundContact(sprite.texture).y).toBe(100); // Actual pixels still lift; the ground does not follow them.
+  render(250,"right");expect(worldFoot()).toMatchObject({x:7,y:40});expect(sprite.scale.x).toBeLessThan(0);
+  render(300,"right",false);expect(sprite.position).toMatchObject({x:7,y:90});expect(sprite.anchor.y).toBe(.5);expect(sprite.texture).toBe(original);
+  player.dispose();sprite.destroy();original.destroy(true);texture.destroy(true);
+ });
  it("deduplicates pending loads and keeps leases alive until release",async()=>{
   const texture=atlas(); const load=vi.spyOn(Assets,"load").mockImplementation(async()=>texture);const unload=vi.spyOn(Assets,"unload").mockResolvedValue(undefined);
   const a=acquireAnimationTexture(idle)!; const b=acquireAnimationTexture(idle)!;

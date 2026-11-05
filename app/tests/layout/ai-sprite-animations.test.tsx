@@ -32,7 +32,7 @@ beforeEach(() => {
           isPending: false,
         }),
       },
-      create: { useMutation: () => ({ mutate: create, isPending: false }) },
+      create: { useMutation: () => ({ mutate: create, reset: vi.fn(), isPending: false }) },
       assign: { useMutation: () => ({ mutate: assign, reset: vi.fn(), isPending: false }) },
     },
   });
@@ -125,6 +125,32 @@ it("previews valid draft metadata before library creation and recovers from an i
   fireEvent.change(view.getByLabelText("Source facing"), { target: { value: "right" } });
   const preview = view.getByRole("img", { name: "New animation" }).querySelector("img")!;
   expect(preview.style.height).toBe("200%");
+  expect(create).not.toHaveBeenCalled();
+  expect(assign).not.toHaveBeenCalled();
+});
+
+it("loads a shared sheet into a new version and keeps bindings unchanged until Apply", async () => {
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  fireEvent.click(view.getByRole("button", { name: "Edit as new version" }));
+  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Idle sheet (revision)");
+  expect((view.getByLabelText("Sprite sheet URL") as HTMLInputElement).value).toBe(animation.url);
+  expect((view.getByLabelText("Frames") as HTMLInputElement).value).toBe("24");
+  fireEvent.input(view.getByLabelText("Frames / second"), { target: { value: "8" } });
+  fireEvent.change(view.getByLabelText("Sprite sheet URL"), { target: { value: "https://example.com/replacement.webp" } });
+  fireEvent.submit(view.getByRole("button", { name: "Save new version" }).closest("form")!);
+  await waitFor(() => expect(create).toHaveBeenCalledWith({
+    name: "Idle sheet (revision)", url: "https://example.com/replacement.webp", columns: 6, rows: 4, frameCount: 24, fps: 8, facing: "left",
+  }));
+  expect(assign).not.toHaveBeenCalled();
+  expect(config.animations[0]).toEqual(animation);
+});
+
+it("cancels revisions without writing or retaining the previous draft", () => {
+  const view = render(<AiSpriteAnimations userId="ai" />);
+  fireEvent.click(view.getByRole("button", { name: "Edit as new version" }));
+  fireEvent.input(view.getByLabelText("Frames / second"), { target: { value: "4" } });
+  fireEvent.click(view.getByRole("button", { name: "Cancel revision" }));
+  expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("");
   expect(create).not.toHaveBeenCalled();
   expect(assign).not.toHaveBeenCalled();
 });

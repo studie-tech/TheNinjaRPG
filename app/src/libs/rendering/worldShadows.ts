@@ -15,7 +15,7 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
-import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
+import { NEAREST_TEXTURE_UV_BIAS, spriteGroundContact } from "@/libs/rendering/assets";
 import type { BakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import type { ProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
@@ -30,10 +30,12 @@ import {
   pointLightFragment,
 } from "@/libs/rendering/worldLightingShaders";
 import {
+  acquireCharacterFrameMaterial,
   acquireWorldMaterial,
   canopyShadowFrame,
   createCharacterMaterialFrame,
   type MaterialFrame,
+  updateCharacterFrameMaterial,
   type WorldMaterial,
   worldMaterialFrame,
 } from "@/libs/rendering/worldMaterials";
@@ -332,7 +334,12 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     pointLayer.destroy({ children: true });
     filter.destroy();
     sun.dispose();
-    for (const record of records) for (const lease of record.leases) lease.release();
+    for (const record of records) {
+      record.active = false;
+      record.cell?.lease.release();
+      record.animatedMaterial?.texture.destroy(true);
+      for (const lease of record.leases) lease.release();
+    }
     records.clear();
     liveRecords = [];
     sceneryOwners = [];
@@ -434,6 +441,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       const release = () => {
         if (!record.active) return;
         record.active = false;
+        if (record.cell) retired.push(record.cell.lease.release);
+        if (record.animatedMaterial) {
+          const material = record.animatedMaterial;
+          retired.push(() => material.texture.destroy(true));
+        }
         records.delete(record);
         for (const lease of leases) {
           if (disposed) lease.release();
@@ -709,6 +721,50 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         const margin = 384;
         const recordViewport = record.sceneryOwner ? sceneryViewport : viewport;
         const dynamic = description.shadowCaster === "character";
+        // Combat sheets replace the portrait's texture source after registration.
+        // Their shadows must follow the live cell, never sample the old portrait material.
+        const liveCell =
+          dynamic && !record.character && !record.sources.has(sprite.texture.source);
+        if (record.cell?.texture !== (liveCell ? sprite.texture : undefined)) {
+          if (record.cell) retired.push(record.cell.lease.release);
+          record.cell = undefined;
+          if (!liveCell) record.cached = null;
+          if (liveCell) {
+            const lease = acquireCharacterFrameMaterial(sprite.texture);
+            const cell = {
+              texture: sprite.texture,
+              lease,
+              material: undefined as WorldMaterial | undefined,
+            };
+            record.cell = cell;
+            const install = (material: WorldMaterial) => {
+              if (!record.active || record.cell !== cell) return;
+              const previous = record.animatedMaterial;
+              cell.material = updateCharacterFrameMaterial(material, previous);
+              if (previous && previous !== cell.material)
+                retired.push(() => previous.texture.destroy(true));
+              record.animatedMaterial = cell.material;
+              record.cached = null;
+              invalidate();
+            };
+            if (lease.material) install(lease.material);
+            else void cell.lease.resource.then(install, () => {});
+          }
+        }
+        if (liveCell && !record.cell?.material) {
+          // Retain the last complete shadow while the next cell's CPU data settles.
+          // Keeping its binding avoids tearing down GPU batches during cold playback.
+          if (
+            record.cached &&
+            boundsOverlap(record.cached.receiver.bounds, viewport, margin)
+          ) {
+            visible.push(record.cached.receiver);
+            if (record.cached.sun) sunCasters.push(record.cached.sun);
+            if (record.occluder) dynamicOccluders.push(record.occluder);
+            appendLights(record, record.cached.lights);
+          }
+          continue;
+        }
         const pose = record.cached?.pose;
         if (
           pose?.parentMatrix.equals(p.matrix) &&
@@ -767,12 +823,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           continue;
         const recordLights: PointLight[] = [];
         const material =
+          record.cell?.material ??
           record.materials[record.sources.get(sprite.texture.source) ?? 0] ??
           record.materials[0];
         if (!material) continue;
-        const sourceRatio = material.width / sprite.texture.source.pixelWidth,
-          heightRatio = material.height / sprite.texture.source.pixelHeight;
-        const frameRect = sprite.texture.frame.clone();
+        const materialTexture = record.cell ? material.texture : sprite.texture;
+        const sourceRatio = material.width / materialTexture.source.pixelWidth,
+          heightRatio = material.height / materialTexture.source.pixelHeight;
+        const frameRect = materialTexture.frame.clone();
         frameRect.x *= sourceRatio;
         frameRect.y *= heightRatio;
         frameRect.width *= sourceRatio;
@@ -783,8 +841,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           if (!cached) {
             cached = createCharacterMaterialFrame(
               material,
-              sprite.texture,
-              record.character ? undefined : sprite.texture.orig.height,
+              materialTexture,
+              record.character
+                ? undefined
+                : (spriteGroundContact(sprite).y * materialTexture.orig.height) /
+                    sprite.texture.orig.height,
             );
             characterFrames.set(sprite.texture, cached);
           }
@@ -810,10 +871,15 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             ]);
         const objectHeight = record.wind ? description.size : Math.hypot(m.c, m.d) * h;
         const characterRoot = record.character ? origin(record.character) : undefined;
+        const contact =
+          dynamic && !record.character ? spriteGroundContact(sprite) : undefined;
         const characterFoot = characterRoot
           ? characterRoot.matrix.apply({ x: 0, y: 28 / 64 })
-          : dynamic
-            ? m.apply({ x: w * (0.5 - sprite.anchor.x), y: h * (1 - sprite.anchor.y) })
+          : contact
+            ? m.apply({
+                x: contact.x - w * sprite.anchor.x,
+                y: contact.y - h * sprite.anchor.y,
+              })
             : undefined;
         const characterHeight = characterRoot
           ? Math.hypot(characterRoot.matrix.c, characterRoot.matrix.d)
@@ -1809,6 +1875,12 @@ type Caster = {
   description: WorldSpriteDescription;
   leases: ReturnType<typeof acquireWorldMaterial>[];
   materials: WorldMaterial[];
+  animatedMaterial?: WorldMaterial;
+  cell?: {
+    texture: Texture;
+    lease: ReturnType<typeof acquireCharacterFrameMaterial>;
+    material?: WorldMaterial;
+  };
   sources: Map<Texture["source"], number>;
   active: boolean;
   /** Fixed, unprepared poses retain their conservative world bounds until owner invalidation. */

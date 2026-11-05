@@ -14,7 +14,7 @@ import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
-import { acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
+import { acquireCharacterFrameMaterial, acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
 
@@ -34,6 +34,43 @@ const decodeNormal = ([u, v]: readonly [number, number]) => {
 };
 
 describe("packed character shadow volumes", () => {
+  it("bounds large combat cells to 64px shadow data and retains their normalized foot plane", async () => {
+    const pixels=new Uint8Array(128*128*4);
+    for(let y=16;y<112;y++)for(let x=32;x<96;x++)pixels[(y*128+x)*4+3]=255;
+    const texture=new Texture({source:new BufferImageSource({resource:pixels,width:128,height:128})});
+    const lease=acquireCharacterFrameMaterial(texture);
+    try {
+      const material=await lease.resource;
+      expect(material.width).toBe(64);expect(material.height).toBe(64);
+      const frame=createCharacterMaterialFrame(material,material.texture,112*64/128);
+      for(let i=0;i<frame.points.length;i+=4)
+        expect(frame.points[i+1]!+frame.points[i+2]!).toBeCloseTo(112/128);
+      expect(frame.volumes!.length).toBeGreaterThan(0);
+    } finally {lease.release();texture.destroy(true);}
+  });
+  it("shares live-cell materials across actors and preserves changing silhouette coverage without loading art again", async () => {
+    const pixels=new Uint8Array(8*4*4);
+    pixels[(2*8+1)*4+3]=255;
+    pixels[(1*8+1)*4+3]=255;
+    pixels[(1*8+6)*4+3]=255;
+    const atlas=new Texture({source:new BufferImageSource({resource:pixels,width:8,height:4})});
+    const first=new Texture({source:atlas.source,frame:new Rectangle(0,0,4,4)});
+    const same=new Texture({source:atlas.source,frame:new Rectangle(0,0,4,4)});
+    const next=new Texture({source:atlas.source,frame:new Rectangle(4,0,4,4)});
+    const a=acquireCharacterFrameMaterial(first), b=acquireCharacterFrameMaterial(same), c=acquireCharacterFrameMaterial(next);
+    try {
+      const [one,two,three]=await Promise.all([a.resource,b.resource,c.resource]);
+      expect(one).toBe(two);expect(three).not.toBe(one);
+      expect(one.width).toBe(4);expect(one.height).toBe(4);
+      expect(one.pixels[(2*4+1)*4+3]).toBe(255);
+      expect(three.pixels[(2*4+1)*4+3]).toBe(0);
+      expect(three.pixels[(1*4+2)*4+3]).toBe(255);
+      const frame=createCharacterMaterialFrame(one,one.texture,3);
+      expect(frame.volumes!.length).toBeGreaterThan(0);
+      const warm=acquireCharacterFrameMaterial(first);
+      expect(warm.material).toBe(one);warm.release();
+    } finally {a.release();b.release();c.release();first.destroy(false);same.destroy(false);next.destroy(false);atlas.destroy(true);}
+  });
   it("aligns rectangular rendition UVs and physical depth when each atlas axis rounds independently", () => {
     const source = material(4, 3); source.isBillboard = true;
     for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) paint(source, x, y, 0, 1);

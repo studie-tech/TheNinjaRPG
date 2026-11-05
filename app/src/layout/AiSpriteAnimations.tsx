@@ -19,6 +19,16 @@ import {
   spriteAnimationSchema,
 } from "@/validators/spriteAnimation";
 
+const emptyAnimation: SpriteAnimationInput = {
+  name: "",
+  url: "",
+  columns: 6,
+  rows: 4,
+  frameCount: 24,
+  fps: 12.5,
+  facing: "left",
+};
+
 /** Edit one AI's bindings and shared sheets independently of the parent AI form draft. */
 export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
   const utils = api.useUtils();
@@ -26,17 +36,11 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
   const [actionKey, setActionKey] = useState("idle");
   // Undefined follows the saved binding; an empty string explicitly previews clearing it.
   const [candidateId, setCandidateId] = useState<string>();
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [revisionName, setRevisionName] = useState<string>();
   const form = useForm<SpriteAnimationInput>({
     resolver: zodResolver(spriteAnimationSchema),
-    defaultValues: {
-      name: "",
-      url: "",
-      columns: 6,
-      rows: 4,
-      frameCount: 24,
-      fps: 12.5,
-      facing: "left",
-    },
+    defaultValues: emptyAnimation,
   });
   const { errors } = useFormState({ control: form.control });
   const draft = useWatch({ control: form.control });
@@ -49,7 +53,9 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
-        form.reset();
+        form.reset(emptyAnimation);
+        setRevisionName(undefined);
+        setEditorOpen(false);
         await utils.spriteAnimation.getAiConfig.invalidate();
         if ("id" in result) setCandidateId(result.id);
       }
@@ -172,6 +178,29 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
                   Reset
                 </Button>
               )}
+              {preview && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={create.isPending}
+                  onClick={() => {
+                    form.reset({
+                      name: `${preview.name.slice(0, 180)} (revision)`,
+                      url: preview.url,
+                      columns: preview.columns,
+                      rows: preview.rows,
+                      frameCount: preview.frameCount,
+                      fps: preview.fps,
+                      facing: preview.facing,
+                    });
+                    create.reset();
+                    setRevisionName(preview.name);
+                    setEditorOpen(true);
+                  }}
+                >
+                  Edit as new version
+                </Button>
+              )}
             </div>
             {assign.error && (
               <p role="alert" className="text-destructive text-sm">
@@ -197,17 +226,31 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
           </div>
         </div>
       )}
-      <details className="mt-5 rounded-md border p-3">
+      <details
+        className="mt-5 rounded-md border p-3"
+        open={editorOpen}
+        onToggle={(event) => setEditorOpen(event.currentTarget.open)}
+      >
         <summary className="cursor-pointer font-semibold text-sm">
-          Add a sprite animation
+          {revisionName ? `Revise ${revisionName}` : "Add a sprite animation"}
         </summary>
+        {revisionName && (
+          <p className="mt-3 text-sm">
+            Change the sheet, grid, timing or facing, then save a new version. Preview
+            and Apply it to the chosen action. Other assignments and battles already in
+            progress keep their existing version.
+          </p>
+        )}
         <p className="my-3 text-muted-foreground text-sm">
           Upload a transparent sheet with equal square cells, read left to right, then
           top to bottom. Use at most {SPRITE_ANIMATION_LIMITS.frames} frames,{" "}
           {SPRITE_ANIMATION_LIMITS.cells} cells and {SPRITE_ANIMATION_LIMITS.seconds}{" "}
           seconds per loop. Battles request 128- or 256-pixel cells to match the
-          displayed size. Uploaded sheets use CDN resizing; external URLs need 128-pixel
-          cells for mobile. New sheets stay in the library when assignments change.
+          displayed size. Keep transparency and frame padding consistent throughout the
+          loop; the first frame establishes the feet position. Upload replacements as
+          new files so browsers can cache each version independently. Uploaded sheets
+          use CDN resizing; external URLs need 128-pixel cells for mobile. New sheets
+          stay in the library when assignments change.
         </p>
         <form
           onSubmit={form.handleSubmit((values) => create.mutate(values))}
@@ -289,10 +332,29 @@ export const AiSpriteAnimations = ({ userId }: { userId: string }) => {
               {create.error.message}
             </p>
           )}
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Saving…" : "Add to animation library"}
+              {create.isPending
+                ? "Saving…"
+                : revisionName
+                  ? "Save new version"
+                  : "Add to animation library"}
             </Button>
+            {revisionName && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={create.isPending}
+                onClick={() => {
+                  form.reset(emptyAnimation);
+                  create.reset();
+                  setRevisionName(undefined);
+                  setEditorOpen(false);
+                }}
+              >
+                Cancel revision
+              </Button>
+            )}
           </div>
         </form>
       </details>

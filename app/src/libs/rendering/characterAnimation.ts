@@ -4,7 +4,11 @@ import {
   acquireAnimationTexture,
   clearUnusedAnimationTextures,
 } from "@/libs/rendering/animationTextures";
-import { stabilizeNearestTexture } from "@/libs/rendering/assets";
+import {
+  setSpriteGroundContact,
+  stabilizeNearestTexture,
+  textureGroundContact,
+} from "@/libs/rendering/assets";
 import {
   type CharacterAnimation,
   type CharacterAnimations,
@@ -24,7 +28,9 @@ export const createCharacterAnimation = (
     texture: sprite.texture,
     anchor: sprite.anchor.clone(),
     scale: sprite.scale.clone(),
+    position: sprite.position.clone(),
   };
+  const originalContact = textureGroundContact(original.texture);
   let current:
     | {
         animation: CharacterAnimation;
@@ -32,6 +38,7 @@ export const createCharacterAnimation = (
         views: Texture[];
         ready: boolean;
         cellSize: number;
+        contact: { x: number; y: number };
       }
     | undefined;
   let desired: CharacterAnimation | undefined;
@@ -44,6 +51,8 @@ export const createCharacterAnimation = (
   let activeKey = "";
   const restore = (facing: AvatarFacing, sourceFacing: AvatarFacing) => {
     sprite.texture = original.texture;
+    sprite.position.copyFrom(original.position);
+    setSpriteGroundContact(sprite);
     sprite.anchor.copyFrom(original.anchor);
     sprite.scale.set(
       Math.abs(original.scale.x) * (facing === sourceFacing ? 1 : -1),
@@ -127,6 +136,7 @@ export const createCharacterAnimation = (
               views: [] as Texture[],
               ready: false,
               cellSize,
+              contact: { x: 0, y: 0 },
             };
             current = slot;
             void lease.resource.then(
@@ -146,6 +156,8 @@ export const createCharacterAnimation = (
                     }),
                   ),
                 );
+                // One rest contact per clip preserves authored movement within every cell.
+                slot.contact = textureGroundContact(slot.views[0]!);
                 slot.ready = true;
               },
               () => {},
@@ -169,7 +181,18 @@ export const createCharacterAnimation = (
         ? 0
         : spriteAnimationFrame(current.animation, elapsed, looping);
       sprite.texture = current.views[index]!;
-      sprite.anchor.set(0.5);
+      const cell = sprite.texture.width;
+      sprite.anchor.set(current.contact.x / cell, current.contact.y / cell);
+      sprite.position.set(
+        original.position.x +
+          (originalContact.x - original.anchor.x * original.texture.orig.width) *
+            Math.abs(original.scale.x) *
+            (input.facing === input.sourceFacing ? 1 : -1),
+        original.position.y +
+          (originalContact.y - original.anchor.y * original.texture.orig.height) *
+            original.scale.y,
+      );
+      setSpriteGroundContact(sprite, current.contact);
       sprite.scale.set(
         (size / sprite.texture.width) *
           (input.facing === current.animation.facing ? 1 : -1),
