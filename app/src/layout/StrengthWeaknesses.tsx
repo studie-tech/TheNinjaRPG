@@ -1,7 +1,7 @@
 "use client";
 
 import type { Chart } from "chart.js";
-import { CircleHelp, Eye, Leaf, Lock, Search } from "lucide-react";
+import { CircleHelp, Leaf, Lock } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -24,6 +24,7 @@ import {
 } from "@/drizzle/constants";
 import { Bloodright } from "@/layout/Bloodright";
 import ContentBox from "@/layout/ContentBox";
+import { CovertStatCard } from "@/layout/CovertStatCard";
 import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
@@ -39,6 +40,7 @@ import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getUserElements } from "@/validators/user";
 
@@ -207,8 +209,7 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             {TOTAL_MASTERY_CAP.toLocaleString()}
           </p>
           {MasteryNames.map((name) => {
-            const label =
-              name.charAt(0).toUpperCase() + name.slice(1).replace("Mastery", "");
+            const label = capitalizeFirstLetter(name.replace("Mastery", ""));
             const bonus = masteries[name] - userData[name];
             return (
               <div key={name} className="flex flex-wrap items-center">
@@ -310,9 +311,8 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
               },
             },
             data: {
-              labels: MasteryNames.map(
-                (stat) =>
-                  stat.charAt(0).toUpperCase() + stat.slice(1).replace("Mastery", ""),
+              labels: MasteryNames.map((stat) =>
+                capitalizeFirstLetter(stat.replace("Mastery", "")),
               ),
               datasets: [
                 {
@@ -666,50 +666,10 @@ export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
     timeDiff,
   );
 
-  const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
-  const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
-
   return (
     <div className="space-y-6">
-      {/* Stealth Section */}
-      <div className="rounded-lg border p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Eye className="h-5 w-5 text-purple-600" />
-          <h3 className="font-bold text-lg">Stealth</h3>
-        </div>
-        <div className="mb-1 flex justify-between">
-          <span className="text-sm">Progress</span>
-          <span className="font-medium text-sm">
-            {Math.floor(stealthStatus.stealth).toLocaleString()} /{" "}
-            {STEALTH_SENSORY_CAP.toLocaleString()}
-          </span>
-        </div>
-        <Progress value={stealthProgress} className="h-2" />
-        <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-          <p>Duration: {Math.floor(stealthStatus.stealthDurationMax / 60)} min</p>
-          <p>Keep Chance: {stealthStatus.stealthKeepChance.toFixed(1)}%</p>
-        </div>
-      </div>
-
-      {/* Sensory Section */}
-      <div className="rounded-lg border p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Search className="h-5 w-5 text-blue-600" />
-          <h3 className="font-bold text-lg">Sensory</h3>
-        </div>
-        <div className="mb-1 flex justify-between">
-          <span className="text-sm">Progress</span>
-          <span className="font-medium text-sm">
-            {Math.floor(stealthStatus.sensory).toLocaleString()} /{" "}
-            {STEALTH_SENSORY_CAP.toLocaleString()}
-          </span>
-        </div>
-        <Progress value={sensoryProgress} className="h-2" />
-        <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-          <p>Detection Chance: {stealthStatus.sensoryDetectChance.toFixed(1)}%</p>
-          <p>Cooldown: {Math.floor(stealthStatus.sensoryCooldown)} sec</p>
-        </div>
-      </div>
+      <CovertStatCard kind="stealth" status={stealthStatus} />
+      <CovertStatCard kind="sensory" status={stealthStatus} />
     </div>
   );
 };

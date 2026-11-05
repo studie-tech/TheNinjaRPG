@@ -1258,6 +1258,10 @@ export const STATS_PER_ENERGY = 0.085;
 export const QueueKinds = ["JUTSU", "CRAFT", "MASTERY", "ENERGY", "ELEMENT"] as const;
 export const MasteryQueueKinds = ["MASTERY", "ELEMENT"] as const;
 export type MasteryQueueKind = (typeof MasteryQueueKinds)[number];
+export const MASTERY_QUEUE_KIND_LABELS: Record<MasteryQueueKind, string> = {
+  MASTERY: "Mastery",
+  ELEMENT: "Elemental",
+};
 export type QueueKind = (typeof QueueKinds)[number];
 /** Queue kinds started on a timer and settled in the database. */
 export const TimedQueueKinds = ["JUTSU", "CRAFT"] as const satisfies readonly QueueKind[];

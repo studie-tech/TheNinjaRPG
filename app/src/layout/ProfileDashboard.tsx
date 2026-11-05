@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   COST_STREAK_CATCHUP_DAY,
+  MASTERY_QUEUE_KIND_LABELS,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
   MasteryQueueKinds,
@@ -159,7 +160,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
           ? [
               {
                 kind,
-                label: kind === "ELEMENT" ? "Elemental" : "Mastery",
+                label: MASTERY_QUEUE_KIND_LABELS[kind],
                 title: capitalizeFirstLetter(noCase(session.stat)),
                 startedAt: session.startedAt,
                 endsAt: masteryTrainingEndsAt(userData, kind),
