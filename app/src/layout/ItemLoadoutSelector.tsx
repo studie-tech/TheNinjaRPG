@@ -23,8 +23,6 @@ const ItemLoadoutSelector: React.FC<LoadoutSelectorDisplayProps> = (props) => {
     updateUser,
   } = useUserDataSelector(fedItemLoadouts);
 
-  // tRPC utility
-  const utils = api.useUtils();
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
 
   // How many loadouts?
