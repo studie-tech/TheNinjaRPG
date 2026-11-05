@@ -10,6 +10,7 @@ import {
   BasicElementName,
   getCombatStatCap,
   getUserCaps,
+  MASTERY_QUEUE_KIND_LABELS,
   MAX_DAILY_TRAININGS,
   MasteryNames,
   type TimedMasteryName,
@@ -207,7 +208,7 @@ export const trainRouter = createTRPCRouter({
       if (readiness?.error) return errorResponse(readiness.error);
       const user = readiness?.user ?? initialUser;
       const session = getMasteryTrainingState(user, input.kind);
-      const label = input.kind === "ELEMENT" ? "Elemental" : "Mastery";
+      const label = MASTERY_QUEUE_KIND_LABELS[input.kind];
       if (
         [...input.entries, ...input.expectedEntries].some(
           (entry) =>
@@ -427,7 +428,7 @@ export const trainRouter = createTRPCRouter({
       return actionReadinessResponse(
         {
           success: true,
-          message: `Started ${kind === "ELEMENT" ? "elemental" : "mastery"} training`,
+          message: `Started ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training`,
           ...(!requiresProgressionRefresh
             ? getUserProgressionUpdate(
                 { ...user, ...data, updatedAt: claim.claimedAt },
@@ -469,7 +470,7 @@ export const trainRouter = createTRPCRouter({
         startedAt.getTime() !== input.startedAt.getTime()
       ) {
         return errorResponse(
-          `Your ${kind === "ELEMENT" ? "elemental" : "mastery"} training changed. Please refresh and try again`,
+          `Your ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training changed. Please refresh and try again`,
         );
       }
       const captchaBlock = await trainingCaptchaMessage(ctx.drizzle, user, input.guess);

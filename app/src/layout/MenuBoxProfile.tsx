@@ -41,6 +41,7 @@ import {
   DIFFUSE_MAX_PERCENTAGE,
   ELITE_JONIN_BRACKET,
   ERRANDS_PER_DAY,
+  MASTERY_QUEUE_KIND_LABELS,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
   MAX_PVP_BRACKET,
@@ -472,7 +473,7 @@ const MenuBoxProfile: React.FC = () => {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {kind === "ELEMENT" ? "Elemental" : "Mastery"} training
+                      {MASTERY_QUEUE_KIND_LABELS[kind]} training
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

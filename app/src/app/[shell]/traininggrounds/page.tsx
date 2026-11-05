@@ -11,7 +11,6 @@ import {
   Loader2,
   Medal,
   RefreshCw,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Star,
@@ -34,7 +33,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type {
   CombatStatName,
@@ -61,6 +59,7 @@ import {
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
+  MASTERY_QUEUE_KIND_LABELS,
   MASTERY_RANK_CAPS,
   MAX_DAILY_TRAININGS,
   MAX_JUTSU_TRAIN_TIME_MS,
@@ -84,6 +83,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { CovertStatCard } from "@/layout/CovertStatCard";
 import { getElementImg } from "@/layout/ElementImage";
 import {
   EnergyTrainingQueue,
@@ -98,7 +98,10 @@ import JutsuFiltering, {
 } from "@/layout/JutsuFiltering";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
+import {
+  MasteryTrainingQueue,
+  useMasteryTrainingQueue,
+} from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
@@ -597,16 +600,8 @@ const StatsTraining: React.FC<
       onError: () => utils.profile.getUser.invalidate(),
     });
 
-  const { mutate: queueMasteryTraining, isPending: isQueueingMastery } =
-    api.train.updateMasteryTrainingQueue.useMutation({
-      onMutate: () => ({ revision: prepareUserUpdate() }),
-      onSuccess: (result) => showMutationToast(result),
-      onSettled: (result, _error, _variables, context) =>
-        updateUser(result, {
-          revision: context?.revision,
-          achievementProgress: result?.achievementProgress,
-        }),
-    });
+  const { saveQueue: queueMasteryTraining, isPending: isQueueingMastery } =
+    useMasteryTrainingQueue();
 
   const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
     api.train.stopMasteryTraining.useMutation({
@@ -674,7 +669,7 @@ const StatsTraining: React.FC<
         <Button
           size="icon"
           variant="ghost"
-          aria-label={`Collect and stop ${kind === "ELEMENT" ? "elemental" : "mastery"} training`}
+          aria-label={`Collect and stop ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training`}
           disabled={isPending}
           onClick={() => collectMasteryTraining()}
         >
@@ -686,7 +681,7 @@ const StatsTraining: React.FC<
     return (
       <Popover>
         <PopoverTrigger
-          aria-label={`Collect and stop ${kind === "ELEMENT" ? "elemental" : "mastery"} training`}
+          aria-label={`Collect and stop ${MASTERY_QUEUE_KIND_LABELS[kind].toLowerCase()} training`}
           disabled={isPending}
           className="flex h-9 w-9 items-center justify-center"
         >
@@ -963,7 +958,7 @@ const StatsTraining: React.FC<
                           : session.stat
                             ? (queuedMasteryStartBlockMessage(userData, entry) ??
                               (masteryEntries.length >= getQueueWaitingSlots(userData)
-                                ? `${kind === "ELEMENT" ? "Elemental" : "Mastery"} queue is full`
+                                ? `${MASTERY_QUEUE_KIND_LABELS[kind]} queue is full`
                                 : null))
                             : masteryTrainingBlockMessage(
                                 actionPrerequisiteUser(userData),
@@ -1701,9 +1696,6 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  const stealthProgress = (stealthStatus.stealth / STEALTH_SENSORY_CAP) * 100;
-  const sensoryProgress = (stealthStatus.sensory / STEALTH_SENSORY_CAP) * 100;
-
   // Check if currently training
   const isTraining = !!stealthStatus.covertTrainingType;
   const trainingType = stealthStatus.covertTrainingType;
@@ -1749,97 +1741,29 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
           </div>
         )}
 
-        {/* Stealth Section - hidden when training */}
-        {!isTraining && (
-          <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Eye className="h-5 w-5 text-purple-600" />
-              <h3 className="font-bold text-lg">Stealth</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 flex justify-between">
-                  <span className="text-sm">Progress</span>
-                  <span className="font-medium text-sm">
-                    {Math.floor(stealthStatus.stealth).toLocaleString()} /{" "}
-                    {STEALTH_SENSORY_CAP.toLocaleString()}
-                  </span>
-                </div>
-                <Progress value={stealthProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-                  <p>
-                    Duration: {Math.floor(stealthStatus.stealthDurationMax / 60)} min
-                  </p>
-                  <p>Keep Chance: {stealthStatus.stealthKeepChance.toFixed(1)}%</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
+        {/* Skill sections - hidden when training */}
+        {!isTraining &&
+          (["stealth", "sensory"] as const).map((type) => (
+            <CovertStatCard
+              key={type}
+              kind={type}
+              status={stealthStatus}
+              actions={[10, 30].map((minutes) => (
                 <Button
-                  onClick={() => trainCovert({ type: "stealth", minutes: 10 })}
-                  disabled={isTrainingCovert || stealthProgress >= 100}
+                  key={minutes}
+                  onClick={() => trainCovert({ type, minutes })}
+                  disabled={
+                    isTrainingCovert ||
+                    (stealthStatus[type] / STEALTH_SENSORY_CAP) * 100 >= 100
+                  }
                   className="w-full"
                 >
                   <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 10 min"}
+                  {isTrainingCovert ? "Starting..." : `Train ${minutes} min`}
                 </Button>
-                <Button
-                  onClick={() => trainCovert({ type: "stealth", minutes: 30 })}
-                  disabled={isTrainingCovert || stealthProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 30 min"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sensory Section - hidden when training */}
-        {!isTraining && (
-          <div className="rounded-lg border p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Search className="h-5 w-5 text-blue-600" />
-              <h3 className="font-bold text-lg">Sensory</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1 flex justify-between">
-                  <span className="text-sm">Progress</span>
-                  <span className="font-medium text-sm">
-                    {Math.floor(stealthStatus.sensory).toLocaleString()} /{" "}
-                    {STEALTH_SENSORY_CAP.toLocaleString()}
-                  </span>
-                </div>
-                <Progress value={sensoryProgress} className="h-2" />
-                <div className="mt-3 space-y-1 text-muted-foreground text-sm">
-                  <p>
-                    Detection Chance: {stealthStatus.sensoryDetectChance.toFixed(1)}%
-                  </p>
-                  <p>Cooldown: {Math.floor(stealthStatus.sensoryCooldown)} sec</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => trainCovert({ type: "sensory", minutes: 10 })}
-                  disabled={isTrainingCovert || sensoryProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 10 min"}
-                </Button>
-                <Button
-                  onClick={() => trainCovert({ type: "sensory", minutes: 30 })}
-                  disabled={isTrainingCovert || sensoryProgress >= 100}
-                  className="w-full"
-                >
-                  <Timer className="mr-1 h-4 w-4" />
-                  {isTrainingCovert ? "Starting..." : "Train 30 min"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+              ))}
+            />
+          ))}
 
         {/* Info Box */}
         <div className="rounded-lg border border-border bg-muted p-4 text-sm">
