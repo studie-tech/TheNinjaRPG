@@ -253,6 +253,17 @@ export const isSameDay = (date1: Date, date2: Date): boolean => {
 };
 
 /**
+ * Browser-local yyyy-MM-dd for local midnight `months` ago, the value of a date input.
+ * Month ends overflow as `Date.setMonth` does: May 31 minus 3 months is March 3.
+ */
+export const getLocalDateStringMonthsAgo = (months: number) => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setMonth(date.getMonth() - months);
+  return format(date, "yyyy-MM-dd");
+};
+
+/**
  * Check if a date is today (UTC-based comparison)
  */
 export const isToday = (date: Date | null): boolean => {
@@ -300,6 +311,19 @@ export const formatSecondsToTimeDisplay = (totalSeconds: number): string => {
     return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
   }
   return `${totalSeconds}s`;
+};
+
+/**
+ * Compact length such as "2h", "1h 30m" or "45m", rounded up to whole minutes. Under a
+ * minute it reads as seconds.
+ */
+export const formatHoursMinutes = (totalSeconds: number): string => {
+  if (totalSeconds < 60) return formatSecondsToTimeDisplay(totalSeconds);
+  const totalMinutes = Math.ceil(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!hours) return `${minutes}m`;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
 /**

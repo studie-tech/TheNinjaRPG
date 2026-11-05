@@ -32,6 +32,7 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { capitalizeFirstLetter, formatBattleUsageType } from "@/utils/string";
+import { formatHoursMinutes } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import {
   activityBonusPowerLabel,
@@ -819,8 +820,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"isFarmSeed" in item && item.isFarmSeed && (
                 <p>
-                  <b>Farm Seed</b>: grow {item.farmGrowTimeSeconds}s · min grow lvl{" "}
-                  {item.farmMinLevel}
+                  <b>Farm Seed</b>: grow {formatHoursMinutes(item.farmGrowTimeSeconds)}{" "}
+                  · min grow lvl {item.farmMinLevel}
                   {getFarmPlantExperience(item) > 0
                     ? ` · plant ${getFarmPlantExperience(item)} XP`
                     : ""}

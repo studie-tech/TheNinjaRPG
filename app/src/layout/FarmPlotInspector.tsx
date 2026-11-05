@@ -15,7 +15,7 @@ import {
   getNextWateringAt,
 } from "@/libs/farming";
 import { cn } from "@/libs/shadui";
-import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { formatHoursMinutes } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
@@ -32,14 +32,6 @@ type FarmPlotInspectorProps = {
   onFertilize: (plot: FarmPlotState, userItemId: string) => void;
   onHarvest: (plot: FarmPlotState) => void;
   onBrowseSeeds: () => void;
-};
-
-const formatDuration = (seconds: number) => {
-  if (seconds < 60) return formatSecondsToTimeDisplay(seconds);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.ceil((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${minutes > 0 ? `${minutes}m` : ""}`.trim();
-  return `${Math.max(1, minutes)}m`;
 };
 
 /** Shows plot actions and base XP estimates with explicit harvest controls. */
@@ -214,8 +206,8 @@ export function FarmPlotInspector({
                       <span className="min-w-0 flex-1">
                         <span className="block font-medium">{seed.name}</span>
                         <span className="block text-muted-foreground text-xs">
-                          {formatDuration(seed.growTimeSeconds)} → {seed.yieldQuantity}{" "}
-                          {seed.yieldName}
+                          {formatHoursMinutes(seed.growTimeSeconds)} →{" "}
+                          {seed.yieldQuantity} {seed.yieldName}
                         </span>
                         <span className="block text-muted-foreground text-xs">
                           {locked
@@ -245,7 +237,7 @@ export function FarmPlotInspector({
               ) : selectedFertilizer ? (
                 <p className="text-muted-foreground">
                   {selectedFertilizer.name} removes up to{" "}
-                  {formatDuration(selectedFertilizer.timeReductionSeconds)} from the
+                  {formatHoursMinutes(selectedFertilizer.timeReductionSeconds)} from the
                   ready time.
                 </p>
               ) : (
@@ -278,7 +270,7 @@ export function FarmPlotInspector({
                   {farmState.availableFertilizers.map((fertilizer) => (
                     <option key={fertilizer.userItemId} value={fertilizer.userItemId}>
                       {fertilizer.name} (−
-                      {formatDuration(fertilizer.timeReductionSeconds)})
+                      {formatHoursMinutes(fertilizer.timeReductionSeconds)})
                     </option>
                   ))}
                 </select>
