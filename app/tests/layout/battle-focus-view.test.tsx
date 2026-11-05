@@ -274,6 +274,16 @@ describe("BattleFocusView", () => {
     }
   });
 
+  it("sizes the desktop field box to the field so the actions sit right under it", () => {
+    isDesktop = true;
+    renderView();
+    const fieldBox = screen.getByText("Field").parentElement!.parentElement!;
+    // 100cqw × the 0.6 field ratio
+    expect(fieldBox.style.flexBasis).toBe("calc(60cqw)");
+    expect(fieldBox.className).not.toContain("flex-1");
+    expect(fieldBox.parentElement!.className).toContain("[container-type:inline-size]");
+  });
+
   it("hands the screen back to the layout", () => {
     isDesktop = true;
     const onShowLayout = vi.fn();
