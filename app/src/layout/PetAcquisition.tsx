@@ -43,7 +43,6 @@ import { acquirePetSchema } from "@/validators/pets";
  */
 export function PetAcquisition() {
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
   const [name, setName] = useState("");
   const [gender, setGender] = useState<PetGender | null>(null);
   const [currency, setCurrency] = useState<PetPaymentCurrency>("REPUTATION");

@@ -91,7 +91,7 @@ import {
 } from "@/libs/sector-map/validation";
 import type { GlobalTile, SectorPoint } from "@/libs/sector-map/world-types";
 import { getRemainingSensoryCooldown, getStealthStatus } from "@/libs/stealth";
-import { showMutationToast, showRewardToast } from "@/libs/toast";
+import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import {
   calcGlobalTravelTime,
