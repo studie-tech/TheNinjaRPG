@@ -66,7 +66,7 @@ const muteSettings = [
   { chatMuted: false, mutedConversationIds: ["global"] },
 ];
 it.each(muteSettings)(
-  "waits for the profile before suppressing muted startup pings (%j)",
+  "waits for the profile, then delivers a ping whatever is muted (%j)",
   async (mute) => {
     const test = mount({ mute });
     await waitFor(() => expect(test.reads()).toBe(1));
@@ -85,8 +85,8 @@ it.each(muteSettings)(
       await pending;
     });
     await test.view.findByText("Profile loaded");
-    expect(test.showToast).not.toHaveBeenCalled();
-    expect(getDefaultStore().get(chatMentionsAtom)).toEqual({});
+    expect(test.showToast).toHaveBeenCalledTimes(1);
+    expect(getDefaultStore().get(chatMentionsAtom)).toEqual({ global: 1 });
   },
 );
 

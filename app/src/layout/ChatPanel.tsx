@@ -16,7 +16,6 @@ import {
   chatMentionsAtom,
   chatPanelAtom,
   chatTavernActivityAtom,
-  combineChatCounts,
   countChatNotifications,
   getInboxNews,
 } from "@/libs/chatPanel";
@@ -53,7 +52,8 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const badge = countChatNotifications(
     userData,
     getInboxNews(notifications),
-    combineChatCounts(mentions, tavernActivity),
+    mentions,
+    tavernActivity,
   );
   const showReminder = hasTutorialReminder(userData);
   const setOpen = (next: boolean) =>

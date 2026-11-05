@@ -81,17 +81,24 @@ export const usePusherHandler = (
   useEffect(() => {
     if (userId) {
       const session = notificationSession.current;
-      const canNotifyConversation = (conversationId: string | undefined) => {
+      // Pings (mentions and quotes) arrive whatever the player muted; mutes quiet other chat.
+      const canNotifyConversation = (
+        conversationId: string | undefined,
+        isPing = false,
+      ) => {
         const user = utils.profile.getUser.getData()?.userData;
         return (
           !!session &&
           notificationSession.current === session &&
           user?.userId === userId &&
-          !isConversationMuted(user, conversationId) &&
+          (isPing || !isConversationMuted(user, conversationId)) &&
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
-      const resolveNotificationProfile = async (conversationId: string | undefined) => {
+      const resolveNotificationProfile = async (
+        conversationId: string | undefined,
+        isPing = false,
+      ) => {
         if (!utils.profile.getUser.getData()?.userData) {
           try {
             // Join the initial profile request so its loading and error state can settle normally.
@@ -101,7 +108,7 @@ export const usePusherHandler = (
             return;
           }
         }
-        return canNotifyConversation(conversationId);
+        return canNotifyConversation(conversationId, isPing);
       };
       // Pusher Channel
       const pusher = new Pusher(
@@ -326,8 +333,8 @@ export const usePusherHandler = (
         } else if (data.type === "pinged") {
           const conversationId = data.conversationId;
           if (
-            (await resolveNotificationProfile(conversationId)) &&
-            canNotifyConversation(conversationId)
+            (await resolveNotificationProfile(conversationId, true)) &&
+            canNotifyConversation(conversationId, true)
           ) {
             if (conversationId && data.isPublic) {
               store.set(chatMentionsAtom, (old) =>

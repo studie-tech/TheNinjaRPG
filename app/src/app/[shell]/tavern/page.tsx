@@ -12,8 +12,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useTavernIds } from "@/hooks/useTavernActivity";
 import { useTaverns } from "@/hooks/useTaverns";
 import BanInfo from "@/layout/BanInfo";
+import { ChatMuteButton } from "@/layout/ChatMuteButton";
 import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
 import NavTabs from "@/layout/NavTabs";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
@@ -35,6 +37,7 @@ export default function Tavern() {
     globalTavernEnabled,
     isLoading: isLoadingTaverns,
   } = useTaverns(userData);
+  const tavernIds = useTavernIds(userData);
 
   // If no tavern defined, set the tavern
   useEffect(() => {
@@ -57,6 +60,7 @@ export default function Tavern() {
 
   // Derived
   const conversation = activeTab ?? (canAccessGlobal ? "Global" : localTavern);
+  const tavernId = tavernIds?.find((tavern) => tavern.title === conversation)?.id;
   const convoProps = {
     refreshKey: 0,
     title: `${conversation} Tavern`,
@@ -102,6 +106,16 @@ export default function Tavern() {
       topRightContent={
         <div className="flex flex-row gap-1">
           {tavernSelector}
+          {tavernId && (
+            <ChatMuteButton
+              label={conversation}
+              conversationId={tavernId}
+              variant="default"
+              size="default"
+              className=""
+              iconClassName="h-6 w-6"
+            />
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button id="filter-bloodline">

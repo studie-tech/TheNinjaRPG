@@ -6,6 +6,7 @@ import {
   getInboxNews,
   isConversationMuted,
   isConversationUnread,
+  unreadForTavern,
   toggleMutedConversation,
 } from "@/libs/chatPanel";
 
@@ -31,13 +32,15 @@ describe("chat mutes", () => {
 });
 
 describe("chat badge", () => {
-  it("adds inbox news to mentions from unmuted conversations", () => {
-    expect(countChatNotifications(user(false, ["muted"]), 2, { tavern: 3, muted: 4 })).toBe(5);
+  it("adds inbox news to tavern counts, keeping only pings from muted taverns", () => {
+    expect(
+      countChatNotifications(user(false, ["muted"]), 2, { tavern: 3, muted: 4 }, { muted: 9 }),
+    ).toBe(9);
   });
 
-  it("shows nothing while all chat is muted or without a player", () => {
-    expect(countChatNotifications(user(true), 2, { tavern: 3 })).toBe(0);
-    expect(countChatNotifications(null, 2, { tavern: 3 })).toBe(0);
+  it("keeps only pings while all chat is muted, and shows nothing without a player", () => {
+    expect(countChatNotifications(user(true), 2, { tavern: 3 }, { tavern: 8, other: 5 })).toBe(3);
+    expect(countChatNotifications(null, 2, { tavern: 3 }, {})).toBe(0);
   });
 });
 
@@ -72,8 +75,15 @@ describe("tavern unread", () => {
     expect(countTavernUnread(user(false, ["akikaze"]), { global: 1 }, { global: 3, akikaze: 2, ally: 1 })).toBe(4);
   });
 
-  it("is zero while all chat is muted or without a player", () => {
-    expect(countTavernUnread(user(true), { global: 1 }, { global: 3 })).toBe(0);
+  it("still counts pings in a muted tavern, or while all chat is muted", () => {
+    expect(countTavernUnread(user(false, ["akikaze"]), { akikaze: 2 }, { akikaze: 7 })).toBe(2);
+    expect(unreadForTavern(user(false, ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
+    expect(unreadForTavern(user(false), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(7);
+    expect(unreadForTavern(user(true), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
+    expect(countTavernUnread(user(true), { global: 1 }, { global: 3 })).toBe(1);
+  });
+
+  it("is zero without a player", () => {
     expect(countTavernUnread(null, { global: 1 }, { global: 3 })).toBe(0);
   });
 });
