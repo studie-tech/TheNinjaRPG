@@ -7,7 +7,7 @@ import { FARM_MAX_PLOTS } from "@/drizzle/constants";
 import { FARM_CARD_GRID, FarmItemCard } from "@/layout/FarmItemCard";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
 import { getFarmQuantityPrice } from "@/libs/farming";
-import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { formatHoursMinutes } from "@/utils/time";
 import type { FarmShopEntryState, FarmStateResponse } from "@/validators/farming";
 
 type FarmMarketProps = {
@@ -18,13 +18,7 @@ type FarmMarketProps = {
   section?: "market" | "upgrades";
 };
 
-const duration = (seconds?: number) => {
-  if (!seconds) return null;
-  if (seconds < 60) return formatSecondsToTimeDisplay(seconds);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.ceil((seconds % 3600) / 60);
-  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
-};
+const duration = (seconds?: number) => (seconds ? formatHoursMinutes(seconds) : null);
 
 /** Farm shop rows with quantity, total price and purchase in one line per item. */
 export function FarmMarket({

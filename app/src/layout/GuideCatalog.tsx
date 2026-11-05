@@ -2,7 +2,7 @@ import Link from "@/layout/Link";
 import { isFarmMarketSeed } from "@/libs/farming";
 import type { fetchBloodlineCatalog, fetchFarmCatalog } from "@/queries/guide";
 
-import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { formatHoursMinutes } from "@/utils/time";
 
 type FarmRow = Awaited<ReturnType<typeof fetchFarmCatalog>>[number];
 type BloodlineRow = Awaited<ReturnType<typeof fetchBloodlineCatalog>>[number];
@@ -56,9 +56,7 @@ export const FarmCatalog: React.FC<{ rows: FarmRow[] }> = ({ rows }) => {
                   )}
                 </td>
                 <td className={TD}>{row.farmMinLevel}</td>
-                <td className={TD}>
-                  {formatSecondsToTimeDisplay(row.farmGrowTimeSeconds)}
-                </td>
+                <td className={TD}>{formatHoursMinutes(row.farmGrowTimeSeconds)}</td>
                 <td className={TD}>
                   {isFarmMarketSeed(row)
                     ? `${row.farmSellValue.toLocaleString("en-US")} farm coins`
