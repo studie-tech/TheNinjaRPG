@@ -53,8 +53,10 @@ import {
   sortEffects,
   storeMasteryBases,
 } from "@/libs/combat/util";
+import { oddQHexDistance, oddQLineStep } from "@/libs/hexgrid";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
 import { calcHP, type StatScale, scaleUserStats } from "@/libs/profile";
+import { clamp } from "@/utils/math";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type {
   PreventTagType,
@@ -2606,27 +2608,17 @@ export const redirection = (
     };
   }
 
-  // Calculate how many spaces to move (based on power)
-  let moveDistance: number;
-
-  if (direction === "pull") {
-    // For pull, ensure we don't pull the target on top of the caster
-    // Calculate hex grid distance between target and caster
-    const hexDistance = Math.max(
-      Math.abs(actualTarget.longitude - caster.longitude),
-      Math.abs(actualTarget.latitude - caster.latitude),
-      Math.abs(
-        actualTarget.longitude +
-          actualTarget.latitude -
-          caster.longitude -
-          caster.latitude,
-      ),
-    );
-    moveDistance = Math.min(power, Math.max(0, hexDistance - 1));
-  } else {
-    // For push, use the full power
-    moveDistance = power;
-  }
+  // A pull stops next to the caster; a push travels its full power.
+  const origin = { col: actualTarget.longitude, row: actualTarget.latitude };
+  const casterTile = { col: caster.longitude, row: caster.latitude };
+  const casterDistance = oddQHexDistance(
+    origin.col,
+    origin.row,
+    casterTile.col,
+    casterTile.row,
+  );
+  const moveDistance =
+    direction === "pull" ? Math.min(power, Math.max(0, casterDistance - 1)) : power;
 
   if (moveDistance === 0) {
     return {
@@ -2635,154 +2627,45 @@ export const redirection = (
     };
   }
 
-  // Calculate new position using hex grid movement
-  let newLongitude: number, newLatitude: number;
-
-  if (direction === "push") {
-    // Push away from caster
-    // Calculate the direction vector from caster to target
-    const deltaX = actualTarget.longitude - caster.longitude;
-    const deltaY = actualTarget.latitude - caster.latitude;
-    const deltaZ = -deltaX - deltaY; // Hex grid constraint: q + r + s = 0
-
-    // Normalize the direction vector
-    const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
-    if (maxDelta === 0) {
-      return {
-        txt: `${target.username} cannot be pushed - no valid direction`,
-        color: "red",
-      };
-    }
-
-    // Move in the direction of the vector
-    newLongitude =
-      actualTarget.longitude + Math.round((deltaX / maxDelta) * moveDistance);
-    newLatitude =
-      actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
-  } else {
-    // Pull towards caster
-    // Calculate the direction vector from target to caster
-    const deltaX = caster.longitude - actualTarget.longitude;
-    const deltaY = caster.latitude - actualTarget.latitude;
-    const deltaZ = -deltaX - deltaY; // Hex grid constraint: q + r + s = 0
-
-    // Normalize the direction vector
-    const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
-    if (maxDelta === 0) {
-      return {
-        txt: `${target.username} cannot be pulled - no valid direction`,
-        color: "red",
-      };
-    }
-
-    // Move in the direction of the vector
-    newLongitude =
-      actualTarget.longitude + Math.round((deltaX / maxDelta) * moveDistance);
-    newLatitude =
-      actualTarget.latitude + Math.round((deltaY / maxDelta) * moveDistance);
-  }
-
-  // Helper function to validate and adjust position for push/pull effects
-  const validateAndAdjustPosition = (
-    targetLongitude: number,
-    targetLatitude: number,
-  ) => {
-    const isOnCaster =
-      targetLongitude === caster.longitude && targetLatitude === caster.latitude;
-    const isOnOtherPlayer = usersState.some(
-      (u) =>
-        u.userId !== actualTarget.userId &&
-        u.longitude === targetLongitude &&
-        u.latitude === targetLatitude,
-    );
-    const barrierAtPosition = groundEffects.find(
-      (g) =>
-        g.longitude === targetLongitude &&
-        g.latitude === targetLatitude &&
-        "curHealth" in g,
-    );
-
-    if (isOnCaster || isOnOtherPlayer || barrierAtPosition) {
-      // Keep stepping back until we find a valid position
-      const deltaX = actualTarget.longitude - targetLongitude;
-      const deltaY = actualTarget.latitude - targetLatitude;
-      const deltaZ = -deltaX - deltaY;
-
-      const maxDelta = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ));
-      if (maxDelta > 0) {
-        let stepBackCount = 0;
-        const maxSteps = Math.max(Math.abs(deltaX), Math.abs(deltaY), Math.abs(deltaZ)); // Maximum possible steps
-
-        while (stepBackCount < maxSteps) {
-          stepBackCount++;
-          targetLongitude = targetLongitude + Math.round((deltaX / maxDelta) * 1);
-          targetLatitude = targetLatitude + Math.round((deltaY / maxDelta) * 1);
-
-          // Check if this position is valid
-          const isOnCasterAfterStep =
-            targetLongitude === caster.longitude && targetLatitude === caster.latitude;
-          const isOnOtherPlayerAfterStep = usersState.some(
-            (u) =>
-              u.userId !== actualTarget.userId &&
-              u.longitude === targetLongitude &&
-              u.latitude === targetLatitude,
-          );
-          const barrierAtPositionAfterStep = groundEffects.find(
-            (g) =>
-              g.longitude === targetLongitude &&
-              g.latitude === targetLatitude &&
-              "curHealth" in g,
-          );
-
-          // If this position is valid, we're done
-          if (
-            !isOnCasterAfterStep &&
-            !isOnOtherPlayerAfterStep &&
-            !barrierAtPositionAfterStep
-          ) {
-            break;
-          }
-        }
-
-        // If we couldn't find a valid position after all steps, stay at original position
-        if (stepBackCount >= maxSteps) {
-          targetLongitude = actualTarget.longitude;
-          targetLatitude = actualTarget.latitude;
-        }
-      } else {
-        // If we can't determine direction, stay at original position
-        targetLongitude = actualTarget.longitude;
-        targetLatitude = actualTarget.latitude;
-      }
-    }
-
-    return { longitude: targetLongitude, latitude: targetLatitude };
+  const line = oddQLineStep(
+    origin,
+    casterTile,
+    direction === "pull" ? moveDistance : -moveDistance,
+  );
+  const landing = {
+    col: clamp(line.col, 0, battle.width - 1),
+    row: clamp(line.row, 0, battle.height - 1),
   };
 
-  // Ensure we don't move the target outside the arena bounds first
-  const maxLongitude = battle.width - 1;
-  const maxLatitude = battle.height - 1;
-
-  let clampedLongitude = Math.max(0, Math.min(maxLongitude, newLongitude));
-  let clampedLatitude = Math.max(0, Math.min(maxLatitude, newLatitude));
-
-  // Store original position for distance calculation
-  const originalLongitude = actualTarget.longitude;
-  const originalLatitude = actualTarget.latitude;
-
-  // Apply position validation for both pull and push after bounds clamping
-  if (direction === "pull" || direction === "push") {
-    const validatedPosition = validateAndAdjustPosition(
-      clampedLongitude,
-      clampedLatitude,
+  const isOpenTile = ({ col, row }: typeof origin) =>
+    col >= 0 &&
+    col < battle.width &&
+    row >= 0 &&
+    row < battle.height &&
+    !(col === caster.longitude && row === caster.latitude) &&
+    !usersState.some(
+      (u) =>
+        u.userId !== actualTarget.userId && u.longitude === col && u.latitude === row,
+    ) &&
+    !groundEffects.some(
+      (g) => g.longitude === col && g.latitude === row && "curHealth" in g,
     );
-    clampedLongitude = validatedPosition.longitude;
-    clampedLatitude = validatedPosition.latitude;
-  }
+
+  // Step back from an occupied landing tile; with no open tile the target stays put.
+  const landingDistance = oddQHexDistance(
+    origin.col,
+    origin.row,
+    landing.col,
+    landing.row,
+  );
+  const destination =
+    Array.from({ length: landingDistance }, (_, steps) =>
+      oddQLineStep(landing, origin, steps),
+    ).find(isOpenTile) ?? origin;
 
   // Update the actual target's position in the battle state
-  actualTarget.longitude = clampedLongitude;
-  actualTarget.latitude = clampedLatitude;
+  actualTarget.longitude = destination.col;
+  actualTarget.latitude = destination.row;
 
   // Handle ground effect timeTracker updates (mirroring the move function logic)
   groundEffects.forEach((g) => {
@@ -2793,20 +2676,18 @@ export const redirection = (
   groundEffects.forEach((g) => {
     if (
       g.timeTracker &&
-      g.longitude === clampedLongitude &&
-      g.latitude === clampedLatitude
+      g.longitude === destination.col &&
+      g.latitude === destination.row
     ) {
       g.timeTracker[actualTarget.userId] = effect.createdRound;
     }
   });
 
-  // Calculate the actual distance moved (hex distance between original and final positions)
-  const actualDistance = Math.max(
-    Math.abs(originalLongitude - clampedLongitude),
-    Math.abs(originalLatitude - clampedLatitude),
-    Math.abs(
-      originalLongitude - clampedLongitude + (originalLatitude - clampedLatitude),
-    ),
+  const actualDistance = oddQHexDistance(
+    origin.col,
+    origin.row,
+    destination.col,
+    destination.row,
   );
 
   const actionText = direction === "push" ? "pushed away from" : "pulled towards";
