@@ -21,6 +21,7 @@ import {
   isExtensionExecutorEvent,
   isInjectedWalletRejection,
   isPayPalCleanupError,
+  isPayPalSdkStack,
   PAYPAL_CLEANUP_PATTERNS,
 } from "@/utils/error";
 
@@ -116,8 +117,8 @@ Sentry.init({
   ],
 
   // Filter out third-party errors that slip through ignoreErrors
-  beforeSend(event) {
-    if (isPayPalSdkError(event)) {
+  beforeSend(event, hint) {
+    if (isPayPalSdkError(event, hint)) {
       return null; // Drop the event
     }
     if (isGoogleTranslateError(event)) {
@@ -408,10 +409,12 @@ const isGoogleTranslateError = (event: Sentry.ErrorEvent): boolean => {
  * UX note: PayPal buttons render and work correctly despite these errors. The errors
  * are logged to PayPal's internal analytics and are not actionable by us.
  */
-const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
+const isPayPalSdkError = (
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
-  const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
 
   // Check message for PayPal-related error patterns
   const paypalErrorPatterns = [
@@ -425,13 +428,9 @@ const isPayPalSdkError = (event: Sentry.ErrorEvent): boolean => {
     return true;
   }
 
-  // Check if the error originates from PayPal SDK (sdk/js in stack trace)
-  const isFromPayPalSdk = stackFrames.some(
-    (frame) =>
-      frame.filename?.includes("sdk/js") ||
-      frame.filename?.includes("paypal") ||
-      frame.abs_path?.includes("sdk/js") ||
-      frame.abs_path?.includes("paypal"),
+  // Check if the error originates from the PayPal SDK
+  const isFromPayPalSdk = isPayPalSdkStack(
+    (hint.originalException as Error | null | undefined)?.stack,
   );
 
   if (isFromPayPalSdk && message.includes("closed")) {
