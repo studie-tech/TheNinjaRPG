@@ -1,9 +1,13 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { useState } from "react";
 import * as contentImage from "@/layout/ContentImage";
 import { ActionSelector } from "@/layout/CombatActions";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
+import type { CombatAction } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
+import { DamageTag } from "@/validators/combat";
+import { coordinateTargetingSchema } from "@/validators/coordinateTargeting";
 
 const browserGlobals = ["Event", "CustomEvent"] as const;
 const saved = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
@@ -33,11 +37,12 @@ const fireball = {
   image: "/fireball.webp",
   type: "jutsu",
   target: "OTHER_USER",
+  method: "SINGLE",
   range: 4,
   actionCostPerc: 60,
-};
+} satisfies Partial<CombatAction>;
 
-const renderActions = (combatMode: boolean, small = true, item = fireball, userActionPoints?: number) => {
+const renderActions = (combatMode: boolean, small = true, item: Partial<CombatAction> = fireball, userActionPoints?: number) => {
   const layout = battleActionGrid({ focus: true, small });
   const onClick = vi.fn();
   const view = render(
@@ -83,6 +88,20 @@ it("selects once when the artwork or native battle control is activated", () => 
   expect(onClick).toHaveBeenCalledTimes(2);
 });
 
+it("exposes selection and deselection on the battle action", () => {
+  const Actions = () => {
+    const [selectedId, setSelectedId] = useState<string>();
+    return <ActionSelector items={[fireball] as never} showLabels={false} combatMode selectedId={selectedId} onClick={(id) => setSelectedId(selectedId === id ? undefined : id)} />;
+  };
+  render(<Actions />);
+  const action = screen.getByRole("button", { name: "Fireball" });
+  expect(action.getAttribute("aria-pressed")).toBe("false");
+  fireEvent.click(action);
+  expect(action.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(action);
+  expect(action.getAttribute("aria-pressed")).toBe("false");
+});
+
 it.each(["AP", "cooldown"])("keeps an action unavailable for %s focusable without selecting it", async (reason) => {
   const item = reason === "cooldown" ? { ...fireball, cooldown: 3, lastUsedRound: 1 } : fireball;
   const { onClick } = renderActions(true, true, item, reason === "AP" ? 0 : 100);
@@ -90,9 +109,34 @@ it.each(["AP", "cooldown"])("keeps an action unavailable for %s focusable withou
   expect(action.getAttribute("aria-disabled")).toBe("true");
   act(() => action.focus());
   expect(document.activeElement).toBe(action);
-  expect((await screen.findByRole("tooltip")).textContent).toContain("Target: other user");
+  const summary = (await screen.findByRole("tooltip")).textContent;
+  expect(summary).toContain("Target: other user · Range 4 · 60 AP");
+  expect(summary).toContain(reason === "AP" ? "Not enough AP" : "On cooldown");
   fireEvent.click(action);
   expect(onClick).not.toHaveBeenCalled();
+});
+
+const targetPattern = coordinateTargetingSchema.parse({ origin: "TARGET", coordinates: [{ longitude: 0, latitude: 0 }] });
+const casterPattern = { ...targetPattern, origin: "CASTER" as const };
+
+it.each([
+  ["CHARACTER", "SINGLE", undefined, [], true],
+  ["CHARACTER", "AOE_CIRCLE_SHOOT", undefined, [], true],
+  ["CHARACTER", "ALL", undefined, [], false],
+  ["CHARACTER", "COORDINATES", targetPattern, [], true],
+  ["CHARACTER", "COORDINATES", casterPattern, [], false],
+  ["OTHER_USER", "ALL", undefined, [], false],
+  ["GROUND", "COORDINATES", undefined, [], false],
+  ["CHARACTER", "ALL", undefined, [DamageTag.parse({ target: "COORDINATES", coordinateTargeting: targetPattern })], true],
+  ["CHARACTER", "ALL", undefined, [DamageTag.parse({ target: "COORDINATES", coordinateTargeting: casterPattern })], false],
+  ["SELF", "SINGLE", undefined, [], false],
+] as const)("describes range only when target %s and method %s constrain selection", async (target, method, coordinateTargeting, effects, hasRange) => {
+  renderActions(true, true, { ...fireball, target, method, coordinateTargeting, effects: [...effects] });
+  act(() => screen.getByRole("button", { name: "Fireball" }).focus());
+  const summary = (await screen.findByRole("tooltip")).textContent;
+  expect(summary?.includes("Range 4")).toBe(hasRange);
+  expect(summary).toContain(`Target: ${target.toLowerCase().replaceAll("_", " ")}`);
+  expect(summary).toContain("60 AP");
 });
 
 it("keeps loadout pickers outside battle free of hover cards", () => {

@@ -176,6 +176,24 @@ export const findHex = (
   }
 };
 
+/** Whether selecting an action's target tile is constrained by its range. */
+export const isActionRangeLimited = (
+  action: Partial<Pick<CombatAction, "effects" | "method" | "coordinateTargeting">>,
+) =>
+  !!action.effects?.some(
+    (tag) =>
+      tag.target === "COORDINATES" && tag.coordinateTargeting?.origin === "TARGET",
+  ) ||
+  (action.method === "COORDINATES" &&
+    action.coordinateTargeting?.origin === "TARGET") ||
+  action.method === "SINGLE" ||
+  action.method === "AOE_LINE_SHOOT" ||
+  action.method === "AOE_WALL_SHOOT" ||
+  action.method === "AOE_LARGE_WALL_SHOOT" ||
+  action.method === "AOE_CIRCLE_SHOOT" ||
+  action.method === "AOE_SPIRAL_SHOOT" ||
+  action.method === "AOE_CIRCLE_SPAWN";
+
 export const getPossibleActionTiles = (
   action: CombatAction | undefined,
   origin: TerrainHex | undefined,
@@ -184,22 +202,7 @@ export const getPossibleActionTiles = (
   let highlights: Grid<TerrainHex> | undefined;
   if (action && origin) {
     const radius = action.range;
-    const hasTargetPattern = action.effects.some(
-      (tag) =>
-        tag.target === "COORDINATES" && tag.coordinateTargeting?.origin === "TARGET",
-    );
-    if (
-      hasTargetPattern ||
-      (action.method === "COORDINATES" &&
-        action.coordinateTargeting?.origin === "TARGET") ||
-      action.method === "SINGLE" ||
-      action.method === "AOE_LINE_SHOOT" ||
-      action.method === "AOE_WALL_SHOOT" ||
-      action.method === "AOE_LARGE_WALL_SHOOT" ||
-      action.method === "AOE_CIRCLE_SHOOT" ||
-      action.method === "AOE_SPIRAL_SHOOT" ||
-      action.method === "AOE_CIRCLE_SPAWN"
-    ) {
+    if (isActionRangeLimited(action)) {
       const f = spiral<TerrainHex>({ start: [origin.q, origin.r], radius: radius });
       highlights = grid.traverse(f);
     } else if (action.method === "ALL" || action.method === "COORDINATES") {

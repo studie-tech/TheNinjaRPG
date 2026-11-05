@@ -17,13 +17,17 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import { getActionPointCost } from "@/libs/combat/actions";
 import { canSetHotkeys } from "@/libs/combat/hotkeys";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
+import { isActionRangeLimited } from "@/libs/hexgrid";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 import ContentImage from "./ContentImage";
 
-interface ActionItemProps {
+interface ActionItemProps
+  extends Partial<
+    Pick<CombatAction, "target" | "range" | "method" | "coordinateTargeting">
+  > {
   id: string;
   name: string;
   image: string;
@@ -358,9 +362,10 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="block w-full rounded-xl focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block w-full rounded-xl focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed"
                   aria-label={name}
                   aria-disabled={insufficientAP || cooldownPerc > 0}
+                  aria-pressed={settings.selectedId === item.id}
                   onClick={handleClick}
                 >
                   {art}
@@ -369,6 +374,8 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               <TooltipContent side="top" className="max-w-60 text-left">
                 <p className="font-bold">{name}</p>
                 <p>{actionHoverSummary(item, effectiveActionCost)}</p>
+                {cooldownPerc > 0 && <p>On cooldown</p>}
+                {insufficientAP && <p>Not enough AP</p>}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -417,7 +424,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         {cooldownPerc > 0 && (
           <>
             <div
-              className="absolute top-0 right-0 bottom-0 left-0 opacity-90 hover:cursor-not-allowed"
+              className="pointer-events-none absolute top-0 right-0 bottom-0 left-0 opacity-90"
               style={{
                 background: `conic-gradient(#ededed ${cooldownPerc}%, rgba(0, 0, 0, 0.1) 0deg)`,
               }}
@@ -426,7 +433,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
               settings.currentRound &&
               lastUsedRound &&
               cooldown - (settings.currentRound - lastUsedRound) > 0 && (
-                <div className="absolute right-0 bottom-0 left-0 z-10 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 font-bold text-base text-black">
+                <div className="pointer-events-none absolute right-0 bottom-0 left-0 z-10 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-slate-400 bg-slate-300 font-bold text-base text-black">
                   {cooldown - (settings.currentRound - lastUsedRound)}
                 </div>
               )}
@@ -434,16 +441,9 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
         )}
         {/* Insufficient AP overlay */}
         {insufficientAP && cooldownPerc === 0 && (
-          <TooltipProvider delayDuration={50}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="absolute top-0 right-0 bottom-0 left-0 flex cursor-not-allowed items-center justify-center rounded-md bg-slate-800/70">
-                  <Zap className="h-8 w-8 text-red-500" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>Not enough AP</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="pointer-events-none absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center rounded-md bg-slate-800/70">
+            <Zap className="h-8 w-8 text-red-500" />
+          </div>
         )}
         {/* Help / info icon - bottom left corner */}
         {settings.showInfoIcon && (
@@ -512,12 +512,13 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
 
 /** One line on what a battle action is aimed at and what it costs, e.g. "Target: other user · Range 4 · 60 AP". */
 const actionHoverSummary = (item: ActionItemProps, actionCost: number | undefined) => {
-  const target =
-    "target" in item && typeof item.target === "string" ? item.target : null;
-  const range = "range" in item && typeof item.range === "number" ? item.range : null;
+  const { target, range } = item;
   return [
     target && `Target: ${target.toLowerCase().replaceAll("_", " ")}`,
-    range !== null && target !== "CHARACTER" && target !== "SELF" && `Range ${range}`,
+    range !== undefined &&
+      target !== "SELF" &&
+      isActionRangeLimited(item) &&
+      `Range ${range}`,
     actionCost !== undefined && `${actionCost} AP`,
   ]
     .filter(Boolean)
