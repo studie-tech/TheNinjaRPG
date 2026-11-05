@@ -59,6 +59,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { PetTasks } from "@/layout/PetTasks";
+import { QueryError } from "@/layout/QueryError";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { actionStatusMessage, canAttemptAwakeAction } from "@/libs/actionReadiness";
 import {
@@ -416,12 +417,13 @@ export function PetProfile() {
   if (error || !data)
     return (
       <ContentBox title="Pet" subtitle="Your companion">
-        <p role="alert" className="mb-3 text-red-600">
-          {error?.message ?? "Your pet could not be loaded."}
-        </p>
-        <Button variant="outline" onClick={() => void refetch()}>
-          Try again
-        </Button>
+        <QueryError
+          layout="stacked"
+          message={error?.message ?? "Your pet could not be loaded."}
+          messageClassName="mb-3 text-red-600"
+          retryVariant="outline"
+          onRetry={() => void refetch()}
+        />
       </ContentBox>
     );
   // Send players through the existing destination picker instead of a location-gated page.

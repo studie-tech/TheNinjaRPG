@@ -16,6 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
@@ -29,10 +30,10 @@ export function ParentalControls() {
   if (isPending) return <Loader explanation="Loading parental controls" />;
   if (error || !data)
     return (
-      <div role="alert">
-        Could not load parental controls.{" "}
-        <Button onClick={() => void refetch()}>Try again</Button>
-      </div>
+      <QueryError
+        message="Could not load parental controls."
+        onRetry={() => void refetch()}
+      />
     );
   return (
     <ParentalSettingsForm

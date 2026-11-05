@@ -51,6 +51,7 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
+import { QueryError } from "@/layout/QueryError";
 import { PendingRewardChoices } from "@/layout/RewardChoice";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { bankAccessBlockMessage } from "@/libs/bank";
@@ -325,7 +326,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {streaks.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="The activity streak could not be loaded."
                   onRetry={() => void streaks.refetch()}
                 />
@@ -333,7 +336,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {interest.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Bank interest could not be loaded."
                   onRetry={() => void interest.refetch()}
                 />
@@ -341,7 +346,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             )}
             {dashboard.isError && (
               <div className="border-t py-3 first:border-t-0">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Raid rewards could not be loaded."
                   onRetry={() => void dashboard.refetch()}
                 />
@@ -666,7 +673,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             ))}
             {sidebarTimers.isError && (
               <div className="border-t py-3">
-                <RetryPanel
+                <QueryError
+                  layout="panel"
+                  retryLabel="Retry"
                   message="Training and crafting timers could not be loaded."
                   onRetry={() => void sidebarTimers.refetch()}
                 />
@@ -784,7 +793,9 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             </div>
           )}
           {dashboard.isError && (
-            <RetryPanel
+            <QueryError
+              layout="panel"
+              retryLabel="Retry"
               message="Quest discovery could not be loaded. This is not the same as having no available content."
               onRetry={() => void dashboard.refetch()}
             />
@@ -1165,22 +1176,6 @@ function ElapsedMeter({
   }, [progress]);
 
   return <Progress value={progress} className="mt-1.5 h-1.5" />;
-}
-
-function RetryPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-      <span>{message}</span>
-      <Button
-        size="sm"
-        variant="outline"
-        className="hover:text-black"
-        onClick={onRetry}
-      >
-        <RotateCcw className="mr-1 h-4 w-4" /> Retry
-      </Button>
-    </div>
-  );
 }
 
 /** Present board or travel actions with ban precedence in the restriction label. */
