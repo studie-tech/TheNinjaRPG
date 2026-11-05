@@ -251,6 +251,29 @@ describe("BattleFocusView", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
+  it("names each fighter's bloodline and keystone, on desktop and on phones", () => {
+    const withTraits = {
+      ...battle,
+      usersState: battle!.usersState.map((user) =>
+        user.userId === "foe"
+          ? { ...user, bloodlineId: "bl", keystoneItemId: "ks", keystoneName: "Jade Keystone" }
+          : user,
+      ),
+      extraState: {
+        bloodlines: { bl: { id: "bl", name: "Musashi Ken", effects: [] } },
+        keystoneItems: { ks: { id: "ks", name: "Jade Keystone", effects: [] } },
+      },
+    } as unknown as BattleState["battle"];
+    for (const desktop of [true, false]) {
+      isDesktop = desktop;
+      renderView(vi.fn(), { battle: withTraits });
+      const foe = screen.getByRole("region", { name: "foe" });
+      expect(within(foe).getByText("Musashi Ken")).toBeTruthy();
+      expect(within(foe).getByText("Jade Keystone")).toBeTruthy();
+      cleanup();
+    }
+  });
+
   it("hands the screen back to the layout", () => {
     isDesktop = true;
     const onShowLayout = vi.fn();

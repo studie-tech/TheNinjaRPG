@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import AvatarImage from "@/layout/Avatar";
+import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import StatusBar from "@/layout/StatusBar";
 import type { BattleState, ReturnedUserState } from "@/libs/combat/types";
@@ -401,6 +402,14 @@ function FighterCard({
           )}
         </div>
       </div>
+      {battle && (
+        <BattleUserTraits
+          battle={battle}
+          battleUser={user}
+          className="mt-[4px] text-[11px]"
+          iconClassName="mr-[4px] h-[14px] w-[14px]"
+        />
+      )}
       <div className="mt-[4px] text-[11px] [&_p]:text-[11px]">
         {bars
           .filter((bar) => !compact || bar.key !== "sp")

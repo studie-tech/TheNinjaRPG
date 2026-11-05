@@ -1,15 +1,13 @@
 import { useAtomValue } from "jotai";
-import { Dna, Gem, Link2 } from "lucide-react";
+import { Link2 } from "lucide-react";
 import type React from "react";
 import { SideBannerTitle } from "@/components/layout/shared/LayoutSidebars";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
-import ItemWithEffects from "@/layout/ItemWithEffects";
+import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import Link from "@/layout/Link";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import StatusBar from "@/layout/StatusBar";
-import { getBloodline, getKeystoneItem } from "@/libs/combat/util";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
 
 const MenuBoxCombat: React.FC = () => {
@@ -101,48 +99,13 @@ const MenuBoxCombat: React.FC = () => {
           />
         </div>
       </div>
-      {(() => {
-        if (!battle || !battleUser?.bloodlineId) return null;
-        const bloodline = getBloodline(battle, battleUser.bloodlineId);
-        if (!bloodline) return null;
-        return (
-          <Popover>
-            <PopoverTrigger>
-              <div className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500">
-                <Dna className="mr-2 h-6 w-6" /> {bloodline.name ?? "??"}
-              </div>
-            </PopoverTrigger>
-            <PopoverContent>
-              <div className="max-w-[320px]">
-                <ItemWithEffects item={bloodline} key={bloodline.id} hideDetails />
-              </div>
-            </PopoverContent>
-          </Popover>
-        );
-      })()}
-      {(() => {
-        if (!battleUser?.keystoneName || !battle) return null;
-        const keystoneItem = getKeystoneItem(battle, battleUser.keystoneItemId);
-        if (!keystoneItem) return null;
-        return (
-          <Popover>
-            <PopoverTrigger>
-              <div className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500">
-                <Gem className="mr-2 h-6 w-6" /> {battleUser.keystoneName}
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px]">
-              <div className="p-4">
-                <ItemWithEffects
-                  item={keystoneItem}
-                  key={keystoneItem.id}
-                  hideDetails
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
-        );
-      })()}
+      {battle && (
+        <BattleUserTraits
+          battle={battle}
+          battleUser={battleUser}
+          className="contents"
+        />
+      )}
       {/* Active Effects on opponent */}
       {battle?.usersEffects && (
         <div className="mt-2">
