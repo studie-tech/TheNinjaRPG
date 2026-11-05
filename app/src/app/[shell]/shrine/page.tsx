@@ -20,7 +20,11 @@ import RamenShop from "@/layout/RamenShop";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { WarFieldActions } from "@/layout/WarFieldActions";
-import { getVillageWarShrineAction, getWarSide } from "@/libs/objectiveWar";
+import {
+  findShrineAttackWar,
+  getVillageWarShrineAction,
+  getWarSide,
+} from "@/libs/objectiveWar";
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
@@ -114,8 +118,15 @@ export default function Shrine() {
   const isUserQueuedForThisSector =
     userData.status === "QUEUED" && userQueuedBattle?.sector === userData.sector;
 
-  // Check if this sector is protected
-  const isReserved = MAP_RESERVED_SECTORS.includes(userData.sector);
+  // Check if this sector is protected; objective wars open reserved shrines
+  const isReserved =
+    MAP_RESERVED_SECTORS.includes(userData.sector) &&
+    !findShrineAttackWar(
+      sectorData.warData ?? [],
+      userData.villageId,
+      userData.userId,
+      userData.sector,
+    )?.rules;
   const isHome = !!sectorData.village;
 
   // Check if user can attack OR defend the shrine in a Village War or Raid

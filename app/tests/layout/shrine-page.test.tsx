@@ -4,7 +4,7 @@ import * as navigation from "next/navigation";
 import Shrine from "@/app/[shell]/shrine/page";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { MAP_RESERVED_SECTORS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import * as contentBox from "@/layout/ContentBox";
 import * as countdown from "@/layout/Countdown";
 import * as ramen from "@/layout/RamenShop";
@@ -146,6 +146,43 @@ describe("shrine page war affiliation", () => {
     const view = mount();
     fireEvent.click(view.getByRole("button", { name: "Create Shrine Attack Party" }));
     expect(challenge).toHaveBeenCalledWith({ sectorNumber: 101 });
+  });
+
+  describe("on a reserved sector", () => {
+    const reserved = MAP_RESERVED_SECTORS[0]!;
+    const objectiveOn = (sector: number) => {
+      sectorNumber = reserved;
+      const war = sectorData.warData![0]!;
+      Object.assign(war, {
+        attackerWarHealth: 100,
+        defenderWarHealth: 100,
+        combatStartedAt: new Date(Date.now() - 3600000),
+      });
+      war.objectiveState!.objectives = [
+        { sector, villageId: "defender", destroyed: false },
+      ] as NonNullable<typeof war.objectiveState>["objectives"];
+    };
+
+    it("opens an enemy objective to attackers", () => {
+      objectiveOn(reserved);
+      const view = mount();
+      fireEvent.click(view.getByRole("button", { name: "Create Shrine Attack Party" }));
+      expect(challenge).toHaveBeenCalledWith({ sectorNumber: reserved });
+      expect(view.queryByText("This sector is reserved and cannot be attacked.")).toBe(
+        null,
+      );
+    });
+
+    it("stays protected outside an objective", () => {
+      objectiveOn(101);
+      const view = mount();
+      expect(
+        view.queryByRole("button", { name: "Create Shrine Attack Party" }),
+      ).toBe(null);
+      expect(
+        view.queryAllByText("This sector is reserved and cannot be attacked.").length,
+      ).toBeGreaterThan(0);
+    });
   });
 
   it.each(["attacker", "defender"])("preserves native %s party controls", (side) => {
