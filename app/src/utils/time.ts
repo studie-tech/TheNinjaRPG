@@ -328,11 +328,12 @@ export const formatHoursMinutes = (totalSeconds: number): string => {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
-/** Clock-style time left: "MM:SS", or "HH:MM:SS" from one hour up. Whole days are dropped. */
+/** Clock-style time left: "MM:SS", "HH:MM:SS" from one hour up, "1d HH:MM:SS" from one day. */
 export const formatClockTime = (ms: number): string => {
-  const [, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
-  const clock = [minutes, seconds].map((part) => part.toString().padStart(2, "0"));
-  return (hours > 0 ? [hours.toString().padStart(2, "0"), ...clock] : clock).join(":");
+  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
+  const parts = days > 0 || hours > 0 ? [hours, minutes, seconds] : [minutes, seconds];
+  const clock = parts.map((part) => part.toString().padStart(2, "0")).join(":");
+  return days > 0 ? `${days}d ${clock}` : clock;
 };
 
 /**

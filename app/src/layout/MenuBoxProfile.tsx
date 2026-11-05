@@ -122,12 +122,17 @@ const MenuBoxProfile: React.FC = () => {
   // Get location of user
   const { location } = useGameMenu();
 
-  const immunitySecsLeft = useSecondsUntil(userData?.immunityUntil, now);
+  const immunitySecsLeft = useSecondsUntil(userData?.immunityUntil, now, timeDiff);
   const bracketImmunitySecsLeft = useSecondsUntil(
     userData?.bracketImmunityLiftedUntil,
     now,
+    timeDiff,
   );
-  const warParticipantSecsLeft = useSecondsUntil(userData?.warParticipantUntil, now);
+  const warParticipantSecsLeft = useSecondsUntil(
+    userData?.warParticipantUntil,
+    now,
+    timeDiff,
+  );
 
   // Battle user state
   const battleUser = battle?.usersState.find((u) => u.userId === userData?.userId);
@@ -402,6 +407,7 @@ const MenuBoxProfile: React.FC = () => {
                     <ShieldCheck className="mr-2 h-6 w-6" />
                     <Countdown
                       targetDate={userData.immunityUntil}
+                      timeDiff={timeDiff}
                       format={formatBracketedClock}
                       onFinish={refreshTime}
                     />
@@ -419,6 +425,7 @@ const MenuBoxProfile: React.FC = () => {
                     <ShieldAlert className="mr-2 h-6 w-6" />
                     <Countdown
                       targetDate={userData.bracketImmunityLiftedUntil}
+                      timeDiff={timeDiff}
                       format={formatBracketedClock}
                       onFinish={refreshTime}
                     />
@@ -436,6 +443,7 @@ const MenuBoxProfile: React.FC = () => {
                     <Swords className="mr-2 h-6 w-6" />
                     <Countdown
                       targetDate={userData.warParticipantUntil}
+                      timeDiff={timeDiff}
                       format={formatBracketedClock}
                       onFinish={refreshTime}
                     />
@@ -695,12 +703,16 @@ const GameClock: React.FC = () => {
 };
 
 /**
- * Seconds left until `until` on the parent clock, which the row's Countdown advances on
- * expiry. A new snapshot may already have expired since that clock last moved, so a change
- * of `until` also reads the current time.
+ * Seconds left until the server time `until` on the parent clock, which the row's Countdown
+ * advances on expiry. A new snapshot may already have expired since that clock last moved,
+ * so a change of `until` also reads the current time.
  */
-const useSecondsUntil = (until: Date | null | undefined, now: number) => {
-  const untilMs = until?.getTime() ?? 0;
+const useSecondsUntil = (
+  until: Date | null | undefined,
+  now: number,
+  timeDiff: number,
+) => {
+  const untilMs = until ? until.getTime() + timeDiff : 0;
   const secsAtSnapshot = useMemo(
     () => Math.max(0, (untilMs - Date.now()) / 1000),
     [untilMs],
