@@ -55,7 +55,7 @@ import {
   votePollSchema,
 } from "@/validators/poll";
 
-const POLL_RANK_MESSAGE = "Too low rank to vote. Must be at least Genin.";
+const POLL_RANK_MESSAGE = "Too low rank to use polls. Must be at least Genin.";
 
 export const pollRouter = createTRPCRouter({
   // Create a new poll

@@ -34,7 +34,7 @@ describeWithDatabase("poll custom options", () => {
 
     expect(refused).toEqual({
       success: false,
-      message: "Too low rank to vote. Must be at least Genin.",
+      message: "Too low rank to use polls. Must be at least Genin.",
     });
     expect(await database.query.pollOption.findMany()).toEqual([]);
     expect(await database.query.actionLog.findMany()).toEqual([]);
