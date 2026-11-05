@@ -57,6 +57,7 @@ import {
   combineChatCounts,
   countTavernUnread,
   getInboxNews,
+  isConversationMuted,
   isConversationUnread,
 } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
@@ -867,11 +868,10 @@ function useTavernUnread() {
   const taverns = useTavernIds(userData);
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
-  const mutes = useChatMutes();
   const counts = combineChatCounts(mentions, tavernActivity);
   return (name: string) => {
     const id = taverns?.find((tavern) => tavern.title === name)?.id;
-    const muted = !!id && mutes.isSilenced(id);
+    const muted = !!id && isConversationMuted(userData, id);
     return { count: id && !muted ? (counts[id] ?? 0) : 0, muted };
   };
 }

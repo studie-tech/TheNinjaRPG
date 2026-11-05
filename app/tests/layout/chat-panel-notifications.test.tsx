@@ -30,7 +30,7 @@ afterEach(() => {
 it("reconciles cleared inbox news when the phone chat list loads", () => {
   const updateNotifications = vi.fn();
   const notifications = [{ href: "/inbox", name: "2 messages", notificationCount: 2 }, { href: "/news", name: "News" }];
-  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true }, notifications, updateNotifications } as never);
+  vi.spyOn(context, "useUserData").mockReturnValue({ data: { userId: "reader", tutorialOn: true, chatMuted: false, mutedConversationIds: [] }, notifications, updateNotifications } as never);
   vi.spyOn(taverns, "useTaverns").mockReturnValue({ availTaverns: ["Global"], isLoading: false } as never);
   vi.spyOn(mutes, "useChatMutes").mockReturnValue({ chatMuted: false, isSilenced: () => false } as never);
   vi.spyOn(prompt, "NewConversationPrompt").mockReturnValue(<></>);
