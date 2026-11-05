@@ -2171,6 +2171,35 @@ export const getMissionHallSettings = (isOutlaw: boolean) => {
   ] as const;
 };
 
+/**
+ * Quests offered by a Mission Hall tile. PvP and medical tiles list every rank the player can
+ * take; the others match their type and rank, so random tiles count what startRandom draws from.
+ * The A-rank picker also keeps the off-type quests that no other tile can start: errands above
+ * D rank, and village-locked quests of the other classifier.
+ */
+export const getMissionHallTileQuests = <
+  T extends Pick<Quest, "questType" | "questRank" | "requiredVillage">,
+>(
+  setting: Pick<ReturnType<typeof getMissionHallSettings>[number], "type" | "rank">,
+  quests: T[],
+  userRanks: LetterRank[],
+) => {
+  const { type, rank } = setting;
+  if (type === "pvp" || type === "medical") {
+    return quests.filter(
+      (q) => q.questType === type && userRanks.includes(q.questRank),
+    );
+  }
+  return quests.filter(
+    (q) =>
+      q.questRank === rank &&
+      (q.questType === type ||
+        (rank === "A" &&
+          (q.questType === "errand" ||
+            (["mission", "crime"].includes(q.questType) && !!q.requiredVillage)))),
+  );
+};
+
 export const mockAchievementHistoryEntries = (
   achievements: Quest[],
   user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,

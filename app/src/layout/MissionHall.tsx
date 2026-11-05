@@ -35,6 +35,7 @@ import MissionPicker from "@/layout/MissionPicker";
 import {
   fallbackQuestsFilter,
   getMissionHallSettings,
+  getMissionHallTileQuests,
   isReducedMissionReward,
   missionHallStartBlockedMessage,
   questDailyQuota,
@@ -256,7 +257,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
       {!currentQuest && !isPending && (
         <div className="grid grid-cols-3 gap-4 p-3 text-center italic">
           {getMissionHallSettings(userData.isOutlaw).map((setting) => {
-            // Count how many of this type and rank are available
             const { filtered, rankInfo } = fallbackQuestsFilter(
               regularMissions,
               userData,
@@ -266,15 +266,12 @@ export default function MissionHall({ userData }: MissionHallProps) {
             const isErrand = setting.type === "errand";
             const isMedical = setting.type === "medical";
             const isPvp = setting.type === "pvp";
-            // For PvP missions, show all ranks user has access to; for others, filter by setting rank
-            // Also ensure we filter by quest type since fallbackQuestsFilter doesn't filter non-medical types
-            const available = isPvp
-              ? filtered?.filter(
-                  (q) =>
-                    q.questType === "pvp" && availableUserRanks.includes(q.questRank),
-                )
-              : filtered?.filter((q) => q.questRank === setting.rank);
-            const count = available?.length ?? 0;
+            const available = getMissionHallTileQuests(
+              setting,
+              filtered,
+              availableUserRanks,
+            );
+            const count = available.length;
             const quota = questDailyQuota(setting.type, userData);
             const capped = !!quota && quota.current >= quota.limit;
             // Checks
@@ -291,12 +288,11 @@ export default function MissionHall({ userData }: MissionHallProps) {
 
             // Handle mission picker cases (PvP, Medical, A-rank)
             if (isPvp || isMedical || setting.rank === "A") {
-              const missions =
-                available?.map((q) => ({
-                  id: q.id,
-                  name: q.name,
-                  image: q.image || undefined,
-                })) || [];
+              const missions = available.map((q) => ({
+                id: q.id,
+                name: q.name,
+                image: q.image || undefined,
+              }));
 
               const typeName = isPvp ? "PvP" : isMedical ? "medical" : "";
               const dialogTitle = isPvp
