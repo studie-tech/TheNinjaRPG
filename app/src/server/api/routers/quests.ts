@@ -294,6 +294,7 @@ import {
 import { awardRecruitRankMilestonesSafely } from "@/server/utils/recruitment";
 import {
   getUserRegenerationGain,
+  regenTicksSql,
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
@@ -3246,7 +3247,7 @@ export const upsertQuestEntry = async (
     : {};
   // Use the persisted pools/clock: a competing account write must not replay recovery
   // or overwrite the pools after the story's quest tracker has already been claimed.
-  const recoveryTicks = sql`FLOOR(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, ${recoveredAt})) / ${REGEN_SECONDS * 1_000_000})`;
+  const recoveryTicks = regenTicksSql(userData.regenAt, recoveredAt);
   const poolRecovery = userRegenerationGainSql(user, userData.regenAt, recoveredAt);
   const recoveryUpdate = settleRecovery
     ? {
