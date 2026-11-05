@@ -139,6 +139,7 @@ export const MASTERY_PROMOTION_PAIR_MESSAGE =
 export const hasPromotionRank = (reward: MasteryPromotionFields) =>
   !!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE";
 
+/** Detect the mastery half of a rank-promotion reward. */
 const hasPromotionStat = (reward: MasteryPromotionFields) =>
   !!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None";
 

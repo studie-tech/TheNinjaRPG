@@ -286,6 +286,7 @@ const DMG_CONFIG_SETTINGS: Record<keyof DmgConfig, string> = {
   advantage_max: "DMG_ADVANTAGE_MAX",
 };
 
+/** Keep config keys typed when enumerating their persisted setting names. */
 const dmgConfigSettings = () =>
   Object.entries(DMG_CONFIG_SETTINGS) as [keyof DmgConfig, string][];
 

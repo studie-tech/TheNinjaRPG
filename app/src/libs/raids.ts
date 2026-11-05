@@ -21,6 +21,7 @@ export const BATTLE_CLAIM_LIKE_PATTERN = `${BATTLE_CLAIM_PREFIX}%`;
 /** Placeholder `battleId` that reserves a queue while its battle is being initiated. */
 export const createBattleClaimId = (nonce: string) => `${BATTLE_CLAIM_PREFIX}${nonce}`;
 
+/** Distinguish an in-flight queue reservation from a published battle ID. */
 export const isBattleClaimId = (battleId: string | null | undefined) =>
   battleId?.startsWith(BATTLE_CLAIM_PREFIX) ?? false;
 

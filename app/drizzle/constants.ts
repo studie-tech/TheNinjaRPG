@@ -1073,6 +1073,7 @@ export const PET_TASK_QUEST_TYPES = [
   "hunting",
   "gathering",
 ] as const satisfies readonly QuestType[];
+/** Narrow companion assignments to hunting and gathering contracts. */
 export const isPetTaskQuestType = (
   questType: QuestType,
 ): questType is (typeof PET_TASK_QUEST_TYPES)[number] =>
@@ -1083,6 +1084,7 @@ export const SHARED_RUN_QUEST_TYPES = [
   "village_mission",
   "achievement",
 ] as const satisfies readonly QuestType[];
+/** Identify quest types excluded from personal entry receipts. */
 export const isSharedRunQuestType = (questType: QuestType) =>
   (SHARED_RUN_QUEST_TYPES as readonly QuestType[]).includes(questType);
 export const QUESTS_CONCURRENT_LIMIT = 4;

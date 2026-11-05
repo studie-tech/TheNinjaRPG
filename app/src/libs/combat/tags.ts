@@ -700,6 +700,7 @@ const applyPercentageStatModifier = (
   (target[statName] as number) = (target[statName] as number) + change;
 };
 
+/** Apply flat changes directly and stack percentage changes against saved base stats. */
 const applyStatChange = (
   target: BattleUserState,
   stat: keyof NonNullable<BattleUserState["baseStatsForModifiers"]>,

@@ -5,6 +5,7 @@
  */
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
+/** Reject field-edit paths containing prototype-chain property names. */
 export const isSafePath = (fieldPath) =>
   !fieldPath.split(".").some((segment) => FORBIDDEN_SEGMENTS.has(segment));
 

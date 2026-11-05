@@ -1373,6 +1373,7 @@ export const isEffectEnabled = (
 const isActiveSeal = (effect: UserEffect) =>
   effect.type === "seal" && !effect.isNew && isEffectActive(effect);
 
+/** Collect resolved, unexpired seals for shared bloodline-suppression checks. */
 export const getActiveSealEffects = (usersEffects: UserEffect[]) =>
   usersEffects.filter(isActiveSeal);
 

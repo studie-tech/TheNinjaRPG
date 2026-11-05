@@ -60,6 +60,7 @@ export const isHumanOpponent = (
 ): boolean =>
   !candidate.isAi && !candidate.isSummon && !areBattleAllies(user, candidate);
 
+/** Detect whether the opposing fixed team includes a human combatant. */
 export const hasHumanOpponent = (
   usersState: HumanOpponentCandidate[],
   user: { direction: "left" | "right" },

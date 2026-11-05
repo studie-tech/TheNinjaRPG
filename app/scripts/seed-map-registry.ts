@@ -13,6 +13,7 @@ import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { BUILTIN_TERRAINS } from "@/libs/sector-map/terrains";
 import { drizzleDB } from "@/server/db";
 
+/** Upsert built-in registry defaults while preserving creator-added keys. */
 const main = async () => {
   for (const asset of DECORATION_ASSETS) {
     const values = {

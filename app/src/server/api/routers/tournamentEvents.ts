@@ -858,5 +858,6 @@ const notifyEventParticipant = async (userId: string, originSocketId?: string) =
 const isReadyAtWakeIsland = (user: Pick<UserData, "status" | "battleId" | "sector">) =>
   user.status === "AWAKE" && !user.battleId && user.sector === MAP_WAKE_ISLAND_SECTOR;
 
+/** Resolve stored seat IDs against the event's current withdrawal flags. */
 const isSeatWithdrawn = (event: EventTournamentState, seatId: string | null) =>
   !!event.participants.find((p) => p.id === seatId)?.withdrawn;

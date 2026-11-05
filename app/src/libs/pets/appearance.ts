@@ -63,6 +63,7 @@ const MAX_PET_IMAGE_BYTES = 5 * 1024 * 1024;
 /** Neutral backdrop for references and cutout input; matches the Nano Banana prompt. */
 const PET_REFERENCE_BACKDROP = "#f0f0f0";
 
+/** Give generation references and cutout input the same neutral backdrop. */
 const flattenOnBackdrop = (image: Buffer) =>
   sharp(image, { limitInputPixels: MAX_PET_IMAGE_PIXELS })
     .flatten({ background: PET_REFERENCE_BACKDROP })

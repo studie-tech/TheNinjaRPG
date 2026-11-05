@@ -1300,6 +1300,7 @@ type UserReference = string | typeof userData.userId;
 const databaseNow = sql`CURRENT_TIMESTAMP(3)`;
 const paypalWindowStart = sql`${databaseNow} - INTERVAL ${PAYPAL_PAID_PERIOD_DAYS} DAY`;
 
+/** Treat a recent active PayPal subscription row as tier evidence. */
 const activePaypalRow = (user: UserReference) =>
   and(
     eq(paypalSubscription.affectedUserId, user),
@@ -1307,6 +1308,7 @@ const activePaypalRow = (user: UserReference) =>
     gte(paypalSubscription.updatedAt, paypalWindowStart),
   );
 
+/** Match granted Stripe periods that entitle the account on the database clock. */
 const liveStripePeriod = (user: UserReference) =>
   and(
     eq(stripePayment.affectedUserId, user),

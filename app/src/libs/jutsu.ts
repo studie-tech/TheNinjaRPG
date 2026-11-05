@@ -105,6 +105,7 @@ export const JUTSU_CATEGORY_DEFS: {
   })),
 ];
 
+/** Share category matching between equipment limits and ranked loadout checks. */
 const matchesJutsuCategory = (match: JutsuCategoryMatch, jutsu: JutsuCapMatchInput) => {
   switch (match.kind) {
     case "residual":
