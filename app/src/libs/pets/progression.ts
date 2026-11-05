@@ -5,6 +5,7 @@ import {
   PET_GENERATION_LEASE_MS,
   PET_MAX_COLLECTION_SLOTS,
   PET_RANKS,
+  type PetPaymentCurrency,
   type UserRank,
 } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
@@ -77,6 +78,11 @@ export const getChargedGenerationAttempts = (
     ? Math.max(0, pet.generationAttempts - 1)
     : pet.generationAttempts;
 
+/** Only a founder without any image may still choose the traits of its first one. */
+export const canChoosePetAppearance = (
+  pet: Pick<UserPet, "rank" | "artRank" | "avatar">,
+) => pet.rank === 1 && pet.artRank === 0 && !pet.avatar;
+
 /** Accepted current-rank art stays usable while a cosmetic replacement is generating. */
 export const isPetAppearanceReady = (
   pet: Pick<UserPet, "rank" | "generationStatus" | "artRank" | "avatar">,
@@ -134,3 +140,21 @@ export const petRankUpBlockMessage = (
     return `Assign ${next.experienceRequired.toLocaleString("en-US")} total experience to evolve to ${next.name}.`;
   return null;
 };
+
+/** Display cost, balance and label of a pet purchase; the router charges by its own rule. */
+export const getPetPaymentOption = (
+  currency: PetPaymentCurrency,
+  user: Pick<UserData, "reputationPoints" | "seichiSilver"> | undefined,
+  costs: { reputation: number; silver: number },
+) =>
+  currency === "SEICHI_SILVER"
+    ? {
+        cost: costs.silver,
+        balance: user?.seichiSilver ?? 0,
+        label: "Seichi Silver",
+      }
+    : {
+        cost: costs.reputation,
+        balance: user?.reputationPoints ?? 0,
+        label: "reputation",
+      };

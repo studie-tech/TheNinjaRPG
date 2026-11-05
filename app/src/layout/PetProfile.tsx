@@ -44,9 +44,12 @@ import {
   PET_SEICHI_SILVER_COST,
   type PetGender,
   PetGenders,
+  PetPaymentCurrencies,
+  type PetPaymentCurrency,
   PetSpawnPositions,
 } from "@/drizzle/constants";
 import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
+import { usePetMutationFeedback } from "@/hooks/usePetMutationFeedback";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
@@ -71,6 +74,7 @@ import { isPetGenderEditable, PET_GENDER_EDIT_UNTIL_LABEL } from "@/libs/pets/ge
 import {
   canUsePet,
   getPetLevel,
+  getPetPaymentOption,
   getPetRank,
   getPetStatCaps,
   isPetAppearanceReady,
@@ -84,7 +88,6 @@ import {
   PET_AI_EFFECT_TYPES,
   updatePetSchema,
 } from "@/validators/pets";
-import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Manage the owner's collection and selected companion within the profile tab.
@@ -107,8 +110,7 @@ export function PetProfile() {
   const [selectedMealId, setSelectedMealId] = useState("");
   const [isSlotDialogOpen, setIsSlotDialogOpen] = useState(false);
   const slotButtonRef = useRef<HTMLButtonElement>(null);
-  const [slotCurrency, setSlotCurrency] =
-    useState<RouterInputs["pets"]["acquirePet"]["currency"]>("REPUTATION");
+  const [slotCurrency, setSlotCurrency] = useState<PetPaymentCurrency>("REPUTATION");
   const [abilityDraft, setAbilityDraft] = useState<
     RouterInputs["pets"]["updateAbilities"] | null
   >(null);
@@ -204,32 +206,10 @@ export function PetProfile() {
     setGenderDraft(pet?.gender ?? null);
   }, [pet?.id, pet?.gender]);
 
-  /** Reconcile pet and player views after a committed or uncertain mutation. */
-  const invalidatePetData = async () => {
-    await Promise.all([
-      utils.pets.getPet.invalidate(),
-      utils.pets.getCollection.invalidate(),
-    ]);
-  };
-  const finishMutation = async (
-    result: UserDeltaResponse,
-    _variables: unknown,
-    revision: number | undefined,
-  ) => {
-    setMessage(result.success ? null : result.message);
-    showMutationToast(result);
-    await Promise.all([
-      invalidatePetData(),
-      result.success
-        ? updateUser(result, { revision })
-        : utils.profile.getUser.invalidate(),
-    ]);
-  };
-  const failMutation = async (cause: { message: string }) => {
-    setMessage(cause.message);
-    // A network failure may arrive after the server commits the update.
-    await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
-  };
+  const { invalidatePetData, finishMutation, failMutation } = usePetMutationFeedback({
+    setMessage,
+    updateUser,
+  });
   const update = api.pets.updatePet.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
@@ -458,14 +438,14 @@ export function PetProfile() {
     hasHomeKitchen &&
     homeVillage.sector === sectorVillage?.sector &&
     (userData.isOutlaw || canAccessStructure(userData, "/home", sectorVillage));
-  const slotCost =
-    slotCurrency === "SEICHI_SILVER" ? data.slotSilverCost : data.slotCost;
-  const slotBalance =
-    slotCurrency === "SEICHI_SILVER"
-      ? userData.seichiSilver
-      : userData.reputationPoints;
-  const slotCurrencyLabel =
-    slotCurrency === "SEICHI_SILVER" ? "Seichi Silver" : "reputation";
+  const {
+    cost: slotCost,
+    balance: slotBalance,
+    label: slotCurrencyLabel,
+  } = getPetPaymentOption(slotCurrency, userData, {
+    reputation: data.slotCost,
+    silver: data.slotSilverCost,
+  });
   const slotBlockMessage =
     userData.status !== "AWAKE" || userData.battleId
       ? "You must be awake and out of combat to unlock a slot."
@@ -571,8 +551,8 @@ export function PetProfile() {
             disabled={isBusy}
             className="gap-2 py-2"
             onValueChange={(value) => {
-              if (value === "REPUTATION" || value === "SEICHI_SILVER")
-                setSlotCurrency(value);
+              const next = PetPaymentCurrencies.find((c) => c === value);
+              if (next) setSlotCurrency(next);
             }}
           >
             {[

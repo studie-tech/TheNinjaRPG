@@ -4,7 +4,7 @@ import { PET_OPTION_COUNTS, PET_RANKS } from "@/drizzle/constants";
 import { classifyNsfwImage } from "@/libs/moderator";
 import { getPetAppearancePrompt } from "@/libs/pets/appearance";
 import { getDailyPetOptions, isAvailablePetAppearance, PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES, PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
-import { canUsePet, getMaxPetRank, getPetLevel, petRankUpBlockMessage } from "@/libs/pets/progression";
+import { canChoosePetAppearance, canUsePet, getMaxPetRank, getPetLevel, getPetPaymentOption, petRankUpBlockMessage } from "@/libs/pets/progression";
 import { calcLevelRequirements } from "@/libs/profile";
 import { getUtcDayKey } from "@/utils/time";
 import { acquirePetSchema, assignPetExperienceSchema, petNameSchema, updatePetAiSchema } from "@/validators/pets";
@@ -67,6 +67,22 @@ describe("companion appearance choices", () => {
 });
 
 describe("companion progression", () => {
+  it("lets only an imageless founder choose its appearance", () => {
+    const founder = { rank: 1, artRank: 0, avatar: null };
+    expect(canChoosePetAppearance(founder)).toBe(true);
+    expect(canChoosePetAppearance({ ...founder, rank: 2 })).toBe(false);
+    expect(canChoosePetAppearance({ ...founder, artRank: 1 })).toBe(false);
+    expect(canChoosePetAppearance({ ...founder, avatar: "avatar.webp" })).toBe(false);
+  });
+
+  it("describes a purchase in the chosen currency", () => {
+    const user = { reputationPoints: 7, seichiSilver: 3 };
+    const costs = { reputation: 20, silver: 50 };
+    expect(getPetPaymentOption("REPUTATION", user, costs)).toEqual({ cost: 20, balance: 7, label: "reputation" });
+    expect(getPetPaymentOption("SEICHI_SILVER", user, costs)).toEqual({ cost: 50, balance: 3, label: "Seichi Silver" });
+    expect(getPetPaymentOption("SEICHI_SILVER", undefined, costs).balance).toBe(0);
+  });
+
   const ready = { rank: 1, experience: 7500, generationStatus: "READY" as const, generationStartedAt: null, artRank: 1, avatar: "/accepted-pet.webp", battleEnabled: true };
 
   it("enforces the exact owner rank hierarchy and accepted current art", () => {
