@@ -1,0 +1,159 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { createTRPCReact } from "@trpc/react-query";
+import { observable } from "@trpc/server/observable";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { getDefaultStore } from "jotai";
+import * as navigation from "next/navigation";
+import * as Pusher from "pusher-js";
+import type { AppRouter } from "@/api/root";
+import * as client from "@/app/_trpc/client";
+import { useTavernActivity } from "@/hooks/useTavernActivity";
+import * as taverns from "@/hooks/useTaverns";
+import { ParentalControls } from "@/layout/ParentalControls";
+import { usePusherHandler } from "@/layout/PusherHandler";
+import { chatTavernActivityAtom, chatViewedConversationsAtom } from "@/libs/chatPanel";
+import * as toast from "@/libs/toast";
+import * as routing from "@/utils/routing";
+
+const testApi = createTRPCReact<AppRouter>();
+const store = getDefaultStore();
+const clients: QueryClient[] = [];
+type Handler = (event: { type?: string; message?: string; fromId?: string; commentId?: string }) => void;
+const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
+const originalGlobals = browserGlobals.map((name) =>
+  Object.getOwnPropertyDescriptor(globalThis, name),
+);
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, "Event", { configurable: true, value: window.Event });
+  Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class { observe() {} unobserve() {} disconnect() {} },
+  });
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
+  vi.spyOn(taverns, "useTaverns").mockReturnValue({
+    availTaverns: ["Global"],
+    isLoading: false,
+  } as never);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  Object.assign(vi.spyOn(client, "api" as never), {
+    comments: testApi.comments,
+    parentalControls: testApi.parentalControls,
+    tournament: testApi.tournament,
+    useUtils: testApi.useUtils,
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  for (const queryClient of clients.splice(0)) queryClient.clear();
+  store.set(chatTavernActivityAtom, {});
+  store.set(chatViewedConversationsAtom, {});
+  browserGlobals.forEach((name, index) => {
+    const original = originalGlobals[index];
+    if (original) Object.defineProperty(globalThis, name, original);
+    else Reflect.deleteProperty(globalThis, name);
+  });
+  vi.restoreAllMocks();
+});
+
+for (const source of ["save", "event"] as const) {
+  it.each([false, true])(
+    `${source} reconciles tavern subscriptions and unread activity when access starts blocked=%s`,
+    async (startingBlocked) => {
+      let blocked = startingBlocked;
+      let version = 0;
+      const handlers = new Map<string, Handler>();
+      vi.spyOn(Pusher, "default").mockImplementation(function () {
+        return {
+          subscribe: (id: string) => ({
+            bind: (_name: string, handler: Handler) => handlers.set(id, handler),
+            unbind: () => handlers.delete(id),
+          }),
+          unsubscribe: (id: string) => handlers.delete(id),
+          disconnect: vi.fn(),
+        };
+      } as never);
+      const readTaverns = vi.fn(() =>
+        blocked ? [] : [{ id: "global", title: "Global" }],
+      );
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      clients.push(queryClient);
+      const trpcClient = testApi.createClient({
+        links: [
+          () =>
+            ({ op }) =>
+              observable((observer) => {
+                let data: unknown;
+                if (op.path === "comments.getTavernIds") data = readTaverns();
+                else if (op.path === "comments.fetchConversationComment") data = { id: "new" };
+                else if (op.path === "parentalControls.get") {
+                  data = {
+                    enabled: true,
+                    hasPin: true,
+                    tavernDisabled: blocked,
+                    privateMessages: "EVERYONE",
+                    approvedPlayers: [],
+                    version,
+                  };
+                } else if (op.path === "parentalControls.save") {
+                  blocked = (op.input as { tavernDisabled: boolean }).tavernDisabled;
+                  version++;
+                  data = { success: true, message: "Saved parental controls" };
+                } else throw new Error(`Unexpected procedure ${op.path}`);
+                observer.next({ result: { data } });
+                observer.complete();
+              }),
+        ],
+      });
+      const user = {
+        userId: "me",
+        level: 50,
+        isBanned: false,
+        isSilenced: false,
+        chatMuted: false,
+        mutedConversationIds: [],
+      } as never;
+      const LiveTab = () => {
+        const pusher = usePusherHandler("me");
+        useTavernActivity(pusher, user);
+        return source === "save" ? <ParentalControls /> : null;
+      };
+      const view = render(
+        <testApi.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <LiveTab />
+          </QueryClientProvider>
+        </testApi.Provider>,
+      );
+      await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(handlers.has("global")).toBe(!startingBlocked));
+      if (!startingBlocked) {
+        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
+        await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
+      }
+
+      if (source === "save") {
+        fireEvent.click(await view.findByRole("switch", { name: "Disable tavern access" }));
+        fireEvent.change(view.getByLabelText("Parent PIN"), { target: { value: "123456" } });
+        fireEvent.click(view.getByRole("button", { name: "Save parental controls" }));
+        await waitFor(() => expect(blocked).toBe(!startingBlocked));
+      } else {
+        blocked = !startingBlocked;
+        await act(async () => handlers.get("me")?.({ type: "parentalControlsChanged" }));
+      }
+      await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(handlers.has("global")).toBe(startingBlocked));
+      expect(store.get(chatTavernActivityAtom)).toEqual({});
+      if (startingBlocked) {
+        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
+        await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
+      }
+    },
+  );
+}

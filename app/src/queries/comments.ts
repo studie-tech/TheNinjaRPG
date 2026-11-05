@@ -520,6 +520,16 @@ export const findConversationForGetConvo2 = (
     with: { users: true },
   });
 
+/** List public conversations by title, for following taverns by name. */
+export const listPublicConversationsByTitle = (
+  client: Pick<DrizzleClient, "select">,
+  titles: string[],
+) =>
+  client
+    .select({ id: conversation.id, title: conversation.title })
+    .from(conversation)
+    .where(and(inArray(conversation.title, titles), eq(conversation.isPublic, true)));
+
 /** Build the `conversation` lookup for `getConvo`, using predicates on `title`. */
 export const findConversationForGetConvo3 = (
   client: Pick<DrizzleClient, "query">,

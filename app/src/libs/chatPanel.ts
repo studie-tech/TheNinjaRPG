@@ -49,6 +49,21 @@ export const chatMutePendingAtom = atom<Record<string, boolean>>({});
  */
 export const chatMentionsAtom = atom<Record<string, number>>({});
 
+/** New tavern messages from other players since the page loaded, per tavern. */
+export const chatTavernActivityAtom = atom<Record<string, number>>({});
+
+/** One count per conversation: its new tavern messages, or its mentions when higher. */
+export const combineChatCounts = (
+  mentions: Record<string, number>,
+  activity: Record<string, number>,
+): Record<string, number> => {
+  const combined = { ...mentions };
+  for (const [conversationId, count] of Object.entries(activity)) {
+    combined[conversationId] = Math.max(combined[conversationId] ?? 0, count);
+  }
+  return combined;
+};
+
 type ChatMuteUser = Pick<
   NonNullable<UserWithRelations>,
   "chatMuted" | "mutedConversationIds"
@@ -81,6 +96,13 @@ export const countChatNotifications = (
     .reduce((sum, [, count]) => sum + count, 0);
   return inboxNews + mentionCount;
 };
+
+/** New tavern messages and mentions across unmuted taverns, for the Tavern tab and menu entry. */
+export const countTavernUnread = (
+  user: ChatMuteUser | null | undefined,
+  mentions: Record<string, number>,
+  activity: Record<string, number>,
+) => countChatNotifications(user, 0, combineChatCounts(mentions, activity));
 
 /** A conversation is unread when it changed after the player last opened it. */
 export const isConversationUnread = (convo: {

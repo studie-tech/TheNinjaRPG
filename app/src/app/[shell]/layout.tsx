@@ -22,6 +22,7 @@ import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import { PyramidRunBoundary } from "@/layout/PyramidRunBoundary";
 import { RewardChoiceModal } from "@/layout/RewardChoice";
 import StructuredData from "@/layout/StructuredData";
+import { TavernActivity } from "@/layout/TavernActivity";
 import { WebAnalytics } from "@/layout/WebAnalytics";
 import { getGameLayout, getGameLayoutScript } from "@/libs/gameLayouts";
 import {
@@ -199,6 +200,7 @@ export default async function RootLayout({
                   <ActivityStreakPopup />
                   <RewardChoiceModal />
                   <EventTournamentNotice />
+                  <TavernActivity />
                   <PWAManager />
                   <NativeBridge />
                   <InstallPrompt />

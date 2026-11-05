@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
+  combineChatCounts,
   countChatNotifications,
+  countTavernUnread,
   getInboxNews,
   isConversationMuted,
   isConversationUnread,
@@ -52,5 +54,26 @@ describe("unread conversations", () => {
     expect(isConversationUnread({ updatedAt: at(10), lastReadAt: at(5) })).toBe(true);
     expect(isConversationUnread({ updatedAt: at(5), lastReadAt: at(10) })).toBe(false);
     expect(isConversationUnread({ updatedAt: at(5), lastReadAt: null })).toBe(true);
+  });
+});
+
+describe("tavern activity", () => {
+  it("counts each conversation once, by its new messages or its mentions", () => {
+    expect(combineChatCounts({ global: 1, village: 2 }, { global: 4, ally: 1 })).toEqual({
+      global: 4,
+      village: 2,
+      ally: 1,
+    });
+  });
+});
+
+describe("tavern unread", () => {
+  it("adds new messages and mentions per tavern, leaving out muted ones", () => {
+    expect(countTavernUnread(user(false, ["akikaze"]), { global: 1 }, { global: 3, akikaze: 2, ally: 1 })).toBe(4);
+  });
+
+  it("is zero while all chat is muted or without a player", () => {
+    expect(countTavernUnread(user(true), { global: 1 }, { global: 3 })).toBe(0);
+    expect(countTavernUnread(null, { global: 1 }, { global: 3 })).toBe(0);
   });
 });

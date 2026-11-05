@@ -93,6 +93,7 @@ function ParentalSettingsForm({
         await Promise.all([
           onSaved(),
           utils.comments.getUserConversations.invalidate(),
+          utils.comments.getTavernIds.invalidate(),
           utils.comments.getConversationComments.invalidate(),
         ]);
       }
