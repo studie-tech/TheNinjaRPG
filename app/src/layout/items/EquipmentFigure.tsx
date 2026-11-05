@@ -119,13 +119,16 @@ function EquippedTileContent({
   const isWorn = durability !== null && durability < 50;
   return (
     <span className="relative block h-full w-full p-1">
-      <ContentImage
-        image={look.image}
-        hideBorder={true}
-        alt={look.name}
-        rarity={item.rarity}
-        className="rounded-lg"
-      />
+      {/* ContentImage positions its art against this inner box, so the padding above insets it from the slot border. */}
+      <span className="relative block h-full w-full">
+        <ContentImage
+          image={look.image}
+          hideBorder={true}
+          alt={look.name}
+          rarity={item.rarity}
+          className="rounded-lg"
+        />
+      </span>
       {hotkey && (
         <kbd className="pointer-events-none absolute top-0.5 left-0.5 z-10 rounded-[3px] border border-black/40 bg-white/95 px-[3px] font-bold font-mono text-[10px] text-black leading-[14px] not-any-pointer-fine:hidden">
           {hotkey.toUpperCase()}
