@@ -189,7 +189,7 @@ describeWithDatabase("recurring streak cycle timing", () => {
       expect((await caller.claimStreakDay({ configId: "recurring" })).success).toBe(
         true,
       );
-      expect((await caller.getUserStreaks()).streaks[0]).toMatchObject({
+      expect((await caller.getUserStreaks()).streaks[0]).toEqual(expect.objectContaining({
         currentDay: 1,
         alreadyClaimedToday: true,
         canClaimToday: false,
@@ -197,7 +197,7 @@ describeWithDatabase("recurring streak cycle timing", () => {
         needsCatchUp: false,
         daysToGo: 0,
         startedAt: new Date(restartAt),
-      });
+      }));
       // A stale or crafted paid request must not turn the false offer into a charge.
       expect(
         (await caller.claimStreakDay({ configId: "recurring", payCatchUp: true }))
@@ -280,11 +280,11 @@ describeWithDatabase("recurring streak cycle timing", () => {
       .where(eq(userStreakProgress.id, "progress"));
     const caller = await callerFor(activityStreakRouter, "streak-user");
     expect((await caller.claimStreakDay({ configId: "recurring" })).success).toBe(true);
-    expect((await caller.getUserStreaks()).streaks[0]).toMatchObject({
+    expect((await caller.getUserStreaks()).streaks[0]).toEqual(expect.objectContaining({
       startedAt: purchasedAt,
       needsCatchUp: true,
       daysToGo: 1,
-    });
+    }));
   });
 
   it("lets only one concurrent claim start the next recurring cycle", async () => {

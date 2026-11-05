@@ -301,14 +301,14 @@ describeWithDatabase("Pyramid entry recovery", () => {
           where: eq(questHistory.id, "open-pyramid"),
         }),
       ]);
-      expect(stored).toMatchObject({
+      expect(stored).toEqual(expect.objectContaining({
         curHealth: 500,
         curChakra: 990,
         curStamina: 1,
         curEnergy: 10,
         regenAt: prior,
-      });
-      expect(attempt).toMatchObject({ entryPaid, isolated: true, questVersion: version });
+      }));
+      expect(attempt).toEqual(expect.objectContaining({ entryPaid, isolated: true, questVersion: version }));
       expect(stored?.questData?.find((tracker) => tracker.id === "pool-pyramid")?.startAt)
         .toBe(prior.toISOString());
     });
@@ -375,10 +375,10 @@ describeWithDatabase("Pyramid entry recovery", () => {
       expect(await client.query.questHistory.findMany()).toHaveLength(1);
       expect(
         await client.query.userData.findFirst({ where: eq(userData.userId, user.userId) }),
-      ).toMatchObject({
+      ).toEqual(expect.objectContaining({
         curHealth: scenario === "pools changed" ? 720 : 520,
         regenAt: new Date(prior.getTime() + 120_000),
-      });
+      }));
       expect(user.userQuests).toHaveLength(1);
       expect(typeof user.curHealth).toBe("number");
       expect(user.regenAt).toBeInstanceOf(Date);

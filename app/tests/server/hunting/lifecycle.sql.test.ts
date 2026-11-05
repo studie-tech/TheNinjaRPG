@@ -260,7 +260,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect(await db.query.battleHistory.findMany()).toHaveLength(0);
     expect(await db.query.huntingSession.findFirst()).toMatchObject({ id: session.id, version: session.version, battleId: null });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", battleId: null });
-    expect(await db.query.huntingProgress.findFirst()).toMatchObject({ used: 3, version: 1, cooldownUntil });
+    expect(await db.query.huntingProgress.findFirst()).toEqual(expect.objectContaining({ used: 3, version: 1, cooldownUntil }));
     await db.update(huntingProgress).set({ cooldownUntil: new Date(0) });
     const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
     expect((await hunter.start({ id: session.id })).success).toBe(true);

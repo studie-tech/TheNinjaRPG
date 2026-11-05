@@ -178,7 +178,7 @@ describeWithDatabase("staff changes during hunting admission", () => {
     expect(await db.query.huntingSession.findFirst()).toEqual(previous);
     expect(await db.query.huntingProgress.findFirst({ where: eq(huntingProgress.contractId, "contract") })).toEqual(progress);
     expect((await hunter.accept({ habitatId: "other", contractId: "other-contract", version: previous.version })).success).toBe(true);
-    expect(await db.query.huntingProgress.findFirst({ where: eq(huntingProgress.contractId, "contract") })).toMatchObject({ used: 2, version: 1, cooldownUntil: new Date(Date.now() + 3_600_000) });
+    expect(await db.query.huntingProgress.findFirst({ where: eq(huntingProgress.contractId, "contract") })).toEqual(expect.objectContaining({ used: 2, version: 1, cooldownUntil: new Date(Date.now() + 3_600_000) }));
   });
 
   it("keeps accepted material references through settlement and releases them on finish", async () => {
