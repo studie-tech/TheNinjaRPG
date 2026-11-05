@@ -130,16 +130,16 @@ describe("combined mastery and elemental queue settlement", () => {
     ];
     const offline = refreshQueues(user, rows, [61]);
     expect(offline).toEqual(refreshQueues(user, rows, [16, 61]));
-    expect(offline).toMatchObject({
+    expect(offline).toEqual(expect.objectContaining({
       dailyTrainings: MAX_DAILY_TRAININGS - 1,
       ninjutsuMastery: 0,
       currentlyTrainingMastery: "ninjutsuMastery",
       masteryQueueHead: 0,
-      elementalMastery: { Wind: fullSession("15min") },
+      elementalMastery: expect.objectContaining({ Wind: fullSession("15min") }),
       currentlyTrainingElement: "Earth",
       elementalTrainingStartedAt: after(15),
       elementalQueueHead: 1,
-    });
+    }));
   });
 
   it("reselects the next finish after each handoff and stops at the shared allowance", () => {
@@ -158,18 +158,18 @@ describe("combined mastery and elemental queue settlement", () => {
     ];
     const offline = refreshQueues(user, rows, [61]);
     expect(offline).toEqual(refreshQueues(user, rows, [16, 31, 46, 61]));
-    expect(offline).toMatchObject({
+    expect(offline).toEqual(expect.objectContaining({
       dailyTrainings: MAX_DAILY_TRAININGS - 1,
       ninjutsuMastery: 0,
       masteryQueueHead: 0,
-      elementalMastery: {
+      elementalMastery: expect.objectContaining({
         Wind: fullSession("15min"),
         Earth: fullSession("15min"),
-      },
+      }),
       currentlyTrainingElement: "Lightning",
       elementalTrainingStartedAt: after(30),
       elementalQueueHead: 2,
-    });
+    }));
   });
 
   it("keeps mastery first for tied finishes at the shared daily limit", () => {

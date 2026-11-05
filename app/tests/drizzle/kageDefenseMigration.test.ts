@@ -63,15 +63,15 @@ describeWithDatabase("Kage defense lifecycle migration", () => {
       expect(history).toHaveLength(2);
       for (const [index, previous] of historyBefore.entries()) {
         const row = history[index]!;
-        expect(row).toMatchObject(previous);
-        expect(row).toMatchObject({
+        expect(row).toEqual(expect.objectContaining(previous));
+        expect(row).toEqual(expect.objectContaining({
           status: "COMPLETED",
           tenure: null,
           activeChallengerId: null,
           notBefore: previous.createdAt,
           startedAt: previous.createdAt,
           resolvedAt: previous.createdAt,
-        });
+        }));
         expect(row.outcome).toBe(
           previous.didWin
             ? "Challenger won the title fight"

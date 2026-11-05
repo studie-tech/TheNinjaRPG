@@ -115,7 +115,7 @@ describeWithDatabase("hourly maintenance claim", () => {
       .mockImplementation(failAfterEffects as never);
 
     expect((await GET(request())).status).toBe(500);
-    expect(await timer()).toMatchObject({ time: previousHour, value: 0 });
+    expect(await timer()).toEqual(expect.objectContaining({ time: previousHour, value: 0 }));
 
     analytics.mockRestore();
     expect((await GET(request())).status).toBe(200);

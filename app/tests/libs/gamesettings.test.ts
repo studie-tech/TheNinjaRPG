@@ -79,7 +79,7 @@ for (const [name, lock] of [
       expect(await loser.release()).toBe(false);
       expect(store.read().time).toEqual(now);
       expect(await winner.release()).toBe(true);
-      expect(store.read()).toMatchObject({ time: oldTime, value: 0 });
+      expect(store.read()).toEqual(expect.objectContaining({ time: oldTime, value: 0 }));
       expect(await winner.release()).toBe(false);
     });
 
@@ -93,7 +93,7 @@ for (const [name, lock] of [
       expect(second.isClaimed).toBe(true);
       expect(await first.release()).toBe(false);
       expect(await first.update(10, oldTime)).toBe(false);
-      expect(store.read()).toMatchObject({ time: later, value: 0 });
+      expect(store.read()).toEqual(expect.objectContaining({ time: later, value: 0 }));
       expect(await second.release()).toBe(true);
       expect(store.read().time).toEqual(now);
     });
@@ -163,7 +163,7 @@ describe("timer cadence", () => {
     const marker = new Date("2026-10-20T23:59:59.999Z");
     expect(await claim.update(1, marker)).toBe(true);
     expect(await claim.release()).toBe(false);
-    expect(store.read()).toMatchObject({ time: marker, value: 1 });
+    expect(store.read()).toEqual(expect.objectContaining({ time: marker, value: 1 }));
   });
 });
 

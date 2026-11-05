@@ -154,7 +154,7 @@ const user = (overrides: Partial<TimerUser> = {}): TimerUser => ({
 
 describe("persisted timer eligibility", () => {
   it("notifies hospital expiry without a foreground read, and skips healed/cancelled stays", () => {
-    expect(dueTimedPushEvents(user({ status: "HOSPITALIZED" }), now)).toMatchObject([{ kind: "hospital", endsAt: now }]);
+    expect(dueTimedPushEvents(user({ status: "HOSPITALIZED" }), now)).toEqual([expect.objectContaining({ kind: "hospital", endsAt: now })]);
     expect(dueTimedPushEvents(user(), now)).toEqual([]);
     expect(dueTimedPushEvents(user({ status: "HOSPITALIZED", regenAt: now }), now)).toEqual([]);
   });

@@ -221,12 +221,12 @@ describe("farming", () => {
     const finishAt = new Date(plantedAt.getTime() + cycleMs * 2);
     const plot = { seedItemId: "seed", plantedAt, finishAt, lastWateredAt: plantedAt };
 
-    expect(getLivePlotTiming(plot, new Date(plantedAt.getTime() + 1000))).toMatchObject({
+    expect(getLivePlotTiming(plot, new Date(plantedAt.getTime() + 1000))).toEqual(expect.objectContaining({
       isReady: false,
       canWater: false,
       nextWateringAt: new Date(cycleMs * 11),
       growthStage: 1,
-    });
+    }));
     expect(getLivePlotTiming(plot, new Date(cycleMs * 11))).toMatchObject({
       isReady: false,
       canWater: true,

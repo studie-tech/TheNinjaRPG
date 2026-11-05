@@ -33,7 +33,7 @@ describeWithDatabase("periodic timer claims in MySQL", () => {
       const loser = results.find((result) => !result.isClaimed)!;
       expect(await loser.release()).toBe(false);
       expect(await winner.release()).toBe(true);
-      expect(await db.query.gameSetting.findFirst()).toMatchObject({ time: previous, value: 0 });
+      expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: previous, value: 0 }));
     });
   }
 
@@ -45,9 +45,9 @@ describeWithDatabase("periodic timer claims in MySQL", () => {
     const second = await actualGameSettings.lockWithMinuteTimer(db, name);
     expect(second.isClaimed).toBe(true);
     expect(await first.release()).toBe(false);
-    expect(await db.query.gameSetting.findFirst()).toMatchObject({ time: later });
+    expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: later }));
     expect(await second.update(17, later)).toBe(true);
-    expect(await db.query.gameSetting.findFirst()).toMatchObject({ time: later, value: 17 });
+    expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: later, value: 17 }));
   });
 
   it("the generic timer also admits one concurrent owner", async () => {
