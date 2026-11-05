@@ -72,7 +72,7 @@ import { canAwardReputation } from "@/utils/permissions";
 import type { DeepPartial } from "@/utils/typeutils";
 import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { showUploadError, UploadButton } from "@/utils/uploadthing";
 import type {
   ZodAllTags,
   ZodBloodlineType,
@@ -1190,12 +1190,7 @@ export const EditContent = <
                                       });
                                     }
                                   }}
-                                  onUploadError={(error: Error) => {
-                                    showMutationToast({
-                                      success: false,
-                                      message: error.message,
-                                    });
-                                  }}
+                                  onUploadError={showUploadError}
                                 />
                                 <Button
                                   type="button"

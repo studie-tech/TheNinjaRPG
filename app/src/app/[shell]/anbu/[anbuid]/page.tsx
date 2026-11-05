@@ -76,7 +76,7 @@ import { parseHtml } from "@/utils/parse";
 import { canEditClans } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
-import { UploadButton } from "@/utils/uploadthing";
+import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { AnbuRenameSchema } from "@/validators/anbu";
 import { anbuRenameSchema } from "@/validators/anbu";
 import type { MutateContentSchema } from "@/validators/comments";
@@ -481,27 +481,14 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
                     <UploadButton
                       endpoint="anbuUploader"
                       onClientUploadComplete={(res) => {
-                        const serverData = res?.[0]?.serverData;
-                        if (serverData?.error) {
-                          showMutationToast({
-                            success: false,
-                            message: serverData.error,
-                          });
-                          return;
-                        }
-                        const url = serverData?.fileUrl;
+                        const url = readUploadResult(res)?.fileUrl;
                         if (url) {
                           renameForm.setValue("image", url, {
                             shouldDirty: true,
                           });
                         }
                       }}
-                      onUploadError={(error: Error) => {
-                        showMutationToast({
-                          success: false,
-                          message: error.message,
-                        });
-                      }}
+                      onUploadError={showUploadError}
                     />
                   </div>
                   <FormField
