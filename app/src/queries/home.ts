@@ -303,7 +303,10 @@ const homeFurnitureWriteGuard = (
     inArray(userData.status, ["AWAKE", "ASLEEP"]),
   );
 
-/** Wake only the regenerated sleeping snapshot while its preference remains enabled. */
+/**
+ * Atomically wake the regenerated snapshot while preference and activity guards still hold.
+ * The caller must check rowsAffected before reporting or publishing the transition.
+ */
 export const wakeUserForAction = (
   client: Pick<DrizzleClient, "update">,
   user: { userId: string; updatedAt: Date },

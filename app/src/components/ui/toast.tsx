@@ -6,11 +6,12 @@ export interface ToastActionProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Accessible label for screen readers */
   altText?: string;
+  /** Apply action styling to a child link while preserving its navigation semantics. */
   asChild?: boolean;
   ref?: React.Ref<HTMLButtonElement>;
 }
 
-/** Styled action button rendered inside a toast. */
+/** Render a styled toast action as a button or a supplied child control. */
 export const ToastAction = ({
   ref,
   className,

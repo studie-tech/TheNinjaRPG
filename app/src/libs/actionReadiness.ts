@@ -16,12 +16,16 @@ export const actionStatusMessage = (status: UserStatus, name = "You") => {
   return `${name} ${are} ${states[status]}.`;
 };
 
+/** Confirmed wake-up notice shared by the transport and toast coordinator. */
 export const AUTO_WAKE_MESSAGE = "This action woke you up.";
+/** Confirmed free-checkout notice; automatic recovery never authorizes payment. */
 export const AUTO_CHECKOUT_MESSAGE =
   "This action checked you out of the hospital for free.";
 
-// Only player-initiated actions with awake prerequisites belong here. Queue controls,
-// combat turns, messages, preferences and background settlement retain their own lifecycle.
+/**
+ * Explicit awake-only actions. Mixed-input endpoints are classified in shouldPrepareAction;
+ * combat turns, messages, preferences and background settlement keep their own lifecycle.
+ */
 export const AWAKE_ACTIONS = new Set([
   "bloodline.roll",
   "clan.leaveClan",
@@ -111,7 +115,10 @@ export const AWAKE_ACTIONS = new Set([
   "war.attackWarCamp",
 ]);
 
-/** Mixed-purpose endpoints prepare only inputs whose own action needs an awake actor. */
+/**
+ * Classify mixed-purpose inputs before handlers run. Queue removals and other passive
+ * operations preserve sleep; saved quest requirements are classified by the middleware.
+ */
 export const shouldPrepareAction = (path: string, input: unknown) => {
   const values =
     input && typeof input === "object" ? (input as Record<string, unknown>) : {};
@@ -135,7 +142,10 @@ export const shouldPrepareAction = (path: string, input: unknown) => {
   return AWAKE_ACTIONS.has(path);
 };
 
-/** Let explicit actions reach the server's recovery gate; other activity stays blocked. */
+/**
+ * Admit explicit recovery attempts, respecting the sleep preference. Hospital affordability
+ * is checked by the server, so a hospitalized actor may still receive a checkout rejection.
+ */
 export const canAttemptAwakeAction = (
   user: { status: UserStatus; autoWakeUp?: boolean } | null | undefined,
 ) =>

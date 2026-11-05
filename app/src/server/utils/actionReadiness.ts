@@ -18,7 +18,11 @@ import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { getStrucBoost } from "@/utils/village";
 
-/** Settle sleep recovery or free hospital checkout before the requested action runs. */
+/**
+ * Settle regeneration, then recover with one guarded status update and no payment.
+ * Recovery commits independently of the requested action: a later action rejection keeps
+ * the recovered state, and its response must still report the confirmed transition.
+ */
 export const prepareCharacterForAction = async (
   client: DrizzleClient,
   userId: string,
@@ -49,6 +53,7 @@ export const prepareCharacterForAction = async (
       return { error: "Your village changed. Please try again." };
     const now = new Date();
     const boost = getStrucBoost("hospitalSpeedupPerLvl", structures);
+    // Checkout is free after the recovery deadline or when the current heal cost is zero.
     if (calcHealFinish({ user, boost }) > now && calcHealCost(user) > 0) {
       return { error: actionStatusMessage(user.status) };
     }

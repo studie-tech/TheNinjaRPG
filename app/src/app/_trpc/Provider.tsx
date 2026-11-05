@@ -96,6 +96,8 @@ const TrpcClientProvider = (props: {
   }, [clerk, session]);
   const onMutateCheck = useGlobalOnMutateProtect();
   const [{ queryClient, queryMetricsTracker }] = useState(() => {
+    // A feature's onSuccess may throw after recovery commits. TanStack then settles
+    // with undefined data, so retain the confirmed result for feedback and reconciliation.
     const recoveryResults = new WeakMap<object, unknown>();
     const queryClient = new QueryClient({
       defaultOptions: {

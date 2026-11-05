@@ -116,7 +116,10 @@ export const updateUserDataForUserHeal = (
       ),
     );
 
-/** Build the `userData` update for `npcHeal`, using predicates on `userId` and `status`. */
+/**
+ * Build free checkout after the caller verifies eligibility. Optional snapshot predicates
+ * guard server-calculated recovery against concurrent changes in the same update.
+ */
 export const updateUserDataForNpcHeal = (
   client: Pick<DrizzleClient, "update">,
   user: { maxHealth: number; maxEnergy: number },
