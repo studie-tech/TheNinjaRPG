@@ -20,6 +20,12 @@ import {
   Zap,
 } from "lucide-react";
 import type React from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   AdjustableBasicAction,
   CombatStatType,
@@ -346,13 +352,21 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
     }
   }
 
+  // The label renders in a portal: icons sit at the edges of scrolling panels that would clip it.
   return (
-    <div key={element} className="group/element relative">
-      {image}
-      <span className="absolute top-1/2 left-1/2 z-50 hidden -translate-x-1/2 -translate-y-1/2 transform whitespace-nowrap rounded-md bg-gray-800 p-2 font-bold text-gray-100 text-sm group-hover/element:block">
-        {hoverText || element}
-      </span>
-    </div>
+    <TooltipProvider delayDuration={0}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div key={element} className="relative">
+            {image}
+            <span className="sr-only">{hoverText || element}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent className="whitespace-nowrap bg-gray-800 font-bold text-gray-100 text-sm">
+          {hoverText || element}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
