@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronsUpDown } from "lucide-react";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -17,6 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
  * Select one catalog ID with searchable labels, closing the popover on selection.
  * Values remain stable IDs; an empty value can represent the caller's reset option.
  * Trigger attributes let FormControl connect field errors and focus to the button.
+ * `searchLabel` names the search box, by default after `label`, and `emptyText` replaces
+ * the no-results message.
  */
 export function SearchSelect({
   label,
@@ -24,6 +26,8 @@ export function SearchSelect({
   options,
   placeholder,
   disabled,
+  searchLabel = `Search ${label.toLowerCase()}`,
+  emptyText = "No matches found.",
   onChange,
   ...triggerProps
 }: {
@@ -32,12 +36,18 @@ export function SearchSelect({
   options: { value: string; label: string }[];
   placeholder: string;
   disabled?: boolean;
+  searchLabel?: string;
+  emptyText?: string;
   onChange: (value: string) => void;
 } & Pick<
   ComponentProps<typeof Button>,
   "id" | "aria-invalid" | "aria-describedby" | "ref"
 >) {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    // Saving or losing edit access must not leave a picker open when editing resumes.
+    if (disabled) setOpen(false);
+  }, [disabled]);
   return (
     <Popover open={disabled ? false : open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -60,12 +70,12 @@ export function SearchSelect({
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         {/* Reserve the popover's borders so search stays visible as results scroll. */}
         <Command
-          label={`Search ${label.toLowerCase()}`}
+          label={searchLabel}
           className="max-h-[calc(var(--radix-popover-content-available-height)-2px)]"
         >
-          <CommandInput placeholder={`Search ${label.toLowerCase()}...`} />
+          <CommandInput placeholder={`${searchLabel}...`} />
           <CommandList>
-            <CommandEmpty>No matches found.</CommandEmpty>
+            <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
