@@ -790,6 +790,12 @@ export type BanState = (typeof BanStates)[number];
 /** Report states that enforce a ban; an escalated ban stays in force until an admin decides. */
 export const ActiveBanStates: BanState[] = ["BAN_ACTIVATED", "BAN_ESCALATED"];
 
+/** Report states that enforce a silence; a timeout is a short silence. Bans do not count. */
+export const ActiveSilenceStates: BanState[] = [
+  "SILENCE_ACTIVATED",
+  "TIMEOUT_ACTIVATED",
+];
+
 /** Sanctions that outlive a deleted account; timeouts count as silences. */
 export const SanctionTombstoneTypes = ["BAN", "SILENCE"] as const;
 export type SanctionTombstoneType = (typeof SanctionTombstoneTypes)[number];

@@ -1,7 +1,11 @@
-import { gt, gte } from "drizzle-orm";
+import { gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { ActiveBanStates, type BanState } from "@/drizzle/constants";
+import {
+  ActiveBanStates,
+  ActiveSilenceStates,
+  type BanState,
+} from "@/drizzle/constants";
 import type { UserReport } from "@/drizzle/schema";
 import { getForumContext, resolveForumPost } from "@/libs/forum";
 import { buildModerationEvidence } from "@/libs/moderation/evidence";
@@ -48,7 +52,6 @@ import {
   updateBattleActionForCreate,
   updateUserDataForAcceptWarning,
   updateUserDataForBan,
-  updateUserDataForGetBan,
   updateUserDataForSilence,
   updateUserDataForTradeBan,
   updateUserDataForUpdateUserAvatar,
@@ -195,9 +198,14 @@ export const reportsRouter = createTRPCRouter({
     // a rejected reset reloads the cases so the sanction screen has a current report.
     const noActiveReport = noActiveReportGuard(ctx.drizzle, ctx.userId, gt);
     const resets = await Promise.all([
-      ...(!activeReport("SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", ...ActiveBanStates) &&
-      user.isSilenced
-        ? [updateUserDataForGetBan(ctx.drizzle, ctx, noActiveReport)]
+      ...(!activeReport(...ActiveSilenceStates) && user.isSilenced
+        ? [
+            clearUserSilenceWithoutActiveReport(
+              ctx.drizzle,
+              [ctx.userId],
+              noActiveReport,
+            ),
+          ]
         : []),
       ...(!activeReport(...ActiveBanStates) && user.isBanned
         ? [clearUserBanWithoutActiveReport(ctx.drizzle, [ctx.userId], noActiveReport)]
@@ -586,7 +594,7 @@ export const reportsRouter = createTRPCRouter({
         ]);
         // A character can be recreated after these reads; only reset flags while
         // no current report still enforces that restriction.
-        const noActiveReport = noActiveReportGuard(ctx.drizzle, reportedUserId, gte);
+        const noActiveReport = noActiveReportGuard(ctx.drizzle, reportedUserId, gt);
         mutations.push(
           ...(bans.length === 0
             ? [

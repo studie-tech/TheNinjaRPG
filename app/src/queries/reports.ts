@@ -26,6 +26,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
   ActiveBanStates,
+  ActiveSilenceStates,
   type AutomoderationCategory,
   type BanState,
   MODERATION_PROMPT_VERSION,
@@ -66,8 +67,7 @@ export const listUserReportForGET = (client: Pick<DrizzleClient, "query">) =>
     where: and(
       inArray(userReport.status, [
         ...ActiveBanStates,
-        "SILENCE_ACTIVATED",
-        "TIMEOUT_ACTIVATED",
+        ...ActiveSilenceStates,
         "TRADE_BAN_ACTIVATED",
       ]),
       lt(userReport.banEnd, new Date()),
@@ -100,8 +100,7 @@ export const listUserReportForGET2 = (
       ]),
       inArray(userReport.status, [
         ...ActiveBanStates,
-        "SILENCE_ACTIVATED",
-        "TIMEOUT_ACTIVATED",
+        ...ActiveSilenceStates,
         "TRADE_BAN_ACTIVATED",
       ]),
       gt(userReport.banEnd, new Date()),
@@ -635,22 +634,6 @@ export const noActiveReportGuard =
         ),
     );
 
-/** Build the `userData` update for `getBan`, setting `isSilenced`, using predicates on `userId`. */
-export const updateUserDataForGetBan = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
-  noActiveReport: (statuses: BanState[]) => SQL<unknown>,
-) =>
-  client
-    .update(userData)
-    .set({ isSilenced: false })
-    .where(
-      and(
-        eq(userData.userId, ctx.userId),
-        noActiveReport(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED", ...ActiveBanStates]),
-      ),
-    );
-
 /** Build the `userData` update for `acceptWarning`, setting `isWarned`, using predicates on `userId`. */
 export const updateUserDataForAcceptWarning = (
   client: Pick<DrizzleClient, "update">,
@@ -778,7 +761,7 @@ export const listUserReportForClear = (
     where: and(
       eq(userReport.reportedUserId, reportedUserId),
       inArray(userReport.status, ActiveBanStates),
-      gte(userReport.banEnd, new Date()),
+      gt(userReport.banEnd, new Date()),
       ne(userReport.id, report.id),
     ),
   });
@@ -792,8 +775,8 @@ export const listUserReportForClear2 = (
   client.query.userReport.findMany({
     where: and(
       eq(userReport.reportedUserId, reportedUserId),
-      inArray(userReport.status, ["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]),
-      gte(userReport.banEnd, new Date()),
+      inArray(userReport.status, ActiveSilenceStates),
+      gt(userReport.banEnd, new Date()),
       ne(userReport.id, report.id),
     ),
   });
@@ -808,7 +791,7 @@ export const listUserReportForClear3 = (
     where: and(
       eq(userReport.reportedUserId, reportedUserId),
       eq(userReport.status, "TRADE_BAN_ACTIVATED"),
-      gte(userReport.banEnd, new Date()),
+      gt(userReport.banEnd, new Date()),
       ne(userReport.id, report.id),
     ),
   });
@@ -833,12 +816,7 @@ export const clearUserSilenceWithoutActiveReport = (
   client
     .update(userData)
     .set({ isSilenced: false })
-    .where(
-      and(
-        inArray(userData.userId, userIds),
-        noActiveReport(["SILENCE_ACTIVATED", "TIMEOUT_ACTIVATED"]),
-      ),
-    );
+    .where(and(inArray(userData.userId, userIds), noActiveReport(ActiveSilenceStates)));
 
 /** Build a trade ban reset guarded by the caller’s active-report predicate. */
 export const clearUserTradeBanWithoutActiveReport = (
