@@ -208,7 +208,9 @@ export function ShopInspector({
             </span>
           </div>
         )}
-        {allowance.isPending && <Loader explanation="Checking purchase limits" />}
+        {allowance.isPending && (
+          <p className="text-muted-foreground text-xs">Checking purchase limits…</p>
+        )}
         {allowance.isError && (
           <p role="alert" className="text-sm">
             Could not load purchase limits.{" "}
