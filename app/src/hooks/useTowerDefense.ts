@@ -37,6 +37,7 @@ import {
   getShurikenAbility,
 } from "@/libs/towerDefense/abilities";
 import { getProjectileProgress } from "@/libs/towerDefense/game";
+import { sleep } from "@/utils/time";
 import type {
   EntityStore,
   GameMode,
@@ -57,7 +58,6 @@ import {
   towerDefenseProjectileSchema,
   towerDefenseStateSchema,
 } from "@/validators/towerDefense";
-import { sleep } from "@/utils/time";
 
 // ============================================================================
 // MODULE-LEVEL HUD STORE

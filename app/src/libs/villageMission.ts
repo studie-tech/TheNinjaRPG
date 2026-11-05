@@ -3,8 +3,8 @@ import {
   type VillageMissionTask,
 } from "@/drizzle/constants";
 import type { Quest, Village } from "@/drizzle/schema";
-import { villageMissionContentError } from "@/validators/villageMission";
 import { getUtcDayKey } from "@/utils/time";
+import { villageMissionContentError } from "@/validators/villageMission";
 
 export const isVillageMissionAvailable = (
   quest: Quest,

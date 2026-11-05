@@ -20,7 +20,6 @@ import {
   ItemTypes,
   JutsuTypes,
   LetterRanks,
-  MasteryTypes,
   MAX_ACTIVITY_REDUCTION_PERCENT,
   MAX_COOKING_OUTPUT,
   MAX_EXTRA_JUTSU_SLOTS,
@@ -30,6 +29,7 @@ import {
   MAX_ITEM_STACK_SIZE,
   MAX_MEAL_DURATION_SECONDS,
   MAX_PLAYER_LEVEL,
+  MasteryTypes,
   MaxPoolTypes,
   NonActionItemTypes,
   PET_MAX_CONSUME_PETS,
@@ -53,10 +53,6 @@ import {
 } from "@/libs/weightedCache";
 import { DateTimeRegExp } from "@/utils/regex";
 import { literalType } from "@/validators/base";
-import {
-  generalRequirementFields,
-  masteryRequirementFields,
-} from "@/validators/mastery";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import {
   type CoordinateTargeting,
@@ -68,6 +64,10 @@ import {
   furnitureItemSchema,
 } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
+import {
+  generalRequirementFields,
+  masteryRequirementFields,
+} from "@/validators/mastery";
 import { type MethodSize, methodSizeSchema } from "@/validators/methodSize";
 import { rewardFields } from "@/validators/rewards";
 import {

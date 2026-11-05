@@ -26,8 +26,8 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { QuestRewardType } from "@/validators/rewardPackages";
-import { hasReward } from "@/validators/rewards";
 import { rewardPayloads } from "@/validators/rewardPackages";
+import { hasReward } from "@/validators/rewards";
 
 interface ObjectiveProps {
   titlePrefix?: string | number;

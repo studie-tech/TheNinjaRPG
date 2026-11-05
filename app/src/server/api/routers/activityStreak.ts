@@ -7,7 +7,7 @@ import {
   getPurchaseEventPassUserUpdate,
 } from "@/deltas/activityStreak";
 
-import { COST_STREAK_CATCHUP_DAY, ActivityStreakTypes } from "@/drizzle/constants";
+import { ActivityStreakTypes, COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";
 import {
   getEventPassCompletionDate,

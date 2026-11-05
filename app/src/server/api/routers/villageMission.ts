@@ -20,6 +20,7 @@ import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/ap
 import { getRandomElement } from "@/utils/array";
 import { isStaffRole } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   type VillageMission,
@@ -27,7 +28,6 @@ import {
   villageMissionCancelSchema,
   villageMissionObjectiveSchema,
 } from "@/validators/villageMission";
-import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const villageMissionRouter = createTRPCRouter({
   get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {

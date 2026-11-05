@@ -51,8 +51,8 @@ import {
   userReportEmbedding,
   userReview,
 } from "@/drizzle/schema";
-import { userCardColumns } from "@/queries/userColumns";
 import { insertValuesWhere } from "@/queries/concurrency";
+import { userCardColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
 import sanitize from "@/utils/sanitize";

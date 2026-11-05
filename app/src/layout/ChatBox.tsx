@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import type { SentimentType } from "@/drizzle/constants";
 import {
   Form,
   FormControl,
@@ -16,6 +15,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import type { SentimentType } from "@/drizzle/constants";
 import {
   safeLocalStorageGetItem,
   safeLocalStorageRemoveItem,

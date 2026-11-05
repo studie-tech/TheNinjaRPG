@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus, Trash2 } from "lucide-react";
-import { type ActivityStreakType } from "@/drizzle/constants";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -20,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ActivityStreakType } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";

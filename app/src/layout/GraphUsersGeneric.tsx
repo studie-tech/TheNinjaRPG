@@ -9,8 +9,8 @@ import type { z } from "zod";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { getEffectiveColorTheme } from "@/libs/themePreference";
-import { isMobile } from "@/utils/hardware";
 import { isErrorFromSource } from "@/utils/error";
+import { isMobile } from "@/utils/hardware";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { getSearchValidator } from "@/validators/register";
 

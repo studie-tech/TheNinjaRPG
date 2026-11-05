@@ -31,9 +31,9 @@ import {
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
+import { sleep } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import { storePurchaseLockSchema } from "@/validators/nativePurchases";
-import { sleep } from "@/utils/time";
 
 /**
  * Backoff while waiting for the grant webhook: roughly 21 seconds in total, which is

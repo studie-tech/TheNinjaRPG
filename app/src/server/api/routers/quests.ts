@@ -22,8 +22,8 @@ import {
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   getUserCaps,
   LetterRanks,
-  MasteryNames,
   MAX_SKILL_POINTS,
+  MasteryNames,
   MEDNIN_EXP_CAP,
   MISSION_HALL_QUEST_TYPES,
   NPC_ONLY_QUEST_TYPES,
@@ -338,9 +338,11 @@ import {
   startPetTaskSchema,
 } from "@/validators/petTasks";
 import { questFilteringSchema } from "@/validators/quest";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import {
   ClaimRewardChoiceSchema,
   hasMasteryPromotion,
+  hasPromotionRank,
   MASTERY_EXPERIENCE_FIELDS,
   type PendingRewardChoice,
   PendingRewardChoiceSchema,
@@ -349,7 +351,6 @@ import {
   type RewardChoiceCard,
   type RewardChoiceDisplay,
   RewardChoiceDisplaySchema,
-  hasPromotionRank,
 } from "@/validators/rewards";
 import {
   getQuestCounterFieldName,
@@ -360,7 +361,6 @@ import {
   type UserDeltaResponse,
   userDeltaResponseSchema,
 } from "@/validators/userCache";
-import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */

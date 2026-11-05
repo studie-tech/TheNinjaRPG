@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IMG_BUILDING_MISSIONHALL, type BountyStatus } from "@/drizzle/constants";
+import { type BountyStatus, IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import type { ColumnDefinitionType } from "@/layout/Table";

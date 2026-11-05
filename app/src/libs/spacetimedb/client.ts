@@ -11,6 +11,7 @@
  * - Tick rate increased to 150ms with client-side interpolation
  */
 
+import { sleep } from "@/utils/time";
 import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
 import type {
   CompletedRun,
@@ -23,7 +24,6 @@ import type {
 } from "./bindings/types";
 import type { CreateSessionParams } from "./bindings/types/reducers";
 import { getSpacetimeDBConfig, type SpacetimeDBConfig } from "./config";
-import { sleep } from "@/utils/time";
 
 export type {
   CompletedRun,

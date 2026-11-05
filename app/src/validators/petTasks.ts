@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { PET_TASK_MAX_MINUTES } from "@/drizzle/constants";
-import { petSelectionSchema } from "@/validators/pets";
 import { makeCappedNullableNumber } from "@/validators/base";
+import { petSelectionSchema } from "@/validators/pets";
 
 /** One accepted profession attempt; millisecond identities distinguish reused history rows. */
 export const petTaskSchema = petSelectionSchema.extend({

@@ -1,6 +1,4 @@
-import { getRandomElement } from "@/utils/array";
-
-("use client");
+"use client";
 
 import { RefreshCw, Settings, Volume2, VolumeX } from "lucide-react";
 import {
@@ -47,6 +45,7 @@ import { getBackgroundMusicSrc } from "@/libs/music";
 import { audioSession, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { getRandomElement } from "@/utils/array";
 import { createSerialQueue } from "@/utils/async";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";

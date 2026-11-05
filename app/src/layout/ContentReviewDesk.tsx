@@ -11,8 +11,8 @@ import {
   ContentProposalCategories,
   type ContentProposalCategory,
   type ContentProposalSource,
-  type ContentProposalStatus,
   ContentProposalSources,
+  type ContentProposalStatus,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { CategoryBadge, ContentReviewDetail } from "@/layout/ContentReviewDetail";

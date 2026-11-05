@@ -126,14 +126,13 @@ import type { QueryCondition } from "@/utils/typeutils";
 import { bloodlineFilteringSchema } from "@/validators/bloodline";
 import { itemFilteringSchema } from "@/validators/item";
 import { jutsuFilteringSchema } from "@/validators/jutsu";
+import { rewardPayloads } from "@/validators/rewardPackages";
 import { skillTreeFilteringSchema } from "@/validators/skillTree";
 import { getPublicUsersSchema } from "@/validators/user";
 import { bloodlineDatabaseFilter } from "./bloodline";
 import { itemDatabaseFilter } from "./item";
 import { jutsuDatabaseFilter } from "./jutsu";
-
 import { isSkillVisible, skillTreeDatabaseFilter } from "./skillTree";
-import { rewardPayloads } from "@/validators/rewardPackages";
 
 export const dataRouter = createTRPCRouter({
   /** Return full-history variant counts for tests with an event in the last week. */

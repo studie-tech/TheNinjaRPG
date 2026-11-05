@@ -7,8 +7,8 @@ import { listVillagesWithStructures } from "@/queries/village";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { chunkArray } from "@/utils/array";
-import { calcBankInterest, getStrucBoost } from "@/utils/village";
 import { getUtcDayKey } from "@/utils/time";
+import { calcBankInterest, getStrucBoost } from "@/utils/village";
 
 const ENDPOINT_NAME = "daily-bank";
 const INTEREST_INSERT_BATCH_SIZE = 500;

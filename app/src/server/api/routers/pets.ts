@@ -87,7 +87,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { getUtcDayKey, getPetFeedAvailableAt } from "@/utils/time";
+import { getPetFeedAvailableAt, getUtcDayKey } from "@/utils/time";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,

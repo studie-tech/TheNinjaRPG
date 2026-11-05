@@ -13,7 +13,7 @@ import { hasEnergyQueue } from "@/libs/queue";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 import type { InventoryQuantityChange } from "@/validators/inventory";
 import type { PetTask } from "@/validators/petTasks";
-import { MASTERY_EXPERIENCE_FIELDS, hasPromotionRank } from "@/validators/rewards";
+import { hasPromotionRank, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /** Project only confirmed whole-stack quest deliveries; grants, nested starts and combat need recovery. */

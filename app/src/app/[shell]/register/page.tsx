@@ -1,6 +1,4 @@
-import { getRandomElement } from "@/utils/array";
-
-("use client");
+"use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
@@ -53,6 +51,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { getRandomElement, shuffle } from "@/utils/array";
 import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -64,7 +63,6 @@ import {
   registrationSchema,
   skin_colors,
 } from "@/validators/register";
-import { shuffle } from "@/utils/array";
 
 /**
  * Wrapper component that handles the loading state and authenticated user redirect.

@@ -10,12 +10,12 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
+import { getClanBoost } from "@/libs/clanBoost";
 import {
   getNextRankExperience,
   getRankForExperience,
   getRankProgress,
 } from "@/libs/occupationRank";
-import { getClanBoost } from "@/libs/clanBoost";
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { reduceActivitySeconds } from "@/utils/time";
