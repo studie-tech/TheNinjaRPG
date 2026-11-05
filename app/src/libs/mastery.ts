@@ -298,7 +298,8 @@ const addMasteryTags = (
     // decreasemastery negates power and powerPerLevel before getPower caps percentages
     const magnitude = Math.abs(tag.power) + level * Math.abs(tag.powerPerLevel);
     const signed = tag.type === "decreasemastery" ? -magnitude : magnitude;
-    const power = tag.calculation === "percentage" ? Math.min(signed, 100) : signed;
+    const power =
+      tag.calculation === "percentage" ? Math.max(-100, Math.min(signed, 100)) : signed;
     for (const mastery of tag.masteryTypes) {
       const stat = MASTERY_TYPE_TO_STAT[mastery];
       target[stat] +=

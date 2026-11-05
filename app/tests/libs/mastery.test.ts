@@ -233,6 +233,15 @@ describe("effectiveMasteries", () => {
     expect(effectiveMasteries(user).ninjutsuMastery).toBe(1700);
   });
 
+  it("floors percentage decreases at -100%, as combat does", () => {
+    const user = wearer({
+      bloodline: {
+        effects: [masteryTag({ type: "decreasemastery", power: 150, calculation: "percentage" })],
+      },
+    });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(0);
+  });
+
   it("ignores tags that have no rounds left", () => {
     const user = wearer({ bloodline: { effects: [masteryTag({ rounds: 0 })] } });
     expect(effectiveMasteries(user).ninjutsuMastery).toBe(1000);
