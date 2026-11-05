@@ -81,8 +81,9 @@ import {
   TrainingSpeeds,
   type UserStatus,
 } from "@/drizzle/constants";
-import type { Badge, UserBadge, UserRank } from "@/drizzle/schema";
+import type { Badge, UserBadge, UserData, UserRank } from "@/drizzle/schema";
 import { useLazyChart } from "@/hooks/useLazyChart";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import ActionLogs from "@/layout/ActionLog";
 import ActionLogFiltering, {
@@ -386,12 +387,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     z.output<typeof awardSchema>
   >({
     resolver: zodResolver(awardSchema),
-    defaultValues: {
-      reputationAmount: 0,
-      moneyAmount: 0,
-      reason: "",
-      userIds: [userId],
-    },
+    defaultValues: awardDefaults(userId),
   });
 
   const { methods: userSearchMethods, users: watchedUsers } = useUserPicker(10);
@@ -419,16 +415,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   useEffect(() => {
     if (profile && !awardTarget) {
-      userSearchMethods.setValue("users", [
-        {
-          userId: profile.userId,
-          username: profile.username,
-          rank: profile.rank,
-          level: profile.level,
-          avatar: profile.avatar,
-          federalStatus: profile.federalStatus,
-        },
-      ]);
+      userSearchMethods.setValue("users", [toSearchUser(profile)]);
     }
   }, [awardTarget, profile, userSearchMethods]);
 
@@ -724,26 +711,10 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const closeAward = () => {
     if (awardPending) return;
     if (completedAward) {
-      form.reset({
-        reputationAmount: 0,
-        moneyAmount: 0,
-        reason: "",
-        userIds: [userId],
-      });
+      form.reset(awardDefaults(userId));
       userSearchMethods.reset({
         username: "",
-        users: profile
-          ? [
-              {
-                userId: profile.userId,
-                username: profile.username,
-                rank: profile.rank,
-                level: profile.level,
-                avatar: profile.avatar,
-                federalStatus: profile.federalStatus,
-              },
-            ]
-          : [],
+        users: profile ? [toSearchUser(profile)] : [],
       });
       setCompletedAward(null);
       setAwardNeedsRetry(false);
@@ -934,14 +905,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     </Tooltip>
                   </TooltipProvider>
                 }
-                preSelectedUser={{
-                  userId: profile.userId,
-                  username: profile.username,
-                  rank: profile.rank,
-                  level: profile.level,
-                  avatar: profile.avatar,
-                  federalStatus: profile.federalStatus,
-                }}
+                preSelectedUser={toSearchUser(profile)}
               />
             )}
             {userData && userData.role !== "USER" && (
@@ -949,10 +913,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Settings
-                        className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                      <button
+                        type="button"
+                        className={TOOLBAR_BUTTON_CLASS}
+                        aria-label="Edit User"
                         onClick={() => setShowEditModal(true)}
-                      />
+                      >
+                        <Settings className="h-6 w-6" />
+                      </button>
                     </TooltipTrigger>
                     <TooltipContent>Edit User</TooltipContent>
                   </Tooltip>
@@ -3161,22 +3129,14 @@ const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
 
   // Re-render when the next time window (immunity lift or war participation) elapses, so the badge
   // does not keep showing stale eligibility while the profile stays open past an expiry.
-  const [, forceBadgeRefresh] = useState(0);
-  const nextExpiry = Math.min(
-    ...[
-      targetBracketImmunityLiftedUntil.getTime(),
-      viewerWarParticipantUntil.getTime(),
-      targetWarParticipantUntil.getTime(),
-    ].filter((t) => t > now),
+  useRefreshAt(
+    [
+      targetBracketImmunityLiftedUntil,
+      viewerWarParticipantUntil,
+      targetWarParticipantUntil,
+    ],
+    () => undefined,
   );
-  useEffect(() => {
-    if (!Number.isFinite(nextExpiry)) return;
-    const id = setTimeout(
-      () => forceBadgeRefresh((n) => n + 1),
-      Math.max(0, nextExpiry - Date.now()),
-    );
-    return () => clearTimeout(id);
-  }, [nextExpiry]);
 
   if (viewerIsPvpRestricted) {
     return (
@@ -3428,11 +3388,14 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Coins
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+            <button
+              type="button"
+              className={TOOLBAR_BUTTON_CLASS}
               aria-label="Adjust Seichi Silver"
               onClick={() => setIsOpen(true)}
-            />
+            >
+              <Coins className="h-6 w-6" />
+            </button>
           </TooltipTrigger>
           <TooltipContent>Adjust Seichi Silver</TooltipContent>
         </Tooltip>
@@ -3531,11 +3494,14 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
       <TooltipProvider delayDuration={50}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Droplets
-              className="h-6 w-6 cursor-pointer hover:text-orange-500"
+            <button
+              type="button"
+              className={TOOLBAR_BUTTON_CLASS}
               aria-label="Manage Bloodline Pool"
               onClick={() => setIsOpen(true)}
-            />
+            >
+              <Droplets className="h-6 w-6" />
+            </button>
           </TooltipTrigger>
           <TooltipContent>Manage Bloodline Pool</TooltipContent>
         </Tooltip>
@@ -3605,3 +3571,28 @@ const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
     </>
   );
 };
+
+const TOOLBAR_BUTTON_CLASS =
+  "cursor-pointer rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+const awardDefaults = (userId: string) => ({
+  reputationAmount: 0,
+  moneyAmount: 0,
+  reason: "",
+  userIds: [userId],
+});
+
+/** The user-picker entry for a loaded profile. */
+const toSearchUser = (
+  profile: Pick<
+    UserData,
+    "userId" | "username" | "rank" | "level" | "avatar" | "federalStatus"
+  >,
+) => ({
+  userId: profile.userId,
+  username: profile.username,
+  rank: profile.rank,
+  level: profile.level,
+  avatar: profile.avatar,
+  federalStatus: profile.federalStatus,
+});
