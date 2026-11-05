@@ -47,7 +47,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
-import { isEquippableUserItem, isImbuing } from "@/libs/item";
+import { isEquippableUserItem, isImbuing, userItemDisplay } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -603,16 +603,7 @@ function OfferCard({
                       }))}
                     />
                     {selected && (
-                      <ItemWithEffects
-                        item={{
-                          ...selected.item,
-                          level: selected.level,
-                          experience: selected.experience,
-                          curDurability: selected.durability,
-                          imbuements: selected.imbuements.map((entry) => entry.item),
-                        }}
-                        hideDetails
-                      />
+                      <ItemWithEffects item={userItemDisplay(selected)} hideDetails />
                     )}
                     {error && (
                       <p role="alert" className="text-destructive text-sm">

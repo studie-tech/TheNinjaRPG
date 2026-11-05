@@ -395,6 +395,28 @@ export const finishedImbuementItems = <T>(
     .map((im) => im.item);
 
 /**
+ * ItemWithEffects payload for an owned item: its current durability, level and experience
+ * with only finished imbuements. Pass `base` to show a variant of the item instead.
+ */
+export const userItemDisplay = <T, I>(
+  ui: {
+    item: T;
+    durability: number;
+    level: number;
+    experience: number;
+    imbuements: { craftingFinishedAt: Date | null; item: I }[];
+  },
+  base: T = ui.item,
+  now: Date = new Date(),
+) => ({
+  ...base,
+  imbuements: finishedImbuementItems(ui, now),
+  curDurability: ui.durability,
+  level: ui.level,
+  experience: ui.experience,
+});
+
+/**
  * Locale-aware comparator for displayed item names.
  * Prefers top-level `name` (e.g. after applyActiveVariant flatten) so variant
  * overrides match what ActionSelector renders; falls back to nested `item.name`.
