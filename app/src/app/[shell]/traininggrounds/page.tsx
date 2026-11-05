@@ -78,7 +78,6 @@ import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
-import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -108,6 +107,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import QuestPicker from "@/layout/QuestPicker";
 import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
+import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
@@ -407,13 +407,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
               {students.map((user) => (
                 <div className="relative" key={user.userId}>
-                  <Link href={`/userid/${user.userId}`} className="text-center">
-                    <AvatarImage
-                      href={user.avatar}
-                      alt={user.username}
-                      hover_effect={true}
-                      size={100}
-                    />
+                  <UserAvatarTile user={user} className="text-center">
                     {user.rank === "GENIN" && (
                       <Confirm
                         title="Remove Student"
@@ -428,13 +422,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
                         You are about to remove this user as your student. Confirm?
                       </Confirm>
                     )}
-                    <div>
-                      <div className="font-bold">{user.username}</div>
-                      <div>
-                        Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
-                      </div>
-                    </div>
-                  </Link>
+                  </UserAvatarTile>
                 </div>
               ))}
             </div>
