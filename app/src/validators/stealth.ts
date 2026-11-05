@@ -17,7 +17,7 @@ export const detectedUserSchema = z.object({
   username: z.string(),
   longitude: z.number(),
   latitude: z.number(),
-  /** Null with `level` when `isMasked`: the sector cover applies to reveals too. */
+  /** Null with `level` when `isMasked`: a reveal does not name a covered player's village. */
   villageId: z.string().nullable(),
   level: z.number().nullable(),
   isMasked: z.boolean(),

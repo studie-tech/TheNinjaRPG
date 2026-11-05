@@ -74,10 +74,10 @@ export const findVillageUserRelationship = (
 };
 
 /**
- * How the map regards a player. A war side wins, as in combat: first `warRelationship`
- * from the sector snapshot, the only source for other players' mercenary contracts, then
- * the viewer's war list. Otherwise a resolved `allianceStatus`, a shared village, and
- * diplomacy decide.
+ * How the map regards a player. A war side wins, as in combat. `warRelationship` from the
+ * sector snapshot is the only source for other players' mercenary contracts, so its answer
+ * stands, null included; the viewer's war list applies only to targets it did not cover.
+ * Otherwise a resolved `allianceStatus`, a shared village, and diplomacy decide.
  */
 export const mapAttackRelation = (
   viewer:
@@ -92,13 +92,14 @@ export const mapAttackRelation = (
     userId: string;
     villageId: string | null;
     allianceStatus?: AllianceState;
-    warRelationship?: "ALLY" | "ENEMY";
+    warRelationship?: "ALLY" | "ENEMY" | null;
   },
   wars: Parameters<typeof getWarRelationship>[0] | null | undefined,
 ): AllianceState => {
   const warRelationship =
-    target.warRelationship ??
-    (viewer ? getWarRelationship(wars ?? [], viewer, target) : undefined);
+    target.warRelationship === undefined && viewer
+      ? getWarRelationship(wars ?? [], viewer, target)
+      : target.warRelationship;
   if (warRelationship) return warRelationship;
   if (target.allianceStatus === "ALLY" || target.allianceStatus === "ENEMY") {
     return target.allianceStatus;

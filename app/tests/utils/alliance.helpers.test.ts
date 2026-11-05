@@ -65,6 +65,11 @@ describe("mapAttackRelation", () => {
     expect(mapAttackRelation({ userId: "viewer", villageId: null }, target(null), null)).toBe("NEUTRAL");
   });
 
+  it("keeps a snapshot that resolved no war side over the viewer's war list", () => {
+    expect(mapAttackRelation(viewer, target("c", { warRelationship: null }), wars)).toBe("NEUTRAL");
+    expect(mapAttackRelation(viewer, target("b", { warRelationship: null }), wars)).toBe("ALLY");
+  });
+
   it("lets the viewer's war list outrank diplomacy", () => {
     expect(mapAttackRelation(viewer, target("c"), wars)).toBe("ALLY");
     expect(mapAttackRelation(viewer, target("b"), wars)).toBe("ENEMY");

@@ -27,7 +27,6 @@ import { getQuestMapLocations } from "@/libs/mapLocations";
 import { isQuestComplete } from "@/libs/objectives";
 import {
   getWarRelationship,
-  isObjectiveWarActive,
   isWarObjectiveLeader,
   maskWarObjectives,
   withMercenaryParticipation,
@@ -439,11 +438,7 @@ export const travelRouter = createTRPCRouter({
         })
         .map((u) => {
           const disguise = getMapDisguise(user, u, warData);
-          const warRelationship = getWarRelationship(
-            warData.filter((w) => isObjectiveWarActive(w)),
-            user,
-            u,
-          );
+          const warRelationship = getWarRelationship(warData, user, u) ?? null;
           const isMasked = disguise === "Mercenary";
           // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
           const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
