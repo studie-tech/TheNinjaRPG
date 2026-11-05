@@ -19,7 +19,6 @@ import {
 import { nanoid } from "nanoid";
 import {
   SHRINE_AI_UNLOCK_COST,
-  SHRINE_BATTLE_MAX_USERS_PER_SIDE,
   SHRINE_BOOST_COST,
   SHRINE_BOOST_REQUIRED_LEVEL,
   type SHRINE_BOOST_TYPE,
@@ -683,19 +682,6 @@ export const selectMpvpBattleUserForLeaveShrineBattle = (
     .select({ remaining: count() })
     .from(mpvpBattleUser)
     .where(eq(mpvpBattleUser.clanBattleId, input.shrineBattleId));
-
-/**
- * Build the `userData` listing for `initiateShrineBattle`, selecting only `userId`,
- * using predicates on `isAi` and `inShrines`.
- */
-export const listUserDataForInitiateShrineBattle = (
-  client: Pick<DrizzleClient, "query">,
-) =>
-  client.query.userData.findMany({
-    where: and(eq(userData.isAi, true), eq(userData.inShrines, true)),
-    columns: { userId: true },
-    limit: SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-  });
 
 /**
  * Build the `sector` selection for `hasLevel3Shrine`, using predicates on `villageId`,

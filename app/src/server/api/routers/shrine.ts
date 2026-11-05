@@ -44,6 +44,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import { createBattleClaimId } from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
+import { listUserDataForStartShrineBattle } from "@/queries/combat";
 import {
   fetchUser,
   findUserById,
@@ -73,7 +74,6 @@ import {
   listMpvpBattleQueueForGetShrineBattles,
   listSectorForGetCapturedSectors,
   listUserDataForGetShrineAis,
-  listUserDataForInitiateShrineBattle,
   selectMpvpBattleQueueForLeaveShrineBattle,
   selectMpvpBattleUserForGetUserQueuedShrineBattle,
   selectMpvpBattleUserForLeaveShrineBattle,
@@ -1137,23 +1137,20 @@ export const shrineRouter = createTRPCRouter({
       // If no player defenders, use AI defenders from the defender village
       if (defenderIds.length === 0) {
         // Use defenderEntityId directly - it's the village ID for shrine battles
-        const defenderVillage = await findVillageById(
-          ctx.drizzle,
-          shrineBattle.defenderEntityId,
+        const [defenderVillage, shrineAis] = await Promise.all([
+          findVillageById(ctx.drizzle, shrineBattle.defenderEntityId),
+          listUserDataForStartShrineBattle(ctx.drizzle),
+        ]);
+        const shrineAiIds = shrineAis.map((ai) => ai.userId);
+        // Only shrine AIs defend, whatever the village has stored.
+        const assignedAiIds = (
+          defenderVillage?.shrineSettings?.activeAiIds ?? []
+        ).filter((id) => shrineAiIds.includes(id));
+        // Without a usable village assignment, fall back to the global shrine AIs.
+        defenderIds = (assignedAiIds.length > 0 ? assignedAiIds : shrineAiIds).slice(
+          0,
+          SHRINE_BATTLE_MAX_USERS_PER_SIDE,
         );
-        if (defenderVillage?.shrineSettings?.activeAiIds) {
-          defenderIds = defenderVillage.shrineSettings.activeAiIds.slice(
-            0,
-            SHRINE_BATTLE_MAX_USERS_PER_SIDE,
-          );
-        }
-        // If still no village-configured AI, fall back to global shrine AIs
-        if (defenderIds.length === 0) {
-          const globalAiDefenders = await listUserDataForInitiateShrineBattle(
-            ctx.drizzle,
-          );
-          defenderIds = globalAiDefenders.map((ai) => ai.userId);
-        }
         // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
           defenderIds = [VILLAGE_PROTECTOR_AI_ID];
