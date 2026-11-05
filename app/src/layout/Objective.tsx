@@ -90,7 +90,12 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         timeDiff={timeDiff}
         targetDate={getCollectDeadline(status, collectTimeMinutes)!}
         onFinish={async () => {
-          if (userData?.status === "AWAKE") checkRewards();
+          if (
+            userData?.status === "AWAKE" ||
+            (isBetweenPyramidBattles(userData) &&
+              getIsolatedPyramid(userData)?.questId === tracker.id)
+          )
+            checkRewards();
         }}
       />
     ) : null;

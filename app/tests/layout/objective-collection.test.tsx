@@ -9,6 +9,7 @@ import * as userContext from "@/utils/UserContext";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 
 describe("collection objective countdown", () => {
+  let actor: Record<string, unknown>;
   beforeEach(() => {
     Object.assign(vi.spyOn(client, "api" as never), {
       useUtils: () => ({}),
@@ -16,8 +17,9 @@ describe("collection objective countdown", () => {
         retryBattle: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       },
     });
+    actor = { userId: "collector", role: "USER", status: "AWAKE", autoWakeUp: true };
     vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
-      data: { userId: "collector", role: "USER", status: "AWAKE" },
+      data: actor,
       timeDiff: 0,
     } as never);
     vi.spyOn(image, "default").mockImplementation(() => null);
@@ -72,4 +74,34 @@ describe("collection objective countdown", () => {
       expect(checkRewards).toHaveBeenCalledTimes(1);
     },
   );
+  it.each([
+    ["AWAKE", null, "quest", true, 1],
+    ["BATTLE", null, "quest", true, 1],
+    ["BATTLE", null, "other", true, 0],
+    ["BATTLE", "fight", "quest", true, 0],
+    ["BATTLE", null, "quest", false, 0],
+    ["ASLEEP", null, "quest", true, 0],
+    ["HOSPITALIZED", null, "quest", true, 0],
+    ["TRAVEL", null, "quest", true, 0],
+  ] as const)(
+    "automatically collects for %s battle=%s quest=%s isolated=%s only when already available",
+    (status, battleId, questId, isolated, calls) => {
+      Object.assign(actor, {
+        status, battleId,
+        userQuests: [{ questId, isolated, completed: false, endAt: null }],
+      });
+      const tracker = QuestTracker.parse({
+        id: "quest", goals: [{ id: "collect", timestamp: "2026-10-01T00:00:00Z" }],
+      });
+      const objective = AllObjectives.parse({
+        id: "collect", task: "collect_item", sector: 1, longitude: 1, latitude: 1,
+        collect_time_minutes: 1, collectItemIds: ["herb"], item_name: "Herb",
+      });
+      const checkRewards = vi.fn();
+      const view = render(<Objective objective={objective} tracker={tracker} checkRewards={checkRewards} />);
+      fireEvent.click(view.getByRole("button", { name: "2026-10-01T00:01:00.000Z" }));
+      expect(checkRewards).toHaveBeenCalledTimes(calls);
+    },
+  );
+
 });

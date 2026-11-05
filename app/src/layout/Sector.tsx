@@ -1122,9 +1122,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mutationFn: (input: RouterInputs["travel"]["moveInSector"]) =>
       utils.client.travel.moveInSector.mutate(input),
     meta: { handlesTransportError: true },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       showActionReadinessToast(result);
-      if (result.actionNotice) void updateUser(undefined);
+      if (result.actionNotice) await updateUser(undefined, { revision: undefined });
     },
   });
 
@@ -1482,7 +1482,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
     onSuccess: async (res, input, context) => {
       showActionReadinessToast(res);
-      if (res.actionNotice) await updateUser(undefined);
       const walk = context?.walk ?? Promise.resolve();
       const data = res.data;
       if (!res.success || !data) {
@@ -1521,7 +1520,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
     // React Query stays pending until animation, reconciliation and any
     // crossing finish, preserving the ANBU auto-attack and movement gates.
-    onSettled: async () => {
+    onSettled: async (res) => {
+      if (res?.actionNotice) await updateUser(undefined, { revision: undefined });
       walkAnimatingRef.current = false;
       movePendingRef.current = false;
       if (mountedRef.current) {
@@ -1605,7 +1605,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         );
       }
       showMutationToast(result);
-      if (result.actionNotice) await updateUser(undefined);
+      if (result.actionNotice) await updateUser(undefined, { revision: undefined });
     },
   });
 
@@ -1619,7 +1619,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           battleId: data.battleId,
           updatedAt: new Date(),
         });
-        if (data.actionNotice) await updateUser(undefined);
+        if (data.actionNotice) await updateUser(undefined, { revision: undefined });
       } else {
         showMutationToast({
           success: false,

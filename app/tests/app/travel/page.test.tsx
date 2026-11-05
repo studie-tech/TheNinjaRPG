@@ -1,3 +1,6 @@
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import { updateUserCache } from "@/utils/userCache";
 import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as dynamic from "next/dynamic";
@@ -234,3 +237,61 @@ it("keeps Quick Travel disabled for the current sector", async () => {
   ).toBe(true);
   expect(mutation.mutate).not.toHaveBeenCalled();
 });
+
+for (const outcome of ["transport error", "success", "rejected"] as const)
+it.each(["ASLEEP", "HOSPITALIZED", "missing snapshot"] as const)(
+  `reconciles global journey ${outcome} from %s`,
+  async (initialStatus) => {
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["profile", "actor"];
+    actor.status = initialStatus === "missing snapshot" ? "ASLEEP" : initialStatus;
+    const initial = { userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 }, notifications: [] };
+    const canonical = { ...initial, userData: { ...initial.userData, status: outcome === "rejected" ? "AWAKE" as const : "TRAVEL" as const,
+      travelFinishAt: outcome === "rejected" ? null : new Date(Date.now() + 10000), curHealth: 100, curChakra: 100, curStamina: 100 } };
+    cache.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return canonical; } });
+    const unsubscribe = observer.subscribe(() => {});
+    const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
+      updateUserCache(cache, key, patch, options);
+    vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
+      data: actor, timeDiff: 0, prepareUserUpdate: () => 1, updateUser,
+    } as never);
+    type Previous = { status: typeof actor.status; travelFinishAt: Date | null } | undefined;
+    let callbacks: {
+      onMutate: (input: { sector: number }) => Promise<Previous>;
+      onError: (error: Error, input: { sector: number }, previous: Previous) => Promise<void>;
+      onSuccess: (result: { success: boolean; actionNotice: string; data?: typeof canonical.userData }, input: { sector: number }, previous: Previous) => Promise<void>;
+    };
+    const endpoint = { useQuery: () => query, useMutation: () => mutation };
+    Object.assign(client.api, {
+      useUtils: () => new Proxy({}, { get: (_target, name) => name === "profile"
+        ? { getUser: { invalidate: () => cache.invalidateQueries({ queryKey: key, exact: true }) } }
+        : Reflect.get(stableUtils, name) }),
+      travel: new Proxy({}, { get: (_target, name) => name === "startGlobalMove"
+        ? { useMutation: (options: typeof callbacks) => { callbacks = options; return mutation; } }
+        : endpoint }),
+    });
+    try {
+      render(<TravelPage />);
+      await act(async () => {
+        const previous = await callbacks.onMutate({ sector: 1539 });
+        expect(cache.getQueryData<typeof initial>(key)?.userData.status).toBe("TRAVEL");
+        const context = initialStatus === "missing snapshot" ? undefined : previous;
+        if (outcome === "transport error") {
+          await callbacks.onError(new Error("Response lost after commit"), { sector: 1539 }, context);
+        } else {
+          await callbacks.onSuccess({ success: outcome === "success", actionNotice: "Recovered",
+            ...(outcome === "success" ? { data: canonical.userData } : {}) }, { sector: 1539 }, context);
+        }
+      });
+      expect(reads).toBe(1);
+      expect(cache.getQueryData(key)).toEqual(canonical);
+      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+    } finally {
+      unsubscribe();
+      cache.clear();
+    }
+  },
+);

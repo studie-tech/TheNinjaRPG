@@ -326,18 +326,18 @@ export default function CombatPage() {
   // Mutation for starting a fight
   const { mutate: startArenaBattle, isPending: isStartingArenaBattle } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (result) => {
+      onSuccess: async (result) => {
         if (result.success && result.battleId) {
           showActionReadinessToast(result);
           setBattleAtom(undefined);
           // The finished battle and its result stay in place until the next battle
           // loads, so the battlefield keeps its reserved size and nothing turns live.
-          void updateUser({
+          await updateUser({
             status: "BATTLE",
             battleId: result.battleId,
             updatedAt: new Date(),
           });
-          if (result.actionNotice) void updateUser(undefined);
+          if (result.actionNotice) await updateUser(undefined, { revision: undefined });
           void utils.combat.getBattle.invalidate();
         } else {
           showMutationToast(result);

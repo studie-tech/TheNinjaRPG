@@ -47,7 +47,7 @@ export default function Shrine() {
             battleId: result.battleId,
             updatedAt: new Date(),
           });
-          if (result.actionNotice) void updateUser(undefined);
+          if (result.actionNotice) await updateUser(undefined, { revision: undefined });
           pushToCombat(router, result.battleId);
           showMutationToast({ ...result, message: "Attacking the Shrine" });
         } else {

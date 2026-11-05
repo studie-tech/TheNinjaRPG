@@ -47,14 +47,14 @@ export function TrainingMode({
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (data) => {
+      onSuccess: async (data) => {
         if (data.success && data.battleId) {
-          void updateUser({
+          await updateUser({
             status: "BATTLE",
             battleId: data.battleId,
             updatedAt: new Date(),
           });
-          if (data.actionNotice) void updateUser(undefined);
+          if (data.actionNotice) await updateUser(undefined, { revision: undefined });
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {

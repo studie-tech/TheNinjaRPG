@@ -60,15 +60,15 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
 
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startArenaBattle.useMutation({
-      onSuccess: (result) => {
+      onSuccess: async (result) => {
         if (result.success && result.battleId) {
           showActionReadinessToast(result);
-          void updateUser({
+          await updateUser({
             status: "BATTLE",
             battleId: result.battleId,
             updatedAt: new Date(),
           });
-          if (result.actionNotice) void updateUser(undefined);
+          if (result.actionNotice) await updateUser(undefined, { revision: undefined });
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           void completeTutorialAction("arenaStart");

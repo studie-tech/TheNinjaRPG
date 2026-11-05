@@ -596,14 +596,16 @@ function Travel() {
       },
       onError: async (_error, _variables, previous) => {
         setAutoDestination(null);
-        if (!previous) return;
-        await updateUser({
-          status: previous.status,
-          travelFinishAt: previous.travelFinishAt,
-        });
+        if (previous) {
+          await updateUser({
+            status: previous.status,
+            travelFinishAt: previous.travelFinishAt,
+          });
+        }
+        // The journey may have committed before its response was lost.
+        await utils.profile.getUser.invalidate();
       },
       onSuccess: async (result, _variables, previous) => {
-        if (result.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(result);
         if (result.success && result.data) {
           // Clear any local-sector movement target before the destination
@@ -628,6 +630,7 @@ function Travel() {
             travelFinishAt: previous.travelFinishAt,
           });
         }
+        if (result.actionNotice) await utils.profile.getUser.invalidate();
       },
     });
 
@@ -753,7 +756,7 @@ function Travel() {
             battleId: data.battleId,
             updatedAt: new Date(),
           });
-          if (data.actionNotice) void updateUser(undefined);
+          if (data.actionNotice) await updateUser(undefined, { revision: undefined });
         } else {
           showMutationToast({
             success: false,
