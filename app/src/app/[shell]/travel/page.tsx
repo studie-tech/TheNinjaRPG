@@ -33,10 +33,8 @@ import {
 import { useForm, useWatch } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
@@ -99,7 +97,6 @@ import {
   optimisticGlobalTravelStart,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
-import { isMapUserAlly } from "@/utils/alliance";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
 import {
@@ -160,10 +157,6 @@ function Travel() {
     false,
   );
   const [autoAttackMode, setAutoAttackMode] = useAutoAttackMode();
-  const [sensoryAllyAttack, setSensoryAllyAttack] = useLocalStorage<boolean>(
-    "friendlyAttackSensory",
-    false,
-  );
   const [showModal, setShowModal] = useState<boolean>(false);
   const [showSorrounding, setShowSorrounding] = useState<boolean>(false);
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
@@ -1452,7 +1445,6 @@ function Travel() {
                 player={player}
                 userData={userData}
                 villageData={villageData}
-                sensoryAllyAttack={sensoryAllyAttack}
                 isAttackingRevealed={isAttackingRevealed}
                 pendingAttackTarget={pendingAttackTarget}
                 attackRevealedUser={attackRevealedUser}
@@ -1462,15 +1454,6 @@ function Travel() {
                 setShowRevealedPlayersModal={setShowRevealedPlayersModal}
               />
             ))}
-            {/* Ally attack toggle */}
-            <div className="flex flex-row items-center pt-3">
-              <Checkbox
-                className="m-1 mr-3"
-                checked={sensoryAllyAttack}
-                onCheckedChange={() => setSensoryAllyAttack(!sensoryAllyAttack)}
-              />
-              <Label>Attack button on allies</Label>
-            </div>
           </div>
         </Modal>
       )}
@@ -1738,7 +1721,6 @@ const StealthControls: React.FC<{
  * @param player - The revealed player
  * @param userData - The user data
  * @param villageData - The village data
- * @param sensoryAllyAttack - Whether to attack allies
  * @param isAttackingRevealed - Whether the user is attacking a revealed player
  * @param pendingAttackTarget - The target of the pending attack
  * @param attackRevealedUser - The function to attack a revealed player
@@ -1750,7 +1732,6 @@ const RevealedPlayerCard = ({
   player,
   userData,
   villageData,
-  sensoryAllyAttack,
   isAttackingRevealed,
   pendingAttackTarget,
   attackRevealedUser,
@@ -1762,7 +1743,6 @@ const RevealedPlayerCard = ({
   player: RevealedPlayer;
   userData: ReturnType<typeof useRequiredUserData>["data"];
   villageData: { id: string; name: string; hexColor: string }[] | undefined;
-  sensoryAllyAttack: boolean;
   isAttackingRevealed: boolean;
   pendingAttackTarget: {
     userId: string;
@@ -1791,11 +1771,11 @@ const RevealedPlayerCard = ({
     player.latitude === userData?.latitude && player.longitude === userData?.longitude;
 
   const village = villageData?.find((v) => v.id === player.villageId);
-  const villageName = village?.name ?? (player.villageId ? "Unknown" : "Outlaw");
+  const villageName =
+    village?.name ?? (player.villageId || player.isMasked ? "Unknown" : "Outlaw");
   const villageColor = village?.hexColor ?? "gray";
 
-  const isAlly = isMapUserAlly(userData, { villageId: player.villageId });
-  const showAttack = sensoryAllyAttack || !isAlly;
+  const showAttack = player.canAttack;
 
   return (
     <div
@@ -1805,7 +1785,7 @@ const RevealedPlayerCard = ({
       <div>
         <p className="font-semibold">{player.username}</p>
         <p className="text-muted-foreground text-sm">
-          Lvl. {player.level} -{" "}
+          {player.level !== null && `Lvl. ${player.level} - `}
           <span style={{ color: villageColor }}>{villageName}</span>
         </p>
         <p className="text-muted-foreground text-sm">
@@ -1855,7 +1835,7 @@ const RevealedPlayerCard = ({
             Attack
           </Button>
         ) : !showAttack ? (
-          <span className="text-muted-foreground text-sm italic">Ally</span>
+          <span className="text-muted-foreground text-sm italic">Cannot attack</span>
         ) : null}
       </div>
     </div>
@@ -1872,5 +1852,7 @@ type RevealedPlayer = {
   longitude: number;
   latitude: number;
   villageId: string | null;
-  level: number;
+  level: number | null;
+  isMasked: boolean;
+  canAttack: boolean;
 };

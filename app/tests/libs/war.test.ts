@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { BattleWar } from "@/libs/combat/types";
-import { isWarAllies } from "@/libs/war";
+import { getWarRelationship } from "@/libs/objectiveWar";
 import { defaultWarRules } from "@/validators/war";
 
 const wars = [
@@ -15,6 +15,11 @@ const wars = [
   },
 ] as unknown as BattleWar[];
 
+const isWarAllies = (
+  activeWars: BattleWar[] | null,
+  first: Parameters<typeof getWarRelationship>[1],
+  second: Parameters<typeof getWarRelationship>[2],
+) => getWarRelationship(activeWars ?? [], first, second) === "ALLY";
 const player = (villageId: string | null, userId = "player") => ({ userId, villageId });
 const villagers = (first: string | null, second: string | null) =>
   [player(first, "first"), player(second, "second")] as const;

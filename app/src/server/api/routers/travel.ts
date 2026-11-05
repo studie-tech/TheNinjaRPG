@@ -28,7 +28,6 @@ import { isQuestComplete } from "@/libs/objectives";
 import {
   getWarRelationship,
   isObjectiveWarActive,
-  isObjectiveWarOpen,
   isWarObjectiveLeader,
   maskWarObjectives,
   withMercenaryParticipation,
@@ -72,6 +71,7 @@ import {
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { fetchActionUser } from "@/queries/actionReadiness";
+import { getMapDisguise } from "@/libs/war";
 import {
   fetchAllGameSettings,
   fetchUser,
@@ -438,16 +438,13 @@ export const travelRouter = createTRPCRouter({
           return true;
         })
         .map((u) => {
-          const contract = warData
-            .filter((w) => isObjectiveWarOpen(w))
-            .flatMap((w) => w.warMercenaries ?? [])
-            .find((m) => m.userId === u.userId);
+          const disguise = getMapDisguise(user, u, warData);
           const warRelationship = getWarRelationship(
             warData.filter((w) => isObjectiveWarActive(w)),
             user,
             u,
           );
-          const isMasked = !!contract && u.userId !== ctx.userId;
+          const isMasked = disguise === "Mercenary";
           // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
           const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
           const participant = {
@@ -464,15 +461,15 @@ export const travelRouter = createTRPCRouter({
           if (isMasked)
             return {
               ...participant,
-              username: "Mercenary",
+              username: disguise,
               spriteAppearance: anonymousSpriteAppearance(),
               avatar: IMG_AVATAR_DEFAULT,
               avatarLight: IMG_AVATAR_DEFAULT,
             };
-          if (u.anbuSquad && u.anbuSquad.villageId !== user.villageId) {
+          if (disguise && u.anbuSquad) {
             return {
               ...participant,
-              username: `ANBU Member`,
+              username: disguise,
               spriteAppearance: anonymousSpriteAppearance(true),
               avatar: u.anbuSquad.image,
               avatarLight: u.anbuSquad.image,

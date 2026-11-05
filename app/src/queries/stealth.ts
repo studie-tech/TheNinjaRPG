@@ -68,7 +68,9 @@ export const listUserDataForUseSensory = (
       experience: true,
       rank: true,
       status: true,
+      isBanned: true,
     },
+    with: { anbuSquad: { columns: { villageId: true } } },
   });
 
 /** Build the `villageAlliance` selection for `useSensory`. */

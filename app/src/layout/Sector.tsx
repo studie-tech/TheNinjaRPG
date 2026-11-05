@@ -118,9 +118,13 @@ import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { isTravelKeyBlocked } from "@/libs/travel";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
-import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
-import { canShowMapAttack, getAllyStatus } from "@/utils/alliance";
+import {
+  canShowMapAttack,
+  getAllyStatus,
+  isAutoAttackTarget,
+  mapAttackRelation,
+} from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
@@ -736,7 +740,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
       const allianceStatus =
         usersRef.current.find((u) => u.userId === data.userId)?.allianceStatus ??
-        getAllyStatus(userData?.village, data.villageId);
+        mapAttackRelation(userData, data, warData);
       const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
       if (idx !== -1 && usersRef.current[idx]) {
         if (instantMove) {
@@ -1819,39 +1823,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
       // Find nearby enemies to attack
       const minLevel = readAutoAttackSetting(AUTO_ATTACK_SETTINGS.minLevel);
-      const nearbyEnemies = usersRef.current.filter((user) => {
-        if (!user.userId || user.userId === userData.userId) return false;
-        // Overworld NPCs share this list for map rendering/interaction, but are fought
-        // through the overworld interact flow, not PvP attackUser — never auto-attack them.
-        if (user.isNpc) return false;
-        if (user.status !== "AWAKE") return false;
-
-        // Don't attack banned users
-        if (user.isBanned) return false;
-
-        // Don't attack allies in active wars
-        const areWarAllies =
-          user.allianceStatus === "ALLY" ||
-          (user.allianceStatus !== "ENEMY" && isWarAllies(warData, userData, user));
-        if (areWarAllies) {
-          return false;
-        }
-
-        // Check if user is an enemy (different village and not ally)
-        const isAlly =
-          user.allianceStatus === "ALLY" ||
-          (user.allianceStatus !== "ENEMY" && user.villageId === userData.villageId);
-
-        if (isAlly) return false;
-
-        // Check if user is in PvP restricted rank
-        if (RANKS_RESTRICTED_FROM_PVP.includes(user.rank)) return false;
-
-        // Check minimum level requirement
-        if (user.level < minLevel) return false;
-
-        return true;
-      });
+      const nearbyEnemies = usersRef.current.filter((user) =>
+        isAutoAttackTarget(userData, user, warData, minLevel),
+      );
       if (nearbyEnemies.length > 0) {
         // Find the closest enemy
         const closestEnemy = nearbyEnemies.reduce((closest, enemy) => {
@@ -2227,6 +2201,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     showUsers: showActive,
     minBracket: storedBracket,
     friendlyAttack: allyAttack,
+    wars: warData,
     structureObjectiveIds: structureObjectiveIdsRef.current,
     nav: windowNavRef.current,
     enabled: !props.showSorrounding && canAttemptAwakeAction(userData),
@@ -2576,6 +2551,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           userData={userData}
           hex={originRef.current}
           allyAttack={allyAttack}
+          wars={warData}
           setAllyAttack={setAllyAttack}
           storedBracket={storedBracket}
           setStoredBracket={setStoredBracket}
@@ -2753,6 +2729,7 @@ interface SorroundingUsersProps {
   hex: TerrainHex;
   users: SectorUser[];
   allyAttack: boolean;
+  wars: Parameters<typeof canShowMapAttack>[3];
   setAllyAttack: (newValue: boolean) => void;
   storedBracket: number;
   setStoredBracket: (newValue: number) => void;
@@ -2811,7 +2788,12 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
           const village = data?.find((v) => v.id === user.villageId);
           const villageName = village ? village.name : "Unknown";
           const villageColor = village ? village.hexColor : "gray";
-          const showAttack = canShowMapAttack(userData, user, props.allyAttack);
+          const showAttack = canShowMapAttack(
+            userData,
+            user,
+            props.allyAttack,
+            props.wars,
+          );
           const showRob =
             !RANKS_RESTRICTED_FROM_PVP.includes(user.rank) &&
             sameHex &&

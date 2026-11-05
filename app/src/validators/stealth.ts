@@ -17,8 +17,12 @@ export const detectedUserSchema = z.object({
   username: z.string(),
   longitude: z.number(),
   latitude: z.number(),
+  /** Null with `level` when `isMasked`: the sector cover applies to reveals too. */
   villageId: z.string().nullable(),
-  level: z.number(),
+  level: z.number().nullable(),
+  isMasked: z.boolean(),
+  /** The server-side map attack rule, so the client needs no masked fields to apply it. */
+  canAttack: z.boolean(),
 });
 
 export const activateStealthDataSchema = z.object({

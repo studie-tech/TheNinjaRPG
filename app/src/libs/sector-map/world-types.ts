@@ -76,6 +76,8 @@ export interface SectorUser {
   robImmunityUntil: Date;
   updatedAt: Date;
   allianceStatus: AllianceState;
+  /** Viewer-specific war side from the authenticated sector snapshot. */
+  warRelationship?: "ALLY" | "ENEMY";
   status: UserStatus;
   battleId: string | null;
   /** Whether this rendered sector entity is a staff-configured overworld NPC. */
