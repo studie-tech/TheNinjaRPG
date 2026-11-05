@@ -19,7 +19,7 @@ import * as routing from "@/utils/routing";
 const testApi = createTRPCReact<AppRouter>();
 const store = getDefaultStore();
 const clients: QueryClient[] = [];
-type Handler = (event: { type?: string; message?: string; fromId?: string }) => void;
+type Handler = (event: { type?: string; message?: string; fromId?: string; commentId?: string }) => void;
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const originalGlobals = browserGlobals.map((name) =>
   Object.getOwnPropertyDescriptor(globalThis, name),
@@ -91,7 +91,7 @@ for (const source of ["save", "event"] as const) {
               observable((observer) => {
                 let data: unknown;
                 if (op.path === "comments.getTavernIds") data = readTaverns();
-                else if (op.path === "profile.getBlacklist") data = [];
+                else if (op.path === "comments.fetchConversationComment") data = { id: "new" };
                 else if (op.path === "parentalControls.get") {
                   data = {
                     enabled: true,
@@ -134,7 +134,7 @@ for (const source of ["save", "event"] as const) {
       await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(handlers.has("global")).toBe(!startingBlocked));
       if (!startingBlocked) {
-        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other" }));
+        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
         await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
       }
 
@@ -151,7 +151,7 @@ for (const source of ["save", "event"] as const) {
       await waitFor(() => expect(handlers.has("global")).toBe(startingBlocked));
       expect(store.get(chatTavernActivityAtom)).toEqual({});
       if (startingBlocked) {
-        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other" }));
+        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
         await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
       }
     },

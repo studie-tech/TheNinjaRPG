@@ -33,14 +33,15 @@ export const useTavernIds = (userData: UserWithRelations | null | undefined) => 
 
 /**
  * Count new messages from other players in every unmuted tavern the player is not
- * looking at. Blocked players' messages stay hidden in the tavern, so they do not count.
+ * looking at. Only comments the server permits the player to read count.
  */
 export const useTavernActivity = (
   pusher: Pusher | undefined,
   userData: UserWithRelations | null | undefined,
 ) => {
   const store = useStore();
-  const utils = api.useUtils();
+  const { mutateAsync: fetchComment } =
+    api.comments.fetchConversationComment.useMutation();
   const taverns = useTavernIds(userData);
   const userId = userData?.userId;
   const available = taverns?.map((tavern) => tavern.id).join(",");
@@ -66,28 +67,47 @@ export const useTavernActivity = (
   useEffect(() => {
     if (!pusher || !userId || !followed) return;
     let isFollowing = true;
-    const unsubscribes = followed.split(",").map((conversationId) =>
-      subscribeConversation(pusher, conversationId, "tavern-activity", (event) => {
-        const senderId = event.fromId;
-        if (event.message !== "new" || !senderId || senderId === userId) return;
-        if (store.get(chatViewedConversationsAtom)[conversationId]) return;
-        void utils.profile.getBlacklist
-          .fetch(undefined, { staleTime: Infinity })
-          .catch(() => undefined)
-          .then((blocked) => {
-            if (!isFollowing || !blocked) return;
-            // Opening the tavern during the lookup must keep its count clear.
-            if (store.get(chatViewedConversationsAtom)[conversationId]) return;
-            if (blocked.some((entry) => entry.targetUserId === senderId)) return;
-            store.set(chatTavernActivityAtom, (current) =>
-              addConversationMention(current, conversationId),
-            );
-          });
-      }),
-    );
+    const unsubscribes = followed.split(",").map((conversationId) => {
+      let viewRevision = 0;
+      const stopObserving = store.sub(chatViewedConversationsAtom, () => {
+        if (store.get(chatViewedConversationsAtom)[conversationId]) viewRevision += 1;
+      });
+      const unsubscribe = subscribeConversation(
+        pusher,
+        conversationId,
+        "tavern-activity",
+        (event) => {
+          const senderId = event.fromId;
+          if (
+            event.message !== "new" ||
+            !senderId ||
+            senderId === userId ||
+            !event.commentId
+          )
+            return;
+          if (store.get(chatViewedConversationsAtom)[conversationId]) return;
+          const receivedViewRevision = viewRevision;
+          // Public event metadata cannot establish reader-specific comment visibility.
+          void fetchComment({ commentId: event.commentId, conversationId })
+            .catch(() => undefined)
+            .then((comment) => {
+              if (!isFollowing || !comment) return;
+              // A tavern viewed during lookup stays read even if it has since closed.
+              if (receivedViewRevision !== viewRevision) return;
+              store.set(chatTavernActivityAtom, (current) =>
+                addConversationMention(current, conversationId),
+              );
+            });
+        },
+      );
+      return () => {
+        stopObserving();
+        unsubscribe();
+      };
+    });
     return () => {
       isFollowing = false;
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
-  }, [pusher, userId, followed, store, utils]);
+  }, [pusher, userId, followed, store, fetchComment]);
 };
