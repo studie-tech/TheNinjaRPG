@@ -8,7 +8,7 @@ import {
   PayPalScriptProvider,
   usePayPalScriptReducer,
 } from "@paypal/react-paypal-js";
-import { Check, ChevronsUp, Search } from "lucide-react";
+import { Check, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -96,6 +96,7 @@ import { showMutationToast } from "@/libs/toast";
 import {
   calcFedUgradeCost,
   dynamicMonthlyRepCap,
+  fedRepsUnavailableNote,
   fedStatusRepsCost,
   reps2dollars,
 } from "@/utils/paypal";
@@ -593,26 +594,6 @@ const PayPalSubscriptionButton = (props: {
         {props.currentUserStatus === props.buttonStatus && (
           <Check className="absolute top-0 right-0 h-8 w-8 rounded-full bg-green-500 p-1" />
         )}
-        {hasSubscription && canUpgrade && (
-          <Confirm
-            title="Confirm Upgrade"
-            button={
-              <ChevronsUp className="absolute top-0 right-0 h-8 w-8 cursor-pointer rounded-full bg-blue-500 p-1 hover:bg-green-500" />
-            }
-            onAccept={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              upgrade({ userId: props.userId, plan: props.buttonStatus });
-            }}
-          >
-            You are about to upgrade your federal subscription. This can only be done if
-            you own the PayPal or Stripe subscription in question, and only for your own
-            character. This costs {upgradeCost} reputation points. For Stripe
-            subscriptions, the upgrade lasts for the rest of the current paid period;
-            renewals keep the original subscription tier. You currently have{" "}
-            {userData?.reputationPoints} reputation points. Are you sure?
-          </Confirm>
-        )}
       </div>
       <div className="flex-1">
         {props.buttonStatus === "NORMAL" && normalBenefits}
@@ -712,6 +693,38 @@ const PayPalSubscriptionButton = (props: {
           userId={props.userId}
           purchase={{ type: "federal", federalStatus: props.buttonStatus }}
         />
+      )}
+      {hasSubscription && canUpgrade && (
+        <Confirm
+          title="Confirm Upgrade"
+          button={
+            <div className="mt-2 w-full rounded-lg border-2 border-black bg-amber-200 p-2 text-center text-black hover:cursor-pointer hover:bg-orange-200">
+              Upgrade for
+              <h3 className="font-bold italic">{upgradeCost} Reputation Points</h3>
+            </div>
+          }
+          onAccept={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            upgrade({ userId: props.userId, plan: props.buttonStatus });
+          }}
+        >
+          You are about to upgrade your federal subscription. This can only be done if
+          you own the PayPal or Stripe subscription in question, and only for your own
+          character. This costs {upgradeCost} reputation points. For Stripe
+          subscriptions, the upgrade lasts for the rest of the current paid period;
+          renewals keep the original subscription tier. You currently have{" "}
+          {userData?.reputationPoints} reputation points. Are you sure?
+        </Confirm>
+      )}
+      {hasSubscription && !canUpgrade && (
+        <p className="mt-2 text-center text-sm">
+          {fedRepsUnavailableNote(
+            props.currentUserStatus,
+            props.buttonStatus,
+            props.userId === userData.userId,
+          )}
+        </p>
       )}
       {!hasSubscription && (
         <Confirm

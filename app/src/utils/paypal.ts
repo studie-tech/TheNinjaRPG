@@ -10,6 +10,7 @@ import {
   FED_SILVER_ITEM_LOADOUTS,
   FED_SILVER_JUTSU_LOADOUTS,
   FED_SILVER_REPS_COST,
+  FederalStatuses,
   MAX_REPS_EXTRA_PER_MONTH,
   MAX_REPS_PER_MONTH,
   PAYPAL_DISCOUNT_PERCENT,
@@ -131,6 +132,25 @@ export const calcFedUgradeCost = (a: FederalStatus, b: FederalStatus) => {
     cost = 20;
   }
   return cost;
+};
+
+/**
+ * Explains a federal card whose reputation purchase is hidden: reputation points only
+ * buy support for a character without any, and upgrades are limited to your own one.
+ */
+export const fedRepsUnavailableNote = (
+  current: FederalStatus,
+  tier: FederalStatus,
+  isSelf: boolean,
+) => {
+  if (!isSelf) {
+    const isUpgrade = FederalStatuses.indexOf(tier) > FederalStatuses.indexOf(current);
+    const upgrade = isUpgrade ? " Only they can upgrade it." : "";
+    return `This player already has Federal Support.${upgrade} You can buy this tier for them with reputation points once it ends.`;
+  }
+  return current === tier
+    ? "Your Federal Support is active. You can buy it with reputation points again once it ends."
+    : "You have a higher Federal Support tier active. You can buy this tier with reputation points once it ends.";
 };
 
 export const plan2FedStatus = (planId: string) => {

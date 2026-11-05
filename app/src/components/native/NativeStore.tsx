@@ -1114,6 +1114,7 @@ export default function NativeStore() {
               })}
               <p className="text-muted-foreground text-xs">
                 Renews monthly until cancelled. Manage your plan in your store account.
+                Reputation points can't be used for Federal Support in the app.
               </p>
             </>
           )}
