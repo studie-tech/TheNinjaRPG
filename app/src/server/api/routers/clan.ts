@@ -38,6 +38,7 @@ import {
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
   FACTION_REPUTATION_TREASURY_LIMIT,
   HIDEOUT_COST,
+  KAGE_MAX_ELDERS,
   STRONGHOLD_REESTABLISH_COST,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
@@ -1309,7 +1310,7 @@ export const clanRouter = createTRPCRouter({
           `Elder nominations are only open from the ${ELDER_NOMINATION_CUTOFF_DAY}th to the ${ELDER_NOMINATION_DEADLINE_DAY}th of each month`,
         );
       }
-      // Eligibility validation - clan must be in top 3 by activity (cutoff snapshot or live fallback)
+      // Eligibility validation - clan must rank as an elder candidate (cutoff snapshot or live fallback)
       const currentMonth = now.getUTCMonth() + 1;
       const currentYear = now.getUTCFullYear();
       const hasCutoffSnapshot =
@@ -1327,7 +1328,7 @@ export const clanRouter = createTRPCRouter({
           )
         ) {
           return errorResponse(
-            "Your clan is not eligible for elder nomination this month (not in top 3 by activity points)",
+            `Your clan is not eligible for elder nomination this month (not in top ${KAGE_MAX_ELDERS} by activity points)`,
           );
         }
       }
