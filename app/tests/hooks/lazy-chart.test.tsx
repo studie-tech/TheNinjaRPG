@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import * as chartLibrary from "chart.js/auto";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useLazyChart } from "@/hooks/useLazyChart";
 
 type Draw = Parameters<typeof useLazyChart>[1];
@@ -12,6 +12,13 @@ const Chart = ({ draw, data }: { draw: Draw; data: number }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   failures.push(useLazyChart(canvas, draw, [data]));
   return <canvas ref={canvas} />;
+};
+
+/** Replaces its canvas on failure, as the hook's callers do. */
+const FallbackChart = ({ draw, data }: { draw: Draw; data: number }) => {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const failed = useLazyChart(canvas, draw, [data]);
+  return failed ? <p role="status">Unavailable</p> : <canvas ref={canvas} />;
 };
 
 const chartHandle = () => ({ destroy: vi.fn() });
@@ -94,5 +101,57 @@ describe("useLazyChart", () => {
     view.rerender(<Chart draw={draw} data={2} />);
     await waitFor(() => expect(draw).toHaveBeenCalledTimes(1));
     expect(failures.at(-1)).toBe(false);
+  });
+
+  it("restores a canvas replaced by the fallback before the next run draws", async () => {
+    const chart = chartHandle();
+    const draw = vi.fn((_: typeof chartLibrary.Chart, __: HTMLCanvasElement) => chart);
+    let setData: (data: number) => void = () => undefined;
+    const Retried = () => {
+      const [data, set] = useState(1);
+      setData = set;
+      const failing: Draw = () => {
+        throw new Error("Draw failed");
+      };
+      return <FallbackChart draw={data === 1 ? failing : draw} data={data} />;
+    };
+    const view = render(<Retried />);
+    await waitFor(() => expect(view.getByRole("status")).toBeTruthy());
+    expect(view.container.querySelector("canvas")).toBeNull();
+
+    // A data update outside act commits on the scheduler, so an already loaded chunk resolves
+    // before any state set by the effect could put the canvas back.
+    setData(2);
+    await waitFor(() => expect(draw).toHaveBeenCalledTimes(1));
+    expect(draw.mock.calls[0]?.[1]).toBe(
+      view.container.querySelector("canvas") as HTMLCanvasElement,
+    );
+    expect(view.queryByRole("status")).toBeNull();
+  });
+
+  it("keeps the fallback while a rerender leaves the failed deps unchanged", async () => {
+    const failing: Draw = () => {
+      throw new Error("Draw failed");
+    };
+    const view = render(<FallbackChart draw={failing} data={1} />);
+    await waitFor(() => expect(view.getByRole("status")).toBeTruthy());
+    const draw = vi.fn(chartHandle);
+    view.rerender(<FallbackChart draw={draw} data={1} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(view.getByRole("status")).toBeTruthy();
+    expect(draw).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a failed draw on its own", async () => {
+    const view = render(<FallbackChart draw={chartHandle} data={1} />);
+    await waitFor(() => expect(view.container.querySelector("canvas")).toBeTruthy());
+    const failing = vi.fn<NonNullable<Draw>>(() => {
+      throw new Error("Draw failed");
+    });
+    view.rerender(<FallbackChart draw={failing} data={2} />);
+    await waitFor(() => expect(view.getByRole("status")).toBeTruthy());
+    expect(failing).toHaveBeenCalledTimes(1);
   });
 });
