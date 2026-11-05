@@ -180,6 +180,14 @@ export const hasReward = (reward: ObjectiveRewardType) => {
   );
 };
 
+/** True when processed rewards hold any amount or content the reward toast lists. */
+export const hasAnyRewardValue = (
+  rewards: Partial<Record<RewardChoiceAmountField, number>> &
+    Partial<Record<RewardChoiceContentField, readonly unknown[]>>,
+) =>
+  REWARD_CHOICE_AMOUNT_FIELDS.some((field) => (rewards[field] ?? 0) > 0) ||
+  REWARD_CHOICE_CONTENT_FIELDS.some((field) => (rewards[field]?.length ?? 0) > 0);
+
 /** Quest content fields that select between granting every reward and a player pick. */
 export const questRewardModeFields = {
   rewardMode: z.enum(QUEST_REWARD_MODES).prefault("all"),
@@ -233,6 +241,7 @@ export const REWARD_CHOICE_CONTENT_FIELDS = [
   "reward_badges",
   "reward_titles",
 ] as const;
+type RewardChoiceContentField = (typeof REWARD_CHOICE_CONTENT_FIELDS)[number];
 
 /**
  * One pickable reward. `amount` is the scaled scalar value, or the item quantity (1 for

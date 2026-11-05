@@ -9,6 +9,7 @@ import {
 } from "@/libs/contentCompleteness";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
 import type { ZodAllTags } from "@/validators/combat";
+import { hasAnyRewardValue } from "@/validators/rewards";
 
 const effect = (fields: Record<string, unknown>) => fields as ZodAllTags;
 
@@ -76,5 +77,15 @@ describe("summarizeBattleOutcomes", () => {
 
   it("reports a zero rate without usage", () => {
     expect(summarizeBattleOutcomes([]).winRate).toBe("0.0%");
+  });
+});
+
+describe("hasAnyRewardValue", () => {
+  it("covers every scalar and content reward", () => {
+    expect(hasAnyRewardValue({})).toBe(false);
+    expect(hasAnyRewardValue({ reward_money: 0, reward_jutsus: [] })).toBe(false);
+    expect(hasAnyRewardValue({ reward_war_healing: 1 })).toBe(true);
+    expect(hasAnyRewardValue({ reward_ninjutsu_experience: 1 })).toBe(true);
+    expect(hasAnyRewardValue({ reward_sage_modes: ["a"] })).toBe(true);
   });
 });

@@ -3,16 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Clock, Gift, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -23,13 +16,15 @@ import {
 } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
-import { EditContent, EffectFormWrapper, type FormEntry } from "@/layout/EditContent";
+import { EffectFormWrapper } from "@/layout/EditContent";
 import Modal from "@/layout/Modal";
+import {
+  REWARD_DIALOG_AMOUNT_FIELDS,
+  RewardDialog,
+  useRewardDialogFormData,
+} from "@/layout/RewardDialog";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
-import { canAwardReputation } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 import { getTagSchema, tagTypes } from "@/validators/combat";
 import {
@@ -37,11 +32,7 @@ import {
   type ThresholdFormDataInput,
   thresholdFormSchema,
 } from "@/validators/raids";
-import {
-  ObjectiveReward,
-  type ObjectiveRewardInputType,
-  type ObjectiveRewardType,
-} from "@/validators/rewards";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 interface RaidThresholdEditorProps {
   questId: string;
@@ -58,14 +49,7 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
   const [effects, setEffects] = useState<ZodAllTags[]>([]);
   const [rewardDialogOpen, setRewardDialogOpen] = useState(false);
 
-  // Queries for reward editor
-  const { data: items } = api.item.getAllNames.useQuery(undefined);
-  const { data: jutsus } = api.jutsu.getAllNames.useQuery(undefined);
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
-  const { data: badges } = api.badge.getAll.useQuery(undefined);
-  const { data: titles } = api.title.getAllNames.useQuery();
-  const { data: userData } = useUserData();
-  const hasReputationPermission = canAwardReputation(userData?.role ?? "USER");
+  const rewardFormData = useRewardDialogFormData(RAID_REWARD_AMOUNT_FIELDS);
 
   // Query for thresholds
   const { data: thresholdsData } = api.raids.getQuestThresholds.useQuery(
@@ -192,81 +176,6 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
   };
 
   const isPending = createPending || updatePending;
-
-  // Build formData for reward edit dialog
-  const buildRewardFormData = () => {
-    const data: FormEntry<keyof ObjectiveRewardType>[] = [
-      { id: "reward_money", type: "number" },
-      { id: "reward_seichi_silver", type: "number" },
-      { id: "reward_clanpoints", type: "number" },
-      { id: "reward_anbupoints", type: "number" },
-      { id: "reward_exp", type: "number" },
-      { id: "reward_pet_experience", type: "number" },
-      { id: "reward_tokens", type: "number" },
-      { id: "reward_prestige", type: "number" },
-      {
-        id: "reward_reputation",
-        type: "number",
-        readonly: !hasReputationPermission,
-      },
-      { id: "reward_skillpoints", type: "number" },
-      { id: "reward_medical_experience", type: "number" },
-      { id: "reward_hunting_experience", type: "number" },
-      { id: "reward_crafting_experience", type: "number" },
-      { id: "reward_gathering_experience", type: "number" },
-      { id: "reward_war_damage", type: "number" },
-      { id: "reward_war_healing", type: "number" },
-      { id: "reward_rank", type: "str_array", values: UserRanks },
-      { id: "reward_village_membership", type: "str_array", values: STARTER_VILLAGES },
-    ];
-
-    if (items) {
-      data.push({
-        id: "reward_items",
-        type: "db_values_with_number",
-        values: items,
-        doubleWidth: true,
-        label: "Reward Items [and drop chance%]",
-      });
-    }
-
-    if (jutsus) {
-      data.push({
-        id: "reward_jutsus",
-        type: "db_values",
-        values: jutsus,
-        multiple: true,
-      });
-    }
-
-    if (bloodlines) {
-      data.push({
-        id: "reward_bloodlines",
-        type: "db_values",
-        values: bloodlines,
-        multiple: true,
-      });
-    }
-
-    if (titles)
-      data.push({
-        id: "reward_titles",
-        label: "Give Title",
-        type: "db_values",
-        values: titles,
-        multiple: true,
-      });
-    if (badges?.data) {
-      data.push({
-        id: "reward_badges",
-        type: "db_values",
-        values: badges.data,
-        multiple: true,
-      });
-    }
-
-    return data;
-  };
 
   // Format rewards for display
   const formatRewards = (rewards: ObjectiveRewardType) => {
@@ -422,8 +331,11 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                 <RewardDialog
                   open={rewardDialogOpen}
                   onOpenChange={setRewardDialogOpen}
-                  parentForm={form}
-                  buildRewardFormData={buildRewardFormData}
+                  value={watchedRewards}
+                  onSave={(data) => {
+                    void form.setValue("rewards", data, { shouldDirty: true });
+                  }}
+                  formData={rewardFormData}
                 />
               )}
             </div>
@@ -508,49 +420,16 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
   );
 };
 
-interface RewardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  parentForm: UseFormReturn<ThresholdFormDataInput, unknown, ThresholdFormData>;
-  buildRewardFormData: () => FormEntry<keyof ObjectiveRewardType>[];
-}
-
-const RewardDialog: React.FC<RewardDialogProps> = ({
-  open,
-  onOpenChange,
-  parentForm,
-  buildRewardFormData,
-}) => {
-  const parentReward = useWatch({ control: parentForm.control, name: "rewards" });
-  const rewardForm = useForm<ObjectiveRewardInputType, unknown, ObjectiveRewardType>({
-    resolver: zodResolver(ObjectiveReward),
-    values: parentReward ?? ObjectiveReward.parse({}),
-    defaultValues: parentReward ?? ObjectiveReward.parse({}),
-    mode: "all",
-  });
-
-  const handleSave = rewardForm.handleSubmit((data) => {
-    void parentForm.setValue("rewards", data, { shouldDirty: true });
-    onOpenChange(false);
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-screen max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Rewards</DialogTitle>
-        </DialogHeader>
-        <EditContent
-          schema={ObjectiveReward}
-          form={rewardForm as UseFormReturn<ObjectiveRewardType, unknown>}
-          formData={buildRewardFormData()}
-          showSubmit={true}
-          buttonTxt="Save Rewards"
-          onAccept={handleSave}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-};
+/** Raids also pay skill points, profession XP and war effort. */
+const RAID_REWARD_AMOUNT_FIELDS = [
+  ...REWARD_DIALOG_AMOUNT_FIELDS,
+  "reward_skillpoints",
+  "reward_medical_experience",
+  "reward_hunting_experience",
+  "reward_crafting_experience",
+  "reward_gathering_experience",
+  "reward_war_damage",
+  "reward_war_healing",
+] as const;
 
 export default RaidThresholdEditor;

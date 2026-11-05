@@ -50,6 +50,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { hasAnyRewardValue } from "@/validators/rewards";
 import Post from "./Post";
 
 const tabs = ["Active", "History", "Battles", "Achievements"] as const;
@@ -895,22 +896,7 @@ export const useCheckRewards = () => {
           const showToast =
             notifications.length > 0 ||
             (resolved && quest.successDescription) ||
-            rewards.reward_money > 0 ||
-            rewards.reward_seichi_silver > 0 ||
-            rewards.reward_clanpoints > 0 ||
-            rewards.reward_anbupoints > 0 ||
-            rewards.reward_exp > 0 ||
-            (rewards.reward_pet_experience ?? 0) > 0 ||
-            rewards.reward_tokens > 0 ||
-            rewards.reward_prestige > 0 ||
-            rewards.reward_reputation > 0 ||
-            rewards.reward_skillpoints > 0 ||
-            rewards.reward_jutsus.length > 0 ||
-            rewards.reward_badges.length > 0 ||
-            (rewards.reward_titles?.length ?? 0) > 0 ||
-            rewards.reward_bloodlines.length > 0 ||
-            rewards.reward_sage_modes.length > 0 ||
-            rewards.reward_items.length > 0;
+            hasAnyRewardValue(rewards);
           // Show toast
           const message = resolved
             ? `Finished: ${quest.name}`
