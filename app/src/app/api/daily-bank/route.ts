@@ -1,7 +1,7 @@
 import { and, eq, ne, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { type FederalStatus, userData } from "@/drizzle/schema";
-import { lockWithDailyTimer } from "@/libs/gamesettings";
+import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import { insertDailyBankInterestForGET, selectUserDataForGET } from "@/queries/bank";
 import { listVillagesWithStructures } from "@/queries/village";
 import { drizzleDB } from "@/server/db";
@@ -19,11 +19,8 @@ export async function GET(request: Request) {
 
   // Check if we've already run today
   const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-  if (!timerCheck.isNewDay && timerCheck.response) {
-    return new Response(`Please wait to next day - ${ENDPOINT_NAME}`);
-  }
 
-  try {
+  return runClaimedCron(timerCheck, "/api/daily-bank", async () => {
     // Get today's date
     const today = getUtcDayKey();
 
@@ -121,13 +118,5 @@ export async function GET(request: Request) {
     return new Response(
       `Daily bank interest processed successfully:\n${responses.join("\n")}`,
     );
-  } catch (cause) {
-    // Rollback timer on error
-    await timerCheck.release();
-    console.error(cause);
-    return Response.json(
-      { error: `Failed to process ${ENDPOINT_NAME}` },
-      { status: 500 },
-    );
-  }
+  });
 }
