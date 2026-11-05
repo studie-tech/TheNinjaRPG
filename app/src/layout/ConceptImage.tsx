@@ -29,9 +29,10 @@ import {
   IMG_ICON_REDDIT,
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
+import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
-import Modal from "@/layout/Modal";
 import ReportUser from "@/layout/Report";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
 import { canDeleteConceptArt } from "@/utils/permissions";
@@ -69,7 +70,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const currentImageIdRef = useRef(image?.id);
   currentImageIdRef.current = image?.id;
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deletedImageId, setDeletedImageId] = useState<string | null>(null);
 
   // tRPC Utility
@@ -156,7 +156,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     deleteInFlightRef.current = null;
     setPendingEmotion(null);
     setDeleteTargetId(null);
-    setShowDeleteConfirmation(false);
     setDeletedImageId(null);
   }, [image?.id]);
 
@@ -202,7 +201,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   // mutation's pending render cannot happen quickly enough to stop a double click.
   const remove = api.conceptart.delete.useMutation();
 
-  const deleteImage = async () => {
+  const deleteImage = async (close: () => void) => {
     if (!image || deleteInFlightRef.current === image.id || isEmotionPending) return;
 
     const imageId = image.id;
@@ -218,7 +217,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
       // Tombstone the exact art before any refresh. This keeps stale/failed query
       // reconciliation from flashing a deleted card back into the gallery.
       setDeletedImageId(imageId);
-      setShowDeleteConfirmation(false);
+      close();
       props.onDeleted?.(imageId);
       if (showDetails && currentImageIdRef.current === imageId) {
         router.replace("/conceptart");
@@ -352,37 +351,45 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         <div className="absolute top-2 right-2">
           {(image.userId === user?.userId ||
             (user && canDeleteConceptArt(user.role))) && (
-            /* biome-ignore lint/a11y/useSemanticElements: gallery cards wrap this control in a link, where a nested button would be invalid interactive markup */
-            <span
-              role="button"
-              tabIndex={isDeleting || isEmotionPending ? -1 : 0}
-              aria-disabled={isDeleting || isEmotionPending}
-              aria-label={`Delete concept art${image.prompt ? `: ${image.prompt}` : ""}`}
-              className={`inline-flex rounded-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 ${
-                isDeleting || isEmotionPending
-                  ? "cursor-not-allowed opacity-50"
-                  : "cursor-pointer hover:text-red-400"
-              }`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (isDeleting || isEmotionPending) return;
-                setShowDeleteConfirmation(true);
-              }}
-              onKeyDown={(e) => {
-                if (isDeleting || isEmotionPending) return;
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowDeleteConfirmation(true);
-                }
-              }}
+            <Confirm
+              key={image.id}
+              id={`delete-concept-art-${image.id}`}
+              title="Delete concept art?"
+              button={
+                <Trash2
+                  className={showDetails ? "h-7 w-7" : "h-5 w-5"}
+                  aria-hidden="true"
+                />
+              }
+              triggerLabel={`Delete concept art${image.prompt ? `: ${image.prompt}` : ""}`}
+              triggerClassName={cn(
+                "rounded-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400",
+                !(isDeleting || isEmotionPending) && "hover:text-red-400",
+              )}
+              disabled={isDeleting || isEmotionPending}
+              proceed_label="Delete"
+              proceed_loading_label="Deleting"
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              isLoading={isDeleting}
+              keepOpenOnAccept
+              onAccept={(_event, { close }) => void deleteImage(close)}
             >
-              <Trash2
-                className={showDetails ? "h-7 w-7" : "h-5 w-5"}
-                aria-hidden="true"
-              />
-            </span>
+              <div className="space-y-3">
+                <p>
+                  You are about to permanently delete concept art by{" "}
+                  <strong>{image.user?.username || "an unknown creator"}</strong>.
+                </p>
+                {image.prompt && (
+                  <p className="rounded-md border border-slate-600 bg-slate-800/60 p-3 text-sm">
+                    <span className="font-semibold">Prompt:</span> {image.prompt}
+                  </p>
+                )}
+                <p className="text-red-300 text-sm">
+                  This cannot be undone. The art will disappear from the gallery and its
+                  detail page.
+                </p>
+              </div>
+            </Confirm>
           )}
           {showDetails && (
             <ReportUser
@@ -613,34 +620,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           )}
         </div>
       </div>
-      <Modal
-        id={`delete-concept-art-${image.id}`}
-        title="Delete concept art?"
-        isOpen={showDeleteConfirmation}
-        setIsOpen={setShowDeleteConfirmation}
-        proceed_label="Delete"
-        proceed_loading_label="Deleting"
-        confirmClassName="bg-red-600 text-white hover:bg-red-700"
-        isLoading={isDeleting}
-        keepOpenOnAccept
-        onAccept={() => void deleteImage()}
-      >
-        <div className="space-y-3">
-          <p>
-            You are about to permanently delete concept art by{" "}
-            <strong>{image.user?.username || "an unknown creator"}</strong>.
-          </p>
-          {image.prompt && (
-            <p className="rounded-md border border-slate-600 bg-slate-800/60 p-3 text-sm">
-              <span className="font-semibold">Prompt:</span> {image.prompt}
-            </p>
-          )}
-          <p className="text-red-300 text-sm">
-            This cannot be undone. The art will disappear from the gallery and its
-            detail page.
-          </p>
-        </div>
-      </Modal>
     </div>
   );
 };

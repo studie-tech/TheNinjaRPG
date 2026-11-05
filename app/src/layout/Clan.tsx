@@ -1490,7 +1490,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       },
     });
 
-  const onClearLeadership = async () => {
+  const onClearLeadership = async (close: () => void) => {
     if (clearLeadershipSubmissionInFlight.current || hasClearedLeadership) return;
 
     clearLeadershipSubmissionInFlight.current = true;
@@ -1502,6 +1502,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // Remove the stale destructive retry path immediately; cache refresh failures
       // must not allow the committed bulk action to be repeated.
       setHasClearedLeadership(true);
+      close();
       void Promise.all([
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
@@ -2285,7 +2286,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   {isClearingLeadership ? "Clearing" : "Clear Leadership"}
                 </Button>
               }
-              onAccept={() => void onClearLeadership()}
+              onAccept={(_event, { close }) => void onClearLeadership(close)}
             >
               <div className="space-y-3">
                 <p>

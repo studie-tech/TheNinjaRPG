@@ -40,7 +40,7 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Link, "default").mockImplementation(({ href, children }) => <a href={String(href)}>{children}</a>);
-  vi.spyOn(Confirm, "default").mockImplementation(({ title, onAccept, disabled }) => <button type="button" disabled={disabled} onClick={onAccept}>Confirm {title}</button>);
+  vi.spyOn(Confirm, "default").mockImplementation(({ title, onAccept, disabled }) => <button type="button" disabled={disabled} onClick={(event) => onAccept?.(event, { close: () => undefined })}>Confirm {title}</button>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
 });
 afterEach(() => {
