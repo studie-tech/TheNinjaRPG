@@ -29,6 +29,7 @@ import {
   getWarRelationship,
   isObjectiveWarActive,
   isObjectiveWarOpen,
+  isWarObjectiveLeader,
   maskWarObjectives,
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
@@ -529,10 +530,7 @@ export const travelRouter = createTRPCRouter({
           maskWarObjectives(
             w,
             user.villageId,
-            user.rank === "ELDER" ||
-              [w.attackerVillage?.kageId, w.defenderVillage?.kageId].includes(
-                user.userId,
-              ),
+            isWarObjectiveLeader(user, user.village),
             ctx.userId,
           ),
         ),
