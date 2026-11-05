@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import Arena from "@/app/[shell]/battlearena/page";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
@@ -10,6 +10,7 @@ import * as pyramidMode from "@/layout/battlearena/PyramidMode";
 import * as rankedMode from "@/layout/battlearena/RankedMode";
 import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
+import type { ContentBoxProps } from "@/layout/ContentBox";
 import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
 
@@ -32,8 +33,8 @@ beforeEach(() => {
     access: true,
   } as never);
   vi.spyOn(tutorial, "useTutorialStep").mockImplementation(() => ({ currentStep: tutorialStep }) as never);
-  vi.spyOn(contentBox, "default").mockImplementation((({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  vi.spyOn(contentBox, "default").mockImplementation((({ children, onBack }: ContentBoxProps) => (
+    <div><button type="button" onClick={onBack}>Battle Arena</button>{children}</div>
   )) as never);
   vi.spyOn(overview, "ArenaOverview").mockImplementation(() => <p>Overview</p>);
   vi.spyOn(modeShell, "ArenaModeShell").mockImplementation(({ mode, children }) => (
@@ -71,6 +72,14 @@ it("opens the mode named in the hash", () => {
   window.history.replaceState({}, "", "/battlearena#Battle%20Pyramid");
   render(<Arena />);
   expect(screen.getByRole("region", { name: "Battle Pyramid mode" }).textContent).toBe("Pyramid body");
+});
+
+it("returns from a deep-linked mode to the overview through the page title", () => {
+  window.history.replaceState({}, "", "/battlearena#Sparring");
+  render(<Arena />);
+  fireEvent.click(screen.getByRole("button", { name: "Battle Arena" }));
+  expect(screen.getByText("Overview")).toBeDefined();
+  expect(window.location.hash).toBe("");
 });
 
 it("opens Arena with the Academy Dummy during the tutorial arena step", () => {

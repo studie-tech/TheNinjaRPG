@@ -1,22 +1,22 @@
 "use client";
 
-import {
-  ChevronRight,
-  SlidersHorizontal,
-  Swords,
-  Target,
-  Triangle,
-  Trophy,
-  Users,
-} from "lucide-react";
+import { ChevronRight, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { RANKED_LEGEND_LP_REQUIREMENT } from "@/drizzle/constants";
+import {
+  IMG_ARENA_MODE_ARENA,
+  IMG_ARENA_MODE_PYRAMID,
+  IMG_ARENA_MODE_RANKED,
+  IMG_ARENA_MODE_SPARRING,
+  IMG_ARENA_MODE_TRAINING,
+  RANKED_LEGEND_LP_REQUIREMENT,
+} from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLoadoutNames } from "@/hooks/useLoadoutNames";
 import { BattleSetupControls } from "@/layout/battlearena/BattleSetupPanel";
+import Image from "@/layout/Image";
 import { type ArenaMode, rankedProgress, sparExamProgress } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -80,7 +80,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     {
       mode: "Arena",
       title: "Arena",
-      icon: Swords,
+      image: IMG_ARENA_MODE_ARENA,
       description: "Fight creatures picked for your level.",
       status: bestMatch
         ? `Best match: ${bestMatch.username} · Lv ${bestMatch.level}`
@@ -92,7 +92,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     {
       mode: "Sparring",
       title: "Sparring",
-      icon: Users,
+      image: IMG_ARENA_MODE_SPARRING,
       description: "Challenge other ninja. Wins count for exams and badges.",
       status:
         waiting > 0
@@ -106,7 +106,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     {
       mode: "Battle Pyramid",
       title: "Battle Pyramid",
-      icon: Triangle,
+      image: IMG_ARENA_MODE_PYRAMID,
       description: "Climb a tower floor by floor, one tower at a time.",
       status: climbing
         ? `Climbing ${climbing.quest.name}`
@@ -119,7 +119,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     {
       mode: "PVP Rank",
       title: "Ranked PvP",
-      icon: Trophy,
+      image: IMG_ARENA_MODE_RANKED,
       description: "Equal stats and a ranked loadout. Climb the divisions.",
       status: !season
         ? "No season running"
@@ -134,7 +134,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
     {
       mode: "Training",
       title: "Training dummy",
-      icon: Target,
+      image: IMG_ARENA_MODE_TRAINING,
       description: "Set the dummy's stats and test your jutsu with no risk.",
       status: "Practice, no rewards",
       detail: null,
@@ -181,7 +181,6 @@ function ModeCard({
   card: OverviewCard;
   onOpen: (mode: ArenaMode) => void;
 }) {
-  const Icon = card.icon;
   return (
     <article
       className={cn(
@@ -195,12 +194,18 @@ function ModeCard({
       <div
         aria-hidden
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-100 to-amber-300 text-amber-900 dark:from-amber-900 dark:to-amber-700 dark:text-amber-100",
+          "bg-muted relative shrink-0 overflow-hidden rounded-lg",
           "h-14 w-14 @min-[600px]:h-20 @min-[600px]:w-full",
           card.wide && "@min-[600px]:h-auto @min-[600px]:w-56",
         )}
       >
-        <Icon className="h-7 w-7 @min-[600px]:h-8 @min-[600px]:w-8" />
+        <Image
+          src={card.image}
+          alt=""
+          width={512}
+          height={342}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 @min-[600px]:gap-1">
         <h2 className="text-base font-bold @min-[600px]:text-lg">{card.title}</h2>
@@ -238,7 +243,7 @@ function ModeCard({
 type OverviewCard = {
   mode: ArenaMode;
   title: string;
-  icon: typeof Swords;
+  image: string;
   description: string;
   status: string | null;
   detail: string | null;

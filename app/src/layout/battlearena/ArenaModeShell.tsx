@@ -13,15 +13,9 @@ import {
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
- * The frame around every arena mode: a way back to the overview, tabs for all five modes and
- * the spar exam reminder. Below 600px the tabs become five equal columns.
+ * Tabs for all five arena modes and the spar exam reminder. The page title owns back navigation.
  */
-export function ArenaModeShell({
-  mode,
-  onSelect,
-  onOverview,
-  children,
-}: ArenaModeShellProps) {
+export function ArenaModeShell({ mode, onSelect, children }: ArenaModeShellProps) {
   const { data: userData } = useRequiredUserData();
   const { data: challenges } = api.sparring.getUserChallenges.useQuery(undefined, {
     staleTime: 5000,
@@ -41,17 +35,7 @@ export function ArenaModeShell({
       onValueChange={(value) => onSelect(decodeURIComponent(value) as ArenaMode)}
       className="@container flex flex-col gap-3 p-3"
     >
-      <button
-        type="button"
-        onClick={onOverview}
-        className="text-primary flex min-h-9 items-center gap-1 self-start text-sm font-semibold hover:underline"
-      >
-        ← Overview
-      </button>
-      <TabsList
-        aria-label="Arena modes"
-        className="grid grid-cols-5 justify-start gap-0.5 p-0.5 @min-[600px]:flex"
-      >
+      <TabsList aria-label="Arena modes" className="grid grid-cols-5 gap-0.5 p-0.5">
         {ARENA_MODES.map((option) => {
           const Icon = MODE_ICONS[option];
           return (
@@ -104,6 +88,5 @@ const MODE_ICONS: Record<ArenaMode, typeof Swords> = {
 interface ArenaModeShellProps {
   mode: ArenaMode;
   onSelect: (mode: ArenaMode) => void;
-  onOverview: () => void;
   children: React.ReactNode;
 }

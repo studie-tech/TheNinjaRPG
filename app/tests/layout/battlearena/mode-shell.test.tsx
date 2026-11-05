@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 const renderShell = (mode: "Arena" | "Sparring" = "Arena") => {
-  const handlers = { onSelect: vi.fn(), onOverview: vi.fn() };
+  const handlers = { onSelect: vi.fn() };
   render(
     <ArenaModeShell mode={mode} {...handlers}>
       <p>Mode body</p>
@@ -88,10 +88,9 @@ it("shows the exam strip outside sparring", () => {
   expect(screen.queryByRole("button", { name: /Find opponents/ })).toBeNull();
 });
 
-it("returns to the overview", () => {
-  const { onOverview } = renderShell();
-  fireEvent.click(screen.getByRole("button", { name: "← Overview" }));
-  expect(onOverview).toHaveBeenCalled();
+it("leaves back navigation to the page title", () => {
+  renderShell();
+  expect(screen.queryByRole("button", { name: "← Overview" })).toBeNull();
 });
 
 it("holds loadouts, auto combat, extra options and the action", () => {

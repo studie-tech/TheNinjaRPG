@@ -3095,6 +3095,18 @@ export const IMG_BUILDING_ARCHIVE =
 export const IMG_BUILDING_ADMINBUILDING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMyfWBKtsO4cexqW2RDgkE3zZbNXSFGitmnar.webp";
 
+/** Arena overview scenes, served through the shared game-media CDN. */
+export const IMG_ARENA_MODE_ARENA =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJX4nt3IqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv";
+export const IMG_ARENA_MODE_SPARRING =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmjjOf1bHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A";
+export const IMG_ARENA_MODE_PYRAMID =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ8B2KsI1kkp45TvAnoIBa0rtCf1lbyXYjVKQ2";
+export const IMG_ARENA_MODE_RANKED =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAdUaSkoZUC4muiGcQNzjfEndY5y1w20B8hTW";
+export const IMG_ARENA_MODE_TRAINING =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJwfsuvnT2j854CWbaITZyegfXimvd7s16cO0h";
+
 export const IMG_INITIATIVE_D20 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE7476GLfKL5D7TAFe29bymSaPCIQ846MdzGg.webp";
 export const IMG_BATTLEFIELD_TOMBSTONE =

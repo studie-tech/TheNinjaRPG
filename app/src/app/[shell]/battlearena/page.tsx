@@ -53,12 +53,13 @@ export default function Arena() {
       title="Battle Arena"
       subtitle={view ? MODE_SUBTITLES[view] : "Pick how you want to fight"}
       defaultBackHref="/village"
+      onBack={view && !isTutorialArena ? openOverview : undefined}
       padding={false}
     >
       {view === null ? (
         <ArenaOverview onOpen={openMode} />
       ) : (
-        <ArenaModeShell mode={view} onSelect={openMode} onOverview={openOverview}>
+        <ArenaModeShell mode={view} onSelect={openMode}>
           {view === "Arena" && (
             <ArenaMode
               aiId={isTutorialArena ? TUTORIAL_ARENA_DUMMY_ID : aiId}
