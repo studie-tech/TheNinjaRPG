@@ -166,6 +166,20 @@ export const isPayPalCleanupError = (err: unknown): boolean => {
   return PAYPAL_CLEANUP_PATTERNS.some((pattern) => message.includes(pattern));
 };
 
+/**
+ * A stack line whose script came from a host the CSP lets serve PayPal scripts, as V8
+ * ("at fn (url:1:2)", "at url:1:2") or Firefox and Safari ("fn@url:1:2") print it.
+ */
+const PAYPAL_STACK_LINE =
+  /(?:^\s*at (?:[^():\n]*\()?|^[^@:\n]*@)https?:\/\/(?:[a-z0-9-]+\.)*paypal(?:objects)?\.com(?::\d+)?[/?#]/im;
+
+/**
+ * True when a raw `Error.stack` ran through PayPal's own hosts. Takes the raw stack because
+ * the Next.js SDK replaces each Sentry frame's origin with `app://` before `beforeSend`.
+ */
+export const isPayPalSdkStack = (stack: string | undefined): boolean =>
+  !!stack && PAYPAL_STACK_LINE.test(stack);
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",
