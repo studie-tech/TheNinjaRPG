@@ -9,3 +9,24 @@ export const needsHtmlSource = (value: string) =>
 /** Plain text must not be interpreted as markup when opening an existing draft. */
 export const richTextInput = (value: string): { html: string } | { text: string } =>
   /<\/?[a-z][^>]*>/i.test(value) ? { html: sanitize(value) } : { text: value };
+
+/** One quote the server attaches to a chat message; its own nested quotes are already removed. */
+const ATTACHED_QUOTE =
+  /^\s*<blockquote\b[^>]*\bauthor="([^"]*)"[^>]*>[\s\S]*?<\/blockquote>/i;
+
+/**
+ * Split the quotes attached when a message was sent from the text its author wrote, so an edit
+ * changes only that text in the visual editor and keeps the quotes as they were.
+ */
+export const splitQuotedReply = (html: string) => {
+  const authors: string[] = [];
+  let rest = html;
+  let match = ATTACHED_QUOTE.exec(rest);
+  while (match) {
+    authors.push(match[1] ?? "");
+    rest = rest.slice(match[0].length);
+    match = ATTACHED_QUOTE.exec(rest);
+  }
+  const reply = rest.trimStart();
+  return { quotes: html.slice(0, html.length - rest.length).trim(), reply, authors };
+};
