@@ -21,6 +21,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
+import { QueryError } from "@/layout/QueryError";
 import type { PetAppearanceOption, PetSpeciesOption } from "@/libs/pets/catalogue";
 import { getPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
@@ -272,15 +273,13 @@ export function PetAcquisition() {
         title="Meet your companion"
         initialBreak
       >
-        <p role="alert" className="mb-3 text-red-600">
-          {error?.message ?? "Today's companions could not be loaded."}
-        </p>
-        <Button
-          variant="outline"
-          onClick={() => void (needsCollectionCheck ? checkAdoption() : refetch())}
-        >
-          Try again
-        </Button>
+        <QueryError
+          layout="stacked"
+          message={error?.message ?? "Today's companions could not be loaded."}
+          messageClassName="mb-3 text-red-600"
+          retryVariant="outline"
+          onRetry={() => void (needsCollectionCheck ? checkAdoption() : refetch())}
+        />
       </ContentBox>
     );
 

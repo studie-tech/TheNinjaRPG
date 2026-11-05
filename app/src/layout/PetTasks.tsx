@@ -14,6 +14,7 @@ import Confirm from "@/layout/Confirm";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import { isPetTaskContract, petTaskDispatchBlockMessage } from "@/libs/pets/tasks";
 import { formatQuestEntryCost } from "@/libs/questRun";
@@ -50,12 +51,12 @@ export const PetTasks = ({ petId }: { petId: string }) => {
   if (!user || task.isPending) return <Loader explanation="Loading companion task" />;
   if (task.error)
     return (
-      <p role="alert">
-        {task.error.message}{" "}
-        <Button variant="link" onClick={() => void task.refetch()}>
-          Retry
-        </Button>
-      </p>
+      <QueryError
+        message={task.error.message}
+        retryLabel="Retry"
+        retryVariant="link"
+        onRetry={() => void task.refetch()}
+      />
     );
 
   return (
@@ -121,12 +122,12 @@ export const PetTasks = ({ petId }: { petId: string }) => {
           ) : contracts.isPending ? (
             <Loader explanation="Loading profession contracts" />
           ) : contracts.error ? (
-            <p role="alert">
-              {contracts.error.message}{" "}
-              <Button variant="link" onClick={() => void contracts.refetch()}>
-                Retry
-              </Button>
-            </p>
+            <QueryError
+              message={contracts.error.message}
+              retryLabel="Retry"
+              retryVariant="link"
+              onRetry={() => void contracts.refetch()}
+            />
           ) : !selected ? (
             <p className="text-sm">
               Content has not enabled any available companion contracts for your
@@ -218,12 +219,12 @@ export const PetTaskDispatch = ({
       {collection.isPending ? (
         <p className="text-sm">Loading companions...</p>
       ) : collection.error ? (
-        <p role="alert">
-          {collection.error.message}{" "}
-          <Button variant="link" onClick={() => void collection.refetch()}>
-            Retry
-          </Button>
-        </p>
+        <QueryError
+          message={collection.error.message}
+          retryLabel="Retry"
+          retryVariant="link"
+          onRetry={() => void collection.refetch()}
+        />
       ) : !selected ? (
         <p className="text-muted-foreground text-sm">
           A ready Hunter-rank companion can complete this contract for you.
