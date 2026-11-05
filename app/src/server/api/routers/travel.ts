@@ -6,8 +6,6 @@ import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
 import { getFinishGlobalMoveUserUpdate } from "@/deltas/travel";
 import {
-  ANBU_STEALTH_BASE_CHANCE_PERC,
-  ANBU_STEALTH_CHANGE_PER_LEVEL,
   IMG_AVATAR_DEFAULT,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   REGEN_SECONDS,
@@ -20,6 +18,7 @@ import {
   VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
+import { anbuStealthChance } from "@/libs/anbu";
 import {
   anonymousSpriteAppearance,
   resolveSpriteAppearance,
@@ -1048,8 +1047,7 @@ export const travelRouter = createTRPCRouter({
             if (Math.random() < (travelLength * chance) / 100) {
               // Chance of ANBU squad avoiding attack
               const anbuChance = user?.anbuId
-                ? ANBU_STEALTH_BASE_CHANCE_PERC +
-                  (user?.anbuSquad?.stealthLevel ?? 0) * ANBU_STEALTH_CHANGE_PER_LEVEL
+                ? anbuStealthChance(user?.anbuSquad?.stealthLevel ?? 0)
                 : 0;
               if (Math.random() < anbuChance / 100) {
                 return {
