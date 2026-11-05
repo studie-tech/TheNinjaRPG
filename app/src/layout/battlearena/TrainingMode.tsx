@@ -2,10 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Sun, Swords } from "lucide-react";
-import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,8 +15,8 @@ import {
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
 import { useAutoCombatSetting } from "@/hooks/combat";
-import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useSleepToggle } from "@/hooks/sleep";
+import { useStartArenaBattle } from "@/hooks/useStartArenaBattle";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import Loader from "@/layout/Loader";
 import {
@@ -28,7 +26,6 @@ import {
 } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
@@ -39,36 +36,13 @@ export function TrainingMode({
   statDistribution,
   setStatDistribution,
 }: TrainingModeProps) {
-  const {
-    data: userData,
-    pusher,
-    prepareUserUpdate,
-    updateUser,
-  } = useRequiredUserData();
-  const router = useRouter();
+  const { data: userData } = useRequiredUserData();
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const [autoCombat] = useAutoCombatSetting();
-  const attackInFlightRef = useRef(false);
 
-  const { mutate: attack, isPending: isAttacking } =
-    api.combat.startArenaBattle.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success && data.battleId) {
-          await updateUser(data, { revision, refetch: false });
-          pushToCombat(router, data.battleId);
-          showMutationToast({ ...data, message: "Entering the Training" });
-        } else {
-          if (data.userRecovery) await updateUser(data, { revision, refetch: false });
-          attackInFlightRef.current = false;
-          showMutationToast(data);
-        }
-      },
-      onError: (error) => {
-        attackInFlightRef.current = false;
-        showMutationToast({ success: false, message: error.message });
-      },
-    });
+  const { start, isAttacking } = useStartArenaBattle((result) =>
+    showMutationToast({ ...result, message: "Entering the Training" }),
+  );
 
   const { schema: statSchema, maxValues } = createStatSchema(
     MIN_STAT,
@@ -85,15 +59,8 @@ export function TrainingMode({
   const values = useWatch({ control: form.control });
 
   const submit = (data: StatSchemaType) => {
-    if (attackInFlightRef.current || isAttacking) return;
-    attackInFlightRef.current = true;
-    setStatDistribution(data);
-    attack({
-      aiId: TRAINING_DUMMY_ID,
-      stats: data,
-      autoCombat,
-      originSocketId: pusher?.connection.socket_id,
-    });
+    if (start({ aiId: TRAINING_DUMMY_ID, stats: data, autoCombat }))
+      setStatDistribution(data);
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;

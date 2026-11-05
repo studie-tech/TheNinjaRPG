@@ -2,7 +2,7 @@
 
 import { sendGTMEvent } from "@next/third-parties/google";
 import { Bot, Info, Loader2, Sun, Swords } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,28 +10,20 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress";
 import { BATTLE_ARENA_DAILY_LIMIT, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
-import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useSleepToggle } from "@/hooks/sleep";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useStartArenaBattle } from "@/hooks/useStartArenaBattle";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import Image from "@/layout/Image";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
-import { showMutationToast } from "@/libs/toast";
-import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** The arena: fight an AI opponent picked for your level. */
 export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
-  const {
-    data: userData,
-    pusher,
-    prepareUserUpdate,
-    updateUser,
-  } = useRequiredUserData();
-  const router = useRouter();
+  const { data: userData } = useRequiredUserData();
 
   // The tutorial teaches fighting by hand, so its fights never start on auto.
   const { currentStep, completeTutorialAction } = useTutorialStep();
@@ -39,7 +31,6 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
 
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const [autoCombat] = useAutoCombatSetting();
-  const attackInFlightRef = useRef(false);
 
   const { data: aiData } = api.profile.getAllAiNames.useQuery({ arenaOnly: true });
 
@@ -63,37 +54,14 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     }
   }, [userData, opponents, aiId, isTutorialFight]);
 
-  const { mutate: attack, isPending: isAttacking } =
-    api.combat.startArenaBattle.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (result, _variables, revision) => {
-        if (result.success && result.battleId) {
-          showActionReadinessToast(result);
-          await updateUser(result, { revision, refetch: false });
-          pushToCombat(router, result.battleId);
-          sendGTMEvent({ event: "enter_arena" });
-          void completeTutorialAction("arenaStart");
-        } else {
-          if (result.userRecovery)
-            await updateUser(result, { revision, refetch: false });
-          attackInFlightRef.current = false;
-          showMutationToast(result);
-        }
-      },
-      onError: (error) => {
-        attackInFlightRef.current = false;
-        showMutationToast({ success: false, message: error.message });
-      },
-    });
+  const { start, isAttacking } = useStartArenaBattle((result) => {
+    showActionReadinessToast(result);
+    sendGTMEvent({ event: "enter_arena" });
+    void completeTutorialAction("arenaStart");
+  });
 
   const handleAttack = () => {
-    if (attackInFlightRef.current || isAttacking || !aiId) return;
-    attackInFlightRef.current = true;
-    attack({
-      aiId,
-      autoCombat: autoCombat && !isTutorialFight,
-      originSocketId: pusher?.connection.socket_id,
-    });
+    if (aiId) start({ aiId, autoCombat: autoCombat && !isTutorialFight });
   };
 
   if (!userData) return <Loader explanation="Loading userdata" />;
