@@ -161,6 +161,20 @@ describeWithDatabase("recruit rank milestones end to end", () => {
     });
   });
 
+  it("records IP history only for a signup with a known address", async () => {
+    await register("recruit-fresh", FRESH_IP);
+    await register("recruit-unknown", "unknown");
+    expect(await referralOf("recruit-unknown")).toMatchObject({
+      isEligible: true,
+      eligibilityReason: "IP_UNKNOWN",
+    });
+    const database = await getTestDatabase();
+    const history = await database.query.historicalIp.findMany();
+    expect(history.map(({ userId, ip }) => ({ userId, ip }))).toEqual([
+      { userId: "recruit-fresh", ip: FRESH_IP },
+    ]);
+  });
+
   it("pays the recruiter when a rank reward promotes an eligible recruit", async () => {
     await register("recruit-fresh", FRESH_IP);
     const database = await getTestDatabase();
