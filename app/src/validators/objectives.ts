@@ -81,6 +81,7 @@ import {
   RetryQuestDelays,
   SAGE_MASTERY_RANKS,
   SECTOR_MAP_MAX_DIMENSION,
+  VILLAGE_MISSION_ONLY_TASKS,
 } from "@/drizzle/constants";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { DateTimeRegExp } from "@/utils/regex";
@@ -1089,10 +1090,8 @@ const questSuperRefine = (
   }
   if (
     val.questType !== "village_mission" &&
-    val.content.objectives.some(
-      (objective) =>
-        objective.task === "siege_operation" ||
-        objective.task === "combined_mission_effort",
+    val.content.objectives.some((objective) =>
+      (VILLAGE_MISSION_ONLY_TASKS as readonly string[]).includes(objective.task),
     )
   ) {
     ctx.addIssue({

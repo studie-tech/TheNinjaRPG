@@ -29,6 +29,7 @@ import {
   IMG_ICON_REDDIT,
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
+import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
 import ReportUser from "@/layout/Report";
@@ -46,8 +47,6 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   height?: number;
   onDeleted?: (imageId: string) => void;
 }
-
-type ConceptEmotion = "like" | "love" | "laugh";
 
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
@@ -281,15 +280,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const showVideo = isVideo && showDetails && image.video;
 
   // Show image
-  const hasLike = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "like",
-  );
-  const hasLove = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "love",
-  );
-  const hasLaugh = image?.likes?.find(
-    (like) => like.userId === user?.userId && like.type === "laugh",
-  );
   const isEmotionPending = pendingEmotion?.imageId === image.id;
   const isDeleting = deleteTargetId === image.id;
 
@@ -414,72 +404,15 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         <div
           className={`absolute right-1 bottom-1 left-1 flex ${showDetails ? "h-12 text-lg" : "h-6 text-xs"} flex-row items-center rounded-md border border-slate-700 bg-slate-800 text-white opacity-90`}
         >
-          <button
-            type="button"
-            className={`ml-1 flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLike ? "bg-slate-700" : ""}`}
+          <ConceptReactions
+            image={image}
+            userId={user?.userId}
+            pendingEmotion={pendingEmotion?.type}
             disabled={isEmotionPending || isDeleting}
-            aria-busy={pendingEmotion?.type === "like"}
-            aria-pressed={!!hasLike}
-            aria-label={
-              pendingEmotion?.type === "like"
-                ? "Updating"
-                : `${hasLike ? "Remove" : "Add"} heart reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("like");
-            }}
-          >
-            {pendingEmotion?.type === "like" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            ❤️ {image.n_likes}
-          </button>
-          <button
-            type="button"
-            className={`flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLove ? "bg-slate-700" : ""}`}
-            disabled={isEmotionPending || isDeleting}
-            aria-busy={pendingEmotion?.type === "love"}
-            aria-pressed={!!hasLove}
-            aria-label={
-              pendingEmotion?.type === "love"
-                ? "Updating"
-                : `${hasLove ? "Remove" : "Add"} thumbs-up reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("love");
-            }}
-          >
-            {pendingEmotion?.type === "love" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            👍 {image.n_loves}
-          </button>
-          <button
-            type="button"
-            className={`flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70 ${hasLaugh ? "bg-slate-700" : ""}`}
-            disabled={isEmotionPending || isDeleting}
-            aria-busy={pendingEmotion?.type === "laugh"}
-            aria-pressed={!!hasLaugh}
-            aria-label={
-              pendingEmotion?.type === "laugh"
-                ? "Updating"
-                : `${hasLaugh ? "Remove" : "Add"} laugh reaction`
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void toggleEmotion("laugh");
-            }}
-          >
-            {pendingEmotion?.type === "laugh" && (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            )}
-            🤣 {image.n_laugh}
-          </button>
+            firstButtonClassName="ml-1"
+            buttonClassName="flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70"
+            onToggle={(type) => void toggleEmotion(type)}
+          />
           {isEmotionPending && (
             <span className="sr-only" role="status" aria-live="polite">
               Updating

@@ -1,10 +1,11 @@
 "use client";
 
-import { Ban, UserPlus } from "lucide-react";
+import { Ban, UserPlus, UserRoundX } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import Loader from "@/layout/Loader";
@@ -92,5 +93,19 @@ const UserBlacklistControl: React.FC = () => {
     </div>
   );
 };
+
+/** Toolbar button opening the blacklist editor. */
+export const UserBlacklistPopover: React.FC = () => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button id="user-blacklist">
+        <UserRoundX className="h-6 w-6 hover:text-orange-500" />
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent className="w-[300px] overflow-hidden p-0">
+      <UserBlacklistControl />
+    </PopoverContent>
+  </Popover>
+);
 
 export default UserBlacklistControl;

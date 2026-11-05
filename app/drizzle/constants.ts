@@ -263,6 +263,11 @@ export const VILLAGE_MAINTAINED_STRUCTURE_ROUTES = [
   "/anbu", "/bank", "/battlearena", "/clanhall", "/home", "/hospital",
   "/itemshop", "/missionhall", "/ramenshop", "/townhall", "/traininggrounds",
 ] as const;
+/** Shared-progress objectives only a village mission can carry. */
+export const VILLAGE_MISSION_ONLY_TASKS = [
+  "siege_operation",
+  "combined_mission_effort",
+] as const;
 export const VILLAGE_MISSION_TASKS = [
   "pvp_kills", "siege_operation", "combined_mission_effort",
   "d_missions_total", "c_missions_total", "b_missions_total", "a_missions_total",

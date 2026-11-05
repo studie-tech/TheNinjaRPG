@@ -6,8 +6,7 @@ import {
   IMG_MANUAL_TOWER_UPGRADES,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import Image from "@/layout/Image";
-import Link from "@/layout/Link";
+import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -32,27 +31,12 @@ export default function TowerDefenseManual() {
       }
       defaultBackHref="/manual"
     >
-      <div className="grid grid-cols-4 gap-4 text-center font-bold">
-        {visibleEntries
+      <ImageLinkGrid
+        priority
+        entries={visibleEntries
           .sort((a, b) => a.name.localeCompare(b.name))
-          .map((page) => (
-            <Link
-              key={page.name}
-              href={`/manual/towerDefense/${page.name}`}
-              className="flex flex-col items-center"
-            >
-              <Image
-                className="rounded-2xl border-2 border-black hover:cursor-pointer hover:opacity-50"
-                src={page.img}
-                alt={page.name}
-                width={125}
-                height={125}
-                priority={true}
-              />
-              <p>{page.name}</p>
-            </Link>
-          ))}
-      </div>
+          .map((page) => ({ ...page, href: `/manual/towerDefense/${page.name}` }))}
+      />
     </ContentBox>
   );
 }
