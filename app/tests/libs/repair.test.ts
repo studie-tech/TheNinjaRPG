@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { calcItemRepairCost } from "@/libs/item";
 import {
+  calcRepairAllCost,
   calculateKitsToUse,
   getRepairKits,
   needsInventoryRepair,
@@ -26,6 +28,28 @@ describe("furniture repair exclusion", () => {
     } as unknown as UserItemWithRelations;
     expect(getRepairKits([row])).toEqual([]);
     expect(getRepairKits([{ ...row, item: { ...row.item, itemType: "CONSUMABLE" } }])).toHaveLength(1);
+  });
+});
+
+describe("repair all cost", () => {
+  const row = (id: string, durability: number, patch: object = {}) =>
+    ({
+      id, durability, storedAtHome: false, isInAuction: false,
+      item: { itemType: "ARMOR", maxDurability: 100, rarity: "RARE" },
+      ...patch,
+    }) as unknown as UserItemWithRelations;
+
+  it("sums only the carried items that need repair", () => {
+    const worn = row("worn", 50);
+    const rows = [worn, row("whole", 100), row("stored", 10, { storedAtHome: true })];
+    expect(calcRepairAllCost(rows)).toEqual({
+      itemsNeedingRepair: [worn],
+      totalCost: calcItemRepairCost(worn),
+    });
+  });
+
+  it("covers nothing before the inventory has loaded", () => {
+    expect(calcRepairAllCost(undefined)).toEqual({ itemsNeedingRepair: [], totalCost: 0 });
   });
 });
 

@@ -8,8 +8,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import Confirm from "@/layout/Confirm";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
-import { calcItemRepairCost } from "@/libs/item";
-import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
+import { calcRepairAllCost, calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -90,13 +89,10 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
     });
 
   // Calculate items needing repair and which kits will be used
-  const itemsNeedingRepair = (userItems || []).filter(needsInventoryRepair);
+  const { itemsNeedingRepair, totalCost: totalRyoRepairCost } =
+    calcRepairAllCost(userItems);
   const repairKits = getRepairKits(userItems, userData);
   const isCrafter = userData.occupation === "CRAFTING";
-  const totalRyoRepairCost = itemsNeedingRepair.reduce(
-    (total, useritem) => total + calcItemRepairCost(useritem),
-    0,
-  );
   const canAffordRyoRepair = userData.money >= totalRyoRepairCost;
   const isRepairAllPending = isRepairingAll || isRepairingAllRyo;
 

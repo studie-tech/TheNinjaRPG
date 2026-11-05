@@ -1,4 +1,5 @@
-import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { UserItemWithItem, UserItemWithRelations } from "@/drizzle/schema";
+import { calcItemRepairCost } from "@/libs/item";
 import { hasRequiredSkill, type SkillRequirementUser } from "@/libs/skillRequirements";
 
 /**
@@ -38,6 +39,23 @@ export const needsInventoryRepair = (ui: {
   !ui.isInAuction &&
   ui.item.maxDurability > 0 &&
   ui.durability < ui.item.maxDurability;
+
+/**
+ * The items a bulk ryo repair covers and its total cost, shared by the repair previews
+ * and `item.repairAll`.
+ */
+export const calcRepairAllCost = <
+  T extends UserItemWithItem & Parameters<typeof needsInventoryRepair>[0],
+>(
+  userItems: T[] | undefined,
+) => {
+  const itemsNeedingRepair = (userItems ?? []).filter(needsInventoryRepair);
+  const totalCost = itemsNeedingRepair.reduce(
+    (total, userItem) => total + calcItemRepairCost(userItem),
+    0,
+  );
+  return { itemsNeedingRepair, totalCost };
+};
 
 /**
  * Gets all repair kits from user items. Shared by the inventory UI and
