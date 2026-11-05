@@ -4,7 +4,10 @@
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { JUTSU_TRAIN_LEVEL_CAP } from "@/drizzle/constants";
 import { tournament, userData, userJutsu } from "@/drizzle/schema";
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
 
 /** Load an event and its combat tokens together for synchronization and versioned edits. */
 export const fetchEvent = (client: DrizzleClient, id: string) =>
@@ -16,9 +19,7 @@ export const fetchEvent = (client: DrizzleClient, id: string) =>
 /** Fetch the account and distinct mastered jutsu needed for event eligibility in parallel. */
 export const fetchEventUser = async (client: DrizzleClient, id: string) => {
   const [user, mastered] = await Promise.all([
-    client.query.userData.findFirst({
-      where: eq(userData.userId, id),
-    }),
+    findUserDataForQueryUpdatedUser(client, id),
     client.query.userJutsu.findMany({
       where: and(eq(userJutsu.userId, id), gte(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP)),
       columns: { jutsuId: true },
@@ -125,22 +126,32 @@ export const insertTournamentForSaveEvent = (
 
 /** Build the `tournament` update for `saveEventState`, using predicates on `id` and `version`. */
 export const updateTournamentForSaveEventState = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "execute">,
   event: import("@/validators/tournament").EventTournamentState,
   row: { id: string; version: number },
+  readiness?: ActionReadiness,
 ) =>
-  client
-    .update(tournament)
-    .set({
-      eventData: event,
-      version: sql`${tournament.version} + 1`,
-      status: ["COMPLETED", "CANCELLED"].includes(event.status)
-        ? "COMPLETED"
-        : event.series.length
-          ? "IN_PROGRESS"
-          : "OPEN",
-    })
-    .where(and(eq(tournament.id, row.id), eq(tournament.version, row.version)));
+  readiness?.notice
+    ? client.execute(sql`
+    UPDATE ${tournament} INNER JOIN ${userData} ON ${userData.userId} = ${readiness.initial.userId}
+    SET ${actionReadinessSqlSet(readiness, [])}
+      ${tournament.eventData} = CAST(${JSON.stringify(event)} AS JSON),
+      ${tournament.version} = ${tournament.version} + 1,
+      ${tournament.status} = ${["COMPLETED", "CANCELLED"].includes(event.status) ? "COMPLETED" : event.series.length ? "IN_PROGRESS" : "OPEN"}
+    WHERE ${tournament.id} = ${row.id} AND ${tournament.version} = ${row.version} AND ${readiness.where}
+  `)
+    : client
+        .update(tournament)
+        .set({
+          eventData: event,
+          version: sql`${tournament.version} + 1`,
+          status: ["COMPLETED", "CANCELLED"].includes(event.status)
+            ? "COMPLETED"
+            : event.series.length
+              ? "IN_PROGRESS"
+              : "OPEN",
+        })
+        .where(and(eq(tournament.id, row.id), eq(tournament.version, row.version)));
 
 /** Build the `battle` lookup for `syncEventTournament`, selecting only `id`, using predicates on `id`. */
 export const findBattleForSyncEventTournament = (

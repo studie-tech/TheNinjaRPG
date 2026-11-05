@@ -174,6 +174,7 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   const { mutate: userHeal, isPending } = api.hospital.userHeal.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
+      if (data.actionNotice) void utils.profile.getUser.invalidate();
       showMutationToast(data);
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {

@@ -181,6 +181,7 @@ export const farmInventoryDeltaSchema = z.object({
 export const farmMutationResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
+  actionNotice: z.string().optional(),
   updatedPlot: farmPlotStateSchema.nullable().optional(),
   updatedPlots: z
     .array(

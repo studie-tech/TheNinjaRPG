@@ -37,6 +37,7 @@ import {
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import { activityCompletionExtras } from "@/server/utils/achievementObjectives";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
@@ -629,14 +630,15 @@ export const claimDungeonQueue = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
   runId: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ status: "QUEUED", updatedAt: new Date() })
+    .set({ ...readiness?.set, status: "QUEUED", updatedAt: new Date() })
     .where(
       and(
         eq(userData.userId, userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         isNull(userData.battleId),
         eq(userData.isBanned, false),
         sql`EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.runId} = ${runId} AND ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} IN ('LOBBY', 'BETWEEN', 'PAUSED') AND (${dungeonRun.expiresAt} IS NULL OR ${dungeonRun.expiresAt} > NOW(3)))`,

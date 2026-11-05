@@ -87,6 +87,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { nonCombatConsume } from "@/libs/item";
 import {
@@ -602,6 +603,7 @@ function Travel() {
         });
       },
       onSuccess: async (result, _variables, previous) => {
+        if (result.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(result);
         if (result.success && result.data) {
           // Clear any local-sector movement target before the destination
@@ -743,6 +745,7 @@ function Travel() {
     api.combat.attackUser.useMutation({
       onSuccess: async (data) => {
         if (data.success) {
+          showActionReadinessToast(data);
           setShowRevealedPlayersModal(false);
           setRevealedPlayers([]);
           await updateUser({
@@ -750,6 +753,7 @@ function Travel() {
             battleId: data.battleId,
             updatedAt: new Date(),
           });
+          if (data.actionNotice) void updateUser(undefined);
         } else {
           showMutationToast({
             success: false,
@@ -1647,6 +1651,7 @@ const StealthControls: React.FC<{
   const { mutate: activateStealth, isPending: isActivatingStealth } =
     api.stealth.activateStealth.useMutation({
       onSuccess: async (data) => {
+        if (data.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(data);
         if (data.success && data.data) {
           await updateUser({
@@ -1676,6 +1681,7 @@ const StealthControls: React.FC<{
   const { mutate: scanSensory, isPending: isScanningSensory } =
     activateSensory.useMutation({
       onSuccess: (data) => {
+        if (data.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(data);
         if (data.success && data.data) {
           lastSuccessfulSensoryAtRef.current = data.data.lastSensoryAt;

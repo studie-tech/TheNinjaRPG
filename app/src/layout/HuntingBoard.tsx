@@ -11,6 +11,7 @@ import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHuntingRank, getHuntingRankProgress } from "@/libs/hunting";
 import {
@@ -57,7 +58,9 @@ export function HuntingBoard({
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    if (result.success || result.userPatch) await updateUser(result, { revision });
+    showActionReadinessToast(result);
+    if (result.success || result.userPatch || result.actionNotice)
+      await updateUser(result, { revision });
     setMessage(result.message);
     if (result.success)
       await Promise.all([board.refetch(), utils.hunting.getSession.invalidate()]);
@@ -75,6 +78,7 @@ export function HuntingBoard({
   const start = api.hunting.start.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
+      showActionReadinessToast(result);
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
         // Clear the previous result before publishing the new battle, as arena starts do.

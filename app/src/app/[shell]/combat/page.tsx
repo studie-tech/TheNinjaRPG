@@ -35,6 +35,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
 import {
@@ -308,6 +309,7 @@ export default function CombatPage() {
           setArenaHealSettledBattleId(arenaHealBattleKey);
         }
         if (data.success && arenaOpponentId) {
+          showActionReadinessToast(data);
           handleStartArenaBattle("post-heal");
         } else {
           showMutationToast(data);
@@ -326,6 +328,7 @@ export default function CombatPage() {
     api.combat.startArenaBattle.useMutation({
       onSuccess: (result) => {
         if (result.success && result.battleId) {
+          showActionReadinessToast(result);
           setBattleAtom(undefined);
           // The finished battle and its result stay in place until the next battle
           // loads, so the battlefield keeps its reserved size and nothing turns live.
@@ -334,6 +337,7 @@ export default function CombatPage() {
             battleId: result.battleId,
             updatedAt: new Date(),
           });
+          if (result.actionNotice) void updateUser(undefined);
           void utils.combat.getBattle.invalidate();
         } else {
           showMutationToast(result);

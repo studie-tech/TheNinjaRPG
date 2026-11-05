@@ -489,10 +489,20 @@ describeWithDatabase("Cooking production and consumption", () => {
     expect(combatCacheEnergy({ curEnergy: 0, regenAt: from.toISOString() }, 100, 10, to, 0, periods)).toBe(25);
   });
 
+  it("wakes an opted-in sleeper when consuming a meal", async () => {
+    const db = await getTestDatabase();
+    await insertUserItems([{ id: "edible", userId, itemId: "meal", quantity: 1 }]);
+    await db.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
+    const result = await (await callerFor(itemRouter, userId)).consume({ userItemId: "edible", expectedQuantity: 1 });
+    expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.status).toBe("AWAKE");
+    expect(await db.query.userRaidBuff.findMany()).toHaveLength(1);
+  });
+
   it.each(["ASLEEP", "BATTLE", "TRAVEL"] as const)("prevents eating while %s", async (status) => {
     const db = await getTestDatabase();
     await insertUserItems([{ id: "edible", userId, itemId: "meal", quantity: 1 }]);
-    await db.update(userData).set({ status, ...(status === "BATTLE" ? { battleId: "busy" } : {}) }).where(eq(userData.userId, userId));
+    await db.update(userData).set({ status, autoWakeUp: false, ...(status === "BATTLE" ? { battleId: "busy" } : {}) }).where(eq(userData.userId, userId));
     const caller = await callerFor(itemRouter, userId);
     expect((await caller.consume({ userItemId: "edible", expectedQuantity: 1 })).success).toBe(false);
     expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "edible") }))?.quantity).toBe(1);

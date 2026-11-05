@@ -14,6 +14,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -48,8 +49,16 @@ export const QuestTeams = ({
     refetchInterval: (query) => (query.state.data?.current ? 5000 : 30000),
   });
   /** Keep rejections beside the controls; successful changes refresh shared and personal progress. */
-  const refresh = async (result: { success: boolean; message: string }) => {
+  const refresh = async (result: {
+    success: boolean;
+    message: string;
+    actionNotice?: string;
+  }) => {
     setMessage(result.success ? "" : result.message);
+    if (!result.success && result.actionNotice) {
+      showActionReadinessToast(result);
+      await updateUser(undefined, { revision: undefined });
+    }
     if (result.success) {
       setEndAction(null);
       setUsername("");

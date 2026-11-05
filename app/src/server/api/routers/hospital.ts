@@ -10,7 +10,6 @@ import {
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   calcHealCost,
   calcHealFinish,
@@ -33,13 +32,16 @@ import {
 import { fetchUser } from "@/queries/profile";
 import { fetchAlliances, fetchStructures } from "@/queries/village";
 import { fetchUpdatedUser } from "@/routers/profile";
-
 import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
@@ -105,10 +107,14 @@ export const hospitalRouter = createTRPCRouter({
       ]);
       const updatedTarget = updatedTargetOrNull ?? updatedUser;
       // Extract user & target to shorthand variables
-      const { user: u } = updatedUser;
-      const { user: t } = updatedTarget;
+      let { user: u } = updatedUser;
+      let { user: t } = updatedTarget;
       if (!u) return errorResponse("Your user was not found");
       if (!t) return errorResponse("Your target was not found");
+      const readiness = prepareActionReadiness(u, updatedUser.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      u = readiness.user;
+      if (isSelfHeal) t = u;
       // Derived
       const pools = calcHospitalHealPools(u, isSelfHeal);
       const { toHeal } = calcHowMuchToHeal(u, t, input.healPercentage, pools);
@@ -127,9 +133,6 @@ export const hospitalRouter = createTRPCRouter({
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");
-      if (u.status !== "AWAKE") {
-        return errorResponse(actionStatusMessage(u.status));
-      }
       if (!MEDNIN_HEALABLE_STATES.find((s) => s === t.status)) {
         return errorResponse("Target user must be awake or hospitalized");
       }
@@ -194,10 +197,14 @@ export const hospitalRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: u.userId,
           updatedAt: u.updatedAt,
-          where: [eq(userData.status, "AWAKE"), gte(userData.curChakra, chakraCost)],
+          where: [
+            readiness.where ?? eq(userData.status, "AWAKE"),
+            gte(userData.curChakra, chakraCost),
+          ],
           set: {
+            ...readiness.set,
             medicalExperience: sql`LEAST(${userData.medicalExperience} + ${expGain}, ${MEDNIN_EXP_CAP})`,
-            curChakra: sql`${userData.curChakra} - ${chakraCost}`,
+            curChakra: sql`${readiness.set.curChakra ?? userData.curChakra} - ${chakraCost}`,
             ...(pools.includes("Health")
               ? {
                   curHealth: sql`LEAST(${userData.curHealth} + ${toHeal}, ${t.maxHealth})`,
@@ -232,6 +239,7 @@ export const hospitalRouter = createTRPCRouter({
             questDataForDb,
             pools,
             toHeal,
+            readiness,
           ),
         );
         // MySQL may count both changed accounts for this single delivery.
@@ -271,13 +279,17 @@ export const hospitalRouter = createTRPCRouter({
           ? Math.min(t.curHealth + toHeal, t.maxHealth)
           : t.curHealth;
       after(() => updateUserOnMap(pusher, t.sector, { ...t, curHealth: healedHealth }));
-      return {
-        success: true,
-        message: `You have healed ${isSelfHeal ? "yourself" : "the target user"}${expGain > 0 ? ` and gained ${expGain} medical experience` : ""}`,
-        chakraCost,
-        expGain,
-        healer,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `You have healed ${isSelfHeal ? "yourself" : "the target user"}${expGain > 0 ? ` and gained ${expGain} medical experience` : ""}`,
+          chakraCost,
+          expGain,
+          healer,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   // Pay to heal & get out of hospital
   npcHeal: protectedProcedure

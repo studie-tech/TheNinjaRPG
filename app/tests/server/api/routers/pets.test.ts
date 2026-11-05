@@ -2,7 +2,8 @@ import { getAssignedPetExperience, getAssignedPetCollection } from "@/deltas/pet
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { ItemRarities, PetRarities, PET_ABILITY_SLOTS_BY_RARITY, type ItemRarity, MAP_WAKE_ISLAND_SECTOR, PET_BATTLE_CONFIG, PET_COLLECTION_SLOT_COST, PET_FEED_COOLDOWN_HOURS, PET_FEED_EXPERIENCE_BY_RARITY, PET_GENERATION_LEASE_MS, PET_GENERATION_RETRY_MS, PET_MAX_COLLECTION_SLOTS, PET_MAX_GENERATION_ATTEMPTS, PET_REPLACEMENT_COST, PET_SEICHI_SILVER_COST, PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
-import { gameSetting, item, jutsu, skillTree, userData, userItem, userJutsu, userPet, petSpecies, userSkill, userUpload } from "@/drizzle/schema";
+import { gameSetting, item, jutsu, skillTree, userData, userItem, userJutsu, userPet, petSpecies, userSkill, userUpload, userQueue } from "@/drizzle/schema";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as appearance from "@/libs/pets/appearance";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as creation from "@/libs/pets/creation";
@@ -16,8 +17,12 @@ import { getUtcDayKey, HOUR_S, secondsFromNow } from "@/utils/time";
 import { initialPetSpecies } from "../../../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertItems, insertPetSpecies, insertUserItems, insertUsers } from "../../../setup/factories";
+import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+
+afterEach(() => resetServerModuleStubs());
 
 const userId = "pet-owner";
 const petId = "owned-pet";
@@ -27,6 +32,7 @@ const task = (patch: Partial<PetTask> = {}): PetTask => ({ petId, questId: "hunt
   questHistoryId: "profession-attempt", startedAt: 1, questVersion: 1, finishesAt: Date.now() + 60000, ...patch });
 
 it("loads adoption choices and valid meals when an inventory item's definition is missing", async () => {
+  stubProfile("fetchAllGameSettings", async () => []);
   const database = { query: {
     userData: { findFirst: async () => ({ userId, rank: "GENIN", status: "AWAKE",
       sector: MAP_WAKE_ISLAND_SECTOR, federalStatus: "NONE", staffAccount: false,
@@ -49,6 +55,7 @@ it("loads adoption choices and valid meals when an inventory item's definition i
 });
 
 it("rejects feeding an orphaned inventory stack before changing companion experience", async () => {
+  stubProfile("fetchAllGameSettings", async () => []);
   const database = { query: {
     userData: { findFirst: async () => ({ userId, rank: "GENIN", status: "AWAKE", activePetId: petId }) },
     userPet: { findMany: async () => [{ id: petId, rank: 1, artRank: 1, avatar,
@@ -69,6 +76,7 @@ it("explains exhausted daily offers before collection capacity, even after a com
     petExperience: 0, activePetId: petId, petDailyClaims: null as null | { dayKey: string; speciesIds: string[] },
   };
   let pets = [{ id: petId, rank: 1, generationStatus: "FAILED", generationAttempts: 0, storedExperience: 0 }];
+  stubProfile("fetchAllGameSettings", async () => []);
   const database = { query: {
     userData: { findFirst: async () => owner },
     userPet: { findMany: async () => pets },
@@ -92,11 +100,89 @@ it("explains exhausted daily offers before collection capacity, even after a com
 
 describeWithDatabase("Companion ownership, economy and generation", () => {
   beforeEach(async () => {
-    await resetTables(gameSetting, petSpecies, userUpload, userPet, userSkill, userJutsu, userItem, skillTree, jutsu, item, userData);
+    await resetTables(userQueue, gameSetting, petSpecies, userUpload, userPet, userSkill, userJutsu, userItem, skillTree, jutsu, item, userData);
     await insertPetSpecies(initialPetSpecies);
     await insertUsers([{ userId, username: "PetOwner", rank: "GENIN", sector: MAP_WAKE_ISLAND_SECTOR, status: "AWAKE", reputationPoints: 200 }]);
   });
   afterEach(() => { vi.restoreAllMocks(); PET_BATTLE_CONFIG.enabled = true; setSystemTime(); });
+
+  it.each(["settings", "activate", "feed", "assign", "evolve"] as const)("preserves queued companion XP while waking for %s", async (action) => {
+    const database = await getTestDatabase();
+    await readyPet(database, { experience: 7500 });
+    await parkedPet(database, { storedExperience: 30 });
+    await mealStack();
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50,
+      regeneration: 0, regenAt: new Date(), experience: 1000, petExperience: 100 })
+      .where(eq(userData.userId, userId));
+    await database.insert(gameSetting).values({ id: "queue-gain", name: "trainingGainMultiplier", value: 2, time: new Date(Date.now() + 60_000) });
+    await queueEnergy(userId, [{ stat: "offence", energy: 40 }]);
+    const before = (await readOwner(database))!;
+    const caller = callerForDatabase(petsRouter, userId, database);
+    const result = action === "activate" ? await caller.activatePet({ petId: "parked" })
+      : action === "feed" ? await caller.feedPet({ petId, userItemId: "meal-stack", expectedQuantity: 2 })
+      : action === "assign" ? await caller.assignExperience({ petId, ...stats })
+      : action === "evolve" ? await caller.rankUp({ petId })
+      : await caller.updatePet({ petId, name: "Queued recovery" });
+    expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+    const after = (await readOwner(database))!;
+    const gained = after.experience - before.experience;
+    expect(gained).toBeGreaterThan(0);
+    expect(after).toMatchObject({ status: "AWAKE", curEnergy: 10, energyQueueHead: 1 });
+    if (action === "activate") {
+      expect(after.petExperience).toBe(30);
+      expect((await readPet(database, petId))?.storedExperience).toBe(100 + gained);
+    } else {
+      const assigned = action === "assign" ? (await readPet(database, petId))!.experience - 7500 : 0;
+      const fed = action === "feed" ? PET_FEED_EXPERIENCE_BY_RARITY.COMMON : 0;
+      expect(after.petExperience).toBe(100 + gained + fed - assigned);
+    }
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("recovers %s in the companion settings write", async (status) => {
+    const database = await getTestDatabase();
+    await readyPet(database);
+    await database.update(userData).set({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100,
+      regenAt: new Date(), money: 23 }).where(eq(userData.userId, userId));
+    const executed = await recordQueries(() => callerForDatabase(petsRouter, userId, database)
+      .updatePet({ petId, name: "Recovered companion" }));
+    expect(executed.result).toMatchObject({ success: true,
+      actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
+    expect(executed.result.message).toContain(executed.result.actionNotice!);
+    expect(executed.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
+    expect(executed.statements.filter((statement) => /^\s*select/i.test(statement) && /from\s+[`"]?UserData[`"]?/i.test(statement) && !/\bavg\s*\(/i.test(statement))).toHaveLength(1);
+    expect(await readOwner(database)).toMatchObject({ status: "AWAKE", money: 23 });
+    expect(await readPet(database)).toMatchObject({ name: "Recovered companion", revision: 1 });
+    expect(executed.result.userPatch).toBeUndefined();
+  });
+
+  it("does not recover or change a companion after the wake preference changes before commit", async () => {
+    const database = await getTestDatabase();
+    await readyPet(database);
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
+    const raced = beforeStatements(database, userData, [async () => {
+      await database.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, userId));
+    }]);
+    const result = await callerForDatabase(petsRouter, userId, raced).updatePet({ petId, name: "Rejected" });
+    expect(result.success).toBe(false);
+    expect(result.actionNotice).toBeUndefined();
+    expect(await readOwner(database)).toMatchObject({ status: "ASLEEP", autoWakeUp: false });
+    expect(await readPet(database)).toMatchObject({ name: "Kumo", revision: 0 });
+  });
+
+  it("recovers an inactive companion release without a transaction", async () => {
+    const database = await getTestDatabase();
+    await readyPet(database);
+    await parkedPet(database);
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
+    const withoutTransactions = new Proxy(database, { get(target, property, receiver) {
+      if (property === "transaction") return () => { throw new Error("Inactive release must not use a transaction"); };
+      return Reflect.get(target, property, receiver);
+    } });
+    const result = await callerForDatabase(petsRouter, userId, withoutTransactions).releasePet({ petId: "parked" });
+    expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+    expect(await readOwner(database)).toMatchObject({ status: "AWAKE", activePetId: petId });
+    expect(await readPet(database, "parked")).toBeUndefined();
+  });
 
   it.each([
     { status: "AWAKE", autoWakeUp: true, available: true },

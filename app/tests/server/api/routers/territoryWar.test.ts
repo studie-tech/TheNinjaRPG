@@ -101,7 +101,7 @@ describeWithDatabase("Territory War participation", () => {
     expect(new Set(Object.values(snapshot.extraState.territoryWar!.competitors).map(comp => comp.id))).toEqual(new Set(["village:home"]));
   });
 
-  it.each(["missing", "expired", "resolved"] as const)("confirms a read-only unavailable event rejection without a profile read: %s", async (scenario) => {
+  it.each(["missing", "expired", "resolved"] as const)("confirms a read-only unavailable event rejection without profile hydration: %s", async (scenario) => {
     const db = await getTestDatabase();
     if (scenario === "expired") await db.update(territoryWar).set({ endsAt: new Date(0) });
     if (scenario === "resolved") await db.update(territoryWar).set({ resolvedAt: new Date() });
@@ -112,7 +112,8 @@ describeWithDatabase("Territory War participation", () => {
     await db.insert(userCookingJob).values({ id: "unsettled-cooking", userId: "leader", experience: 23, finishesAt: new Date(0) });
     const measured = await recordQueries(() => callerForDatabase(territoryWarRouter, "leader", db).createTeam({ eventId: scenario === "missing" ? "missing" : "event" }));
     expect(measured.result).toMatchObject({ success: false, message: "This Territory War has ended", userDelta: {} });
-    expect(measured.statements).toHaveLength(3);
+    // Isolation, event, actor relations and recovery settings are independent reads.
+    expect(measured.statements).toHaveLength(4);
     expect(measured.statements.every((statement) => /^select /i.test(statement))).toBe(true);
     await cache.onSuccess(measured.result, undefined, revision);
     expect(cache.refetch).not.toHaveBeenCalled();

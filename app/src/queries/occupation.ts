@@ -1,3 +1,4 @@
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 /**
  * Database access for occupation; authorization and transaction scopes stay in callers.
  */
@@ -81,10 +82,12 @@ export const updateUserDataForCraftItem = (
   questDataForDb: import("@/validators/objectives").QuestTrackerType[],
   ctx: { userId: string },
   updatedAt: Date,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       updatedAt,
       craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
       questData: questDataForDb,
@@ -93,7 +96,7 @@ export const updateUserDataForCraftItem = (
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.updatedAt, user.updatedAt),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         or(isNull(userData.sector), ne(userData.sector, MAP_WAKE_ISLAND_SECTOR)),
       ),
     );

@@ -47,6 +47,7 @@ export const useItemActions = ({
     onMutate: prepareInventoryUpdate,
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
+      if (data.actionNotice) void utils.profile.getUser.invalidate();
       await updateInventory(
         data.success
           ? (rows) => getInventoryQuantities(rows, data.inventoryChanges)
@@ -182,6 +183,7 @@ export const useItemActions = ({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
         if (data.success) {
           onDone();
           await Promise.all([
@@ -197,6 +199,7 @@ export const useItemActions = ({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
         if (data.success) {
           onSettled();
           await Promise.all([
@@ -210,6 +213,7 @@ export const useItemActions = ({
   const { mutate: evolve, isPending: isEvolving } = api.item.evolveItem.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
+      if (data.actionNotice) void utils.profile.getUser.invalidate();
       if (data.success) {
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),

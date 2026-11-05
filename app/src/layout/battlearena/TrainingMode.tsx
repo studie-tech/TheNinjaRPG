@@ -54,6 +54,7 @@ export function TrainingMode({
             battleId: data.battleId,
             updatedAt: new Date(),
           });
+          if (data.actionNotice) void updateUser(undefined);
           pushToCombat(router, data.battleId);
           showMutationToast({ ...data, message: "Entering the Training" });
         } else {

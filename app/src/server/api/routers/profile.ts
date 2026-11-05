@@ -141,6 +141,7 @@ import {
   settleQueuedTraining,
 } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchSquad } from "@/queries/anbu";
 import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
@@ -177,7 +178,6 @@ import {
   findUserDataForUpdateAi,
   findUserDataForUpdateUser,
   findUserDataForUpdateUsername,
-  findUserDataForUseUnusedExperiencePoints,
   findUserNindoByUserId,
   findUserVoteForClaimVotes,
   findVillageForFetchUpdatedUserOnce,
@@ -279,6 +279,10 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   adjustSeichiSilverAtomically,
   claimUserSnapshot,
@@ -1746,8 +1750,19 @@ export const profileRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await findUserDataForUseUnusedExperiencePoints(ctx.drizzle, ctx);
-      if (!user) return errorResponse("User not found");
+      const [initialUser, actionSettings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      if (!initialUser) return errorResponse("User not found");
+      const hasElementAllocation = BasicElementName.some(
+        (element) => Math.floor(input[element]) > 0,
+      );
+      const readiness = hasElementAllocation
+        ? prepareActionReadiness(initialUser, actionSettings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const assignmentBlock = experienceAssignmentBlockMessage(user);
       if (assignmentBlock) return errorResponse(assignmentBlock);
       // Derived
@@ -1761,9 +1776,7 @@ export const profileRouter = createTRPCRouter({
       if (inputSum > user.earnedExperience) {
         return errorResponse("Trying to assign more stats than available");
       }
-      const hasElementAllocation = BasicElementName.some(
-        (element) => Math.floor(input[element]) > 0,
-      );
+
       if (hasElementAllocation && user.status !== "AWAKE") {
         return errorResponse("Must be awake to assign elemental experience");
       }
@@ -1831,22 +1844,23 @@ export const profileRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
         set: {
           ...stats,
           ...elementalUpdate,
-          experience: sql`${userData.experience} + ${combatSpent}`,
+          experience: sql`${userData.experience} + ${combatSpent + user.experience - initialUser.experience}`,
           earnedExperience: sql`${userData.earnedExperience} - ${spent}`,
         },
         where: [
           ...(hasElementAllocation
-            ? [...elementalSnapshotConditions(user), eq(userData.status, "AWAKE")]
+            ? [...elementalSnapshotConditions(initialUser), readiness?.where]
             : []),
           eq(userData.rank, user.rank),
-          sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,
+          sql`${userData.masteryRanks} = CAST(${JSON.stringify(initialUser.masteryRanks)} AS JSON)`,
           ...[...CombatStatNames, ...MasteryNames].map((stat) =>
-            eq(userData[stat], user[stat]),
+            eq(userData[stat], initialUser[stat]),
           ),
-          eq(userData.experience, user.experience),
+          eq(userData.experience, initialUser.experience),
           eq(userData.earnedExperience, user.earnedExperience),
           gte(userData.earnedExperience, spent),
         ],
@@ -1854,16 +1868,20 @@ export const profileRouter = createTRPCRouter({
       if (!result.success) {
         return errorResponse("Stats changed while assigning points. Please try again");
       } else {
-        return {
-          success: true,
-          message: "User stats updated",
-          // A pending queue is settled by the profile refresh, including quest progress.
-          ...getUseUnusedExperiencePointsUserUpdate({
-            data,
-            resultClaimedAt: result.claimedAt,
-            user,
-          }),
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "User stats updated",
+            // A pending queue is settled by the profile refresh, including quest progress.
+            ...getUseUnusedExperiencePointsUserUpdate({
+              data,
+              resultClaimedAt: result.claimedAt,
+              user,
+            }),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
     }),
   // Get nindo text of user

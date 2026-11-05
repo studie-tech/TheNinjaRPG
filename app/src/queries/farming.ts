@@ -26,6 +26,7 @@ import {
 } from "@/drizzle/schema";
 import { EMPTY_PLOT } from "@/libs/farming";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /** Load a seed and its yield definition; a missing seed leaves seedItem undefined and yieldItem null. */
 export const fetchFarmSeedAndYield = async (
@@ -240,11 +241,15 @@ export const updateUserDataForSellCrop = (
   client: Pick<DrizzleClient, "update">,
   totalValue: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ farmCurrency: sql`${userData.farmCurrency} + ${totalValue}` })
-    .where(eq(userData.userId, ctx.userId));
+    .set({
+      ...readiness?.set,
+      farmCurrency: sql`${userData.farmCurrency} + ${totalValue}`,
+    })
+    .where(and(eq(userData.userId, ctx.userId), readiness?.where));
 
 /**
  * Build the `userData` update for `buyShopItem`, setting `farmCurrency` and
@@ -257,16 +262,19 @@ export const updateUserDataForBuyShopItem = (
   ctx: { userId: string },
   user: { farmPlotsPurchased: number },
   maxPurchased: number,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       farmCurrency: sql`${userData.farmCurrency} - ${shopEntry.cost}`,
       farmPlotsPurchased: sql`${userData.farmPlotsPurchased} + 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
+        readiness?.where,
         gte(userData.farmCurrency, shopEntry.cost),
         eq(userData.farmPlotsPurchased, user.farmPlotsPurchased),
         lt(userData.farmPlotsPurchased, maxPurchased),
@@ -299,16 +307,19 @@ export const updateUserDataForBuyShopItem2 = (
   ctx: { userId: string },
   user: { farmExtractorsOwned: number },
   maxExtractors: number,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       farmCurrency: sql`${userData.farmCurrency} - ${shopEntry.cost}`,
       farmExtractorsOwned: sql`${userData.farmExtractorsOwned} + 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
+        readiness?.where,
         gte(userData.farmCurrency, shopEntry.cost),
         eq(userData.farmExtractorsOwned, user.farmExtractorsOwned),
         lt(userData.farmExtractorsOwned, maxExtractors),
@@ -323,11 +334,21 @@ export const updateUserDataForBuyShopItem3 = (
   client: Pick<DrizzleClient, "update">,
   totalCost: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ farmCurrency: sql`${userData.farmCurrency} - ${totalCost}` })
-    .where(and(eq(userData.userId, ctx.userId), gte(userData.farmCurrency, totalCost)));
+    .set({
+      ...readiness?.set,
+      farmCurrency: sql`${userData.farmCurrency} - ${totalCost}`,
+    })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        readiness?.where,
+        gte(userData.farmCurrency, totalCost),
+      ),
+    );
 
 /** Build the `farmExtraction` insert for `extractSeeds`, updating duplicate keys. */
 export const insertFarmExtractionForExtractSeeds = (
@@ -568,11 +589,15 @@ export const updateUserDataForAwardFarmingProgress = (
   client: Pick<DrizzleClient, "update">,
   xpGain: number,
   user: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` })
-    .where(eq(userData.userId, user.userId));
+    .set({
+      ...readiness?.set,
+      farmingExperience: sql`${userData.farmingExperience} + ${xpGain}`,
+    })
+    .where(and(eq(userData.userId, user.userId), readiness?.where));
 
 /**
  * Build the `item` listing for `getFarmCollectionState`, including predicates on

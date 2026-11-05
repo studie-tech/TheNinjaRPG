@@ -1,16 +1,17 @@
 import {and, eq} from "drizzle-orm";
 import {afterEach, beforeEach, expect, it, vi} from "bun:test";
-import {CombatStatNames, getUserCaps, MAX_MASTERY_CAP, TRAINING_CAPTCHA_REFRESHES_PER_MINUTE} from "@/drizzle/constants";
+import {CombatStatNames, getUserCaps, ELEMENTAL_MASTERY_CAP, MAX_MASTERY_CAP, TRAINING_CAPTCHA_REFRESHES_PER_MINUTE} from "@/drizzle/constants";
 import {bloodline, captcha, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userQueue, userVote} from "@/drizzle/schema";
 import {getEnergyQueue} from "@/libs/queue";
 import {fetchUpdatedUser} from "@/server/api/routers/profile";
 import {generateCaptcha, refreshCaptcha, validateCaptcha} from "@/server/api/routers/misc";
 import {trainRouter} from "@/server/api/routers/train";
+import {appRouter} from "@/server/api/root";
 import {InstantNewQuestObjective, SimpleObjective} from "@/validators/objectives";
 import {ObjectiveReward} from "@/validators/rewards";
 import {insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory} from "../../../setup/factories";
 import {queueEnergy, readEnergyQueue} from "../../../setup/queues";
-import {callerFor, describeWithDatabase, getTestDatabase, resetTables} from "../../../setup/testDatabase";
+import {callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables} from "../../../setup/testDatabase";
 import type {EnergyTrainingQueueEntry} from "@/validators/train";
 const USER_ID = "trainee";
 const SESSION_GAIN = 100;
@@ -294,12 +295,37 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     { name: "a changed threshold", current: [{ stat: "offence", energy: 40 }], entries: [{ stat: "offence", energy: 50 }] },
     { name: "reordered entries", current: [{ stat: "offence", energy: 40 }, { stat: "defence", energy: 40 }], entries: [{ stat: "defence", energy: 40 }, { stat: "offence", energy: 40 }] },
   ] satisfies { name: string; current: EnergyTrainingQueueEntry[]; entries: EnergyTrainingQueueEntry[] }[])("rejects $name while asleep without changing the Energy queue", async ({ current, entries }) => {
-    await trainee({ status: "ASLEEP", curEnergy: 0, regeneration: 0, energyQueue: current });
+    await trainee({ status: "ASLEEP", autoWakeUp: false, curEnergy: 0, regeneration: 0, energyQueue: current });
     const before = await readUser();
     expect(await (await caller()).updateEnergyTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
     expect(await readEnergyQueue(USER_ID)).toEqual(current);
     expect(await readUser()).toMatchObject({ status: "ASLEEP", energyQueueHead: before.energyQueueHead, energyQueueTail: before.energyQueueTail, curEnergy: 0, offence: before.offence, defence: before.defence, experience: before.experience });
     expect(await readLogs()).toHaveLength(0);
+  });
+
+  it("settles loaded queued Energy with a raw action snapshot and one actor read", async () => {
+    await trainee({ status: "ASLEEP", autoWakeUp: true, curEnergy: 50, regeneration: 0, elementalMastery: {Wind: ELEMENTAL_MASTERY_CAP}, energyQueue: [{stat: "offence", energy: 40}] });
+    const before = await readUser();
+    const database = await getTestDatabase();
+    const api = callerForDatabase(appRouter, USER_ID, database).train;
+    const {result, statements} = await recordQueries(() => api.selectTrainedElement({element: "Wind"}));
+    expect(result).toMatchObject({success: true, actionNotice: "This action woke you up."});
+    const after = await readUser();
+    expect(after).toMatchObject({status: "AWAKE", activeTrainedElement: "Wind", curEnergy: 10});
+    expect(after.energyQueueHead).toBeGreaterThan(before.energyQueueHead);
+    expect(after.offence).toBeGreaterThan(before.offence);
+    expect(after.experience - before.experience).toBe(Math.round(after.offence - before.offence));
+    expect(await readLogs()).toMatchObject([{userId: USER_ID, stat: "offence", amount: after.offence - before.offence}]);
+    expect(statements.filter((statement) => /^\s*select/i.test(statement) && /from\s+[`"]?UserData[`"]?/i.test(statement) && /[`"]userId[`"]/.test(statement))).toHaveLength(1);
+  });
+
+  it("recovers an opted-in sleeper in the guarded Energy queue publication", async () => {
+    await trainee({ status: "ASLEEP", autoWakeUp: true, curEnergy: 0, regeneration: 0 });
+    const entries = [{ stat: "offence" as const, energy: 40 }];
+    const result = await (await caller()).updateEnergyTrainingQueue({ expectedEntries: [], entries });
+    expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect(await readEnergyQueue(USER_ID)).toEqual(entries);
+    expect((await readUser()).status).toBe("AWAKE");
   });
 
   it("allows removing and clearing Energy entries while asleep", async () => {

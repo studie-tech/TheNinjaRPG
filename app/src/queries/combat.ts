@@ -122,6 +122,10 @@ import {
   completedQuestHistoryRelation,
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
+import type {
+  ActionReadiness,
+  ActionReadinessWrite,
+} from "@/server/utils/actionReadiness";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import {
   elementalSnapshotConditions,
@@ -367,10 +371,12 @@ export const updateUserDataForBattleArenaHeal = (
   client: Pick<DrizzleClient, "update">,
   user: { maxHealth: number; maxStamina: number; maxChakra: number },
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       money: sql`${userData.money} - ${BATTLE_ARENA_HEAL_COST}`,
       curHealth: user.maxHealth,
       curStamina: user.maxStamina,
@@ -379,7 +385,7 @@ export const updateUserDataForBattleArenaHeal = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         gte(userData.money, BATTLE_ARENA_HEAL_COST),
       ),
     );
@@ -924,6 +930,7 @@ export const updateUserDataForCreateBattle = (
   queueUpdate: Record<string, SQL<unknown>>,
   battleId: string,
   info: {
+    actionReadiness?: ActionReadiness;
     tournamentGame?: undefined | { id: string; battleId: string; aiOnly: false | true };
     hunting?: undefined | import("@/validators/hunting").HuntingBattleState;
     questAttempt?: undefined | import("@/drizzle/schema").UserQuest;
@@ -1044,6 +1051,12 @@ export const updateUserDataForCreateBattle = (
         // row is never even examined (or locked) by this update. Drizzle
         // compiles an empty list to FALSE, matching expectedRows === 0.
         inArray(userData.userId, allParticipantIds),
+        info.actionReadiness?.notice
+          ? or(
+              ne(userData.userId, info.actionReadiness.initial.userId),
+              info.actionReadiness.where,
+            )
+          : undefined,
         // A companion swap during preload must not claim a battle with a stale active pet.
         ...(petsAllowedInBattle(battleType)
           ? fetchedUsers
@@ -1064,7 +1077,7 @@ export const updateUserDataForCreateBattle = (
           : []),
         ...(info.hunting
           ? [
-              eq(userData.status, "AWAKE"),
+              info.actionReadiness?.where ?? eq(userData.status, "AWAKE"),
               isNull(userData.battleId),
               eq(userData.occupation, "HUNTER"),
               eq(userData.sector, sector ?? -1),
@@ -1181,7 +1194,18 @@ export const updateUserDataForCreateBattle = (
         eq(userData.isAi, false),
         // The team roster and awake status must survive preload until the atomic claim.
         ...(questEncounter
-          ? [eq(userData.questPartyId, questEncounter.id), eq(userData.status, "AWAKE")]
+          ? [
+              eq(userData.questPartyId, questEncounter.id),
+              or(
+                eq(userData.status, "AWAKE"),
+                info.actionReadiness?.notice
+                  ? and(
+                      eq(userData.userId, info.actionReadiness.initial.userId),
+                      info.actionReadiness.where,
+                    )
+                  : undefined,
+              ),
+            ]
           : []),
         ...(info.kageMatch
           ? [
@@ -1271,6 +1295,12 @@ export const updateUserDataForCreateBattle = (
                 exists(selectClaimedRankedQueueEntry(client, userData.userId)),
               )
             : or(
+                info.actionReadiness?.notice
+                  ? and(
+                      eq(userData.userId, info.actionReadiness.initial.userId),
+                      info.actionReadiness.where,
+                    )
+                  : undefined,
                 eq(userData.status, "AWAKE"),
                 eq(userData.status, "QUEUED"),
                 info.questAttempt?.isolated &&

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { and, eq, exists, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, exists, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -54,6 +54,7 @@ import {
   petRankUpBlockMessage,
 } from "@/libs/pets/progression";
 import { getAssignedCombatStatTotal } from "@/libs/profile";
+import { updateUserForActionReadiness } from "@/queries/actionReadiness";
 import { deleteEmptyUserItem } from "@/queries/item";
 import {
   deleteUserPetForReleasePet,
@@ -84,11 +85,20 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadinessWrite,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { getPetFeedAvailableAt, getUtcDayKey } from "@/utils/time";
+import {
+  getNextUserSnapshotAt,
+  getPetFeedAvailableAt,
+  getUtcDayKey,
+} from "@/utils/time";
 import {
   acquirePetSchema,
   assignPetExperienceSchema,
@@ -109,7 +119,16 @@ export const petsRouter = createTRPCRouter({
     .input(petPaymentSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user } = await fetchPetOwner(ctx.drizzle, ctx.userId);
+      const { user: initialUser, settings } = await fetchPetOwner(
+        ctx.drizzle,
+        ctx.userId,
+        undefined,
+        true,
+      );
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!user) return errorResponse("User not found");
       if (user.isBanned || user.status !== "AWAKE" || user.battleId || user.isAi)
         return errorResponse(
@@ -127,8 +146,9 @@ export const petsRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           updatedAt: user.updatedAt,
+          readiness,
           where: [
-            ...ownerMutationWhere(user),
+            ...ownerMutationWhere(user, readiness),
             eq(userData.petSlots, user.petSlots),
             gte(payment.column, payment.cost),
           ],
@@ -139,16 +159,20 @@ export const petsRouter = createTRPCRouter({
         }),
       );
       return claim.success
-        ? {
-            success: true,
-            message: "Companion collection slot unlocked.",
-            ...getUnlockSlotUserUpdate({
-              userPetSlots: user.petSlots,
-              claimClaimedAt: claim.claimedAt,
-              paymentColumnName: payment.column.name,
-              paymentCost: payment.cost,
-            }),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "Companion collection slot unlocked.",
+              ...getUnlockSlotUserUpdate({
+                userPetSlots: user.petSlots,
+                claimClaimedAt: claim.claimedAt,
+                paymentColumnName: payment.column.name,
+                paymentCost: payment.cost,
+              }),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -157,11 +181,16 @@ export const petsRouter = createTRPCRouter({
     .input(petSelectionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, pet, pets } = await fetchPetOwner(
-        ctx.drizzle,
-        ctx.userId,
-        input.petId,
-      );
+      const {
+        user: initialUser,
+        pet,
+        pets,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -177,8 +206,9 @@ export const petsRouter = createTRPCRouter({
       // statement independently of MySQL's unspecified multi-table assignment order.
       const ownerSnapshot = selectUserDataForActivatePet(
         ctx.drizzle,
-        ownerSnapshotWhere,
+        (snapshot) => ownerSnapshotWhere(snapshot, readiness),
         user,
+        readiness,
       );
       // Drizzle's MySQL UPDATE builder cannot update the owner and both pets together.
       const activated = await retryOnDeadlock(() =>
@@ -189,20 +219,25 @@ export const petsRouter = createTRPCRouter({
           pet,
           user,
           now,
-          ownerSnapshotWhere,
+          (snapshot) => ownerSnapshotWhere(snapshot, readiness),
+          readiness,
         ),
       );
       return activated.rowsAffected > 0
-        ? {
-            success: true,
-            message: `${pet.name} is now your active companion.`,
-            ...getActivatePetUserUpdate({
-              petId: pet.id,
-              petStoredExperience: pet.storedExperience,
-              userUpdatedAt: user.updatedAt,
-              now,
-            }),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: `${pet.name} is now your active companion.`,
+              ...getActivatePetUserUpdate({
+                petId: pet.id,
+                petStoredExperience: pet.storedExperience,
+                userUpdatedAt: user.updatedAt,
+                now,
+              }),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -211,10 +246,14 @@ export const petsRouter = createTRPCRouter({
     .input(updatePetAbilitiesSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user, pet }, abilities] = await Promise.all([
-        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
+      const [{ user: initialUser, pet, settings }, abilities] = await Promise.all([
+        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true),
         fetchPetAbilities(ctx.drizzle, ctx.userId),
       ]);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -224,16 +263,26 @@ export const petsRouter = createTRPCRouter({
         ...abilities,
       });
       if (blocked) return errorResponse(blocked);
-      const changed = await updateOwnedPet(ctx.drizzle, user, pet, {
-        jutsuIds: input.jutsuIds,
-        skillIds: input.skillIds,
-      });
+      const changed = await updateOwnedPet(
+        ctx.drizzle,
+        user,
+        pet,
+        {
+          jutsuIds: input.jutsuIds,
+          skillIds: input.skillIds,
+        },
+        readiness,
+      );
       return changed
-        ? {
-            success: true,
-            message: "Companion abilities updated.",
-            ...getUnchangedPetUserUpdate(),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "Companion abilities updated.",
+              ...getUnchangedPetUserUpdate(),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -242,10 +291,14 @@ export const petsRouter = createTRPCRouter({
     .input(feedPetSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user, pet }, meal] = await Promise.all([
-        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
+      const [{ user: initialUser, pet, settings }, meal] = await Promise.all([
+        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true),
         findUserItemForFeedPet(ctx.drizzle, input, ctx),
       ]);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const now = new Date();
       const feedBlock = petFeedBlockMessage(user, pet, now);
       if (feedBlock || !user || !pet)
@@ -274,10 +327,11 @@ export const petsRouter = createTRPCRouter({
           meal,
           isActive,
           experience,
-          ownerSnapshotWhere,
+          (snapshot) => ownerSnapshotWhere(snapshot, readiness),
 
           pet,
           ctx,
+          readiness,
         ),
       );
       if (fed.rowsAffected === 0) return changedResponse();
@@ -295,17 +349,21 @@ export const petsRouter = createTRPCRouter({
           });
         }
       }
-      return {
-        success: true,
-        ...getFeedPetUserUpdate({
-          userUpdatedAt: user.updatedAt,
-          now,
-          isActive,
-          experience,
-        }),
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getFeedPetUserUpdate({
+            userUpdatedAt: user.updatedAt,
+            now,
+            isActive,
+            experience,
+          }),
 
-        message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
-      };
+          message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   /** Return the owner's collection without exposing server-only generation tokens. */
@@ -415,11 +473,16 @@ export const petsRouter = createTRPCRouter({
     .input(acquirePetSchema)
     .output(userDeltaResponseSchema.extend({ petId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [{ user, pets }, species, jutsus] = await Promise.all([
-        fetchPetOwner(ctx.drizzle, ctx.userId),
-        listPetSpeciesForGetPet(ctx.drizzle),
-        listVisiblePetJutsu(ctx.drizzle),
-      ]);
+      const [{ user: initialUser, pets, settings }, species, jutsus] =
+        await Promise.all([
+          fetchPetOwner(ctx.drizzle, ctx.userId, undefined, true),
+          listPetSpeciesForGetPet(ctx.drizzle),
+          listVisiblePetJutsu(ctx.drizzle),
+        ]);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!user) return errorResponse("User not found");
       const restriction = acquisitionBlockMessage(user);
       if (restriction) return errorResponse(restriction);
@@ -482,8 +545,9 @@ export const petsRouter = createTRPCRouter({
               client: tx,
               userId: user.userId,
               updatedAt: user.updatedAt,
+              readiness,
               where: [
-                ...ownerMutationWhere(user),
+                ...ownerMutationWhere(user, readiness),
                 eq(userData.isAi, false),
                 eq(userData.sector, MAP_WAKE_ISLAND_SECTOR),
                 eq(userData.federalStatus, user.federalStatus),
@@ -511,24 +575,28 @@ export const petsRouter = createTRPCRouter({
           }),
         );
         if (!acquired) return changedResponse();
-        return {
-          success: true,
-          petId,
-          ...getAcquirePetUserUpdate({
-            userActivePetId: user.activePetId,
+        return actionReadinessResponse(
+          {
+            success: true,
             petId,
-            userPetAcquisitions: user.petAcquisitions,
-            dayKey,
-            claimedSpecies,
-            inputSpeciesId: input.speciesId,
-            paymentColumnName: payment.column.name,
-            paymentCost: payment.cost,
-          }),
+            ...getAcquirePetUserUpdate({
+              userActivePetId: user.activePetId,
+              petId,
+              userPetAcquisitions: user.petAcquisitions,
+              dayKey,
+              claimedSpecies,
+              inputSpeciesId: input.speciesId,
+              paymentColumnName: payment.column.name,
+              paymentCost: payment.cost,
+            }),
 
-          message: payment.cost
-            ? `Companion adopted for ${payment.cost} ${payment.label}. Its appearance is ready to generate.`
-            : "Your first companion is adopted free. Its appearance is ready to generate.",
-        };
+            message: payment.cost
+              ? `Companion adopted for ${payment.cost} ${payment.label}. Its appearance is ready to generate.`
+              : "Your first companion is adopted free. Its appearance is ready to generate.",
+          },
+          readiness,
+          ctx.drizzle,
+        );
       } catch (error) {
         if (isPetMutationConflict(error) || isMysqlDuplicateKeyError(error))
           return changedResponse();
@@ -541,7 +609,15 @@ export const petsRouter = createTRPCRouter({
     .input(petSelectionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -553,23 +629,38 @@ export const petsRouter = createTRPCRouter({
         // An inactive pet owns its bank entirely. A joined DELETE checks both
         // snapshots without updating or serializing an unrelated active XP bank.
         if (user.activePetId !== pet.id) {
-          const removed = await retryOnDeadlock(() =>
-            executeRemovedForReleasePet(
-              ctx.drizzle,
-              ownerSnapshotWhere,
-              user,
-
-              pet,
+          const recoveredAt = getNextUserSnapshotAt(user.updatedAt);
+          // DELETE cannot update the retained owner. Its parallel recovery may win first;
+          // accept only that exact owner revision while retaining every pet snapshot guard.
+          const [removed, recovered] = await Promise.all([
+            retryOnDeadlock(() =>
+              executeRemovedForReleasePet(
+                ctx.drizzle,
+                (snapshot) =>
+                  readiness.notice
+                    ? or(
+                        ownerSnapshotWhere(snapshot, readiness),
+                        ownerSnapshotWhere({ ...snapshot, updatedAt: recoveredAt }),
+                      )
+                    : ownerSnapshotWhere(snapshot),
+                user,
+                pet,
+              ),
             ),
-          );
-          return removed.rowsAffected === 1
-            ? {
-                success: true,
-                ...getUnchangedPetUserUpdate(),
-                message:
-                  "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
-              }
-            : changedResponse();
+            updateUserForActionReadiness(ctx.drizzle, readiness, recoveredAt),
+          ]);
+          const response =
+            removed.rowsAffected === 1
+              ? {
+                  success: true,
+                  ...getUnchangedPetUserUpdate(),
+                  message:
+                    "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
+                }
+              : changedResponse();
+          return recovered.rowsAffected > 0
+            ? actionReadinessResponse(response, readiness, ctx.drizzle)
+            : response;
         }
         // DELETE cannot also reset fields on a retained owner row. The active
         // selection and its XP reset must commit with this pet's deletion.
@@ -579,7 +670,8 @@ export const petsRouter = createTRPCRouter({
               client: tx,
               userId: user.userId,
               updatedAt: user.updatedAt,
-              where: ownerMutationWhere(user),
+              readiness,
+              where: ownerMutationWhere(user, readiness),
               set: { petExperience: 0, activePetId: null },
             });
             if (!claim.success) return false;
@@ -589,12 +681,16 @@ export const petsRouter = createTRPCRouter({
           }),
         );
         return released
-          ? {
-              success: true,
-              ...getReleasePetUserUpdate(),
-              message:
-                "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
-            }
+          ? actionReadinessResponse(
+              {
+                success: true,
+                ...getReleasePetUserUpdate(),
+                message:
+                  "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
+              },
+              readiness,
+              ctx.drizzle,
+            )
           : changedResponse();
       } catch (error) {
         if (isPetMutationConflict(error)) return changedResponse();
@@ -607,7 +703,15 @@ export const petsRouter = createTRPCRouter({
     .input(updatePetSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -618,13 +722,17 @@ export const petsRouter = createTRPCRouter({
       const genderBlock = getPetGenderUpdateError(pet, input.gender);
       if (genderBlock) return errorResponse(genderBlock);
       const { petId: _petId, ...patch } = input;
-      const changed = await updateOwnedPet(ctx.drizzle, user, pet, patch);
+      const changed = await updateOwnedPet(ctx.drizzle, user, pet, patch, readiness);
       return changed
-        ? {
-            success: true,
-            message: "Companion settings updated.",
-            ...getUnchangedPetUserUpdate(),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "Companion settings updated.",
+              ...getUnchangedPetUserUpdate(),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -633,22 +741,40 @@ export const petsRouter = createTRPCRouter({
     .input(updatePetAiSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
       if (pet.rank > getMaxPetRank(user.rank))
         return errorResponse("Your rank does not support this companion rank.");
-      const changed = await updateOwnedPet(ctx.drizzle, user, pet, {
-        aiRules: input.rules,
-        includeDefaultRules: input.includeDefaultRules,
-      });
+      const changed = await updateOwnedPet(
+        ctx.drizzle,
+        user,
+        pet,
+        {
+          aiRules: input.rules,
+          includeDefaultRules: input.includeDefaultRules,
+        },
+        readiness,
+      );
       return changed
-        ? {
-            success: true,
-            message: "Companion AI settings updated.",
-            ...getUnchangedPetUserUpdate(),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "Companion AI settings updated.",
+              ...getUnchangedPetUserUpdate(),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -680,7 +806,15 @@ export const petsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -728,24 +862,29 @@ export const petsRouter = createTRPCRouter({
           availableExperience,
           spent,
           stats,
-          ownerSnapshotWhere,
+          (snapshot) => ownerSnapshotWhere(snapshot, readiness),
 
           pet,
+          readiness,
         ),
       );
       return assigned.rowsAffected > 0
-        ? {
-            success: true,
-            message: `${spent.toLocaleString("en-US")} companion experience assigned.`,
-            ...getAssignExperienceUserUpdate({
-              user,
-              pet,
-              stats,
-              availableExperience,
-              spent,
-              now,
-            }),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: `${spent.toLocaleString("en-US")} companion experience assigned.`,
+              ...getAssignExperienceUserUpdate({
+                user,
+                pet,
+                stats,
+                availableExperience,
+                spent,
+                now,
+              }),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -754,7 +893,15 @@ export const petsRouter = createTRPCRouter({
     .input(petSelectionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction || !user || !pet)
         return errorResponse(restriction ?? "Pet not found");
@@ -763,19 +910,29 @@ export const petsRouter = createTRPCRouter({
       const next = PET_RANKS.find((entry) => entry.rank === pet.rank + 1);
       if (!next) return errorResponse("Your pet has reached its highest rank.");
       // Each evolution gets its own bounded allowance, even if the previous rank exhausted it.
-      const changed = await updateOwnedPet(ctx.drizzle, user, pet, {
-        rank: next.rank,
-        generationAttempts: 0,
-        generationStatus: "PENDING",
-        generationToken: null,
-        generationStartedAt: null,
-      });
+      const changed = await updateOwnedPet(
+        ctx.drizzle,
+        user,
+        pet,
+        {
+          rank: next.rank,
+          generationAttempts: 0,
+          generationStatus: "PENDING",
+          generationToken: null,
+          generationStartedAt: null,
+        },
+        readiness,
+      );
       return changed
-        ? {
-            success: true,
-            ...getUnchangedPetUserUpdate(),
-            message: `Your companion is now ${next.name}. Generate its evolved appearance to continue training.`,
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              ...getUnchangedPetUserUpdate(),
+              message: `Your companion is now ${next.name}. Generate its evolved appearance to continue training.`,
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : changedResponse();
     }),
 
@@ -790,10 +947,14 @@ export const petsRouter = createTRPCRouter({
     .input(generatePetAppearanceSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user, pet }, provider] = await Promise.all([
-        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
+      const [{ user: initialUser, pet, settings }, provider] = await Promise.all([
+        fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true),
         fetchPetArtProvider(ctx.drizzle),
       ]);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!user || !pet) return errorResponse("Pet not found");
       const restriction = petMutationBlockMessage(user, pet);
       if (restriction) return errorResponse(restriction);
@@ -868,11 +1029,12 @@ export const petsRouter = createTRPCRouter({
           attempts,
 
           pet,
-          ownerSnapshotWhere,
+          (snapshot) => ownerSnapshotWhere(snapshot, readiness),
           user,
+          readiness,
         ),
       );
-      if (claim.rowsAffected !== 1) return changedResponse();
+      if (claim.rowsAffected === 0) return changedResponse();
       try {
         const { avatar, avatarFacing } = await generatePetAppearance(
           { ...pet, ...appearance },
@@ -893,14 +1055,22 @@ export const petsRouter = createTRPCRouter({
           ),
         );
         if (accepted.rowsAffected !== 1)
-          return errorResponse(
-            "The companion changed before the image completed. Refresh to see its current appearance.",
+          return actionReadinessResponse(
+            errorResponse(
+              "The companion changed before the image completed. Refresh to see its current appearance.",
+            ),
+            readiness,
+            ctx.drizzle,
           );
-        return {
-          success: true,
-          message: "Your companion's appearance is ready.",
-          ...getUnchangedPetUserUpdate(),
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "Your companion's appearance is ready.",
+            ...getUnchangedPetUserUpdate(),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       } catch (error) {
         // Returned failures bypass tRPC's onError; retain diagnostics while the UI offers a retry.
         logError(error, "Companion appearance generation failed", {
@@ -925,11 +1095,19 @@ export const petsRouter = createTRPCRouter({
           ),
         );
         if (keepsPreviousLook && settled.rowsAffected === 1)
-          return errorResponse(
-            "The evolved image could not be verified, so we kept its previous look. No image attempt was used. Your companion can fight and evolve again; staff can redraw it.",
+          return actionReadinessResponse(
+            errorResponse(
+              "The evolved image could not be verified, so we kept its previous look. No image attempt was used. Your companion can fight and evolve again; staff can redraw it.",
+            ),
+            readiness,
+            ctx.drizzle,
           );
-        return errorResponse(
-          "The appearance could not be generated or verified. No image attempt was used and your companion is kept. A retry only uses an attempt if its image is accepted, and never charges adoption again.",
+        return actionReadinessResponse(
+          errorResponse(
+            "The appearance could not be generated or verified. No image attempt was used and your companion is kept. A retry only uses an attempt if its image is accepted, and never charges adoption again.",
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
     }),
@@ -1002,8 +1180,8 @@ const petFeedBlockMessage = (
 };
 
 /** Keep the validated rank, active identity and ability to mutate current at commit. */
-const ownerMutationWhere = (user: UserData) => [
-  eq(userData.status, "AWAKE"),
+const ownerMutationWhere = (user: UserData, readiness?: ActionReadinessWrite) => [
+  readiness?.where ?? eq(userData.status, "AWAKE"),
   eq(userData.isBanned, false),
   isNull(userData.battleId),
   user.activePetId
@@ -1015,11 +1193,11 @@ const ownerMutationWhere = (user: UserData) => [
     : isNull(userData.petTask),
 ];
 /** Pin account identity and its monotonic revision alongside the domain guards. */
-const ownerSnapshotWhere = (user: UserData) =>
+const ownerSnapshotWhere = (user: UserData, readiness?: ActionReadinessWrite) =>
   and(
     eq(userData.userId, user.userId),
     eq(userData.updatedAt, user.updatedAt),
-    ...ownerMutationWhere(user),
+    ...ownerMutationWhere(user, readiness),
   );
 
 /** Snapshot conflicts remain recoverable mutation results, not server exceptions. */
@@ -1041,6 +1219,7 @@ const updateOwnedPet = async (
   user: UserData,
   pet: UserPet,
   patch: Partial<UserPet>,
+  readiness?: ActionReadinessWrite,
 ) => {
   const now = new Date();
   const assignments = Object.entries(patch)
@@ -1059,9 +1238,10 @@ const updateOwnedPet = async (
       user,
       now,
       assignments,
-      ownerSnapshotWhere,
+      (snapshot) => ownerSnapshotWhere(snapshot, readiness),
 
       pet,
+      readiness,
     ),
   );
   return result.rowsAffected > 0;

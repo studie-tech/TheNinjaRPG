@@ -5,27 +5,34 @@ import type { SQL } from "drizzle-orm";
 import { and, eq } from "drizzle-orm";
 import type { CombatStatName } from "@/drizzle/constants";
 import { jutsu, userData, userPet, userSkill } from "@/drizzle/schema";
+import { actionReadinessSqlSet, fetchActionUser } from "@/queries/actionReadiness";
+import { fetchAllGameSettings } from "@/queries/profile";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
-/** Load independent owner and collection snapshots in parallel. */
+/** Load independent owner and collection snapshots; actions include recovery context in the same read phase. */
 export const fetchPetOwner = async (
   client: DrizzleClient,
   userId: string,
   petId?: string,
+  includeActionReadiness = false,
 ) => {
-  const [user, pets] = await Promise.all([
-    client.query.userData.findFirst({ where: eq(userData.userId, userId) }),
+  const [user, pets, settings] = await Promise.all([
+    includeActionReadiness
+      ? fetchActionUser(client, userId)
+      : client.query.userData.findFirst({ where: eq(userData.userId, userId) }),
     client.query.userPet.findMany({
       where: eq(userPet.userId, userId),
       orderBy: userPet.createdAt,
       with: { species: true },
     }),
+    includeActionReadiness ? fetchAllGameSettings(client) : [],
   ]);
   const pet =
     pets.find((entry) => entry.id === (petId ?? user?.activePetId)) ??
     (!petId ? pets[0] : undefined);
-  return { user, pet, pets };
+  return { user, pet, pets, settings };
 };
 
 /** Published pet jutsus are shared; passive skills still require an activated owner copy. */
@@ -61,16 +68,23 @@ import {
 /** Table alias for previous pet joins, keeping its columns distinct from other participants. */
 const previousPet = alias(userPet, "previous_pet");
 /**
- * Build the locking owner derived table for the activation UPDATE; compose it into
- * that single statement instead of awaiting a separate read.
+ * Materialize the owner XP bank before a companion transfer or queued award; compose it into
+ * the guarded statement so bank settlement adds no database round-trip.
  */
 export const selectUserDataForActivatePet = (
   client: Pick<DrizzleClient, "select">,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
   user: import("@/drizzle/schema").UserData,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
-    .select({ userId: userData.userId, petExperience: userData.petExperience })
+    .select({
+      userId: userData.userId,
+      petExperience:
+        sql<number>`${readiness?.set.petExperience ?? userData.petExperience}`.as(
+          "ownerPetExperience",
+        ),
+    })
     .from(userData)
     .where(ownerSnapshotWhere(user))
     .limit(1)
@@ -92,13 +106,14 @@ export const executeActivatedForActivatePet = (
   user: import("@/drizzle/schema").UserData,
   now: Date,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
           UPDATE ${userData}
           INNER JOIN ${ownerSnapshot} ON ${eq(userData.userId, ownerSnapshot.userId)}
           INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
           ${previous ? sql`INNER JOIN ${userPet} previous_pet ON ${and(eq(previousPet.id, previous.id), eq(previousPet.userId, userData.userId), eq(previousPet.revision, previous.revision))}` : sql``}
-          SET ${userData.activePetId} = ${pet.id},
+          SET ${actionReadinessSqlSet(readiness, ["petExperience"])} ${userData.activePetId} = ${pet.id},
               ${userData.petExperience} = ${pet.storedExperience},
               ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
               ${userPet.storedExperience} = 0,
@@ -121,7 +136,7 @@ export const findUserItemForFeedPet = (
 
 /** Execute the database statement for `feedPet`. */
 export const executeFedForFeedPet = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "execute" | "select">,
   user: import("@/drizzle/schema").UserData,
   now: Date,
   meal: {
@@ -138,17 +153,24 @@ export const executeFedForFeedPet = (
     species: import("@/drizzle/schema").PetSpecies;
   },
   ctx: { userId: string },
-) =>
-  client.execute(sql`
+  readiness?: ActionReadinessWrite,
+) => {
+  // A queued XP award must read companion eligibility before this same statement changes it.
+  const recoverySnapshot = readiness?.set.petExperience
+    ? selectUserDataForActivatePet(client, ownerSnapshotWhere, user, readiness)
+    : undefined;
+  return client.execute(sql`
           UPDATE ${userData}
+          ${recoverySnapshot ? sql`INNER JOIN ${recoverySnapshot} ON ${eq(userData.userId, recoverySnapshot.userId)}` : sql``}
           INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
           INNER JOIN ${userItem} ON ${eq(userItem.userId, userData.userId)}
-          SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
+          SET ${actionReadinessSqlSet(readiness, recoverySnapshot ? ["petExperience"] : [])} ${!isActive && recoverySnapshot ? sql`${userData.petExperience} = ${recoverySnapshot.petExperience},` : sql``}
+              ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
               ${userItem.quantity} = ${meal.quantity - 1},
               ${userPet.lastFedAt} = ${now},
               ${userPet.revision} = ${userPet.revision} + 1,
               ${userPet.updatedAt} = ${now},
-              ${isActive ? sql`${userData.petExperience} = ${userData.petExperience} + ${experience}` : sql`${userPet.storedExperience} = ${userPet.storedExperience} + ${experience}`}
+              ${isActive ? sql`${userData.petExperience} = ${recoverySnapshot?.petExperience ?? userData.petExperience} + ${experience}` : sql`${userPet.storedExperience} = ${userPet.storedExperience} + ${experience}`}
           WHERE ${and(ownerSnapshotWhere(user), petSnapshotWhere(pet))}
             AND ${userItem.id} = ${meal.id}
             AND ${userItem.userId} = ${ctx.userId}
@@ -162,6 +184,7 @@ export const executeFedForFeedPet = (
             AND EXISTS (SELECT 1 FROM ${item} WHERE ${item.id} = ${meal.itemId}
               AND ${item.itemType} = 'MEAL' AND ${item.rarity} = ${meal.item.rarity})
         `);
+};
 
 /** Build the `petSpecies` listing for `getPet`. */
 export const listPetSpeciesForGetPet = (client: Pick<DrizzleClient, "query">) =>
@@ -247,7 +270,7 @@ export const deleteUserPetForReleasePet = (
 
 /** Pin the XP bank as well as revisions so allocation can return its exact remaining balance. */
 export const executeAssignedForAssignExperience = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "execute" | "select">,
   user: import("@/drizzle/schema").UserData,
   now: Date,
   bank:
@@ -261,12 +284,19 @@ export const executeAssignedForAssignExperience = (
   pet: import("@/drizzle/schema").UserPet & {
     species: import("@/drizzle/schema").PetSpecies;
   },
-) =>
-  client.execute(sql`
+  readiness?: ActionReadinessWrite,
+) => {
+  // A queued XP award must read companion eligibility before this same statement changes it.
+  const recoverySnapshot = readiness?.set.petExperience
+    ? selectUserDataForActivatePet(client, ownerSnapshotWhere, user, readiness)
+    : undefined;
+  return client.execute(sql`
           UPDATE ${userData}
+          ${recoverySnapshot ? sql`INNER JOIN ${recoverySnapshot} ON ${eq(userData.userId, recoverySnapshot.userId)}` : sql``}
           INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
-          SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
-              ${bank} = ${bank} - ${spent},
+          SET ${actionReadinessSqlSet(readiness, recoverySnapshot ? ["petExperience"] : [])} ${bank !== userData.petExperience && recoverySnapshot ? sql`${userData.petExperience} = ${recoverySnapshot.petExperience},` : sql``}
+              ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
+              ${bank} = ${bank === userData.petExperience && recoverySnapshot ? recoverySnapshot.petExperience : bank} - ${spent},
               ${sql.join(
                 CombatStatNames.map((stat) => sql`${userPet[stat]} = ${stats[stat]}`),
                 sql`, `,
@@ -276,10 +306,11 @@ export const executeAssignedForAssignExperience = (
               ${userPet.updatedAt} = ${now}
           WHERE ${and(ownerSnapshotWhere(user), petSnapshotWhere(pet), eq(bank, availableExperience), gte(bank, spent))}
         `);
+};
 
 /** Build the `userPet` update for `generateAppearance`, using predicates on `federalStatus` and `staffAccount`. */
 export const updateUserPetForGenerateAppearance = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute" | "select">,
   token: string,
   now: Date,
   attempts: number,
@@ -288,27 +319,34 @@ export const updateUserPetForGenerateAppearance = (
     species: import("@/drizzle/schema").PetSpecies;
   },
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
-  user: import("@/drizzle/schema").UserData,
-) =>
-  client
-    .update(userPet)
-    .set({
-      generationStatus: "GENERATING",
-      generationToken: token,
-      generationStartedAt: now,
-      generationAttempts: attempts + 1,
-      revision: sql`${userPet.revision} + 1`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        petSnapshotWhere(pet),
-        sql`EXISTS (SELECT 1 FROM ${userData}
-                WHERE ${ownerSnapshotWhere(user)}
-                AND ${userData.federalStatus} = ${user.federalStatus}
-                AND ${userData.staffAccount} = ${user.staffAccount})`,
-      ),
-    );
+  user: UserData,
+  readiness?: ActionReadinessWrite,
+) => {
+  // A queued XP award must read companion eligibility before this same statement changes it.
+  const recoverySnapshot = readiness?.set.petExperience
+    ? selectUserDataForActivatePet(client, ownerSnapshotWhere, user, readiness)
+    : undefined;
+  return client.execute(sql`
+    UPDATE ${userData}
+          ${recoverySnapshot ? sql`INNER JOIN ${recoverySnapshot} ON ${eq(userData.userId, recoverySnapshot.userId)}` : sql``}
+    INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
+    SET ${actionReadinessSqlSet(readiness, recoverySnapshot ? ["petExperience"] : [])}
+        ${recoverySnapshot ? sql`${userData.petExperience} = ${recoverySnapshot.petExperience},` : sql``}
+        ${readiness?.set.status ? sql`${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},` : sql``}
+        ${userPet.generationStatus} = 'GENERATING',
+        ${userPet.generationToken} = ${token},
+        ${userPet.generationStartedAt} = ${now},
+        ${userPet.generationAttempts} = ${attempts + 1},
+        ${userPet.revision} = ${userPet.revision} + 1,
+        ${userPet.updatedAt} = ${now}
+    WHERE ${and(
+      petSnapshotWhere(pet),
+      ownerSnapshotWhere(user),
+      eq(userData.federalStatus, user.federalStatus),
+      eq(userData.staffAccount, user.staffAccount),
+    )}
+  `);
+};
 
 /** Build the `userUpload` insert for `generateAppearance`. */
 export const insertUserUploadForGenerateAppearance = (
@@ -387,23 +425,31 @@ export const updateUserPetForGenerateAppearance3 = (
 
 /** Execute the database statement for `updateOwnedPet`. */
 export const executeResultForUpdateOwnedPet = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "execute" | "select">,
   user: import("@/drizzle/schema").UserData,
   now: Date,
   assignments: SQL<unknown>[],
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 
   pet: import("@/drizzle/schema").UserPet,
-) =>
-  client.execute(sql`
+  readiness?: ActionReadinessWrite,
+) => {
+  // A queued XP award must read companion eligibility before this same statement changes it.
+  const recoverySnapshot = readiness?.set.petExperience
+    ? selectUserDataForActivatePet(client, ownerSnapshotWhere, user, readiness)
+    : undefined;
+  return client.execute(sql`
       UPDATE ${userData}
+          ${recoverySnapshot ? sql`INNER JOIN ${recoverySnapshot} ON ${eq(userData.userId, recoverySnapshot.userId)}` : sql``}
       INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
-      SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
+      SET ${actionReadinessSqlSet(readiness, recoverySnapshot ? ["petExperience"] : [])} ${recoverySnapshot ? sql`${userData.petExperience} = ${recoverySnapshot.petExperience},` : sql``}
+        ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
           ${sql.join(assignments, sql`, `)}${assignments.length ? sql`,` : sql``}
           ${userPet.revision} = ${userPet.revision} + 1,
           ${userPet.updatedAt} = ${now}
       WHERE ${and(ownerSnapshotWhere(user), petSnapshotWhere(pet))}
     `);
+};
 
 /** Every pet write must still own the selected identity at the fetched revision. */
 const petSnapshotWhere = (pet: UserPet) =>

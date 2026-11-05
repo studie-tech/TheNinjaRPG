@@ -5,17 +5,27 @@ import { quest, questHistory, userData, village, villageStructure } from "@/driz
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
 import { appRouter } from "@/server/api/root";
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { actionReadinessResponse, prepareActionReadiness } from "@/server/utils/actionReadiness";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { insertQuests, insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 import { beforeStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
-// The path activates the same gate used by the real training endpoint, with a handler
-// whose invocation makes rejection-before-side-effects observable.
+// A resolver composes recovery into its own read and account-claim phases.
+// The protected procedure itself does not load or change character readiness.
 let invocations = 0;
-const router = createTRPCRouter({ train: createTRPCRouter({ startTraining: protectedProcedure.mutation(() => {
-  invocations++; return { success: true, message: "Trained" };
+const router = createTRPCRouter({ train: createTRPCRouter({ startTraining: protectedProcedure.mutation(async ({ ctx }) => {
+  const initial = await fetchActionUser(ctx.drizzle, ctx.userId);
+  if (!initial) return errorResponse("User not found");
+  const readiness = prepareActionReadiness(initial);
+  if (readiness.error) return errorResponse(readiness.error);
+  const claim = await claimUserSnapshot({ client: ctx.drizzle, userId: ctx.userId, updatedAt: initial.updatedAt, readiness });
+  if (!claim.success) return errorResponse("Your status changed. Please try again.");
+  invocations++;
+  return actionReadinessResponse({ success: true, message: "Trained" }, readiness);
 }) }) });
 const userId = "action-readiness";
 const current = async () => (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
@@ -24,18 +34,19 @@ afterEach(() => { invocations = 0; resetServerModuleStubs(); vi.restoreAllMocks(
 
 describeWithDatabase("automatic action recovery", () => {
   const setup = async (status: "ASLEEP" | "HOSPITALIZED", values: Record<string, unknown> = {}) => {
-    await resetTables(userData, villageStructure);
+    await resetTables(userData, villageStructure, village);
     await insertUsers([{ userId, username: userId, status, villageId: "village", curHealth: 10, maxHealth: 100, money: 1234, ...values }]);
+    await (await getTestDatabase()).insert(village).values({ id: "village", name: "Village", sector: 0, kageId: "" });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     // Isolate the transition's SQL, with the shared hydrated snapshot controlled at the
     // boundary. Profile regeneration itself is exercised by the arena and hospital suites.
     stubProfile("fetchUpdatedUser", async () => ({ user: await current() }) as never);
     return callerForDatabase(router, userId, await getTestDatabase());
   };
-  it("wakes with the default preference before invoking the action", async () => {
+  it("wakes with the default preference in the endpoint account claim", async () => {
     const caller = await setup("ASLEEP");
     expect((await current()).autoWakeUp).toBe(true);
-    expect(await caller.train.startTraining()).toMatchObject({ success: true, message: "Trained", actionNotice: AUTO_WAKE_MESSAGE });
+    expect(await caller.train.startTraining()).toMatchObject({ success: true, message: `Trained ${AUTO_WAKE_MESSAGE}`, actionNotice: AUTO_WAKE_MESSAGE });
     expect(invocations).toBe(1);
     expect((await current()).status).toBe("AWAKE");
   });

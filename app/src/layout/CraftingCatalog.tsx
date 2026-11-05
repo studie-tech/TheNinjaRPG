@@ -130,6 +130,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     onMutate: prepareUserUpdate,
     onSuccess: (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
       if (data.success) {
         setSelectedItem(null);
         setCraftQuantity(1);

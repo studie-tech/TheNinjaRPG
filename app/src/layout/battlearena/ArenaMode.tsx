@@ -18,6 +18,7 @@ import Image from "@/layout/Image";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -61,11 +62,13 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     api.combat.startArenaBattle.useMutation({
       onSuccess: (result) => {
         if (result.success && result.battleId) {
+          showActionReadinessToast(result);
           void updateUser({
             status: "BATTLE",
             battleId: result.battleId,
             updatedAt: new Date(),
           });
+          if (result.actionNotice) void updateUser(undefined);
           pushToCombat(router, result.battleId);
           sendGTMEvent({ event: "enter_arena" });
           void completeTutorialAction("arenaStart");

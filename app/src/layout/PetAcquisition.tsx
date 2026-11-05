@@ -151,6 +151,7 @@ export function PetAcquisition() {
     onSuccess: async (result) => {
       setMessage(result.success ? null : result.message);
       showMutationToast(result);
+      if (result.actionNotice) void utils.profile.getUser.invalidate();
       await Promise.all([
         utils.pets.getPet.invalidate(),
         utils.pets.getCollection.invalidate(),

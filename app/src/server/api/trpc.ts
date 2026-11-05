@@ -1,12 +1,9 @@
-import { MISSION_HALL_QUEST_TYPES } from "@/drizzle/constants";
-import { actionStatusMessage, shouldPrepareAction } from "@/libs/actionReadiness";
 import {
   fetchUserDataForEnforceRateLimit,
   insertActionLogForEnforceRateLimit,
   updateUserDataForEnforceRateLimit,
 } from "@/queries/concurrency";
-import { fetchActionReadiness } from "@/queries/profile";
-import { fetchIsolatedPyramid, fetchQuest } from "@/queries/quests";
+import { fetchIsolatedPyramid } from "@/queries/quests";
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
  * 1. You want to modify request context (see Part 1)
@@ -36,7 +33,6 @@ import {
 } from "@/libs/queryTelemetry";
 import {
   ISOLATED_PYRAMID_MESSAGE,
-  isManagedQuestRun,
   isPyramidRestrictedProcedure,
 } from "@/libs/questRun";
 import { trpcSessionUserId } from "@/libs/trpcSession";
@@ -431,83 +427,28 @@ const enforceUserIsAuthed = t.middleware(async ({ ctx: context, path, next }) =>
   return next({ ctx: { userId: context.userId } });
 });
 
-/** Enforce persisted isolation and recover eligible characters before action handlers run. */
-const enforceCharacterActionReadiness = t.middleware(
-  async ({ ctx, path, type, next, getRawInput }) => {
-    if (type !== "mutation" || !ctx.userId)
-      return next({ ctx: { actionQuest: undefined } });
-    const input = await getRawInput();
-    const questId =
-      path === "quests.startQuest" &&
-      input &&
-      typeof input === "object" &&
-      "questId" in input &&
-      typeof input.questId === "string"
-        ? input.questId
-        : undefined;
-    const needsPreparation = shouldPrepareAction(path, input);
-    const [isolated, readiness, actionQuest] = await Promise.all([
-      isPyramidRestrictedProcedure(path)
-        ? fetchIsolatedPyramid(ctx.drizzle, ctx.userId)
-        : null,
-      needsPreparation || questId
-        ? fetchActionReadiness(ctx.drizzle, ctx.userId)
-        : null,
-      questId ? fetchQuest(ctx.drizzle, questId) : undefined,
-    ]);
-    const reject = (message: string) => ({
-      ok: true as const,
-      data: errorResponse(message),
-      marker: middlewareMarker,
-    });
-    if (isolated) return reject(ISOLATED_PYRAMID_MESSAGE);
-    let notice: string | undefined;
-    // Specific quest starts share one server-loaded quest with the handler; ordinary
-    // stories preserve their activity while Mission Hall and managed runs recover.
-    const requiresAwake =
-      needsPreparation ||
-      (actionQuest &&
-        (MISSION_HALL_QUEST_TYPES.includes(actionQuest.questType) ||
-          isManagedQuestRun(actionQuest)));
-    if (
-      requiresAwake &&
-      readiness &&
-      !readiness.isBanned &&
-      ["ASLEEP", "HOSPITALIZED"].includes(readiness.status)
-    ) {
-      if (readiness.status === "ASLEEP" && !readiness.autoWakeUp)
-        return reject(actionStatusMessage(readiness.status));
-      // Profile hydration imports the router primitives; load it only on a recovery path.
-      const { prepareCharacterForAction } = await import(
-        "@/server/utils/actionReadiness"
-      );
-      const prepared = await prepareCharacterForAction(
-        ctx.drizzle,
-        ctx.userId,
-        readiness,
-      );
-      if (prepared.error) return reject(prepared.error);
-      notice = prepared.notice;
+/** Enforce persisted isolation even when hidden content or stale client state omits its tracker. */
+const enforcePyramidIsolation = t.middleware(async ({ ctx, path, type, next }) => {
+  if (type === "mutation" && ctx.userId && isPyramidRestrictedProcedure(path)) {
+    const isolated = await fetchIsolatedPyramid(ctx.drizzle, ctx.userId);
+    if (isolated) {
+      // Some activities allow ordinary BATTLE players. Restrict isolated runs to their
+      // own progression and combat controls; the existing response contract permits recovery.
+      return {
+        ok: true,
+        data: errorResponse(ISOLATED_PYRAMID_MESSAGE),
+        marker: middlewareMarker,
+      };
     }
-    const result = await next({ ctx: { actionQuest } });
-    if (notice) {
-      if (result.ok && result.data && typeof result.data === "object") {
-        const data = result.data as Record<string, unknown>;
-        // Output parsing has completed. Keep the transport notice on every result shape,
-        // including silent mutations, without changing their success or cache contracts.
-        return { ...result, data: { ...data, actionNotice: notice } };
-      }
-      if (!result.ok) result.error.message = `${result.error.message} ${notice}`;
-    }
-    return result;
-  },
-);
+  }
+  return next();
+});
 
 export const protectedProcedure = t.procedure
   .use(enforceUserIsAuthed)
+  .use(enforcePyramidIsolation)
   .use(botIdMiddleware)
-  .use(sentryMiddleware)
-  .use(enforceCharacterActionReadiness);
+  .use(sentryMiddleware);
 
 /**
  * 4. EXPORTS

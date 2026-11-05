@@ -1,3 +1,4 @@
+import * as liveActivity from "@/server/utils/push/liveActivity";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -425,6 +426,28 @@ describeWithDatabase("scheduled Kage defenses", () => {
     expect(await caller.setDefenseAi({ id: m.id, consent: true })).toEqual({ success: false, message: "Village not found" });
     expect((await db.query.kageDefendedChallenges.findFirst())?.status).toBe("SCHEDULED");
   });
+  it("publishes recovery only after the check-in transaction commits", async () => {
+    const match = await due();
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "HOSPITALIZED", regenAt: new Date(Date.now() - 24 * 60 * 60 * 1000) }).where(eq(userData.userId, "first"));
+    const publication = vi.spyOn(liveActivity, "pushActivityUpdate").mockResolvedValue(undefined);
+    const rejectedCommit = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property === "transaction") {
+          return (callback: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(async (tx) => {
+            await callback(tx as unknown as DrizzleClient);
+            throw new Error("Check-in commit rejected");
+          });
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    await expect(callerForDatabase(kageRouter, "first", rejectedCommit).checkInDefense({ id: match.id })).rejects.toThrow("Check-in commit rejected");
+    expect(publication).not.toHaveBeenCalled();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "first") })).toMatchObject({ status: "HOSPITALIZED" });
+    expect(await db.query.kageDefendedChallenges.findFirst({ where: eq(kageDefendedChallenges.id, match.id) })).toMatchObject({ checkedInAt: null });
+  });
+
   it("defers hospital stays only when the scheduled match is due", async () => {
     const m = await join(); const db = await getTestDatabase();
     await db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "first"));

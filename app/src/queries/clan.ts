@@ -58,6 +58,7 @@ import {
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { userSummaryColumns } from "@/queries/userColumns";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { clampActionLogText } from "@/utils/actionLog";
 
@@ -678,14 +679,18 @@ export const updateClanForNominateElder = (
 export const updateUserDataForChallengeClan = (
   client: Pick<DrizzleClient, "update" | "select">,
   user: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ status: "QUEUED" })
+    .set({
+      ...readiness?.set,
+      status: "QUEUED",
+    })
     .where(
       and(
         eq(userData.userId, user.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         notExists(
           client
             .select({ id: mpvpBattleUser.id })
@@ -933,15 +938,19 @@ export const updateUserDataForUndoClanBattleJoin = (
 export const updateUserDataForRemoveFromClan = (
   client: Pick<DrizzleClient, "update">,
   userId: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       clanId: null,
-      status: sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
+      status:
+        readiness?.set.status ??
+        sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
       villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
     })
-    .where(eq(userData.userId, userId));
+    .where(and(eq(userData.userId, userId), readiness?.where));
 
 /** Build the `userRequest` deletion for `removeFromClan`, using predicates on `type`, `senderId`, `receiverId`. */
 export const deleteUserRequestForRemoveFromClan = (

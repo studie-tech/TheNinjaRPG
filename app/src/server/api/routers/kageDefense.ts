@@ -9,6 +9,7 @@ import {
   KAGE_DEFENSE_SLOT_MINUTES,
 } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   executeResultForDismissInstantDefense,
   executeResultForRequestInstantDefense,
@@ -24,8 +25,7 @@ import {
   updateKageDefendedChallengesForCheckInDefense,
   updateKageDefendedChallengesForRescheduleDefense2,
 } from "@/queries/kageDefense";
-import { findUserById } from "@/queries/profile";
-
+import { fetchAllGameSettings, findUserById } from "@/queries/profile";
 import { initiateBattle } from "@/routers/combat";
 import {
   baseServerResponse,
@@ -33,6 +33,11 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   assignKageMatches,
   getKageDefensePublic,
@@ -248,44 +253,64 @@ export const kageDefenseProcedures = {
     .input(kageMatchSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const match = await findKageDefendedChallengesForWithdrawDefense(
-        ctx.drizzle,
-        input,
-      );
+      const [match, actionUser, settings] = await Promise.all([
+        findKageDefendedChallengesForWithdrawDefense(ctx.drizzle, input),
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       if (!match) return errorResponse("Match not found");
-      return withKageHall(ctx.drizzle, match.villageId, async (tx, hall) => {
-        if (!(await syncLockedKageDefense(tx, hall)))
-          return errorResponse("Leadership changed. Refresh the defense schedule.");
-        const row = hall.rows.find((r) => r.match.id === input.id);
-        const m = row?.match;
-        if (!m || m.userId !== ctx.userId)
-          return errorResponse("Only the challenger can check in");
-        if (
-          hall.paused ||
-          m.hospitalDeferred ||
-          m.status !== "SCHEDULED" ||
-          !m.scheduledAt
-        )
-          return errorResponse("Check-in is unavailable while this match is paused");
-        if (row.user.status !== "AWAKE")
-          return errorResponse("Be awake and free of other activities to check in");
-        if (
-          hall.now.getTime() <
-            m.scheduledAt.getTime() - KAGE_DEFENSE_CHECK_IN_MINUTES * 60_000 ||
-          hall.now.getTime() >
-            m.scheduledAt.getTime() + KAGE_DEFENSE_GRACE_MINUTES * 60_000
-        )
-          return errorResponse(
-            `Check in during the ${KAGE_DEFENSE_CHECK_IN_MINUTES} minutes before the match or its start grace period`,
+      let confirmedReadiness: ActionReadiness | undefined;
+      const result = await withKageHall(
+        ctx.drizzle,
+        match.villageId,
+        async (tx, hall) => {
+          const readiness = prepareActionReadiness(actionUser, settings, hall.now);
+          if (readiness.error) return errorResponse(readiness.error);
+          for (const row of hall.rows) {
+            if (row.user.userId === ctx.userId) row.user = readiness.user;
+          }
+          if (hall.village.kage?.userId === ctx.userId)
+            hall.village.kage = readiness.user;
+          if (!(await syncLockedKageDefense(tx, hall)))
+            return errorResponse("Leadership changed. Refresh the defense schedule.");
+          const row = hall.rows.find((r) => r.match.id === input.id);
+          const m = row?.match;
+          if (!m || m.userId !== ctx.userId)
+            return errorResponse("Only the challenger can check in");
+          if (
+            hall.paused ||
+            m.hospitalDeferred ||
+            m.status !== "SCHEDULED" ||
+            !m.scheduledAt
+          )
+            return errorResponse("Check-in is unavailable while this match is paused");
+          if (
+            hall.now.getTime() <
+              m.scheduledAt.getTime() - KAGE_DEFENSE_CHECK_IN_MINUTES * 60_000 ||
+            hall.now.getTime() >
+              m.scheduledAt.getTime() + KAGE_DEFENSE_GRACE_MINUTES * 60_000
+          )
+            return errorResponse(
+              `Check in during the ${KAGE_DEFENSE_CHECK_IN_MINUTES} minutes before the match or its start grace period`,
+            );
+          const saved = await updateKageDefendedChallengesForCheckInDefense(
+            tx,
+            hall,
+            input,
+            readiness,
           );
-        await updateKageDefendedChallengesForCheckInDefense(tx, hall, input);
-        return {
-          success: true,
-          message: hall.village.kage?.isAi
-            ? "Checked in. Remain awake and start the title fight at the appointed time."
-            : "Checked in. Remain awake; the Kage starts the battle.",
-        };
-      });
+          if (!saved.rowsAffected)
+            return errorResponse("Your status changed. Please try again.");
+          confirmedReadiness = readiness;
+          return {
+            success: true,
+            message: hall.village.kage?.isAi
+              ? "Checked in. Remain awake and start the title fight at the appointed time."
+              : "Checked in. Remain awake; the Kage starts the battle.",
+          };
+        },
+      );
+      return actionReadinessResponse(result, confirmedReadiness, ctx.drizzle);
     }),
   /**
    * Publish one invitation with a guarded village write, without reconciling attendance
@@ -381,15 +406,23 @@ export const kageDefenseProcedures = {
     .input(kageStartSchema)
     .output(kageBattleResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const match = await findKageDefendedChallengesForWithdrawDefense(
-        ctx.drizzle,
-        input,
-      );
+      const [match, actionUser, settings] = await Promise.all([
+        findKageDefendedChallengesForWithdrawDefense(ctx.drizzle, input),
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       if (!match) return errorResponse("Match not found");
       const admission = await withKageHall(
         ctx.drizzle,
         match.villageId,
         async (tx, hall) => {
+          const readiness = prepareActionReadiness(actionUser, settings, hall.now);
+          if (readiness.error) return errorResponse(readiness.error);
+          for (const row of hall.rows) {
+            if (row.user.userId === ctx.userId) row.user = readiness.user;
+          }
+          if (hall.village.kage?.userId === ctx.userId)
+            hall.village.kage = readiness.user;
           if (!(await syncLockedKageDefense(tx, hall)))
             return errorResponse("Leadership changed. Refresh the defense schedule.");
           const row = hall.rows.find((r) => r.match.id === input.id);
@@ -443,9 +476,16 @@ export const kageDefenseProcedures = {
             return errorResponse(
               `Challengers may fight ${KAGE_CHALLENGER_DAILY_LIMIT} time per UTC day and ${KAGE_CHALLENGER_WEEKLY_LIMIT} times per UTC week`,
             );
+          const actor = ctx.userId === row.user.userId ? row.user : hall.village.kage;
+          if (!actor) return errorResponse("Your character is unavailable");
           if (
-            row.user.status !== "AWAKE" ||
-            (!hall.village.kage?.isAi && hall.village.kage?.status !== "AWAKE")
+            (row.user.userId === ctx.userId ? readiness.user : row.user).status !==
+              "AWAKE" ||
+            (!hall.village.kage?.isAi &&
+              (hall.village.kage?.userId === ctx.userId
+                ? readiness.user
+                : hall.village.kage
+              )?.status !== "AWAKE")
           )
             return errorResponse(
               "Both participants must be awake and free of other activities",
@@ -466,6 +506,7 @@ export const kageDefenseProcedures = {
         result = await initiateBattle(
           {
             client: ctx.drizzle,
+            actionUserId: ctx.userId,
             userIds: [m.userId],
             targetIds: [m.kageId],
             biome: "arena",

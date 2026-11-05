@@ -95,7 +95,7 @@ const fixture = ({ width = SECTOR_WIDTH, height = SECTOR_HEIGHT,
   return { api, move, reads, campSectors, userStarted, releaseUser, getWrites: () => writes };
 };
 
-beforeEach(() => invalidatePublishedMapCache());
+beforeEach(() => { invalidatePublishedMapCache(); stubProfile("fetchAllGameSettings", async () => []); });
 afterEach(() => { resetServerModuleStubs(); invalidatePublishedMapCache(); });
 
 describe("travel camp admission scheduling", () => {

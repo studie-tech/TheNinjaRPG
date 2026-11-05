@@ -53,6 +53,7 @@ import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { expandedWorldAtom } from "@/libs/expandedWorld";
@@ -1121,6 +1122,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     mutationFn: (input: RouterInputs["travel"]["moveInSector"]) =>
       utils.client.travel.moveInSector.mutate(input),
     meta: { handlesTransportError: true },
+    onSuccess: (result) => {
+      showActionReadinessToast(result);
+      if (result.actionNotice) void updateUser(undefined);
+    },
   });
 
   /**
@@ -1476,6 +1481,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       return { walk, sector: prepareSectorUpdate() };
     },
     onSuccess: async (res, input, context) => {
+      showActionReadinessToast(res);
+      if (res.actionNotice) await updateUser(undefined);
       const walk = context?.walk ?? Promise.resolve();
       const data = res.data;
       if (!res.success || !data) {
@@ -1598,6 +1605,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         );
       }
       showMutationToast(result);
+      if (result.actionNotice) await updateUser(undefined);
     },
   });
 
@@ -1605,11 +1613,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     onSuccess: async (data) => {
       document.body.style.cursor = "default";
       if (data.success) {
+        showActionReadinessToast(data);
         await updateUser({
           status: "BATTLE",
           battleId: data.battleId,
           updatedAt: new Date(),
         });
+        if (data.actionNotice) await updateUser(undefined);
       } else {
         showMutationToast({
           success: false,

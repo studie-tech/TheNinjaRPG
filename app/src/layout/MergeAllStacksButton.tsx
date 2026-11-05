@@ -21,6 +21,7 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   compact = false,
   onMerged,
 }) => {
+  const utils = api.useUtils();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
 
@@ -28,6 +29,7 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
     onMutate: prepareInventoryUpdate,
     onSuccess: async (data, _input, snapshot) => {
       showMutationToast(data);
+      if (data.actionNotice) void utils.profile.getUser.invalidate();
       // Partial failures can already have changed stacks and require authoritative recovery.
       await updateInventory(
         data.success

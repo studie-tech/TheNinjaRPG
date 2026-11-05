@@ -22,11 +22,11 @@ const content = {
 const readUser = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, "medic") });
 const readHistory = async () => (await getTestDatabase()).query.questHistory.findMany({ where: eq(questHistory.userId, "medic") });
 
-describeWithDatabase("mission hall starts require an awake player", () => {
+describeWithDatabase("mission hall action recovery", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(questHistory, quest, villageStructure, village, userData);
-    await insertUsers([{ userId: "medic", rank: "JONIN", level: 50, status: "ASLEEP", villageId: "home", sector: 0,
+    await insertUsers([{ userId: "medic", rank: "JONIN", level: 50, status: "ASLEEP", autoWakeUp: false, villageId: "home", sector: 0,
       regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" }]);
     const database = await getTestDatabase();
     await database.insert(village).values({ id: "home", name: "Home", sector: 0, kageId: "kage" });
@@ -36,13 +36,26 @@ describeWithDatabase("mission hall starts require an awake player", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("rejects a sleeping player's specific and random medical starts without spending the attempt", async () => {
+  it("respects sleep opt-out for specific and random medical starts without spending the attempt", async () => {
     const api = await callerFor(questsRouter, "medic");
     const blocked = { success: false, message: expect.stringContaining("asleep") };
     expect(await api.startQuest({ questId: "bloom", userSector: 0 })).toMatchObject(blocked);
     expect(await api.startRandom({ type: "medical", rank: "D", userLevel: 50, userSector: 0, userVillageId: "home" })).toMatchObject(blocked);
     expect((await readUser())?.dailyMedicalMissions).toBe(0);
     expect(await readHistory()).toHaveLength(0);
+  });
+
+  it.each(["specific", "random"] as const)("recovers an opted-in actor inside the %s endpoint", async (kind) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ autoWakeUp: true }).where(eq(userData.userId, "medic"));
+    // The leaf router exercises endpoint preparation without an app-router middleware preflight.
+    const api = await callerFor(questsRouter, "medic");
+    const result = kind === "specific"
+      ? await api.startQuest({ questId: "bloom", userSector: 0 })
+      : await api.startRandom({ type: "medical", rank: "D", userLevel: 50, userSector: 0, userVillageId: "home" });
+    expect(result).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect(await readUser()).toMatchObject({ status: "AWAKE", dailyMedicalMissions: 1 });
+    expect(await readHistory()).toHaveLength(1);
   });
 
   it("lets the same player start and progress the mission once awake", async () => {

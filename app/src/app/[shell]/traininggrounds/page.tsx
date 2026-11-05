@@ -110,6 +110,7 @@ import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import {
   actionPrerequisiteUser,
   actionStatusMessage,
@@ -1198,6 +1199,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       }),
       onSuccess: async (result, variables, context) => {
         showMutationToast(result);
+        if (result.actionNotice) void utils.profile.getUser.invalidate();
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
           await updateUser(result.data, { revision: context.revision });
@@ -1646,6 +1648,7 @@ const CovertTraining: React.FC<
   }
 > = (props) => {
   const { userData, timeDiff, updateUser } = props;
+  const utils = api.useUtils();
 
   // Stealth status derived from userData
   const stealthStatus = getStealthStatus(
@@ -1659,6 +1662,10 @@ const CovertTraining: React.FC<
   const { mutate: trainCovert, isPending: isTrainingCovert } =
     api.stealth.trainCovert.useMutation({
       onSuccess: async (data, variables) => {
+        if (data.actionNotice) {
+          showActionReadinessToast(data);
+          void utils.profile.getUser.invalidate();
+        }
         if (data.success && data.data) {
           // Derive start time from server-provided finish time to avoid clock-skew issues
           const covertTrainingStartedAt = new Date(

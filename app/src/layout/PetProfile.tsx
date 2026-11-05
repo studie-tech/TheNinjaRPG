@@ -249,7 +249,10 @@ export function PetProfile() {
         ...result,
         message: `${context?.name ?? "Companion"}: ${result.message}`,
       });
-      await invalidatePetData();
+      await Promise.all([
+        invalidatePetData(),
+        result.actionNotice ? utils.profile.getUser.invalidate() : undefined,
+      ]);
     },
     onError: async (cause, { petId }, context) => {
       // A dropped connection says nothing about the server: the image may still be accepted.

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { DMG_SETTING_DEFAULTS } from "@/drizzle/constants";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { DMG_SETTING_DEFAULTS, HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile, battle, battleHistory, gameSetting, jutsu, quest, questHistory,
   userCookingJob, userData, userJutsu, userQueue, userVote, village,
@@ -73,6 +74,58 @@ describeWithDatabase("arena readiness reads", () => {
     const saved = (await client.query.battle.findFirst())!;
     expect(saved.battleType).toBe("ARENA");
     expect(saved.usersState.find((user) => user.controllerId === userId)?.isAutoCombat).toBe(true);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("commits explicit %s recovery in the existing battle claim without extra read or write phases", async (status) => {
+    const client = await getTestDatabase();
+    const start = () => withRequestScope(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA"));
+    // Warm shared content caches before comparing the two actor states.
+    expect((await start()).success).toBe(true);
+    await resetTables(battle, battleHistory);
+    await client.update(userData).set({ status: "AWAKE", battleId: null }).where(eq(userData.userId, userId));
+    const awake = await recordQueries(start);
+    expect(awake.result.success).toBe(true);
+    await resetTables(battle, battleHistory);
+    await client.update(userData).set({ status, battleId: null, curHealth: 1, maxHealth: 1000,
+      autoWakeUp: true, regeneration: 0, regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 1) * 1000) })
+      .where(eq(userData.userId, userId));
+    const recovered = await recordQueries(start);
+    expect(recovered.result).toMatchObject({ success: true,
+      actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
+    const reads = (queries: string[]) => queries.filter((query) => /^select /i.test(query));
+    const actorWrites = (queries: string[]) => queries.filter((query) => /^update `UserData` /i.test(query));
+    expect(reads(recovered.statements).length).toBe(reads(awake.statements).length);
+    expect(actorWrites(awake.statements)).toHaveLength(1);
+    expect(actorWrites(recovered.statements)).toHaveLength(1);
+    expect(actorWrites(recovered.statements)[0]).toContain("`status`");
+    const owner = (await client.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+    expect(owner.status).toBe("BATTLE");
+    expect(owner.money).toBe(1000);
+    if (status === "HOSPITALIZED") {
+      expect(owner.curHealth).toBe(owner.maxHealth);
+      expect((await client.query.battle.findFirst())?.usersState.find((user) => user.controllerId === userId)?.curHealth).toBe(1000);
+    }
+  });
+
+  it.each([
+    { status: "ASLEEP", autoWakeUp: false, message: "asleep" },
+    { status: "HOSPITALIZED", autoWakeUp: true, message: "in the hospital" },
+  ] as const)("rejects unavailable actors before battle writes: %j", async (patch) => {
+    const client = await getTestDatabase();
+    await client.update(userData).set({ status: patch.status, autoWakeUp: patch.autoWakeUp,
+      curHealth: 1, maxHealth: 1000, regenAt: new Date() }).where(eq(userData.userId, userId));
+    const recorded = await recordQueries(() => initiateBattle({ client, userIds: [userId], targetIds: [aiId], actionUserId: userId }, "ARENA"));
+    expect(recorded.result).toMatchObject({ success: false, message: expect.stringContaining(patch.message) });
+    expect(recorded.statements.filter((query) => /^(?:update|insert|delete) /i.test(query))).toEqual([]);
+    expect(await client.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ status: patch.status, money: 1000 });
+  });
+
+  it("keeps background initiation strict without explicit actor recovery", async () => {
+    const client = await getTestDatabase();
+    await client.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, userId));
+    expect(await initiateBattle({ client, userIds: [userId], targetIds: [aiId] }, "ARENA"))
+      .toMatchObject({ success: false, message: expect.stringContaining("asleep") });
+    expect(await client.query.battle.findMany()).toEqual([]);
   });
 
   it("retains display alert reads for ordinary profile callers", async () => {

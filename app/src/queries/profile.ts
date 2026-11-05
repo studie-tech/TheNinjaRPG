@@ -99,6 +99,7 @@ import {
   completedQuestHistoryRelation,
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { missingUserMessage } from "@/server/utils/sentry";
@@ -1879,7 +1880,7 @@ export const findUserDataForQueryUpdatedUser = (
         },
       },
       anbuSquad: {
-        columns: { id: true, name: true, points: true },
+        columns: { id: true, name: true, points: true, stealthLevel: true },
       },
       loadout: {
         columns: { jutsuIds: true },
@@ -2136,11 +2137,17 @@ export const deleteUserAttributes = (
 export const queueAwakeUser = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ status: "QUEUED" })
-    .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
+    .set({ ...readiness?.set, status: "QUEUED" })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
+      ),
+    );
 
 /** Build a wake-up update guarded by the user still being queued. */
 export const wakeQueuedUser = (client: Pick<DrizzleClient, "update">, userId: string) =>
@@ -2171,11 +2178,18 @@ export const debitUserMoney = (
   client: Pick<DrizzleClient, "update">,
   amountRyo: number,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ money: sql`${userData.money} - ${amountRyo}` })
-    .where(and(eq(userData.userId, ctx.userId), gte(userData.money, amountRyo)));
+    .set({ ...readiness?.set, money: sql`${userData.money} - ${amountRyo}` })
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        gte(userData.money, amountRyo),
+        readiness?.where,
+      ),
+    );
 
 /** Build the `userData` lookup, using predicates on `userId`. */
 export const findUserWithBloodline = (
@@ -2315,10 +2329,3 @@ export const incrementUserVillagePrestige = (
     .update(userData)
     .set({ villagePrestige: sql`${userData.villagePrestige} + ${amount}` })
     .where(eq(userData.userId, userId));
-
-/** Read authoritative activity and preference alongside the mutation's isolation check. */
-export const fetchActionReadiness = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    columns: { status: true, autoWakeUp: true, isBanned: true, villageId: true },
-    where: eq(userData.userId, userId),
-  });

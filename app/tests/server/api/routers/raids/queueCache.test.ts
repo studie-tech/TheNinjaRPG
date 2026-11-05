@@ -41,8 +41,8 @@ import { queueEnergy } from "../../../../setup/queues";
 import { countUserReads } from "../../../../setup/userReads";
 
 describe("raid join cache reconciliation", () => {
-  beforeEach(() => { stubRateLimitTransport(); });
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => { stubRateLimitTransport(); stubProfile("fetchAllGameSettings", async () => []); });
+  afterEach(() => { vi.restoreAllMocks(); resetServerModuleStubs(); });
   const databaseFor = (pendingQueue: boolean, canClaim = true) => {
     const actor = {
       villageId: "queue-village",
@@ -136,7 +136,7 @@ describe("raid join cache reconciliation", () => {
 });
 
 describeWithDatabase("raid join committed queue", () => {
-  beforeEach(() => { stubRateLimitTransport(); });
+  beforeEach(() => { stubRateLimitTransport(); stubProfile("fetchAllGameSettings", async () => []); });
   beforeEach(async () => {
     await resetTables(
       userQueue,

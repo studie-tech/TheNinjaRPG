@@ -6,6 +6,7 @@ import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { getEffectiveStackSize } from "@/libs/item";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
 import {
   deleteHuntingHabitatForDelete,
@@ -32,7 +33,11 @@ import {
   updateHuntingProgressForSave,
   updateHuntingSessionForSessionAction,
 } from "@/queries/hunting";
-import { findUserById, findUserRoleById } from "@/queries/profile";
+import {
+  fetchAllGameSettings,
+  findUserById,
+  findUserRoleById,
+} from "@/queries/profile";
 import { initiateBattle } from "@/routers/combat";
 import {
   createTRPCRouter,
@@ -41,6 +46,11 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { canChangeContent } from "@/utils/permissions";
@@ -214,12 +224,19 @@ export const huntingRouter = createTRPCRouter({
     .input(acceptHuntingContractSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, habitats, session, progress] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        listHuntingHabitats(ctx.drizzle),
-        findHuntingSessionForUser(ctx.drizzle, ctx),
-        findHuntingProgressForAccept(ctx.drizzle, ctx, input),
-      ]);
+      const [initialUser, actionSettings, habitats, session, progress] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+          listHuntingHabitats(ctx.drizzle),
+          findHuntingSessionForUser(ctx.drizzle, ctx),
+          findHuntingProgressForAccept(ctx.drizzle, ctx, input),
+        ]);
+      const readiness = initialUser
+        ? prepareActionReadiness(initialUser, actionSettings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const habitat = habitats.find((h) => h.id === input.habitatId);
       const contract = habitat?.content.contracts.find(
         (c) => c.id === input.contractId,
@@ -282,38 +299,71 @@ export const huntingRouter = createTRPCRouter({
       );
       try {
         // Switching and reconciling the old allowance share one guarded statement.
-        const saved = await retryOnDeadlock(() =>
-          executeSavedForAccept(
-            ctx.drizzle,
-            session,
-            next,
-            previousContract,
-            ctx,
-            targetHabitatGuard,
-            previousHabitat,
-          ),
-        );
+        // A lost actor claim can leave only this account's reversible contract reservation;
+        // recovery runs beside that write without delaying the accepted action.
+        const [saved, recovery] = await Promise.all([
+          retryOnDeadlock(() =>
+            executeSavedForAccept(
+              ctx.drizzle,
+              session,
+              next,
+              previousContract,
+              ctx,
+              targetHabitatGuard,
+              previousHabitat,
+            ),
+          ).catch((error: unknown) => {
+            // A duplicate reservation is an expected loser; still await the parallel recovery claim.
+            if (isMysqlDuplicateKeyError(error)) return { rowsAffected: 0 };
+            throw error;
+          }),
+          readiness?.notice
+            ? claimUserSnapshot({
+                client: ctx.drizzle,
+                userId: ctx.userId,
+                updatedAt: readiness.initial.updatedAt,
+                readiness,
+              })
+            : Promise.resolve({ success: true }),
+        ]);
+        if (!recovery.success)
+          return errorResponse("Your activity changed. Please try again.");
         if (saved.rowsAffected === 0)
-          return errorResponse("Your hunting session changed. Refresh the board.");
+          return actionReadinessResponse(
+            errorResponse("Your hunting session changed. Refresh the board."),
+            readiness,
+            ctx.drizzle,
+          );
       } catch (error) {
         if (!isMysqlDuplicateKeyError(error)) throw error;
         return errorResponse("You already have an active contract. Refresh the board.");
       }
-      return {
-        success: true,
-        ...getUnchangedHuntingUserUpdate(),
-        message: `Contract accepted. Travel to sector ${sector}.`,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          ...getUnchangedHuntingUserUpdate(),
+          message: `Contract accepted. Travel to sector ${sector}.`,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   /** Prepare accepted terms once, or finish the displayed session and reconcile reduced limits. */
   sessionAction: protectedProcedure
     .input(huntingSessionActionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, session] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
+      const [initialUser, actionSettings, session] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
         findHuntingSessionForUser(ctx.drizzle, ctx),
       ]);
+      const readiness =
+        initialUser && input.action === "prepare"
+          ? prepareActionReadiness(initialUser, actionSettings)
+          : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       if (
         !session ||
         session.id !== input.id ||
@@ -375,18 +425,31 @@ export const huntingRouter = createTRPCRouter({
           ...getUnchangedHuntingUserUpdate(),
           message: "Preparation has already started.",
         };
-      const saved = await updateHuntingSessionForSessionAction(
+      // A raced preparation changes only this account's reversible session; recover in the same write phase.
+      const [saved, recovery] = await Promise.all([
+        updateHuntingSessionForSessionAction(ctx.drizzle, contract, guard),
+        readiness?.notice
+          ? claimUserSnapshot({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              updatedAt: readiness.initial.updatedAt,
+              readiness,
+            })
+          : Promise.resolve({ success: true }),
+      ]);
+      if (!recovery.success)
+        return errorResponse("Your activity changed. Please try again.");
+      return actionReadinessResponse(
+        saved.rowsAffected === 1
+          ? {
+              success: true,
+              ...getUnchangedHuntingUserUpdate(),
+              message: "Preparation started.",
+            }
+          : errorResponse("Your session changed."),
+        readiness,
         ctx.drizzle,
-        contract,
-        guard,
       );
-      return saved.rowsAffected === 1
-        ? {
-            success: true,
-            ...getUnchangedHuntingUserUpdate(),
-            message: "Preparation started.",
-          }
-        : errorResponse("Your session changed.");
     }),
   /** Validate accepted terms and preload combat data before guarded encounter admission. */
   start: protectedProcedure
@@ -394,12 +457,19 @@ export const huntingRouter = createTRPCRouter({
     .input(huntingIdSchema)
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [user, session, progressRows, materials] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        findHuntingSessionForUser(ctx.drizzle, ctx),
-        listHuntingProgressForGetBoard(ctx.drizzle, ctx),
-        listHuntableItems(ctx.drizzle),
-      ]);
+      const [initialUser, actionSettings, session, progressRows, materials] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+          findHuntingSessionForUser(ctx.drizzle, ctx),
+          listHuntingProgressForGetBoard(ctx.drizzle, ctx),
+          listHuntableItems(ctx.drizzle),
+        ]);
+      const readiness = initialUser
+        ? prepareActionReadiness(initialUser, actionSettings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const contract = session?.content?.contracts.find(
         (c) => c.id === session?.contractId,
       );
@@ -441,6 +511,7 @@ export const huntingRouter = createTRPCRouter({
         {
           client: ctx.drizzle,
           cacheUserId: ctx.userId,
+          actionReadiness: readiness,
           userIds: [ctx.userId],
           targetIds: [contract.aiId],
           sector: user.sector,

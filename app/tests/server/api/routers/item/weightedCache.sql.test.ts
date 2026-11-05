@@ -1,3 +1,4 @@
+import { commitCacheConsumption } from "@/server/utils/cacheConsumption";
 import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -43,6 +44,35 @@ describeWithDatabase("weighted cache consumption", () => {
     ]);
     await insertUserItems([{ id: "cache-stack", userId: "opener", itemId: "cache", quantity: 2 }]);
   });
+  it("publishes recovery only for the receipt this request commits", async () => {
+    const database = await getTestDatabase();
+    let published = 0;
+    const response = { success: true as const, message: "Opened", notifications: [], rewards: null, cacheRewards: [] };
+    const request: Parameters<typeof commitCacheConsumption>[0] = { client: database, receiptId: "confirmed-recovery", userId: "opener",
+      userItemId: "cache-stack", itemId: "cache", selections: [],
+      consume: async () => response,
+      onCommitted: (result) => { published++; return result; } };
+    expect(await commitCacheConsumption(request)).toEqual(response);
+    expect(published).toBe(1);
+    expect(await commitCacheConsumption({ ...request, consume: async () => { throw new Error("A replay cannot consume"); } })).toEqual(response);
+    expect(published).toBe(1);
+    await expect(commitCacheConsumption({ ...request, receiptId: "rolled-back-recovery",
+      consume: async () => { throw new Error("Rejected delivery"); } })).rejects.toThrow("Rejected delivery");
+    expect(published).toBe(1);
+    expect(await database.query.actionLog.findFirst({ where: eq(actionLog.id, "rolled-back-recovery") })).toBeUndefined();
+  });
+
+  it("replays the committed opening's recovery feedback without another debit", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true }).where(eq(userData.userId, "opener"));
+    const caller = callerForDatabase(itemRouter, "opener", database);
+    const input = { userItemId: "cache-stack", expectedQuantity: 2, requestId: "recovered-opening" };
+    const response = await caller.consume(input);
+    expect(response).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect(await caller.consume(input)).toEqual(response);
+    expect((await database.query.userItem.findFirst({ where: eq(userItem.id, "cache-stack") }))?.quantity).toBe(1);
+  });
+
   it("grants bundles with stack limits and accurate combined quantities, then replays retries", async () => {
     const db = await getTestDatabase(); const caller = callerForDatabase(itemRouter, "opener", db);
     const input = { userItemId: "cache-stack", expectedQuantity: 2, requestId: "opening-request-1" };

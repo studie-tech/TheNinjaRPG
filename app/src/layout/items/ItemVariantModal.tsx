@@ -59,6 +59,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   const consumeToken = api.item.consumeVariantToken.useMutation({
     onSuccess: async (result) => {
       showMutationToast(result);
+      if (result.actionNotice) void utils.profile.getUser.invalidate();
       if (result.success) {
         setIsOpen(false);
         onClose();

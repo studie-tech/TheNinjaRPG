@@ -80,6 +80,7 @@ import {
 import { getShrineHpByLevel, isVillageInvolvedInAnyWar } from "@/libs/war";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { defaultWarRules, type WarMissionAttempt } from "@/validators/war";
 
@@ -1453,10 +1454,12 @@ export const updateUserDataForStartWarMission = (
   user: { villageId: null | string; sector: number },
   activeWar: { id: string },
   side: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       warMission: attempt,
       immunityUntil: new Date(0),
       bracketImmunityLiftedUntil: liftBracketImmunitySql(),
@@ -1465,7 +1468,7 @@ export const updateUserDataForStartWarMission = (
     .where(
       and(
         eq(userData.userId, ctx.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         isNull(userData.warMission),
         user.villageId
           ? eq(userData.villageId, user.villageId)
@@ -1507,14 +1510,18 @@ export const updateUserDataForClaim = (
   },
   activeWar: { id: string },
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
-    .set({ warMission: null })
+    .set({
+      ...readiness?.set,
+      warMission: null,
+    })
     .where(
       and(
         eq(userData.userId, user.userId),
-        eq(userData.status, "AWAKE"),
+        readiness?.where ?? eq(userData.status, "AWAKE"),
         attempt.villageId
           ? eq(userData.villageId, attempt.villageId)
           : isNull(userData.villageId),

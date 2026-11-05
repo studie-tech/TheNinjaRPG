@@ -13,7 +13,7 @@ import {
 import { getServerPusher } from "@/libs/pusher";
 import { getTerritoryCompetitor, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { deleteBattleQueueMemberById } from "@/queries/clan";
-import { wakeQueuedUser } from "@/queries/profile";
+import { fetchAllGameSettings, wakeQueuedUser } from "@/queries/profile";
 import { claimBattleQueue, listQueueMembers } from "@/queries/raids";
 import {
   deleteMpvpBattleQueueForCreateTeam,
@@ -31,6 +31,11 @@ import {
 import { initiateBattle } from "@/server/api/routers/combat";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -81,21 +86,25 @@ export const territoryWarRouter = createTRPCRouter({
     .input(z.object({ eventId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [event, user] = await Promise.all([
+      let [event, user, settings] = await Promise.all([
         findTerritoryWarById(ctx.drizzle, input.eventId),
         fetchUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       if (!event || event.resolvedAt || event.endsAt <= new Date())
         return {
           ...errorResponse("This Territory War has ended"),
           ...getCreateTeamUserUpdate(),
         };
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (user.isBanned || user.status !== "AWAKE" || user.sector !== event.sector)
         return errorResponse("You must be awake in the event sector");
       const competitor = getTerritoryCompetitor(user);
       const id = nanoid();
       await insertMpvpBattleQueueForCreateTeam(ctx.drizzle, id, event, competitor);
-      const result = await joinTeam(ctx.drizzle, user, id, competitor.id);
+      const result = await joinTeam(ctx.drizzle, user, id, competitor.id, readiness);
       if (!result.success)
         // Another member may have joined or reserved launch while the creator lost eligibility.
         await retryOnDeadlock(() =>
@@ -109,10 +118,22 @@ export const territoryWarRouter = createTRPCRouter({
     .input(z.object({ teamId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      let [user, settings] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (user.isBanned || user.status !== "AWAKE")
         return errorResponse("You must be awake to join a team");
-      return joinTeam(ctx.drizzle, user, input.teamId, getTerritoryCompetitor(user).id);
+      return joinTeam(
+        ctx.drizzle,
+        user,
+        input.teamId,
+        getTerritoryCompetitor(user).id,
+        readiness,
+      );
     }),
 
   /** Membership may be removed only before the launch reservation is claimed. */
@@ -208,6 +229,7 @@ const joinTeam = async (
   user: Awaited<ReturnType<typeof fetchUser>>,
   teamId: string,
   competitorId: string,
+  readiness?: ActionReadiness,
 ) => {
   const memberId = nanoid();
   let joined = false;
@@ -222,15 +244,19 @@ const joinTeam = async (
     // Updating q in the same statement serializes this admission against startBattle's reservation.
     // A missing-row/slot race is reversible, so no transaction or locking read is needed.
     const claimed = await retryOnDeadlock(() =>
-      executeClaimedForJoinTeam(client, user, memberId),
+      executeClaimedForJoinTeam(client, user, memberId, readiness),
     );
     joined = claimed.rowsAffected > 0;
     return joined
-      ? {
-          success: true,
-          message: "Joined the team. Start solo or wait for teammates",
-          ...getJoinTeamUserUpdate(),
-        }
+      ? actionReadinessResponse(
+          {
+            success: true,
+            message: "Joined the team. Start solo or wait for teammates",
+            ...getJoinTeamUserUpdate(),
+          },
+          readiness,
+          client,
+        )
       : errorResponse("Your status or this team changed. Try again");
   } finally {
     if (!joined) await deleteBattleQueueMemberById(client, memberId);

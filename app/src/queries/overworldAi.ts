@@ -12,6 +12,7 @@ import {
   userQuestAttempt,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 
 /** Build the `overworldAiPlacement` listing for `GET`, using predicates on `isActive`, `sectorType`, `locationType`. */
 export const listOverworldAiPlacementForGET = (client: Pick<DrizzleClient, "query">) =>
@@ -235,15 +236,18 @@ export const selectUserQuestAttemptForInteractWithOverworldAi = (
 export const updateUserDataForInteractWithOverworldAi = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
+  readiness?: ActionReadinessWrite,
 ) =>
   client
     .update(userData)
     .set({
+      ...readiness?.set,
       dailyOverworldQuestRolls: sql`${userData.dailyOverworldQuestRolls} + 1`,
     })
     .where(
       and(
         eq(userData.userId, ctx.userId),
+        readiness?.where,
         sql`${userData.dailyOverworldQuestRolls} < ${OVERWORLD_QUEST_ROLLS_PER_DAY}`,
       ),
     );

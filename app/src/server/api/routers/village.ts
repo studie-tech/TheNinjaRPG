@@ -7,7 +7,6 @@ import {
   VILLAGE_LEAVE_REQUIRED_RANK,
 } from "@/drizzle/constants";
 import type { VillageAlliance } from "@/drizzle/schema";
-import { actionStatusMessage } from "@/libs/actionReadiness";
 import { hasRequiredRank } from "@/libs/train";
 import { fetchUser } from "@/queries/profile";
 import { deleteRequests } from "@/queries/sensei";
@@ -53,6 +52,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
@@ -145,7 +148,7 @@ export const villageRouter = createTRPCRouter({
         userId: ctx.userId,
         forceRegen: true,
       });
-      const user = updatedUser.user;
+      let user = updatedUser.user;
       if (!user) return errorResponse("User does not exist");
       const sectorVillage = await fetchSectorVillage(
         ctx.drizzle,
@@ -160,10 +163,11 @@ export const villageRouter = createTRPCRouter({
       const healPercentage = getRamenHealPercentage(input.ramen);
       const cost = calcRamenCost(input.ramen, user) * factor;
       // Guard
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
-      if (user.money < cost) return errorResponse("You don't have enough money");
       if (user.isBanned) return errorResponse("You are banned");
+      const readiness = prepareActionReadiness(user, updatedUser.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
+      if (user.money < cost) return errorResponse("You don't have enough money");
       if (
         user.isOutlaw &&
         sectorVillage &&
@@ -190,22 +194,27 @@ export const villageRouter = createTRPCRouter({
         newStamina,
         newChakra,
         ctx,
+        readiness,
       );
       if (result.rowsAffected === 0) {
         return errorResponse("Error trying to buy food. Try again.");
       } else {
-        return {
-          success: true,
-          message: `You have bought food and healed to ${newStamina}SP and ${newChakra}CP`,
-          ...getBuyFoodUserUpdate({
-            user,
-            newStamina,
-            newChakra,
-            cost,
-            requiresProgressionRefresh: updatedUser.requiresProgressionRefresh,
-            publishedAchievementIds: updatedUser.publishedAchievementIds,
-          }),
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: `You have bought food and healed to ${newStamina}SP and ${newChakra}CP`,
+            ...getBuyFoodUserUpdate({
+              user,
+              newStamina,
+              newChakra,
+              cost,
+              requiresProgressionRefresh: updatedUser.requiresProgressionRefresh,
+              publishedAchievementIds: updatedUser.publishedAchievementIds,
+            }),
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
     }),
   leaveVillage: protectedProcedure
@@ -215,7 +224,7 @@ export const villageRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Queries
-      const { user } = await fetchUpdatedUser({
+      let { user, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -229,9 +238,10 @@ export const villageRouter = createTRPCRouter({
       if (user.villageId !== village.id) return errorResponse("Not in village");
       if (user.anbuId) return errorResponse("Leave ANBU squad first");
       if (user.clanId) return errorResponse("Leave Clan first");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot leave while banned");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
         return errorResponse(
           `Must be at least ${VILLAGE_LEAVE_REQUIRED_RANK.toLowerCase()} to leave village`,
@@ -239,15 +249,24 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      const saved = await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
+      const saved = await updateUserDataForLeaveVillage(
+        ctx.drizzle,
+        user,
+        ctx,
+        readiness,
+      );
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
 
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return {
-        success: true,
-        message: "You have left the village",
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "You have left the village",
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   joinVillage: protectedProcedure
     .meta({ mcp: { description: "Join a village as an outlaw" } })
@@ -259,7 +278,7 @@ export const villageRouter = createTRPCRouter({
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchVillage(ctx.drizzle, input.villageId),
       ]);
-      const user = updatedUser.user;
+      let user = updatedUser.user;
       // Guards
       if (!user) return errorResponse("User does not exist");
       if (!village) return errorResponse("Village does not exist");
@@ -267,9 +286,10 @@ export const villageRouter = createTRPCRouter({
       if (!village.joinable) return errorResponse("Not joinable");
       if (user.villageId === village.id) return errorResponse("Already joined");
       if (user.clanId) return errorResponse("Leave faction first");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot join while banned");
+      const readiness = prepareActionReadiness(user, updatedUser.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (village.type !== "VILLAGE") return errorResponse("Can only join villages");
       if (!hasRequiredRank(user.rank, VILLAGE_LEAVE_REQUIRED_RANK)) {
         return errorResponse(
@@ -278,22 +298,32 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      const saved = await updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx);
+      const saved = await updateUserDataForJoinVillage(
+        ctx.drizzle,
+        village,
+        user,
+        ctx,
+        readiness,
+      );
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
       await detachFromVillageRelations(ctx);
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return {
-        success: true,
-        message: "You have joined the village",
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "You have joined the village",
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   swapVillage: protectedProcedure
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const { user } = await fetchUpdatedUser({
+      let { user, settings } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -309,9 +339,10 @@ export const villageRouter = createTRPCRouter({
       if (user.villageId === village.id) return errorResponse("Already in village");
       if (user.anbuId) return errorResponse("Leave ANBU squad first");
       if (user.clanId) return errorResponse("Leave Clan or Faction first");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
       if (user.isBanned) return errorResponse("Cannot leave while banned");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       if (!canSwapVillage(user.role)) return errorResponse("No permission to do this");
       if (cost > user.reputationPoints) return errorResponse("Need reputation points");
       if (
@@ -330,15 +361,20 @@ export const villageRouter = createTRPCRouter({
         user,
         cost,
         ctx,
+        readiness,
       );
       if (!saved.rowsAffected)
         return errorResponse("Your status changed. Try again while awake.");
       await detachFromVillageRelations(ctx);
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return {
-        success: true,
-        message: "You have swapped villages",
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "You have swapped villages",
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   getAlliances: publicProcedure
     .meta({

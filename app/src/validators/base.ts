@@ -3,6 +3,8 @@ import { z } from "zod";
 export const baseServerResponse = z.object({
   success: z.boolean(),
   message: z.string(),
+  // Endpoints report only recovery committed by their guarded account write.
+  actionNotice: z.string().optional(),
 });
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 

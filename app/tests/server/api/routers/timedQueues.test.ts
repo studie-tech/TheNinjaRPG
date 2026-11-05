@@ -1043,7 +1043,7 @@ describeWithDatabase("mastery training queue", () => {
     { name: "a changed interval", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "genjutsuMastery", speed: "1hr" }] },
     { name: "reordered entries", current: [{ stat: "genjutsuMastery", speed: "15min" }, { stat: "taijutsuMastery", speed: "15min" }], entries: [{ stat: "taijutsuMastery", speed: "15min" }, { stat: "genjutsuMastery", speed: "15min" }] },
   ] satisfies { name: string; current: MasteryTrainingQueueEntry[]; entries: MasteryTrainingQueueEntry[] }[])("rejects $name while asleep without changing the mastery queue", async ({ current, entries }) => {
-    await insertUser({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
+    await insertUser({ status: "ASLEEP", autoWakeUp: false, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
     await queueMasteries(USER_ID, current);
     const caller = await callerFor(trainRouter, USER_ID);
     expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });

@@ -51,9 +51,10 @@ import {
   isFactionVillage,
   isVillageInvolvedInAnyWar,
 } from "@/libs/war";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchElderVote } from "@/queries/elder";
 import { incrementNotificationCounters } from "@/queries/misc";
-import { fetchUser } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
 import { fetchQuest, listVisibleRaidQuests } from "@/queries/quests";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import {
@@ -131,6 +132,10 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objectiveWar";
 import { notifyWarVillages } from "@/server/utils/push/war";
@@ -427,14 +432,18 @@ export const warRouter = createTRPCRouter({
     .input(startWarMissionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [activeWar, user, mission, completedQuests, mercenaryWarId] =
+      let [activeWar, user, mission, completedQuests, mercenaryWarId, settings] =
         await Promise.all([
           findWarForStartWarMission(ctx.drizzle, input),
-          fetchUser(ctx.drizzle, ctx.userId),
+          fetchActionUser(ctx.drizzle, ctx.userId),
           fetchQuest(ctx.drizzle, input.questId),
           listQuestHistoryForGetObjectiveWarInfo(ctx.drizzle, ctx),
           fetchMercenaryWarId(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
         ]);
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       const side = activeWar
         ? getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)
         : null;
@@ -506,20 +515,31 @@ export const warRouter = createTRPCRouter({
         user,
         activeWar,
         side,
+        readiness,
       );
       if (!saved.rowsAffected)
         return errorResponse("Your situation changed. Refresh and try again.");
-      return {
-        success: true,
-        message: "War mission started. Remain in this sector until completion.",
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "War mission started. Remain in this sector until completion.",
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   /** Consume the matching ready attempt inside the strategic effect's receipt boundary. */
   completeWarMission: protectedProcedure
     .input(completeWarMissionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      let [user, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       const attempt = user.warMission;
       if (!attempt || attempt.id !== input.attemptId)
         return errorResponse("No matching war mission");
@@ -575,16 +595,21 @@ export const warRouter = createTRPCRouter({
             attempt,
             activeWar,
             ctx,
+            readiness,
           );
           return result.rowsAffected > 0;
         },
       });
       return applied
-        ? {
-            success: true,
-            message: "War objective completed",
-            ...getCompleteWarMissionUserUpdate(),
-          }
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "War objective completed",
+              ...getCompleteWarMissionUserUpdate(),
+            },
+            readiness,
+            ctx.drizzle,
+          )
         : errorResponse(
             "The war or mission changed before completion. Refresh to continue.",
           );
@@ -611,11 +636,12 @@ export const warRouter = createTRPCRouter({
   attackWarCamp: protectedProcedure
     .input(warCampSchema)
     .mutation(async ({ ctx, input }) => {
-      const [camp, user, mercenaryWarId, activeWar] = await Promise.all([
+      let [camp, user, mercenaryWarId, activeWar, settings] = await Promise.all([
         findWarCampForAttackWarCamp(ctx.drizzle, input),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchMercenaryWarId(ctx.drizzle, ctx.userId),
         findWarForAttackWarCamp(ctx.drizzle, input),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       if (
         !camp ||
@@ -624,6 +650,9 @@ export const warRouter = createTRPCRouter({
         camp.endsAt <= new Date()
       )
         return errorResponse("War camp is closed");
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       const side = activeWar
         ? getWarSide(activeWar, user.villageId, user.userId, mercenaryWarId)
         : null;
@@ -639,6 +668,8 @@ export const warRouter = createTRPCRouter({
       return initiateBattle(
         {
           userIds: [user.userId],
+          actionReadiness: readiness,
+          actionUserId: ctx.userId,
           targetIds: [camp.guardianId],
           client: ctx.drizzle,
           sector: camp.sector,

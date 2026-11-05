@@ -67,6 +67,8 @@ export default function Kitchen({ image }: { image?: string }) {
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
+      if (result.actionNotice && !result.success)
+        void utils.profile.getUser.invalidate();
       setMessage(result.message);
       if (result.success) {
         setSelectedId("");

@@ -31,7 +31,6 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import { actionStatusMessage } from "@/libs/actionReadiness";
 import {
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
@@ -218,6 +217,10 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -832,11 +835,12 @@ export const jutsuRouter = createTRPCRouter({
         fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
         fetchJutsuEquipCaps(ctx.drizzle),
       ]);
-      const { user } = snapshot;
+      const initialUser = snapshot.user;
       // Guards
-      if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, snapshot.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
       if (!evolutionJutsu.parentJutsuId)
         return errorResponse("Target jutsu is not an evolution");
@@ -899,6 +903,8 @@ export const jutsuRouter = createTRPCRouter({
         userJutsuObj,
         conflictingReskin,
         ctx,
+        readiness,
+        questDataForDb,
       );
       if (evolveResult.rowsAffected === 0)
         return errorResponse("Evolution failed - jutsu may have already been evolved");
@@ -923,7 +929,6 @@ export const jutsuRouter = createTRPCRouter({
               ),
         }));
       await Promise.all([
-        updateUserQuestData(ctx.drizzle, questDataForDb, ctx.userId),
         ...loadoutsToUpdate.map((loadout) =>
           updateJutsuLoadoutIds(ctx.drizzle, loadout.jutsuIds, loadout.id),
         ),
@@ -968,19 +973,23 @@ export const jutsuRouter = createTRPCRouter({
               snapshot.publishedAchievementIds,
             )
           : undefined;
-      return {
-        success: true,
-        message: `Evolved into ${evolutionJutsu.name}!`,
-        ...(progression
-          ? {
-              ...progression,
-              ...getEvolveJutsuUserUpdate({
-                progressionUserPatch: progression.userPatch,
-                activeLoadout,
-              }),
-            }
-          : {}),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Evolved into ${evolutionJutsu.name}!`,
+          ...(progression
+            ? {
+                ...progression,
+                ...getEvolveJutsuUserUpdate({
+                  progressionUserPatch: progression.userPatch,
+                  activeLoadout,
+                }),
+              }
+            : {}),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   /** Validate content and species/default-loadout compatibility before saving a jutsu. */
@@ -1305,8 +1314,11 @@ export const jutsuRouter = createTRPCRouter({
         data.startedQueuedJobs > 0
           ? await fetchUserJutsus(ctx.drizzle, ctx.userId)
           : fetchedJutsus;
-      const { user } = data;
-      if (!user) return errorResponse("User not found");
+      const initialUser = data.user;
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, data.settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const waiting = liveQueueRows(user.queue ?? [], "JUTSU");
       // Gear and skill mastery buffs count, as they do for equipping
       const masteries = effectiveMasteries(user);
@@ -1342,8 +1354,6 @@ export const jutsuRouter = createTRPCRouter({
         )
       )
         return errorResponse("You have already evolved this jutsu");
-      if (user.status !== "AWAKE")
-        return errorResponse(actionStatusMessage(user.status));
 
       // Levels already queued for this jutsu count toward the one being bought.
       const level =
@@ -1391,16 +1401,26 @@ export const jutsuRouter = createTRPCRouter({
           user,
           input.jutsuId,
           planned,
+          readiness,
         );
-        if (!queued.success) return errorResponse(queued.message);
-        return {
-          success: true,
-          message: `Queued ${info.name} ${formatLevelRange(level + 1, level + levels)}`,
-          data: {
-            money: user.money - queued.cost,
-            questData: getPublicQuestUser(user).questData,
+        if (!queued.success)
+          return actionReadinessResponse(
+            errorResponse(queued.message),
+            queued.actionNotice ? readiness : undefined,
+            ctx.drizzle,
+          );
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: `Queued ${info.name} ${formatLevelRange(level + 1, level + levels)}`,
+            data: {
+              money: user.money - queued.cost,
+              questData: getPublicQuestUser(user).questData,
+            },
           },
-        };
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       // Time & cost
@@ -1436,7 +1456,7 @@ export const jutsuRouter = createTRPCRouter({
       // Deduct money first, but persist new-jutsu quest progress only after the
       // ownership insert is confirmed. A duplicate request can then refund its
       // own money without restoring a stale questData snapshot over the winner.
-      const moneyUpdate = await debitUserMoney(ctx.drizzle, trainCost, ctx);
+      const moneyUpdate = await debitUserMoney(ctx.drizzle, trainCost, ctx, readiness);
       if (moneyUpdate.rowsAffected !== 1) {
         return errorResponse("You don't have enough money");
       }
@@ -1453,7 +1473,11 @@ export const jutsuRouter = createTRPCRouter({
         // The returned level must describe this increment, even when two starts race.
         if (saved.rowsAffected !== 1) {
           await incrementUserMoney(ctx.drizzle, trainCost, ctx.userId);
-          return errorResponse("Jutsu training changed. Refresh and try again");
+          return actionReadinessResponse(
+            errorResponse("Jutsu training changed. Refresh and try again"),
+            readiness,
+            ctx.drizzle,
+          );
         }
       } else {
         // Soft pre-check whether auto-equip is likely to succeed. Insert already
@@ -1499,25 +1523,35 @@ export const jutsuRouter = createTRPCRouter({
               input,
             );
           } catch {
-            return errorResponse(
-              "Training status could not be confirmed — please refresh before retrying",
+            return actionReadinessResponse(
+              errorResponse(
+                "Training status could not be confirmed — please refresh before retrying",
+              ),
+              readiness,
+              ctx.drizzle,
             );
           }
           insertedByThisRequest = persisted?.id === newUserJutsuId;
           if (!insertedByThisRequest) {
             await refundTrainCost();
-            return errorResponse(
-              persisted
-                ? "You already own this jutsu — please refresh and try again"
-                : "Failed to start training — please try again",
+            return actionReadinessResponse(
+              errorResponse(
+                persisted
+                  ? "You already own this jutsu — please refresh and try again"
+                  : "Failed to start training — please try again",
+              ),
+              readiness,
+              ctx.drizzle,
             );
           }
         }
 
         if (!insertedByThisRequest) {
           await refundTrainCost();
-          return errorResponse(
-            "You already own this jutsu — please refresh and try again",
+          return actionReadinessResponse(
+            errorResponse("You already own this jutsu — please refresh and try again"),
+            readiness,
+            ctx.drizzle,
           );
         }
 
@@ -1544,31 +1578,35 @@ export const jutsuRouter = createTRPCRouter({
         followUps,
       );
       const queuedCost = queued.success ? queued.cost : 0;
-      return {
-        success: true,
-        message: queued.success
-          ? followUps.length > 0
-            ? `You started training: ${info.name}, and queued ${formatLevelRange(level + 2, level + 1 + followUps.length)}`
-            : `You started training: ${info.name}`
-          : `You started training: ${info.name}, but the further levels could not be queued: ${queued.message}`,
-        data: {
-          money: user.money - trainCost - queuedCost,
-          questData: getPublicQuestUser({ ...user, questData: questDataFull })
-            .questData,
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: queued.success
+            ? followUps.length > 0
+              ? `You started training: ${info.name}, and queued ${formatLevelRange(level + 2, level + 1 + followUps.length)}`
+              : `You started training: ${info.name}`
+            : `You started training: ${info.name}, but the further levels could not be queued: ${queued.message}`,
+          data: {
+            money: user.money - trainCost - queuedCost,
+            questData: getPublicQuestUser({ ...user, questData: questDataFull })
+              .questData,
+          },
+          trainingUpdate:
+            userjutsuObj &&
+            levels === 1 &&
+            !data.requiresProgressionRefresh &&
+            !data.startedQueuedJobs
+              ? getStartedJutsuTrainingUpdate(
+                  userjutsuObj,
+                  info.name,
+                  trainingStartedAt,
+                  finishTraining,
+                )
+              : undefined,
         },
-        trainingUpdate:
-          userjutsuObj &&
-          levels === 1 &&
-          !data.requiresProgressionRefresh &&
-          !data.startedQueuedJobs
-            ? getStartedJutsuTrainingUpdate(
-                userjutsuObj,
-                info.name,
-                trainingStartedAt,
-                finishTraining,
-              )
-            : undefined,
-      };
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   stopTraining: protectedProcedure

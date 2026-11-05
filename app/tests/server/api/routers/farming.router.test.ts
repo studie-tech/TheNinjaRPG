@@ -1,13 +1,15 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { FARM_MAX_PLOTS, FARM_PLOT_PURCHASE_COST, FARM_STARTING_PLOTS } from "@/drizzle/constants";
-import { farmCollectionLog, farmExtraction, farmPlot, item, quest, questHistory, userData, userItem } from "@/drizzle/schema";
+import { farmCollectionLog, farmExtraction, farmPlot, item, quest, questHistory, userData, userItem, userQueue } from "@/drizzle/schema";
 import { getFarmBulkMutationUpdate } from "@/deltas/farming";
 import { setSystemTime } from "bun:test";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { DecreaseFarmingTime } from "@/validators/combat";
+import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements } from "../../../setup/statements";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
@@ -102,9 +104,57 @@ const readFarmGoal = async () => {
 
 describeWithDatabase("farming router guards against a real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(farmCollectionLog, farmExtraction, farmPlot, userItem, item, questHistory, quest, userData);
+    await resetTables(userQueue, farmCollectionLog, farmExtraction, farmPlot, userItem, item, questHistory, quest, userData);
     const database = await getTestDatabase();
     await database.insert(item).values([cropItemRow(), seedItemRow()] as never);
+  });
+
+  it("retains queued training goals when recovery and watering advance the same quest", async () => {
+    await farmer({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50, regeneration: 0, regenAt: new Date() });
+    const database = await getTestDatabase();
+    await queueEnergy("farm-user", [{ stat: "offence", energy: 40 }]);
+    await database.insert(quest).values({ id: "recovery-goals", name: "Training and watering", questType: "event",
+      content: { objectives: [
+        { id: "training-goal", task: "stats_trained", value: 1, nextObjectiveId: "watering-goal", description: "", successDescription: "" },
+        { id: "watering-goal", task: "plants_watered", value: 10, description: "", successDescription: "" },
+      ], reward: {}, sceneBackground: "", sceneCharacters: [] } } as never);
+    await database.insert(questHistory).values({ id: "recovery-history", userId: "farm-user", questId: "recovery-goals", questType: "event" } as never);
+    await database.insert(farmPlot).values({ id: "recovery-plot", userId: "farm-user", slotIndex: 0,
+      seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000) });
+    const result = await callerForDatabase(farmingRouter, "farm-user", database).waterPlot({ plotId: "recovery-plot" });
+    expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
+    const stored = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!;
+    expect(stored).toMatchObject({ status: "AWAKE", curEnergy: 10, energyQueueHead: 1 });
+    const goals = stored.questData?.find((entry) => entry.id === "recovery-goals")?.goals;
+    expect(goals?.find((goal) => goal.id === "training-goal")?.value).toBeGreaterThan(0);
+    expect(goals?.find((goal) => goal.id === "watering-goal")?.value).toBe(1);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("recovers %s in the guarded farm purchase", async (status) => {
+    await farmer({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100, regenAt: new Date(), farmingExperience: 100_000_000 });
+    const database = await getTestDatabase();
+    const executed = await recordQueries(() => callerForDatabase(farmingRouter, "farm-user", database)
+      .buyShopItem({ type: "PLOT", quantity: 1 }));
+    expect(executed.result).toMatchObject({ success: true,
+      actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
+    expect(executed.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
+    const stored = await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") });
+    expect(stored).toMatchObject({ status: "AWAKE", farmPlotsPurchased: 1,
+      farmCurrency: 1000 - FARM_PLOT_PURCHASE_COST });
+  });
+
+  it.each([
+    { status: "ASLEEP", autoWakeUp: false, curHealth: 100 },
+    { status: "HOSPITALIZED", autoWakeUp: true, curHealth: 1 },
+  ] as const)("rejects an unavailable farm actor before purchases: %j", async (patch) => {
+    await farmer({ ...patch, maxHealth: 100, regenAt: new Date() });
+    const database = await getTestDatabase();
+    const result = await callerForDatabase(farmingRouter, "farm-user", database)
+      .buyShopItem({ type: "PLOT", quantity: 1 });
+    expect(result.success).toBe(false);
+    expect(result.actionNotice).toBeUndefined();
+    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
+      .toMatchObject({ status: patch.status, farmPlotsPurchased: 0, farmCurrency: 1000 });
   });
 
   it.each(["water", "harvest", "first collection", "new stack"] as const)("reconciles bulk %s against the canonical farm view", async (action) => {
@@ -177,7 +227,7 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       expect((await readFarmGoal())?.value).toBe(isBulk ? 2 : 1);
       // A same-snapshot claim must not invalidate the quest JSON it just protected.
       const userReads = recorded.statements.filter((statement) =>
-        statement.startsWith("select") && statement.includes("from `UserData`"));
+        statement.startsWith("select") && statement.includes("from `UserData`") && !/\bavg\s*\(/i.test(statement));
       // Planting also preloads passive sources for its duration snapshot.
       expect(userReads).toHaveLength(isPlanting ? 3 : 2);
     });

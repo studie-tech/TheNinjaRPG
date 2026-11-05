@@ -49,7 +49,7 @@ const isParticipantGuard = (path: string, guard: Guard) =>
   (guard.owner.endsWith(`#${path}`) && guard.status === targetOnlyChecks.get(path));
 
 // These endpoints have awake-only branches, rather than an unconditional contract.
-// Specific quest starts use the saved quest; the middleware/SQL suite tests that case.
+// Specific quest starts use the saved quest; endpoint SQL tests cover that case.
 const conditionalActions = new Set([
   "train.updateEnergyTrainingQueue", "train.updateMasteryTrainingQueue",
   "coop.dungeon.act", "hunting.sessionAction", "profile.useUnusedExperiencePoints",
@@ -137,6 +137,22 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
       const status = awakeStatusCheck(child);
       if (status) entry.guards.push({ owner, status });
       if (child.type !== "CallExpression") return;
+      const callee = child.callee.type === "Identifier" ? lookup(file, child.callee.name) : undefined;
+      // The pure plan is the actor guard itself. Its implementation must not make
+      // every helper that forwards an optional plan look like an awake-only action.
+      if (callee?.name === "prepareActionReadiness") {
+        entry.guards.push({ owner, status: "actor.status", kind: "prepare" });
+        return;
+      }
+      if (callee?.name !== "actionReadinessResponse" && callee?.name !== "shouldPrepareAction") {
+        let composesRecovery = false;
+        walk(child, (part) => {
+          if (part.type === "ObjectProperty" && part.key.type === "Identifier" && ["readiness", "actionReadiness", "actionUserId"].includes(part.key.name)) composesRecovery = true;
+          if (part.type === "Identifier" && part.name === "readiness" && child.arguments.includes(part)) composesRecovery = true;
+          if (part.type === "MemberExpression" && part.object.type === "Identifier" && part.object.name === "readiness" && part.property.type === "Identifier" && ["set", "where"].includes(part.property.name)) composesRecovery = true;
+        });
+        if (composesRecovery) entry.guards.push({ owner, status: "", kind: "write" });
+      }
       for (const reference of [child.callee, ...child.arguments]) {
         if (reference.type !== "Identifier") continue;
         const target = lookup(file, reference.name);
@@ -148,7 +164,7 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
           walk(argument, (part) => { if (part.type === "ObjectProperty" && part.key.type === "Identifier" && part.key.name === "task" && part.value.type === "StringLiteral" && part.value.value === "start_battle") startsBattle = true; });
           return startsBattle;
         });
-        if (!settlementFunctions.has(targetOwner) || explicitBattle) entry.calls.push(scan(target));
+        if (target.name !== "prepareActionReadiness" && (!settlementFunctions.has(targetOwner) || explicitBattle)) entry.calls.push(scan(target));
       }
     });
     return node;
@@ -166,6 +182,8 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
 const awakeStatusCheck = (node: Node): string | undefined => {
   const memberName = (value: Node): string | undefined => {
     if (value.type === "Identifier") return value.name;
+    // Actor projections leave the other participant in the conditional's fallback.
+    if (value.type === "ConditionalExpression") return memberName(value.alternate);
     if ((value.type === "MemberExpression" || value.type === "OptionalMemberExpression") && !value.computed && value.property.type === "Identifier") {
       const parent = memberName(value.object);
       return parent && `${parent}.${value.property.name}`;
@@ -188,12 +206,19 @@ const awakeStatusCheck = (node: Node): string | undefined => {
 
 /** Compare source-derived actor prerequisites in both directions, not a second endpoint list. */
 const policyDrift = (mutations: Map<string, Guard[]>, policy = AWAKE_ACTIONS) => {
-  const required = new Set([...mutations].filter(([path, guards]) => guards.some((guard) => !isParticipantGuard(path, guard)) && !conditionalActions.has(path)).map(([path]) => path));
+  const required = new Set([...mutations].filter(([path, guards]) => guards.some((guard) => guard.kind !== "write" && !isParticipantGuard(path, guard)) && !conditionalActions.has(path)).map(([path]) => path));
   return {
     missing: [...required].filter((path) => !policy.has(path)).sort(),
     stale: [...policy].filter((path) => !required.has(path)).sort(),
   };
 };
+
+/** Every explicit recovery entry point must prepare locally and compose a plan into a write. */
+const localReadinessDrift = (mutations: Map<string, Guard[]>) =>
+  [...AWAKE_ACTIONS, ...conditionalActions].filter((path) => {
+    const guards = mutations.get(path) ?? [];
+    return !guards.some((guard) => guard.kind === "prepare") || !guards.some((guard) => guard.kind === "write" && guard.owner.endsWith(`#${path}`));
+  }).sort();
 
 describe("mutation awake prerequisites", () => {
   const mutations = inspectMutations();
@@ -212,7 +237,7 @@ describe("mutation awake prerequisites", () => {
 
   it("keeps conditional and participant-only exceptions tied to live awake checks", () => {
     for (const path of conditionalActions) {
-      expect(mutations.get(path)?.some((guard) => !isParticipantGuard(path, guard)), path).toBe(true);
+      expect(mutations.get(path)?.some((guard) => guard.kind !== "write" && !isParticipantGuard(path, guard)), path).toBe(true);
       expect(AWAKE_ACTIONS.has(path), path).toBe(false);
     }
     for (const path of [...participantLaunchers, ...targetOnlyChecks.keys()])
@@ -226,11 +251,27 @@ describe("mutation awake prerequisites", () => {
     expect(policyDrift(mutations, changed)).toEqual({ missing: ["farming.waterPlot"], stale: ["bank.deposit"] });
   });
 
-  it("detects a removed shared awake guard without changing the policy", () => {
-    // Source variants stay in memory; the maintained application files aren't changed.
+  it("requires an explicit local plan and write composition for each actor action", () => {
+    expect(localReadinessDrift(mutations)).toEqual([]);
+  });
+
+  it("detects removing endpoint preparation or its mutation-phase composition", () => {
     const file = join(sourceRoot, "server/api/routers/farming.ts");
-    const source = readFileSync(file, "utf8").replace('if (user.status !== "AWAKE")', "if (false)");
-    expect(policyDrift(inspectMutations(new Map([[file, source]]))).stale).toContain("farming.waterPlot");
+    const source = readFileSync(file, "utf8");
+    const start = source.indexOf("  waterPlot: protectedProcedure");
+    const end = source.indexOf("  applyFertilizer: protectedProcedure", start);
+    const endpoint = source.slice(start, end);
+    const withoutPlan = source.slice(0, start) + endpoint.replace("prepareActionReadiness(", "unchangedUser(") + source.slice(end);
+    expect(localReadinessDrift(inspectMutations(new Map([[file, withoutPlan]])))).toContain("farming.waterPlot");
+    const withoutWrite = source.slice(0, start) + endpoint.replace(/\n\s*readiness,\n/, "\n        undefined,\n") + source.slice(end);
+    expect(localReadinessDrift(inspectMutations(new Map([[file, withoutWrite]])))).toContain("farming.waterPlot");
+  });
+
+  it("keeps recovery out of tRPC and the global mutation provider", () => {
+    for (const file of ["server/api/trpc.ts", "app/_trpc/Provider.tsx"]) {
+      const source = readFileSync(join(sourceRoot, file), "utf8");
+      expect(source).not.toMatch(/fetchActionReadiness|prepareCharacterForAction|prepareActionReadiness|shouldPrepareAction|prepareActionFeedback|finishActionFeedback/);
+    }
   });
 
   it("detects an awake requirement introduced by a new mutation", () => {
@@ -252,5 +293,5 @@ describe("mutation awake prerequisites", () => {
 });
 
 type Definition = { file: string; name: string; node: Node };
-type Guard = { owner: string; status: string };
+type Guard = { owner: string; status: string; kind?: "prepare" | "write" };
 type Module = { definitions: Map<string, Node>; imports: Map<string, { file: string; name: string }> };

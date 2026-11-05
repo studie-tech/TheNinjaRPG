@@ -18,6 +18,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { WarMercenaries } from "@/layout/WarMercenaries";
+import { showActionReadinessToast } from "@/libs/actionFeedback";
 import {
   getObjectiveWarDeadline,
   getWarEspionage,
@@ -73,14 +74,17 @@ export const ObjectiveWarPanel = ({
     success: boolean;
     message: string;
     battleId?: string;
+    actionNotice?: string;
   }) => {
     setFeedback(result);
+    showActionReadinessToast(result);
     if (result.success && result.battleId) {
       await updateUser({
         status: "BATTLE",
         battleId: result.battleId,
         updatedAt: new Date(),
       });
+      if (result.actionNotice) void updateUser(undefined);
       pushToCombat(router, result.battleId);
     }
   };

@@ -83,6 +83,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   const { mutate: joinMatch, isPending: isJoiningMatch } =
     api.tournament.joinMatch.useMutation({
       onSuccess: async (data) => {
+        if (data.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(data);
         await utils.tournament.getTournament.invalidate();
         // A match can be joined without a battle starting — the opponent no-showed and this

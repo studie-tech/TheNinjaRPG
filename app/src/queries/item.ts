@@ -1,3 +1,8 @@
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import type {
+  ActionReadiness,
+  ActionReadinessWrite,
+} from "@/server/utils/actionReadiness";
 /**
  * Database access for item; authorization and transaction scopes stay in callers.
  */
@@ -712,41 +717,43 @@ export const listItemForGetEvolutions = (
     orderBy: (table, { asc: orderAsc }) => [orderAsc(table.requiredLevel)],
   });
 
-/** Build the `userItem` update for `evolveItem`, including predicates on `id`, `userId`, `itemId`. */
+/** Evolve the owned item and recover its actor in one guarded account/inventory update. */
 export const updateUserItemForEvolveItem = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "execute">,
   input: { evolutionItemId: string; userItemId: string },
   evolutionItem: { maxDurability: number },
-  canKeepEquipped: false | true,
+  canKeepEquipped: boolean,
   ctx: { userId: string },
   parentItemId: string,
   userItemObj: { level: number },
+  readiness: ActionReadiness,
 ) =>
-  client
-    .update(userItem)
-    .set({
-      itemId: input.evolutionItemId,
-      level: 1,
-      experience: 0,
-      activeVariantId: null,
-      durability: sql`LEAST(${userItem.durability}, ${evolutionItem.maxDurability})`,
-      updatedAt: new Date(),
-      ...(canKeepEquipped ? {} : { equipped: "NONE" as const }),
-    })
-    .where(
-      and(
-        eq(userItem.id, input.userItemId),
-        eq(userItem.userId, ctx.userId),
-        eq(userItem.itemId, parentItemId),
-        eq(userItem.level, userItemObj.level),
-        eq(userItem.quantity, 1),
-        eq(userItem.isInAuction, false),
-        or(
-          isNull(userItem.craftingFinishedAt),
-          lte(userItem.craftingFinishedAt, new Date()),
-        ),
-      ),
-    );
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${userItem} ON ${eq(userItem.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(readiness, [])}
+      ${userData.updatedAt} = ${getNextUserSnapshotAt(readiness.initial.updatedAt)},
+      ${userItem.itemId} = ${input.evolutionItemId},
+      ${userItem.level} = 1,
+      ${userItem.experience} = 0,
+      ${userItem.activeVariantId} = NULL,
+      ${userItem.durability} = LEAST(${userItem.durability}, ${evolutionItem.maxDurability}),
+      ${canKeepEquipped ? sql`` : sql`${userItem.equipped} = 'NONE',`}
+      ${userItem.updatedAt} = NOW(3)
+  WHERE ${and(
+    eq(userData.userId, ctx.userId),
+    readiness.where ?? eq(userData.status, "AWAKE"),
+    eq(userItem.id, input.userItemId),
+    eq(userItem.itemId, parentItemId),
+    eq(userItem.level, userItemObj.level),
+    eq(userItem.quantity, 1),
+    eq(userItem.isInAuction, false),
+    or(
+      isNull(userItem.craftingFinishedAt),
+      lte(userItem.craftingFinishedAt, new Date()),
+    ),
+  )}
+`);
 
 /** Build the `userItem` lookup for `evolveItem`, selecting only `id`, using predicates on `id`, `userId`, `itemId`. */
 export const findUserItemForEvolveItem = (
@@ -1428,11 +1435,14 @@ export const executeUserPetForClaim = (
   grantedQuest: undefined | import("@/drizzle/schema").Quest,
   petCapacity: number,
   rewardSpeciesUpdatedAt: undefined | Date,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
           UPDATE ${userData}
           INNER JOIN ${userItem} ON ${userItem.userId} = ${userData.userId}
-          SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt)},
+          SET ${actionReadinessSqlSet(readiness, ["curHealth", "curChakra", "curStamina"])}
+              ${readiness?.set.status ? sql`${userData.status} = 'AWAKE',` : sql``}
+              ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt)},
               ${userData.curHealth} = ${updates.curHealth},
               ${userData.curChakra} = ${updates.curChakra},
               ${userData.curStamina} = ${updates.curStamina},
@@ -1445,7 +1455,7 @@ export const executeUserPetForClaim = (
               ${userItem.quantity} = ${useritem.quantity - 1}
           WHERE ${userData.userId} = ${ctx.userId}
             AND ${userData.updatedAt} = ${user.updatedAt}
-            AND ${userData.status} = 'AWAKE'
+            AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
             AND ${userData.battleId} IS NULL
             AND ${userItem.id} = ${input.userItemId}
             AND ${userItem.quantity} = ${useritem.quantity}
@@ -2025,11 +2035,14 @@ export const updateUserItemForTryRepairUserItemDurability = (
 export const selectUserDataForExecuteMergeStacksForItemBucket = (
   client: Pick<DrizzleClient, "select">,
   userId: string,
+  ownerWhere?: SQL,
 ) =>
   client
     .select({ one: sql`1` })
     .from(userData)
-    .where(and(eq(userData.userId, userId), eq(userData.status, "AWAKE")));
+    .where(
+      and(eq(userData.userId, userId), ownerWhere ?? eq(userData.status, "AWAKE")),
+    );
 
 /**
  * Build the `userItem` update for `restoreOriginalQuantities`, setting `quantity`,
@@ -2296,12 +2309,13 @@ export const executeConsumedForConsumeMeal = (
   expiresAt: Date,
   createdAt: Date,
   id: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
       UPDATE ${userData}
       INNER JOIN ${userItem} ON ${userItem.userId} = ${userData.userId}
       INNER JOIN ${userRaidBuff} ON ${userRaidBuff.userId} = ${userData.userId}
-      SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
+      SET ${actionReadinessSqlSet(readiness, [])} ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
           ${userItem.quantity} = ${expectedQuantity - 1},
           ${userRaidBuff.itemId} = ${owned.itemId},
           ${userRaidBuff.questId} = NULL,
@@ -2310,7 +2324,7 @@ export const executeConsumedForConsumeMeal = (
           ${userRaidBuff.createdAt} = ${createdAt}
       WHERE ${userData.userId} = ${user.userId}
         AND ${userData.updatedAt} = ${user.updatedAt}
-        AND ${userData.status} = 'AWAKE'
+        AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
         AND ${userData.battleId} IS NULL
         AND ${userItem.id} = ${owned.id}
         AND ${userItem.userId} = ${user.userId}
@@ -2350,3 +2364,33 @@ export const listVariantNames = (client: Pick<DrizzleClient, "select">) =>
     .from(itemVariant)
     .innerJoin(item, eq(item.id, itemVariant.itemId))
     .where(eq(itemVariant.costType, "VARIANT_TOKEN"));
+
+/** Debit a variant token and recover its owner together before delivering its unlock. */
+export const consumeVariantTokenForAction = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  token: { id: string; quantity: number; itemId: string },
+  readiness: ActionReadiness,
+) =>
+  client.execute(sql`
+  UPDATE ${userData}
+  INNER JOIN ${userItem} ON ${eq(userItem.userId, userData.userId)}
+  SET ${actionReadinessSqlSet(readiness, [])}
+      ${userData.updatedAt} = ${getNextUserSnapshotAt(readiness.initial.updatedAt)},
+      ${userItem.quantity} = ${token.quantity - 1}
+  WHERE ${and(
+    eq(userData.userId, userId),
+    readiness.where ?? eq(userData.status, "AWAKE"),
+    eq(userItem.id, token.id),
+    eq(userItem.itemId, token.itemId),
+    eq(userItem.quantity, token.quantity),
+    gt(userItem.quantity, 0),
+    eq(userItem.isInAuction, false),
+    eq(userItem.storedAtHome, false),
+    or(
+      isNull(userItem.craftingFinishedAt),
+      lte(userItem.craftingFinishedAt, new Date()),
+    ),
+    hasNoHuntingBattle(userId),
+  )}
+`);

@@ -44,6 +44,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
@@ -58,6 +59,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.actionNotice && !data.success) void utils.profile.getUser.invalidate();
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),

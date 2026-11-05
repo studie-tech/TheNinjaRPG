@@ -19,6 +19,7 @@ import {
 } from "@/libs/dungeonRewards";
 import { canUsePet } from "@/libs/pets/progression";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiUserIds } from "@/queries/ai";
 import { listUserPetForInitiateBattle } from "@/queries/combat";
 import {
@@ -58,7 +59,11 @@ import {
   updateDungeonRunForReserve,
   updateDungeonRunForUpdateParty,
 } from "@/queries/dungeon";
-import { findUserById, findUserRoleById } from "@/queries/profile";
+import {
+  fetchAllGameSettings,
+  findUserById,
+  findUserRoleById,
+} from "@/queries/profile";
 import { initiateBattle } from "@/routers/combat";
 import { updateRewards } from "@/routers/quests";
 import {
@@ -68,6 +73,10 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { launchCoopEncounter } from "@/server/utils/coop";
 import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
@@ -336,13 +345,22 @@ export const dungeonRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [user, definition, active, admissionData, pets] = await Promise.all([
-        findUserById(ctx.drizzle, ctx.userId),
-        findDungeonForCreate(ctx.drizzle, input),
-        findDungeonMemberForCreate(ctx.drizzle, ctx),
-        fetchDungeonEntryData(ctx.drizzle, [ctx.userId]),
-        input.petIds ? listUserPetForInitiateBattle(ctx.drizzle, [ctx.userId], []) : [],
-      ]);
+      const [initialUser, actionSettings, definition, active, admissionData, pets] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+          findDungeonForCreate(ctx.drizzle, input),
+          findDungeonMemberForCreate(ctx.drizzle, ctx),
+          fetchDungeonEntryData(ctx.drizzle, [ctx.userId]),
+          input.petIds
+            ? listUserPetForInitiateBattle(ctx.drizzle, [ctx.userId], [])
+            : [],
+        ]);
+      const readiness = initialUser
+        ? prepareActionReadiness(initialUser, actionSettings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       if (user?.status !== "AWAKE" || user.isBanned || user.isAi)
         return errorResponse(
           "You must be awake and out of combat to create a dungeon lobby.",
@@ -401,7 +419,7 @@ export const dungeonRouter = createTRPCRouter({
         );
         // A crash here can leave a reversible membership without queue protection. A
         // failed status claim removes only this run's reservation and never another activity.
-        const queued = await claimDungeonQueue(ctx.drizzle, ctx.userId, id);
+        const queued = await claimDungeonQueue(ctx.drizzle, ctx.userId, id, readiness);
         if (queued.rowsAffected !== 1) {
           await deleteDungeonMemberForUpdateParty(ctx.drizzle, { id }, ctx.userId);
           await deleteDungeonRunForCreate(ctx.drizzle, id);
@@ -414,24 +432,35 @@ export const dungeonRouter = createTRPCRouter({
           return errorResponse("You already joined another dungeon.");
         throw error;
       }
-      return {
-        success: true,
-        message: "Lobby created.",
-        ...getCreatedDungeonUserUpdate({ id }),
-        id,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: "Lobby created.",
+          ...getCreatedDungeonUserUpdate({ id }),
+          id,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
   /** Apply one party version; membership changes also commit their cross-run reservation. */
   act: protectedProcedure
     .use(ratelimitMiddleware)
     .input(dungeonActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const [run, user, target, active] = await Promise.all([
+      const [run, initialUser, target, active, actionSettings] = await Promise.all([
         findDungeonRunForAct(ctx.drizzle, input),
-        findUserById(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         input.userId ? findUserById(ctx.drizzle, input.userId) : undefined,
         listDungeonMemberForAct(ctx.drizzle, ctx, input),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness =
+        initialUser && input.action === "accept"
+          ? prepareActionReadiness(initialUser, actionSettings)
+          : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       if (!run || !user) return errorResponse("Dungeon not found.");
       if (await expireDungeonRun(ctx.drizzle, run)) {
         return {
@@ -552,7 +581,7 @@ export const dungeonRouter = createTRPCRouter({
         if (claim.rowsAffected !== 1) return false;
         if (joined) {
           await insertDungeonMember(client, run.id, ctx.userId);
-          const queued = await claimDungeonQueue(client, ctx.userId, run.id);
+          const queued = await claimDungeonQueue(client, ctx.userId, run.id, readiness);
           if (queued.rowsAffected !== 1) throw queueChanged;
         }
         if (removedUser || ending)
@@ -571,19 +600,23 @@ export const dungeonRouter = createTRPCRouter({
             ? ctx.drizzle.transaction(updateParty)
             : updateParty(ctx.drizzle),
         );
-        return saved
-          ? {
-              success: true,
-              message: "Party updated.",
-              ...getActUserUpdate({
-                joined,
-                runId: run.id,
-                ending,
-                removedUser,
-                ctxUserId: ctx.userId,
-              }),
-            }
-          : errorResponse("The party changed. Refresh and try again.");
+        return actionReadinessResponse(
+          saved
+            ? {
+                success: true,
+                message: "Party updated.",
+                ...getActUserUpdate({
+                  joined,
+                  runId: run.id,
+                  ending,
+                  removedUser,
+                  ctxUserId: ctx.userId,
+                }),
+              }
+            : errorResponse("The party changed. Refresh and try again."),
+          saved ? readiness : undefined,
+          ctx.drizzle,
+        );
       } catch (error) {
         if (error === queueChanged)
           return errorResponse("Your activity changed. Refresh and try again.");

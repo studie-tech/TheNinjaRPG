@@ -4,8 +4,9 @@ import { RANKED_PVP_STATS } from "@/drizzle/constants";
 import type { RankedLoadout, UserRequest } from "@/drizzle/schema";
 import { SPAR_EXPIRY_SECONDS } from "@/libs/combat/constants";
 import { getServerPusher } from "@/libs/pusher";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
-import { fetchUser } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
 import { findRankedLoadoutByUserId } from "@/queries/pvprank";
 import {
   fetchRequests,
@@ -22,6 +23,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { idSchema } from "@/validators/misc";
 
@@ -80,11 +85,15 @@ export const sparringRouter = createTRPCRouter({
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [challenge, user, jutsuEquipLimits] = await Promise.all([
+      let [challenge, user, jutsuEquipLimits, settings] = await Promise.all([
         fetchRequest(ctx.drizzle, input.id, "SPAR"),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchJutsuEquipLimits(ctx.drizzle),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(user, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      user = readiness.user;
       // Guards
       if (challenge.receiverId !== ctx.userId) {
         return errorResponse("Not your challenge to accept");
@@ -151,6 +160,7 @@ export const sparringRouter = createTRPCRouter({
           userIds: [challenge.receiverId],
           targetIds: [challenge.senderId],
           client: ctx.drizzle,
+          actionUserId: ctx.userId,
           biome: "arena",
           targetStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,
           userStatDistribution: useRankedRules ? RANKED_PVP_STATS : undefined,

@@ -153,7 +153,8 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const measured = await recordQueries(() => callerForDatabase(dungeonRouter, userId, db).create({ id: "unavailable" }));
     const response = userDeltaResponseSchema.parse(measured.result);
     expect(response).toMatchObject({ success: false, message: "This dungeon is unavailable.", userDelta: {} });
-    expect(measured.statements).toHaveLength(7);
+    // Recovery sources share the initial read phase; a rejected create performs no account write or confirmation read.
+    expect(measured.statements).toHaveLength(8);
     expect(measured.statements.every((statement) => /^select /i.test(statement))).toBe(true);
     if (scenario === "cleanup" || scenario === "reservation") {
       // Another tab reserves a party after the rejected create, before its mandatory state read.

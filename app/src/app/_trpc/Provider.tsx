@@ -23,7 +23,6 @@ import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/components/ui/use-toast";
-import { finishActionFeedback, prepareActionFeedback } from "@/libs/actionFeedback";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
 import {
   BUILD_ID_HEADER,
@@ -96,9 +95,6 @@ const TrpcClientProvider = (props: {
   }, [clerk, session]);
   const onMutateCheck = useGlobalOnMutateProtect();
   const [{ queryClient, queryMetricsTracker }] = useState(() => {
-    // A feature's onSuccess may throw after recovery commits. TanStack then settles
-    // with undefined data, so retain the confirmed result for feedback and reconciliation.
-    const recoveryResults = new WeakMap<object, unknown>();
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: {
@@ -122,25 +118,6 @@ const TrpcClientProvider = (props: {
         onError: (error, _query) => handleTrpcError(error, "query"),
       }),
       mutationCache: new MutationCache({
-        onSuccess: (data, _variables, _context, mutation) => {
-          prepareActionFeedback(data);
-          recoveryResults.set(mutation, data);
-        },
-        onSettled: (data, _error, _variables, _context, mutation) => {
-          const feedback = finishActionFeedback(recoveryResults.get(mutation) ?? data);
-          recoveryResults.delete(mutation);
-          if (feedback) {
-            if (feedback.needsToast)
-              showMutationToast({
-                success: true,
-                title: "Character ready",
-                message: feedback.notice,
-              });
-            void queryClient.invalidateQueries({
-              queryKey: getQueryKey(api.profile.getUser, undefined, "query"),
-            });
-          }
-        },
         onMutate: (_variables, mutation) => {
           // Reject before a local onMutate callback can apply optimistic changes.
           session.assertCurrent();

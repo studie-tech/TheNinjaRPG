@@ -254,7 +254,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
     onSuccess: async (data, _variables, revision) => {
       props.refetch();
       showMutationToast({ ...data, title: "Bloodline Roll" });
-      if (data.success) {
+      if (data.success || data.actionNotice) {
         await updateUser(data, { revision });
       }
     },

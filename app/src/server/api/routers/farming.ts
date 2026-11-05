@@ -51,6 +51,7 @@ import {
 } from "@/libs/quest";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   deleteFarmExtractionForExtractSeeds,
   deleteFarmExtractionForPayOutExtractions,
@@ -87,11 +88,17 @@ import {
   updateUserItemForAwardItemToUser,
 } from "@/queries/farming";
 import { fetchItem, insertUserItems, listItemsByIds } from "@/queries/item";
+import { fetchAllGameSettings } from "@/queries/profile";
 import { fetchQuestTrackerState } from "@/queries/quests";
 import { fetchMasterySources, fetchUserSkills } from "@/queries/skillTree";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import {
   claimUserSnapshot,
   refundUserItemQuantityAtomically,
@@ -125,20 +132,25 @@ export const farmingRouter = createTRPCRouter({
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [
-        user,
+        initialUser,
         userItems,
         plot,
         { seedItem, yieldItem },
         questState,
         passiveSources,
+        settings,
       ] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         findFarmPlotForPlantSeed(ctx.drizzle, input, ctx),
         fetchFarmSeedAndYield(ctx.drizzle, input.seedItemId),
         fetchQuestTrackerState(ctx.drizzle, ctx.userId),
         fetchMasterySources(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const userSkills = passiveSources.userSkills;
       const { farmingReductionPercent } = getActivityBonuses({
         ...user,
@@ -167,7 +179,8 @@ export const farmingRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
-        where: [eq(userData.status, "AWAKE")],
+        readiness,
+        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not plant — please try again");
@@ -192,45 +205,66 @@ export const farmingRouter = createTRPCRouter({
         finishAt,
       );
       if (planted === "plotsChanged") {
-        return errorResponse("Could not plant — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not plant — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (planted === "seedsChanged") {
-        return errorResponse("Could not consume seed — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not consume seed — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
         baseXpGain,
-        farmingQuestStateAfterClaim(questState, user.updatedAt, claim.claimedAt),
+        farmingQuestStateAfterClaim(
+          questState,
+          user.updatedAt,
+          claim.claimedAt,
+          readiness,
+        ),
         "seeds_planted",
       );
       if (xpGain === null) {
-        return errorResponse("Planted seed but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Planted seed but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
-      return {
-        success: true,
-        message:
-          xpGain > 0
-            ? `Planted ${seedItem.name} (+${xpGain} farming XP)`
-            : `Planted ${seedItem.name}`,
-        updatedPlot: mapPlotToState(
-          {
-            ...plot,
-            seedItemId: seedItem.id,
-            plantedAt: now,
-            finishAt,
-            lastWateredAt: null,
-            fertilizerApplied: false,
-            seedItem,
-            yieldItem,
-          },
-          now,
-        ),
-        farmingExperienceDelta: xpGain,
-        inventoryDeltas: [{ itemId: seedItem.id, quantityDelta: -1 }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            xpGain > 0
+              ? `Planted ${seedItem.name} (+${xpGain} farming XP)`
+              : `Planted ${seedItem.name}`,
+          updatedPlot: mapPlotToState(
+            {
+              ...plot,
+              seedItemId: seedItem.id,
+              plantedAt: now,
+              finishAt,
+              lastWateredAt: null,
+              fertilizerApplied: false,
+              seedItem,
+              yieldItem,
+            },
+            now,
+          ),
+          farmingExperienceDelta: xpGain,
+          inventoryDeltas: [{ itemId: seedItem.id, quantityDelta: -1 }],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   waterPlot: protectedProcedure
@@ -238,11 +272,15 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, plot, questState] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, plot, questState, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
         fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -266,20 +304,27 @@ export const farmingRouter = createTRPCRouter({
         FARM_WATER_EXPERIENCE,
         questState,
         "plants_watered",
+        1,
+        undefined,
+        readiness,
       );
       if (xpGain === null) {
         return errorResponse("Watered crop but failed to update farming progress");
       }
 
-      return {
-        success: true,
-        message: `Watered the crop (+${xpGain} farming XP)`,
-        updatedPlot: mapPlotToState(
-          { ...plot, finishAt: newFinishAt, lastWateredAt: now },
-          now,
-        ),
-        farmingExperienceDelta: xpGain,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Watered the crop (+${xpGain} farming XP)`,
+          updatedPlot: mapPlotToState(
+            { ...plot, finishAt: newFinishAt, lastWateredAt: now },
+            now,
+          ),
+          farmingExperienceDelta: xpGain,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   applyFertilizer: protectedProcedure
@@ -287,13 +332,18 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string(), userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems, plot, questState, userSkills] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-        fetchUserSkills(ctx.drizzle, ctx.userId),
-      ]);
+      const [initialUser, userItems, plot, questState, userSkills, settings] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
+          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+          fetchUserSkills(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+        ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -325,6 +375,8 @@ export const farmingRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
+        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success)
         return errorResponse("Could not apply fertilizer — please try again");
@@ -345,38 +397,57 @@ export const farmingRouter = createTRPCRouter({
         now,
       );
       if (fertilized === "plotsChanged") {
-        return errorResponse("Could not apply fertilizer — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not apply fertilizer — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (fertilized === "stackChanged") {
-        return errorResponse("Could not consume fertilizer — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not consume fertilizer — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
         baseXpGain,
-        farmingQuestStateAfterClaim(questState, user.updatedAt, claim.claimedAt),
+        farmingQuestStateAfterClaim(
+          questState,
+          user.updatedAt,
+          claim.claimedAt,
+          readiness,
+        ),
         "plants_fertilized",
       );
       if (xpGain === null) {
-        return errorResponse(
-          "Applied fertilizer but failed to update farming progress",
+        return actionReadinessResponse(
+          errorResponse("Applied fertilizer but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
         );
       }
 
-      return {
-        success: true,
-        message:
-          xpGain > 0
-            ? `Applied ${fertilizerStack.item.name} (+${xpGain} farming XP)`
-            : `Applied ${fertilizerStack.item.name}`,
-        updatedPlot: mapPlotToState(
-          { ...plot, finishAt: newFinishAt, fertilizerApplied: true },
-          now,
-        ),
-        farmingExperienceDelta: xpGain,
-        inventoryDeltas: [{ itemId: fertilizerStack.itemId, quantityDelta: -1 }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            xpGain > 0
+              ? `Applied ${fertilizerStack.item.name} (+${xpGain} farming XP)`
+              : `Applied ${fertilizerStack.item.name}`,
+          updatedPlot: mapPlotToState(
+            { ...plot, finishAt: newFinishAt, fertilizerApplied: true },
+            now,
+          ),
+          farmingExperienceDelta: xpGain,
+          inventoryDeltas: [{ itemId: fertilizerStack.itemId, quantityDelta: -1 }],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   harvestPlot: protectedProcedure
@@ -384,12 +455,16 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems, plot, questState] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, userItems, plot, questState, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchFarmPlotWithItems(ctx.drizzle, ctx.userId, input.plotId),
         fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -418,6 +493,7 @@ export const farmingRouter = createTRPCRouter({
         baseXpGain,
         questState,
         now,
+        readiness,
       );
       if (harvest.outcome === "plotsChanged") {
         return errorResponse("Could not harvest — please try again");
@@ -430,19 +506,23 @@ export const farmingRouter = createTRPCRouter({
       }
       const { xpGain } = harvest;
 
-      return {
-        success: true,
-        message:
-          xpGain > 0
-            ? `Harvested ${plot.yieldItem.name} (+${xpGain} farming XP)`
-            : `Harvested ${plot.yieldItem.name}`,
-        updatedPlot: mapPlotToState(
-          { ...plot, ...EMPTY_PLOT, seedItem: null, yieldItem: null },
-          now,
-        ),
-        farmingExperienceDelta: xpGain,
-        inventoryDeltas: [{ itemId: plot.yieldItem.id, quantityDelta: 1 }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message:
+            xpGain > 0
+              ? `Harvested ${plot.yieldItem.name} (+${xpGain} farming XP)`
+              : `Harvested ${plot.yieldItem.name}`,
+          updatedPlot: mapPlotToState(
+            { ...plot, ...EMPTY_PLOT, seedItem: null, yieldItem: null },
+            now,
+          ),
+          farmingExperienceDelta: xpGain,
+          inventoryDeltas: [{ itemId: plot.yieldItem.id, quantityDelta: 1 }],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   plantAllEmpty: protectedProcedure
@@ -452,15 +532,26 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems, seedItem, plots, questState, passiveSources] =
-        await Promise.all([
-          fetchUser(ctx.drizzle, ctx.userId),
-          fetchUserItems(ctx.drizzle, ctx.userId),
-          fetchItem(ctx.drizzle, input.seedItemId),
-          listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-          fetchMasterySources(ctx.drizzle, ctx.userId),
-        ]);
+      const [
+        initialUser,
+        userItems,
+        seedItem,
+        plots,
+        questState,
+        passiveSources,
+        settings,
+      ] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchItem(ctx.drizzle, input.seedItemId),
+        listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
+        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const userSkills = passiveSources.userSkills;
       const { farmingReductionPercent } = getActivityBonuses({
         ...user,
@@ -492,7 +583,8 @@ export const farmingRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
-        where: [eq(userData.status, "AWAKE")],
+        readiness,
+        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success)
         return errorResponse("Could not plant all — please try again");
@@ -513,10 +605,18 @@ export const farmingRouter = createTRPCRouter({
         finishAt,
       );
       if (planted === "plotsChanged") {
-        return errorResponse("Could not plant all — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not plant all — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (planted === "seedsChanged") {
-        return errorResponse("Could not consume seeds — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not consume seeds — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       const baseXpGain = getFarmPlantExperience(seedItem) * emptyPlots.length;
@@ -524,31 +624,48 @@ export const farmingRouter = createTRPCRouter({
         ctx.drizzle,
         user,
         baseXpGain,
-        farmingQuestStateAfterClaim(questState, user.updatedAt, claim.claimedAt),
+        farmingQuestStateAfterClaim(
+          questState,
+          user.updatedAt,
+          claim.claimedAt,
+          readiness,
+        ),
         "seeds_planted",
         emptyPlots.length,
       );
       if (xpGain === null) {
-        return errorResponse("Planted seeds but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Planted seeds but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
-      return {
-        success: true,
-        message: `Planted ${emptyPlots.length} ${seedItem.name}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
-        farmingExperienceDelta: xpGain,
-        inventoryDeltas: [{ itemId: seedItem.id, quantityDelta: -emptyPlots.length }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Planted ${emptyPlots.length} ${seedItem.name}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
+          farmingExperienceDelta: xpGain,
+          inventoryDeltas: [{ itemId: seedItem.id, quantityDelta: -emptyPlots.length }],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   waterAll: protectedProcedure
     .meta({ mcp: { description: "Water every eligible farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
-      const [user, plots, questState] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, plots, questState, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         listFarmPlotForWaterAll(ctx.drizzle, ctx),
         fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
 
@@ -577,19 +694,25 @@ export const farmingRouter = createTRPCRouter({
         questState,
         "plants_watered",
         wateredCount,
+        undefined,
+        readiness,
       );
       if (xpGain === null) {
         return errorResponse("Watered crops but failed to update farming progress");
       }
-      return {
-        success: true,
-        message: `Watered ${wateredCount} plot${wateredCount === 1 ? "" : "s"} (+${xpGain} farming XP)`,
-        farmingExperienceDelta: xpGain,
-        // A lost plot CAS may hide another writer's timeline; recover the complete view.
-        updatedPlots: results.every(Boolean)
-          ? getWateredFarmPlots(waterable, results, now)
-          : undefined,
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Watered ${wateredCount} plot${wateredCount === 1 ? "" : "s"} (+${xpGain} farming XP)`,
+          farmingExperienceDelta: xpGain,
+          // A lost plot CAS may hide another writer's timeline; recover the complete view.
+          updatedPlots: results.every(Boolean)
+            ? getWateredFarmPlots(waterable, results, now)
+            : undefined,
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   fertilizeAll: protectedProcedure
@@ -597,13 +720,18 @@ export const farmingRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems, plots, questState, userSkills] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserItems(ctx.drizzle, ctx.userId),
-        listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
-        fetchQuestTrackerState(ctx.drizzle, ctx.userId),
-        fetchUserSkills(ctx.drizzle, ctx.userId),
-      ]);
+      const [initialUser, userItems, plots, questState, userSkills, settings] =
+        await Promise.all([
+          fetchActionUser(ctx.drizzle, ctx.userId),
+          fetchUserItems(ctx.drizzle, ctx.userId),
+          listFarmPlotForPlantAllEmpty(ctx.drizzle, ctx),
+          fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+          fetchUserSkills(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+        ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
 
@@ -640,6 +768,8 @@ export const farmingRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
+        readiness,
+        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not fertilize all — please try again");
@@ -653,10 +783,18 @@ export const farmingRouter = createTRPCRouter({
         now,
       );
       if (fertilized === "plotsChanged") {
-        return errorResponse("Could not fertilize all — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not fertilize all — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
       if (fertilized === "stackChanged") {
-        return errorResponse("Could not consume fertilizer — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not consume fertilizer — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       const baseXpGain =
@@ -665,21 +803,34 @@ export const farmingRouter = createTRPCRouter({
         ctx.drizzle,
         user,
         baseXpGain,
-        farmingQuestStateAfterClaim(questState, user.updatedAt, claim.claimedAt),
+        farmingQuestStateAfterClaim(
+          questState,
+          user.updatedAt,
+          claim.claimedAt,
+          readiness,
+        ),
         "plants_fertilized",
         fertilizable.length,
       );
       if (xpGain === null) {
-        return errorResponse("Fertilized crops but failed to update farming progress");
+        return actionReadinessResponse(
+          errorResponse("Fertilized crops but failed to update farming progress"),
+          readiness,
+          ctx.drizzle,
+        );
       }
-      return {
-        success: true,
-        message: `Fertilized ${fertilizable.length} plot${fertilizable.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
-        farmingExperienceDelta: xpGain,
-        inventoryDeltas: [
-          { itemId: fertilizerStack.itemId, quantityDelta: -fertilizable.length },
-        ],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Fertilized ${fertilizable.length} plot${fertilizable.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
+          farmingExperienceDelta: xpGain,
+          inventoryDeltas: [
+            { itemId: fertilizerStack.itemId, quantityDelta: -fertilizable.length },
+          ],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   harvestAll: protectedProcedure
@@ -687,8 +838,8 @@ export const farmingRouter = createTRPCRouter({
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
       let inventoryRecovered = false;
-      const [user, userItems, plots, questState] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, userItems, plots, questState, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, {
           onStaleMergeClaimRecovery: () => {
             inventoryRecovered = true;
@@ -696,7 +847,11 @@ export const farmingRouter = createTRPCRouter({
         }),
         fetchFarmPlotsWithItems(ctx.drizzle, ctx.userId),
         fetchQuestTrackerState(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
 
@@ -738,6 +893,7 @@ export const farmingRouter = createTRPCRouter({
         baseXpGain,
         questState,
         now,
+        readiness,
       );
       if (harvest.outcome === "plotsChanged") {
         return errorResponse("Could not harvest all — please try again");
@@ -749,22 +905,26 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Harvested crops but failed to update farming progress");
       }
       const { xpGain, awards } = harvest;
-      return {
-        success: true,
-        message: `Harvested ${readyPlots.length} plot${readyPlots.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
-        farmingExperienceDelta: xpGain,
-        updatedPlots: getHarvestedFarmPlots(readyPlots, now),
-        // Crop grants cannot represent unrelated seed or fertilizer stacks restored by the preload.
-        inventoryChanges:
-          !inventoryRecovered &&
-          awards.every((award) => award && award.inventoryChanges !== undefined)
-            ? awards.flatMap((award) => (award ? (award.inventoryChanges ?? []) : []))
-            : undefined,
-        inventoryDeltas: [...harvests.entries()].map(([itemId, harvest]) => ({
-          itemId,
-          quantityDelta: harvest.quantity,
-        })),
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Harvested ${readyPlots.length} plot${readyPlots.length === 1 ? "" : "s"}${xpGain > 0 ? ` (+${xpGain} farming XP)` : ""}`,
+          farmingExperienceDelta: xpGain,
+          updatedPlots: getHarvestedFarmPlots(readyPlots, now),
+          // Crop grants cannot represent unrelated seed or fertilizer stacks restored by the preload.
+          inventoryChanges:
+            !inventoryRecovered &&
+            awards.every((award) => award && award.inventoryChanges !== undefined)
+              ? awards.flatMap((award) => (award ? (award.inventoryChanges ?? []) : []))
+              : undefined,
+          inventoryDeltas: [...harvests.entries()].map(([itemId, harvest]) => ({
+            itemId,
+            quantityDelta: harvest.quantity,
+          })),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   sellCrop: protectedProcedure
@@ -777,10 +937,14 @@ export const farmingRouter = createTRPCRouter({
     )
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, userItems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, userItems, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
 
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
@@ -813,18 +977,25 @@ export const farmingRouter = createTRPCRouter({
         ctx.drizzle,
         totalValue,
         ctx,
+        readiness,
       );
 
       if (currencyResult.rowsAffected !== 1) {
         return errorResponse("Could not grant farm currency");
       }
 
-      return {
-        success: true,
-        message: `Sold ${input.quantity}x ${cropStack.item.name} for ${totalValue} farm coins`,
-        farmCurrencyDelta: totalValue,
-        inventoryDeltas: [{ itemId: cropStack.itemId, quantityDelta: -input.quantity }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Sold ${input.quantity}x ${cropStack.item.name} for ${totalValue} farm coins`,
+          farmCurrencyDelta: totalValue,
+          inventoryDeltas: [
+            { itemId: cropStack.itemId, quantityDelta: -input.quantity },
+          ],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   buyShopItem: protectedProcedure
@@ -835,11 +1006,15 @@ export const farmingRouter = createTRPCRouter({
       // The inventory is only consulted on the SEED/FERTILIZER branch, but fetching it
       // alongside the user keeps the common purchase path at one round-trip instead of
       // two; plot and extractor upgrades simply ignore the extra read.
-      const [user, shopEntry, userItems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, shopEntry, userItems, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         resolveShopEntry(ctx.drizzle, input.type, input.itemId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const guard = guardFarmingMutation(user);
       if (guard) return guard;
 
@@ -866,6 +1041,7 @@ export const farmingRouter = createTRPCRouter({
           ctx,
           user,
           maxPurchased,
+          readiness,
         );
         if (currencyResult.rowsAffected !== 1) {
           return errorResponse("Could not purchase plot — please try again");
@@ -873,13 +1049,17 @@ export const farmingRouter = createTRPCRouter({
 
         await insertFarmPlotForBuyShopItem(ctx.drizzle, ctx, newTotal);
 
-        return {
-          success: true,
-          message: "Purchased an extra farm plot",
-          farmCurrencyDelta: -shopEntry.cost,
-          totalPlots: newTotal,
-          farmPlotsPurchasedDelta: 1,
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "Purchased an extra farm plot",
+            farmCurrencyDelta: -shopEntry.cost,
+            totalPlots: newTotal,
+            farmPlotsPurchasedDelta: 1,
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       if (input.type === "EXTRACTOR") {
@@ -894,17 +1074,22 @@ export const farmingRouter = createTRPCRouter({
           ctx,
           user,
           maxExtractors,
+          readiness,
         );
         if (currencyResult.rowsAffected !== 1) {
           return errorResponse("Could not purchase extractor — please try again");
         }
 
-        return {
-          success: true,
-          message: "Purchased a seed extractor",
-          farmCurrencyDelta: -shopEntry.cost,
-          farmExtractorsOwnedDelta: 1,
-        };
+        return actionReadinessResponse(
+          {
+            success: true,
+            message: "Purchased a seed extractor",
+            farmCurrencyDelta: -shopEntry.cost,
+            farmExtractorsOwnedDelta: 1,
+          },
+          readiness,
+          ctx.drizzle,
+        );
       }
 
       if (!("itemInfo" in shopEntry)) return errorResponse("Shop item not found");
@@ -921,6 +1106,7 @@ export const farmingRouter = createTRPCRouter({
         ctx.drizzle,
         totalCost,
         ctx,
+        readiness,
       );
       if (currencyResult.rowsAffected !== 1) {
         return errorResponse("Not enough farm coins");
@@ -936,14 +1122,18 @@ export const farmingRouter = createTRPCRouter({
       if (!itemAwarded) {
         return errorResponse("Purchase completed but failed to grant item");
       }
-      return {
-        success: true,
-        message: `Purchased ${input.quantity}x ${shopEntry.label}`,
-        farmCurrencyDelta: -totalCost,
-        inventoryDeltas: [
-          { itemId: shopEntry.itemInfo.id, quantityDelta: input.quantity },
-        ],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Purchased ${input.quantity}x ${shopEntry.label}`,
+          farmCurrencyDelta: -totalCost,
+          inventoryDeltas: [
+            { itemId: shopEntry.itemInfo.id, quantityDelta: input.quantity },
+          ],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 
   extractSeeds: protectedProcedure
@@ -962,11 +1152,15 @@ export const farmingRouter = createTRPCRouter({
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const now = new Date();
-      const [user, userItems, extractions] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [initialUser, userItems, extractions, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUserExtractions(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       const activeExtraction = extractions.find(
         (extraction) => extraction.extractorSlot === input.extractorSlot,
       );
@@ -1029,7 +1223,8 @@ export const farmingRouter = createTRPCRouter({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
-        where: [eq(userData.status, "AWAKE")],
+        readiness,
+        where: [readiness.where ?? eq(userData.status, "AWAKE")],
       });
       if (!claim.success) {
         return errorResponse("Could not start extraction — please try again");
@@ -1056,8 +1251,12 @@ export const farmingRouter = createTRPCRouter({
         input,
       );
       if (!extractionCreated) {
-        return errorResponse(
-          `Seed extractor ${input.extractorSlot + 1} is already processing crops`,
+        return actionReadinessResponse(
+          errorResponse(
+            `Seed extractor ${input.extractorSlot + 1} is already processing crops`,
+          ),
+          readiness,
+          ctx.drizzle,
         );
       }
 
@@ -1070,14 +1269,24 @@ export const farmingRouter = createTRPCRouter({
       });
       if (!consumed) {
         await deleteFarmExtractionForExtractSeeds(ctx.drizzle, extractionId, ctx);
-        return errorResponse("Could not consume crop — please try again");
+        return actionReadinessResponse(
+          errorResponse("Could not consume crop — please try again"),
+          readiness,
+          ctx.drizzle,
+        );
       }
 
-      return {
-        success: true,
-        message: `Seed extractor ${input.extractorSlot + 1} started processing ${input.quantity} ${cropStack.item.name}. Ready in ${extractionSeconds / 60} minutes.`,
-        inventoryDeltas: [{ itemId: cropStack.itemId, quantityDelta: -input.quantity }],
-      };
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Seed extractor ${input.extractorSlot + 1} started processing ${input.quantity} ${cropStack.item.name}. Ready in ${extractionSeconds / 60} minutes.`,
+          inventoryDeltas: [
+            { itemId: cropStack.itemId, quantityDelta: -input.quantity },
+          ],
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 });
 
@@ -1283,6 +1492,7 @@ const settleFarmHarvest = async (
   baseXpGain: number,
   questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   now: Date,
+  readiness?: ActionReadiness,
 ) => {
   const { userId } = user;
   const cleared = await updateFarmPlotsForHarvest(client, now, { userId }, plotIds);
@@ -1312,6 +1522,7 @@ const settleFarmHarvest = async (
       "plants_harvested",
       plotIds.length,
       () => harvestRecorded.then(() => getFarmCollectionCount(client, userId)),
+      readiness,
     ),
     harvestRecorded,
   ]);
@@ -2092,9 +2303,14 @@ const farmingQuestStateAfterClaim = (
   questState: Awaited<ReturnType<typeof fetchQuestTrackerState>>,
   updatedAt: Date,
   claimedAt: Date,
+  readiness?: ActionReadiness,
 ) =>
   questState?.updatedAt.getTime() === updatedAt.getTime()
-    ? { ...questState, updatedAt: claimedAt }
+    ? {
+        ...questState,
+        updatedAt: claimedAt,
+        questData: readiness?.user.questData ?? questState.questData,
+      }
     : questState;
 
 /** Awards farming XP and advances the matching active quest objectives together. */
@@ -2117,7 +2333,14 @@ const awardFarmingProgress = async (
   task: FarmingQuestTask,
   increment = 1,
   loadFarmingCollectionCount?: () => Promise<number>,
+  readiness?: ActionReadiness,
 ) => {
+  if (
+    readiness?.notice &&
+    questState?.updatedAt.getTime() === readiness.initial.updatedAt.getTime()
+  ) {
+    questState = { ...questState, questData: readiness.user.questData };
+  }
   xpGain = Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
   const emittedTasks = new Set<AllObjectiveTask>([
     task,
@@ -2201,11 +2424,16 @@ const awardFarmingProgress = async (
   };
 
   const first = await questUpdateFor(user, questState);
-  if (xpGain <= 0 && !first.advancesObjective) return xpGain;
+  if (xpGain <= 0 && !first.advancesObjective && !readiness?.notice) return xpGain;
 
   // Nothing but XP to persist: the SQL increment is already conflict-free.
   if (!first.advancesObjective) {
-    const result = await updateUserDataForAwardFarmingProgress(client, xpGain, user);
+    const result = await updateUserDataForAwardFarmingProgress(
+      client,
+      xpGain,
+      user,
+      readiness,
+    );
     return Number(result.rowsAffected ?? 0) >= 1 ? xpGain : null;
   }
 
@@ -2214,6 +2442,7 @@ const awardFarmingProgress = async (
   let update = first;
   for (let attempt = 0; attempt < QUEST_PROGRESS_ATTEMPTS; attempt++) {
     if (attempt > 0) {
+      if (readiness?.notice) return null;
       [snapshotUser, snapshotQuests] = await Promise.all([
         fetchUser(client, user.userId),
         fetchQuestTrackerState(client, user.userId),
@@ -2238,6 +2467,7 @@ const awardFarmingProgress = async (
       client,
       userId: user.userId,
       updatedAt: snapshotQuests.updatedAt,
+      readiness,
       set: {
         ...(xpGain > 0
           ? { farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` }

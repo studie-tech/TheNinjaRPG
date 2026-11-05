@@ -40,6 +40,10 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (result, _variables, revision) => {
         showMutationToast(result);
+        if (result.actionNotice) {
+          await utils.profile.getUser.invalidate();
+          return;
+        }
         if (result.success) {
           await updateUser(
             (current) => {

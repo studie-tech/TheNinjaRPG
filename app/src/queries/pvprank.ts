@@ -1,3 +1,5 @@
+import { actionReadinessSqlSet } from "@/queries/actionReadiness";
+import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 /**
  * Database access for pvprank; authorization and transaction scopes stay in callers.
  */
@@ -326,14 +328,15 @@ export const executeResultForQueueForRankedPvp = (
   client: Pick<DrizzleClient, "execute">,
   user: { userId: string },
   queueId: string,
+  readiness?: ActionReadinessWrite,
 ) =>
   client.execute(sql`
             UPDATE ${userData}
             INNER JOIN ${rankedPvpQueue}
               ON ${rankedPvpQueue.userId} = ${userData.userId}
-            SET ${userData.status} = 'QUEUED', ${rankedPvpQueue.hasClaimed} = true
+            SET ${actionReadinessSqlSet(readiness)} ${userData.status} = 'QUEUED', ${rankedPvpQueue.hasClaimed} = true
             WHERE ${userData.userId} = ${user.userId}
-              AND ${userData.status} = 'AWAKE'
+              AND ${readiness?.where ?? eq(userData.status, "AWAKE")}
               AND ${rankedPvpQueue.id} = ${queueId}
               AND ${rankedPvpQueue.hasClaimed} = false
           `);

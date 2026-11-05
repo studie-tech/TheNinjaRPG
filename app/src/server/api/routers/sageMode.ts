@@ -7,7 +7,8 @@ import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
-import { fetchUser, fetchViewerRole } from "@/queries/profile";
+import { fetchActionUser } from "@/queries/actionReadiness";
+import { fetchAllGameSettings, fetchUser, fetchViewerRole } from "@/queries/profile";
 import {
   deleteSageModeForDelete,
   fetchSageMode,
@@ -23,7 +24,6 @@ import {
   updateUserDataForDelete,
   updateUserDataForUpdateSageMode,
 } from "@/queries/sageMode";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -33,6 +33,11 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import {
+  type ActionReadiness,
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { offsetPage } from "@/server/utils/pagination";
 import { calculateContentDiff } from "@/utils/diff";
@@ -218,24 +223,36 @@ export const sageModeRouter = createTRPCRouter({
   removeSageMode: protectedProcedure
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [initialUser, settings] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
       if (!user.sageModeId) {
         throw serverError("PRECONDITION_FAILED", "You do not have a sage mode");
-      }
-      if (user.status !== "AWAKE") {
-        return errorResponse(
-          `Cannot remove sage mode while ${user.status.toLowerCase()}`,
-        );
       }
       if (user.reputationPoints < REMOVAL_COST) {
         return errorResponse("You do not have enough reputation points");
       }
-      await updateSageMode(ctx.drizzle, user, REMOVAL_COST, "SageMode Removed");
-      return {
-        success: true,
-        message: `Sage Mode removed for ${REMOVAL_COST} reps`,
-        ...getRemoveSageModeUserUpdate({ user }),
-      };
+      await updateSageMode(
+        ctx.drizzle,
+        user,
+        REMOVAL_COST,
+        "SageMode Removed",
+        readiness,
+      );
+      return actionReadinessResponse(
+        {
+          success: true,
+          message: `Sage Mode removed for ${REMOVAL_COST} reps`,
+          ...getRemoveSageModeUserUpdate({ user }),
+        },
+        readiness,
+        ctx.drizzle,
+      );
     }),
 });
 
@@ -254,8 +271,14 @@ export const updateSageMode = async (
   user: UserData,
   repCost: number,
   logMsg: string,
+  readiness?: ActionReadiness,
 ) => {
-  const updateResult = await updateUserDataForUpdateSageMode(client, repCost, user);
+  const updateResult = await updateUserDataForUpdateSageMode(
+    client,
+    repCost,
+    user,
+    readiness,
+  );
 
   if (!updateResult.rowsAffected) {
     throw serverError("BAD_REQUEST", "Unable to update sage mode");

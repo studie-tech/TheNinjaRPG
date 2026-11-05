@@ -26,6 +26,55 @@ describeWithDatabase("village membership changes", () => {
   });
   afterEach(resetServerModuleStubs);
 
+  for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+    it(`recovers a ${status.toLowerCase()} actor in the village join's own guarded write`, async () => {
+      await insertUsers([{
+        userId: MEMBER, username: MEMBER, villageId: "home", isOutlaw: true,
+        rank: "JONIN", status, autoWakeUp: true, money: 123,
+        curHealth: 20, maxHealth: 100,
+        regenAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      }]);
+      const db = await getTestDatabase();
+      const result = await callerForDatabase(villageRouter, MEMBER, db).joinVillage({ villageId: "destination" });
+      expect(result.success).toBe(true);
+      expect(result.actionNotice).toContain(status === "ASLEEP" ? "woke you up" : "hospital for free");
+      expect(result.message).toContain(result.actionNotice ?? "missing recovery notice");
+      expect(await userOf(MEMBER)).toMatchObject({ status: "AWAKE", villageId: "destination", money: 123, curHealth: 100 });
+    });
+  }
+
+  it("preserves sleep opt-out and paid hospital admission without joining", async () => {
+    const db = await getTestDatabase();
+    for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+      await resetTables(userData);
+      await insertUsers([{
+        userId: MEMBER, username: MEMBER, villageId: "home", isOutlaw: true,
+        rank: "JONIN", status, autoWakeUp: false, money: 123,
+        curHealth: 20, maxHealth: 100, regenAt: new Date(),
+      }]);
+      const result = await callerForDatabase(villageRouter, MEMBER, db).joinVillage({ villageId: "destination" });
+      expect(result.success).toBe(false);
+      expect(result.actionNotice).toBeUndefined();
+      expect(await userOf(MEMBER)).toMatchObject({ status, villageId: "home", money: 123 });
+    }
+  });
+
+  it("does not join or detach relationships when automatic wake-up loses its preference guard", async () => {
+    await insertUsers([
+      { userId: MEMBER, username: MEMBER, villageId: "home", isOutlaw: true, rank: "JONIN", status: "ASLEEP", autoWakeUp: true },
+      { userId: "student", username: "student", villageId: "home", rank: "GENIN", senseiId: MEMBER },
+    ]);
+    const db = await getTestDatabase();
+    const raced = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, MEMBER));
+    }]);
+    const result = await callerForDatabase(villageRouter, MEMBER, raced).joinVillage({ villageId: "destination" });
+    expect(result.success).toBe(false);
+    expect(result.actionNotice).toBeUndefined();
+    expect(await userOf(MEMBER)).toMatchObject({ status: "ASLEEP", villageId: "home", autoWakeUp: false });
+    expect((await userOf("student"))?.senseiId).toBe(MEMBER);
+  });
+
   it("keeps reputation credited while a village swap is in flight", async () => {
     await insertUsers([{ userId: MEMBER, username: MEMBER, villageId: "home", role: "MODERATOR", reputationPoints: 40 }]);
     const db = await getTestDatabase();

@@ -425,6 +425,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { mutateAsync: challenge, isPending: isChallenging } =
     api.clan.challengeClan.useMutation({
       onSuccess: (data) => {
+        if (data.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(data);
       },
       onError: (error) => {

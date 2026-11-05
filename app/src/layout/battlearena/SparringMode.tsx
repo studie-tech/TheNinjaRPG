@@ -39,6 +39,7 @@ export function SparringMode() {
   const { mutate: accept, isPending: isAccepting } =
     api.sparring.acceptChallenge.useMutation({
       onSuccess: async (data) => {
+        if (data.actionNotice) void utils.profile.getUser.invalidate();
         showMutationToast(data);
         if (data.success && data.battleId) {
           await updateUser({

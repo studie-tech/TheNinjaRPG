@@ -53,6 +53,7 @@ export const commitCacheConsumption = async ({
   selections,
   relatedMsg = "WeightedCacheOpening",
   consume,
+  onCommitted,
 }: {
   client: DrizzleClient;
   receiptId: string;
@@ -61,6 +62,10 @@ export const commitCacheConsumption = async ({
   itemId: string;
   selections: unknown;
   relatedMsg?: string;
+  /** Publish confirmed recovery only after this request owns a committed receipt. */
+  onCommitted?: (
+    response: z.infer<typeof cacheConsumptionResponseSchema>,
+  ) => z.infer<typeof cacheConsumptionResponseSchema>;
   consume: (
     client: DrizzleClient,
   ) => Promise<
@@ -79,12 +84,15 @@ export const commitCacheConsumption = async ({
       );
       if (claimed.rowsAffected === 0) {
         const receipt = await findActionLogById(tx, receiptId);
-        return readCacheReceipt(receipt?.changes, userItemId);
+        return {
+          response: readCacheReceipt(receipt?.changes, userItemId),
+          committed: false,
+        };
       }
       const response = await consume(tx as unknown as DrizzleClient);
       if (!response.success) {
         await deleteActionLogForCommitCacheConsumption(tx, receiptId);
-        return response;
+        return { response, committed: false };
       }
       await updateActionLogForCommitCacheConsumption(
         tx,
@@ -93,6 +101,8 @@ export const commitCacheConsumption = async ({
         selections,
         receiptId,
       );
-      return response;
+      return { response, committed: true };
     }),
+  ).then(({ response, committed }) =>
+    committed && response.success ? (onCommitted?.(response) ?? response) : response,
   );

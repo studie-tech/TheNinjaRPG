@@ -16,7 +16,7 @@ export const actionStatusMessage = (status: UserStatus, name = "You") => {
   return `${name} ${are} ${states[status]}.`;
 };
 
-/** Confirmed wake-up notice shared by the transport and toast coordinator. */
+/** Confirmed wake-up notice shared by endpoint responses and feature feedback. */
 export const AUTO_WAKE_MESSAGE = "This action woke you up.";
 /** Confirmed free-checkout notice; automatic recovery never authorizes payment. */
 export const AUTO_CHECKOUT_MESSAGE =
@@ -117,8 +117,8 @@ export const AWAKE_ACTIONS = new Set([
 ]);
 
 /**
- * Classify mixed-purpose inputs before handlers run. Queue removals and other passive
- * operations preserve sleep; saved quest requirements are classified by the middleware.
+ * Classify mixed-purpose inputs within their endpoint. Queue removals and other passive
+ * operations preserve sleep; quest starts use the saved quest requirements.
  */
 export const shouldPrepareAction = (path: string, input: unknown) => {
   const values =

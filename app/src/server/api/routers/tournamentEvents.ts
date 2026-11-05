@@ -26,7 +26,11 @@ import {
   isSeriesAwaitingBegin,
 } from "@/libs/tournament/events";
 import { fetchJutsuEquipLimits } from "@/queries/jutsuEquipLimit";
-import { findUserById, findUserRoleById } from "@/queries/profile";
+import {
+  fetchAllGameSettings,
+  findUserById,
+  findUserRoleById,
+} from "@/queries/profile";
 import { deleteTournamentMatches } from "@/queries/tournament";
 import {
   deleteTournamentForMaintainEventTournaments,
@@ -58,6 +62,11 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import type { ActionReadiness } from "@/server/utils/actionReadiness";
+import {
+  actionReadinessResponse,
+  prepareActionReadiness,
+} from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
@@ -347,81 +356,96 @@ export const eventTournamentProcedures = {
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchEventUser(ctx.drizzle, ctx.userId);
+      let [user, settings] = await Promise.all([
+        fetchEventUser(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
       if (!user || user.isAi || user.isBanned)
         return errorResponse("An active player account is required");
+      const readiness = ["WITHDRAW", "DECLINE", "NOT_READY"].includes(input.action)
+        ? undefined
+        : prepareActionReadiness(user, settings);
+      if (readiness?.error) return errorResponse(readiness.error);
+      if (readiness) user = readiness.user;
       await syncEventTournament(ctx.drizzle, input.tournamentId);
-      const result = await editEvent(ctx.drizzle, input.tournamentId, (event) => {
-        const now = Date.now();
-        const seat = event.participants.find(
-          (p) => p.userId === user.userId && !p.withdrawn,
-        );
-        if (["DRAFT", "COMPLETED", "CANCELLED"].includes(event.status))
-          return "Tournament is not accepting player actions";
-        if (input.action === "JOIN") {
-          if (
-            event.status !== "REGISTRATION" ||
-            now >= event.config.registrationClosesAt
-          )
-            return "Registration is closed";
-          if (user.sector !== MAP_WAKE_ISLAND_SECTOR || user.status !== "AWAKE")
-            return "Register while awake at Wake Island";
-          if (seat?.accepted) return "Already registered";
-          if (event.config.registration === "INVITE_ONLY" && !seat?.invited)
-            return "A staff invitation is required";
-          const failure = eligibilityError(event.config, snapshotFor(user));
-          if (failure) return failure;
-          if (seat) {
-            seat.accepted = true;
-            seat.snapshot = snapshotFor(user);
-          } else {
-            if (occupiedSeats(event) >= event.config.capacity)
-              return "Tournament is full, including reserved invitations";
-            event.participants = event.participants.filter(
-              (p) => p.userId !== user.userId,
+      const result = await editEvent(
+        ctx.drizzle,
+        input.tournamentId,
+        (event) => {
+          const now = Date.now();
+          const seat = event.participants.find(
+            (p) => p.userId === user.userId && !p.withdrawn,
+          );
+          if (["DRAFT", "COMPLETED", "CANCELLED"].includes(event.status))
+            return "Tournament is not accepting player actions";
+          if (input.action === "JOIN") {
+            if (
+              event.status !== "REGISTRATION" ||
+              now >= event.config.registrationClosesAt
+            )
+              return "Registration is closed";
+            if (user.sector !== MAP_WAKE_ISLAND_SECTOR || user.status !== "AWAKE")
+              return "Register while awake at Wake Island";
+            if (seat?.accepted) return "Already registered";
+            if (event.config.registration === "INVITE_ONLY" && !seat?.invited)
+              return "A staff invitation is required";
+            const failure = eligibilityError(event.config, snapshotFor(user));
+            if (failure) return failure;
+            if (seat) {
+              seat.accepted = true;
+              seat.snapshot = snapshotFor(user);
+            } else {
+              if (occupiedSeats(event) >= event.config.capacity)
+                return "Tournament is full, including reserved invitations";
+              event.participants = event.participants.filter(
+                (p) => p.userId !== user.userId,
+              );
+              event.participants.push(makeParticipant(user, false, true));
+            }
+          } else if (input.action === "WITHDRAW" || input.action === "DECLINE") {
+            if (!seat) return "No registration or invitation found";
+            seat.withdrawn = true;
+          } else if (input.action === "READY" || input.action === "NOT_READY") {
+            const series = event.series.find((s) => s.id === input.seriesId);
+            if (
+              !seat?.accepted ||
+              !series ||
+              !isSeriesAwaitingBegin(series, currentEventRound(event)) ||
+              !series.seats.includes(seat.id)
+            )
+              return "This series is not waiting for staff to begin";
+            // Players can cancel readiness anywhere; marking ready requires availability.
+            if (input.action === "READY" && !isReadyAtWakeIsland(user))
+              return "Be awake and available at Wake Island to mark yourself ready";
+            series.readyUserIds = (series.readyUserIds ?? []).filter(
+              (id) => id !== user.userId,
             );
-            event.participants.push(makeParticipant(user, false, true));
+            if (input.action === "READY") series.readyUserIds.push(user.userId);
+          } else {
+            const series = event.series.find(
+              (s) => s.id === input.seriesId && !s.complete,
+            );
+            const game = series?.games.at(-1);
+            if (!seat || !series || !game || !series.seats.includes(seat.id))
+              return "Ready check not found";
+            if (game.status !== "READY" || now < game.opensAt || now >= game.deadline)
+              return "Ready check is not open";
+            if (!isReadyAtWakeIsland(user))
+              return "Ready check failed: be awake and available at Wake Island, outside combat, travel, hospital or queues";
+            if (!game.accepted.includes(user.userId)) game.accepted.push(user.userId);
           }
-        } else if (input.action === "WITHDRAW" || input.action === "DECLINE") {
-          if (!seat) return "No registration or invitation found";
-          seat.withdrawn = true;
-        } else if (input.action === "READY" || input.action === "NOT_READY") {
-          const series = event.series.find((s) => s.id === input.seriesId);
-          if (
-            !seat?.accepted ||
-            !series ||
-            !isSeriesAwaitingBegin(series, currentEventRound(event)) ||
-            !series.seats.includes(seat.id)
-          )
-            return "This series is not waiting for staff to begin";
-          // Players can cancel readiness anywhere; marking ready requires availability.
-          if (input.action === "READY" && !isReadyAtWakeIsland(user))
-            return "Be awake and available at Wake Island to mark yourself ready";
-          series.readyUserIds = (series.readyUserIds ?? []).filter(
-            (id) => id !== user.userId,
-          );
-          if (input.action === "READY") series.readyUserIds.push(user.userId);
-        } else {
-          const series = event.series.find(
-            (s) => s.id === input.seriesId && !s.complete,
-          );
-          const game = series?.games.at(-1);
-          if (!seat || !series || !game || !series.seats.includes(seat.id))
-            return "Ready check not found";
-          if (game.status !== "READY" || now < game.opensAt || now >= game.deadline)
-            return "Ready check is not open";
-          if (!isReadyAtWakeIsland(user))
-            return "Ready check failed: be awake and available at Wake Island, outside combat, travel, hospital or queues";
-          if (!game.accepted.includes(user.userId)) game.accepted.push(user.userId);
-        }
-      });
+        },
+        readiness,
+      );
       if (result.success) {
         await syncEventTournament(ctx.drizzle, input.tournamentId);
         // The action's local invalidation does not refresh this player's other tabs.
         if (["JOIN", "WITHDRAW", "DECLINE"].includes(input.action))
           await notifyEventParticipant(ctx.userId, input.originSocketId);
       }
-      return result;
+      return result.success
+        ? actionReadinessResponse(result, readiness, ctx.drizzle)
+        : result;
     }),
 };
 
@@ -432,9 +456,10 @@ const saveEventState = async (
   client: DrizzleClient,
   row: EventRow,
   event: EventTournamentState,
+  readiness?: ActionReadiness,
 ) => {
-  const saved = await updateTournamentForSaveEventState(client, event, row);
-  return saved.rowsAffected === 1;
+  const saved = await updateTournamentForSaveEventState(client, event, row, readiness);
+  return saved.rowsAffected > 0;
 };
 
 /** Retry a roster or bracket edit against the latest event when another writer wins its CAS. */
@@ -442,6 +467,7 @@ const editEvent = async (
   client: DrizzleClient,
   id: string,
   edit: (event: EventTournamentState) => string | undefined,
+  readiness?: ActionReadiness,
 ) => {
   for (let attempt = 0; attempt < 4; attempt++) {
     const row = await fetchEvent(client, id);
@@ -449,7 +475,7 @@ const editEvent = async (
     const event = structuredClone(row.eventData);
     const message = edit(event);
     if (message) return errorResponse(message);
-    if (await saveEventState(client, row, event))
+    if (await saveEventState(client, row, event, readiness))
       return { success: true, message: "Tournament updated" };
   }
   return errorResponse("Tournament changed; please try again");

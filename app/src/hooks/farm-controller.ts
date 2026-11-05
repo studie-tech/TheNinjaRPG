@@ -44,17 +44,23 @@ export function useFarmController() {
   const query = api.farming.getFarmState.useQuery(undefined, {
     refetchInterval: 30_000,
   });
-  const plantMutation = api.farming.plantSeed.useMutation();
-  const waterMutation = api.farming.waterPlot.useMutation();
-  const fertilizeMutation = api.farming.applyFertilizer.useMutation();
-  const harvestMutation = api.farming.harvestPlot.useMutation();
-  const plantAllMutation = api.farming.plantAllEmpty.useMutation();
-  const waterAllMutation = api.farming.waterAll.useMutation();
-  const fertilizeAllMutation = api.farming.fertilizeAll.useMutation();
-  const harvestAllMutation = api.farming.harvestAll.useMutation();
-  const buyMutation = api.farming.buyShopItem.useMutation();
-  const sellMutation = api.farming.sellCrop.useMutation();
-  const extractMutation = api.farming.extractSeeds.useMutation();
+  // Plot and inventory cache deltas do not include the actor's recovered activity.
+  const mutationOptions = {
+    onSuccess: (result: FarmMutationResponse) => {
+      if (result.actionNotice) return utils.profile.getUser.invalidate();
+    },
+  };
+  const plantMutation = api.farming.plantSeed.useMutation(mutationOptions);
+  const waterMutation = api.farming.waterPlot.useMutation(mutationOptions);
+  const fertilizeMutation = api.farming.applyFertilizer.useMutation(mutationOptions);
+  const harvestMutation = api.farming.harvestPlot.useMutation(mutationOptions);
+  const plantAllMutation = api.farming.plantAllEmpty.useMutation(mutationOptions);
+  const waterAllMutation = api.farming.waterAll.useMutation(mutationOptions);
+  const fertilizeAllMutation = api.farming.fertilizeAll.useMutation(mutationOptions);
+  const harvestAllMutation = api.farming.harvestAll.useMutation(mutationOptions);
+  const buyMutation = api.farming.buyShopItem.useMutation(mutationOptions);
+  const sellMutation = api.farming.sellCrop.useMutation(mutationOptions);
+  const extractMutation = api.farming.extractSeeds.useMutation(mutationOptions);
 
   useEffect(() => {
     const interval = window.setInterval(() => setClockNow(Date.now()), 5_000);

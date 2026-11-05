@@ -7,7 +7,6 @@ import { CONFETTI_SFX_URL } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import { markActionFeedbackShown } from "@/libs/actionFeedback";
 import { actionStatusMessage } from "@/libs/actionReadiness";
 import { getAudioPreference } from "@/libs/audioPreferences";
 import { haptics } from "@/libs/native";
@@ -128,6 +127,8 @@ export const triggerConfetti = async (
 export const showMutationToast = (data: {
   success: boolean;
   message: React.ReactNode;
+  /** Recovery committed by the endpoint, retained when a feature customizes its outcome text. */
+  actionNotice?: string;
   /** Confirmed feedback that a later profile read cannot redeliver. */
   announcements?: string[];
   title?: string;
@@ -138,6 +139,19 @@ export const showMutationToast = (data: {
   /** Stable toast id: repeating the same id replaces the visible toast instead of stacking. */
   id?: string;
 }) => {
+  if (
+    data.actionNotice &&
+    typeof data.message === "string" &&
+    !data.message.includes(data.actionNotice)
+  ) {
+    data = {
+      ...data,
+      message:
+        data.message && data.message !== "OK"
+          ? `${data.message} ${data.actionNotice}`
+          : data.actionNotice,
+    };
+  }
   if (
     !data.success &&
     !data.action &&
@@ -156,7 +170,6 @@ export const showMutationToast = (data: {
   }
   // Only show non-trivial messages
   if (data.message && data.message !== "OK") {
-    markActionFeedbackShown(data);
     // Every mutation outcome in the app funnels through here, so this one call gives the
     // native shells feedback everywhere. It no-ops in a browser and when the player has
     // haptics switched off.

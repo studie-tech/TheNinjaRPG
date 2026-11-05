@@ -62,8 +62,10 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     success: boolean;
     message: string;
     battleId?: string;
+    actionNotice?: string;
   }) => {
     showMutationToast(result);
+    if (result.actionNotice) void utils.profile.getUser.invalidate();
     setMessage(result);
     if (result.success) {
       setDraft(null);
