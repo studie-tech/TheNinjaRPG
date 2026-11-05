@@ -13,7 +13,10 @@ import {
   PET_OPTION_COUNTS,
   type PetGender,
   PetGenders,
+  PetPaymentCurrencies,
+  type PetPaymentCurrency,
 } from "@/drizzle/constants";
+import { usePetMutationFeedback } from "@/hooks/usePetMutationFeedback";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
@@ -24,11 +27,14 @@ import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { QueryError } from "@/layout/QueryError";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import type { PetAppearanceOption, PetSpeciesOption } from "@/libs/pets/catalogue";
-import { getPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
+import {
+  getPetPaymentOption,
+  getPetRank,
+  isPetAppearanceReady,
+} from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { acquirePetSchema } from "@/validators/pets";
-import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Guide daily trait selection, claim a companion, then request its first artwork.
@@ -40,8 +46,7 @@ export function PetAcquisition() {
   const utils = api.useUtils();
   const [name, setName] = useState("");
   const [gender, setGender] = useState<PetGender | null>(null);
-  const [currency, setCurrency] =
-    useState<RouterInputs["pets"]["acquirePet"]["currency"]>("REPUTATION");
+  const [currency, setCurrency] = useState<PetPaymentCurrency>("REPUTATION");
   const [selection, setSelection] = useState<PetSelection>(emptySelection);
   const [stage, setStage] = useState(0);
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -73,15 +78,14 @@ export function PetAcquisition() {
     },
   );
   const dayKey = data?.dayKey;
-  const paymentCost =
-    currency === "SEICHI_SILVER"
-      ? (data?.replacementSilverCost ?? 0)
-      : (data?.replacementCost ?? 0);
-  const paymentBalance =
-    currency === "SEICHI_SILVER"
-      ? (userData?.seichiSilver ?? 0)
-      : (userData?.reputationPoints ?? 0);
-  const paymentLabel = currency === "SEICHI_SILVER" ? "Seichi Silver" : "reputation";
+  const {
+    cost: paymentCost,
+    balance: paymentBalance,
+    label: paymentLabel,
+  } = getPetPaymentOption(currency, userData, {
+    reputation: data?.replacementCost ?? 0,
+    silver: data?.replacementSilverCost ?? 0,
+  });
   const canAfford = paymentBalance >= paymentCost;
   // Day, tier and appearance changes invalidate a draft; adoption only removes a species.
   const catalogueKey = data
@@ -119,28 +123,10 @@ export function PetAcquisition() {
     setStage(next);
   };
 
-  const finishMutation = async (
-    result: UserDeltaResponse,
-    _variables: unknown,
-    revision: number | undefined,
-  ) => {
-    setMessage(result.success ? null : result.message);
-    showMutationToast(result);
-    await Promise.all([
-      utils.pets.getPet.invalidate(),
-      utils.pets.getCollection.invalidate(),
-      updateUser(result, { revision }),
-    ]);
-  };
-  const failMutation = async (cause: { message: string }) => {
-    setMessage(cause.message);
-    // A failed response can follow a committed claim; reload before offering another adoption.
-    await Promise.all([
-      utils.pets.getPet.invalidate(),
-      utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.invalidate(),
-    ]);
-  };
+  const { invalidatePetData, finishMutation, failMutation } = usePetMutationFeedback({
+    setMessage,
+    updateUser,
+  });
   const acquire = api.pets.acquirePet.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
@@ -153,17 +139,11 @@ export function PetAcquisition() {
       showMutationToast(result);
       if (result.success || result.userRecovery)
         await updateUser(result, { revision, refetch: false });
-      await Promise.all([
-        utils.pets.getPet.invalidate(),
-        utils.pets.getCollection.invalidate(),
-      ]);
+      await invalidatePetData();
     },
     onError: async (cause) => {
       setMessage(cause.message);
-      await Promise.all([
-        utils.pets.getPet.invalidate(),
-        utils.pets.getCollection.invalidate(),
-      ]);
+      await invalidatePetData();
     },
   });
   const isBusy =
@@ -592,8 +572,8 @@ export function PetAcquisition() {
                           disabled={isBusy}
                           className="flex flex-wrap gap-x-5 gap-y-2"
                           onValueChange={(value) => {
-                            if (value === "REPUTATION" || value === "SEICHI_SILVER")
-                              setCurrency(value);
+                            const next = PetPaymentCurrencies.find((c) => c === value);
+                            if (next) setCurrency(next);
                           }}
                         >
                           <div className="flex items-center gap-2">

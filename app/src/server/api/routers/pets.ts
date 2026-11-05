@@ -44,6 +44,7 @@ import { getDailyPetOptions, isAvailablePetAppearance } from "@/libs/pets/catalo
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getPetGenderUpdateError } from "@/libs/pets/gender";
 import {
+  canChoosePetAppearance,
   getChargedGenerationAttempts,
   getMaxPetRank,
   getPetCollectionCapacity,
@@ -976,7 +977,7 @@ export const petsRouter = createTRPCRouter({
           `You have used all ${PET_MAX_GENERATION_ATTEMPTS} image attempts for this rank. Your companion is still yours.`,
         );
       if (input.appearance) {
-        if (pet.rank !== 1 || pet.artRank !== 0 || pet.avatar)
+        if (!canChoosePetAppearance(pet))
           return errorResponse(
             "Your companion keeps its saved appearance traits after its first image.",
           );
