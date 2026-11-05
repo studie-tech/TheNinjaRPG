@@ -24,6 +24,7 @@ import {
 import type { FederalStatus, UserRank } from "@/drizzle/constants";
 import { CONVERSATION_MAX_USERS, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import { AiSenderSelect } from "@/layout/AiSenderSelect";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -86,9 +87,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   );
 
   // User search for sender selection (AI posting)
-  const maxSenderUsers = 1;
-  const { methods: senderSearchMethods, user: senderUser } =
-    useUserPicker(maxSenderUsers);
+  const { methods: senderSearchMethods, user: senderUser } = useUserPicker();
   const canPostAsAI = userData && canPostAsAi(userData.role);
   const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
@@ -210,14 +209,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
                 {canPostAsAI && (
                   <div className="mb-3">
                     <FormLabel>Sender</FormLabel>
-                    <UserSearchSelect
-                      useFormMethods={senderSearchMethods}
-                      label="Post as (leave empty to post as yourself)"
-                      showYourself={true}
-                      showAi={true}
-                      inline={true}
-                      maxUsers={maxSenderUsers}
-                    />
+                    <AiSenderSelect methods={senderSearchMethods} />
                   </div>
                 )}
                 <div>

@@ -18,6 +18,10 @@ import {
   canRemoveBloodlineFromPool,
   canViewAllApplications,
   getApprovalGroup,
+  getConversationComposeRestriction,
+  getMessagingRestriction,
+  RESTRICTED_STAFF_CONVERSATION_MESSAGE,
+  RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
 
 test("approval groups are assigned to the correct admin roles", () => {
@@ -211,4 +215,25 @@ test("report moderation follows the role table for every report state", () => {
     expect([...allowed].sort()).toEqual([...expected[status]].sort() as UserRole[]);
     expect(canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report)).toBe(false);
   }
+});
+
+test("conversation compose restriction lets banned users reply to their own ticket only", () => {
+  const free = { userId: "me", isBanned: false, isSilenced: false, level: 50 };
+  const banned = { ...free, isBanned: true };
+  const lowLevel = { ...free, level: 1 };
+  const staffConvo = { sendRestriction: null, isStaffAvailable: true };
+  const publicConvo = { sendRestriction: null, isStaffAvailable: false };
+  const compose = getConversationComposeRestriction;
+
+  expect(compose(free, staffConvo, null)).toBeNull();
+  expect(compose(free, { sendRestriction: "Closed" }, null)).toBe("Closed");
+  expect(compose(banned, { sendRestriction: "Closed" }, "me")).toBe("Closed");
+  expect(compose(undefined, { sendRestriction: "Closed" }, null)).toBe("Closed");
+  expect(compose(undefined, staffConvo, null)).toBeNull();
+  expect(compose(banned, undefined, null)).toBe(getMessagingRestriction(banned));
+  expect(compose(banned, publicConvo, "me")).toBe(getMessagingRestriction(banned));
+  expect(compose(lowLevel, staffConvo, "me")).toBe(getMessagingRestriction(lowLevel));
+  expect(compose(banned, staffConvo, "me")).toBeNull();
+  expect(compose(banned, staffConvo, "other")).toBe(RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE);
+  expect(compose(banned, staffConvo, null)).toBe(RESTRICTED_STAFF_CONVERSATION_MESSAGE);
 });
