@@ -17,7 +17,7 @@ const item = (overrides: Record<string, unknown>) => ({
 const catalog = [
   item({ id: "bow", name: "Bow", rarity: "RARE", cost: 300 }),
   item({ id: "axe", name: "Axe", rarity: "LEGENDARY", cost: 9_000 }),
-  item({ id: "pill", name: "Pill", itemType: "CONSUMABLE", slot: "ITEM", cost: 20, canStack: true, stackSize: 50 }),
+  item({ id: "pill", name: "Pill", itemType: "CONSUMABLE", slot: "ITEM", cost: 20, canStack: true, stackSize: 50, description: "Restores a little chakra." }),
   item({ id: "coat", name: "Coat", itemType: "ARMOR", slot: "CHEST", rarity: "RARE", cost: 200 }),
 ];
 
@@ -207,6 +207,7 @@ describe("shop catalog", () => {
     const inspector = view.getByRole("region", { name: "Pill" });
     expect(within(inspector).getByRole("region", { name: "Details" })).toBeDefined();
     expect(within(inspector).queryByText("All details")).toBeNull();
+    expect(within(inspector).getByText("Restores a little chakra.")).toBeDefined();
     // The header already shows the description, so the details start with the stats.
     const details = (ItemWithEffects.default as unknown as { mock: { calls: [{ item: { description: string } }][] } }).mock.calls.at(-1)?.[0];
     expect(details?.item.description).toBe("");
