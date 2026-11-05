@@ -38,6 +38,7 @@ beforeEach(() => {
     },
     quests: { specificQuests: { useQuery: () => ({ data: towers }) } },
     pvpRank: {
+      getCurrentTopPlayers: { useQuery: () => ({ data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110] }) },
       getCurrentSeason: { useQuery: () => ({ data: { name: "Season 4", paused: false } }) },
       getRankedQueueCount: { useQuery: () => ({ data: 4 }) },
     },

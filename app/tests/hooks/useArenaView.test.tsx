@@ -35,6 +35,17 @@ describe("useArenaView", () => {
     expect(result.current.mode).toBeNull();
   });
 
+  it("does not add history entries for the current mode or overview", () => {
+    const { result } = renderHook(() => useArenaView());
+    const initialLength = window.history.length;
+    act(() => result.current.openOverview());
+    expect(window.history.length).toBe(initialLength);
+    act(() => result.current.openMode("Training"));
+    const modeLength = window.history.length;
+    act(() => result.current.openMode("Training"));
+    expect(window.history.length).toBe(modeLength);
+  });
+
   it("follows back navigation", () => {
     const { result } = renderHook(() => useArenaView());
     act(() => {

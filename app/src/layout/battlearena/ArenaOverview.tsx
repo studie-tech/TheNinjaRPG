@@ -13,6 +13,7 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { RANKED_LEGEND_LP_REQUIREMENT } from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLoadoutNames } from "@/hooks/useLoadoutNames";
 import { BattleSetupControls } from "@/layout/battlearena/BattleSetupPanel";
@@ -46,6 +47,10 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
   const { data: season } = api.pvpRank.getCurrentSeason.useQuery(undefined, {
     enabled,
   });
+  const { data: topPlayersLP } = api.pvpRank.getCurrentTopPlayers.useQuery(undefined, {
+    enabled: enabled && userData.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT,
+    staleTime: 300_000,
+  });
   const { data: queueCount } = api.pvpRank.getRankedQueueCount.useQuery(undefined, {
     enabled,
   });
@@ -66,7 +71,7 @@ export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
   const climbing = userData.userQuests?.find(
     (uq) => !uq.endAt && uq.quest?.questType === "battlepyramid",
   );
-  const ranked = rankedProgress(userData.rankedLp);
+  const ranked = rankedProgress(userData.rankedLp, topPlayersLP);
   const setupSummary = [
     loadoutNames.jutsu && `Jutsu: ${loadoutNames.jutsu}`,
     loadoutNames.item && `Items: ${loadoutNames.item}`,

@@ -1,5 +1,6 @@
 import { RANKED_DIVISIONS } from "@/drizzle/constants";
 import type { UserData, UserQuest } from "@/drizzle/schema";
+import { getRankedRank } from "@/libs/ranked_pvp";
 import type { ObjectiveTrackerType } from "@/validators/objectives";
 
 /** Arena modes, named as their URL hashes (`/battlearena#PVP%20Rank`). */
@@ -56,17 +57,16 @@ export const sparExamProgress = (user: {
   return null;
 };
 
-/** The division an LP total reaches and how far the next one is; the top division has no LP mark. */
+/** Canonical ranked division and its next LP mark, including the top-player Sannin rank. */
 export const rankedProgress = (
   lp: number,
+  topPlayersLP: number[] = [],
 ): { division: string; nextDivision: string | null; toNext: number | null } => {
-  const reachedIndex = RANKED_DIVISIONS.reduce(
-    (found, division, index) => (lp >= division.rankedLp ? index : found),
-    0,
-  );
+  const division = getRankedRank(lp, topPlayersLP);
+  const reachedIndex = RANKED_DIVISIONS.findIndex((entry) => entry.name === division);
   const next = RANKED_DIVISIONS[reachedIndex + 1];
   return {
-    division: RANKED_DIVISIONS[reachedIndex]?.name ?? "Unranked",
+    division,
     nextDivision: next?.name ?? null,
     toNext: next && Number.isFinite(next.rankedLp) ? next.rankedLp - lp : null,
   };

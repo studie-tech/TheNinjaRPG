@@ -30,6 +30,7 @@ beforeEach(() => {
     useUtils: () => ({}),
     pvpRank: {
       getRankedPvpQueue: { useQuery: () => ({ data: { inQueue, queueCount: 4, createdAt: new Date() } }) },
+      getCurrentTopPlayers: { useQuery: () => ({ data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110] }) },
       getCurrentSeason: { useQuery: () => ({ data: season, isPending: false }) },
       getRankedLoadout: {
         useQuery: () => ({ data: { loadout: { jutsuIds: Array(12).fill("j"), weaponIds: ["w", "w"], consumableIds: ["c"] } } }),
@@ -65,6 +66,13 @@ it("shows the division and LP to the next one", () => {
   expect(screen.getByText("180 LP")).toBeDefined();
   expect(screen.getByText("120 LP to Adept")).toBeDefined();
   expect(screen.getByText("Jutsu 12 / 15 · Weapons 2 / 2 · Consumables 1 / 4")).toBeDefined();
+});
+
+it("shows Sannin for a player among the top Legend players", () => {
+  user = { ...user, rankedLp: 1200 };
+  render(<RankedMode />);
+  expect(screen.getByRole("heading", { name: "Sannin" })).toBeDefined();
+  expect(screen.queryByText(/LP to/)).toBeNull();
 });
 
 it("queues and leaves the queue", () => {

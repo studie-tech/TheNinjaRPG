@@ -9,6 +9,7 @@ import {
   MAX_PLAYER_LEVEL,
   RANKED_DIVISIONS,
   RANKED_ENTRY_COST,
+  RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_WEAPONS,
@@ -36,6 +37,10 @@ export function RankedMode() {
   });
   const { data: currentSeason, isPending: isLoadingSeason } =
     api.pvpRank.getCurrentSeason.useQuery();
+  const { data: topPlayersLP } = api.pvpRank.getCurrentTopPlayers.useQuery(undefined, {
+    enabled: !!userData && userData.rankedLp >= RANKED_LEGEND_LP_REQUIREMENT,
+    staleTime: 300_000,
+  });
   const { data: rankedLoadout } = api.pvpRank.getRankedLoadout.useQuery();
 
   const { mutate: enterSeason, isPending: isEntering } =
@@ -114,7 +119,7 @@ export function RankedMode() {
     );
   }
 
-  const progress = rankedProgress(userData.rankedLp);
+  const progress = rankedProgress(userData.rankedLp, topPlayersLP);
   const hasEntered = userData.rankedLp > 0;
   const hasEnoughPrestige = userData.villagePrestige >= RANKED_ENTRY_COST;
 
@@ -143,7 +148,7 @@ export function RankedMode() {
           {RANKED_DIVISIONS.filter((division) => division.key !== "UNRANKED").map(
             (division) => {
               const reached =
-                Number.isFinite(division.rankedLp) &&
+                division.name === progress.division ||
                 userData.rankedLp >= division.rankedLp;
               return (
                 <li key={division.key} className="flex flex-col items-center gap-1">

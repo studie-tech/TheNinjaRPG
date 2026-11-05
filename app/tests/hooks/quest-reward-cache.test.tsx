@@ -26,6 +26,7 @@ const setup = () => {
     getQueryKey(api.quests.specificQuests, { questType: "story", level: 50 }, "query"),
     getQueryKey(api.quests.getQuestHistory, { limit: 10 }, "query"),
     getQueryKey(api.quests.allianceBuilding, { level: 50 }, "query"),
+    getQueryKey(api.quests.upcomingQuests, { questType: "battlepyramid" }, "query"),
     getQueryKey(api.item.getUserItems, undefined, "query"),
     getQueryKey(api.item.getUserItemsWithVariants, undefined, "query")];
   const reads = keys.map((queryKey, i) => {
@@ -54,8 +55,8 @@ it("patches confirmed completion counters while retaining list-membership refres
   test.result.questCacheUpdate = { ...test.result.questCacheUpdate, after: { ...test.result.questCacheUpdate.after, previousCompletes: 1 }, discoveryUnchanged: false };
   await act(async () => test.view.result.current.updateQuestRewards(test.result, test.view.result.current.prepareQuestRewardUpdate(), true));
   expect(test.reads[0]).not.toHaveBeenCalled();
-  test.reads.slice(1, 5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
-  test.reads.slice(5).forEach(read => expect(read).not.toHaveBeenCalled());
+  test.reads.slice(1, 6).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+  test.reads.slice(6).forEach(read => expect(read).not.toHaveBeenCalled());
   expect(test.client.getQueryData<{ candidates: { previousCompletes: number }[] }>(test.keys[0]!)?.candidates[0]?.previousCompletes).toBe(1);
 });
 
@@ -64,7 +65,7 @@ it.each(["item", "hunter items", "gathering items", "missing rewards"] as const)
   async reward => {
     const test = setup();
     const inventory = [{ id: "quest-gift" }];
-    test.reads.slice(5).forEach(read => read.mockResolvedValueOnce(inventory as never));
+    test.reads.slice(6).forEach(read => read.mockResolvedValueOnce(inventory as never));
     const rewards = reward === "missing rewards" ? undefined : PostProcessedRewardSchema.parse({
       reward_items: reward === "item" ? ["Quest gift"] : [],
       reward_hunter_items: reward === "hunter items",
@@ -73,9 +74,9 @@ it.each(["item", "hunter items", "gathering items", "missing rewards"] as const)
     await act(async () => test.view.result.current.updateQuestRewards(
       { ...test.result, rewards }, test.view.result.current.prepareQuestRewardUpdate(), true,
     ));
-    test.reads.slice(0, 5).forEach(read => expect(read).not.toHaveBeenCalled());
-    test.reads.slice(5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
-    test.keys.slice(5).forEach(key => expect(test.client.getQueryData(key)).toEqual(inventory));
+    test.reads.slice(0, 6).forEach(read => expect(read).not.toHaveBeenCalled());
+    test.reads.slice(6).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+    test.keys.slice(6).forEach(key => expect(test.client.getQueryData(key)).toEqual(inventory));
   },
 );
 

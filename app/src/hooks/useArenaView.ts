@@ -21,6 +21,7 @@ const getSnapshot = () => arenaModeFromHash(window.location.hash);
 const getServerSnapshot = () => null;
 
 const pushPath = (hash: string) => {
+  if (window.location.hash === hash) return;
   window.history.pushState(
     window.history.state,
     "",

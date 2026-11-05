@@ -64,6 +64,11 @@ describe("sparExamProgress", () => {
 });
 
 describe("rankedProgress", () => {
+  it("uses the canonical Sannin cutoff and has no next division after it", () => {
+    const topPlayersLP = [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110];
+    expect(rankedProgress(1200, topPlayersLP)).toEqual({ division: "Sannin", nextDivision: null, toNext: null });
+    expect(rankedProgress(1100, topPlayersLP).division).toBe("Legend");
+  });
   it("places LP on the division ladder", () => {
     expect(rankedProgress(180)).toEqual({ division: "Wood", nextDivision: "Adept", toNext: 120 });
     expect(rankedProgress(300)).toEqual({ division: "Adept", nextDivision: "Master", toNext: 300 });

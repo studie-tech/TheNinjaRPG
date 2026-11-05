@@ -14,6 +14,9 @@ const browserGlobals = ["Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 
 let finderInputs: Record<string, unknown>[];
+let finderOptions: Record<string, unknown>[];
+let finderUpdatedAt: number;
+let playerUpdatedAt: Date;
 const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
 const player = (userId: string, username: string, level: number) => ({
   userId,
@@ -21,7 +24,7 @@ const player = (userId: string, username: string, level: number) => ({
   level,
   rank: "GENIN",
   avatar: null,
-  updatedAt: new Date(),
+  updatedAt: playerUpdatedAt,
   village: { name: "Akikaze" },
 });
 
@@ -57,6 +60,9 @@ beforeEach(() => {
     if (key in window) Object.defineProperty(globalThis, key, { configurable: true, value: window[key as keyof Window] });
   }
   finderInputs = [];
+  finderOptions = [];
+  finderUpdatedAt = Date.now();
+  playerUpdatedAt = new Date(finderUpdatedAt);
   for (const name of ["createChallenge", "acceptChallenge", "rejectChallenge", "cancelChallenge"]) {
     mutations[name] = vi.fn();
   }
@@ -68,8 +74,9 @@ beforeEach(() => {
     }),
     profile: {
       getPublicUsers: {
-        useInfiniteQuery: (input: Record<string, unknown>) => {
+        useInfiniteQuery: (input: Record<string, unknown>, options: Record<string, unknown>) => {
           finderInputs.push(input);
+          finderOptions.push(options);
           return {
             data: {
               pages: [
@@ -79,6 +86,7 @@ beforeEach(() => {
                 },
               ],
             },
+            dataUpdatedAt: finderUpdatedAt,
             fetchNextPage: vi.fn(),
             hasNextPage: true,
             isFetching: false,
@@ -177,4 +185,13 @@ it("accepts, declines and cancels challenges", () => {
   expect(mutations.acceptChallenge).toHaveBeenCalledWith({ id: "c-in" });
   expect(mutations.rejectChallenge).toHaveBeenCalledWith({ id: "c-in" });
   expect(mutations.cancelChallenge).toHaveBeenCalledWith({ id: "c-out" });
+});
+
+it("refreshes activity results and labels from the query timestamp", () => {
+  const view = render(<SparringMode />);
+  expect(screen.getAllByText(/online$/).length).toBeGreaterThan(0);
+  expect(finderOptions.at(-1)).toMatchObject({ staleTime: 60_000, refetchInterval: 60_000, refetchIntervalInBackground: false });
+  finderUpdatedAt += 31 * 60_000;
+  view.rerender(<SparringMode />);
+  expect(screen.queryByText(/online$/)).toBeNull();
 });

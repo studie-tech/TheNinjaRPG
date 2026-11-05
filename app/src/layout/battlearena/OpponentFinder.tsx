@@ -45,6 +45,7 @@ export function OpponentFinder({
     fetchNextPage,
     hasNextPage,
     isFetching,
+    dataUpdatedAt,
   } = api.profile.getPublicUsers.useInfiniteQuery(
     {
       limit: 20,
@@ -65,6 +66,10 @@ export function OpponentFinder({
     },
     {
       enabled: !!userData,
+      // Activity changes independently of this player's actions.
+      staleTime: 60_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -73,7 +78,7 @@ export function OpponentFinder({
   const players = pages?.pages
     .flatMap((page) => page.data)
     .filter((player) => player.userId !== userData?.userId);
-  const onlineSince = Date.now() - ONLINE_WINDOW_MINUTES * 60_000;
+  const onlineSince = dataUpdatedAt - ONLINE_WINDOW_MINUTES * 60_000;
 
   return (
     <section aria-label="Find opponents" className="flex flex-col gap-2">

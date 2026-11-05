@@ -38,7 +38,13 @@ export function PyramidMode() {
   );
   const { data: upcoming } = api.quests.upcomingQuests.useQuery(
     { questType: "battlepyramid" },
-    { enabled: !!userData },
+    {
+      enabled: !!userData,
+      // Level and mastery can change outside quest reward claims.
+      staleTime: 0,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: false,
+    },
   );
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
     enabled: towers?.some((tower) => tower.entryRequirements.length > 0) ?? false,

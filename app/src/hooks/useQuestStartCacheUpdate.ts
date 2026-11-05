@@ -26,6 +26,7 @@ export const useQuestStartCacheUpdate = () => {
       ),
       utils.quests.missionHall.invalidate(),
       utils.quests.specificQuests.invalidate(),
+      utils.quests.upcomingQuests.invalidate(),
     ]);
   };
   return { prepareQuestStartUpdate, updateQuestStart };
