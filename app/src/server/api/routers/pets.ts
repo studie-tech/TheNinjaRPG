@@ -111,7 +111,7 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Own, configure and progress companions through guarded account and pet snapshots. */
 export const petsRouter = createTRPCRouter({
-  /** Restrict individual companion values to Content leadership and developers. */
+  /** Restrict individual companion values to authorized content and coding leadership. */
   getPotentialsForStaff: protectedProcedure
     .input(z.object({ userId: z.string().min(1).max(191) }))
     .query(async ({ ctx, input }) => {
@@ -144,8 +144,9 @@ export const petsRouter = createTRPCRouter({
       const restriction = petMutationBlockMessage(target, pet);
       if (restriction || !pet)
         return errorResponse(restriction ?? "Companion not found");
-      // MySQL cannot update an owned pet and insert a separate audit row in one
-      // statement. Commit both together so an override always has its audit record.
+      // A MySQL multi-table UPDATE cannot insert the new ActionLog row, and an
+      // INSERT cannot update the existing pet. This staff-only transaction keeps
+      // audit failures from committing an unaudited override; player writes use CAS.
       const changed = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           const updated = await updateOwnedPetOnce(tx, target, pet, {
@@ -900,6 +901,8 @@ export const petsRouter = createTRPCRouter({
           return errorResponse("One or more companion stats exceed its potential cap.");
         stats[stat] += gains[stat];
       }
+      // Charge integer gains directly: subtracting fractional stat snapshots can
+      // introduce floating-point error after proportional XP transfers.
       const spent = CombatStatNames.reduce((sum, stat) => sum + gains[stat], 0);
       const isActive = user.activePetId === pet.id;
       const availableExperience = isActive ? user.petExperience : pet.storedExperience;
@@ -1140,7 +1143,7 @@ const getPetPayment = (
   };
 };
 
-/** Generation tokens are server-only lease credentials. */
+/** Hide server-only generation leases and unrevealed potential from owner-facing responses. */
 const omitGenerationToken = <T extends UserPet>({
   generationToken: _generationToken,
   ...pet

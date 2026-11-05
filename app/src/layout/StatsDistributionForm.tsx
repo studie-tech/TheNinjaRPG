@@ -54,6 +54,7 @@ interface StatDistributionProps {
   id?: string;
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
   statCaps?: Parameters<typeof createStatSchema>[3];
   /** Returning false preserves the draft after an expected server rejection. */
   onAccept: (
@@ -213,6 +214,7 @@ interface SimpleDistributionProps {
   includeMasteries?: boolean;
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
   statCaps?: Parameters<typeof createStatSchema>[3];
   onAccept: StatDistributionProps["onAccept"];
   isPending: boolean;
@@ -488,6 +490,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
 interface AdvancedDistributionProps {
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
   statCaps?: Parameters<typeof createStatSchema>[3];
   onAccept: StatDistributionProps["onAccept"];
   includeMasteries?: boolean;

@@ -30,6 +30,10 @@ export const assignableMasteryNames = [
   "bukijutsuMastery",
 ] as const;
 
+/**
+ * Validate allocatable gains against remaining stat, mastery and elemental room.
+ * Optional stat caps support companion potential without changing mastery limits.
+ */
 export const createAssignedExperienceSchema = (
   user?: NonNullable<UserWithRelations>,
   caps?: Parameters<typeof createStatSchema>[3],

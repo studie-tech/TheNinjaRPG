@@ -625,11 +625,20 @@ export const EMAIL_REMINDER_EXPERIENCE_REWARD = 10_000;
 /** Shared availability gate for companion combat, including saved opt-in settings. */
 export const PET_BATTLE_CONFIG = { enabled: true, battleTypes: ["QUEST"] as readonly BattleType[] };
 export const PET_BASE_STAT = 10;
+/** Lifetime cap for each companion combat stat before allocating potential. */
 export const PET_POTENTIAL_BASE_CAP = 150_000;
+/** Additional lifetime cap granted to the stat chosen for each permanent point. */
 export const PET_POTENTIAL_STAT_BONUS = 150_000;
+/** Ryo charged once per successful same-species assigned-XP transfer. */
 export const PET_EXPERIENCE_TRANSFER_COST = 1_000_000;
+/** Maximum percentage of a source companion's assigned XP movable per transfer. */
 export const PET_EXPERIENCE_TRANSFER_MAX_PERCENT = 70;
+/** Species choose a fixed acquisition value or a weighted acquisition roll. */
 export const PetPotentialModes = ["FIXED", "RANDOM"] as const;
+/**
+ * Potential titles, battle HP ceilings and default relative acquisition weights.
+ * Species normalize weights within their enabled range; HP ceilings do not grant HP.
+ */
 export const PET_POTENTIAL_TIERS = [
   { value: 1, title: "Modest", hpCap: 4000, weight: 70 },
   { value: 2, title: "Promising", hpCap: 5000, weight: 50 },

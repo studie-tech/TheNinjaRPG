@@ -2,9 +2,29 @@
  * Database access for pets; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
+import { nanoid } from "nanoid";
 import type { CombatStatName } from "@/drizzle/constants";
-import { jutsu, userData, userPet, userSkill } from "@/drizzle/schema";
+import { CombatStatNames } from "@/drizzle/constants";
+import type {
+  ItemRarity,
+  PetSpecies,
+  UserData,
+  UserPet,
+  UserPetInsert,
+} from "@/drizzle/schema";
+import {
+  actionLog,
+  item,
+  jutsu,
+  petSpecies,
+  userData,
+  userItem,
+  userPet,
+  userSkill,
+  userUpload,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { clampActionLogText } from "@/utils/actionLog";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -46,20 +66,6 @@ export const fetchPetAbilities = async (client: DrizzleClient, userId: string) =
   };
 };
 
-import { count, gt, gte, isNull, lt, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/mysql-core";
-import { nanoid } from "nanoid";
-import { CombatStatNames } from "@/drizzle/constants";
-import {
-  actionLog,
-  item,
-  petSpecies,
-  type UserData,
-  type UserPet,
-  userItem,
-  userUpload,
-} from "@/drizzle/schema";
-
 /** Table alias for previous pet joins, keeping its columns distinct from other participants. */
 const previousPet = alias(userPet, "previous_pet");
 /**
@@ -69,7 +75,7 @@ const previousPet = alias(userPet, "previous_pet");
 export const selectUserDataForActivatePet = (
   client: Pick<DrizzleClient, "select">,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
 ) =>
   client
     .select({ userId: userData.userId, petExperience: userData.petExperience })
@@ -85,13 +91,13 @@ export const executeActivatedForActivatePet = (
   ownerSnapshot: ReturnType<typeof selectUserDataForActivatePet>,
   previous:
     | undefined
-    | (import("@/drizzle/schema").UserPet & {
-        species: import("@/drizzle/schema").PetSpecies;
+    | (UserPet & {
+        species: PetSpecies;
       }),
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
   now: Date,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 ) =>
@@ -124,20 +130,20 @@ export const findUserItemForFeedPet = (
 /** Execute the database statement for `feedPet`. */
 export const executeFedForFeedPet = (
   client: Pick<DrizzleClient, "execute">,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
   now: Date,
   meal: {
     quantity: number;
     id: string;
     itemId: string;
-    item: { rarity: import("@/drizzle/schema").ItemRarity };
+    item: { rarity: ItemRarity };
   },
   isActive: false | true,
   experience: number,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
   ctx: { userId: string },
 ) =>
@@ -218,17 +224,17 @@ export const selectPetSpeciesForWhere = (
 /** Build the `userPet` insert. */
 export const insertUserPet = (
   client: Pick<DrizzleClient, "insert">,
-  created: import("@/drizzle/schema").UserPetInsert,
+  created: UserPetInsert,
 ) => client.insert(userPet).values(created);
 
 /** Execute the database statement for `releasePet`. */
 export const executeRemovedForReleasePet = (
   client: Pick<DrizzleClient, "execute">,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
 
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
 ) =>
   client.execute(sql`
@@ -242,26 +248,24 @@ export const executeRemovedForReleasePet = (
 export const deleteUserPetForReleasePet = (
   client: Pick<DrizzleClient, "delete">,
 
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
 ) => client.delete(userPet).where(petSnapshotWhere(pet));
 
 /** Pin the XP bank as well as revisions so allocation can return its exact remaining balance. */
 export const executeAssignedForAssignExperience = (
   client: Pick<DrizzleClient, "execute">,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
   now: Date,
-  bank:
-    | typeof import("@/drizzle/schema").userData["petExperience"]
-    | typeof import("@/drizzle/schema").userPet["storedExperience"],
+  bank: typeof userData.petExperience | typeof userPet.storedExperience,
   availableExperience: number,
   spent: number,
   stats: Pick<UserData, CombatStatName>,
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
 ) =>
   client.execute(sql`
@@ -286,11 +290,11 @@ export const updateUserPetForGenerateAppearance = (
   now: Date,
   attempts: number,
 
-  pet: import("@/drizzle/schema").UserPet & {
-    species: import("@/drizzle/schema").PetSpecies;
+  pet: UserPet & {
+    species: PetSpecies;
   },
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
 ) =>
   client
     .update(userPet)
@@ -324,10 +328,7 @@ export const updateUserPetForGenerateAppearance2 = (
   client: Pick<DrizzleClient, "update">,
   appearance:
     | undefined
-    | Pick<
-        import("@/drizzle/schema").UserPet,
-        "paletteIndex" | "characteristicIndex" | "auraIndex"
-      >,
+    | Pick<UserPet, "paletteIndex" | "characteristicIndex" | "auraIndex">,
   avatar: string,
   avatarFacing: "left",
   pet: { rank: number; id: string },
@@ -390,12 +391,12 @@ export const updateUserPetForGenerateAppearance3 = (
 /** Execute the database statement for `updateOwnedPet`. */
 export const executeResultForUpdateOwnedPet = (
   client: Pick<DrizzleClient, "execute">,
-  user: import("@/drizzle/schema").UserData,
+  user: UserData,
   now: Date,
   assignments: SQL<unknown>[],
   ownerSnapshotWhere: (user: UserData) => SQL<unknown> | undefined,
 
-  pet: import("@/drizzle/schema").UserPet,
+  pet: UserPet,
 ) =>
   client.execute(sql`
       UPDATE ${userData}
@@ -415,7 +416,10 @@ const petSnapshotWhere = (pet: UserPet) =>
     eq(userPet.revision, pet.revision),
   );
 
-/** Debit the transfer cost, remove assigned progression and credit the destination in one guarded statement. */
+/**
+ * Debit ryo, scale assigned source progression and credit the destination's active
+ * or stored XP bank in one statement, guarded by owner and both pet snapshots.
+ */
 export const transferPetExperience = (
   client: Pick<DrizzleClient, "execute">,
   user: UserData,

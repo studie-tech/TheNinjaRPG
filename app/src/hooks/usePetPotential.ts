@@ -9,6 +9,7 @@ export const usePetPotential = () => {
   const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [message, setMessage] = useState<string | null>(null);
+  // Potential and transfers can change multiple pet views; reconcile canonical snapshots.
   const refresh = () =>
     Promise.all([
       utils.pets.getPet.invalidate(),

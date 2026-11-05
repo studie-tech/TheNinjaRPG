@@ -2287,7 +2287,8 @@ const roundStat = (stat: number) => {
 
 /**
  * Create a stats schema. Used for validating user stats, either starting stats,
- * stat changes, or stat differences
+ * stat changes, or stat differences. Optional absolute caps override rank caps
+ * per stat; current stats are subtracted to return nonnegative remaining room.
  * @returns - zod schema and max values for each stat
  */
 export const createStatSchema = (
