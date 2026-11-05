@@ -212,3 +212,19 @@ export const calcIsInVillage = (
   position: SectorPoint,
   sectorMap: Pick<NormalizedSectorMap, "tiles">,
 ) => getSectorTile(sectorMap, position)?.zone === "village";
+
+/**
+ * Whether a key press should leave the sector map alone: the player is typing
+ * (chat, search, forms), holds a browser shortcut, or another handler used it.
+ */
+export const isTravelKeyBlocked = (event: KeyboardEvent): boolean => {
+  if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey)
+    return true;
+  const target = event.target;
+  return (
+    target instanceof Element &&
+    !!target.closest(
+      "input, textarea, select, [contenteditable]:not([contenteditable='false'])",
+    )
+  );
+};

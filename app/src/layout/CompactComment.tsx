@@ -25,6 +25,7 @@ import { EmojiPicker } from "@/layout/EmojiPicker";
 import Link from "@/layout/Link";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import { getPostUserClasses, type PostProps } from "@/layout/Post";
+import { QuotingNote } from "@/layout/QuotingNote";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
 import type { ChatStartUser } from "@/libs/chatPanel";
@@ -32,6 +33,7 @@ import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
+import { splitQuotedReply } from "@/utils/richText";
 import { useUserData } from "@/utils/UserContext";
 import {
   type DeleteCommentSchema,
@@ -451,6 +453,8 @@ function CompactEditor({
   onSubmit: (data: MutateCommentSchema) => void;
   isPending?: boolean;
 }) {
+  // An edit sends only the author's own text; the server keeps attached quotes
+  const quoted = splitQuotedReply(comment.content);
   const {
     handleSubmit,
     control,
@@ -458,7 +462,7 @@ function CompactEditor({
   } = useForm<MutateCommentSchema>({
     defaultValues: {
       object_id: comment.id,
-      comment: comment.content,
+      comment: quoted.reply,
       quoteIds: null,
       senderId: null,
     },
@@ -469,10 +473,11 @@ function CompactEditor({
   });
   return (
     <form onSubmit={submit} className="mt-[4px]">
+      <QuotingNote authors={quoted.authors} />
       <RichInput
         id="comment"
         height="80"
-        placeholder={comment.content}
+        placeholder={quoted.reply}
         control={control}
         disabled={isPending}
         onSubmit={submit}

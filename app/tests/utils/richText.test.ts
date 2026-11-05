@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHtml } from "@/utils/parse";
-import { needsHtmlSource, richTextInput } from "@/utils/richText";
+import { needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
 import sanitize from "@/utils/sanitize";
 
 const render = (html: string) => renderToStaticMarkup(parseHtml(sanitize(html)));
@@ -51,5 +51,36 @@ describe("rich-text HTML compatibility", () => {
     expect(markup).not.toContain('href=');
     expect(markup).not.toContain('javascript:');
     expect(markup).not.toContain('onload');
+  });
+});
+
+describe("splitQuotedReply", () => {
+  const quote = '<blockquote author="twix" date="11/04/2026"><p>only cuz someone asked</p></blockquote>';
+
+  it("separates attached quotes from the message's own text", () => {
+    const split = splitQuotedReply(`${quote}\n\n<p>add them to the blocklist xD</p>`);
+    expect(split).toEqual({
+      quotes: quote,
+      reply: "<p>add them to the blocklist xD</p>",
+      authors: ["twix"],
+    });
+    expect(needsHtmlSource(split.reply)).toBe(false);
+  });
+
+  it("keeps several quotes in order", () => {
+    const second = '<blockquote author="Neon" date="11/05/2026"><p>hi</p></blockquote>';
+    expect(splitQuotedReply(`${quote}${second}<p>both</p>`)).toEqual({
+      quotes: `${quote}${second}`,
+      reply: "<p>both</p>",
+      authors: ["twix", "Neon"],
+    });
+  });
+
+  it("leaves messages without an attached quote whole", () => {
+    expect(splitQuotedReply("<p>plain</p><blockquote>typed quote</blockquote>")).toEqual({
+      quotes: "",
+      reply: "<p>plain</p><blockquote>typed quote</blockquote>",
+      authors: [],
+    });
   });
 });

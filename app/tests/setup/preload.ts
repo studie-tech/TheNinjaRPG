@@ -12,6 +12,7 @@ import RichInput from "@/layout/RichInput";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import ContentBox from "@/layout/ContentBox";
+import { EmojiPicker } from "@/layout/EmojiPicker";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
@@ -32,6 +33,7 @@ export const actualItemWithEffects = ItemWithEffects;
 export const actualContentImage = ContentImage;
 export const actualContentImageSelector = ContentImageSelector;
 export const actualContentBox = ContentBox;
+export const actualEmojiPicker = EmojiPicker;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
 

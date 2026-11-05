@@ -20,11 +20,13 @@ import type { ChatStartUser } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
+import { splitQuotedReply } from "@/utils/richText";
 import { useUserData } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import type { systems } from "@/validators/reports";
 import Post, { type PostProps } from "./Post";
+import { QuotingNote } from "./QuotingNote";
 import RichInput from "./RichInput";
 
 /**
@@ -159,7 +161,8 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   const emojiRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
 
-  // Handle submit
+  // Handle submit: an edit sends only the author's own text; the server keeps attached quotes
+  const quoted = splitQuotedReply(props.comment.content);
   const {
     handleSubmit,
     control,
@@ -167,7 +170,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   } = useForm<MutateCommentSchema>({
     defaultValues: {
       object_id: props.comment.id,
-      comment: props.comment.content,
+      comment: quoted.reply,
       quoteIds: null,
       senderId: null,
     },
@@ -297,10 +300,11 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
     >
       {props.editing ? (
         <form onSubmit={onSubmit}>
+          <QuotingNote authors={quoted.authors} />
           <RichInput
             id="comment"
             height="200"
-            placeholder={props.comment.content}
+            placeholder={quoted.reply}
             control={control}
             disabled={props.isEditPending}
             onSubmit={onSubmit}
