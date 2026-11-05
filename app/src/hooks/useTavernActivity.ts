@@ -4,7 +4,7 @@ import { useStore } from "jotai";
 import type Pusher from "pusher-js";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
-import { addConversationMention } from "@/deltas/chat";
+import { addConversationMention, retainTavernActivity } from "@/deltas/chat";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { useTaverns } from "@/hooks/useTaverns";
 import {
@@ -27,7 +27,8 @@ export const useTavernIds = (userData: UserWithRelations | null | undefined) => 
     { titles: availTaverns },
     { enabled: canRead && !isLoading && availTaverns.length > 0, staleTime: Infinity },
   );
-  return data;
+  if (!canRead) return [];
+  return isLoading ? undefined : data;
 };
 
 /**
@@ -42,6 +43,7 @@ export const useTavernActivity = (
   const utils = api.useUtils();
   const taverns = useTavernIds(userData);
   const userId = userData?.userId;
+  const available = taverns?.map((tavern) => tavern.id).join(",");
   const followed = (taverns ?? [])
     .filter((tavern) => !isConversationMuted(userData, tavern.id))
     .map((tavern) => tavern.id)
@@ -52,6 +54,14 @@ export const useTavernActivity = (
     if (!userId) return;
     return () => store.set(chatTavernActivityAtom, {});
   }, [userId, store]);
+
+  useEffect(() => {
+    // Keep counts during lookup, then discard taverns the player can no longer open.
+    if (available === undefined) return;
+    store.set(chatTavernActivityAtom, (current) =>
+      retainTavernActivity(current, available ? available.split(",") : []),
+    );
+  }, [available, store]);
 
   useEffect(() => {
     if (!pusher || !userId || !followed) return;

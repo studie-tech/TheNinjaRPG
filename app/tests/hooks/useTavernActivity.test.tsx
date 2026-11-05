@@ -82,8 +82,10 @@ it("leaves out muted taverns and every tavern while all chat is muted", () => {
     initialProps: { user: player(["global"]) },
   });
   expect(Object.keys(handlers)).toEqual(["akikaze"]);
+  store.set(chatTavernActivityAtom, { global: 1, akikaze: 2 });
   rerender({ user: player([], true) });
   expect(Object.keys(handlers)).toEqual([]);
+  expect(activity()).toEqual({ global: 1, akikaze: 2 });
 });
 
 it("ignores own messages, other events, open taverns and blocked players", async () => {
@@ -145,3 +147,47 @@ it("skips the message when the blacklist lookup fails", async () => {
   await act(async () => handlers.global?.({ message: "new", fromId: "troll" }));
   expect(activity()).toEqual({});
 });
+
+it("keeps counts during a tavern lookup and discards unavailable taverns once it settles", async () => {
+  let visible: { id: string; title: string }[] | undefined = [
+    { id: "global", title: "Global" },
+    { id: "akikaze", title: "Akikaze" },
+  ];
+  Object.assign(vi.spyOn(client, "api" as never), {
+    comments: { getTavernIds: { useQuery: () => ({ data: visible }) } },
+  });
+  const { rerender } = renderHook(() => useTavernActivity(pusher, player()));
+  await act(async () => {
+    handlers.global?.({ message: "new", fromId: "sora" });
+    handlers.akikaze?.({ message: "new", fromId: "sora" });
+  });
+  expect(activity()).toEqual({ global: 1, akikaze: 1 });
+  visible = undefined;
+  vi.spyOn(taverns, "useTaverns").mockReturnValue({
+    availTaverns: ["Global", "Hyorin"],
+    isLoading: false,
+  } as never);
+  rerender();
+  expect(activity()).toEqual({ global: 1, akikaze: 1 });
+  visible = [
+    { id: "global", title: "Global" },
+    { id: "hyorin", title: "Hyorin" },
+  ];
+  rerender();
+  expect(Object.keys(handlers)).toEqual(["global", "hyorin"]);
+  expect(activity()).toEqual({ global: 1 });
+});
+
+it.each([{ level: 1 }, { isBanned: true }, { isSilenced: true }])(
+  "drops cached subscriptions and activity when tavern reading is disallowed: %j",
+  async (restriction) => {
+    const { rerender } = renderHook(({ user }) => useTavernActivity(pusher, user), {
+      initialProps: { user: player() },
+    });
+    await act(async () => handlers.global?.({ message: "new", fromId: "sora" }));
+    expect(activity()).toEqual({ global: 1 });
+    rerender({ user: { ...(player() as object), ...restriction } as never });
+    expect(Object.keys(handlers)).toEqual([]);
+    expect(activity()).toEqual({});
+  },
+);

@@ -45,6 +45,17 @@ export const clearConversationMentions = (
   return remaining;
 };
 
+/** Discard unread activity for taverns the player can no longer open. */
+export const retainTavernActivity = (
+  activity: Record<string, number>,
+  conversationIds: string[],
+): Record<string, number> => {
+  const available = new Set(conversationIds);
+  const entries = Object.entries(activity);
+  const remaining = entries.filter(([id]) => available.has(id));
+  return remaining.length === entries.length ? activity : Object.fromEntries(remaining);
+};
+
 /** Clear the inbox news acknowledged by viewing the private conversation list. */
 export const clearInboxNotifications = (
   notifications: NavBarDropdownLink[] | undefined,
