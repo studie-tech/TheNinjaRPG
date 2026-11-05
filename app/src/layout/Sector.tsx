@@ -2575,7 +2575,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           setIsOpen={props.setShowSorrounding}
           users={sorrounding}
           userData={userData}
-          timeDiff={timeDiff}
           hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
@@ -2636,8 +2635,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         <div className="pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 transform">
           <HealingPopover
             targetUser={healTargetUser}
-            userData={userData}
-            timeDiff={timeDiff}
             side="top"
             open={!!healTargetUser}
             onOpenChange={(open) => {
@@ -2754,7 +2751,6 @@ const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   userData: NonNullable<UserWithRelations>;
-  timeDiff: number;
   hex: TerrainHex;
   users: SectorUser[];
   allyAttack: boolean;
@@ -2768,7 +2764,7 @@ interface SorroundingUsersProps {
 
 export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
-  const { userData, timeDiff, storedBracket, setStoredBracket } = props;
+  const { userData, storedBracket, setStoredBracket } = props;
 
   // Query
   const { data } = api.village.getAll.useQuery(undefined);
@@ -2864,12 +2860,7 @@ export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                 <div className="absolute bottom-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
                   {user.curHealth < user.maxHealth &&
                     hasRequiredRank(userData.rank, MEDNIN_MIN_RANK) && (
-                      <HealingPopover
-                        targetUser={user}
-                        userData={userData}
-                        timeDiff={timeDiff}
-                        side="top"
-                      />
+                      <HealingPopover targetUser={user} side="top" />
                     )}
                 </div>
                 <AvatarImage href={user.avatar} alt={user.username} size={512} />
