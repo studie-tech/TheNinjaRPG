@@ -12,6 +12,7 @@ import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Accordion from "@/layout/Accordion";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
 import ContentBox from "@/layout/ContentBox";
@@ -39,10 +40,10 @@ import {
   isBetweenPyramidBattles,
   isManagedQuestRun,
 } from "@/libs/questRun";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import { parseHtml } from "@/utils/parse";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -447,11 +448,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const questStartedAt = userQuest.startedAt;
   const abandonIdentity = `${userQuest.id}:${quest.id}:${questStartedAt?.toISOString() ?? "missing-start"}`;
   const activeAbandonIdentityRef = useRef(abandonIdentity);
-  const abandonRequestRef = useRef<{ identity: string } | null>(null);
+  const abandonFlight = useSingleFlight<{ identity: string; revision?: number }>();
   const [abandonDialogIdentity, setAbandonDialogIdentity] = useState<string | null>(
-    null,
-  );
-  const [abandonPendingIdentity, setAbandonPendingIdentity] = useState<string | null>(
     null,
   );
   const [abandonedIdentity, setAbandonedIdentity] = useState<string | null>(null);
@@ -459,13 +457,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   useEffect(() => {
     activeAbandonIdentityRef.current = abandonIdentity;
     setAbandonDialogIdentity(null);
-    setAbandonPendingIdentity(null);
     setAbandonedIdentity(null);
     // A response for the previous attempt remains harmless because both the client response
     // handler and server CAS are bound to that attempt. Let the new attempt have its own action.
-    if (abandonRequestRef.current?.identity !== abandonIdentity) {
-      abandonRequestRef.current = null;
-    }
+    if (abandonFlight.current()?.identity !== abandonIdentity) abandonFlight.release();
   }, [abandonIdentity]);
 
   // A/B test for starter quest assistant image
@@ -577,67 +572,50 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const { mutateAsync: abandon } = api.quests.abandon.useMutation({
     meta: { handlesTransportError: true },
   });
-  const isAbandoning = abandonPendingIdentity === abandonIdentity;
+  const isAbandoning = abandonFlight.pending?.identity === abandonIdentity;
   const isAbandoned =
     abandonedIdentity === abandonIdentity ||
     abandonedQuestAttemptTombstones.has(abandonIdentity);
   const isAbandonDialogOpen = abandonDialogIdentity === abandonIdentity;
 
   const abandonCurrentQuest = async () => {
-    // React state is asynchronous, so the ref is the same-tick duplicate-submit lock.
-    if (abandonRequestRef.current || !questStartedAt) return;
+    if (abandonFlight.current() || !questStartedAt) return;
 
     const request = { identity: abandonIdentity, revision: prepareUserUpdate() };
-    abandonRequestRef.current = request;
-    setAbandonPendingIdentity(abandonIdentity);
-
-    try {
-      const data = await abandon({
-        id: quest.id,
-      });
-
+    await abandonFlight.run(request, async () => {
       // A parent may reuse this component for another attempt while the request is in flight.
       // The server committed only the captured attempt; never hide or toast for its successor.
-      if (
-        abandonRequestRef.current !== request ||
-        activeAbandonIdentityRef.current !== request.identity
-      ) {
-        return;
-      }
+      const isCurrentAttempt = () =>
+        abandonFlight.owns(request) &&
+        activeAbandonIdentityRef.current === request.identity;
 
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // Suppress and close before cache work. A failed/stale refresh must not immediately expose
-      // a second destructive action for an attempt the server has already closed.
-      abandonedQuestAttemptTombstones.add(request.identity);
-      setAbandonedIdentity(request.identity);
-      setAbandonDialogIdentity(null);
-      await Promise.allSettled([
-        utils.quests.allianceBuilding.invalidate(),
-        updateUser(data, { revision: request.revision }),
-      ]);
-    } catch (error) {
-      // This caller owns transport recovery feedback; other tRPC failures use the global handler.
-      if (
-        abandonRequestRef.current === request &&
-        activeAbandonIdentityRef.current === request.identity &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not abandon this quest. Check your connection and try again.",
+      try {
+        const data = await abandon({
+          id: quest.id,
         });
-      }
-    } finally {
-      if (abandonRequestRef.current === request) {
-        abandonRequestRef.current = null;
-        if (activeAbandonIdentityRef.current === request.identity) {
-          setAbandonPendingIdentity(null);
+        if (!isCurrentAttempt()) return;
+
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Suppress and close before cache work. A failed/stale refresh must not immediately expose
+        // a second destructive action for an attempt the server has already closed.
+        abandonedQuestAttemptTombstones.add(request.identity);
+        setAbandonedIdentity(request.identity);
+        setAbandonDialogIdentity(null);
+        await Promise.allSettled([
+          utils.quests.allianceBuilding.invalidate(),
+          updateUser(data, { revision: request.revision }),
+        ]);
+      } catch (error) {
+        if (isCurrentAttempt()) {
+          showRetryableErrorToast(
+            error,
+            "Could not abandon this quest. Check your connection and try again.",
+          );
         }
       }
-    }
+    });
   };
 
   return (

@@ -27,6 +27,7 @@ import {
   WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
@@ -39,11 +40,11 @@ import {
   missionHallStartBlockedMessage,
   questDailyQuota,
 } from "@/libs/quest";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { isRetryableTrpcError } from "@/utils/error";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 
@@ -60,13 +61,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
   activeUserIdRef.current = userData.userId;
   const activeContextRef = useRef(activeContext);
   activeContextRef.current = activeContext;
-  const startRequestRef = useRef<{
+  const startFlight = useSingleFlight<{
     context: string;
     questId: string;
     userSector: number;
-  } | null>(null);
+  }>();
+  const pendingQuestId = startFlight.pending?.questId ?? null;
   const randomStartRequestRef = useRef(false);
-  const [pendingQuestId, setPendingQuestId] = useState<string | null>(null);
   const [committedStart, setCommittedStart] = useState<{
     context: string;
     questId: string;
@@ -108,71 +109,48 @@ export default function MissionHall({ userData }: MissionHallProps) {
   });
 
   const startSpecificQuest = async (quest: { id: string }) => {
-    // Mutation pending state is only visible on the next render. Capture the quest, sector, and
-    // user context synchronously so a rapid click/Enter cannot submit twice or act on new props.
-    if (startRequestRef.current || randomStartRequestRef.current || isPending) {
-      return false;
-    }
+    // Capture the quest, sector, and user context so a late response cannot act on new props.
+    if (randomStartRequestRef.current || isPending) return false;
     const request = {
       context: activeContext,
       questId: quest.id,
       userSector: userData.sector,
     };
-    startRequestRef.current = request;
-    setPendingQuestId(request.questId);
+    const started = await startFlight.run(request, async () => {
+      const userRevision = prepareUserUpdate();
+      const questSnapshot = prepareQuestStartUpdate();
+      try {
+        const data = await startQuest({
+          questId: request.questId,
+          userSector: request.userSector,
+          supportsAnnouncements: true,
+        });
+        // Consumed announcements belong to this account even when its quest context changed.
+        if (activeUserIdRef.current === userData.userId) showMutationToast(data);
+        if (activeContextRef.current !== request.context) return false;
 
-    const userRevision = prepareUserUpdate();
-    const questSnapshot = prepareQuestStartUpdate();
-    try {
-      const data = await startQuest({
-        questId: request.questId,
-        userSector: request.userSector,
-        supportsAnnouncements: true,
-      });
-      // Consumed announcements belong to this account even when its quest context changed.
-      if (activeUserIdRef.current === userData.userId) showMutationToast(data);
-      if (
-        startRequestRef.current !== request ||
-        activeContextRef.current !== request.context
-      ) {
+        if (!data.success) return false;
+
+        // The server has committed a mutually-exclusive mission. Suppress every stale start action
+        // before cache work; failed invalidation must not expose another start on old hall data.
+        setCommittedStart({ context: request.context, questId: request.questId });
+        void Promise.allSettled([
+          updateUser(data, { revision: userRevision }).then((profileApplied) =>
+            updateQuestStart(data, questSnapshot, profileApplied),
+          ),
+        ]);
+        return true;
+      } catch (error) {
+        if (activeContextRef.current === request.context) {
+          showRetryableErrorToast(
+            error,
+            "Could not start this quest. Check your connection and try again.",
+          );
+        }
         return false;
       }
-
-      if (!data.success) return false;
-
-      // The server has committed a mutually-exclusive mission. Suppress every stale start action
-      // before cache work; failed invalidation must not expose another start on old hall data.
-      setCommittedStart({ context: request.context, questId: request.questId });
-      setPendingQuestId(null);
-      void Promise.allSettled([
-        updateUser(data, { revision: userRevision }).then((profileApplied) =>
-          updateQuestStart(data, questSnapshot, profileApplied),
-        ),
-      ]);
-      return true;
-    } catch (error) {
-      // This caller owns transport recovery feedback; other tRPC failures use the global handler.
-      if (
-        startRequestRef.current === request &&
-        activeContextRef.current === request.context &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not start this quest. Check your connection and try again.",
-        });
-      }
-      return false;
-    } finally {
-      if (startRequestRef.current === request) {
-        startRequestRef.current = null;
-        // This state belongs to the exact request guarded above. Clear it even if navigation or
-        // fresh profile props changed context while the request was in flight; otherwise the new
-        // hall context would remain disabled forever after correctly ignoring a stale response.
-        setPendingQuestId(null);
-      }
-    }
+    });
+    return started ?? false;
   };
 
   // Derived
@@ -540,7 +518,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                             onClick={(e) => {
                               e.preventDefault();
                               if (
-                                startRequestRef.current ||
+                                startFlight.current() ||
                                 randomStartRequestRef.current
                               ) {
                                 return;
