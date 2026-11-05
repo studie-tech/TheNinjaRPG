@@ -24,7 +24,6 @@ import {
   CLAN_ASSASSIN_SLOTS,
   CLAN_BOOST_CONFIG,
   CLAN_BOOST_MAX_LEVEL,
-  CLAN_BOOST_PERCENT_PER_LEVEL,
   CLAN_COLOR_CHANGE_REP_COST,
   CLAN_CREATE_PRESTIGE_REQUIREMENT,
   CLAN_CREATE_RYO_COST,
@@ -43,6 +42,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
+import { getClanBoostCost, getClanBoostLevel } from "@/libs/clanBoost";
 import { isElderCandidateWithoutCutoff } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
 import { hasEnergyQueue } from "@/libs/queue";
@@ -1205,8 +1205,8 @@ export const clanRouter = createTRPCRouter({
       const leaderLike = checkClanLeadership(ctx.userId, clanData);
       // Convert stored percentage to actual level (e.g., 10% -> level 5)
       const currentBoost = clanData?.[input.boostType] ?? 0;
-      const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
-      const cost = config.baseCost + currentLevel * config.perLevelCost;
+      const currentLevel = getClanBoostLevel(currentBoost);
+      const cost = getClanBoostCost(input.boostType, currentBoost);
       // Guard
       if (!clanData) return errorResponse(`${groupLabel} not found`);
       if (config.villageOnly && user.isOutlaw) {

@@ -1,3 +1,5 @@
+import type { ClanBoostType } from "@/drizzle/constants";
+import { CLAN_BOOST_CONFIG, CLAN_BOOST_PERCENT_PER_LEVEL } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
 
 /**
@@ -14,6 +16,16 @@ export const getClanBoost = (
     | undefined,
   field: ClanBoostField,
 ) => (user?.isOutlaw ? 0 : (user?.clan?.[field] ?? 0) / 100);
+
+/** Purchased levels of a clan boost, from its stored percentage. */
+export const getClanBoostLevel = (currentBoost: number) =>
+  currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
+
+/** Ryo price of a clan boost's next level. */
+export const getClanBoostCost = (boostType: ClanBoostType, currentBoost: number) => {
+  const { baseCost, perLevelCost } = CLAN_BOOST_CONFIG[boostType];
+  return baseCost + getClanBoostLevel(currentBoost) * perLevelCost;
+};
 
 type ClanBoostField =
   | "missionRewardBoost"
