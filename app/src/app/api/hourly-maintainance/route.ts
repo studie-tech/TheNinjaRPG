@@ -28,32 +28,31 @@ export async function GET(request: Request) {
   // Check timer
   const timerCheck = await lockWithHourlyTimer(drizzleDB, ENDPOINT_NAME);
 
-  // A failure keeps the hour, so bounty refunds never rerun within it.
-  return runClaimedCron(
-    timerCheck,
-    "/api/hourly-maintainance",
-    async () => {
-      // Expired bounties
-      const [expiredBounties, activeCount, expiredAnalytics, villageMaintenance] =
-        await Promise.all([
-          bountyExpire(),
-          dailyActivePlayers(timerCheck),
-          deleteExpiredVisitorAnalytics(),
-          accrueVillageStructureMaintenance(drizzleDB),
-        ]);
+  return runClaimedCron(timerCheck, "/api/hourly-maintainance", async () => {
+    const startedAt = new Date();
 
-      // Return response
-      return NextResponse.json({
-        success: true,
-        message: `Expired ${expiredBounties.length} bounties and refunded all contributions and updated active players count to ${activeCount}`,
-        expiredBountiesCount: expiredBounties.length,
-        activeCount: activeCount,
-        expiredAnalytics,
-        villageMaintenance,
-      });
-    },
-    { keepClaimOnError: true },
-  );
+    // Expired bounties
+    const [expiredBounties, activeCount, expiredAnalytics, villageMaintenance] =
+      await Promise.all([
+        bountyExpire(),
+        dailyActivePlayers(),
+        deleteExpiredVisitorAnalytics(),
+        accrueVillageStructureMaintenance(drizzleDB),
+      ]);
+
+    // Publishing the count ends the claim, so it follows all work that can hand the hour back.
+    await timerCheck.update(activeCount, startedAt);
+
+    // Return response
+    return NextResponse.json({
+      success: true,
+      message: `Expired ${expiredBounties.length} bounties and refunded all contributions and updated active players count to ${activeCount}`,
+      expiredBountiesCount: expiredBounties.length,
+      activeCount: activeCount,
+      expiredAnalytics,
+      villageMaintenance,
+    });
+  });
 }
 
 /**
@@ -84,18 +83,11 @@ const bountyExpire = async () => {
   return expiredBounties;
 };
 
-const dailyActivePlayers = async (
-  timerCheck: Awaited<ReturnType<typeof lockWithHourlyTimer>>,
-) => {
+const dailyActivePlayers = async () => {
   // Count users active in the last 24 hours (updatedAt within last 24 hours)
   const result = await countUsersActiveInLastDay(drizzleDB); // 24 hours = 3600 * 24 seconds
 
-  const activeCount = result?.[0]?.count ?? 0;
-
-  // Update the game setting with the count
-  await timerCheck.update(activeCount, new Date());
-
-  return activeCount;
+  return result?.[0]?.count ?? 0;
 };
 
 /**
