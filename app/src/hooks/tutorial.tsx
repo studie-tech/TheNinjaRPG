@@ -329,6 +329,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     action: "Tap Shuriken, then buy a few.",
     elementIds: [
       "tutorial-itemshop-confirmPurchase-proceed",
+      "tutorial-itemshop-buy",
       "tutorial-itemshop-item",
       `tutorial-combat-action-${TUTORIAL_ITEM_ID}`,
     ],

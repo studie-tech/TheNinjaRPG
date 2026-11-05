@@ -38,6 +38,7 @@ import { CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import GraphBlackmarketLedger from "@/layout/GraphBlackmarketLedger";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Shop from "@/layout/Shop";
@@ -59,13 +60,11 @@ import {
 import { getSearchValidator } from "@/validators/register";
 
 export default function BlackMarket() {
-  // Tab selection
-  const tabs = ["Bloodline", "Item", "Ryo"] as const;
-  const [tab, setTab] = useLocalStorage<(typeof tabs)[number] | null>(
-    "blackmarketTab",
-    null,
-    true,
-  );
+  // Tab selection, remembered between visits and settable from the URL anchor
+  const [tab, setTab] = useLocalStorage<BlackMarketTab>("blackmarketTab", "Item", true);
+  const current = BLACK_MARKET_TABS.some((option) => option.value === tab)
+    ? tab
+    : "Item";
 
   // Settings
   const { data: userData } = useRequiredUserData();
@@ -78,46 +77,72 @@ export default function BlackMarket() {
     <>
       <ContentBox
         title="Black Market"
-        subtitle="Special Abilities and Items"
+        subtitle="Rare items, bloodlines and reputation trades"
         defaultBackHref="/village"
-        topRightCorntentBreakpoint="sm"
-        topRightContent={
-          <NavTabs
-            id="blackmarket-page"
-            current={tab}
-            options={tabs}
-            setValue={setTab}
-          />
-        }
       >
-        <div>
-          Welcome to the Black Market. Here you can purchase special abilities, items,
-          and currency. You can:
-          <ol className="pt-3">
-            <li>
-              <i> - Have a bloodline genetically infused.</i>
-            </li>
-            <li>
-              <i> - Buy special items with silver or reputation points.</i>
-            </li>
-            <li>
-              <i> - Exchange ryo for reputation points.</i>
-            </li>
-          </ol>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <WalletPill amount={userData.reputationPoints} unit="rep" />
+            <WalletPill amount={userData.seichiSilver} unit="silver" />
+            <WalletPill amount={userData.money} unit="ryo" />
+            <Link href="/points" className="ml-auto text-sm font-semibold underline">
+              Get reputation
+            </Link>
+          </div>
+          <div
+            role="tablist"
+            aria-label="Black Market"
+            className="bg-muted grid grid-cols-3 gap-0.5 rounded-lg p-0.5"
+          >
+            {BLACK_MARKET_TABS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={current === option.value}
+                onClick={() => setTab(option.value)}
+                className={cn(
+                  "h-10 rounded-md text-sm",
+                  current === option.value
+                    ? "bg-background text-foreground font-semibold shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </ContentBox>
-      {tab === "Bloodline" && <Bloodline userData={userData} />}
-      {tab === "Ryo" && <RyoShop userData={userData} />}
-      {tab === "Item" && <BlackMarketItemCatalog userData={userData} />}
+      {current === "Item" && <BlackMarketItemCatalog userData={userData} />}
+      {current === "Bloodline" && <Bloodline userData={userData} />}
+      {current === "Ryo" && <RyoShop userData={userData} />}
     </>
   );
 }
+
+/** One balance in the Black Market's wallet row. */
+function WalletPill({ amount, unit }: { amount: number; unit: string }) {
+  return (
+    <span className="bg-background rounded-full border px-3 py-1 text-sm font-semibold tabular-nums">
+      {amount.toLocaleString()} {unit}
+    </span>
+  );
+}
+
+const BLACK_MARKET_TABS = [
+  { value: "Item", label: "Items" },
+  { value: "Bloodline", label: "Bloodlines" },
+  { value: "Ryo", label: "Ryo exchange" },
+] as const;
+
+type BlackMarketTab = (typeof BLACK_MARKET_TABS)[number]["value"];
 
 const itemCurrencyTabs = ["Reputation", "Silver"] as const;
 
 /**
  * Reputation and silver catalogs share Shop, but only one is mounted so we do
- * not fire two item.getAll infinite queries or render two card grids at once.
+ * not fire two item.getAll infinite queries or render two catalogs at once.
  */
 const BlackMarketItemCatalog: React.FC<{
   userData: NonNullable<UserWithRelations>;
@@ -126,45 +151,32 @@ const BlackMarketItemCatalog: React.FC<{
     (typeof itemCurrencyTabs)[number]
   >("blackmarketItemCurrency", "Reputation");
   const isSilver = itemCurrency === "Silver";
-  const currencyNav = (
-    <NavTabs
-      id="blackmarket-item-currency"
-      current={itemCurrency}
-      options={itemCurrencyTabs}
-      setValue={setItemCurrency}
-    />
-  );
-
   return (
-    <>
-      <Shop
-        key={itemCurrency}
-        userData={userData}
-        defaultType="CONSUMABLE"
-        initialBreak={true}
-        minRepsCost={isSilver ? undefined : 1}
-        minSeichiSilverCost={isSilver ? 1 : undefined}
-        title={isSilver ? "Silver Shop" : "Reputation Shop"}
-        subtitle="Browse categories, search the catalog, then open a card to buy."
-        catalog={{
-          silverLabel: "silver",
-          heroTitle: isSilver ? "Silver catalog" : "Reputation catalog",
-          heroDescription: isSilver
-            ? "Spend silver on exclusive goods. Use tabs and search, then tap a card to review and purchase."
-            : "Spend reputation on rare stock. Category tabs and search match the village shop; filters refine rarity, slot, and effects.",
-          heroBadge: isSilver ? "Silver pricing" : "Reputation pricing",
-          searchId: isSilver
-            ? "blackmarket-seichi-catalog-search"
-            : "blackmarket-rep-catalog-search",
-          listId: false,
-          filterTriggerId: isSilver
-            ? "blackmarket-seichi-filter"
-            : "blackmarket-rep-filter",
-          headerExtra: currencyNav,
-        }}
-      />
-      <PityBloodlineRoll userData={userData} />
-    </>
+    <Shop
+      key={itemCurrency}
+      userData={userData}
+      defaultType="CONSUMABLE"
+      initialBreak={true}
+      minRepsCost={isSilver ? undefined : 1}
+      minSeichiSilverCost={isSilver ? 1 : undefined}
+      title={isSilver ? "Silver Shop" : "Reputation Shop"}
+      subtitle={isSilver ? "Exclusive goods for silver" : "Rare stock for reputation"}
+      catalog={{
+        silverLabel: "silver",
+        listId: false,
+        filterTriggerId: isSilver
+          ? "blackmarket-seichi-filter"
+          : "blackmarket-rep-filter",
+        headerExtra: (
+          <NavTabs
+            id="blackmarket-item-currency"
+            current={itemCurrency}
+            options={itemCurrencyTabs}
+            setValue={setItemCurrency}
+          />
+        ),
+      }}
+    />
   );
 };
 
@@ -203,7 +215,7 @@ const PityBloodlineRoll: React.FC<{
   // Loaders
   if (isPendingRolls) return <Loader explanation="Loading previous rolls" />;
   if (isPendingBloodlines) return <Loader explanation="Loading bloodlines" />;
-  if (!prevRolls || !bloodlines) return null;
+  if (!prevRolls?.length || !bloodlines) return null;
 
   // Process data for table
   const itemRolls = prevRolls?.map((entry) => {
@@ -286,6 +298,7 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       {bloodlineId && (
         <CurrentBloodline bloodlineId={bloodlineId} initialBreak={true} />
       )}
+      <PityBloodlineRoll userData={userData} />
     </>
   );
 };
@@ -543,7 +556,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
     >
       {/* CREATE OFFERS */}
       {belowRepTradeMinLevel && (
-        <p className="border-b px-3 py-3 text-center text-muted-foreground text-sm">
+        <p className="text-muted-foreground border-b px-3 py-3 text-center text-sm">
           {repTradeLevelMessage}
         </p>
       )}
@@ -679,7 +692,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         </div>
       )}
       {!allOffers?.length && (
-        <p className="mt-3 border-t-2 border-dashed bg-popover p-3">
+        <p className="bg-popover mt-3 border-t-2 border-dashed p-3">
           No offers currently listed.
         </p>
       )}
