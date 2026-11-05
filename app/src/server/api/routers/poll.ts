@@ -178,6 +178,9 @@ export const pollRouter = createTRPCRouter({
         findPollOptionForAddOption(ctx.drizzle, input),
       ]);
       // Guard
+      if (!canInteractWithPolls(user.rank)) {
+        return errorResponse(POLL_RANK_MESSAGE);
+      }
       if (!existingPoll) return errorResponse("Poll not found");
       if (existingOption) return errorResponse("Option already exists");
       if (!existingPoll.isActive) return errorResponse("Poll is not active");
