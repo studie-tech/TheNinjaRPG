@@ -1,13 +1,15 @@
 "use client";
 
-import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
-import Confirm from "@/layout/Confirm";
+import { useContentDetails } from "@/hooks/useContentDetails";
+import { ClearBattleDataButton } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
+import { ContentDetailsModal } from "@/layout/ContentDetailsModal";
+import { ContentLinksCell } from "@/layout/ContentLinksCell";
 import ItemBalanceFiltering, {
   getFilter,
   useFiltering,
@@ -16,13 +18,11 @@ import ItemFiltering, {
   getFilter as getItemFilter,
   useFiltering as useItemFiltering,
 } from "@/layout/ItemFiltering";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { showMutationToast } from "@/libs/toast";
+import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -64,15 +64,7 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
   // Queries
   const { data, isPending } = api.data.getItemEffectsBalanceStatistics.useQuery(filter);
 
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItemId, setSelectedItemId] = useState<string>("");
-
-  // Get item details for modal
-  const { data: itemDetails, isPending: isItemDetailsPending } = api.item.get.useQuery(
-    { id: selectedItemId },
-    { enabled: !!selectedItemId },
-  );
+  const details = useContentDetails();
 
   // Can edit items
   const canEdit = canChangeContent(userData?.role ?? "USER");
@@ -84,23 +76,12 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
         return {
           name: item.name,
           links: (
-            <div className="flex items-center gap-2">
-              <Link href={`/manual/item/statistics/${item.id}`}>
-                <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-              </Link>
-              {canEdit && (
-                <Link href={`/manual/item/edit/${item.id}`}>
-                  <Pencil className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                </Link>
-              )}
-              <InfoIcon
-                className="h-4 w-4 text-muted-foreground hover:text-primary"
-                onClick={() => {
-                  setSelectedItemId(item.id);
-                  setIsModalOpen(true);
-                }}
-              />
-            </div>
+            <ContentLinksCell
+              type="item"
+              id={item.id}
+              canEdit={canEdit}
+              onInfo={() => details.open(item.id)}
+            />
           ),
           rarity: item.rarity,
           itemType: item.itemType,
@@ -155,19 +136,7 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
         </div>
       )}
 
-      {/* Item Details Modal */}
-      <Modal
-        title="Item Details"
-        isOpen={isModalOpen}
-        setIsOpen={setIsModalOpen}
-        proceed_label={null}
-      >
-        {isItemDetailsPending ? (
-          <Loader explanation="Loading item details" />
-        ) : (
-          itemDetails && <ItemWithEffects item={itemDetails} showStatistic="item" />
-        )}
-      </Modal>
+      <ContentDetailsModal type="item" {...details} />
     </ContentBox>
   );
 };
@@ -191,18 +160,6 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
   const { data, isPending } = api.data.getItemBalanceStatistics.useQuery(filter);
   const { data: itemNames } = api.item.getAllNames.useQuery();
 
-  // Mutations
-  const { mutate: deleteAllData, isPending: isDeleting } =
-    api.data.deleteAllDataBattleAction.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        if (result.success) {
-          // Invalidate the item balance statistics query to refresh the data
-          await utils.data.getItemBalanceStatistics.invalidate();
-        }
-      },
-    });
-
   const utils = api.useUtils();
 
   // Create mapping from item names to IDs
@@ -217,20 +174,7 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
     (() => {
       const groups = groupBy(data, "name");
       const rows = Array.from(groups.entries()).map(([name, entries]) => {
-        const wins = entries
-          .filter((entry) => entry.battleWon === 1)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const flees = entries
-          .filter((entry) => entry.battleWon === 2)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const losses = entries
-          .filter((entry) => entry.battleWon === 0)
-          .reduce((acc, curr) => acc + (curr.count || 0), 0);
-
-        const totalUsage = wins + flees + losses;
-        const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
+        const outcomes = summarizeBattleOutcomes(entries);
 
         // Get equipped count from the first entry (all entries for an item will have the same equipped count)
         const equippedCount = entries[0]?.equippedCount || 0;
@@ -249,12 +193,8 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
 
         return {
           name: nameWithIcon,
-          totalUsage,
           equippedCount,
-          wins,
-          flees,
-          losses,
-          winRate: `${winRate.toFixed(1)}%`,
+          ...outcomes,
         };
       });
 
@@ -296,30 +236,11 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
           {props.navTabs}
           <ItemBalanceFiltering state={filterState} />
           {canDelete && (
-            <Confirm
-              title="Clear All Item Battle Data"
-              button={
-                <Button size="icon">
-                  <Trash2 className="h-5 w-5 cursor-pointer" />
-                </Button>
-              }
-              proceed_label="Clear Data"
-              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onAccept={(e) => {
-                e.preventDefault();
-                deleteAllData({ type: "item" });
-              }}
-            >
-              {isDeleting ? (
-                <Loader explanation="Deleting data" />
-              ) : (
-                <>
-                  Are you sure you want to clear all item battle action data? This
-                  action cannot be undone and will reset all item usage statistics. This
-                  action will be logged for future audit and review.
-                </>
-              )}
-            </Confirm>
+            <ClearBattleDataButton
+              type="item"
+              label="item"
+              onCleared={() => utils.data.getItemBalanceStatistics.invalidate()}
+            />
           )}
         </div>
       }

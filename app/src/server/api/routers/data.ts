@@ -37,6 +37,7 @@ import {
 import { aggregateExperiments } from "@/libs/experimentAnalytics";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { collapseRewards } from "@/libs/rewards";
+import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
   deleteDataBattleActionForDeleteAllDataBattleAction,
@@ -897,31 +898,11 @@ export const dataRouter = createTRPCRouter({
         const userCount = userCountMap.get(bloodline.id) || 0;
         const battleData = battleStatsMap.get(bloodline.id) || [];
 
-        // Calculate battle statistics
-        const wins = battleData
-          .filter((entry) => entry.battleWon === 1)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const flees = battleData
-          .filter((entry) => entry.battleWon === 2)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const losses = battleData
-          .filter((entry) => entry.battleWon === 0)
-          .reduce((acc, curr) => acc + curr.count, 0);
-
-        const totalUsage = wins + flees + losses;
-        const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
-
         return {
           name: bloodline.name,
           bloodlineId: bloodline.id,
           userCount,
-          totalUsage,
-          wins,
-          flees,
-          losses,
-          winRate: `${winRate.toFixed(1)}%`,
+          ...summarizeBattleOutcomes(battleData),
         };
       });
     }),

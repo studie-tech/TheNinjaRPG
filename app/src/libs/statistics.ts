@@ -176,3 +176,22 @@ export const kde = (
     return sum / n;
   });
 };
+
+/**
+ * Totals of battle outcome rows, where `battleWon` is 0 for a loss, 1 for a win and 2
+ * for a flee.
+ */
+export const summarizeBattleOutcomes = (
+  rows: readonly { battleWon: number; count: number | null }[],
+) => {
+  const sumOutcome = (battleWon: number) =>
+    rows
+      .filter((row) => row.battleWon === battleWon)
+      .reduce((acc, row) => acc + (row.count || 0), 0);
+  const wins = sumOutcome(1);
+  const flees = sumOutcome(2);
+  const losses = sumOutcome(0);
+  const totalUsage = wins + flees + losses;
+  const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
+  return { wins, flees, losses, totalUsage, winRate: `${winRate.toFixed(1)}%` };
+};

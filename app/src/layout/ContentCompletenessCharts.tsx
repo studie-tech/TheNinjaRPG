@@ -1,7 +1,57 @@
 "use client";
 
 import { Chart as ChartJS } from "chart.js/auto";
+import { CircleCheckBig, CircleMinus } from "lucide-react";
+import type React from "react";
 import { useEffect, useRef } from "react";
+import { useLocalStorage } from "@/hooks/localstorage";
+import type { ContentDetails } from "@/hooks/useContentDetails";
+import ContentBox from "@/layout/ContentBox";
+import { ContentDetailsModal } from "@/layout/ContentDetailsModal";
+import Loader from "@/layout/Loader";
+import NavTabs from "@/layout/NavTabs";
+
+const AVAILABLE_TABS = ["Incomplete", "Diversity"];
+
+/** Completeness overview of one content type: a table of gaps and diversity charts. */
+export const ContentCompletenessPanel: React.FC<ContentCompletenessPanelProps> = (
+  props,
+) => {
+  const { type, storageKey, isPending, details, incomplete, diversity } = props;
+  const [filter, setFilter] = useLocalStorage<string>(storageKey, "Incomplete", true);
+
+  return (
+    <>
+      <ContentBox
+        title="Completeness"
+        subtitle="Missing information etc."
+        defaultBackHref={`/manual/${type}`}
+        padding={false}
+        topRightContent={
+          <NavTabs current={filter} options={AVAILABLE_TABS} setValue={setFilter} />
+        }
+      >
+        <p className="p-3">
+          The aim of this overview is to highlight any missing information in content,
+          such that we can ensure that content is complete & diverse.
+        </p>
+        {isPending && <Loader explanation="Loading data" />}
+        {!isPending && filter === "Incomplete" && incomplete}
+        {!isPending && filter === "Diversity" && <div className="p-3">{diversity}</div>}
+      </ContentBox>
+
+      <ContentDetailsModal type={type} {...details} />
+    </>
+  );
+};
+
+/** Table mark for one completeness check. */
+export const CompletenessMark: React.FC<{ missing: boolean }> = ({ missing }) =>
+  missing ? (
+    <CircleMinus className="h-4 w-4 text-red-500" />
+  ) : (
+    <CircleCheckBig className="h-4 w-4 text-green-500" />
+  );
 
 export function CountsChart(props: CountsChartProps) {
   const classChartRef = useRef<HTMLCanvasElement>(null);
@@ -115,6 +165,16 @@ const rotatedBarOptions = (stacked: boolean) => ({
     },
   },
 });
+
+interface ContentCompletenessPanelProps {
+  type: "jutsu" | "item" | "bloodline";
+  /** localStorage key of the selected tab. */
+  storageKey: string;
+  isPending: boolean;
+  details: ContentDetails;
+  incomplete: React.ReactNode;
+  diversity: React.ReactNode;
+}
 
 interface CountsChartProps {
   data: Record<string, number> | undefined;

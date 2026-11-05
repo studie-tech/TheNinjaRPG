@@ -24,6 +24,7 @@ import {
 import { nanoid } from "nanoid";
 import type { z } from "zod";
 import {
+  DEFAULT_ITEM_DESCRIPTION,
   IMG_AVATAR_DEFAULT,
   type VariantCostType,
   type VariantCurrencyField,
@@ -388,7 +389,7 @@ export const insertItemForCreate = (
     id: id,
     name: `New Item - ${id}`,
     image: IMG_AVATAR_DEFAULT,
-    description: "New item description",
+    description: DEFAULT_ITEM_DESCRIPTION,
     itemType: input.type,
     rarity: "COMMON",
     slot: "ITEM",
