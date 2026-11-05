@@ -310,7 +310,7 @@ const Shop: React.FC<ShopProps> = (props) => {
           <ul
             id={listId}
             aria-label="Shop items"
-            className="grid min-w-0 list-none auto-rows-fr grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-2 p-2 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:p-3"
+            className="grid min-w-0 list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-2 p-2 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:p-3"
           >
             {shown.map((row) => (
               <li
