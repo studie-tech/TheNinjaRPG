@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { WAR_SHRINE_IMAGE_BY_BIOME } from "@/drizzle/constants";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { WORLD_STRUCTURE_ART, resolveWorldStructure } from "@/libs/rendering/worldStructures";
-import { createShrineStructure } from "@/libs/sector-map/structures";
+import { createShrineStructure, withSectorShrine } from "@/libs/sector-map/structures";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 
 const makeMap = (sector = 90_000): NormalizedSectorMap => ({
@@ -60,4 +60,11 @@ describe("sector shrine structures", () => {
       expect(createShrineStructure(map, type)).toMatchObject({ image: WAR_SHRINE_IMAGE_BY_BIOME[biome], longitude: 10, latitude: 5 });
     },
   );
+
+  it("appends the shrine only when no structure routes to it", () => {
+    const hall = { route: "/missionhall" };
+    expect(withSectorShrine([hall], makeMap(), 1).map((s) => s.route)).toEqual(["/missionhall", "/shrine"]);
+    const owned = [hall, { route: "/shrine" }];
+    expect(withSectorShrine(owned, makeMap(), 1)).toBe(owned);
+  });
 });
