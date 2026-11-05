@@ -41,15 +41,22 @@ const EmojiMartPicker = dynamic(
   },
 );
 
+/**
+ * Under `dynamicWidth` emoji-mart fills its parent and recounts its columns whenever that parent
+ * resizes. The fixed box keeps a popover without a width of its own from growing with the
+ * preview line, where a long emoji name would otherwise reflow the grid on every hover.
+ */
 export const EmojiPicker: React.FC<AppEmojiPickerProps> = (props) => (
-  <EmojiMartPicker
-    perLine={props.perLine ?? DEFAULT_PER_LINE}
-    emojiSize={24}
-    emojiButtonSize={36}
-    dynamicWidth={true}
-    onEmojiSelect={(emoji: { native?: string }) => {
-      if (emoji.native) props.onSelect(emoji.native);
-    }}
-    onClickOutside={props.onClickOutside}
-  />
+  <div style={{ width: PICKER_WIDTH }}>
+    <EmojiMartPicker
+      perLine={props.perLine ?? DEFAULT_PER_LINE}
+      emojiSize={24}
+      emojiButtonSize={36}
+      dynamicWidth={true}
+      onEmojiSelect={(emoji: { native?: string }) => {
+        if (emoji.native) props.onSelect(emoji.native);
+      }}
+      onClickOutside={props.onClickOutside}
+    />
+  </div>
 );
