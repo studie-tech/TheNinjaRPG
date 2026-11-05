@@ -57,6 +57,7 @@ import { MethodSizeEditor } from "@/layout/MethodSizeEditor";
 import Modal from "@/layout/Modal";
 import { RewardEditor } from "@/layout/RewardEditor";
 import RichInput from "@/layout/RichInput";
+import { SearchSelect } from "@/layout/SearchSelect";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
 import { WeightedCacheEditor } from "@/layout/WeightedCacheEditor";
@@ -3125,11 +3126,12 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const raw = eff[field];
     const value = typeof raw === "string" ? raw : "";
     return (
-      <SingleSelectSimple
+      <SearchSelect
+        label={field}
+        placeholder="Select"
         value={value}
         onChange={(v) => onChange(v)}
         options={opts.options?.animation || []}
-        searchable
         disabled={opts.disabled}
       />
     );
@@ -3138,11 +3140,12 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const raw = eff[field];
     const value = typeof raw === "string" ? raw : "";
     return (
-      <SingleSelectSimple
+      <SearchSelect
+        label={field}
+        placeholder="Select"
         value={value}
         onChange={(v) => onChange(v)}
         options={opts.options?.staticAsset || []}
-        searchable
         disabled={opts.disabled}
       />
     );
@@ -3179,7 +3182,9 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const cur = typeof raw === "string" ? raw : "";
     const handle = (v: string) => onChange(v);
     return (
-      <SingleSelectSimple
+      <SearchSelect
+        label={field}
+        placeholder="Select"
         value={cur}
         onChange={handle}
         options={options}
@@ -3235,65 +3240,6 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
       onChange={(e) => onChange(e.target.value)}
       disabled={opts.disabled}
     />
-  );
-};
-
-/** Simple single-select reused helper */
-const SingleSelectSimple: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  options: OptionType[];
-  searchable?: boolean;
-  disabled?: boolean;
-}> = ({ value, onChange, options, searchable, disabled }) => {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
-  return (
-    <Popover
-      open={disabled ? false : open}
-      onOpenChange={(nextOpen) => {
-        if (!disabled) setOpen(nextOpen);
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="w-full justify-between"
-          disabled={disabled}
-        >
-          {options.find((o) => o.value === value)?.label || "Select"}
-          <ChevronsUpDown className="opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[240px] p-0">
-        <Command>
-          {searchable && <CommandInput placeholder="Search..." className="h-9" />}
-          <CommandList>
-            <CommandEmpty>No options</CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt.value}
-                  value={opt.value}
-                  keywords={[opt.label]}
-                  onSelect={() => onChange(opt.value)}
-                >
-                  {opt.label}
-                  <Check
-                    className={cn(
-                      "ml-auto",
-                      value === opt.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 };
 

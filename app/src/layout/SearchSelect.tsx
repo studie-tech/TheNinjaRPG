@@ -67,7 +67,8 @@ export function SearchSelect({
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+      {/* Long unbroken asset ids stay readable when the trigger sits in a narrow table cell. */}
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-0">
         {/* Reserve the popover's borders so search stays visible as results scroll. */}
         <Command
           label={searchLabel}

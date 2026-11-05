@@ -742,6 +742,47 @@ describe("effect drafts", () => {
     else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   });
 
+  describe("MassEffectEditor selects", () => {
+    const mount = (selectedFields: string[]) =>
+      render(
+        <MassEffectEditor
+          kind="item"
+          entries={[{ id: "first", name: "First", effects: [DamageTag.parse({})], updatedAt: new Date() }]}
+          selectedFields={selectedFields}
+        />,
+      );
+
+    it("searches an enum field by name and saves the choice", async () => {
+      const view = mount(["target"]);
+      fireEvent.click(view.getByRole("combobox", { name: "target" }));
+      const search = await view.findByPlaceholderText("Search target...");
+      fireEvent.change(search, { target: { value: "self" } });
+      await waitFor(() => expect(view.queryByRole("option", { name: "OPPONENT" })).toBeNull());
+      fireEvent.click(view.getByRole("option", { name: "SELF" }));
+      expect(view.queryByRole("option", { name: "SELF" })).toBeNull();
+      expect(view.getByRole("combobox", { name: "target" }).textContent).toContain("SELF");
+      fireEvent.click(view.getByRole("button", { name: "Save item effects for First" }));
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+      expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ target: "SELF" });
+    });
+
+    it("offers long animation names in a popover wider than a narrow cell", async () => {
+      const animation = "a-very-long-animation-identifier-without-any-break";
+      const assets = vi.spyOn(names, "useQuery").mockReturnValue({
+        data: [
+          { id: animation, type: "ANIMATION" },
+          { id: "still-image", type: "STATIC" },
+        ],
+      } as never);
+      const view = mount(["appearAnimation", "staticAssetPath"]);
+      fireEvent.click(view.getByRole("combobox", { name: "appearAnimation" }));
+      const option = await view.findByRole("option", { name: animation });
+      expect(view.queryByRole("option", { name: "still-image" })).toBeNull();
+      expect(option.closest('[role="dialog"]')?.className).toContain("min-w-[240px]");
+      assets.mockRestore();
+    });
+  });
+
   for (const target of ["INHERIT", "SELF"] as const) {
     it(`discards invalid coordinates when changing target to ${target}`, async () => {
       const view = render(<CoordinateDraftForm />);
