@@ -164,6 +164,7 @@ import {
   deleteUserItemForDelete,
   deleteUserItemForExecuteMergeStacksForItemBucket,
   deleteUserItemForSellUserItem,
+  deleteUserItemForSellUserItems,
   deleteUserItemImbuementForDelete,
   deleteUserItemImbuementForEvolveItem,
   deleteUserItemImbuementForSellUserItem,
@@ -1977,12 +1978,7 @@ export const itemRouter = createTRPCRouter({
       const deletions = await Promise.allSettled(
         sellable.map((useritem) =>
           retryOnDeadlock(async () =>
-            deleteUserItemForSellUserItem(
-              ctx.drizzle,
-              { userItemId: useritem.id },
-              ctx,
-              useritem,
-            ),
+            deleteUserItemForSellUserItems(ctx.drizzle, ctx, useritem),
           ),
         ),
       );

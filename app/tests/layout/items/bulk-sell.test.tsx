@@ -244,6 +244,8 @@ it("lets a ticked stack that can no longer be sold be unticked", () => {
   act(() => fireEvent.click(card("Old Scroll")));
   rerender([pill, { ...scroll, isInAuction: true }, token, blade]);
   expect((card("Old Scroll") as HTMLButtonElement).disabled).toBe(false);
+  // The reason shows on the card, where touch screens have no tooltip.
+  expect(card("Old Scroll").textContent).toContain("Is in auction");
   act(() => fireEvent.click(card("Old Scroll")));
   expect(card("Old Scroll").getAttribute("aria-pressed")).toBe("false");
   expect((card("Old Scroll") as HTMLButtonElement).disabled).toBe(true);

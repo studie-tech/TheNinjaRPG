@@ -160,12 +160,32 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row", "potion-row"]);
   });
 
+  it("leaves a stack equipped or stored at home after it was checked", async () => {
+    const list = itemQueries.listUserItemsForSellUserItems;
+    // The rows read as carried, then the player equips one and stores the other.
+    vi.spyOn(itemQueries, "listUserItemsForSellUserItems").mockImplementation(((
+      ...args: Parameters<typeof list>
+    ) =>
+      list(...args).then((rows) =>
+        rows.map((row) => ({ ...row, equipped: "NONE" as const, storedAtHome: false })),
+      )) as never);
+    const result = await sell(["potion-row", "equipped-row", "home-row"]);
+    expect(result.soldUserItemIds).toEqual(["potion-row"]);
+    expect(result.ryo).toBe(60);
+    expect(result.refused.map((entry) => entry.userItemId).sort()).toEqual([
+      "equipped-row",
+      "home-row",
+    ]);
+    expect(await money()).toBe(startMoney + 60);
+    expect(await remaining(["equipped-row", "home-row"])).toEqual(["equipped-row", "home-row"]);
+  });
+
   it("still pays for the removed stacks when another stack's delete fails", async () => {
-    const remove = itemQueries.deleteUserItemForSellUserItem;
-    vi.spyOn(itemQueries, "deleteUserItemForSellUserItem").mockImplementation(
-      (client, input, ctx, useritem) => {
-        if (input.userItemId === "blade-row") throw new Error("Connection lost");
-        return remove(client, input, ctx, useritem);
+    const remove = itemQueries.deleteUserItemForSellUserItems;
+    vi.spyOn(itemQueries, "deleteUserItemForSellUserItems").mockImplementation(
+      (client, ctx, useritem) => {
+        if (useritem.id === "blade-row") throw new Error("Connection lost");
+        return remove(client, ctx, useritem);
       },
     );
     const result = await sell(["potion-row", "blade-row"]);

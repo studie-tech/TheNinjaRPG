@@ -8,6 +8,7 @@ import DurabilityBar from "@/layout/DurabilityBar";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { showsItemLevelBadge } from "@/libs/item";
 import { cn } from "@/libs/shadui";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 /** One backpack item: art, name, rarity and where it goes, with stack size or wear. */
 export function ItemCard({
@@ -74,15 +75,21 @@ export function ItemCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold text-sm">{look.name}</span>
-        <span
-          className={cn(
-            "block truncate text-xs font-medium",
-            rarityTextClass[item.rarity],
-          )}
-        >
-          {rarityLabel[item.rarity]} · {slotLabel(userItem)}
-          {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
-        </span>
+        {blockReason ? (
+          <span className="block truncate text-xs font-medium text-destructive">
+            {capitalizeFirstLetter(blockReason)}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "block truncate text-xs font-medium",
+              rarityTextClass[item.rarity],
+            )}
+          >
+            {rarityLabel[item.rarity]} · {slotLabel(userItem)}
+            {showsItemLevelBadge(item) && ` · Lv ${userItem.level}`}
+          </span>
+        )}
       </span>
       {detail && (
         <span className="shrink-0 text-muted-foreground text-xs font-semibold">

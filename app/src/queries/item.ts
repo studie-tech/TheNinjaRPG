@@ -1267,6 +1267,30 @@ export const deleteUserItemForSellUserItem = (
       ),
     );
 
+/**
+ * Build one stack's deletion for a bulk sell: the single sale's guards, and the stack must
+ * still be carried and unequipped, since the bulk guard checked that on an earlier read.
+ */
+export const deleteUserItemForSellUserItems = (
+  client: Pick<DrizzleClient, "delete">,
+  ctx: { userId: string },
+  useritem: { id: string; quantity: number },
+) =>
+  client
+    .delete(userItem)
+    .where(
+      and(
+        eq(userItem.id, useritem.id),
+        eq(userItem.userId, ctx.userId),
+        eq(userItem.quantity, useritem.quantity),
+        gt(userItem.quantity, 0),
+        eq(userItem.isInAuction, false),
+        eq(userItem.equipped, "NONE"),
+        eq(userItem.storedAtHome, false),
+        hasNoHuntingBattle(ctx.userId),
+      ),
+    );
+
 /** Load the owned positive-quantity rows a bulk sell names, with their items. */
 export const listUserItemsForSellUserItems = (
   client: Pick<DrizzleClient, "query">,
