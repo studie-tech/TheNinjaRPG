@@ -56,10 +56,10 @@ import { getHomeRooms } from "@/libs/homeProperty";
 import {
   byItemName,
   calcMaxHouseSpecialItems,
-  finishedImbuementItems,
   getHomeStorageBucket,
   showsItemLevelBadge,
   userItemActionBadges,
+  userItemDisplay,
 } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { remainingXpToLevel } from "@/libs/train";
@@ -1180,13 +1180,7 @@ function Residence() {
                     </p>
                   )}
                 <ItemWithEffects
-                  item={{
-                    ...selectedItem.item,
-                    imbuements: finishedImbuementItems(selectedItem),
-                    curDurability: selectedItem.durability,
-                    level: selectedItem.level,
-                    experience: selectedItem.experience,
-                  }}
+                  item={userItemDisplay(selectedItem)}
                   key={selectedItem.id}
                   showStatistic="item"
                 />
