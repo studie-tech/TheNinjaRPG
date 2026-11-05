@@ -5,6 +5,7 @@ import {
   filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   getBiomeAtSectorAnchor,
+  isTravelKeyBlocked,
   optimisticGlobalTravelStart,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
@@ -133,5 +134,29 @@ describe("filterLiveSectorBattleUsers", () => {
   it("allows several idle turn timeouts before treating a battle as abandoned", () => {
     expect(SECTOR_BATTLE_STALE_SECONDS).toBeGreaterThanOrEqual(COMBAT_SECONDS * 3);
     expect(SECTOR_BATTLE_STALE_SECONDS).toBeLessThan(60 * 60);
+  });
+});
+
+describe("isTravelKeyBlocked", () => {
+  const press = (target: EventTarget | null, extra: Partial<KeyboardEvent> = {}) =>
+    ({ key: "w", target, ctrlKey: false, metaKey: false, altKey: false, ...extra }) as KeyboardEvent;
+
+  it("lets map keys through outside text fields", () => {
+    expect(isTravelKeyBlocked(press(document.body))).toBe(false);
+  });
+
+  it("ignores keys typed into chat and other text fields", () => {
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    const word = document.createElement("p");
+    editor.append(word);
+    expect(isTravelKeyBlocked(press(word))).toBe(true);
+    expect(isTravelKeyBlocked(press(document.createElement("textarea")))).toBe(true);
+    expect(isTravelKeyBlocked(press(document.createElement("input")))).toBe(true);
+  });
+
+  it("ignores browser shortcuts and keys another handler already used", () => {
+    expect(isTravelKeyBlocked(press(document.body, { ctrlKey: true }))).toBe(true);
+    expect(isTravelKeyBlocked(press(document.body, { defaultPrevented: true }))).toBe(true);
   });
 });

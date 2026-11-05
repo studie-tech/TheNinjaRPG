@@ -107,6 +107,7 @@ import type {
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
+import { isTravelKeyBlocked } from "@/libs/travel";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
@@ -633,6 +634,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
+    if (isTravelKeyBlocked(event)) return;
     if (originRef.current && pathFinderRef.current) {
       const x = originRef.current.col;
       const y = originRef.current.row;
