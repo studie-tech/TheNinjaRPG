@@ -37,6 +37,7 @@ import {
 import type { CombatAction } from "@/libs/combat/types";
 import {
   applyPoolAdjustmentsToBase,
+  calcPoolCost,
   canStackEffect,
   getActiveSealEffects,
   getActiveTargetEffects,
@@ -2181,36 +2182,9 @@ export const poison = (
     );
   }
 
-  // Calculate modified costs based on pool adjustment effects.
-  // Start with the base costs from the action.
-  let modifiedChakraCost = action.chakraCost;
-  let modifiedStaminaCost = action.staminaCost;
-
   if (!effect.castThisRound && actorId === target.userId) {
-    // Match action spending's modifier eligibility, including bloodline suppression.
-    usersEffects.forEach((eff) => {
-      if (
-        (eff.type === "increasepoolcost" || eff.type === "decreasepoolcost") &&
-        eff.targetId === target.userId &&
-        isEffectEnabled(eff, usersEffects) &&
-        eff.poolsAffected &&
-        Array.isArray(eff.poolsAffected)
-      ) {
-        // For Chakra: use the multiplier (1 + eff.power/100).
-        if (eff.poolsAffected.includes("Chakra")) {
-          modifiedChakraCost *= 1 + eff.power / 100;
-        }
-        // For Stamina: use the multiplier (1 + eff.power/100).
-        if (eff.poolsAffected.includes("Stamina")) {
-          modifiedStaminaCost *= 1 + eff.power / 100;
-        }
-      }
-    });
-    // Sum the modified costs.
-    const totalCost = modifiedChakraCost + modifiedStaminaCost;
-
-    // Calculate poison damage using the modified total cost.
-    const dmg = Math.floor(totalCost * (power / 100));
+    const { cpCost, spCost } = calcPoolCost(action, usersEffects, target);
+    const dmg = Math.floor((cpCost + spCost) * (power / 100));
 
     consequences.set(effect.id, {
       userId: effect.creatorId,
