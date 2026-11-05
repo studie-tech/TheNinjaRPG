@@ -294,56 +294,21 @@ export default function Shrine() {
               </TabsContent>
               <TabsContent value="info" className="mt-4">
                 <div className="flex flex-col items-center">
-                  {sectorData.sectorData ? (
-                    userIsOwner ? (
-                      <p>
-                        This sector is owned by your village. You can defend it when
-                        other villages attack.
-                      </p>
-                    ) : (
-                      <p>
-                        This sector is claimed by{" "}
-                        <strong>{sectorData.sectorData?.village.name}</strong>.{" "}
-                        {isProtected
-                          ? "However, because it is a protected sector, it cannot be attacked."
-                          : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                      </p>
-                    )
-                  ) : (
-                    <p>
-                      This sector is unclaimed.{" "}
-                      {!isProtected &&
-                        "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                    </p>
-                  )}
+                  <SectorClaimDescription
+                    ownerVillage={sectorData.sectorData?.village.name}
+                    userIsOwner={userIsOwner}
+                    isProtected={isProtected}
+                  />
                 </div>
               </TabsContent>
             </Tabs>
           ) : (
             <div className="flex flex-col items-center text-center">
-              {sectorData.sectorData ? (
-                userIsOwner ? (
-                  <p>
-                    This sector is owned by your village. You can defend it when other
-                    villages attack.
-                  </p>
-                ) : (
-                  <p>
-                    {" "}
-                    This sector is claimed by{" "}
-                    <strong>{sectorData.sectorData.village.name}</strong>.{" "}
-                    {isProtected
-                      ? "However, because it is a protected sector, it cannot be attacked."
-                      : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                  </p>
-                )
-              ) : (
-                <p>
-                  This sector is unclaimed.{" "}
-                  {!isProtected &&
-                    "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
-                </p>
-              )}
+              <SectorClaimDescription
+                ownerVillage={sectorData.sectorData?.village.name}
+                userIsOwner={userIsOwner}
+                isProtected={isProtected}
+              />
               {isProtected && (
                 <p className="mt-2 font-semibold text-amber-600">
                   {isReserved
@@ -496,6 +461,43 @@ export default function Shrine() {
     </div>
   );
 }
+
+/** Who holds the sector, and whether its shrine can be attacked. */
+const SectorClaimDescription = ({
+  ownerVillage,
+  userIsOwner,
+  isProtected,
+}: {
+  ownerVillage: string | undefined;
+  userIsOwner: boolean;
+  isProtected: boolean;
+}) => {
+  if (!ownerVillage) {
+    return (
+      <p>
+        This sector is unclaimed.{" "}
+        {!isProtected &&
+          "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+      </p>
+    );
+  }
+  if (userIsOwner) {
+    return (
+      <p>
+        This sector is owned by your village. You can defend it when other villages
+        attack.
+      </p>
+    );
+  }
+  return (
+    <p>
+      This sector is claimed by <strong>{ownerVillage}</strong>.{" "}
+      {isProtected
+        ? "However, because it is a protected sector, it cannot be attacked."
+        : "The leader of your village or faction can attack the shrine to try and defeat it and claim the sector."}
+    </p>
+  );
+};
 
 // Component to render a single war
 const WarCard = ({

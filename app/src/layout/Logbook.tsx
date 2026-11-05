@@ -201,25 +201,12 @@ export const LogbookAchievements: React.FC = () => {
           </Button>
         </div>
       )}
-      {quests
-        .filter((uq) => uq.completed === 0)
-        .map((uq) => {
-          const tracker = userData?.questData?.find((q) => q.id === uq.questId);
-
-          return (
-            tracker && (
-              <Accordion
-                key={uq.questId}
-                title={uq.quest.name}
-                selectedTitle={activeElement}
-                titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
-                onClick={setActiveElement}
-              >
-                <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
-              </Accordion>
-            )
-          );
-        })}
+      <QuestAccordionList
+        quests={quests.filter((uq) => uq.completed === 0)}
+        trackers={userData?.questData}
+        activeElement={activeElement}
+        onSelect={setActiveElement}
+      />
     </div>
   );
 };
@@ -248,28 +235,42 @@ export const LogbookActive: React.FC = () => {
 
   return (
     <div className="">
-      {quests?.map((uq) => {
-        const tracker = userData?.questData?.find((q) => q.id === uq.questId);
-        return (
-          tracker && (
-            <Accordion
-              key={uq.questId}
-              title={uq.quest.name}
-              selectedTitle={activeElement}
-              titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
-              onClick={setActiveElement}
-            >
-              <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
-            </Accordion>
-          )
-        );
-      })}
+      <QuestAccordionList
+        quests={quests}
+        trackers={userData?.questData}
+        activeElement={activeElement}
+        onSelect={setActiveElement}
+      />
       {quests?.length === 0 && (
         <div className="p-3 text-muted-foreground">No active quests</div>
       )}
     </div>
   );
 };
+
+/** One collapsible logbook entry per quest with a tracker. */
+const QuestAccordionList: React.FC<{
+  quests: UserQuest[] | undefined;
+  trackers: QuestTrackerType[] | null | undefined;
+  activeElement: string;
+  onSelect: React.Dispatch<React.SetStateAction<string>>;
+}> = ({ quests, trackers, activeElement, onSelect }) =>
+  quests?.map((uq) => {
+    const tracker = trackers?.find((q) => q.id === uq.questId);
+    return (
+      tracker && (
+        <Accordion
+          key={uq.questId}
+          title={uq.quest.name}
+          selectedTitle={activeElement}
+          titlePrefix={`${capitalizeFirstLetter(uq.quest.questType)}: `}
+          onClick={onSelect}
+        >
+          <LogbookEntry userQuest={uq} tracker={tracker} hideTitle />
+        </Accordion>
+      )
+    );
+  });
 
 /**
  * Renders a logbook of battles.
