@@ -3,7 +3,7 @@ import {
   type VillageMissionTask,
 } from "@/drizzle/constants";
 import type { Quest, Village } from "@/drizzle/schema";
-import { getUtcDayKey } from "@/utils/time";
+import { getUtcDayKey, hasEndDatePassed } from "@/utils/time";
 import { villageMissionContentError } from "@/validators/villageMission";
 
 export const isVillageMissionAvailable = (
@@ -15,7 +15,7 @@ export const isVillageMissionAvailable = (
   !quest.hidden &&
   (!quest.requiredVillage || quest.requiredVillage === villageId) &&
   (!quest.startsAt || quest.startsAt <= getUtcDayKey(now)) &&
-  (!quest.endsAt || quest.endsAt >= getUtcDayKey(now)) &&
+  !hasEndDatePassed(quest.endsAt, now) &&
   !quest.requiredBloodlineId &&
   !quest.requiredSageModeId &&
   !quest.requiredSageRank &&

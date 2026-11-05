@@ -108,6 +108,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import {
   formatSecondsToTimeDisplay,
   getCollectDeadline,
+  hasEndDatePassed,
   periodStart,
   reduceActivitySeconds,
   secondsPassed,
@@ -2513,8 +2514,7 @@ export const isAvailableUserQuests = (
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
   const startsCheck =
     !questAndUserQuestInfo.startsAt || new Date(questAndUserQuestInfo.startsAt) <= now;
-  const expiresCheck =
-    !questAndUserQuestInfo.endsAt || new Date(questAndUserQuestInfo.endsAt) > now;
+  const expiresCheck = !hasEndDatePassed(questAndUserQuestInfo.endsAt, now);
   const villageCheck =
     !questAndUserQuestInfo.requiredVillage ||
     questAndUserQuestInfo.requiredVillage === user.villageId ||

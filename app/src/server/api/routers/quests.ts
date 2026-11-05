@@ -320,6 +320,7 @@ import {
 } from "@/utils/permissions";
 import {
   getNextUserSnapshotAt,
+  hasEndDatePassed,
   periodStart,
   regenTicksSince,
   secondsFromDate,
@@ -2975,7 +2976,7 @@ export const assignQuestToUser = async (args: {
   if (questData.startsAt && questData.startsAt > new Date().toISOString()) {
     return errorResponse(`Quest starts in the future`);
   }
-  if (questData.endsAt && questData.endsAt < new Date().toISOString()) {
+  if (hasEndDatePassed(questData.endsAt)) {
     return errorResponse(`Quest has ended`);
   }
 
