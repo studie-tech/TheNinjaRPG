@@ -18,7 +18,7 @@ import { calcCurrent } from "@/layout/StatusBar";
 import { Pusher } from "@/libs/pusher";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { questsRouter } from "@/server/api/routers/quests";
+import { questsRouter, upsertQuestEntry } from "@/server/api/routers/quests";
 import { createTRPCRouter } from "@/server/api/trpc";
 import {
   getUserRegenerationGain,
@@ -119,6 +119,44 @@ describeWithDatabase(
         }
         expect(await readUser()).toMatchObject({ status, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regenAt: from });
         expect(await readEnergyQueue(USER_ID)).toMatchObject([{ stat: "offence", energy: 1000 }]);
+      },
+    );
+
+    it.each([
+      [4 * STEP + 5000, 4, 54],
+      [4 * STEP - 1, 3, 44],
+    ])(
+      "isolated quest entry %dms after the clock settles %d ticks with timed recovery",
+      async (elapsed, ticks, earned) => {
+        const db = await getTestDatabase();
+        const from = new Date("2026-01-01T00:00:00Z");
+        await db.update(userData).set({
+          status: "AWAKE", battleId: null, regenAt: from, updatedAt: from,
+          joinedVillageAt: new Date(from.getTime() - 100 * 86400000),
+          curHealth: 0, curChakra: 0, curStamina: 0, curEnergy: 0,
+        }).where(eq(userData.userId, USER_ID));
+        await insertQuests([{
+          id: "entry-recovery", questType: "story",
+          content: { isolated: true, entryItems: [], objectives: [], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
+        }]);
+        await db.insert(userRaidBuff).values({
+          id: "entry-meal", userId: USER_ID, itemId: "meal",
+          createdAt: from, expiresAt: new Date(from.getTime() + 2.5 * STEP),
+          effects: [IncreaseRegenerationTag.parse({ power: 70 })],
+        });
+        setSystemTime(from);
+        const { user } = await fetchUpdatedUser({ client: db, userId: USER_ID });
+        const story = await db.query.quest.findFirst({ where: eq(quest.id, "entry-recovery") });
+        setSystemTime(new Date(from.getTime() + elapsed));
+
+        await upsertQuestEntry(db, user!, story!, "system", null);
+
+        const pools = { curHealth: earned, curChakra: earned, curStamina: earned, curEnergy: earned };
+        const stored = await readUser();
+        expect(stored).toMatchObject({ status: "BATTLE", ...pools });
+        expect(user).toMatchObject(pools);
+        expect(stored?.regenAt.getTime()).toBe(from.getTime() + ticks * STEP);
+        expect(user?.regenAt.getTime()).toBe(from.getTime() + ticks * STEP);
       },
     );
 
