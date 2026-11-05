@@ -69,7 +69,7 @@ export const RamenMenu = ({ showImage }: RamenMenuProps) => {
     onError: (error) => setPurchaseError(error.message),
   });
 
-  useAwake(userData);
+  useAwake(userData, { allowActionRecovery: true });
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (userData.isBanned) return <BanInfo />;

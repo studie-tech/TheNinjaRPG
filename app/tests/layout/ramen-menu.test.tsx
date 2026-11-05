@@ -1,8 +1,10 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import type { UserStatus } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as client from "@/app/_trpc/client";
+import * as navigation from "@/hooks/navigation";
 import * as tutorial from "@/hooks/tutorial";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
@@ -23,11 +25,12 @@ type PurchaseOptions = {
 let purchaseOptions: PurchaseOptions;
 let purchaseResult: FoodResult;
 let isPending = false;
+const push = vi.fn();
 const prepareUserUpdate = vi.fn(() => 17);
 const completeTutorialAction = vi.fn(async () => {});
 const updateUser = vi.fn(async (_patch: unknown, _options: unknown) => undefined);
 const user = {
-  status: "AWAKE", money: 1_000, level: 10, sector: 1, isOutlaw: false,
+  status: "AWAKE", autoWakeUp: true, money: 1_000, level: 10, sector: 1, isOutlaw: false,
   maxHealth: 100, curHealth: 100, maxStamina: 100, curStamina: 20,
   maxChakra: 100, curChakra: 20,
 } as NonNullable<UserWithRelations>;
@@ -39,6 +42,8 @@ const purchase = vi.fn(async (input: FoodInput) => {
 beforeEach(() => {
   vi.clearAllMocks();
   isPending = false;
+  user.status = "AWAKE";
+  user.autoWakeUp = true;
   purchaseResult = { success: true, message: "Food purchased", userPatch: { curStamina: 40, curChakra: 40, curHealth: 100 }, userDelta: { money: -10 } };
   Object.assign(vi.spyOn(client, "api" as never), {
     village: { buyFood: { useMutation: (options: PurchaseOptions) => {
@@ -50,7 +55,8 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: user, prepareUserUpdate, updateUser,
   } as never);
-  vi.spyOn(routing, "useAwake").mockReturnValue(true);
+  vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ push } as never);
+  vi.spyOn(routing, "usePublicPathname").mockReturnValue("/ramenshop");
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ completeTutorialAction } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
@@ -63,6 +69,28 @@ afterEach(() => {
 });
 
 describe("ramen menu", () => {
+  it.each([
+    ["AWAKE", true, null],
+    ["ASLEEP", true, null],
+    ["HOSPITALIZED", false, null],
+    ["ASLEEP", false, "/home"],
+    ["BATTLE", true, "/combat"],
+    ["TRAVEL", true, "/travel"],
+    ["QUEUED", true, null],
+  ] satisfies [UserStatus, boolean, string | null][])(
+    "routes %s (auto-wake %s) before an explicit purchase",
+    (status, autoWakeUp, destination) => {
+      user.status = status;
+      user.autoWakeUp = autoWakeUp;
+      const view = render(<RamenShop.RamenMenu />);
+      expect(push.mock.calls).toEqual(destination ? [[destination]] : []);
+      expect(view.getByRole("button", { name: /Small Bowl/ })).toBeTruthy();
+      expect(view.container.querySelector("#tutorial-ramen-menu")).toBeTruthy();
+      expect(purchase).not.toHaveBeenCalled();
+      expect(completeTutorialAction).not.toHaveBeenCalled();
+    },
+  );
+
   it("uses village.buyFood and the shared user revision update", async () => {
     const view = render(<RamenShop.RamenMenu />);
     await act(async () => fireEvent.click(view.getByRole("button", { name: /Small Bowl/ })));
