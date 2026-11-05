@@ -312,7 +312,7 @@ export const shrineRouter = createTRPCRouter({
           `Need ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens to unlock AI defender`,
         );
       }
-      if (!ai) return errorResponse("AI not found");
+      if (!ai?.isAi || !ai.inShrines) return errorResponse("AI not found");
 
       const currentUnlocks = user.village.shrineSettings.unlockedAiIds || [];
       if (currentUnlocks.includes(input.aiId)) {
@@ -379,6 +379,8 @@ export const shrineRouter = createTRPCRouter({
         newAssigns = currentAssigns.filter((id) => id !== input.aiId);
         message = `AI defender ${ai.username} removed from active defenders`;
       } else {
+        // Stays out of the removal branch so a Kage can clear a retired defender.
+        if (!ai.isAi || !ai.inShrines) return errorResponse("AI not found");
         if (currentAssigns.length >= SHRINE_MAX_AI_ASSIGNMENTS) {
           return errorResponse(
             `Can only assign up to ${SHRINE_MAX_AI_ASSIGNMENTS} AI defenders`,

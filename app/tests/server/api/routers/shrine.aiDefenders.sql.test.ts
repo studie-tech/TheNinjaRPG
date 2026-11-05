@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { SHRINE_BATTLE_LOBBY_SECONDS } from "@/drizzle/constants";
+import { SHRINE_AI_UNLOCK_COST, SHRINE_BATTLE_LOBBY_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
@@ -133,5 +133,82 @@ describeWithDatabase("shrine AI defenders", () => {
   it("falls back to the global shrine AIs when no stored defender qualifies", async () => {
     const defenders = await startLobby(["human", "plain-ai"]);
     expect(defenders).toEqual(["shrine-a", "shrine-b", "shrine-c"]);
+  });
+
+  const storeSettings = async (activeAiIds: string[], unlockedAiIds: string[]) => {
+    const db = await getTestDatabase();
+    await db
+      .update(village)
+      .set({ shrineSettings: settings(activeAiIds, unlockedAiIds) })
+      .where(eq(village.id, "a"));
+  };
+  const homeVillage = async () => {
+    const db = await getTestDatabase();
+    const row = await db.query.village.findFirst({ where: eq(village.id, "a") });
+    return { tokens: row?.tokens, shrineSettings: row?.shrineSettings };
+  };
+  const shrineCaller = async (userId: string) =>
+    callerForDatabase(shrineRouter, userId, await getTestDatabase());
+
+  it("unlocks and assigns a shrine AI for the Kage", async () => {
+    const kage = await shrineCaller("kage");
+    expect((await kage.unlockAiDefender({ aiId: "shrine-a" })).success).toBe(true);
+    expect((await kage.toggleVillageAiDefender({ aiId: "shrine-a" })).success).toBe(true);
+    expect(await homeVillage()).toMatchObject({
+      tokens: 1000000 - SHRINE_AI_UNLOCK_COST,
+      shrineSettings: { unlockedAiIds: ["shrine-a"], activeAiIds: ["shrine-a"] },
+    });
+  });
+
+  it("rejects a caller who is not their village's Kage", async () => {
+    await storeSettings([], ["shrine-a"]);
+    const before = await homeVillage();
+    const ally = await shrineCaller("ally");
+    expect(await ally.unlockAiDefender({ aiId: "shrine-b" })).toMatchObject({
+      success: false,
+      message: "Only the Kage can unlock AI defenders",
+    });
+    expect(await ally.toggleVillageAiDefender({ aiId: "shrine-a" })).toMatchObject({
+      success: false,
+      message: "Only the Kage can manage AI defenders",
+    });
+    expect(await homeVillage()).toEqual(before);
+  });
+
+  it.each(["human", "plain-ai", "missing"])(
+    "refuses to unlock %s, which is not a shrine AI",
+    async (aiId) => {
+      await storeSettings([], []);
+      const before = await homeVillage();
+      const kage = await shrineCaller("kage");
+      expect(await kage.unlockAiDefender({ aiId })).toMatchObject({
+        success: false,
+        message: "AI not found",
+      });
+      expect(await homeVillage()).toEqual(before);
+    },
+  );
+
+  it.each(["human", "plain-ai"])(
+    "refuses to assign %s from a previously stored unlock",
+    async (aiId) => {
+      await storeSettings([], [aiId]);
+      const before = await homeVillage();
+      const kage = await shrineCaller("kage");
+      expect(await kage.toggleVillageAiDefender({ aiId })).toMatchObject({
+        success: false,
+        message: "AI not found",
+      });
+      expect(await homeVillage()).toEqual(before);
+    },
+  );
+
+  it("still removes a stored defender that no longer qualifies", async () => {
+    await storeSettings(["plain-ai", "shrine-a"], ["plain-ai", "shrine-a"]);
+    const kage = await shrineCaller("kage");
+    expect((await kage.toggleVillageAiDefender({ aiId: "plain-ai" })).success).toBe(true);
+    expect(await homeVillage()).toMatchObject({
+      shrineSettings: { activeAiIds: ["shrine-a"] },
+    });
   });
 });

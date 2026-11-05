@@ -36,7 +36,7 @@ describeWithDatabase("committed shrine cache state", () => {
     await resetTables(sector, village, userData);
     await insertUsers([
       { userId, username: "CacheKage", villageId, rank: "JONIN" },
-      { userId: aiId, username: "CacheDefender", isAi: true },
+      { userId: aiId, username: "CacheDefender", isAi: true, inShrines: true },
     ]);
     const db = await getTestDatabase();
     await db.insert(village).values({
