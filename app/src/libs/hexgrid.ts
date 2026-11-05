@@ -143,6 +143,35 @@ export const oddQHexDistance = (
 };
 
 /**
+ * Tile `steps` hexes along the straight line from `from` through `to`, in flat-top odd-q
+ * offsets. Negative steps extend the line behind `from`, and it can leave the grid.
+ */
+export const oddQLineStep = (
+  from: { col: number; row: number },
+  to: { col: number; row: number },
+  steps: number,
+) => {
+  const a = oddQToCube(from.col, from.row);
+  const b = oddQToCube(to.col, to.row);
+  const t = steps / Math.max(oddQHexDistance(from.col, from.row, to.col, to.row), 1);
+  const exact = {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    z: a.z + (b.z - a.z) * t,
+  };
+  let x = Math.round(exact.x);
+  const y = Math.round(exact.y);
+  let z = Math.round(exact.z);
+  // Rounding can break x + y + z = 0; rebuild the axis that rounded furthest.
+  const xError = Math.abs(x - exact.x);
+  const yError = Math.abs(y - exact.y);
+  const zError = Math.abs(z - exact.z);
+  if (xError > yError && xError > zError) x = -y - z;
+  else if (zError >= yError) z = -x - y;
+  return { col: x, row: z + Math.floor((x - (x & 1)) / 2) };
+};
+
+/**
  * A point defined by X and Y
  */
 export interface Point2D {
