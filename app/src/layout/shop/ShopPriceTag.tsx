@@ -42,7 +42,8 @@ export function ShopPriceTag({
         );
       })}
       {missing.length > 0 && (
-        <span className="text-destructive text-xs font-medium">
+        // Always its own line, so every card keeps the same layout.
+        <span className="text-destructive basis-full text-xs font-medium">
           Need{" "}
           {missing.length === 1
             ? missing[0]?.amount.toLocaleString()

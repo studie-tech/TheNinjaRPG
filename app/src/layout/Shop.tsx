@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
@@ -84,6 +85,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     isFetching,
     fetchNextPage,
     hasNextPage,
+    isFetchNextPageError,
   } = api.item.getAll.useInfiniteQuery(
     {
       minCost,
@@ -104,10 +106,11 @@ const Shop: React.FC<ShopProps> = (props) => {
     },
   );
 
-  // Load the rest of the catalog so chips, counts and sorting cover every item.
+  // Load the rest of the catalog so chips, counts and sorting cover every item. A failed
+  // page stops here; the player retries from the message under the toolbar.
   useEffect(() => {
-    if (hasNextPage && !isFetching) void fetchNextPage();
-  }, [hasNextPage, isFetching, fetchNextPage]);
+    if (hasNextPage && !isFetching && !isFetchNextPageError) void fetchNextPage();
+  }, [hasNextPage, isFetching, isFetchNextPageError, fetchNextPage]);
 
   // Wide containers show the inspector beside the list; narrow ones use a bottom sheet.
   useEffect(() => {
@@ -291,11 +294,23 @@ const Shop: React.FC<ShopProps> = (props) => {
             />
           </div>
         </div>
+        {isFetchNextPageError && (
+          <p role="alert" className="text-destructive border-b px-3 py-2 text-sm">
+            Some items could not load.{" "}
+            <Button
+              variant="link"
+              className="h-auto p-0"
+              onClick={() => void fetchNextPage()}
+            >
+              Try again
+            </Button>
+          </p>
+        )}
         <div className="grid @min-[600px]:grid-cols-[minmax(0,1fr)_24rem]">
           <ul
             id={listId}
             aria-label="Shop items"
-            className="grid min-w-0 list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-2 p-2 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:p-3"
+            className="grid min-w-0 list-none auto-rows-fr grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] content-start gap-2 p-2 @min-[600px]:max-h-[600px] @min-[600px]:overflow-y-auto @min-[600px]:p-3"
           >
             {shown.map((row) => (
               <li
