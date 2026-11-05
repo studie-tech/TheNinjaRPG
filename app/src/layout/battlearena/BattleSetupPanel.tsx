@@ -11,15 +11,18 @@ import { useLoadoutNames } from "@/hooks/useLoadoutNames";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Link from "@/layout/Link";
+import { cn } from "@/libs/shadui";
 
 /**
- * Loadouts, auto combat and the primary action for a fight. A rail beside the mode on wide
- * screens; on narrow ones the controls move into a sheet and the action stays in view.
+ * Loadouts, auto combat and the primary action for a fight, as a rail beside the mode or a row
+ * below it on wide screens; on narrow ones the controls move into a sheet and the action stays
+ * in view.
  */
 export function BattleSetupPanel({
   autoCombat,
   children,
   action,
+  placement = "rail",
 }: BattleSetupPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAutoCombat] = useAutoCombatSetting();
@@ -35,11 +38,21 @@ export function BattleSetupPanel({
   return (
     <aside
       aria-label="Battle setup"
-      // On phones the setup and action come first, so the fight starts without scrolling.
-      className="bg-card flex flex-col gap-3 rounded-xl border p-2 @max-[600px]:order-first @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start @min-[600px]:p-3"
+      className={cn(
+        "bg-card flex flex-col gap-3 rounded-xl border p-2 @min-[600px]:p-3",
+        // A rail on phones puts the setup and action first, so the fight starts without scrolling.
+        placement === "rail" &&
+          "@max-[600px]:order-first @min-[600px]:w-60 @min-[600px]:shrink-0 @min-[600px]:self-start",
+      )}
     >
       <h2 className="text-base font-bold @max-[600px]:sr-only">Battle setup</h2>
-      <div className="flex flex-col gap-3 @max-[600px]:hidden">
+      <div
+        className={cn(
+          "flex flex-col gap-3 @max-[600px]:hidden",
+          placement === "below" &&
+            "@min-[600px]:grid @min-[600px]:grid-cols-3 @min-[600px]:items-start",
+        )}
+      >
         <BattleSetupControls autoCombat={autoCombat}>{children}</BattleSetupControls>
       </div>
       <Button
@@ -118,4 +131,6 @@ interface BattleSetupPanelProps {
   children?: React.ReactNode;
   /** The mode's primary button. */
   action: React.ReactNode;
+  /** A rail beside the mode, or a full-width row below it with the options side by side. */
+  placement?: "rail" | "below";
 }

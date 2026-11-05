@@ -172,7 +172,7 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
     <fieldset
       disabled={isAttacking}
       aria-busy={isAttacking}
-      className="flex flex-col gap-3 @min-[600px]:flex-row"
+      className="flex flex-col gap-3"
     >
       <section
         aria-label="Choose your opponent"
@@ -199,44 +199,49 @@ export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
             <OpponentDetails aiId={selected.userId} />
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2 @min-[480px]:grid-cols-4">
+        {/* One scrolling row keeps the battle setup in view below the picker. */}
+        <ul
+          aria-label="Opponents"
+          className="flex snap-x gap-2 overflow-x-auto pt-2 pb-2"
+        >
           {opponents?.map((opponent) => {
             const isSelected = opponent.userId === aiId;
             return (
-              <button
-                key={opponent.userId}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => setAiId(opponent.userId)}
-                className={`bg-background hover:bg-popover relative flex w-full flex-col items-center gap-1 rounded-lg border-2 p-2 transition-colors ${
-                  isSelected ? "border-amber-500 shadow-md" : "border-transparent"
-                }`}
-              >
-                <Image
-                  alt={opponent.username}
-                  src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
-                  width={80}
-                  height={80}
-                  className="aspect-square w-full rounded-md object-cover"
-                />
-                <span className="w-full truncate text-center text-xs font-semibold">
-                  {opponent.username}
-                </span>
-                <span className="text-muted-foreground text-[11px]">
-                  Level {opponent.level}
-                </span>
-                {opponent.userId === bestMatchId && (
-                  <Badge className="pointer-events-none absolute -top-1.5 -right-1 px-1 py-0 text-[10px]">
-                    Best match
-                  </Badge>
-                )}
-              </button>
+              <li key={opponent.userId} className="w-24 shrink-0 snap-start">
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => setAiId(opponent.userId)}
+                  className={`bg-background hover:bg-popover relative flex w-full flex-col items-center gap-1 rounded-lg border-2 p-2 transition-colors ${
+                    isSelected ? "border-amber-500 shadow-md" : "border-transparent"
+                  }`}
+                >
+                  <Image
+                    alt={opponent.username}
+                    src={opponent.avatar ?? IMG_AVATAR_DEFAULT}
+                    width={80}
+                    height={80}
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                  <span className="w-full truncate text-center text-xs font-semibold">
+                    {opponent.username}
+                  </span>
+                  <span className="text-muted-foreground text-[11px]">
+                    Level {opponent.level}
+                  </span>
+                  {opponent.userId === bestMatchId && (
+                    <Badge className="pointer-events-none absolute -top-1.5 -right-1 px-1 py-0 text-[10px]">
+                      Best match
+                    </Badge>
+                  )}
+                </button>
+              </li>
             );
           })}
-          {!opponents && <Loader explanation="Loading opponents" />}
-        </div>
+        </ul>
+        {!opponents && <Loader explanation="Loading opponents" />}
       </section>
-      <BattleSetupPanel autoCombat={!isTutorialFight} action={action}>
+      <BattleSetupPanel autoCombat={!isTutorialFight} action={action} placement="below">
         {isTutorialFight && (
           <p className="text-muted-foreground flex items-center gap-2 text-xs">
             <Bot className="h-4 w-4 shrink-0" aria-hidden /> Auto combat stays off
