@@ -206,6 +206,8 @@ it("shows the full stats straight away without repeating the header", () => {
   expect(screen.getByText("Item effects").closest("details")).toBeNull();
   expect(screen.queryByText("All details")).toBeNull();
   expect(spy.mock.calls.at(-1)?.[0]).toMatchObject({ hideTitle: true, hideImage: true, hideDates: true });
+  // The header already shows the description, so the details start with the stats.
+  expect(spy.mock.calls.at(-1)?.[0].item.description).toBe("");
 });
 
 it("shows durability with its repair actions when the item wears", () => {

@@ -508,6 +508,8 @@ export function ItemInspector({
           <ItemWithEffects
             item={{
               ...applyActiveVariant(useritem as UserItemWithVariants),
+              // The header above already shows the description.
+              description: "",
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
               level: useritem.level,
