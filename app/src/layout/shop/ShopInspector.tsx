@@ -103,26 +103,26 @@ export function ShopInspector({
     rep: userData.reputationPoints,
     silver: userData.seichiSilver,
   };
-  const prices = shopItemPrices(item, ryoFactor);
-  const missing = missingForPrices(prices, wallet, quantity);
+  const prices = shopItemPrices(item, ryoFactor, quantity);
+  const missing = missingForPrices(prices, wallet);
   const currencyName = (currency: ShopCurrency) =>
     currency === "ryo"
       ? "ryo"
       : currency === "rep"
         ? "reputation points"
         : silverCopy.purchase;
-  const amounts = (list: typeof prices, times = 1) =>
+  const amounts = (list: typeof prices) =>
     list
       .map(
         ({ currency, amount }) =>
-          `${(amount * times).toLocaleString()} ${currencyName(currency)}`,
+          `${amount.toLocaleString()} ${currencyName(currency)}`,
       )
       .join(", ");
-  const costText = amounts(prices, quantity);
+  const costText = amounts(prices);
   const leftText = prices
     .map(
       ({ currency, amount }) =>
-        `${(wallet[currency] - amount * quantity).toLocaleString()} ${currencyName(currency)}`,
+        `${(wallet[currency] - amount).toLocaleString()} ${currencyName(currency)}`,
     )
     .join(", ");
   const canBuy =
@@ -177,7 +177,6 @@ export function ShopInspector({
         <ShopPriceTag
           prices={prices}
           wallet={wallet}
-          quantity={quantity}
           silverLabel={silverCopy.catalog}
         />
         {maxQuantity > 1 && (
