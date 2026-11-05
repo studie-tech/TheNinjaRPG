@@ -34,6 +34,7 @@ import {
   type RecruitMilestoneRank,
   type RecruitMilestoneStatus,
 } from "@/drizzle/constants";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -508,7 +509,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
   promotionUrl,
 }) => {
   const utils = api.useUtils();
-  const submissionInFlight = useRef(false);
+  const submissionFlight = useSingleFlight();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reviewComplete, setReviewComplete] = useState(false);
   const reviewForm = useForm<LinkPromotionReviewInput>({
@@ -533,8 +534,8 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
   });
 
   const review = () => {
-    if (submissionInFlight.current) return;
-    submissionInFlight.current = true;
+    // The claim spans validation, so both of handleSubmit's callbacks release it.
+    if (!submissionFlight.claim()) return;
     void reviewForm.handleSubmit(
       async (values) => {
         try {
@@ -542,12 +543,10 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
         } catch {
           // The mutation callback presents the error and the form stays open for retry.
         } finally {
-          submissionInFlight.current = false;
+          submissionFlight.release();
         }
       },
-      () => {
-        submissionInFlight.current = false;
-      },
+      () => submissionFlight.release(),
     )();
   };
 

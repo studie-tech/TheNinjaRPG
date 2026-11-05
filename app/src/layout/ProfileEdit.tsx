@@ -91,6 +91,8 @@ import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
+import { usePendingIds } from "@/hooks/usePendingIds";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
@@ -169,7 +171,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import { type StatSchemaType } from "@/validators/combat";
+import type { StatSchemaType } from "@/validators/combat";
 import {
   attributes,
   type Color,
@@ -654,8 +656,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
     userData?.showBattleDescription ?? false,
   );
-  const battleDescriptionRequestRef = useRef(false);
-  const preferencesRequestRef = useRef(false);
+  const battleDescriptionFlight = useSingleFlight();
+  const preferencesFlight = useSingleFlight();
 
   // Default auto-combat preference (persisted on the user)
   const [autoCombat, setAutoCombat] = useAutoCombatSetting();
@@ -681,38 +683,35 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   });
 
   useEffect(() => {
-    if (!battleDescriptionRequestRef.current && userData) {
+    if (!battleDescriptionFlight.current() && userData) {
       setBattleDescriptionDraft(userData.showBattleDescription);
     }
   }, [userData]);
 
   const handleBattleDescriptionChange = async (checked: boolean) => {
-    if (battleDescriptionRequestRef.current) return;
-
     const previousValue = battleDescriptionDraft;
-    battleDescriptionRequestRef.current = true;
-    setBattleDescriptionDraft(checked);
+    await battleDescriptionFlight.run(true, async () => {
+      setBattleDescriptionDraft(checked);
 
-    try {
-      const result = await updateBattleDescription({
-        showBattleDescription: checked,
-      });
-      if (!result.success) {
-        showMutationToast(result);
+      try {
+        const result = await updateBattleDescription({
+          showBattleDescription: checked,
+        });
+        if (!result.success) {
+          showMutationToast(result);
+          setBattleDescriptionDraft(previousValue);
+        }
+      } catch (error) {
+        showMutationToast({
+          success: false,
+          message:
+            error instanceof Error && error.message
+              ? error.message
+              : "Could not update the preference",
+        });
         setBattleDescriptionDraft(previousValue);
       }
-    } catch (error) {
-      showMutationToast({
-        success: false,
-        message:
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not update the preference",
-      });
-      setBattleDescriptionDraft(previousValue);
-    } finally {
-      battleDescriptionRequestRef.current = false;
-    }
+    });
   };
 
   const { mutate: updateAiProfile, isPending } = api.ai.updateAiProfile.useMutation({
@@ -748,20 +747,17 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
 
   // Form submission
   const onSubmit = async (values: UpdateUserPreferencesSchema) => {
-    if (preferencesRequestRef.current) return;
-
-    preferencesRequestRef.current = true;
-    try {
-      const result = await updatePreferences(values);
-      showMutationToast(result);
-      if (result.success) {
-        await updateUser(values);
+    await preferencesFlight.run(true, async () => {
+      try {
+        const result = await updatePreferences(values);
+        showMutationToast(result);
+        if (result.success) {
+          await updateUser(values);
+        }
+      } catch {
+        // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
       }
-    } catch {
-      // Mutation errors are surfaced by the shared tRPC error handler. Keep the draft.
-    } finally {
-      preferencesRequestRef.current = false;
-    }
+    });
   };
 
   // Loaders
@@ -1044,8 +1040,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
 const Marriage: React.FC = () => {
   // tRPC utility
   const utils = api.useUtils();
-  const divorceRequestRef = useRef(new Set<string>());
-  const [divorcingUserIds, setDivorcingUserIds] = useState(() => new Set<string>());
+  const divorces = usePendingIds();
 
   const maxUsers = 1;
   const userSearchSchema = getSearchValidator({ max: maxUsers });
@@ -1094,10 +1089,7 @@ const Marriage: React.FC = () => {
   const { mutateAsync: divorce } = api.marriage.divorce.useMutation({ onSuccess });
 
   const handleDivorce = async (userId: string) => {
-    if (divorceRequestRef.current.has(userId)) return;
-
-    divorceRequestRef.current.add(userId);
-    setDivorcingUserIds((current) => new Set(current).add(userId));
+    if (!divorces.begin(userId)) return;
 
     try {
       await divorce({ userId });
@@ -1105,12 +1097,7 @@ const Marriage: React.FC = () => {
       // The shared tRPC error handler surfaces transport errors. Keep the
       // confirmation open so the user can safely retry.
     } finally {
-      divorceRequestRef.current.delete(userId);
-      setDivorcingUserIds((current) => {
-        const next = new Set(current);
-        next.delete(userId);
-        return next;
-      });
+      divorces.end(userId);
     }
   };
 
@@ -1125,7 +1112,7 @@ const Marriage: React.FC = () => {
       <Label className="pt-2">Users who are married to you</Label>
       <div className="grid grid-cols-6">
         {marriages?.map((user) => {
-          const isDivorcing = divorcingUserIds.has(user.userId);
+          const isDivorcing = divorces.ids.has(user.userId);
 
           return (
             <div
@@ -1740,7 +1727,7 @@ const SwapBloodline: React.FC = () => {
 const ResetStats: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
-  const submissionInFlight = useRef(false);
+  const submissionFlight = useSingleFlight();
 
   // Mutations
   const { mutateAsync: updateStats, isPending } =
@@ -1760,16 +1747,13 @@ const ResetStats: React.FC = () => {
     });
 
   const submitStatRedistribution = async (data: StatSchemaType) => {
-    if (submissionInFlight.current) return;
-
-    submissionInFlight.current = true;
-    try {
-      await updateStats(data);
-    } catch {
-      // The mutation's onError handler displays the actionable error to the user.
-    } finally {
-      submissionInFlight.current = false;
-    }
+    await submissionFlight.run(true, async () => {
+      try {
+        await updateStats(data);
+      } catch {
+        // The mutation's onError handler displays the actionable error to the user.
+      }
+    });
   };
 
   // Only show if we have userData
@@ -1888,9 +1872,9 @@ const AvatarChange: React.FC = () => {
 /** Edit saved palettes and compatible traits while sharing the authoritative appearance snapshot. */
 const AttributeChange: React.FC = () => {
   const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
-  const [pendingAttribute, setPendingAttribute] = useState<string | null>(null);
+  const saveFlight = useSingleFlight<string>();
+  const pendingAttribute = saveFlight.pending;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const isSavingRef = useRef(false);
   const {
     data,
     refetch,
@@ -1924,26 +1908,22 @@ const AttributeChange: React.FC = () => {
     attribute: string,
     save: () => Promise<BaseServerResponse>,
   ) => {
-    if (isSavingRef.current) return;
-    isSavingRef.current = true;
-    setPendingAttribute(attribute);
-    setErrorMessage(null);
-    try {
-      const result = await save();
-      showMutationToast(result);
-      if (result.success) await refetch();
-      else setErrorMessage(result.message ?? "Could not save appearance. Try again.");
-    } catch (error) {
-      // The shared handler reports transport failures; keep the saved selection and allow retry here.
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not save appearance. Try again.",
-      );
-    } finally {
-      isSavingRef.current = false;
-      setPendingAttribute(null);
-    }
+    await saveFlight.run(attribute, async () => {
+      setErrorMessage(null);
+      try {
+        const result = await save();
+        showMutationToast(result);
+        if (result.success) await refetch();
+        else setErrorMessage(result.message ?? "Could not save appearance. Try again.");
+      } catch (error) {
+        // The shared handler reports transport failures; keep the saved selection and allow retry here.
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not save appearance. Try again.",
+        );
+      }
+    });
   };
 
   return (
@@ -2232,9 +2212,9 @@ const NameChange: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
-  const [isChangingUsername, setIsChangingUsername] = useState(false);
+  const usernameFlight = useSingleFlight();
+  const isChangingUsername = usernameFlight.isPending;
   const [usernameDraft, setUsernameDraft] = useState("");
-  const usernameRequestRef = useRef(false);
 
   // Username search
   const { form, searchTerm } = useUserSearch();
@@ -2265,31 +2245,26 @@ const NameChange: React.FC = () => {
   });
 
   const handleUsernameChange = async () => {
-    if (usernameRequestRef.current) return;
-
     const submittedUsername = usernameDraft;
-    usernameRequestRef.current = true;
-    setIsChangingUsername(true);
-    try {
-      const data = await updateUsername({ username: submittedUsername });
-      showMutationToast(data);
-      if (data.success) {
-        // The paid mutation has already committed. A failed cache refresh must
-        // not leave the confirmation retryable and charge the user twice.
-        setShowNameChangeConfirm(false);
-      } else {
+    await usernameFlight.run(true, async () => {
+      try {
+        const data = await updateUsername({ username: submittedUsername });
+        showMutationToast(data);
+        if (data.success) {
+          // The paid mutation has already committed. A failed cache refresh must
+          // not leave the confirmation retryable and charge the user twice.
+          setShowNameChangeConfirm(false);
+        } else {
+          setUsernameDraft(submittedUsername);
+          form.setValue("username", submittedUsername, { shouldValidate: true });
+        }
+      } catch {
+        // The shared tRPC error handler surfaces transport failures. Leave the
+        // confirmation and draft open so the user can correct or retry it.
         setUsernameDraft(submittedUsername);
         form.setValue("username", submittedUsername, { shouldValidate: true });
       }
-    } catch {
-      // The shared tRPC error handler surfaces transport failures. Leave the
-      // confirmation and draft open so the user can correct or retry it.
-      setUsernameDraft(submittedUsername);
-      form.setValue("username", submittedUsername, { shouldValidate: true });
-    } finally {
-      usernameRequestRef.current = false;
-      setIsChangingUsername(false);
-    }
+    });
   };
 
   // Only show if we have userData
@@ -2584,8 +2559,8 @@ const ChangeGender: React.FC = () => {
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
-  const [isChangingGender, setIsChangingGender] = useState(false);
-  const genderChangeRequestRef = useRef(false);
+  const genderChangeFlight = useSingleFlight();
+  const isChangingGender = genderChangeFlight.isPending;
 
   // Mutations
   const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation({
@@ -2627,36 +2602,32 @@ const ChangeGender: React.FC = () => {
   });
 
   const handleGenderChange = async () => {
-    if (genderChangeRequestRef.current || !userData) return;
+    if (!userData) return;
 
     const submittedGender = form.getValues("gender");
-    genderChangeRequestRef.current = true;
-    setIsChangingGender(true);
-
-    try {
-      const data = await changeGender({ gender: submittedGender });
-      showMutationToast(data);
-      if (data.success) {
-        // The purchase has committed. Close even if cache reconciliation fails
-        // so retrying the dialog cannot charge again.
-        setShowGenderConfirmation(false);
-      } else {
+    await genderChangeFlight.run(true, async () => {
+      try {
+        const data = await changeGender({ gender: submittedGender });
+        showMutationToast(data);
+        if (data.success) {
+          // The purchase has committed. Close even if cache reconciliation fails
+          // so retrying the dialog cannot charge again.
+          setShowGenderConfirmation(false);
+        } else {
+          form.setValue("gender", submittedGender, {
+            shouldDirty: true,
+            shouldValidate: true,
+          });
+        }
+      } catch {
+        // The shared tRPC error handler surfaces transport failures. Keep the
+        // confirmation and selected gender open so the user can retry.
         form.setValue("gender", submittedGender, {
           shouldDirty: true,
           shouldValidate: true,
         });
       }
-    } catch {
-      // The shared tRPC error handler surfaces transport failures. Keep the
-      // confirmation and selected gender open so the user can retry.
-      form.setValue("gender", submittedGender, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-    } finally {
-      genderChangeRequestRef.current = false;
-      setIsChangingGender(false);
-    }
+    });
   };
 
   // Only show if we have userData

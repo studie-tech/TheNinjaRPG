@@ -82,6 +82,7 @@ import {
   type UserStatus,
 } from "@/drizzle/constants";
 import type { Badge, UserBadge, UserRank } from "@/drizzle/schema";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import ActionLogs from "@/layout/ActionLog";
 import ActionLogFiltering, {
   getFilter,
@@ -110,9 +111,9 @@ import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import { groupBy } from "@/utils/grouping";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { parseHtml } from "@/utils/parse";
@@ -347,30 +348,30 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     username: string;
     expectedStatus: UserStatus;
   } | null>(null);
-  const [forceAwakePending, setForceAwakePending] = useState(false);
   const [committedForceAwakeUserId, setCommittedForceAwakeUserId] = useState<
     string | null
   >(null);
-  const forceAwakeRequestRef = useRef<typeof forceAwakeTarget>(null);
+  const forceAwakeFlight = useSingleFlight<NonNullable<typeof forceAwakeTarget>>();
+  const forceAwakePending = forceAwakeFlight.isPending;
   const [avatarUpdateTarget, setAvatarUpdateTarget] = useState<{
     userId: string;
     username: string;
   } | null>(null);
-  const [avatarUpdatePending, setAvatarUpdatePending] = useState(false);
-  const avatarUpdateRequestRef = useRef<typeof avatarUpdateTarget>(null);
+  const avatarUpdateFlight = useSingleFlight<NonNullable<typeof avatarUpdateTarget>>();
+  const avatarUpdatePending = avatarUpdateFlight.isPending;
   const [clearNindoTarget, setClearNindoTarget] = useState<{
     userId: string;
     username: string;
     nindoId: string;
     expectedContent: string;
   } | null>(null);
-  const [clearNindoPending, setClearNindoPending] = useState(false);
   const [committedNindoClear, setCommittedNindoClear] = useState<{
     userId: string;
     nindoId: string;
     expectedContent: string;
   } | null>(null);
-  const clearNindoRequestRef = useRef<typeof clearNindoTarget>(null);
+  const clearNindoFlight = useSingleFlight<NonNullable<typeof clearNindoTarget>>();
+  const clearNindoPending = clearNindoFlight.isPending;
   const [awardTarget, setAwardTarget] = useState<ReputationAwardTarget | null>(null);
   const [awardPending, setAwardPending] = useState(false);
   const [awardNeedsRetry, setAwardNeedsRetry] = useState(false);
@@ -498,41 +499,26 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   const handleAvatarUpdate = async () => {
     const target = avatarUpdateTarget;
-    if (!target || avatarUpdateRequestRef.current) return;
+    if (!target) return;
 
-    // This ref closes the same-tick gap before React can render the pending state.
-    avatarUpdateRequestRef.current = target;
-    setAvatarUpdatePending(true);
-    try {
-      const data = await updateAvatar.mutateAsync({
-        userId: target.userId,
-      });
-      if (avatarUpdateRequestRef.current !== target) return;
-
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // The modal closes before the profile refresh.
-      setAvatarUpdateTarget(null);
-      void utils.profile.getPublicUser.invalidate();
-    } catch (error) {
-      // Non-transient tRPC errors are already shown by the global mutation handler.
-      if (
-        avatarUpdateRequestRef.current === target &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not update this avatar. Check your connection and try again.",
+    await avatarUpdateFlight.run(target, async () => {
+      try {
+        const data = await updateAvatar.mutateAsync({
+          userId: target.userId,
         });
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // The modal closes before the profile refresh.
+        setAvatarUpdateTarget(null);
+        void utils.profile.getPublicUser.invalidate();
+      } catch (error) {
+        showRetryableErrorToast(
+          error,
+          "Could not update this avatar. Check your connection and try again.",
+        );
       }
-    } finally {
-      if (avatarUpdateRequestRef.current === target) {
-        avatarUpdateRequestRef.current = null;
-        setAvatarUpdatePending(false);
-      }
-    }
+    });
   };
 
   const clearNindo = api.reports.clearNindo.useMutation({
@@ -541,47 +527,32 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   const handleClearNindo = async () => {
     const target = clearNindoTarget;
-    if (!target || clearNindoRequestRef.current) return;
+    if (!target) return;
 
-    // React has not rendered the pending state yet during a same-tick second click.
-    clearNindoRequestRef.current = target;
-    setClearNindoPending(true);
-    try {
-      const data = await clearNindo.mutateAsync({
-        userId: target.userId,
-      });
-      if (clearNindoRequestRef.current !== target) return;
-
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // Immediately suppress the exact committed nindo. A stale profile response
-      // must not briefly expose a second clear action for content that is gone.
-      setCommittedNindoClear({
-        userId: target.userId,
-        nindoId: target.nindoId,
-        expectedContent: target.expectedContent,
-      });
-      setClearNindoTarget(null);
-      void utils.profile.getPublicUser.invalidate();
-    } catch (error) {
-      // Other tRPC errors are already displayed once by the global mutation handler.
-      if (
-        clearNindoRequestRef.current === target &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message: "Could not clear this nindo. Check your connection and try again.",
+    await clearNindoFlight.run(target, async () => {
+      try {
+        const data = await clearNindo.mutateAsync({
+          userId: target.userId,
         });
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Immediately suppress the exact committed nindo. A stale profile response
+        // must not briefly expose a second clear action for content that is gone.
+        setCommittedNindoClear({
+          userId: target.userId,
+          nindoId: target.nindoId,
+          expectedContent: target.expectedContent,
+        });
+        setClearNindoTarget(null);
+        void utils.profile.getPublicUser.invalidate();
+      } catch (error) {
+        showRetryableErrorToast(
+          error,
+          "Could not clear this nindo. Check your connection and try again.",
+        );
       }
-    } finally {
-      if (clearNindoRequestRef.current === target) {
-        clearNindoRequestRef.current = null;
-        setClearNindoPending(false);
-      }
-    }
+    });
   };
 
   const updateUserId = api.staff.updateUserId.useMutation({
@@ -605,48 +576,32 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const handleForceAwake = async () => {
     const target = forceAwakeTarget;
     const reason = forceAwakeReason.trim();
-    if (!target || forceAwakeRequestRef.current || reason.length < 10) return;
+    if (!target || reason.length < 10) return;
 
-    // Close the same-tick gap before React can commit the mutation's pending state.
-    forceAwakeRequestRef.current = target;
-    setForceAwakePending(true);
-    try {
-      const data = await unstuckUser.mutateAsync({
-        userId: target.userId,
-        reason,
-      });
-      if (forceAwakeRequestRef.current !== target) return;
-
-      showMutationToast(data);
-      if (!data.success) return;
-
-      // Suppress a second intervention before any cache refresh can return stale profile data.
-      setCommittedForceAwakeUserId(target.userId);
-      setShowForceAwakeModal(false);
-      setForceAwakeTarget(null);
-      setForceAwakeReason("");
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-      ]);
-    } catch (error) {
-      // Non-network tRPC failures are already rendered exactly once by the global handler.
-      if (
-        forceAwakeRequestRef.current === target &&
-        error instanceof Error &&
-        isRetryableTrpcError(error)
-      ) {
-        showMutationToast({
-          success: false,
-          message:
-            "Could not force this user awake. Check your connection and try again.",
+    await forceAwakeFlight.run(target, async () => {
+      try {
+        const data = await unstuckUser.mutateAsync({
+          userId: target.userId,
+          reason,
         });
+        showMutationToast(data);
+        if (!data.success) return;
+
+        // Suppress a second intervention before any cache refresh can return stale profile data.
+        setCommittedForceAwakeUserId(target.userId);
+        setShowForceAwakeModal(false);
+        setForceAwakeTarget(null);
+        setForceAwakeReason("");
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+        ]);
+      } catch (error) {
+        showRetryableErrorToast(
+          error,
+          "Could not force this user awake. Check your connection and try again.",
+        );
       }
-    } finally {
-      if (forceAwakeRequestRef.current === target) {
-        forceAwakeRequestRef.current = null;
-        setForceAwakePending(false);
-      }
-    }
+    });
   };
 
   // mutations related to badges and activity events were relocated to their tab components.
@@ -2082,12 +2037,12 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
 }) => {
   const router = useRouter();
   const utils = api.useUtils();
-  const requestRef = useRef<{
+  const userIdFlight = useSingleFlight<{
     userId: string;
     username: string;
     newUserId: string;
-  } | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  }>();
+  const isPending = userIdFlight.isPending;
   const [modalVersion, setModalVersion] = useState(0);
   const [committedSourceId, setCommittedSourceId] = useState<string | null>(null);
 
@@ -2103,52 +2058,40 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
   }).trim();
 
   const handleUpdateUserId = userIdForm.handleSubmit(async (data) => {
-    if (requestRef.current || committedSourceId === userId) return;
+    if (committedSourceId === userId) return;
     const request = {
       userId,
       username,
       newUserId: data.newUserId.trim(),
     };
 
-    // Mutation state reaches React after this event. Claim the exact old/new pair synchronously
-    // so click + Enter cannot launch two identity migrations in the same tick.
-    requestRef.current = request;
-    setIsPending(true);
-    try {
-      const result = await updateUserIdMutation.mutateAsync({
-        userId: request.userId,
-        newUserId: request.newUserId,
-      });
-      if (requestRef.current !== request) return;
-
-      showMutationToast(result);
-      if (!result.success) return;
-
-      // The old identity no longer exists. Suppress this stale action and close the confirmation
-      // before cache/network work; every later move requires a fresh profile and confirmation.
-      setCommittedSourceId(request.userId);
-      setModalVersion((version) => version + 1);
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({ userId: request.userId }),
-        utils.profile.getPublicUser.invalidate({ userId: request.newUserId }),
-        utils.profile.getPublicUsers.invalidate(),
-      ]);
-      router.replace(`/userid/${encodeURIComponent(request.newUserId)}`);
-    } catch (error) {
-      // Non-transient tRPC errors are reported by the global mutation handler. Transient errors
-      // are locally actionable and retain the exact old/new pair in the open form for retry.
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: "Could not update the user ID. Check your connection and try again.",
+    await userIdFlight.run(request, async () => {
+      try {
+        const result = await updateUserIdMutation.mutateAsync({
+          userId: request.userId,
+          newUserId: request.newUserId,
         });
+        showMutationToast(result);
+        if (!result.success) return;
+
+        // The old identity no longer exists. Suppress this stale action and close the confirmation
+        // before cache/network work; every later move requires a fresh profile and confirmation.
+        setCommittedSourceId(request.userId);
+        setModalVersion((version) => version + 1);
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({ userId: request.userId }),
+          utils.profile.getPublicUser.invalidate({ userId: request.newUserId }),
+          utils.profile.getPublicUsers.invalidate(),
+        ]);
+        router.replace(`/userid/${encodeURIComponent(request.newUserId)}`);
+      } catch (error) {
+        // The exact old/new pair stays in the open form for a retry.
+        showRetryableErrorToast(
+          error,
+          "Could not update the user ID. Check your connection and try again.",
+        );
       }
-    } finally {
-      if (requestRef.current === request) {
-        requestRef.current = null;
-        setIsPending(false);
-      }
-    }
+    });
   });
 
   if (committedSourceId === userId) return null;
@@ -2679,11 +2622,9 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [assignment, setAssignment] = useState<BadgeAssignmentSnapshot | null>(null);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const [assignmentPending, setAssignmentPending] = useState(false);
   const [assignmentNeedsRetry, setAssignmentNeedsRetry] = useState(false);
   const [removal, setRemoval] = useState<BadgeRemovalSnapshot | null>(null);
   const [removalOpen, setRemovalOpen] = useState(false);
-  const [removalPending, setRemovalPending] = useState(false);
   const [removalNeedsRetry, setRemovalNeedsRetry] = useState(false);
   const [removedAssignments, setRemovedAssignments] = useState<Set<string>>(
     () => new Set(),
@@ -2691,8 +2632,10 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   const [optimisticBadges, setOptimisticBadges] = useState<
     Map<string, Pick<Badge, "id" | "name" | "image">>
   >(() => new Map());
-  const assignmentRef = useRef<BadgeAssignmentSnapshot | null>(null);
-  const removalRef = useRef<BadgeRemovalSnapshot | null>(null);
+  const assignmentFlight = useSingleFlight<BadgeAssignmentSnapshot>();
+  const removalFlight = useSingleFlight<BadgeRemovalSnapshot>();
+  const assignmentPending = assignmentFlight.isPending;
+  const removalPending = removalFlight.isPending;
   const profileIdentityRef = useRef({ userId, username });
   profileIdentityRef.current = { userId, username };
 
@@ -2735,14 +2678,14 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   useEffect(() => {
     // A tab instance can be reused while navigating between profiles. Never let an unsubmitted
     // choice from the old profile become an assignment to the new one.
-    if (!assignmentRef.current) {
+    if (!assignmentFlight.current()) {
       setAssignment(null);
       setAssignmentOpen(false);
       setAssignmentNeedsRetry(false);
     }
     setPopoverOpen(false);
     setOptimisticBadges(new Map());
-    if (!removalRef.current) {
+    if (!removalFlight.current()) {
       setRemoval(null);
       setRemovalOpen(false);
       setRemovalNeedsRetry(false);
@@ -2751,13 +2694,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   }, [userId, username]);
 
   const openBadgeAssignment = (badgeId: string) => {
-    if (
-      assignmentPending ||
-      assignmentRef.current ||
-      removalPending ||
-      removalRef.current
-    )
-      return;
+    if (assignmentFlight.current() || removalFlight.current()) return;
     const selectedBadge = allBadges?.find((entry) => entry.id === badgeId);
     if (!selectedBadge) return;
 
@@ -2774,7 +2711,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   };
 
   const closeBadgeAssignment = () => {
-    if (assignmentPending || assignmentRef.current) return;
+    if (assignmentFlight.current()) return;
     setAssignmentOpen(false);
     setAssignment(null);
     setAssignmentNeedsRetry(false);
@@ -2782,70 +2719,51 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
 
   const confirmBadgeAssignment = async () => {
     const target = assignment;
-    // Mutation state updates on the next render; this ref closes the click/Enter same-tick gap.
-    if (!target || assignmentRef.current || assignmentPending) return;
+    if (!target) return;
 
-    assignmentRef.current = target;
-    setAssignmentPending(true);
-    try {
-      const result = await insertUserBadge.mutateAsync({
-        userId: target.userId,
-        badgeId: target.badgeId,
-      });
-      if (assignmentRef.current !== target) return;
-
-      if (!result.success) return showMutationToast(result);
-
-      showMutationToast(result);
-      if (
-        profileIdentityRef.current.userId === target.userId &&
-        profileIdentityRef.current.username === target.username
-      ) {
-        setOptimisticBadges((previous) => {
-          const next = new Map(previous);
-          next.set(target.badgeId, {
-            id: target.badgeId,
-            name: target.badgeName,
-            image: target.badgeImage,
-          });
-          return next;
+    await assignmentFlight.run(target, async () => {
+      try {
+        const result = await insertUserBadge.mutateAsync({
+          userId: target.userId,
+          badgeId: target.badgeId,
         });
-      }
-      setAssignmentOpen(false);
-      setAssignment(null);
-      setAssignmentNeedsRetry(false);
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-        utils.logs.getContentChanges.invalidate(),
-      ]);
-    } catch (error) {
-      // The endpoint has no replay key, so block another assignment until the profile is checked.
-      if (assignmentRef.current === target) {
-        setAssignmentNeedsRetry(true);
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message:
-              "The assignment outcome is unknown. Refresh the profile before trying again.",
+        if (!result.success) return showMutationToast(result);
+
+        showMutationToast(result);
+        if (
+          profileIdentityRef.current.userId === target.userId &&
+          profileIdentityRef.current.username === target.username
+        ) {
+          setOptimisticBadges((previous) => {
+            const next = new Map(previous);
+            next.set(target.badgeId, {
+              id: target.badgeId,
+              name: target.badgeName,
+              image: target.badgeImage,
+            });
+            return next;
           });
         }
+        setAssignmentOpen(false);
+        setAssignment(null);
+        setAssignmentNeedsRetry(false);
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+          utils.logs.getContentChanges.invalidate(),
+        ]);
+      } catch (error) {
+        // The endpoint has no replay key, so block another assignment until the profile is checked.
+        setAssignmentNeedsRetry(true);
+        showRetryableErrorToast(
+          error,
+          "The assignment outcome is unknown. Refresh the profile before trying again.",
+        );
       }
-    } finally {
-      if (assignmentRef.current === target) {
-        assignmentRef.current = null;
-        setAssignmentPending(false);
-      }
-    }
+    });
   };
 
   const openBadgeRemoval = (entry: UserBadge & { badge: Badge }) => {
-    if (
-      removalPending ||
-      removalRef.current ||
-      assignmentPending ||
-      assignmentRef.current
-    )
-      return;
+    if (removalFlight.current() || assignmentFlight.current()) return;
 
     setRemoval({
       userId,
@@ -2861,7 +2779,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
   };
 
   const closeBadgeRemoval = () => {
-    if (removalPending || removalRef.current) return;
+    if (removalFlight.current()) return;
     setRemovalOpen(false);
     setRemoval(null);
     setRemovalNeedsRetry(false);
@@ -2869,59 +2787,45 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
 
   const confirmBadgeRemoval = async () => {
     const target = removal;
-    // React mutation state is not synchronous. The ref prevents a click and Enter in the same
-    // event turn from issuing the same destructive request twice.
-    if (!target || removalRef.current || removalPending) return;
+    if (!target) return;
 
-    removalRef.current = target;
-    setRemovalPending(true);
-    try {
-      const result = await removeUserBadge.mutateAsync({
-        userId: target.userId,
-        badgeId: target.badgeId,
-      });
-      if (removalRef.current !== target) return;
-
-      if (!result.success) {
-        setRemovalNeedsRetry(true);
-        return showMutationToast(result);
-      }
-
-      showMutationToast(result);
-      if (
-        profileIdentityRef.current.userId === target.userId &&
-        profileIdentityRef.current.username === target.username
-      ) {
-        setRemovedAssignments((previous) => {
-          const next = new Set(previous);
-          next.add(target.assignmentKey);
-          return next;
+    await removalFlight.run(target, async () => {
+      try {
+        const result = await removeUserBadge.mutateAsync({
+          userId: target.userId,
+          badgeId: target.badgeId,
         });
-      }
-      setRemovalOpen(false);
-      setRemoval(null);
-      setRemovalNeedsRetry(false);
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-        utils.logs.getContentChanges.invalidate(),
-      ]);
-    } catch (error) {
-      if (removalRef.current === target) {
-        setRemovalNeedsRetry(true);
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message:
-              "The removal outcome is unknown. Refresh the profile before trying again.",
+        if (!result.success) {
+          setRemovalNeedsRetry(true);
+          return showMutationToast(result);
+        }
+
+        showMutationToast(result);
+        if (
+          profileIdentityRef.current.userId === target.userId &&
+          profileIdentityRef.current.username === target.username
+        ) {
+          setRemovedAssignments((previous) => {
+            const next = new Set(previous);
+            next.add(target.assignmentKey);
+            return next;
           });
         }
+        setRemovalOpen(false);
+        setRemoval(null);
+        setRemovalNeedsRetry(false);
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({ userId: target.userId }),
+          utils.logs.getContentChanges.invalidate(),
+        ]);
+      } catch (error) {
+        setRemovalNeedsRetry(true);
+        showRetryableErrorToast(
+          error,
+          "The removal outcome is unknown. Refresh the profile before trying again.",
+        );
       }
-    } finally {
-      if (removalRef.current === target) {
-        removalRef.current = null;
-        setRemovalPending(false);
-      }
-    }
+    });
   };
 
   const currentBadgeIds = new Set(currentBadges.map((entry) => entry.badgeId));
@@ -2949,12 +2853,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
             <Popover
               open={popoverOpen}
               onOpenChange={(open) => {
-                if (
-                  !assignmentPending &&
-                  !assignmentRef.current &&
-                  !removalPending &&
-                  !removalRef.current
-                )
+                if (!assignmentFlight.current() && !removalFlight.current())
                   setPopoverOpen(open);
               }}
             >
@@ -3240,60 +3139,48 @@ const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
   onRemoved,
 }) => {
   const utils = api.useUtils();
-  const inFlightRef = useRef<ReferralRemovalRequest | null>(null);
+  const removalFlight = useSingleFlight<ReferralRemovalRequest>();
+  const isRemoving = removalFlight.isPending;
   const [retryRequest, setRetryRequest] = useState<ReferralRemovalRequest | null>(null);
-  const [isRemoving, setIsRemoving] = useState(false);
   const [modalVersion, setModalVersion] = useState(0);
   const deleteReferral = api.staff.deleteReferral.useMutation({
     meta: { handlesTransportError: true },
   });
 
   const handleRemove = async () => {
-    if (inFlightRef.current) return;
     const request: ReferralRemovalRequest = {
       userId: recruit.userId,
       expectedRecruiterId: recruiterId,
     };
 
-    // Mutation state updates after this event. Claim the exact relationship synchronously so a
-    // double click cannot submit two destructive requests in the same tick.
-    inFlightRef.current = request;
-    setIsRemoving(true);
-    try {
-      const result = await deleteReferral.mutateAsync({ userId: request.userId });
-      if (inFlightRef.current !== request) return;
-      if (!result.success) {
+    await removalFlight.run(request, async () => {
+      try {
+        const result = await deleteReferral.mutateAsync({ userId: request.userId });
+        if (!result.success) {
+          showMutationToast(result);
+          setRetryRequest(request);
+          return;
+        }
+        // The commit is authoritative. Remove only this captured row before cache/network work so
+        // a slow or stale refresh cannot expose the destructive action for a second click.
         showMutationToast(result);
+        setRetryRequest(null);
+        onRemoved(request.userId);
+        setModalVersion((version) => version + 1);
+        void Promise.allSettled([
+          utils.profile.getPublicUser.invalidate({
+            userId: request.expectedRecruiterId,
+          }),
+          utils.profile.getPublicUsers.invalidate(),
+        ]);
+      } catch (error) {
         setRetryRequest(request);
-        return;
+        showRetryableErrorToast(
+          error,
+          "The referral response was not confirmed. Refresh before trying again.",
+        );
       }
-      // The commit is authoritative. Remove only this captured row before cache/network work so
-      // a slow or stale refresh cannot expose the destructive action for a second click.
-      showMutationToast(result);
-      setRetryRequest(null);
-      onRemoved(request.userId);
-      setModalVersion((version) => version + 1);
-      void Promise.allSettled([
-        utils.profile.getPublicUser.invalidate({
-          userId: request.expectedRecruiterId,
-        }),
-        utils.profile.getPublicUsers.invalidate(),
-      ]);
-    } catch (error) {
-      setRetryRequest(request);
-      if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message:
-            "The referral response was not confirmed. Refresh before trying again.",
-        });
-      }
-    } finally {
-      if (inFlightRef.current === request) {
-        inFlightRef.current = null;
-        setIsRemoving(false);
-      }
-    }
+    });
   };
 
   return (
