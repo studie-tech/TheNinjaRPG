@@ -56,6 +56,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserNindo } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { usePendingIds } from "@/hooks/usePendingIds";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import AvatarImage from "@/layout/Avatar";
 import BanInfo from "@/layout/BanInfo";
@@ -212,15 +213,9 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   );
   const [showAutoAttackModal, setShowAutoAttackModal] = useState<boolean>(false);
 
-  // Keep kick progress scoped to the affected member so other rows remain usable.
-  // The ref closes the brief gap before state re-renders and prevents double submits.
-  const kickingMemberIdsRef = useRef<Set<string>>(new Set());
-  const [kickingMemberIds, setKickingMemberIds] = useState<Set<string>>(new Set());
-
-  // Promotion is also target-scoped: one member can show progress without
-  // blocking the rest of the roster. The ref prevents rapid duplicate submits.
-  const promotingMemberIdsRef = useRef<Set<string>>(new Set());
-  const [promotingMemberIds, setPromotingMemberIds] = useState<Set<string>>(new Set());
+  // Kicks and promotions are scoped to one member so other rows remain usable.
+  const kicks = usePendingIds();
+  const promotions = usePendingIds();
 
   // Leaving is independent from member management and only blocks its own control.
   // The ref closes the gap before the mutation pending state reaches the UI.
@@ -229,28 +224,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   // Disbanding only conflicts with leaving the same squad. Keep a synchronous
   // guard alongside the rendered pending state to close the pre-render gap.
   const disbandPendingRef = useRef(false);
-
-  const setMemberKickPending = (memberId: string, pending: boolean) => {
-    const next = new Set(kickingMemberIdsRef.current);
-    if (pending) {
-      next.add(memberId);
-    } else {
-      next.delete(memberId);
-    }
-    kickingMemberIdsRef.current = next;
-    setKickingMemberIds(next);
-  };
-
-  const setMemberPromotionPending = (memberId: string, pending: boolean) => {
-    const next = new Set(promotingMemberIdsRef.current);
-    if (pending) {
-      next.add(memberId);
-    } else {
-      next.delete(memberId);
-    }
-    promotingMemberIdsRef.current = next;
-    setPromotingMemberIds(next);
-  };
 
   // Mutations
   const onSuccess = async (data: BaseServerResponse) => {
@@ -269,15 +242,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   });
   const { mutate: kick } = api.anbu.kickMember.useMutation({
     onSuccess,
-    onSettled: (_data, _error, variables) => {
-      setMemberKickPending(variables.memberId, false);
-    },
+    onSettled: (_data, _error, variables) => kicks.end(variables.memberId),
   });
   const { mutate: promote } = api.anbu.promoteMember.useMutation({
     onSuccess,
-    onSettled: (_data, _error, variables) => {
-      setMemberPromotionPending(variables.memberId, false);
-    },
+    onSettled: (_data, _error, variables) => promotions.end(variables.memberId),
   });
   const { mutate: upgradeEspionage, isPending: isUpgradingEspionage } =
     api.anbu.purchaseEspionageUpgrade.useMutation({ onSuccess });
@@ -314,15 +283,11 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   const currentImage = useWatch({ control: renameForm.control, name: "image" });
 
   const kickMember = (memberId: string) => {
-    if (kickingMemberIdsRef.current.has(memberId)) return;
-    setMemberKickPending(memberId, true);
-    kick({ squadId, memberId });
+    if (kicks.begin(memberId)) kick({ squadId, memberId });
   };
 
   const promoteMember = (memberId: string) => {
-    if (promotingMemberIdsRef.current.has(memberId)) return;
-    setMemberPromotionPending(memberId, true);
-    promote({ squadId, memberId });
+    if (promotions.begin(memberId)) promote({ squadId, memberId });
   };
 
   const leaveSquad = () => {
@@ -346,8 +311,8 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
 
   // Adjust members for table
   const members = squad.members.map((member) => {
-    const isKickingMember = kickingMemberIds.has(member.userId);
-    const isPromotingMember = promotingMemberIds.has(member.userId);
+    const isKickingMember = kicks.ids.has(member.userId);
+    const isPromotingMember = promotions.ids.has(member.userId);
     const isMemberActionPending = isKickingMember || isPromotingMember;
 
     return {
