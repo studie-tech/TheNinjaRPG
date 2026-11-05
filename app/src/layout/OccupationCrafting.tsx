@@ -640,13 +640,19 @@ export default function OccupationCrafting() {
                         <p className="mb-2 text-muted-foreground text-sm">
                           Only crystals compatible with{" "}
                           <strong>{selectedImbuableItem.item?.itemType}</strong> items
-                          are shown.
+                          are shown. PvE-only crystals require a PvE-only item.
                         </p>
                         <ActionSelector
                           items={crystals
                             .filter((userItem) => {
                               const crystal = userItem.item;
                               if (!crystal) return false;
+                              if (
+                                crystal.battleUsageType === "PVE" &&
+                                selectedImbuableItem.item?.battleUsageType !== "PVE"
+                              ) {
+                                return false;
+                              }
 
                               const alreadyOnItem =
                                 selectedImbuableItem.imbuements?.some(
