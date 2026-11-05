@@ -661,7 +661,7 @@ export default function CombatPage() {
     toggleAutoCombat,
   ]);
 
-  /** Focus drops labels while retaining action selection and editable hotkeys. */
+  /** Both layouts share action selection, editable hotkeys and the small-icon setting. */
   const renderActions = useCallback(
     (focus = false) => {
       if (!isInBattle || !battle || isAutoCombatActive) return null;

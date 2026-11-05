@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as contentImage from "@/layout/ContentImage";
 import { ActionSelector } from "@/layout/CombatActions";
+import { battleActionGrid } from "@/libs/combat/actionGrid";
 import * as userContext from "@/utils/UserContext";
 
 const browserGlobals = ["Event", "CustomEvent"] as const;
@@ -36,16 +37,26 @@ const fireball = {
   actionCostPerc: 60,
 };
 
-const renderActions = (combatMode: boolean) =>
-  render(
+const renderActions = (combatMode: boolean, small = true) => {
+  const layout = battleActionGrid({ focus: true, small });
+  return render(
     <ActionSelector
       items={[fireball] as never}
       showBgColor={false}
-      showLabels={false}
+      showLabels={layout.labels}
+      gridClassNameOverwrite={layout.grid}
+      aspectRatioClass={layout.aspect}
       combatMode={combatMode}
       onClick={vi.fn()}
     />,
   );
+};
+
+it.each([false, true])("shows battle focus names unless small icons are enabled (%s)", (small) => {
+  renderActions(true, small);
+  expect(screen.queryByText("Fireball") !== null).toBe(!small);
+  expect(screen.queryByRole("tooltip")).toBeNull();
+});
 
 it("names a battle action, its target, range and cost on hover", async () => {
   renderActions(true);

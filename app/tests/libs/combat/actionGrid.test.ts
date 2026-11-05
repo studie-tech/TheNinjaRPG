@@ -14,7 +14,7 @@ it("follows the small-icon setting in the game layout", () => {
   });
 });
 
-it("follows the small-icon setting in battle focus too, without labels", () => {
+it("follows the small-icon setting in battle focus, including action names", () => {
   expect(battleActionGrid({ focus: true, small: true })).toEqual({
     grid: "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1",
     aspect: "aspect-square",
@@ -23,6 +23,6 @@ it("follows the small-icon setting in battle focus too, without labels", () => {
   expect(battleActionGrid({ focus: true, small: false })).toEqual({
     grid: "grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-1",
     aspect: "aspect-square",
-    labels: false,
+    labels: true,
   });
 });

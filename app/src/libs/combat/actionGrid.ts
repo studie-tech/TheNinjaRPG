@@ -1,6 +1,6 @@
 /**
- * How the battle's action icons are laid out. The small-icon setting applies in both the game
- * layout and battle focus; focus never shows labels, so its larger size only grows the icons.
+ * How the battle's action icons are laid out. Both layouts hide names only when the
+ * small-icon setting is enabled; battle focus keeps its icons in a denser grid.
  */
 export const battleActionGrid = ({
   focus,
@@ -15,7 +15,7 @@ export const battleActionGrid = ({
         ? "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1"
         : "grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-1",
       aspect: "aspect-square",
-      labels: false,
+      labels: !small,
     };
   }
   return small
