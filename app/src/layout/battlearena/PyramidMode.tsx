@@ -11,7 +11,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
 import { QuestTeams } from "@/layout/QuestTeams";
-import { type TowerState, towerState } from "@/libs/battleArena";
+import { orderTowers, type TowerState, towerState } from "@/libs/battleArena";
 import { getRewardArray } from "@/libs/objectives";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";
 import { formatQuestEntryCost } from "@/libs/questRun";
@@ -92,10 +92,7 @@ export function PyramidMode() {
   const activeTracker = activeQuest
     ? userData.questData?.find((q) => q.id === activeQuest.quest.id)
     : undefined;
-  const ordered = [
-    ...towers.filter((tower) => tower.id === activeTower?.id),
-    ...towers.filter((tower) => tower.id !== activeTower?.id),
-  ];
+  const ordered = orderTowers(towers, activeTower);
   const itemName = (itemId: string, fallback: string) =>
     itemNames?.find((item) => item.id === itemId)?.name ?? fallback;
   const start = (questId: string) =>
@@ -168,11 +165,15 @@ export function PyramidMode() {
               disabled={state.kind !== "open" || isPending}
               onClick={needsConfirm ? undefined : () => start(tower.id)}
             >
-              <Gamepad2 className="mr-2 h-5 w-5" aria-hidden />
+              {state.kind === "missingItems" ? (
+                <Lock className="mr-2 h-5 w-5" aria-hidden />
+              ) : (
+                <Gamepad2 className="mr-2 h-5 w-5" aria-hidden />
+              )}
               {state.kind === "busy"
                 ? `Finish ${state.climbing} first`
                 : state.kind === "missingItems"
-                  ? `Needs ${state.missing} more`
+                  ? `Missing ${state.missing} ${state.missing === 1 ? "item" : "items"}`
                   : "Climb tower"}
             </Button>
           );
