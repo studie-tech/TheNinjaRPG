@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { getDefaultStore } from "jotai";
+import { TUTORIAL_STEPS_COUNT } from "@/drizzle/constants";
 import { chatPanelAtom } from "@/libs/chatPanel";
 import { type ReactNode, useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -25,6 +26,8 @@ function testMocks() {
   const globals = globalThis as typeof globalThis & { __tutorialAssistantMocks?: {
     client: QueryClient;
     disable: ReturnType<typeof vi.fn<() => Promise<{ success: boolean; message: string }>>>;
+    finish: ReturnType<typeof vi.fn<(input: { step: number }) => void>>;
+    finished?: (data: { success: boolean; userPatch?: { tutorialStep: number } }) => Promise<void>;
     updateUser: ReturnType<typeof vi.fn<(patch: UserPatch) => Promise<void>>>;
     rewardHook: ReturnType<typeof vi.fn>;
     step: TutorialStepConfig;
@@ -35,6 +38,7 @@ function testMocks() {
   globals.__tutorialAssistantMocks ??= {
     client: new QueryClient(),
     disable: vi.fn(async () => ({ success: true, message: "Saved" })),
+    finish: vi.fn(),
     updateUser: vi.fn(async (patch: UserPatch) => { await updateUserCache(testMocks().client, key, patch); }),
     rewardHook: vi.fn(),
     step: { id: "welcome", chapter: "student", title: "Welcome", description: "Welcome", page: "/profile" },
@@ -48,7 +52,13 @@ vi.mock("@/app/_trpc/client", () => ({ api: {
     cancel: () => testMocks().client.cancelQueries({ queryKey: key, exact: true }),
     setData: (_input: unknown, updater: (old: ReturnType<typeof profile> | undefined) => ReturnType<typeof profile> | undefined) => testMocks().client.setQueryData(key, updater),
   } } }),
-  profile: { updatePreferences: { useMutation: () => ({ mutateAsync: testMocks().disable }) } },
+  profile: {
+    updatePreferences: { useMutation: () => ({ mutateAsync: testMocks().disable }) },
+    updateTutorialStep: { useMutation: ({ onSuccess }: { onSuccess: NonNullable<ReturnType<typeof testMocks>["finished"]> }) => {
+      testMocks().finished = onSuccess;
+      return { mutate: testMocks().finish };
+    } },
+  },
   gameAsset: { getSceneAssets: { useQuery: () => ({ data: [] }) } },
 } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
@@ -312,6 +322,38 @@ describe("TutorialAssistant disable reconciliation", () => {
     // The account switch closes the confirmation; only the panel's skip control remains.
     expect(view.queryByRole("dialog")).toBeNull();
     expect(view.getByRole("button", { name: "Skip tutorial" })).toBeTruthy();
+  });
+});
+
+describe("TutorialAssistant completion sync", () => {
+  const assistant = <TutorialAssistant sidebarBreakpoint={768} rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />;
+  const graduate = (rank: string) => {
+    const { userData } = profile();
+    mocks.client.setQueryData(key, { userData: { ...userData, rank, userQuests: [] } });
+  };
+  const collapsed = () => localStorage.setItem("activityDockOpen:actor", "false");
+
+  it("finishes the tutorial of a graduate whose lesson is collapsed", async () => {
+    graduate("GENIN");
+    collapsed();
+    render(assistant);
+    await waitFor(() => expect(mocks.finish).toHaveBeenCalledWith({ step: TUTORIAL_STEPS_COUNT }));
+    expect(mocks.finish).toHaveBeenCalledTimes(1);
+    await act(() => mocks.finished?.({ success: true, userPatch: { tutorialStep: TUTORIAL_STEPS_COUNT } }));
+    expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData.tutorialStep).toBe(TUTORIAL_STEPS_COUNT);
+  });
+
+  it("leaves a student with a collapsed lesson on their step", () => {
+    graduate("STUDENT");
+    collapsed();
+    render(assistant);
+    expect(mocks.finish).not.toHaveBeenCalled();
+  });
+
+  it("leaves the guided finish to the assistant while the lesson is on screen", () => {
+    graduate("GENIN");
+    render(assistant);
+    expect(mocks.finish).not.toHaveBeenCalled();
   });
 });
 

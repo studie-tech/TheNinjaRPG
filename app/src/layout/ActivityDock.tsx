@@ -27,7 +27,14 @@ import { useUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 
 /** A collapsible home for lessons and active quests, opposite the chat launcher. */
-export function ActivityDock({ children }: { children: ReactNode }) {
+export function ActivityDock({
+  children,
+  hiddenLesson,
+}: {
+  children: ReactNode;
+  /** Rendered in place of `children` while the lesson is out of view. */
+  hiddenLesson?: ReactNode;
+}) {
   const { data: user } = useUserData();
   const [chat, setChat] = useAtom(chatPanelAtom);
   const { swapSides, setSwapSides } = useActivityDock();
@@ -154,6 +161,7 @@ export function ActivityDock({ children }: { children: ReactNode }) {
           Activity
         </Button>
       )}
+      {!(open && tab === "tutorial") && hiddenLesson}
     </aside>
   );
 }

@@ -16,6 +16,7 @@ import {
   getStarterQuestProgress,
   getTutorialBattleReturnPage,
   getTutorialCatchUpStepIndex,
+  hasOutgrownTutorial,
   getTutorialChapterProgress,
   getTutorialCombatGuidance,
   getTutorialHighlightedQuestId,
@@ -499,6 +500,28 @@ describe("starter quest progress", () => {
     expect(getStarterQuestProgress({ userQuests: [activeQuest], questData: [] })).toBe(
       undefined,
     );
+  });
+});
+
+describe("hasOutgrownTutorial", () => {
+  const graduate = { tutorialOn: true, tutorialStep: 0, rank: "GENIN", userQuests: [] };
+  const exam = { questId: TUTORIAL_GENIN_EXAM_QUEST_ID, endAt: null, completed: 0 };
+
+  it("is true for a running tutorial whose player already graduated", () => {
+    expect(hasOutgrownTutorial(graduate)).toBe(true);
+  });
+
+  it("waits for the exam quest and for quest data", () => {
+    expect(hasOutgrownTutorial({ ...graduate, rank: "STUDENT" })).toBe(false);
+    expect(hasOutgrownTutorial({ ...graduate, userQuests: [exam] })).toBe(false);
+    expect(hasOutgrownTutorial({ ...graduate, userQuests: undefined })).toBe(false);
+  });
+
+  it("leaves a finished or switched-off tutorial alone", () => {
+    expect(hasOutgrownTutorial({ ...graduate, tutorialOn: false })).toBe(false);
+    expect(
+      hasOutgrownTutorial({ ...graduate, tutorialStep: TUTORIAL_STEPS_COUNT }),
+    ).toBe(false);
   });
 });
 
