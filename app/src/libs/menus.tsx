@@ -26,6 +26,7 @@ import { type ReactNode, useMemo } from "react";
 import type { SupportTicketStatus } from "@/drizzle/constants";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Image from "@/layout/Image";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import {
   chatMentionsAtom,
   chatTavernActivityAtom,
@@ -108,6 +109,7 @@ export const useGameMenu = () => {
     village: user.village,
     isOutlaw: user.isOutlaw,
     status: user.status,
+    autoWakeUp: user.autoWakeUp,
     chatMuted: user.chatMuted,
     mutedConversationIds: user.mutedConversationIds,
   }));
@@ -129,6 +131,7 @@ export const useGameMenu = () => {
   const newInTavern = countTavernUnread(userData, mentions, tavernActivity);
 
   const status = userData?.status;
+  const autoWakeUp = userData?.autoWakeUp;
   const systems = useMemo(() => {
     const systems: NavBarDropdownLink[] = [
       {
@@ -219,7 +222,7 @@ export const useGameMenu = () => {
       const inBattle = status === "BATTLE";
       const inHospital = status === "HOSPITALIZED";
       const inBed = status === "ASLEEP";
-      const notAwake = inBattle || inHospital || inBed;
+      const notAwake = !canAttemptAwakeAction({ status, autoWakeUp });
       systems.forEach((system) => {
         if (system.requireAwake && notAwake) {
           if (inBattle) system.href = "/combat";
@@ -230,7 +233,15 @@ export const useGameMenu = () => {
     }
 
     return systems;
-  }, [newInInbox, newInReports, newInSupport, newInProfile, newInTavern, status]);
+  }, [
+    newInInbox,
+    newInReports,
+    newInSupport,
+    newInProfile,
+    newInTavern,
+    status,
+    autoWakeUp,
+  ]);
 
   const { sectorVillage: sector } = useSectorVillage(userData);
 

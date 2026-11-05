@@ -35,6 +35,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
 import {
   actionPointsAfterAction,
@@ -171,7 +172,7 @@ export default function CombatPage() {
       results.curStamina < userData.maxStamina ||
       results.curChakra < userData.maxChakra);
   const canAffordArenaHealing = (userData?.money ?? 0) >= BATTLE_ARENA_HEAL_COST;
-  const canHealFromCurrentStatus = userData?.status === "AWAKE";
+  const canHealFromCurrentStatus = canAttemptAwakeAction(userData);
   const showNextMatch =
     results?.outcome === "Won" &&
     (battle?.battleType === "ARENA" || battle?.battleType === "TRAINING");

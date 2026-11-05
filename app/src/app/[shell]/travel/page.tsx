@@ -783,9 +783,9 @@ function Travel() {
     (sector: number | undefined) =>
       Number.isFinite(sector) &&
       sector !== userData?.sector &&
-      userData?.status === "AWAKE" &&
+      canAttemptAwakeAction(userData) &&
       !isStartingTravel,
-    [userData?.sector, userData?.status, isStartingTravel],
+    [userData?.sector, userData?.status, userData?.autoWakeUp, isStartingTravel],
   );
 
   // Stable identity for the globe click path: MapComponent is memoized to avoid

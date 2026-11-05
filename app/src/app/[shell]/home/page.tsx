@@ -51,6 +51,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getHomeRooms } from "@/libs/homeProperty";
 import {
   byItemName,
@@ -488,7 +489,7 @@ function Residence() {
                 <Button variant="outline" asChild>
                   <Link href="/pets">Open sanctuary</Link>
                 </Button>
-              ) : userData.status === "AWAKE" && !userData.battleId ? (
+              ) : canAttemptAwakeAction(userData) && !userData.battleId ? (
                 <Button variant="outline" asChild>
                   <Link href={`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`}>
                     Travel to Wake Island

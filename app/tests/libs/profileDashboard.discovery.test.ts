@@ -187,13 +187,23 @@ describe("dashboard auto-travel destinations", () => {
     expect(dashboardContentHref(entry!)).toBe("/travel?sector=40");
   });
 
-  it.each(["ASLEEP", "BATTLE", "HOSPITALIZED", "TRAVEL", "QUEUED"] as const)("blocks auto-travel while %s", (status) => {
-    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status }));
+  it.each(["ASLEEP", "BATTLE", "TRAVEL", "QUEUED"] as const)("blocks auto-travel while %s", (status) => {
+    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status, autoWakeUp: false }));
     expect(entry?.availabilityReason).toBe("Travel to Global ANBU HQ to begin. You must be awake to travel");
   });
 
   it.each(["AWAKE", "ASLEEP"] as const)("preserves the ban restriction for remote content while %s", (status) => {
-    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status, isBanned: true }));
+    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status, isBanned: true, autoWakeUp: false }));
     expect(entry?.availabilityReason).toBe(`Travel to Global ANBU HQ to begin. You are banned and cannot start quests${status !== "AWAKE" ? ". You must be awake to travel" : ""}`);
   });
 });
+
+for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["BATTLE", true, false], ["TRAVEL", true, false], ["QUEUED", true, false]] as const) {
+  it(`dashboard content travel ${status} auto=${autoWakeUp}`, () => {
+    const actor = { ...user({ sector: 12, status }), autoWakeUp };
+    const [entry] = resolveDashboardContent([candidate()], actor);
+    expect(entry).toBeDefined();
+    expect(!entry!.availabilityReason).toBe(expected);
+    expect(dashboardContentHref(entry!)).toBe(`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`);
+  });
+}

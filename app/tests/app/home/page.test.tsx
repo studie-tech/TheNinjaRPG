@@ -299,7 +299,7 @@ it.each([
   { sector: 1, status: "AWAKE", battleId: "battle", href: null, label: "Travel to Wake Island" },
 ])("offers location-aware sanctuary navigation for $status in sector $sector with battle $battleId", async ({ sector, status, battleId, href, label }) => {
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({
-    userData: { homeType: "NONE", status, battleId, money: 1000, sector, village: { sector } },
+    userData: { homeType: "NONE", status, autoWakeUp: false, battleId, money: 1000, sector, village: { sector } },
     access: true,
     ownVillage: true,
   } as never);
@@ -874,4 +874,15 @@ function mountHome() {
   );
   const view = render(page());
   return { view, queryClient, rerender: () => view.rerender(page()) };
+}
+
+for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["AWAKE", false, true]] as const) {
+  it(`home sanctuary travel ${status} auto=${autoWakeUp}`, async () => {
+    vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({ userData: { userId: "home-test-user", homeType: "NONE", status, autoWakeUp, battleId: null, money: 1000, sector: 1, village: { sector: 1 } }, access: true, ownVillage: true } as never);
+    const { view, queryClient } = mountHome();
+    try {
+      await view.findByText(/Meet your first companion at the Bondkeeper Sanctuary on Wake Island/);
+      expect(!!view.queryByRole("link", { name: "Travel to Wake Island" })).toBe(expected);
+    } finally { queryClient.clear(); }
+  });
 }
