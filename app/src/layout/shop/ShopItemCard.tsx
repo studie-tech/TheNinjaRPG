@@ -51,7 +51,8 @@ export function ShopItemCard({
         >
           {rarityLabel[item.rarity]} · {typeLabel(item)}
         </span>
-        <span className="mt-1 flex">
+        {/* Room for the price and its "Need … more" line, so every card is one size. */}
+        <span className="mt-1 flex min-h-10 items-start">
           <ShopPriceTag prices={prices} wallet={wallet} silverLabel={silverLabel} />
         </span>
       </span>
