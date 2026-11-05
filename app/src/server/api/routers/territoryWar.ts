@@ -12,6 +12,7 @@ import {
 } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import { getTerritoryCompetitor, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { deleteBattleQueueMemberById } from "@/queries/clan";
 import { fetchAllGameSettings, wakeQueuedUser } from "@/queries/profile";
 import { claimBattleQueue, listQueueMembers } from "@/queries/raids";
@@ -86,9 +87,10 @@ export const territoryWarRouter = createTRPCRouter({
     .input(z.object({ eventId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
+      // Recovery needs equipment, skills and quest history from the same actor read.
       let [event, user, settings] = await Promise.all([
         findTerritoryWarById(ctx.drizzle, input.eventId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
       if (!event || event.resolvedAt || event.endsAt <= new Date())
@@ -118,8 +120,9 @@ export const territoryWarRouter = createTRPCRouter({
     .input(z.object({ teamId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
+      // Recovery settles queued training before the guarded admission.
       let [user, settings] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
       const readiness = prepareActionReadiness(user, settings);
@@ -226,7 +229,7 @@ export const territoryWarRouter = createTRPCRouter({
  */
 const joinTeam = async (
   client: DrizzleClient,
-  user: Awaited<ReturnType<typeof fetchUser>>,
+  user: Awaited<ReturnType<typeof fetchActionUser>>,
   teamId: string,
   competitorId: string,
   readiness?: ActionReadiness,

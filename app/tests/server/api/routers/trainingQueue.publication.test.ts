@@ -172,6 +172,35 @@ describeWithDatabase("Training queue atomic publication", () => {
     expect(getMasteryQueue(await readUser())).toEqual([]);
   });
 
+  it.each(["ENERGY", "MASTERY"] as const)("keeps %s removals passive and prepares recovery for additions", async (kind) => {
+    const database = await getTestDatabase();
+    const caller = callerForDatabase(trainRouter, userId, database);
+    const energy = [{ stat: "strength" as const, energy: 100 }, { stat: "offence" as const, energy: 100 }];
+    const mastery = [genjutsu, taijutsu];
+    const saved = kind === "ENERGY"
+      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: energy })
+      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: mastery });
+    expect(saved.success).toBe(true);
+    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true, regeneration: 0 }).where(eq(userData.userId, userId));
+    const removed = kind === "ENERGY"
+      ? await caller.updateEnergyTrainingQueue({ expectedEntries: energy, entries: [energy[1]!] })
+      : await caller.updateMasteryTrainingQueue({ expectedEntries: mastery, entries: [taijutsu] });
+    expect(removed.success).toBe(true);
+    expect(removed.actionNotice).toBeUndefined();
+    expect((await readUser()).status).toBe("ASLEEP");
+    const cleared = kind === "ENERGY"
+      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [energy[1]!], entries: [] })
+      : await caller.updateMasteryTrainingQueue({ expectedEntries: [taijutsu], entries: [] });
+    expect(cleared.success).toBe(true);
+    expect(cleared.actionNotice).toBeUndefined();
+    expect((await readUser()).status).toBe("ASLEEP");
+    const added = kind === "ENERGY"
+      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: energy })
+      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: mastery });
+    expect(added).toMatchObject({ success: true, actionNotice: "This action woke you up." });
+    expect((await readUser()).status).toBe("AWAKE");
+  });
+
   it("publishes an Energy entry with isolation validation in seven round trips", async () => {
     const normal = callerForDatabase(trainRouter, userId, await getTestDatabase());
     const saved = await recordQueries(() =>

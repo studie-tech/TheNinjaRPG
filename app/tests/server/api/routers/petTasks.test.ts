@@ -43,6 +43,28 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); setSystemTime(); });
 
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("offers dispatch from %s without a query-side write", async (status) => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ status, autoWakeUp: true, curHealth: 1, regenAt: new Date(Date.now() - (HOSPITAL_BASE_HEAL_SECONDS + 1) * 1000) }).where(eq(userData.userId, ownerId));
+    const caller = callerForDatabase(questsRouter, ownerId, database);
+    const { result, statements } = await recordQueries(() => caller.getPetTask({ petId }));
+    expect(result.dispatchBlockMessage).toBeNull();
+    expect(statements.every((statement) => /^select /i.test(statement))).toBe(true);
+    expect((await readOwner(database))?.status).toBe(status);
+    expect(await dispatch(database)).toMatchObject({ success: true, actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
+  });
+
+  it("keeps dispatch hints blocked for sleep opt-out and combat", async () => {
+    const database = await getTestDatabase();
+    const caller = callerForDatabase(questsRouter, ownerId, database);
+    for (const status of ["ASLEEP", "BATTLE"] as const) {
+      await database.update(userData).set({ status, autoWakeUp: false, battleId: status === "BATTLE" ? "battle" : null }).where(eq(userData.userId, ownerId));
+      expect((await caller.getPetTask({ petId })).dispatchBlockMessage).toContain("awake");
+      expect((await dispatch(database)).success).toBe(false);
+      expect((await readOwner(database))?.status).toBe(status);
+    }
+  });
+
   it("accepts a normal attempt and reserves its exact identity without paying objective rewards", async () => {
     const database = await getTestDatabase();
     const before = Date.now();

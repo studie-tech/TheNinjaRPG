@@ -6,6 +6,7 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { questsRouter } from "@/server/api/routers/quests";
 import { PetTaskDispatch, PetTasks } from "@/layout/PetTasks";
 import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
@@ -14,7 +15,7 @@ import { updateUserCache } from "@/utils/userCache";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
-let owner: { userId: string; rank: string; status: string; level: number; occupation: string; activePetId: string; battleId: string | null; petTask: unknown; isBanned: boolean; isAi: boolean };
+let owner: { userId: string; rank: string; status: string; level: number; occupation: string; activePetId: string; battleId: string | null; petTask: unknown; isBanned: boolean; isAi: boolean; autoWakeUp?: boolean };
 let task: RouterOutputs["quests"]["getPetTask"];
 let start: ReturnType<typeof vi.fn>;
 let collect: ReturnType<typeof vi.fn>;
@@ -147,3 +148,19 @@ it("merges a cancelled receipt without deleting a restarted cached attempt", asy
   expect(queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(key)?.userData).toMatchObject({ petTask: null, userQuests: [successor, unrelated] });
   expect(updateUser.mock.calls[0]![1].revision).toBe(1);
 });
+
+for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
+  it(`offers dedicated companion dispatch with recoverable ${status.toLowerCase()} status`, async () => {
+    Object.assign(owner, { status, autoWakeUp: true });
+    const pet = { id: "pet", name: "Kumo", rank: 5, artRank: 5, generationStatus: "READY", avatar: "/kumo.webp" };
+    const database = { query: { userData: { findFirst: async () => ({ ...owner, pets: [pet] }) } } };
+    task = await questsRouter.createCaller({ drizzle: database, userId: "owner" } as never).getPetTask({ petId: "pet" });
+    expect(task.dispatchBlockMessage).toBeNull();
+    const view = mount();
+    await view.findByRole("combobox", { name: "Companion contract" });
+    fireEvent.click(view.getAllByRole("button", { name: "Send companion" }).find((button) => button.tagName === "BUTTON")!);
+    const dialog = await view.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+    await waitFor(() => expect(start).toHaveBeenCalledWith({ petId: "pet", questId: "contract" }));
+  });
+}

@@ -255,14 +255,7 @@ export const findUserDataForFetchTerritoryWarUser = (
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    with: {
-      village: { with: { structures: true } },
-      clan: true,
-      bloodline: true,
-      titles: true,
-      raidBuffs: true,
-      queue: true,
-    },
+    with: { village: true, clan: true },
   });
 
 /** Build the `territoryWarScore` listing for `getCurrent`, using predicates on `warId`. */

@@ -21,6 +21,7 @@ describeWithDatabase("village membership changes", () => {
     })));
     stubProfile("fetchUpdatedUser", async () => ({
       user: await db.query.userData.findFirst({ where: eq(userData.userId, MEMBER), with: { village: true } }),
+      settings: [],
       requiresUserRefresh: false,
     }));
   });

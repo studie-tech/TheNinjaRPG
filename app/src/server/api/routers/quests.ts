@@ -1301,7 +1301,7 @@ export const questsRouter = createTRPCRouter({
             )
           : null,
         dispatchBlockMessage: petTaskDispatchBlockMessage(
-          owner,
+          actionPrerequisiteUser(owner),
           owner.pets.find((entry) => entry.id === input?.petId),
         ),
       };

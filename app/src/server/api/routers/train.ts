@@ -139,15 +139,12 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!initialUser) return errorResponse("User not found");
-      const readiness = prepareActionReadiness(initialUser, settings);
-      if (
-        readiness.error &&
-        shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-      )
-        return errorResponse(readiness.error);
-      const user = shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-        ? readiness.user
-        : initialUser;
+      // Pure removals retain the current activity without preparing recovery or settlement.
+      const readiness = shouldPrepareAction("train.updateEnergyTrainingQueue", input)
+        ? prepareActionReadiness(initialUser, settings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const result = await editTrainingQueue({
         client: ctx.drizzle,
         user,
@@ -164,14 +161,8 @@ export const trainRouter = createTRPCRouter({
             return "Queued Energy cannot exceed your capacity";
           return await trainingCaptchaMessage(ctx.drizzle, user, input.guess);
         },
-        readiness: shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-          ? readiness
-          : undefined,
-        where: [
-          shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-            ? undefined
-            : eq(userData.status, initialUser.status),
-        ],
+        readiness,
+        where: [readiness ? undefined : eq(userData.status, initialUser.status)],
         messages: {
           stale: "Your training queue changed. Please refresh and try again",
           conflict: "Your training queue changed. Please try again",
@@ -186,9 +177,7 @@ export const trainRouter = createTRPCRouter({
           requiresProgressionRefresh,
           publishedAchievementIds,
         ),
-        result.success && shouldPrepareAction("train.updateEnergyTrainingQueue", input)
-          ? readiness
-          : undefined,
+        result.success ? readiness : undefined,
         ctx.drizzle,
       );
     }),
@@ -211,15 +200,12 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!initialUser) return errorResponse("User not found");
-      const readiness = prepareActionReadiness(initialUser, settings);
-      if (
-        readiness.error &&
-        shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-      )
-        return errorResponse(readiness.error);
-      const user = shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-        ? readiness.user
-        : initialUser;
+      // Pure removals retain the current activity without preparing recovery or settlement.
+      const readiness = shouldPrepareAction("train.updateMasteryTrainingQueue", input)
+        ? prepareActionReadiness(initialUser, settings)
+        : undefined;
+      if (readiness?.error) return errorResponse(readiness.error);
+      const user = readiness?.user ?? initialUser;
       const session = getMasteryTrainingState(user, input.kind);
       const label = input.kind === "ELEMENT" ? "Elemental" : "Mastery";
       if (
@@ -256,13 +242,9 @@ export const trainRouter = createTRPCRouter({
               .find(Boolean) ?? null
           );
         },
-        readiness: shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-          ? readiness
-          : undefined,
+        readiness,
         where: [
-          shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-            ? undefined
-            : eq(userData.status, initialUser.status),
+          readiness ? undefined : eq(userData.status, initialUser.status),
           ...elementalSnapshotConditions(user),
         ],
         messages: {
@@ -279,9 +261,7 @@ export const trainRouter = createTRPCRouter({
           requiresProgressionRefresh,
           publishedAchievementIds,
         ),
-        result.success && shouldPrepareAction("train.updateMasteryTrainingQueue", input)
-          ? readiness
-          : undefined,
+        result.success ? readiness : undefined,
         ctx.drizzle,
       );
     }),
