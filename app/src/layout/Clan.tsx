@@ -88,6 +88,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import Tournament from "@/layout/Tournament";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import { WarRoom } from "@/layout/WarSystem";
+import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -616,7 +617,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   ) => {
     const canJoin =
       clan.id === userClanId &&
-      (userData?.status === "AWAKE" || leftBattleIds.has(battleId)) &&
+      (canAttemptAwakeAction(userData) || leftBattleIds.has(battleId)) &&
       !joinedBattleId;
     const crewLength = Math.max(CLAN_MPVP_MAX_USERS_PER_SIDE, queue.length);
     const empties = Array.from(

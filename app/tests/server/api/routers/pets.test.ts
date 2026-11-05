@@ -17,7 +17,7 @@ import { initialPetSpecies } from "../../../libs/pets/helpers/species";
 import { petJutsuFixture, petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertItems, insertPetSpecies, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const userId = "pet-owner";
 const petId = "owned-pet";
@@ -97,6 +97,51 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     await insertUsers([{ userId, username: "PetOwner", rank: "GENIN", sector: MAP_WAKE_ISLAND_SECTOR, status: "AWAKE", reputationPoints: 200 }]);
   });
   afterEach(() => { vi.restoreAllMocks(); PET_BATTLE_CONFIG.enabled = true; setSystemTime(); });
+
+  it.each([
+    { status: "AWAKE", autoWakeUp: true, available: true },
+    { status: "ASLEEP", autoWakeUp: true, available: true },
+    { status: "HOSPITALIZED", autoWakeUp: true, available: true },
+    { status: "HOSPITALIZED", autoWakeUp: false, available: true },
+    { status: "ASLEEP", autoWakeUp: false, available: false },
+    { status: "BATTLE", autoWakeUp: true, available: false },
+    { status: "TRAVEL", autoWakeUp: true, available: false },
+    { status: "QUEUED", autoWakeUp: true, available: false },
+  ] as const)("projects explicit companion action availability without recovering the actor: %j", async ({ status, autoWakeUp, available }) => {
+    const database = await getTestDatabase();
+    await readyPet(database, { experience: 7500 });
+    await database.update(userData).set({ status, autoWakeUp, petSlots: 2 }).where(eq(userData.userId, userId));
+    const beforeOwner = await readOwner(database);
+    const beforePet = await readPet(database);
+    const query = await recordQueries(() => callerForDatabase(petsRouter, userId, database).getPet());
+    expect(query.result).toMatchObject({ canAcquire: available, canFeed: available, canRankUp: available });
+    expect(query.statements.every((statement) => /^select /i.test(statement))).toBe(true);
+    expect(await readOwner(database)).toEqual(beforeOwner);
+    expect(await readPet(database)).toEqual(beforePet);
+  });
+
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)("preserves companion prerequisites in recovery availability for %s", async (status) => {
+    const database = await getTestDatabase();
+    await readyPet(database, { experience: 7500 });
+    await database.update(userData).set({ status, autoWakeUp: true, petSlots: 2 }).where(eq(userData.userId, userId));
+    const caller = callerForDatabase(petsRouter, userId, database);
+    expect(await caller.getPet()).toMatchObject({ canAcquire: true, canFeed: true, canRankUp: true });
+    await database.update(userData).set({ battleId: "active-battle" }).where(eq(userData.userId, userId));
+    expect(await caller.getPet()).toMatchObject({ canAcquire: false, canFeed: false, canRankUp: false });
+    await database.update(userData).set({ battleId: null, petTask: task() }).where(eq(userData.userId, userId));
+    expect(await caller.getPet()).toMatchObject({ canFeed: false, canRankUp: false, rankUpReason: expect.stringContaining("profession job") });
+    await database.update(userData).set({ petTask: null, sector: MAP_WAKE_ISLAND_SECTOR + 1 }).where(eq(userData.userId, userId));
+    expect(await caller.getPet()).toMatchObject({ canAcquire: false, unavailableReason: expect.stringContaining("Wake Island") });
+    await database.update(userData).set({ sector: MAP_WAKE_ISLAND_SECTOR, petSlots: 1 }).where(eq(userData.userId, userId));
+    expect(await caller.getPet()).toMatchObject({ canAcquire: false, unavailableReason: expect.stringContaining("collection slot") });
+    await database.update(userPet).set({ experience: 0 }).where(eq(userPet.id, petId));
+    expect(await caller.getPet()).toMatchObject({ canRankUp: false, rankUpReason: expect.stringContaining("experience") });
+    await database.update(userPet).set({ experience: 7500, lastFedAt: new Date() }).where(eq(userPet.id, petId));
+    expect(await caller.getPet()).toMatchObject({ canFeed: false });
+    await database.update(userPet).set({ lastFedAt: null, avatar: null, artRank: 0 }).where(eq(userPet.id, petId));
+    expect(await caller.getPet()).toMatchObject({ canFeed: false, canRankUp: false });
+    expect((await readOwner(database))?.status).toBe(status);
+  });
 
   it("lets only one concurrent request claim the first free companion", async () => {
     const database = await getTestDatabase();

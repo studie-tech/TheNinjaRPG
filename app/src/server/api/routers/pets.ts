@@ -31,6 +31,7 @@ import {
   type PetPaymentCurrency,
 } from "@/drizzle/constants";
 import { type UserData, type UserPet, userData, userPet } from "@/drizzle/schema";
+import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import { fetchPetArtProvider } from "@/libs/gamesettings";
 import {
   getPetAbilityCapacity,
@@ -327,6 +328,7 @@ export const petsRouter = createTRPCRouter({
       if (!user) throw serverError("NOT_FOUND", "User not found");
       const now = new Date();
       const dayKey = getUtcDayKey(now);
+      const prerequisiteUser = actionPrerequisiteUser(user);
       const capacity = getPetCollectionCapacity(user);
       const federalStatus = getUserFederalStatus(user);
       const options = getDailyPetOptions(
@@ -345,9 +347,10 @@ export const petsRouter = createTRPCRouter({
           ? "You have adopted all of today's companion species. New choices arrive at midnight UTC."
           : capacity.slots <= pets.length
             ? "Unlock another collection slot or release a companion before adopting another."
-            : acquisitionBlockMessage(user);
+            : acquisitionBlockMessage(prerequisiteUser);
       const rankUpReason = pet
-        ? (petMutationBlockMessage(user, pet) ?? petRankUpBlockMessage(pet, user))
+        ? (petMutationBlockMessage(prerequisiteUser, pet) ??
+          petRankUpBlockMessage(pet, user))
         : "Adopt a pet first.";
       const attempts = pet ? getChargedGenerationAttempts(pet) : 0;
       // A generation token is server-only; the UI needs its status and retry time instead.
@@ -376,7 +379,7 @@ export const petsRouter = createTRPCRouter({
             experience: PET_FEED_EXPERIENCE_BY_RARITY[meal.item.rarity],
           })),
         feedAvailableAt,
-        canFeed: !petFeedBlockMessage(user, pet, now),
+        canFeed: !petFeedBlockMessage(prerequisiteUser, pet, now),
         options,
         dayKey,
         optionCount: PET_OPTION_COUNTS[federalStatus],
