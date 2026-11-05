@@ -60,6 +60,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import { ShrineHall } from "@/layout/ShrineHall";
+import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { VillageMission } from "@/layout/VillageMission";
@@ -373,20 +374,7 @@ const ElderHall: React.FC<{
             )}
             {elders?.map((elder) => (
               <div key={elder.userId} className="relative">
-                <Link href={`/userid/${elder.userId}`} className="text-center">
-                  <AvatarImage
-                    href={elder.avatar}
-                    alt={elder.username}
-                    hover_effect={true}
-                    size={100}
-                  />
-                  <div>
-                    <div className="font-bold">{elder.username}</div>
-                    <div>
-                      Lvl. {elder.level} {capitalizeFirstLetter(elder.rank)}
-                    </div>
-                  </div>
-                </Link>
+                <UserAvatarTile user={elder} className="text-center" />
               </div>
             ))}
           </div>

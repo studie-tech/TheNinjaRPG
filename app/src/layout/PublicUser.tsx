@@ -111,6 +111,7 @@ import RichInput from "@/layout/RichInput";
 import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
+import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
@@ -2395,24 +2396,7 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
       {students && students.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {students.map((user) => (
-            <Link
-              href={`/username/${user.username}`}
-              className="text-center"
-              key={user.userId}
-            >
-              <AvatarImage
-                href={user.avatar || ""}
-                alt={user.username}
-                hover_effect={true}
-                size={100}
-              />
-              <div>
-                <div className="font-bold">{user.username}</div>
-                <div>
-                  Lvl. {user.level} {showUserRank(user)}
-                </div>
-              </div>
-            </Link>
+            <UserAvatarTile key={user.userId} user={user} className="text-center" />
           ))}
         </div>
       )}
@@ -2442,21 +2426,12 @@ const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive 
       {marriages && marriages.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {marriages.map((user) => (
-            <Link
-              href={`/username/${user.username}`}
-              className="text-center"
+            <UserAvatarTile
               key={user.userId}
-            >
-              <AvatarImage
-                href={user.avatar}
-                alt={user.username}
-                hover_effect={true}
-                size={100}
-              />
-              <div>
-                <div className="font-bold">{user.username}</div>
-              </div>
-            </Link>
+              user={user}
+              hideLevel
+              className="text-center"
+            />
           ))}
         </div>
       )}
@@ -2958,20 +2933,7 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {visibleRecruits.map((user) => (
             <div key={user.userId} className="relative text-center">
-              <Link href={`/username/${user.username}`} className="block">
-                <AvatarImage
-                  href={user.avatar || ""}
-                  alt={user.username}
-                  hover_effect={true}
-                  size={100}
-                />
-                <div>
-                  <div className="font-bold">{user.username}</div>
-                  <div>
-                    Lvl. {user.level} {showUserRank(user)}
-                  </div>
-                </div>
-              </Link>
+              <UserAvatarTile user={user} className="block" />
               {canDelete && (
                 <RemoveReferralButton
                   recruit={user}
