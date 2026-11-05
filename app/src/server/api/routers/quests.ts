@@ -18,6 +18,7 @@ import {
   getUnchangedRewardChoiceUserUpdate,
 } from "@/deltas/quests";
 import {
+  ABANDONABLE_QUEST_TYPES,
   ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   getUserCaps,
@@ -812,22 +813,7 @@ export const questsRouter = createTRPCRouter({
       }
       if (
         user.role === "USER" &&
-        ![
-          "mission",
-          "crime",
-          "event",
-          "errand",
-          "story",
-          "hunting",
-          "gathering",
-          "medical",
-          "battlepyramid",
-          "pvp",
-          "war",
-          "overworld",
-          "mastery",
-          "special",
-        ].includes(current.questType)
+        ![...ABANDONABLE_QUEST_TYPES, "war"].includes(current.questType)
       ) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
       }

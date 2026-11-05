@@ -45,8 +45,7 @@ import { ActivityDock } from "@/layout/ActivityDock";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import { useCheckRewards } from "@/layout/Logbook";
-import { Objective } from "@/layout/Objective";
+import { QuestObjectives, useCheckRewards } from "@/layout/Logbook";
 import {
   getLemuImage,
   LEMU_EXPERIMENT,
@@ -54,9 +53,9 @@ import {
 } from "@/libs/lemuExperiment";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
+  dialogChoiceContentId,
   getActiveObjective,
   isQuestComplete,
-  isQuestObjectiveAvailable,
 } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import {
@@ -933,52 +932,7 @@ const PlayerTutorialAssistant: React.FC<
       return;
     }
 
-    // Initial position calculation
-    updateHighlightPosition(step);
-
-    // Poll as well: content can shift without a DOM mutation (images, canvases)
-    const intervalId = setInterval(() => {
-      updateHighlightPosition(step);
-    }, 250);
-
-    // Add scroll event listener to update position when scrolling
-    const handleScroll = () => {
-      requestAnimationFrame(() => {
-        updateHighlightPosition(step);
-      });
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    // Add resize event listener to update position when window is resized
-    const handleResize = () => {
-      requestAnimationFrame(() => {
-        updateHighlightPosition(step);
-      });
-    };
-
-    window.addEventListener("resize", handleResize, { passive: true });
-
-    // Add a mutation observer to detect DOM changes that might affect positioning
-    const observer = new MutationObserver(() => {
-      requestAnimationFrame(() => {
-        updateHighlightPosition(step);
-      });
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: false,
-    });
-
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleResize);
-      observer.disconnect();
-    };
+    return trackLayout(() => updateHighlightPosition(step));
   }, [currentStep, isAssistantVisible, pathname, userData?.status]);
 
   // Update game menu highlight position when showing game menu tutorial
@@ -990,52 +944,21 @@ const PlayerTutorialAssistant: React.FC<
       return;
     }
 
-    const updateGameMenuHighlight = () => {
-      const highlightInfo = findElementToHighlight(
-        {
-          id: "game-menu",
-          chapter: currentStep?.chapter ?? "student",
-          elementIds: ["tutorial-gameBtn"],
-          title: "Game Menu",
-          description: "",
-          page: pathname,
-        },
-        rightSideBarRef,
-        rightSideBarOpen,
-      );
-
-      if (highlightInfo) {
+    return trackLayout(() => {
+      const rect =
+        getUsableHighlightElement("tutorial-gameBtn")?.getBoundingClientRect();
+      if (rect) {
         const next = {
-          top: highlightInfo.top,
-          left: highlightInfo.left,
-          width: highlightInfo.width,
-          height: highlightInfo.height,
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
         };
         setGameMenuHighlight((prev) => (prev && isSameBox(prev, next) ? prev : next));
       } else {
         setGameMenuHighlight(null);
       }
-    };
-
-    updateGameMenuHighlight();
-    const intervalId = setInterval(updateGameMenuHighlight, 250);
-    const handleViewportChange = () => requestAnimationFrame(updateGameMenuHighlight);
-    window.addEventListener("scroll", handleViewportChange, { passive: true });
-    window.addEventListener("resize", handleViewportChange, { passive: true });
-    const observer = new MutationObserver(handleViewportChange);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: false,
     });
-
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener("scroll", handleViewportChange);
-      window.removeEventListener("resize", handleViewportChange);
-      observer.disconnect();
-    };
   }, [
     showGameMenuTutorial,
     pathname,
@@ -1256,11 +1179,14 @@ const PlayerTutorialAssistant: React.FC<
   const activeRelatedObjective = relatedQuest
     ? getActiveObjective(relatedQuest.userQuest.quest, relatedQuest.tracker)
     : undefined;
+  // Placement-bound choices belong to the NPC's dialog on the map.
   const dialogOptions =
     activeRelatedObjective?.task === "dialog" &&
+    !activeRelatedObjective.overworldPlacementId &&
     (dynamicQuestStep || currentTutorialStep?.advanceOn === "questDialog")
       ? {
           questId: relatedQuest?.userQuest.questId ?? "",
+          objectiveId: activeRelatedObjective.id,
           options: activeRelatedObjective.nextObjectiveId,
         }
       : null;
@@ -1627,7 +1553,10 @@ const PlayerTutorialAssistant: React.FC<
                             e.stopPropagation();
                             checkRewards({
                               questId: dialogOptions.questId,
-                              nextObjectiveId: entry.nextObjectiveId,
+                              nextObjectiveId: dialogChoiceContentId(
+                                entry.nextObjectiveId,
+                                dialogOptions.objectiveId,
+                              ),
                             });
                           }}
                           className="min-w-[120px] flex-1"
@@ -1717,36 +1646,13 @@ const PlayerTutorialAssistant: React.FC<
           {isQuestOverlay && postTutorialQuest?.userQuest.quest.content.objectives && (
             <>
               <div className="grid grid-cols-2 gap-4">
-                {postTutorialQuest.userQuest.quest.content.objectives.map(
-                  (objective, objectiveIndex) => {
-                    const quest = postTutorialQuest.userQuest.quest;
-                    const tracker = postTutorialQuest.tracker;
-                    const allDone = isQuestComplete(quest, tracker);
-                    const activeObjective = getActiveObjective(quest, tracker);
-                    const status = tracker.goals.find((g) => g.id === objective.id);
-                    const hideIfNoRewards =
-                      objective.task === "dialog" ||
-                      (activeObjective && objective.id !== activeObjective?.id) ||
-                      (allDone && !status?.done);
-                    return (
-                      <Objective
-                        objective={objective}
-                        tracker={tracker}
-                        checkRewards={() => checkRewards({ questId: quest.id })}
-                        key={objective.id}
-                        titlePrefix={
-                          quest.consecutiveObjectives
-                            ? "Objective: "
-                            : `${objectiveIndex + 1}. `
-                        }
-                        grayedOut={
-                          !isQuestObjectiveAvailable(quest, tracker, objectiveIndex)
-                        }
-                        hideIfNoRewards={hideIfNoRewards}
-                      />
-                    );
-                  },
-                )}
+                <QuestObjectives
+                  quest={postTutorialQuest.userQuest.quest}
+                  tracker={postTutorialQuest.tracker}
+                  checkRewards={() =>
+                    checkRewards({ questId: postTutorialQuest.userQuest.quest.id })
+                  }
+                />
               </div>
               {isQuestComplete(
                 postTutorialQuest.userQuest.quest,
@@ -1911,6 +1817,31 @@ const highlightHoleStyle = (box: {
   height: box.height + 16,
   transform: `translate(${box.left - 8}px, ${box.top - 8}px)`,
 });
+
+/**
+ * Run `update` now and whenever layout may have moved, returning the cleanup. The poll covers
+ * content that shifts without a DOM mutation, such as images and canvases.
+ */
+const trackLayout = (update: () => void) => {
+  update();
+  const intervalId = setInterval(update, 250);
+  const updateNextFrame = () => requestAnimationFrame(update);
+  window.addEventListener("scroll", updateNextFrame, { passive: true });
+  window.addEventListener("resize", updateNextFrame, { passive: true });
+  const observer = new MutationObserver(updateNextFrame);
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    characterData: false,
+  });
+  return () => {
+    clearInterval(intervalId);
+    window.removeEventListener("scroll", updateNextFrame);
+    window.removeEventListener("resize", updateNextFrame);
+    observer.disconnect();
+  };
+};
 
 // Helper function to find element to highlight based on current tutorial step
 const getUsableHighlightElement = (id: string | undefined) => {

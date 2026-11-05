@@ -35,9 +35,8 @@ import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { LogbookEntry } from "@/layout/Logbook";
+import { QuestUpdateModal } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
-import Modal from "@/layout/Modal";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
 import {
@@ -58,7 +57,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { haptics } from "@/libs/native";
-import { getIsolatedPyramid } from "@/libs/questRun";
+import { findConsecutiveQuestId, getIsolatedPyramid } from "@/libs/questRun";
 import {
   type CombatHover,
   type CombatSceneSnapshot,
@@ -101,7 +100,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   // State
   const [isReturningFromTutorial, setIsReturningFromTutorial] = useState(false);
   const tutorialReturnLockRef = useRef(false);
-  const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [readySettledBattleId, setReadySettledBattleId] = useState<string | null>(null);
   const [pendingLoadoutSelection, setPendingLoadoutSelection] = useState<{
@@ -425,18 +423,14 @@ const Combat: React.FC<CombatProps> = (props) => {
         });
       }
       // Check for quest updates
-      if (data.updatedQuestIds && data.updatedQuestIds.length > 0) {
-        // The tutorial claims its own quest rewards from the assistant panel
-        if (!isTutorialActive(userData)) {
-          // Show popup for consecutive quests
-          data.updatedQuestIds.forEach((questId) => {
-            const quest = userData?.userQuests?.find((q) => q.questId === questId);
-            if (quest?.quest?.consecutiveObjectives) {
-              setLogbookModalOpen(true);
-              setLogbookModalQuestId(questId);
-            }
-          });
-        }
+      // The tutorial claims its own quest rewards from the assistant panel
+      if (data.updatedQuestIds && !isTutorialActive(userData)) {
+        // Show popup for consecutive quests
+        const questId = findConsecutiveQuestId(
+          userData?.userQuests,
+          data.updatedQuestIds,
+        );
+        if (questId) setLogbookModalQuestId(questId);
       }
       // Reuse the same committed-delta path as PvP websocket observers.
       if (data.logEntries && data.battleUpdate) {
@@ -1050,10 +1044,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const initiveWinner = battleRef.current?.usersState.find(
     (u) => u.userId === battleRef.current?.activeUserId,
   );
-  const modalUserQuest = userData?.userQuests?.find(
-    (q) => q.questId === logbookModalQuestId,
-  );
-  const modalTracker = userData?.questData?.find((q) => q.id === logbookModalQuestId);
   const toHospital =
     battleType &&
     result &&
@@ -1365,19 +1355,11 @@ const Combat: React.FC<CombatProps> = (props) => {
           </div>
         </div>
       )}
-      {logbookModalOpen && modalUserQuest && modalTracker && (
-        <Modal
-          isOpen={logbookModalOpen}
-          setIsOpen={setLogbookModalOpen}
-          title="Quest Update"
-        >
-          <LogbookEntry
-            userQuest={modalUserQuest}
-            tracker={modalTracker}
-            showScene={true}
-            hideTitle={false}
-          />
-        </Modal>
+      {logbookModalQuestId && (
+        <QuestUpdateModal
+          questId={logbookModalQuestId}
+          onClose={() => setLogbookModalQuestId(null)}
+        />
       )}
     </>
   );

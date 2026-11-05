@@ -28,7 +28,6 @@ import {
   RANKS_RESTRICTED_FROM_PVP,
   SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
-  TERMINAL_DIALOG_PREFIX,
   WAR_SHRINE_IMAGE_BY_BIOME,
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
@@ -46,7 +45,7 @@ import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
+import { QuestDialogScene, QuestUpdateModal } from "@/layout/Logbook";
 import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
@@ -61,7 +60,7 @@ import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
-import { isQuestObjectiveAvailable } from "@/libs/objectives";
+import { dialogChoiceContentId, isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
   arrivalPromptDecision,
   findActionableBoundObjective,
@@ -78,6 +77,7 @@ import {
   getBoundObjectiveCandidates,
   isLocationObjective,
 } from "@/libs/quest";
+import { findConsecutiveQuestId } from "@/libs/questRun";
 import {
   createTravelScene,
   type TravelPick,
@@ -268,7 +268,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const [hoveredStructure, setHoveredStructure] = useState<VillageStructure | null>(
     null,
   );
-  const [logbookModalOpen, setLogbookModalOpen] = useState<boolean>(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
   const [npcDialog, setNpcDialog] = useState<{
@@ -609,14 +608,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Router for forwarding
   const router = useRouter();
 
-  // Convenience calculations
-
-  // If new objective is available, then show a modal
-  const modalUserQuest = userData?.userQuests?.find(
-    (q) => q.questId === logbookModalQuestId,
-  );
-  const modalTracker = userData?.questData?.find((q) => q.id === logbookModalQuestId);
-
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
     if (isTravelKeyBlocked(event)) return;
@@ -684,18 +675,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // If there are any quest ids that have been updated,
       // let's see if we should show a modal with new objective for consecutive quests.
       // The tutorial presents its own quest's dialogs in the assistant panel.
-      if (
-        result.questIdsUpdated &&
-        result.questIdsUpdated.length > 0 &&
-        !isTutorialActive(userData)
-      ) {
-        result.questIdsUpdated.forEach((questId) => {
-          const quest = userData?.userQuests?.find((q) => q.questId === questId);
-          if (quest?.quest?.consecutiveObjectives) {
-            setLogbookModalOpen(true);
-            setLogbookModalQuestId(questId);
-          }
-        });
+      if (result.questIdsUpdated && !isTutorialActive(userData)) {
+        const questId = findConsecutiveQuestId(
+          userData?.userQuests,
+          result.questIdsUpdated,
+        );
+        if (questId) setLogbookModalQuestId(questId);
       }
     },
   });
@@ -894,7 +879,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           isOnLocation &&
           !isTutorialActive(userData)
         ) {
-          setLogbookModalOpen(true);
           setLogbookModalQuestId(userquest.questId);
         }
       });
@@ -2472,10 +2456,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             inspectTriggerRef.current = trigger;
             setInspectLocationId(location.id);
           }}
-          onQuest={(questId) => {
-            setLogbookModalQuestId(questId);
-            setLogbookModalOpen(true);
-          }}
+          onQuest={setLogbookModalQuestId}
           onGoTo={(location) =>
             setTarget({ x: location.longitude, y: location.latitude })
           }
@@ -2606,19 +2587,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }}
         />
       )}
-      {logbookModalOpen && modalUserQuest && modalTracker && (
-        <Modal
-          isOpen={logbookModalOpen}
-          setIsOpen={setLogbookModalOpen}
-          title="Quest Update"
-        >
-          <LogbookEntry
-            userQuest={modalUserQuest}
-            tracker={modalTracker}
-            showScene={true}
-            hideTitle={false}
-          />
-        </Modal>
+      {logbookModalQuestId && (
+        <QuestUpdateModal
+          questId={logbookModalQuestId}
+          onClose={() => setLogbookModalQuestId(null)}
+        />
       )}
       {targetUser && (isAttacking || userData?.status === "BATTLE") && (
         <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black">
@@ -2724,12 +2697,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                     interactNpc({
                       placementId: ctx.placementId,
                       positionVersion: ctx.positionVersion,
-                      // A terminal branch has no follow-up objective; send an objective-scoped
-                      // sentinel so the server completes this dialog objective instead of
-                      // re-opening the same dialog.
-                      dialogContentId:
-                        branch.nextObjectiveId ??
-                        `${TERMINAL_DIALOG_PREFIX}${npcDialog.objectiveId}`,
+                      dialogContentId: dialogChoiceContentId(
+                        branch.nextObjectiveId,
+                        npcDialog.objectiveId,
+                      ),
                     });
                   }
                   setNpcDialog(null);
