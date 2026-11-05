@@ -3,12 +3,15 @@ import {
   ELDER_NOMINATION_DEADLINE_DAY,
   KAGE_MAX_ELDERS,
 } from "@/drizzle/constants";
+import { resolveElderRotation } from "@/libs/elder";
 import { handleEndpointError, lockWithMonthlyTimer } from "@/libs/gamesettings";
 import {
+  insertActionLogForHandleRotation,
   listClanForHandleCutoff,
   listClanForHandleRotation,
   listClanForHandleRotation2,
   listUserDataForHandleRotation,
+  listUserDataForHandleRotationElders,
   listVillageForHandleCutoff,
   updateClanForHandleCutoff,
   updateClanForHandleCutoff2,
@@ -18,6 +21,7 @@ import {
 } from "@/queries/elder";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
@@ -165,41 +169,41 @@ async function handleRotation() {
       }
     }
 
-    // Demote all elders first (must complete before nominee fetch so re-nominated elders pass JONIN check)
-    await updateUserDataForHandleRotation(drizzleDB, villageIds);
+    // The log rows must commit with the rank changes and the nominee reset they
+    // explain: the reset erases the only other record of who was nominated, and no
+    // single statement spans UserData, Clan and ActionLog.
+    await retryOnDeadlock(() =>
+      drizzleDB.transaction(async (tx) => {
+        const elders = await listUserDataForHandleRotationElders(tx, villageIds);
 
-    // Fetch all potential nominees
-    const validNominees =
-      allNomineeIds.size > 0
-        ? await listUserDataForHandleRotation(drizzleDB, allNomineeIds, villageIds)
-        : [];
+        // Demote all elders first (must complete before nominee fetch so re-nominated elders pass JONIN check)
+        await updateUserDataForHandleRotation(tx, villageIds);
 
-    // Build map for O(1) lookups
-    type NomineeType = (typeof validNominees)[number];
-    const validNomineeMap = new Map(
-      validNominees.map((n: NomineeType) => [n.userId, n]),
+        // Fetch all potential nominees
+        const nominees =
+          allNomineeIds.size > 0
+            ? await listUserDataForHandleRotation(tx, allNomineeIds)
+            : [];
+
+        // Determine all users to promote and the log of what happened to everyone
+        const { toPromote, logs } = resolveElderRotation(
+          elders,
+          [...eligibleByVillage.values()].flat(),
+          nominees,
+        );
+
+        // Batch promote all valid nominees, reset clan fields and log the outcome
+        await Promise.all([
+          toPromote.length > 0
+            ? updateUserDataForHandleRotation2(tx, toPromote)
+            : Promise.resolve(),
+          updateClanForHandleRotation(tx, villageIds),
+          logs.length > 0
+            ? insertActionLogForHandleRotation(tx, logs)
+            : Promise.resolve(),
+        ]);
+      }),
     );
-
-    // Determine all users to promote
-    const toPromote: string[] = [];
-    for (const [villageId, clans] of eligibleByVillage) {
-      for (const c of clans) {
-        const nomineeId = c.elderNomineeId || c.leaderId;
-        if (!nomineeId) continue;
-        const nominee = validNomineeMap.get(nomineeId);
-        if (nominee && nominee.clanId === c.id && nominee.villageId === villageId) {
-          toPromote.push(nomineeId);
-        }
-      }
-    }
-
-    // Batch promote all valid nominees and reset clan fields in parallel
-    await Promise.all([
-      toPromote.length > 0
-        ? updateUserDataForHandleRotation2(drizzleDB, toPromote)
-        : Promise.resolve(),
-      updateClanForHandleRotation(drizzleDB, villageIds),
-    ]);
 
     return Response.json(`OK - Elder rotation completed`);
   } catch (cause) {

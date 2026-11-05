@@ -1,9 +1,10 @@
 /**
  * Database access for elder; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+  actionLog,
   clan,
   userData,
   village,
@@ -11,6 +12,15 @@ import {
   villageElderVoteEntry,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { clampActionLogText } from "@/utils/actionLog";
+
+/** One ActionLog row of the monthly elder rotation, logged against the village. */
+export type ElderRotationLogEntry = {
+  userId: string;
+  villageId: string | null;
+  message: string;
+  changes: string[];
+};
 
 /** Build the `villageElderVote` listing for `fetchElderVotes`, using predicates on `villageId` and `status`. */
 export const listVillageElderVoteForFetchElderVotes = (
@@ -170,6 +180,7 @@ export const listClanForHandleRotation = (client: Pick<DrizzleClient, "query">) 
     where: isNotNull(clan.elderCutoffRank),
     columns: {
       id: true,
+      name: true,
       villageId: true,
       leaderId: true,
       elderNomineeId: true,
@@ -185,6 +196,7 @@ export const listClanForHandleRotation2 = (client: Pick<DrizzleClient, "query">)
     where: isNotNull(clan.villageId),
     columns: {
       id: true,
+      name: true,
       villageId: true,
       leaderId: true,
       elderNomineeId: true,
@@ -204,21 +216,32 @@ export const updateUserDataForHandleRotation = (
     .set({ rank: "JONIN" })
     .where(and(inArray(userData.villageId, villageIds), eq(userData.rank, "ELDER")));
 
-/** Build the `userData` listing for `handleRotation`, including predicates on `userId`, `villageId`, `isBanned`. */
-export const listUserDataForHandleRotation = (
+/** Build the `userData` listing of current elders for `handleRotation`, using predicates on `villageId` and `rank`. */
+export const listUserDataForHandleRotationElders = (
   client: Pick<DrizzleClient, "query">,
-  allNomineeIds: Set<string>,
   villageIds: string[],
 ) =>
   client.query.userData.findMany({
-    where: and(
-      inArray(userData.userId, [...allNomineeIds]),
-      inArray(userData.villageId, villageIds),
-      eq(userData.isBanned, false),
-      eq(userData.rank, "JONIN"),
-      isNull(userData.anbuId),
-    ),
-    columns: { userId: true, clanId: true, villageId: true },
+    where: and(inArray(userData.villageId, villageIds), eq(userData.rank, "ELDER")),
+    columns: { userId: true, username: true, villageId: true },
+  });
+
+/** Build the `userData` listing of every nominee for `handleRotation`, using predicates on `userId`. */
+export const listUserDataForHandleRotation = (
+  client: Pick<DrizzleClient, "query">,
+  allNomineeIds: Set<string>,
+) =>
+  client.query.userData.findMany({
+    where: inArray(userData.userId, [...allNomineeIds]),
+    columns: {
+      userId: true,
+      username: true,
+      clanId: true,
+      villageId: true,
+      isBanned: true,
+      rank: true,
+      anbuId: true,
+    },
   });
 
 /** Build the `userData` update for `handleRotation`, setting `rank`, using predicates on `userId`. */
@@ -230,6 +253,22 @@ export const updateUserDataForHandleRotation2 = (
     .update(userData)
     .set({ rank: "ELDER" })
     .where(inArray(userData.userId, toPromote));
+
+/** Build the `actionLog` insert for `handleRotation`. */
+export const insertActionLogForHandleRotation = (
+  client: Pick<DrizzleClient, "insert">,
+  entries: ElderRotationLogEntry[],
+) =>
+  client.insert(actionLog).values(
+    entries.map((entry) => ({
+      id: nanoid(),
+      userId: entry.userId,
+      tableName: "village",
+      relatedId: entry.villageId,
+      relatedMsg: clampActionLogText(entry.message),
+      changes: entry.changes,
+    })),
+  );
 
 /** Build the `clan` update for `handleRotation`, using predicates on `villageId`. */
 export const updateClanForHandleRotation = (
