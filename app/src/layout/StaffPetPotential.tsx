@@ -61,7 +61,14 @@ export const StaffPetPotential = ({
             mutation.mutate({ userId, petId: selected.id, value, reason });
         }}
       >
-        <div className="space-y-3">
+        <fieldset
+          aria-label="Companion potential settings"
+          className="min-w-0 space-y-3"
+          onKeyDown={(event) => {
+            // Enter operates the form controls without invoking modal confirmation.
+            if (event.key === "Enter") event.stopPropagation();
+          }}
+        >
           <p className="text-muted-foreground text-sm">
             Set a permanent PV from 1–5. This reveals potential and clears its
             allocations for the player to assign again. Saved trained stats are kept;
@@ -123,15 +130,11 @@ export const StaffPetPotential = ({
                 maxLength={500}
                 disabled={mutation.isPending}
                 onChange={(event) => setReason(event.target.value)}
-                onKeyDown={(event) => {
-                  // Enter adds a reason line without invoking the modal confirmation.
-                  if (event.key === "Enter") event.stopPropagation();
-                }}
               />
             </>
           )}
           {message && <p role="alert">{message}</p>}
-        </div>
+        </fieldset>
       </Modal>
     </>
   );
