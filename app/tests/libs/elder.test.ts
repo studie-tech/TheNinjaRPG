@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import { KAGE_MAX_ELDERS } from "@/drizzle/constants";
 import {
   isElderCandidateWithoutCutoff,
@@ -12,6 +13,16 @@ const clan = (id: string, activityPoints: number, points = 0, month?: number) =>
   points,
   elderCutoffMonth: month ?? null,
   elderCutoffYear: month ? 2026 : null,
+});
+
+describe("nominateElder eligibility message", () => {
+  it("names the candidate count from the constant the ranking slices by", () => {
+    const router = readFileSync(
+      new URL("../../src/server/api/routers/clan.ts", import.meta.url),
+      "utf8",
+    );
+    expect(router).toContain("not in top ${KAGE_MAX_ELDERS} by activity points");
+  });
 });
 
 describe("rankElderCandidates", () => {
