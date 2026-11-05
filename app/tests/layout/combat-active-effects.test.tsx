@@ -1,7 +1,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
-import { getEffectMagnitude } from "@/libs/combat/power";
+import { getEffectMagnitude, getEffectPower } from "@/libs/combat/power";
 import { invertPower } from "@/libs/combat/tags";
 import type { GroundEffect } from "@/libs/combat/types";
 import { makeEffect } from "../libs/combat/helpers/battleScenario";
@@ -52,11 +52,15 @@ describe("combat active effects", () => {
     expect(view.queryByText(/150%/)).toBeNull();
   });
 
-  it("keeps uncapped static power and inverted decreases at their applied size", () => {
-    const flat = makeEffect("reflect", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "static" }, { ...runtime, level: 100 });
-    const decrease = invertPower(makeEffect("decreasedamagegiven", { power: 120, powerPerLevel: 0.3, rounds: 3, calculation: "percentage" }, { ...runtime, level: 100 }));
+  it("keeps static power uncapped and caps inverted percentage decreases at -100", () => {
+    const tag = { power: 120, powerPerLevel: 0.3, rounds: 3 };
+    const flat = makeEffect("reflect", { ...tag, calculation: "static" }, { ...runtime, level: 100 });
+    const flatDecrease = invertPower(makeEffect("decreasedamagegiven", { ...tag, calculation: "static" }, { ...runtime, level: 100 }));
+    const decrease = invertPower(makeEffect("decreasedamagegiven", { ...tag, calculation: "percentage" }, { ...runtime, level: 100 }));
     expect(getEffectMagnitude(flat)).toBe(150);
-    expect(getEffectMagnitude(decrease)).toBe(150);
+    expect(getEffectPower(flatDecrease)).toBe(-150);
+    expect(getEffectPower(decrease)).toBe(-100);
+    expect(getEffectMagnitude(decrease)).toBe(100);
   });
 
   it("hides stored Curse healing with its filtered source", () => {

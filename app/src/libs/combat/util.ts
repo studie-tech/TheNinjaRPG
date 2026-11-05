@@ -1626,7 +1626,12 @@ export const calcPoolCost = (
         });
       }
     });
-  return { hpCost, cpCost, spCost };
+  // A reduction past the cost makes the action free; it never refunds pools.
+  return {
+    hpCost: Math.max(0, hpCost),
+    cpCost: Math.max(0, cpCost),
+    spCost: Math.max(0, spCost),
+  };
 };
 
 /**
