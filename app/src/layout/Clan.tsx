@@ -60,6 +60,7 @@ import {
   CLAN_MPVP_MAX_USERS_PER_SIDE,
   CLAN_POINT_RYO_RATE,
   CLAN_RANK_REQUIREMENT,
+  type ClanBoostType,
   ClanBoostTypes,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
@@ -91,6 +92,7 @@ import Tournament from "@/layout/Tournament";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import { WarRoom } from "@/layout/WarSystem";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { getClanBoostCost, getClanBoostLevel } from "@/libs/clanBoost";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -954,8 +956,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         <Table
           data={clanBattles}
           columns={[
-            { key: "clan1name", header: "Attacker Clan", type: "jsx" },
-            { key: "clan2name", header: "Defender Clan", type: "jsx" },
+            { key: "clan1name", header: `Attacker ${groupLabel}`, type: "jsx" },
+            { key: "clan2name", header: `Defender ${groupLabel}`, type: "jsx" },
             { key: "countdown", header: "Start Time", type: "jsx" },
           ]}
         />
@@ -1784,7 +1786,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
               <div className="flex flex-row items-center">
                 <p>Bank: {clanData.bank}</p>{" "}
                 <Confirm
-                  title="Donate to clan"
+                  title={`Donate to ${groupLabel.toLowerCase()}`}
                   proceed_label="Submit"
                   button={
                     <PiggyBank className="ml-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
@@ -1792,8 +1794,9 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   onAccept={onDeposit}
                 >
                   <p>
-                    Confirm donating money from pocket to clan bank. You currently have{" "}
-                    {userData.money.toLocaleString()} ryo in your pocket.
+                    Confirm donating money from pocket to {groupLabel.toLowerCase()}{" "}
+                    bank. You currently have {userData.money.toLocaleString()} ryo in
+                    your pocket.
                   </p>
                   {userData.isOutlaw && (
                     <p>
@@ -1901,26 +1904,22 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
             </div>
           </div>
           {/* Clans and factions share training, Ryo and crafting speed boosts. */}
-          {
-            <div className="mt-4 grid grid-cols-2 gap-x-4">
-              {ClanBoostTypes.filter(
-                (boostType) =>
-                  !userData.isOutlaw || !CLAN_BOOST_CONFIG[boostType].villageOnly,
-              ).map((boostType) => (
-                <BoostRow
-                  key={boostType}
-                  label={CLAN_BOOST_CONFIG[boostType].label}
-                  currentBoost={clanData[boostType]}
-                  baseCost={CLAN_BOOST_CONFIG[boostType].baseCost}
-                  perLevelCost={CLAN_BOOST_CONFIG[boostType].perLevelCost}
-                  clanBank={clanData.bank}
-                  canPurchase={leaderLike}
-                  isPending={isPurchasingBoost}
-                  onPurchase={() => purchaseBoost({ clanId, boostType })}
-                />
-              ))}
-            </div>
-          }
+          <div className="mt-4 grid grid-cols-2 gap-x-4">
+            {ClanBoostTypes.filter(
+              (boostType) =>
+                !userData.isOutlaw || !CLAN_BOOST_CONFIG[boostType].villageOnly,
+            ).map((boostType) => (
+              <BoostRow
+                key={boostType}
+                boostType={boostType}
+                currentBoost={clanData[boostType]}
+                clanBank={clanData.bank}
+                canPurchase={leaderLike}
+                isPending={isPurchasingBoost}
+                onPurchase={() => purchaseBoost({ clanId, boostType })}
+              />
+            ))}
+          </div>
           {/* Elder Nomination - only for non-outlaw clans */}
           {!userData?.isOutlaw &&
             leaderLike &&
@@ -2162,8 +2161,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 </ul>
                 <p className="text-muted-foreground text-sm">
                   The leader will remain in place. Everyone will remain a member of the{" "}
-                  {groupLabel.toLowerCase()}, and unrelated clan details will not
-                  change. These roles can be assigned again later.
+                  {groupLabel.toLowerCase()}, and unrelated {groupLabel.toLowerCase()}{" "}
+                  details will not change. These roles can be assigned again later.
                 </p>
               </div>
             </Confirm>
@@ -3066,10 +3065,8 @@ export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
 
 // Helper component for displaying boost rows with Ryo-based costs
 interface BoostRowProps {
-  label: string;
+  boostType: ClanBoostType;
   currentBoost: number;
-  baseCost: number;
-  perLevelCost: number;
   clanBank: number;
   canPurchase: boolean;
   isPending?: boolean;
@@ -3077,17 +3074,16 @@ interface BoostRowProps {
 }
 
 const BoostRow: React.FC<BoostRowProps> = ({
-  label,
+  boostType,
   currentBoost,
-  baseCost,
-  perLevelCost,
   clanBank,
   canPurchase,
   isPending,
   onPurchase,
 }) => {
-  const currentLevel = currentBoost / CLAN_BOOST_PERCENT_PER_LEVEL;
-  const cost = baseCost + currentLevel * perLevelCost;
+  const { label } = CLAN_BOOST_CONFIG[boostType];
+  const currentLevel = getClanBoostLevel(currentBoost);
+  const cost = getClanBoostCost(boostType, currentBoost);
   const canAfford = clanBank >= cost;
   const isMaxed = currentLevel >= CLAN_BOOST_MAX_LEVEL;
 
