@@ -86,6 +86,6 @@ describeWithDatabase("companion potential and transfers", () => {
     const logs = await db.query.actionLog.findMany();
     expect(logs).toHaveLength(1);
     expect(logs[0]?.relatedMsg?.length).toBeLessThanOrEqual(191);
-    expect(logs[0]?.changes).toContain(`Reason: ${input.reason}`);
+    expect(logs[0]?.changes).toContain(`Reason: ${input.reason.trim()}`);
   });
 });
