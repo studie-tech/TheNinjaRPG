@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import {
@@ -9,6 +9,7 @@ import {
   userItem,
   userItemImbuement,
 } from "@/drizzle/schema";
+import * as itemQueries from "@/queries/item";
 import { itemRouter } from "@/server/api/routers/item";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
@@ -44,6 +45,7 @@ const sell = async (userItemIds: string[]) =>
 
 /** Real inventory rows verify that only removed stacks are paid, and paid once. */
 describeWithDatabase("bulk selling and dropping", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     await resetTables(
       actionLog,
@@ -156,6 +158,23 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.refused.map((entry) => entry.userItemId).sort()).toEqual(["blade-row", "potion-row"]);
     expect(await money()).toBe(startMoney);
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row", "potion-row"]);
+  });
+
+  it("still pays for the removed stacks when another stack's delete fails", async () => {
+    const remove = itemQueries.deleteUserItemForSellUserItem;
+    vi.spyOn(itemQueries, "deleteUserItemForSellUserItem").mockImplementation(
+      (client, input, ctx, useritem) => {
+        if (input.userItemId === "blade-row") throw new Error("Connection lost");
+        return remove(client, input, ctx, useritem);
+      },
+    );
+    const result = await sell(["potion-row", "blade-row"]);
+    expect(result.success).toBe(true);
+    expect(result.soldUserItemIds).toEqual(["potion-row"]);
+    expect(result.ryo).toBe(60);
+    expect(result.refused.map((entry) => entry.userItemId)).toEqual(["blade-row"]);
+    expect(await money()).toBe(startMoney + 60);
+    expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row"]);
   });
 
   it("rejects repeated ids and more than the bulk limit", async () => {

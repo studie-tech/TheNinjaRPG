@@ -1972,8 +1972,9 @@ export const itemRouter = createTRPCRouter({
           });
         }
       }
-      // Claim each stack before paying for it, exactly as a single sale does.
-      const deletions = await Promise.all(
+      // Claim each stack before paying for it, exactly as a single sale does. A delete that
+      // fails is unconfirmed: that stack is not paid, and the others still are.
+      const deletions = await Promise.allSettled(
         sellable.map((useritem) =>
           retryOnDeadlock(async () =>
             deleteUserItemForSellUserItem(
@@ -1986,7 +1987,10 @@ export const itemRouter = createTRPCRouter({
         ),
       );
       const sold = sellable.filter((useritem, index) => {
-        if (deletions[index]?.rowsAffected === 1) return true;
+        const deletion = deletions[index];
+        if (deletion?.status === "fulfilled" && deletion.value.rowsAffected === 1) {
+          return true;
+        }
         refused.push({
           userItemId: useritem.id,
           name: useritem.item.name,
@@ -2005,7 +2009,14 @@ export const itemRouter = createTRPCRouter({
             ctx.drizzle,
             sold.map((useritem) => useritem.id),
           ),
-          ...(ryo > 0 ? [incrementUserMoney(ctx.drizzle, ryo, ctx.userId)] : []),
+          // A deadlocked increment never applied, so retrying it cannot pay twice.
+          ...(ryo > 0
+            ? [
+                retryOnDeadlock(async () =>
+                  incrementUserMoney(ctx.drizzle, ryo, ctx.userId),
+                ),
+              ]
+            : []),
           ...sold.flatMap((useritem, index) =>
             useritem.item.cost >= 500000
               ? [
