@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PITY_BLOODLINE_ROLLS,
   REP_TRADE_MIN_LEVEL,
@@ -74,7 +75,7 @@ export default function BlackMarket() {
 
   // Render
   return (
-    <>
+    <Tabs value={current} onValueChange={(value) => setTab(value as BlackMarketTab)}>
       <ContentBox
         title="Black Market"
         subtitle="Rare items, bloodlines and reputation trades"
@@ -89,35 +90,33 @@ export default function BlackMarket() {
               Get reputation
             </Link>
           </div>
-          <div
-            role="tablist"
+          <TabsList
             aria-label="Black Market"
-            className="bg-muted grid grid-cols-3 gap-0.5 rounded-lg p-0.5"
+            className="grid grid-cols-3 gap-0.5 p-0.5"
           >
             {BLACK_MARKET_TABS.map((option) => (
-              <button
+              <TabsTrigger
                 key={option.value}
-                type="button"
-                role="tab"
-                aria-selected={current === option.value}
-                onClick={() => setTab(option.value)}
-                className={cn(
-                  "h-10 rounded-md text-sm",
-                  current === option.value
-                    ? "bg-background text-foreground font-semibold shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                value={option.value}
+                className="text-muted-foreground hover:text-foreground data-[state=active]:font-semibold h-10"
               >
                 {option.label}
-              </button>
+              </TabsTrigger>
             ))}
-          </div>
+          </TabsList>
         </div>
       </ContentBox>
-      {current === "Item" && <BlackMarketItemCatalog userData={userData} />}
-      {current === "Bloodline" && <Bloodline userData={userData} />}
-      {current === "Ryo" && <RyoShop userData={userData} />}
-    </>
+      {/* Only the open section mounts, so one catalog query runs at a time. */}
+      <TabsContent value="Item" className="mt-0">
+        <BlackMarketItemCatalog userData={userData} />
+      </TabsContent>
+      <TabsContent value="Bloodline" className="mt-0">
+        <Bloodline userData={userData} />
+      </TabsContent>
+      <TabsContent value="Ryo" className="mt-0">
+        <RyoShop userData={userData} />
+      </TabsContent>
+    </Tabs>
   );
 }
 

@@ -165,7 +165,8 @@ function ItemArt({ userItem }: { userItem: UserItemWithRelations }) {
         image={look.image}
         alt={look.name}
         rarity={userItem.item.rarity}
-        className="h-11 w-11"
+        // Sized by the box, so the art stays inside the frame's border.
+        className="h-full w-full"
       />
     </span>
   );
