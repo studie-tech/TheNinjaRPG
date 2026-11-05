@@ -56,6 +56,7 @@ export default function ManualBloodlineCompleteness() {
         total: total,
       };
     })
+    .filter((b) => b.total > 0)
     .sort((a, b) => b.total - a.total);
 
   // Table
@@ -66,6 +67,7 @@ export default function ManualBloodlineCompleteness() {
     { key: "classification", header: "Classification", type: "jsx" },
     { key: "effects", header: "Effects", type: "jsx" },
     { key: "description", header: "Description", type: "jsx" },
+    { key: "total", header: "Total", type: "jsx" },
   ];
 
   return (
