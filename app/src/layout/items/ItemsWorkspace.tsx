@@ -197,7 +197,9 @@ export function ItemsWorkspace({
           getBlockedReason={getBlockedReason}
           onEquip={(userItemId, slot) => equipOnce({ userItemId, slot })}
           onUnequip={(userItemId, slot) => equipOnce({ userItemId, slot })}
-          onInspect={(userItemId) => openView({ kind: "item", userItemId })}
+          onInspect={(userItemId) =>
+            openView({ kind: "item", userItemId, slot: view.slot })
+          }
           onShowInBackpack={() => {
             setPhoneTab("backpack");
             returnFocusRef.current = backpackRef.current;
@@ -215,6 +217,12 @@ export function ItemsWorkspace({
           userData={userData}
           onClose={closeView}
           onEquip={equipOnce}
+          equipSlot={view.kind === "item" ? view.slot : undefined}
+          equipBlockedReason={
+            view.kind === "item" && view.slot
+              ? getBlockedReason(inspected, view.slot)
+              : undefined
+          }
           isEquipping={isEquipping}
           onSetHotkey={setHotkey}
           masteryWarning={masteryWarning(inspected)}
@@ -356,7 +364,7 @@ function PhoneTab({ value, children }: { value: string; children: React.ReactNod
 export type ItemsView =
   | { kind: "backpack" }
   | { kind: "slot"; slot: ItemSlot }
-  | { kind: "item"; userItemId: string };
+  | { kind: "item"; userItemId: string; slot?: ItemSlot };
 
 interface ItemsWorkspaceProps {
   userData: NonNullable<UserWithRelations>;

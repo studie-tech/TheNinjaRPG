@@ -116,22 +116,34 @@ export function SlotPicker({
               data-item-name={userItem.item.name}
               className="flex items-center gap-2 rounded-lg border bg-card p-2"
             >
-              <ItemArt userItem={userItem} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-bold text-sm">
-                  {applyActiveVariant(userItem).name}
-                </p>
-                <p className={cn("text-xs", rarityTextClass[userItem.item.rarity])}>
-                  {rarityLabel[userItem.item.rarity]}
-                  {wearText(userItem)}
-                  {equippedIn && ` · Equipped in ${slotName(equippedIn)}`}
-                </p>
-                {blockedReason && (
-                  <p className="font-semibold text-destructive text-xs">
-                    {blockedReason}
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                aria-label={`Details of ${applyActiveVariant(userItem).name}`}
+                onClick={() => onInspect(userItem.id)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ItemArt userItem={userItem} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-bold text-sm">
+                    {applyActiveVariant(userItem).name}
+                  </span>
+                  <span
+                    className={cn(
+                      "block text-xs",
+                      rarityTextClass[userItem.item.rarity],
+                    )}
+                  >
+                    {rarityLabel[userItem.item.rarity]}
+                    {wearText(userItem)}
+                    {equippedIn && ` · Equipped in ${slotName(equippedIn)}`}
+                  </span>
+                  {blockedReason && (
+                    <span className="block font-semibold text-destructive text-xs">
+                      {blockedReason}
+                    </span>
+                  )}
+                </span>
+              </button>
               <Button
                 size="sm"
                 aria-label={`Equip ${applyActiveVariant(userItem).name}`}

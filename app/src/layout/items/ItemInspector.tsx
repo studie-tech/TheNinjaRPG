@@ -65,6 +65,8 @@ export function ItemInspector({
   userData,
   onClose,
   onEquip,
+  equipSlot,
+  equipBlockedReason,
   isEquipping,
   onSetHotkey,
   masteryWarning,
@@ -142,7 +144,10 @@ export function ItemInspector({
   };
   const look = applyActiveVariant(useritem as UserItemWithVariants);
   const canEquip =
-    useritem.equipped === "NONE" && fittingSlots(useritem.item).length > 0;
+    (equipSlot ? useritem.equipped !== equipSlot : useritem.equipped === "NONE") &&
+    (equipSlot
+      ? fittingSlots(useritem.item).includes(equipSlot)
+      : fittingSlots(useritem.item).length > 0);
   const canConsume = !isMeal && nonCombatConsume(useritem.item, userData);
   const hasVariants =
     ((useritem as UserItemWithVariants).item.variants?.length ?? 0) > 0;
@@ -217,7 +222,7 @@ export function ItemInspector({
         </div>
       </div>
       {look.description && (
-        <div data-reading-text className="line-clamp-3 text-muted-foreground text-sm">
+        <div data-reading-text className="text-muted-foreground text-sm">
           {parseHtml(look.description)}
         </div>
       )}
@@ -233,9 +238,17 @@ export function ItemInspector({
         <>
           <div className="flex flex-row flex-wrap items-center gap-2">
             {canEquip && (
-              <Button onClick={() => onEquip({ userItemId: useritem.id }, onClose)}>
+              <Button
+                disabled={!!equipBlockedReason}
+                onClick={() =>
+                  onEquip(
+                    { userItemId: useritem.id, ...(equipSlot && { slot: equipSlot }) },
+                    onClose,
+                  )
+                }
+              >
                 <Shirt className="mr-2 h-5 w-5" />
-                Equip
+                {equipSlot ? `Equip in ${slotName(equipSlot)}` : "Equip"}
               </Button>
             )}
             {equippedIn && (
@@ -294,6 +307,9 @@ export function ItemInspector({
               </Button>
             )}
           </div>
+          {canEquip && equipBlockedReason && (
+            <p className="text-destructive text-sm">{equipBlockedReason}</p>
+          )}
           {durabilityPercent !== null && (
             <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
               <div className="flex items-center gap-2 text-xs">
@@ -501,14 +517,15 @@ export function ItemInspector({
       {isEquipping && <Loader explanation="Equipping" />}
       {isEvolving && <Loader explanation="Evolving" />}
       {isRepairingWithRyo && <Loader explanation="Repairing" />}
-      <details className="group rounded-lg border bg-card">
-        <summary className="flex min-h-11 cursor-pointer items-center px-3 font-semibold text-sm">
-          All details
-        </summary>
+      {/* The full stats show straight away; the header above already carries the name and art. */}
+      <section aria-label="Details" className="rounded-lg border bg-card">
+        <h3 className="px-3 pt-2 font-semibold text-sm">Details</h3>
         <div className="p-2">
           <ItemWithEffects
             item={{
               ...applyActiveVariant(useritem as UserItemWithVariants),
+              // The header above already shows the description.
+              description: "",
               imbuements: useritem.imbuements.map((imbuement) => imbuement.item),
               curDurability: useritem.durability,
               level: useritem.level,
@@ -517,9 +534,12 @@ export function ItemInspector({
             key={useritem.id}
             showStatistic="item"
             showEvolutions
+            hideTitle
+            hideImage
+            hideDates
           />
         </div>
-      </details>
+      </section>
       {!isLoading && (
         <div className="flex items-center gap-2 border-t pt-3">
           <span className="flex-1 text-muted-foreground text-xs">
@@ -638,6 +658,10 @@ interface ItemInspectorProps {
     input: { userItemId: string; slot?: ItemSlot },
     onSettled: () => void,
   ) => void;
+  /** The picker slot this item was inspected from, retained for equipping or moving. */
+  equipSlot?: ItemSlot;
+  /** The picker's current restriction on equipping into that slot. */
+  equipBlockedReason?: string | null;
   isEquipping: boolean;
   /** Opens battle-key assignment; offered on devices with a keyboard. */
   onSetHotkey?: (userItem: UserItemWithRelations) => void;

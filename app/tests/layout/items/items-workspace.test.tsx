@@ -439,6 +439,59 @@ const useRealInspector = () => {
   vi.spyOn(itemLib, "calcItemSellingPrice").mockReturnValue(120);
 };
 
+it.each([1000, 390])("equips an inspected slot candidate into the selected empty hand at width %s", (width) => {
+  useRealInspector();
+  containerWidth = width;
+  renderWorkspace({ userItems: [tanto] });
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })));
+  fireEvent.click(screen.getByRole("button", { name: "Equip in Hand 1" }));
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: tanto.id, slot: "HAND_1" });
+  expect(inspectorEquip).not.toHaveBeenCalled();
+});
+
+it("offers the selected slot when inspecting an item equipped in another hand", () => {
+  useRealInspector();
+  const worn = { ...katana, item: { ...katana.item, maxEquips: 2 } };
+  renderWorkspace({ userItems: [worn] });
+  act(() => fireEvent.click(slotOf("HAND_2")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Shadowsteel Katana" })));
+  fireEvent.click(screen.getByRole("button", { name: "Equip in Hand 2" }));
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: worn.id, slot: "HAND_2" });
+});
+
+it("keeps the equip-limit restriction when inspecting a candidate worn elsewhere", () => {
+  useRealInspector();
+  const worn = { ...katana, item: { ...katana.item, maxEquips: 1 } };
+  renderWorkspace({ userItems: [worn] });
+  act(() => fireEvent.click(slotOf("HAND_2")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Shadowsteel Katana" })));
+  const equipButton = screen.getByRole("button", { name: "Equip in Hand 2" }) as HTMLButtonElement;
+  expect(equipButton.disabled).toBe(true);
+  expect(screen.getByText("Unequip from Hand 1 first")).toBeDefined();
+  fireEvent.click(equipButton);
+  expect(equip).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Unequip" }));
+  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: worn.id, slot: "HAND_1" });
+});
+
+it("checks mastery after removing the selected slot's current item in the inspector", () => {
+  useRealInspector();
+  vi.spyOn(mastery, "gearMissingMastery").mockImplementation((_item, wearer) =>
+    wearer.items?.some((ui) => ui.id === katana.id)
+      ? null
+      : { required: 500, current: 0, label: "Bukijutsu" } as never,
+  );
+  renderWorkspace();
+  act(() => fireEvent.click(slotOf("HAND_1")));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })));
+  const equipButton = screen.getByRole("button", { name: "Equip in Hand 1" }) as HTMLButtonElement;
+  expect(equipButton.disabled).toBe(true);
+  expect(screen.getByText("Needs 500 Bukijutsu")).toBeDefined();
+  fireEvent.click(equipButton);
+  expect(equip).not.toHaveBeenCalled();
+});
+
 it("shares an unequip guard and pending state with the inspector opened from its slot", () => {
   useRealInspector();
   const { rerender } = renderWorkspace();
