@@ -1,9 +1,13 @@
 import {
+  ItemRarities,
+  ItemTypes,
   MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
   MIN_ITEM_SHOP_DISCOUNT_FACTOR,
 } from "@/drizzle/constants";
-import type { Item } from "@/drizzle/schema";
+import type { Item, ItemType } from "@/drizzle/schema";
+import { byItemName } from "@/libs/item";
+import { ITEM_TYPE_LABELS } from "@/libs/itemsPage";
 
 export const getMaxItemShopPurchaseQuantity = (stackSize: number) =>
   Math.min(stackSize, MAX_ITEM_SHOP_PURCHASE_QUANTITY);
@@ -36,3 +40,76 @@ export function shopItemDiscountFactor(
       100,
   );
 }
+
+export type ShopCurrency = "ryo" | "rep" | "silver";
+export type ShopPrice = { currency: ShopCurrency; amount: number };
+export type ShopSort = "rarity" | "price" | "name" | "type";
+
+export const SHOP_SORTS: { value: ShopSort; label: string }[] = [
+  { value: "rarity", label: "Rarity" },
+  { value: "price", label: "Price" },
+  { value: "name", label: "Name" },
+  { value: "type", label: "Type" },
+];
+
+/** Unit prices of a shop item: ryo after the player's discounts, reputation and silver as listed. */
+export const shopItemPrices = (
+  item: Pick<Item, "cost" | "repsCost" | "seichiSilverCost">,
+  ryoFactor: number,
+): ShopPrice[] => [
+  ...(item.cost > 0
+    ? [{ currency: "ryo" as const, amount: Math.ceil(item.cost * ryoFactor) }]
+    : []),
+  ...(item.repsCost > 0
+    ? [{ currency: "rep" as const, amount: Math.ceil(item.repsCost) }]
+    : []),
+  ...(item.seichiSilverCost > 0
+    ? [{ currency: "silver" as const, amount: Math.ceil(item.seichiSilverCost) }]
+    : []),
+];
+
+/** How much of each currency the player is short of to buy `quantity` at these prices. */
+export const missingForPrices = (
+  prices: ShopPrice[],
+  wallet: Record<ShopCurrency, number>,
+  quantity = 1,
+): ShopPrice[] =>
+  prices.flatMap(({ currency, amount }) => {
+    const missing = amount * quantity - wallet[currency];
+    return missing > 0 ? [{ currency, amount: missing }] : [];
+  });
+
+/** Rarest first, then the cheapest: the order gear is chosen in, as in the backpack. */
+const shopComparators: Record<
+  ShopSort,
+  <T extends ShopSortable>(a: T, b: T, priceOf: (item: T) => number) => number
+> = {
+  rarity: (a, b, priceOf) =>
+    ItemRarities.indexOf(b.rarity) - ItemRarities.indexOf(a.rarity) ||
+    priceOf(a) - priceOf(b) ||
+    byItemName(a, b),
+  price: (a, b, priceOf) => priceOf(a) - priceOf(b) || byItemName(a, b),
+  name: (a, b) => byItemName(a, b),
+  type: (a, b) =>
+    ItemTypes.indexOf(a.itemType) - ItemTypes.indexOf(b.itemType) || byItemName(a, b),
+};
+
+/** A sorted copy of the catalog; the input keeps its order. */
+export const sortShopItems = <T extends ShopSortable>(
+  items: T[],
+  sort: ShopSort,
+  priceOf: (item: T) => number,
+): T[] => [...items].sort((a, b) => shopComparators[sort](a, b, priceOf));
+
+/** "All" plus one chip per item type in stock, in the game's type order, with counts. */
+export const shopTypeChips = (
+  items: Pick<Item, "itemType">[],
+): { value: ItemType | "ALL"; label: string; count: number }[] => [
+  { value: "ALL", label: "All", count: items.length },
+  ...ItemTypes.flatMap((type) => {
+    const count = items.filter((item) => item.itemType === type).length;
+    return count > 0 ? [{ value: type, label: ITEM_TYPE_LABELS[type], count }] : [];
+  }),
+];
+
+type ShopSortable = Pick<Item, "name" | "rarity" | "itemType">;
