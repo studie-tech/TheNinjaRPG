@@ -170,16 +170,20 @@ export const isPayPalCleanupError = (err: unknown): boolean => {
  * A stack line whose script came from a domain or its subdomains, as V8
  * ("at fn (url:1:2)", "at url:1:2") or Firefox and Safari ("fn@url:1:2") print it.
  */
-const stackLineFromDomain = (domain: string) =>
+const stackLineFromDomain = (domain: string, path = "[/?#]") =>
   new RegExp(
-    `(?:^\\s*at (?:[^():\\n]*\\()?|^[^@:\\n]*@)https?://(?:[a-z0-9-]+\\.)*${domain}(?::\\d+)?[/?#]`,
+    `(?:^\\s*at (?:[^():\\n]*\\()?|^[^@:\\n]*@)https?://(?:[a-z0-9-]+\\.)*${domain}(?::\\d+)?${path}`,
     "im",
   );
 
 /** The hosts the CSP lets serve PayPal scripts. */
 const PAYPAL_STACK_LINE = stackLineFromDomain("paypal(?:objects)?\\.com");
 const COOKIEBOT_STACK_LINE = stackLineFromDomain("cookiebot\\.com");
-const GOOGLE_TAG_STACK_LINE = stackLineFromDomain("googletagmanager\\.com");
+/** Only gtag.js: GTM's own script can wrap our calls and sit on the stack of our errors. */
+const GOOGLE_TAG_STACK_LINE = stackLineFromDomain(
+  "googletagmanager\\.com",
+  "/gtag/js[?#:]",
+);
 
 /**
  * True when a raw `Error.stack` ran through PayPal's own hosts. Takes the raw stack because
@@ -192,7 +196,7 @@ export const isPayPalSdkStack = (stack: string | undefined): boolean =>
 export const isCookiebotStack = (stack: string | undefined): boolean =>
   !!stack && COOKIEBOT_STACK_LINE.test(stack);
 
-/** True when a raw `Error.stack` ran through Google's tag hosts, as for PayPal above. */
+/** True when a raw `Error.stack` ran through Google's gtag script, as for PayPal above. */
 export const isGoogleTagStack = (stack: string | undefined): boolean =>
   !!stack && GOOGLE_TAG_STACK_LINE.test(stack);
 

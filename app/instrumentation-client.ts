@@ -92,7 +92,6 @@ Sentry.init({
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
-    "Illegal invocation", // Third-party script error (Facebook in-app browser or Cookiebot)
     "Can't find variable: EmptyRanges", // Browser extension error (CodeMirror-based extensions)
     "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
     "xbrowser is not defined", // Browser extension/password manager autofill error - occurs when third-party autofill scripts (browser extensions, Android WebView bridge) reference undefined xbrowser variable

@@ -7,8 +7,9 @@ import { nextjsClientStackFrameNormalizationIntegration } from "../../node_modul
 /** The production filter, taken from the options `instrumentation-client.ts` initializes with. */
 const init = vi.spyOn(Sentry, "init").mockImplementation((() => undefined) as never);
 await import("../../instrumentation-client");
-const { beforeSend } = init.mock.calls[0]![0] as unknown as {
+const { beforeSend, ignoreErrors } = init.mock.calls[0]![0] as unknown as {
   beforeSend: (event: Event, hint: EventHint) => Event | null;
+  ignoreErrors: (string | RegExp)[];
 };
 afterAll(() => init.mockRestore());
 
@@ -58,6 +59,10 @@ describe("third-party script Sentry filters", () => {
     (await replay(name, message, stack(name, message, url))).dropped;
   const own = "https://www.theninja-rpg.com/_next/static/chunks";
 
+  it("leaves Illegal invocation to the host check, which ignoreErrors would pre-empt", () => {
+    expect(ignoreErrors).not.toContain("Illegal invocation");
+  });
+
   it("sees Cookiebot frames with their origin already replaced", async () => {
     const { frames } = await replay(...ILLEGAL, chromeStack(...ILLEGAL, "https://consent.cookiebot.com/uc.js"));
     expect(frames).toContain("app:///uc.js");
@@ -87,6 +92,7 @@ describe("third-party script Sentry filters", () => {
     ["own chunk ending like the injected script", ILLEGAL, `${own}/reinject_content.js`],
     ["own chunk named after the injected script", ILLEGAL, `${own}/inject_content.js.map.js`],
     ["own chunk named after gtag", CLONE, `${own}/gtag/js`],
+    ["Google Tag Manager's own script", CLONE, "https://www.googletagmanager.com/gtm.js?id=GTM-ABC"],
     ["own chunk containing mediafilter", CLONE, `${own}/mediafilter-1a2b.js`],
     ["own chunk ending in mediafilter", CLONE, `${own}/socialmediafilter.js`],
     ["Cookiebot look-alike host", ILLEGAL, "https://consent.cookiebot.com.evil.example/uc.js"],
