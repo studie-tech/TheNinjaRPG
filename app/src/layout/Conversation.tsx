@@ -17,22 +17,16 @@ import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
+import { AiSenderSelect } from "@/layout/AiSenderSelect";
 import ContentBox from "@/layout/ContentBox";
 import { ConversationComments } from "@/layout/ConversationComments";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
-import UserSearchSelect from "@/layout/UserSearchSelect";
 import { subscribeConversation } from "@/libs/conversationEvents";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { getNewReactions, processMentions } from "@/utils/chat";
-import {
-  canPostAsAi,
-  canReplyToStaffConversationWhileRestricted,
-  getMessagingRestriction,
-  RESTRICTED_STAFF_CONVERSATION_MESSAGE,
-  RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
-} from "@/utils/permissions";
+import { canPostAsAi, getConversationComposeRestriction } from "@/utils/permissions";
 import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -116,7 +110,6 @@ export const useConversation = (props: ConversationLogicProps) => {
     );
     return () => clearTimeout(timeout);
   }, [isPageActive]);
-  const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
   // Typing indicator state
   type TypingUser = { username: string; timestamp: number };
@@ -157,29 +150,12 @@ export const useConversation = (props: ConversationLogicProps) => {
   });
   const conversation = comments?.pages[0]?.convo;
   useConversationViewing(conversation?.id, isPageActive, props.isInChatPanel);
-  const canComposeDespiteRestriction =
-    !!userData &&
-    !!conversation?.isStaffAvailable &&
-    canReplyToStaffConversationWhileRestricted(
-      userData,
-      props.supportTicketCreatedByUserId,
-    );
-  const canComposeMessage =
-    !!userData &&
-    !conversation?.sendRestriction &&
-    (!composeRestriction || canComposeDespiteRestriction);
-  // Single source of truth for the inline copy when compose is blocked.
-  const composeRestrictionMessage =
-    conversation?.sendRestriction ??
-    (!composeRestriction
-      ? null
-      : conversation?.isStaffAvailable &&
-          (userData?.isBanned || userData?.isSilenced) &&
-          !canComposeDespiteRestriction
-        ? props.supportTicketCreatedByUserId
-          ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
-          : RESTRICTED_STAFF_CONVERSATION_MESSAGE
-        : composeRestriction);
+  const composeRestrictionMessage = getConversationComposeRestriction(
+    userData,
+    conversation,
+    props.supportTicketCreatedByUserId,
+  );
+  const canComposeMessage = !!userData && !composeRestrictionMessage;
   type ReturnedComment = ArrayElement<
     NonNullable<typeof comments>["pages"][number]["data"]
   >;
@@ -384,8 +360,7 @@ export const useConversation = (props: ConversationLogicProps) => {
   });
 
   // User search for sender selection (AI posting)
-  const maxUsers = 1;
-  const { methods: userSearchMethods, user: senderUser } = useUserPicker(maxUsers);
+  const { methods: userSearchMethods, user: senderUser } = useUserPicker();
   const canPostAsAI = userData && canPostAsAi(userData.role);
 
   // Current quote ID
@@ -756,7 +731,6 @@ export const useConversation = (props: ConversationLogicProps) => {
     composeRestrictionMessage,
     canPostAsAI,
     userSearchMethods,
-    maxUsers,
     senderUser,
     quoteIds,
     setValue,
@@ -791,7 +765,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     composeRestrictionMessage,
     canPostAsAI,
     userSearchMethods,
-    maxUsers,
     senderUser,
     quoteIds,
     setValue,
@@ -868,14 +841,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
             <div className="relative mb-2">
               {canPostAsAI && (
                 <div className="mb-3">
-                  <UserSearchSelect
-                    useFormMethods={userSearchMethods}
-                    label="Post as (leave empty to post as yourself)"
-                    showYourself={true}
-                    showAi={true}
-                    inline={true}
-                    maxUsers={maxUsers}
-                  />
+                  <AiSenderSelect methods={userSearchMethods} />
                 </div>
               )}
               {quoteIds &&
