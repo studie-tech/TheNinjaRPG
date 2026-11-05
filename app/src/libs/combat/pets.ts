@@ -17,6 +17,7 @@ import type {
 } from "@/libs/combat/types";
 import { rollInitiative } from "@/libs/combat/util";
 import { selectPetBattleAbilities } from "@/libs/pets/abilities";
+import { getPetPotentialTier } from "@/libs/pets/potential";
 import {
   canUsePet,
   getPetLevel,
@@ -270,8 +271,8 @@ const createPetBattleUser = (
     latitude: location.y,
     originalLongitude: location.x,
     originalLatitude: location.y,
-    curHealth: calcHP(level),
-    maxHealth: calcHP(level),
+    curHealth: Math.min(calcHP(level), getPetPotentialTier(pet.potentialValue).hpCap),
+    maxHealth: Math.min(calcHP(level), getPetPotentialTier(pet.potentialValue).hpCap),
     curStamina: calcSP(level),
     maxStamina: calcSP(level),
     curChakra: calcCP(level),
@@ -336,11 +337,7 @@ const createPetBattleUser = (
     taijutsuMastery: PET_BASE_STAT,
     bukijutsuMastery: PET_BASE_STAT,
   };
-  for (const stat of CombatStatNames)
-    actor[stat] = Math.min(
-      pet[stat],
-      stat === "offence" || stat === "defence" ? caps.stats_cap : caps.gens_cap,
-    );
+  for (const stat of CombatStatNames) actor[stat] = Math.min(pet[stat], caps[stat]);
   actor.highestGenerals = GenNames.slice()
     .sort((a, b) => actor[b] - actor[a])
     .slice(0, 2);

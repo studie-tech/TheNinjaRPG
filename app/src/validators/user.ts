@@ -32,8 +32,9 @@ export const assignableMasteryNames = [
 
 export const createAssignedExperienceSchema = (
   user?: NonNullable<UserWithRelations>,
+  caps?: Parameters<typeof createStatSchema>[3],
 ) => {
-  const { schema, maxValues } = createStatSchema(0, 0, user);
+  const { schema, maxValues } = createStatSchema(0, 0, user, caps);
   const additionalRoom = Object.fromEntries([
     ...assignableMasteryNames.map((name) => [
       name,

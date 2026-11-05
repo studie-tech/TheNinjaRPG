@@ -10,13 +10,13 @@ const species = { name: "Mist fox", description: "A fox with silver ears.", rari
 
 describe("authored companion species contracts", () => {
   it("defaults optional behavior without changing the author's species identity", () => {
-    expect(PetSpeciesValidator.parse(species)).toEqual({ ...species, artDirection: null, rankConcepts: [], preferredDamageElement: null, role: "ASSAULT", defaultJutsuIds: [], aiRules: [], includeDefaultRules: true, effects: [] });
+    expect(PetSpeciesValidator.parse(species)).toEqual({ ...species, potentialMode: "FIXED", potentialValue: 1, potentialMin: 1, potentialMax: 5, potentialWeights: [70, 50, 20, 10, 2], artDirection: null, rankConcepts: [], preferredDamageElement: null, role: "ASSAULT", defaultJutsuIds: [], aiRules: [], includeDefaultRules: true, effects: [] });
   });
 
   it("bounds art direction and per-rank concepts, storing blanks as defaults", () => {
     const concepts = ["A slim white kit ", "", "A fox with three flame-tipped tails", "", ""];
     expect(PetSpeciesValidator.parse({ ...species, artDirection: "  A white fox. ", rankConcepts: concepts })).toMatchObject({ artDirection: "A white fox.", rankConcepts: ["A slim white kit", "", "A fox with three flame-tipped tails"] });
-    expect(PetSpeciesValidator.parse({ ...species, artDirection: "   ", rankConcepts: ["", " "] })).toMatchObject({ artDirection: null, rankConcepts: [] });
+    expect(PetSpeciesValidator.parse({ ...species, artDirection: "   ", rankConcepts: ["", " "] })).toMatchObject({ potentialMode: "FIXED", potentialValue: 1, potentialMin: 1, potentialMax: 5, potentialWeights: [70, 50, 20, 10, 2], artDirection: null, rankConcepts: [] });
     expect(PetSpeciesValidator.parse({ ...species, rankConcepts: [undefined, null, "A gold neck ornament"] }).rankConcepts).toEqual(["", "", "A gold neck ornament"]);
     expect(PetSpeciesValidator.safeParse({ ...species, artDirection: "a".repeat(1000), rankConcepts: Array(10).fill("b".repeat(1000)) }).success).toBe(true);
     expect(PetSpeciesValidator.safeParse({ ...species, artDirection: "a".repeat(1001) }).success).toBe(false);

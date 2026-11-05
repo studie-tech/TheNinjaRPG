@@ -10,8 +10,8 @@ describe("companion species rarity", () => {
     expect(initialPetSpecies.map(({ id }) => id)).toEqual(names.map((_, index) => `pet-species-${index}`));
     expect(PetRarities.map((rarity) => initialPetSpecies.filter((option) => option.rarity === rarity).length)).toEqual([30, 18, 9, 7, 3]);
     expect(initialPetSpecies.every(({ rarity }) => PetRarities.includes(rarity))).toBe(true);
-    expect(initialPetSpecies[9]).toEqual({ id: "pet-species-9", name: "Snow leopard", description: "A fluffy snow leopard with a thick tail", rarity: "EPIC", isActive: true, artDirection: null, rankConcepts: [] });
-    expect(initialPetSpecies[54]).toEqual({ id: "pet-species-54", name: "Axolotl", description: "A cheerful axolotl with feathery external gills", rarity: "UNCOMMON", isActive: true, artDirection: null, rankConcepts: [] });
+    expect(initialPetSpecies[9]).toMatchObject({ id: "pet-species-9", name: "Snow leopard", description: "A fluffy snow leopard with a thick tail", rarity: "EPIC", isActive: true, artDirection: null, rankConcepts: [] });
+    expect(initialPetSpecies[54]).toMatchObject({ id: "pet-species-54", name: "Axolotl", description: "A cheerful axolotl with feathery external gills", rarity: "UNCOMMON", isActive: true, artDirection: null, rankConcepts: [] });
     const namesByRarity = {
       COMMON: ["Beetle", "Butterfly", "Cat", "Chipmunk", "Crab", "Dragonfly", "Ferret", "Frog", "Gecko", "Goat", "Hamster", "Hare", "Hedgehog", "Heron", "Iguana", "Kingfisher", "Marten", "Mole", "Moth", "Mouse", "Rabbit", "Raccoon", "Rat", "Salamander", "Sparrow", "Squirrel", "Toad", "Tortoise", "Turtle", "Weasel"],
       UNCOMMON: ["Axolotl", "Badger", "Bat", "Boar", "Capybara", "Chameleon", "Chinchilla", "Crane", "Crow", "Deer", "Elk", "Mantis", "Otter", "Owl", "Peacock", "Porcupine", "Ram", "Tanuki"],
@@ -30,8 +30,8 @@ describe("companion species rarity", () => {
 
   it("offers newly authored species, retires them without deleting identities and supports reactivation", () => {
     const authored = [
-      { id: "new-fox", name: "Spirit fox", description: "A fox with translucent ears", rarity: "RARE" as const, isActive: true },
-      { id: "new-owl", name: "Moon owl", description: "An owl with silver plumage", rarity: "LEGENDARY" as const, isActive: true },
+      { ...initialPetSpecies[0]!, id: "new-fox", name: "Spirit fox", description: "A fox with translucent ears", rarity: "RARE" as const, isActive: true },
+      { ...initialPetSpecies[0]!, id: "new-owl", name: "Moon owl", description: "An owl with silver plumage", rarity: "LEGENDARY" as const, isActive: true },
     ];
     const roll = (catalogue: typeof authored) => getDailyPetOptions("catalogue-owner", "GOLD", catalogue, "2026-10-16");
     expect(roll(authored).species.map(({ id }) => id).sort()).toEqual(["new-fox", "new-owl"]);

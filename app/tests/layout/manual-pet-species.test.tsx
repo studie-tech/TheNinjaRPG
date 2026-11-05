@@ -28,7 +28,7 @@ setDefaultTimeout(20_000);
 
 const testApi = createTRPCReact<AppRouter>();
 const usePetSpeciesEditForm = petSpecies.usePetSpeciesEditForm;
-const defaults = { artDirection: null, rankConcepts: [], preferredDamageElement: null, role: "ASSAULT" as const, defaultJutsuIds: [], aiRules: [], includeDefaultRules: true, effects: [] };
+const defaults = { potentialMode: "FIXED" as const, potentialValue: 1, potentialMin: 1, potentialMax: 5, potentialWeights: [70, 50, 20, 10, 2], artDirection: null, rankConcepts: [], preferredDamageElement: null, role: "ASSAULT" as const, defaultJutsuIds: [], aiRules: [], includeDefaultRules: true, effects: [] };
 let queryClient: QueryClient;
 let role: UserRole;
 let species: RouterOutputs["petSpecies"]["getAll"];

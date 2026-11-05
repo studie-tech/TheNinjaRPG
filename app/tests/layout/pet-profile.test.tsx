@@ -89,7 +89,7 @@ beforeEach(() => {
   };
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const pet = {
-    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0, revision: 0,
+    id: "companion", name: "Miso", rank: 7, experience: 0, storedExperience: 0, revision: 0, potentialValue: 1, potentialRevealed: true, potentialChances: [], potentialAllocations: {},
     speciesId: "pet-species-0", species: petSpeciesFixture({ rarity: "UNCOMMON" }), paletteIndex: 0, characteristicIndex: 0, auraIndex: 0,
     generationStatus: "READY", avatar: "/miso.webp", artRank: 7, battleEnabled: true,
     spawnPosition: "BEHIND", jutsuIds: [], skillIds: [],

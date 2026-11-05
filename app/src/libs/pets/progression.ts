@@ -1,6 +1,5 @@
 /** Pure progression and readiness rules shared by pet presentation and server guards. */
 import {
-  getUserCaps,
   PET_FED_COLLECTION_SLOTS,
   PET_GENERATION_LEASE_MS,
   PET_MAX_COLLECTION_SLOTS,
@@ -8,6 +7,7 @@ import {
   type UserRank,
 } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
+import { getPetPotentialCaps } from "@/libs/pets/potential";
 import { calcLevelRequirements } from "@/libs/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 
@@ -109,9 +109,8 @@ export const getPetLevel = (pet: Pick<UserPet, "rank" | "experience">) => {
   return level;
 };
 
-/** Reuse the stat caps of the character rank associated with this pet evolution. */
-export const getPetStatCaps = (pet: Pick<UserPet, "rank">) =>
-  getUserCaps(getPetRank(pet.rank).minUserRank);
+/** Potential allocations define lifetime stat caps independently of evolution rank. */
+export const getPetStatCaps = getPetPotentialCaps;
 
 /** Return the first progression prerequisite to show the owner, or null when met. */
 export const petRankUpBlockMessage = (

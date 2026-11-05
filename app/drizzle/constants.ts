@@ -625,6 +625,18 @@ export const EMAIL_REMINDER_EXPERIENCE_REWARD = 10_000;
 /** Shared availability gate for companion combat, including saved opt-in settings. */
 export const PET_BATTLE_CONFIG = { enabled: true, battleTypes: ["QUEST"] as readonly BattleType[] };
 export const PET_BASE_STAT = 10;
+export const PET_POTENTIAL_BASE_CAP = 150_000;
+export const PET_POTENTIAL_STAT_BONUS = 150_000;
+export const PET_EXPERIENCE_TRANSFER_COST = 1_000_000;
+export const PET_EXPERIENCE_TRANSFER_MAX_PERCENT = 70;
+export const PetPotentialModes = ["FIXED", "RANDOM"] as const;
+export const PET_POTENTIAL_TIERS = [
+  { value: 1, title: "Modest", hpCap: 4000, weight: 70 },
+  { value: 2, title: "Promising", hpCap: 5000, weight: 50 },
+  { value: 3, title: "Gifted", hpCap: 6000, weight: 20 },
+  { value: 4, title: "Exceptional", hpCap: 7000, weight: 10 },
+  { value: 5, title: "Perfect", hpCap: 8000, weight: 2 },
+] as const;
 export const PET_REPLACEMENT_COST = 30;
 export const PET_MAX_COLLECTION_SLOTS = 6;
 export const PET_COLLECTION_SLOT_COST = 20;

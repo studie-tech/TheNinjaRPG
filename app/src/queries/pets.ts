@@ -50,6 +50,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { CombatStatNames } from "@/drizzle/constants";
 import {
+  actionLog,
   item,
   petSpecies,
   type UserData,
@@ -412,3 +413,83 @@ const petSnapshotWhere = (pet: UserPet) =>
     eq(userPet.userId, pet.userId),
     eq(userPet.revision, pet.revision),
   );
+
+/** Debit the transfer cost, remove assigned progression and credit the destination in one guarded statement. */
+export const transferPetExperience = (
+  client: Pick<DrizzleClient, "execute">,
+  user: UserData,
+  source: UserPet,
+  destination: UserPet,
+  sourcePatch: Pick<UserPet, CombatStatName | "experience">,
+  amount: number,
+  cost: number,
+  ownerWhere: SQL | undefined,
+) => {
+  const destinationPet = alias(userPet, "destination_pet");
+  const now = new Date();
+  const bank =
+    destination.id === user.activePetId
+      ? userData.petExperience
+      : destinationPet.storedExperience;
+  return client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${userPet} ON ${eq(userPet.userId, userData.userId)}
+    INNER JOIN ${userPet} destination_pet ON ${eq(destinationPet.userId, userData.userId)}
+    SET ${userData.money} = ${userData.money} - ${cost},
+        ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt, now)},
+        ${bank} = ${bank} + ${amount},
+        ${userPet.experience} = ${sourcePatch.experience},
+        ${sql.join(
+          CombatStatNames.map((stat) => sql`${userPet[stat]} = ${sourcePatch[stat]}`),
+          sql`, `,
+        )},
+        ${userPet.revision} = ${userPet.revision} + 1,
+        ${userPet.updatedAt} = ${now},
+        ${destinationPet.revision} = ${destinationPet.revision} + 1,
+        ${destinationPet.updatedAt} = ${now}
+    WHERE ${and(
+      ownerWhere,
+      petSnapshotWhere(source),
+      gte(userData.money, cost),
+      eq(destinationPet.id, destination.id),
+      eq(destinationPet.revision, destination.revision),
+      eq(userPet.speciesId, destinationPet.speciesId),
+    )}
+  `);
+};
+
+/** Load the target collection for the restricted potential support tool. */
+export const listStaffPetPotentials = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userPet.findMany({
+    where: eq(userPet.userId, userId),
+    columns: {
+      id: true,
+      name: true,
+      potentialValue: true,
+      potentialRevealed: true,
+      potentialAllocations: true,
+    },
+  });
+
+/** Audit the committed support override using the account log convention. */
+export const logPetPotentialOverride = (
+  client: Pick<DrizzleClient, "insert">,
+  actorId: string,
+  pet: UserPet,
+  value: number,
+  reason: string,
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: actorId,
+    tableName: "user",
+    relatedId: pet.userId,
+    relatedMsg: reason,
+    relatedImage: pet.avatar,
+    changes: [
+      `Set companion ${pet.name} (${pet.id}) potential from ${pet.potentialValue} to ${value}; cleared potential allocations.`,
+    ],
+  });

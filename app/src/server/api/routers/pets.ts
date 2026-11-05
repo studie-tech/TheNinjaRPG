@@ -5,9 +5,11 @@ import { z } from "zod";
 import {
   getAcquirePetUserUpdate,
   getActivatePetUserUpdate,
+  getAllocatedPetPotential,
   getAssignExperienceUserUpdate,
   getFeedPetUserUpdate,
   getReleasePetUserUpdate,
+  getTransferPetExperienceUpdate,
   getUnchangedPetUserUpdate,
   getUnlockSlotUserUpdate,
 } from "@/deltas/pets";
@@ -16,6 +18,8 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_COLLECTION_SLOT_COST,
+  PET_EXPERIENCE_TRANSFER_COST,
+  PET_EXPERIENCE_TRANSFER_MAX_PERCENT,
   PET_FEED_COOLDOWN_HOURS,
   PET_FEED_EXPERIENCE_BY_RARITY,
   PET_GENERATION_LEASE_MS,
@@ -66,16 +70,21 @@ import {
   insertUserPet,
   insertUserUploadForGenerateAppearance,
   listPetSpeciesForGetPet,
+  listStaffPetPotentials,
   listUserItemForGetPet,
   listVisiblePetJutsu,
+  logPetPotentialOverride,
   selectPetSpeciesForWhere,
   selectUserDataForActivatePet,
   selectUserPetForWhere,
+  transferPetExperience,
   updateUserPetForGenerateAppearance,
   updateUserPetForGenerateAppearance2,
   updateUserPetForGenerateAppearance3,
 } from "@/queries/pets";
+import { fetchUser, findOwnedUserPet } from "@/queries/profile";
 import {
+  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -86,6 +95,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
+import { canEditPetPotential } from "@/utils/permissions";
 import { getPetDayKey, getPetFeedAvailableAt } from "@/utils/time";
 import {
   acquirePetSchema,
@@ -102,6 +112,171 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Own, configure and progress companions through guarded account and pet snapshots. */
 export const petsRouter = createTRPCRouter({
+  /** Restrict individual companion values to Content leadership and developers. */
+  getPotentialsForStaff: protectedProcedure
+    .input(z.object({ userId: z.string().min(1).max(191) }))
+    .query(async ({ ctx, input }) => {
+      const [actor, pets] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        listStaffPetPotentials(ctx.drizzle, input.userId),
+      ]);
+      return !actor.isBanned && canEditPetPotential(actor.role) ? pets : [];
+    }),
+
+  /** Save and audit an explicit support override; clear cap allocations for reassignment. */
+  setPotentialForStaff: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1).max(191),
+        petId: z.string().min(1).max(191),
+        value: z.number().int().min(1).max(5),
+        reason: z.string().trim().min(10).max(500),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [actor, target, pet] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+        findOwnedUserPet(ctx.drizzle, input.petId, input.userId),
+      ]);
+      if (actor.isBanned || !canEditPetPotential(actor.role))
+        return errorResponse("You do not have permission to edit companion potential.");
+      const restriction = petMutationBlockMessage(target, pet);
+      if (restriction || !pet)
+        return errorResponse(restriction ?? "Companion not found");
+      const changed = await updateOwnedPet(ctx.drizzle, target, pet, {
+        potentialValue: input.value,
+        potentialRevealed: true,
+        potentialAllocations: {},
+      });
+      if (!changed) return changedResponse();
+      await logPetPotentialOverride(
+        ctx.drizzle,
+        ctx.userId,
+        pet,
+        input.value,
+        input.reason,
+      );
+      return {
+        success: true,
+        message: "Companion potential updated; points are available to allocate again.",
+      };
+    }),
+
+  /** Reveal the saved adoption roll; retries cannot produce a different potential. */
+  revealPotential: protectedProcedure
+    .input(petSelectionSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const restriction = petMutationBlockMessage(user, pet);
+      if (restriction || !user || !pet)
+        return errorResponse(restriction ?? "Pet not found");
+      if (pet.potentialRevealed)
+        return errorResponse("This companion's potential is already revealed.");
+      const changed = await updateOwnedPet(ctx.drizzle, user, pet, {
+        potentialRevealed: true,
+      });
+      return changed
+        ? {
+            success: true,
+            message: "Companion potential revealed.",
+            ...getUnchangedPetUserUpdate(),
+          }
+        : changedResponse();
+    }),
+
+  /** Spend one unallocated point permanently on a combat stat's cap. */
+  allocatePotential: protectedProcedure
+    .input(petSelectionSchema.extend({ stat: z.enum(CombatStatNames) }))
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
+      const restriction = petMutationBlockMessage(user, pet);
+      if (restriction || !user || !pet)
+        return errorResponse(restriction ?? "Pet not found");
+      if (!pet.potentialRevealed)
+        return errorResponse("Reveal this companion's potential first.");
+      const spent = Object.values(pet.potentialAllocations).reduce(
+        (sum, points) => sum + points,
+        0,
+      );
+      if (spent >= pet.potentialValue)
+        return errorResponse("No potential points remain.");
+      const changed = await updateOwnedPet(ctx.drizzle, user, pet, {
+        potentialAllocations: getAllocatedPetPotential(pet, input.stat),
+      });
+      return changed
+        ? {
+            success: true,
+            message: "Potential point allocated permanently.",
+            ...getUnchangedPetUserUpdate(),
+          }
+        : changedResponse();
+    }),
+
+  /** Move assigned XP between owned companions of the exact same species. */
+  transferExperience: protectedProcedure
+    .input(
+      petSelectionSchema.extend({
+        destinationPetId: z.string().min(1).max(191),
+        amount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user, pet, pets } = await fetchPetOwner(
+        ctx.drizzle,
+        ctx.userId,
+        input.petId,
+      );
+      const destination = pets.find((entry) => entry.id === input.destinationPetId);
+      const restriction =
+        petMutationBlockMessage(user, pet) ??
+        petMutationBlockMessage(user, destination);
+      if (restriction || !user || !pet || !destination)
+        return errorResponse(restriction ?? "Pet not found");
+      if (pet.id === destination.id || pet.speciesId !== destination.speciesId)
+        return errorResponse("Choose another companion of the same species.");
+      if (hasActiveGeneration(pet) || hasActiveGeneration(destination))
+        return errorResponse("Wait for companion artwork to finish generating.");
+      if (
+        input.amount >
+        Math.floor((pet.experience * PET_EXPERIENCE_TRANSFER_MAX_PERCENT) / 100)
+      )
+        return errorResponse(
+          `Transfer at most ${PET_EXPERIENCE_TRANSFER_MAX_PERCENT}% of the source's assigned experience.`,
+        );
+      if (user.money < PET_EXPERIENCE_TRANSFER_COST)
+        return errorResponse("Not enough ryo for this transfer.");
+      const update = getTransferPetExperienceUpdate(
+        pet,
+        input.amount,
+        destination.id === user.activePetId,
+      );
+      const result = await retryOnDeadlock(() =>
+        transferPetExperience(
+          ctx.drizzle,
+          user,
+          pet,
+          destination,
+          update.source,
+          input.amount,
+          PET_EXPERIENCE_TRANSFER_COST,
+          ownerSnapshotWhere(user),
+        ),
+      );
+      return result.rowsAffected > 0
+        ? {
+            success: true,
+            message:
+              "Experience transferred to the destination's unused experience. Source stats were reduced proportionally.",
+            userDelta: update.userDelta,
+          }
+        : changedResponse();
+    }),
+
   /** Buy collection capacity and debit its price in one account update. */
   unlockSlot: protectedProcedure
     .input(petPaymentSchema)
@@ -704,7 +879,7 @@ export const petsRouter = createTRPCRouter({
         return errorResponse(
           "Finish your pet's appearance before assigning experience.",
         );
-      const { stats_cap, gens_cap } = getPetStatCaps(pet);
+      const caps = getPetStatCaps(pet);
       const gains = Object.fromEntries(
         CombatStatNames.map((stat) => [stat, Math.floor(input[stat])]),
       ) as Record<(typeof CombatStatNames)[number], number>;
@@ -719,9 +894,9 @@ export const petsRouter = createTRPCRouter({
         willpower: pet.willpower,
       };
       for (const stat of CombatStatNames) {
-        const cap = stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
-        if (stats[stat] + gains[stat] > cap)
-          return errorResponse("One or more companion stats exceed this rank's cap.");
+        const cap = caps[stat];
+        if (gains[stat] > 0 && stats[stat] + gains[stat] > cap)
+          return errorResponse("One or more companion stats exceed its potential cap.");
         stats[stat] += gains[stat];
       }
       const spent = getAssignedCombatStatTotal(stats) - getAssignedCombatStatTotal(pet);
@@ -968,7 +1143,10 @@ const getPetPayment = (
 const omitGenerationToken = <T extends UserPet>({
   generationToken: _generationToken,
   ...pet
-}: T) => pet;
+}: T) => ({
+  ...pet,
+  potentialValue: pet.potentialRevealed ? pet.potentialValue : null,
+});
 
 /** Sanctuary adoption requires an eligible, awake player at its current location. */
 const acquisitionBlockMessage = (user: UserData) => {
