@@ -2,10 +2,10 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
 interface SkillTreeFilteringProps {
@@ -52,28 +52,12 @@ const makeSkillTreeSchema = () =>
         })),
         normalizeForFilter: (v: string) => (v === "ANY" ? null : Number(v)),
       },
-      {
-        id: "hidden",
-        label: "Visibility",
-        type: "tri-state",
-        defaultValue: false,
-        visibleIf: (ctx) =>
-          Boolean((ctx as { canEdit?: boolean } | undefined)?.canEdit),
-        triStateLabels: {
-          labelActive: "Hidden",
-          labelInactive: "Visible",
-          labelAll: "All Visibility",
-        },
-      },
+      hiddenVisibilityField(false),
     ] as const,
   });
 
 const SkillTreeFiltering: React.FC<SkillTreeFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
-  const context = {
-    canEdit: Boolean(userData && canChangeContent(userData.role)),
-    isBloodright: props.isBloodright,
-  };
+  const context = { ...useContentEditContext(), isBloodright: props.isBloodright };
   return (
     <ContentFiltering
       schema={makeSkillTreeSchema()}

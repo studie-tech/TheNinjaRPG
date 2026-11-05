@@ -1,9 +1,10 @@
-import { BattleTypes, MAX_PLAYER_LEVEL } from "@/drizzle/constants";
+import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
 import {
+  battleTypesField,
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
-  toOptions,
+  minCountField,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 
@@ -14,20 +15,8 @@ interface BattleLengthFilteringProps {
 const makeSchema = () =>
   defineFilteringSchema({
     fields: [
-      {
-        id: "battleTypes",
-        label: "Battle Types",
-        type: "multi-select",
-        defaultValue: ["COMBAT", "RANKED_PVP"],
-        options: toOptions(BattleTypes),
-      },
-      {
-        id: "minCount",
-        label: "Minimum Count",
-        type: "number",
-        defaultValue: undefined,
-        normalizeForFilter: (v) => (v !== undefined && v >= 1 ? v : undefined),
-      },
+      battleTypesField(["COMBAT", "RANKED_PVP"]),
+      minCountField,
       {
         id: "minWinnerLevel",
         label: "Min Winner Level",

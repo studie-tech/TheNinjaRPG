@@ -10,12 +10,12 @@ import {
   buildFilter,
   ContentFiltering,
   defineFilteringSchema,
+  hiddenVisibilityField,
   toOptions,
+  useContentEditContext,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
 // Inline schema (single source of truth)
@@ -175,18 +175,7 @@ const itemFilteringSchema = defineFilteringSchema({
         labelAll: "All Trading",
       },
     },
-    {
-      id: "hidden",
-      label: "Visibility",
-      type: "tri-state",
-      defaultValue: undefined,
-      visibleIf: (ctx) => Boolean((ctx as { canEdit?: boolean } | undefined)?.canEdit),
-      triStateLabels: {
-        labelActive: "Hidden",
-        labelInactive: "Visible",
-        labelAll: "All Visibility",
-      },
-    },
+    hiddenVisibilityField(),
   ] as const,
 });
 
@@ -196,8 +185,7 @@ interface ItemFilteringProps {
 }
 
 const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
-  const context = { canEdit: Boolean(userData && canChangeContent(userData.role)) };
+  const context = useContentEditContext();
 
   return (
     <ContentFiltering

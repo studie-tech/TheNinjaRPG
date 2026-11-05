@@ -16,7 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { BattleType } from "@/drizzle/constants";
+import { BattleTypes } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
+import { canChangeContent } from "@/utils/permissions";
+import { useUserData } from "@/utils/UserContext";
 
 /**
  * Generic, type-safe filtering system.
@@ -197,6 +201,53 @@ export function defineFilteringSchema<
 /** Convenience: map a string union/tuple into options */
 export const toOptions = <T extends readonly string[]>(arr: T): Option<T[number]>[] =>
   arr.map((x) => ({ value: x, label: x })) as Option<T[number]>[];
+
+// ---------- Shared fields ----------
+
+/** Minimum row count for statistics; anything below 1 sends no minimum. */
+export const minCountField = {
+  id: "minCount",
+  label: "Minimum Count",
+  type: "number",
+  defaultValue: undefined,
+  normalizeForFilter: (value: number | undefined) =>
+    value !== undefined && value >= 1 ? value : undefined,
+} as const satisfies NumberFieldConfig<"minCount">;
+
+/** Battle type multi-select starting from `defaultValue`. */
+export const battleTypesField = (defaultValue: BattleType[]) =>
+  ({
+    id: "battleTypes",
+    label: "Battle Types",
+    type: "multi-select",
+    defaultValue,
+    options: toOptions(BattleTypes),
+  }) as const satisfies MultiSelectFieldConfig<"battleTypes", BattleType>;
+
+/** Hidden-content toggle, shown to viewers `useContentEditContext` reports as editors. */
+export const hiddenVisibilityField = (defaultValue?: boolean) =>
+  ({
+    id: "hidden",
+    label: "Visibility",
+    type: "tri-state",
+    defaultValue,
+    visibleIf: (ctx?: unknown) =>
+      Boolean((ctx as ContentEditContext | undefined)?.canEdit),
+    triStateLabels: {
+      labelActive: "Hidden",
+      labelInactive: "Visible",
+      labelAll: "All Visibility",
+    },
+  }) as const satisfies TriStateFieldConfig<"hidden">;
+
+/** `ContentFiltering` context telling content editors from players. */
+export const useContentEditContext = (): ContentEditContext => {
+  const { data: userData } = useUserData();
+  return { canEdit: Boolean(userData && canChangeContent(userData.role)) };
+};
+
+/** Read by `visibleIf`/`filterOptions` of fields reserved for content editors. */
+export type ContentEditContext = { canEdit: boolean };
 
 // ---------- Derived Types ----------
 
