@@ -101,10 +101,10 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
+import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
-import StatusBar from "@/layout/StatusBar";
 import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
@@ -1586,33 +1586,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 )}
               </div>
               <div className="mt-2">
-                <StatusBar
-                  title="HP"
-                  tooltip="Health"
-                  color="bg-red-500"
-                  showText={true}
-                  status={profile.status}
-                  current={profile.curHealth}
-                  total={profile.maxHealth}
-                />
-                <StatusBar
-                  title="CP"
-                  tooltip="Chakra"
-                  color="bg-blue-500"
-                  showText={true}
-                  status={profile.status}
-                  current={profile.curChakra}
-                  total={profile.maxChakra}
-                />
-                <StatusBar
-                  title="SP"
-                  tooltip="Stamina"
-                  color="bg-green-500"
-                  showText={true}
-                  status={profile.status}
-                  current={profile.curStamina}
-                  total={profile.maxStamina}
-                />
+                <PoolStatusBars pools={profile} status={profile.status} />
               </div>
             </div>
           </div>

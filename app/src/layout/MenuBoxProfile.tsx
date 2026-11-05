@@ -66,6 +66,7 @@ import ElementImage from "@/layout/ElementImage";
 import Image from "@/layout/Image";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
+import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
 import { getEffectPower } from "@/libs/combat/power";
 import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
@@ -261,46 +262,13 @@ const MenuBoxProfile: React.FC = () => {
           </Link>
 
           <div className="pt-5">
-            <StatusBar
-              key={`hp-${pools.curHealth}-${pools.maxHealth}`}
-              title="HP"
-              tooltip="Health"
-              color="bg-red-500"
-              showText={true}
+            <PoolStatusBars
+              pools={pools}
+              remountOnChange
               lastRegenAt={userData?.regenAt}
               regen={hasBattlePools ? 0 : passiveRegeneration}
               timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
               status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curHealth}
-              total={pools.maxHealth}
-              timeDiff={timeDiff}
-            />
-            <StatusBar
-              key={`cp-${pools.curChakra}-${pools.maxChakra}`}
-              title="CP"
-              tooltip="Chakra"
-              color="bg-blue-500"
-              showText={true}
-              lastRegenAt={userData?.regenAt}
-              regen={hasBattlePools ? 0 : passiveRegeneration}
-              timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
-              status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curChakra}
-              total={pools.maxChakra}
-              timeDiff={timeDiff}
-            />
-            <StatusBar
-              key={`sp-${pools.curStamina}-${pools.maxStamina}`}
-              title="SP"
-              tooltip="Stamina"
-              color="bg-green-500"
-              showText={true}
-              lastRegenAt={userData?.regenAt}
-              regen={hasBattlePools ? 0 : passiveRegeneration}
-              timedBuffs={hasBattlePools ? undefined : poolRegenerationBuffs}
-              status={hasBattlePools ? "AWAKE" : userData?.status}
-              current={pools.curStamina}
-              total={pools.maxStamina}
               timeDiff={timeDiff}
             />
             <StatusBar
