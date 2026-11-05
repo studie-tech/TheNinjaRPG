@@ -6,27 +6,20 @@ import {
   SHRINE_HP_BY_LEVEL,
 } from "@/drizzle/constants";
 import type { Village, VillageAlliance, VillageStructure, War } from "@/drizzle/schema";
-import type { BattleWar } from "@/libs/combat/types";
-import { getWarSide } from "@/libs/objectiveWar";
+import { getWarRelationship } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
 
 /**
- * Checks if two villages fight on the same side of any war
- * @param wars - The wars to check
- * @param targetVillageId - The village ID to check
- * @param userVillageId - The village ID to check
- * @returns Whether the villages are war allies
+ * Checks if two players fight on the same side, by the rule combat enforces.
+ * Masked war data carries only the viewer's mercenary contract, so a client cannot see
+ * another player's; `warRelationship` on sector users already resolves those.
  */
 export const isWarAllies = (
-  wars: BattleWar[] | null | undefined,
-  targetVillageId: string | null | undefined,
-  userVillageId: string | null | undefined,
-) =>
-  !!wars?.some((war) => {
-    const side = getWarSide(war, targetVillageId ?? null);
-    return !!side && side === getWarSide(war, userVillageId ?? null);
-  });
+  wars: Parameters<typeof getWarRelationship>[0] | null | undefined,
+  first: Parameters<typeof getWarRelationship>[1],
+  second: Parameters<typeof getWarRelationship>[2],
+) => getWarRelationship(wars ?? [], first, second) === "ALLY";
 
 /**
  * Checks if a village can join a war
